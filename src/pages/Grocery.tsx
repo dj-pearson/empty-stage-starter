@@ -31,7 +31,16 @@ import {
   X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
-import { FoodCategory, GroceryItem } from "@/types";
+import { GroceryItem } from "@/types";
+import {
+  categoryLabel,
+  filterItemsByList,
+  splitByChecked,
+  computeProgressPercent,
+  milestoneMessage,
+  groupItems,
+  flattenGroupedRows,
+} from "@/lib/groceryData";
 import { supabase } from "@/integrations/supabase/client";
 import { parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { logger } from "@/lib/logger";
@@ -63,35 +72,9 @@ interface UserContribution {
   created_at?: string;
 }
 
-const categoryLabels: Record<FoodCategory, string> = {
-  protein: "Protein",
-  carb: "Carbs",
-  dairy: "Dairy",
-  fruit: "Fruits",
-  vegetable: "Vegetables",
-  snack: "Snacks",
-};
-
-const categoryIcons: Record<FoodCategory, string> = {
-  protein: "🥩",
-  carb: "🍞",
-  dairy: "🧀",
-  fruit: "🍎",
-  vegetable: "🥦",
-  snack: "🍿",
-};
-
-// Grocery item categories are now free-text (grocery_items.category was
-// relaxed to allow values like "other" / aisle-derived labels), so a direct
-// categoryLabels[item.category] lookup can be undefined and crash the render.
-// Resolve to the friendly label when known, otherwise fall back to "Other".
-const OTHER_CATEGORY_LABEL = "Other";
-function categoryLabel(category: string | null | undefined): string {
-  if (category && category in categoryLabels) {
-    return categoryLabels[category as FoodCategory];
-  }
-  return OTHER_CATEGORY_LABEL;
-}
+// Grocery data derivations (labels, grouping, split, progress, flatten) live in
+// src/lib/groceryData.ts (unit-tested) so they're separated from this JSX and
+// the heavy list subtree can memoize on stable outputs (US-553 AC2).
 
 export default function Grocery() {
   const { foods, addFood, updateFood } = useFoods();
@@ -182,19 +165,13 @@ export default function Grocery() {
 
   // Filter grocery items by selected list
   const filteredGroceryItems = useMemo(
-    () => selectedListId
-      ? groceryItems.filter(item => item.grocery_list_id === selectedListId)
-      : groceryItems,
+    () => filterItemsByList(groceryItems, selectedListId),
     [groceryItems, selectedListId]
   );
 
   // Split into active (unchecked) and purchased (checked) items
-  const activeItems = useMemo(
-    () => filteredGroceryItems.filter(i => !i.checked),
-    [filteredGroceryItems]
-  );
-  const purchasedItems = useMemo(
-    () => filteredGroceryItems.filter(i => i.checked),
+  const { active: activeItems, purchased: purchasedItems } = useMemo(
+    () => splitByChecked(filteredGroceryItems),
     [filteredGroceryItems]
   );
 
@@ -202,18 +179,12 @@ export default function Grocery() {
   const totalItems = filteredGroceryItems.length;
   const purchasedCount = purchasedItems.length;
   const progressPercent = useMemo(
-    () => totalItems > 0 ? Math.round((purchasedCount / totalItems) * 100) : 0,
+    () => computeProgressPercent(totalItems, purchasedCount),
     [totalItems, purchasedCount]
   );
 
   // Milestone message based on progress percentage
-  const milestoneMessage = useMemo(() => {
-    if (progressPercent >= 100) return "Shopping complete!";
-    if (progressPercent >= 75) return "Almost done!";
-    if (progressPercent >= 50) return "Halfway there!";
-    if (progressPercent >= 25) return "Great start!";
-    return "";
-  }, [progressPercent]);
+  const milestone = useMemo(() => milestoneMessage(progressPercent), [progressPercent]);
 
   // Manual regeneration function
   const handleRegenerateFromPlan = () => {
@@ -593,47 +564,17 @@ export default function Grocery() {
   };
 
   // Group active items by category or aisle
-  const activeItemsByGroup = useMemo(() => {
-    const groups: Record<string, GroceryItem[]> = {};
+  const activeItemsByGroup = useMemo(
+    () => groupItems(activeItems, groupBy),
+    [activeItems, groupBy]
+  );
 
-    if (groupBy === "category") {
-      // Bucket by friendly label so unknown/free-text categories land in
-      // "Other" instead of throwing on an undefined fixed-key array.
-      activeItems.forEach(item => {
-        const label = categoryLabel(item.category);
-        if (!groups[label]) groups[label] = [];
-        groups[label].push(item);
-      });
-    } else {
-      activeItems.forEach(item => {
-        const aisle = item.aisle || "Uncategorized";
-        if (!groups[aisle]) {
-          groups[aisle] = [];
-        }
-        groups[aisle].push(item);
-      });
-    }
-
-    return groups;
-  }, [activeItems, groupBy]);
-
-  // Virtualization for large grocery lists (>50 items)
-  // Flatten grouped items into rows: each row is either a group header or an item
-  type VirtualRow =
-    | { type: "header"; group: string; count: number }
-    | { type: "item"; item: GroceryItem; group: string };
-
-  const flattenedRows = useMemo<VirtualRow[]>(() => {
-    const rows: VirtualRow[] = [];
-    for (const [group, items] of Object.entries(activeItemsByGroup)) {
-      if (items.length === 0) continue;
-      rows.push({ type: "header", group, count: items.length });
-      for (const item of items) {
-        rows.push({ type: "item", item, group });
-      }
-    }
-    return rows;
-  }, [activeItemsByGroup]);
+  // Virtualization for large grocery lists (>50 items): flatten grouped items
+  // into rows (each row is either a group header or an item).
+  const flattenedRows = useMemo(
+    () => flattenGroupedRows(activeItemsByGroup),
+    [activeItemsByGroup]
+  );
 
   const useVirtualGrocery = activeItems.length > 50;
   const groceryListParentRef = useRef<HTMLDivElement>(null);
@@ -745,9 +686,9 @@ export default function Grocery() {
               </div>
               <Progress value={progressPercent} className="h-2" />
               <div className="flex items-center justify-between mt-2">
-                {milestoneMessage && (
+                {milestone && (
                   <p className={`text-sm font-medium ${progressPercent >= 100 ? "text-primary" : "text-muted-foreground"}`}>
-                    {milestoneMessage}
+                    {milestone}
                   </p>
                 )}
                 {progressPercent === 100 && (

@@ -43,10 +43,12 @@ describe('generateId', () => {
     expect(generateId()).toContain('-');
   });
 
-  it('starts with timestamp-like number', () => {
+  it('is UUID v4 shaped', () => {
+    // US-549 switched generateId from `${Date.now()}-${rand}` to a real UUID.
+    // The old "starts with a timestamp number" assertion was flaky against
+    // UUIDs (parseInt of a hex segment beginning with a-f/0 is NaN/0).
     const id = generateId();
-    const timestamp = parseInt(id.split('-')[0]);
-    expect(timestamp).toBeGreaterThan(0);
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   });
 });
 

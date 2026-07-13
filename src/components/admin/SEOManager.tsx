@@ -41,7 +41,6 @@ import {
   Link as LinkIcon,
   CheckCircle,
   AlertCircle,
-  Download,
   Copy,
   RefreshCw,
   Zap,
@@ -80,31 +79,27 @@ import { logger } from "@/lib/logger";
 import {
   CrawlResults,
   ImageResults,
-  RedirectResults,
-  DuplicateResults,
-  SecurityResults,
-  LinkStructureResults,
-  MobileResults,
-  BudgetResults
 } from "./SEOResultsDisplay";
 
-interface AuditResult {
-  category: string;
-  item: string;
-  status: "passed" | "warning" | "failed" | "info";
-  message: string;
-  impact: "high" | "medium" | "low";
-  fix?: string;
-}
-
-interface SEOScore {
-  overall: number;
-  technical: number;
-  onPage: number;
-  performance: number;
-  mobile: number;
-  accessibility: number;
-}
+// AuditResult, SEOScore and the pure scoring logic live in src/lib/seoScore.ts
+// (unit-tested) so the scoring math is verifiable outside this large component (US-553 AC1).
+import {
+  computeSEOScore,
+  getScoreColor,
+  type AuditResult,
+  type SEOScore,
+} from "@/lib/seoScore";
+import { SeoFilesTabs } from "@/components/admin/seo/SeoFilesTabs";
+import { SeoMetaTab, type MetaTags } from "@/components/admin/seo/SeoMetaTab";
+import { SeoStructuredDataTab } from "@/components/admin/seo/SeoStructuredDataTab";
+import {
+  SeoRedirectsTab,
+  SeoDuplicateContentTab,
+  SeoSecurityTab,
+  SeoLinkStructureTab,
+  SeoMobileCheckTab,
+  SeoBudgetTab,
+} from "@/components/admin/seo/SeoAnalysisTabs";
 
 interface KeywordData {
   keyword: string;
@@ -132,7 +127,7 @@ export function SEOManager() {
   const [sitemapXml, setSitemapXml] = useState("");
   const [llmsTxt, setLlmsTxt] = useState("");
   const [isRegeneratingSitemap, setIsRegeneratingSitemap] = useState(false);
-  const [metaTags, setMetaTags] = useState({
+  const [metaTags, setMetaTags] = useState<MetaTags>({
     title: "EatPal - Picky Eater Meal Planning Made Easy",
     description:
       "Plan weekly meals for picky eaters with safe foods and daily try bites. Auto-generate grocery lists and track meal results.",
@@ -145,7 +140,7 @@ export function SEOManager() {
     twitter_site: "@lovable_dev",
   });
 
-  const [structuredData, setStructuredData] = useState({});
+  const [structuredData, setStructuredData] = useState<Record<string, unknown>>({});
   const [auditResults, setAuditResults] = useState<AuditResult[]>([]);
   const [seoScore, setSeoScore] = useState<SEOScore>({
     overall: 0,
@@ -1514,44 +1509,8 @@ export function SEOManager() {
     }
   };
 
-  const calculateSEOScore = (results: AuditResult[]) => {
-    const categories = {
-      technical: results.filter((r) => r.category === "Technical SEO" || r.category === "Security"),
-      onPage: results.filter((r) => r.category === "On-Page SEO"),
-      performance: results.filter((r) => r.category === "Performance"),
-      mobile: results.filter((r) => r.category === "Mobile & Accessibility"),
-      content: results.filter((r) => r.category === "Content Quality"),
-    };
-
-    const calculateCategoryScore = (categoryResults: AuditResult[]) => {
-      if (categoryResults.length === 0) return 100;
-
-      const passed = categoryResults.filter((r) => r.status === "passed").length;
-      const warnings = categoryResults.filter((r) => r.status === "warning").length;
-      const _failed = categoryResults.filter((r) => r.status === "failed").length;
-
-      // Scoring: passed = 1.0, warning = 0.5, failed = 0
-      const score = (passed + warnings * 0.5) / categoryResults.length * 100;
-      return Math.round(score);
-    };
-
-    const scores = {
-      technical: calculateCategoryScore(categories.technical),
-      onPage: calculateCategoryScore(categories.onPage),
-      performance: calculateCategoryScore(categories.performance),
-      mobile: calculateCategoryScore(categories.mobile),
-      accessibility: calculateCategoryScore(categories.mobile), // Using mobile results
-    };
-
-    const overall = Math.round(
-      (scores.technical * 0.3 + scores.onPage * 0.25 + scores.performance * 0.25 + scores.mobile * 0.2)
-    );
-
-    const finalScores = {
-      overall,
-      ...scores,
-    };
-
+  const calculateSEOScore = (results: AuditResult[]): SEOScore => {
+    const finalScores = computeSEOScore(results); // pure math in src/lib/seoScore.ts
     setSeoScore(finalScores);
     return finalScores; // Return scores for saving to database
   };
@@ -2042,12 +2001,6 @@ RESTful API available for integrations. Contact for API access.
       default:
         return null;
     }
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-green-600";
-    if (score >= 70) return "text-yellow-600";
-    return "text-red-600";
   };
 
   return (
@@ -3175,511 +3128,35 @@ RESTful API available for integrations. Contact for API access.
         </TabsContent>
 
         {/* Meta Tags Tab */}
-        <TabsContent value="meta">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Meta Tags Configuration
-              </CardTitle>
-              <CardDescription>
-                Configure meta tags for SEO and social media sharing
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Title Tag *</Label>
-                  <Input
-                    value={metaTags.title}
-                    onChange={(e) => setMetaTags({ ...metaTags, title: e.target.value })}
-                    placeholder="30-60 characters"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Length: {metaTags.title.length} characters
-                  </p>
-                </div>
+        {/* Meta Tags configuration tab (US-553 AC1) */}
+        <SeoMetaTab metaTags={metaTags} setMetaTags={setMetaTags} onSave={handleUpdateMetaTags} />
 
-                <div className="space-y-2">
-                  <Label>Keywords</Label>
-                  <Input
-                    value={metaTags.keywords}
-                    onChange={(e) => setMetaTags({ ...metaTags, keywords: e.target.value })}
-                    placeholder="comma, separated, keywords"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Meta Description *</Label>
-                <Textarea
-                  value={metaTags.description}
-                  onChange={(e) => setMetaTags({ ...metaTags, description: e.target.value })}
-                  placeholder="120-160 characters"
-                  rows={3}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Length: {metaTags.description.length} characters
-                </p>
-              </div>
-
-              <div className="border-t pt-4">
-                <h4 className="font-medium mb-4">Open Graph Tags (Facebook, LinkedIn)</h4>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>OG Title</Label>
-                    <Input
-                      value={metaTags.og_title}
-                      onChange={(e) => setMetaTags({ ...metaTags, og_title: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>OG Description</Label>
-                    <Textarea
-                      value={metaTags.og_description}
-                      onChange={(e) =>
-                        setMetaTags({ ...metaTags, og_description: e.target.value })
-                      }
-                      rows={2}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>OG Image URL</Label>
-                    <Input
-                      value={metaTags.og_image}
-                      onChange={(e) => setMetaTags({ ...metaTags, og_image: e.target.value })}
-                      placeholder="https://..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <h4 className="font-medium mb-4">Twitter Card Tags</h4>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Twitter Card Type</Label>
-                    <Input
-                      value={metaTags.twitter_card}
-                      onChange={(e) =>
-                        setMetaTags({ ...metaTags, twitter_card: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Twitter Site Handle</Label>
-                    <Input
-                      value={metaTags.twitter_site}
-                      onChange={(e) =>
-                        setMetaTags({ ...metaTags, twitter_site: e.target.value })
-                      }
-                      placeholder="@username"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Button onClick={handleUpdateMetaTags} className="w-full">
-                Save Meta Tags Configuration
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* robots.txt Tab */}
-        <TabsContent value="robots">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" />
-                robots.txt
-              </CardTitle>
-              <CardDescription>
-                Control search engine crawling. Place this file in your /public directory.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                value={robotsTxt}
-                onChange={(e) => setRobotsTxt(e.target.value)}
-                rows={20}
-                className="font-mono text-sm"
-              />
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleCopyToClipboard(robotsTxt, "robots.txt")}
-                  variant="outline"
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy to Clipboard
-                </Button>
-                <Button
-                  onClick={() => handleDownloadFile(robotsTxt, "robots.txt")}
-                  variant="outline"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download File
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* sitemap.xml Tab */}
-        <TabsContent value="sitemap">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Code className="h-5 w-5" />
-                sitemap.xml
-              </CardTitle>
-              <CardDescription>
-                Help search engines discover your pages. Regenerate to include all published blog posts.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-2">
-                  <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-sm font-medium">Click Regenerate to include latest blog posts</span>
-                </div>
-                <Button
-                  onClick={regenerateSitemap}
-                  disabled={isRegeneratingSitemap}
-                  size="sm"
-                >
-                  {isRegeneratingSitemap ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Regenerating...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Regenerate Sitemap
-                    </>
-                  )}
-                </Button>
-              </div>
-              <Textarea
-                value={sitemapXml}
-                onChange={(e) => setSitemapXml(e.target.value)}
-                rows={20}
-                className="font-mono text-sm"
-              />
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleCopyToClipboard(sitemapXml, "sitemap.xml")}
-                  variant="outline"
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy to Clipboard
-                </Button>
-                <Button
-                  onClick={() => handleDownloadFile(sitemapXml, "sitemap.xml")}
-                  variant="outline"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download File
-                </Button>
-              </div>
-              <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  <strong>Note:</strong> After regenerating, download the sitemap.xml file and manually replace the one in your public folder, or set up the dynamic sitemap edge function for automatic updates.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* llms.txt Tab */}
-        <TabsContent value="llms">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                llms.txt
-              </CardTitle>
-              <CardDescription>
-                Provide information about your site for Large Language Models and AI assistants.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                value={llmsTxt}
-                onChange={(e) => setLlmsTxt(e.target.value)}
-                rows={20}
-                className="font-mono text-sm"
-              />
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleCopyToClipboard(llmsTxt, "llms.txt")}
-                  variant="outline"
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy to Clipboard
-                </Button>
-                <Button
-                  onClick={() => handleDownloadFile(llmsTxt, "llms.txt")}
-                  variant="outline"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download File
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* robots.txt / sitemap.xml / llms.txt editor tabs (US-553 AC1) */}
+        <SeoFilesTabs
+          robotsTxt={robotsTxt}
+          setRobotsTxt={setRobotsTxt}
+          sitemapXml={sitemapXml}
+          setSitemapXml={setSitemapXml}
+          llmsTxt={llmsTxt}
+          setLlmsTxt={setLlmsTxt}
+          isRegeneratingSitemap={isRegeneratingSitemap}
+          regenerateSitemap={regenerateSitemap}
+          onCopy={handleCopyToClipboard}
+          onDownload={handleDownloadFile}
+        />
 
         {/* Structured Data Tab */}
-        <TabsContent value="structured">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <LinkIcon className="h-5 w-5" />
-                Structured Data (JSON-LD)
-              </CardTitle>
-              <CardDescription>
-                Add this schema.org markup to your index.html for rich search results
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                value={JSON.stringify(structuredData, null, 2)}
-                onChange={(e) => {
-                  try {
-                    setStructuredData(JSON.parse(e.target.value));
-                  } catch (_err) {
-                    // Invalid JSON, ignore
-                  }
-                }}
-                rows={20}
-                className="font-mono text-sm"
-              />
-              <div className="flex gap-2">
-                <Button
-                  onClick={() =>
-                    handleCopyToClipboard(
-                      JSON.stringify(structuredData, null, 2),
-                      "Structured Data"
-                    )
-                  }
-                  variant="outline"
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy to Clipboard
-                </Button>
-                <Button
-                  onClick={() =>
-                    handleDownloadFile(
-                      JSON.stringify(structuredData, null, 2),
-                      "structured-data.json"
-                    )
-                  }
-                  variant="outline"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download File
-                </Button>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                <p>
-                  <strong>How to add to your site:</strong>
-                </p>
-                <ol className="list-decimal list-inside space-y-1 mt-2">
-                  <li>Copy the JSON-LD code above</li>
-                  <li>Open your index.html file</li>
-                  <li>
-                    Add this inside the {"<head>"} section:
-                    <code className="block mt-1 p-2 bg-muted rounded text-xs">
-                      {'<script type="application/ld+json">'}
-                      <br />
-                      {"  /* Paste JSON here */"}
-                      <br />
-                      {"</script>"}
-                    </code>
-                  </li>
-                </ol>
-              </div>
-
-              <Separator className="my-6" />
-
-              {/* Structured Data Validator Section */}
-              <div className="space-y-4 pt-4">
-                <div>
-                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5" />
-                    Validate Existing Structured Data
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Check any page for valid Schema.org JSON-LD markup
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="validate-structured-url">Page URL to Validate</Label>
-                  <Input
-                    id="validate-structured-url"
-                    type="url"
-                    placeholder={`${window.location.origin}/`}
-                    defaultValue={`${window.location.origin}/`}
-                  />
-                </div>
-
-                <Button
-                  className="w-full"
-                  disabled={isValidatingStructuredData}
-                  onClick={async () => {
-                    const urlInput = document.getElementById('validate-structured-url') as HTMLInputElement;
-                    const url = urlInput?.value || `${window.location.origin}/`;
-
-                    setIsValidatingStructuredData(true);
-                    setStructuredDataValidationResults(null);
-
-                    try {
-                      const { data, error } = await invokeEdgeFunction('validate-structured-data', {
-                        body: { url }
-                      });
-
-                      if (data?.success) {
-                        setStructuredDataValidationResults({
-                          success: true,
-                          data: data.data
-                        });
-                        logger.debug('Full structured data validation:', data.data);
-                      } else {
-                        throw new Error(data?.error || 'Failed to validate structured data');
-                      }
-                    } catch (error: unknown) {
-                      setStructuredDataValidationResults({
-                        success: false,
-                        error: error.message || 'Failed to validate structured data'
-                      });
-                    } finally {
-                      setIsValidatingStructuredData(false);
-                    }
-                  }}
-                >
-                  {isValidatingStructuredData ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Validating...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Validate Structured Data
-                    </>
-                  )}
-                </Button>
-
-                <div className="rounded-lg border p-4 bg-muted/50">
-                  <p className="text-sm text-muted-foreground">
-                    <Info className="h-4 w-4 inline mr-2" />
-                    Validates JSON-LD structured data against Schema.org standards. Checks 15+ types including Article, Recipe, Product, Organization, and more.
-                  </p>
-                </div>
-
-                <div className="text-sm text-muted-foreground">
-                  <h4 className="font-semibold mb-2">Validation Checks:</h4>
-                  <ul className="space-y-1 ml-4">
-                    <li>✅ JSON-LD syntax validation</li>
-                    <li>✅ Required properties for each type</li>
-                    <li>✅ Date format validation (ISO 8601)</li>
-                    <li>✅ URL format validation</li>
-                    <li>✅ Breadcrumb structure</li>
-                    <li>✅ Review and rating validation</li>
-                    <li>✅ Recipe, Product, Article validation</li>
-                  </ul>
-                </div>
-
-                {structuredDataValidationResults && (
-                  <div className="mt-4">
-                    {structuredDataValidationResults.success ? (
-                      <Card className="border-green-200 bg-green-50">
-                        <CardContent className="pt-4">
-                          <div className="flex items-start gap-3 mb-4">
-                            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-green-900 mb-1">Validation Complete</h4>
-                              <p className="text-sm text-green-800">
-                                Structured data {structuredDataValidationResults.data.hasStructuredData ? 'found' : 'not found'} on this page
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div className="bg-card rounded p-3">
-                              <div className="text-sm text-muted-foreground">Overall Score</div>
-                              <div className="text-2xl font-bold text-green-600">{structuredDataValidationResults.data.overallScore}/100</div>
-                            </div>
-                            <div className="bg-card rounded p-3">
-                              <div className="text-sm text-muted-foreground">Total Items</div>
-                              <div className="text-2xl font-bold">{structuredDataValidationResults.data.totalItems}</div>
-                            </div>
-                            <div className="bg-card rounded p-3">
-                              <div className="text-sm text-muted-foreground">Valid Items</div>
-                              <div className="text-2xl font-bold text-green-600">{structuredDataValidationResults.data.validItems}</div>
-                            </div>
-                            <div className="bg-card rounded p-3">
-                              <div className="text-sm text-muted-foreground">Invalid Items</div>
-                              <div className="text-2xl font-bold text-red-600">{structuredDataValidationResults.data.invalidItems}</div>
-                            </div>
-                          </div>
-
-                          {structuredDataValidationResults.data.items && structuredDataValidationResults.data.items.length > 0 && (
-                            <div className="space-y-2">
-                              <h5 className="font-semibold text-sm">Items Found:</h5>
-                              {structuredDataValidationResults.data.items.map((item: any, idx: number) => (
-                                <div key={idx} className="bg-card rounded p-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-medium">{item.type}</span>
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant={item.isValid ? "default" : "destructive"}>
-                                        Score: {item.score}/100
-                                      </Badge>
-                                      {item.isValid ? (
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                      ) : (
-                                        <XCircle className="h-4 w-4 text-red-600" />
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {structuredDataValidationResults.data.issues && structuredDataValidationResults.data.issues.length > 0 && (
-                            <div className="mt-4 space-y-2">
-                              <h5 className="font-semibold text-sm text-red-900">Issues:</h5>
-                              {structuredDataValidationResults.data.issues.map((issue: Record<string, unknown>, idx: number) => (
-                                <div key={idx} className="bg-red-100 rounded p-2 text-sm">
-                                  <span className="font-semibold text-red-900">[{issue.severity}]</span>{' '}
-                                  <span className="text-red-800">{issue.message}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                        <div className="flex items-start gap-3">
-                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-red-900 mb-1">Validation Failed</h4>
-                            <p className="text-sm text-red-800">{structuredDataValidationResults.error}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Structured Data (JSON-LD) tab (US-553 AC1) */}
+        <SeoStructuredDataTab
+          structuredData={structuredData}
+          setStructuredData={setStructuredData}
+          isValidatingStructuredData={isValidatingStructuredData}
+          setIsValidatingStructuredData={setIsValidatingStructuredData}
+          structuredDataValidationResults={structuredDataValidationResults}
+          setStructuredDataValidationResults={setStructuredDataValidationResults}
+          onCopy={handleCopyToClipboard}
+          onDownload={handleDownloadFile}
+        />
 
         {/* Monitoring & Alerts Tab */}
         <TabsContent value="monitoring" className="space-y-4">
@@ -5031,560 +4508,28 @@ RESTful API available for integrations. Contact for API access.
         </TabsContent>
 
         {/* Redirects Tab */}
-        <TabsContent value="redirects" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ArrowRightCircle className="h-5 w-5" />
-                Redirect Chain Detector
-              </CardTitle>
-              <CardDescription>
-                Detect redirect chains, loops, and performance issues
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="redirect-urls">URLs to Check (one per line)</Label>
-                <textarea
-                  id="redirect-urls"
-                  className="w-full min-h-[100px] p-2 border rounded-md"
-                  placeholder={`${window.location.origin}/\n${window.location.origin}/about\n${window.location.origin}/contact`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlsInput = document.getElementById('redirect-urls') as HTMLTextAreaElement;
-                  const urls = urlsInput?.value.split('\n').filter(u => u.trim());
-
-                  if (!urls || urls.length === 0) {
-                    setRedirectResults({
-                      error: 'Please enter at least one URL',
-                      summary: { totalUrls: 0, urlsWithRedirects: 0, urlsWithChains: 0, urlsWithLoops: 0, avgChainLength: 0, totalIssues: 0 }
-                    });
-                    return;
-                  }
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('detect-redirect-chains', {
-                      body: { urls, maxRedirects: 10 }
-                    });
-
-                    if (data?.success) {
-                      setRedirectResults(data.data);
-                      logger.debug('Full redirect analysis:', data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to analyze redirects');
-                    }
-                  } catch (error: unknown) {
-                    setRedirectResults({
-                      error: error.message || 'Failed to analyze redirects',
-                      summary: { totalUrls: 0, urlsWithRedirects: 0, urlsWithChains: 0, urlsWithLoops: 0, avgChainLength: 0, totalIssues: 0 }
-                    });
-                  }
-                }}
-              >
-                <ArrowRightCircle className="h-4 w-4 mr-2" />
-                Analyze Redirects
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Follows redirect chains, detects loops, and measures redirect performance impact.
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Detects:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ Redirect chains (A→B→C→D)</li>
-                  <li>✅ Redirect loops</li>
-                  <li>✅ HTTPS/HTTP protocol downgrades</li>
-                  <li>✅ Slow redirect chains</li>
-                  <li>✅ Mixed 301/302 redirects</li>
-                </ul>
-              </div>
-
-              <RedirectResults results={redirectResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* redirects analysis tab (US-553 AC1) */}
+        <SeoRedirectsTab results={redirectResults} setResults={setRedirectResults} />
 
         {/* Duplicate Content Tab */}
-        <TabsContent value="duplicate-content" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Copy className="h-5 w-5" />
-                Duplicate Content Detector
-              </CardTitle>
-              <CardDescription>
-                Find duplicate, similar, and thin content across pages
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="duplicate-urls">URLs to Compare (one per line, minimum 2)</Label>
-                <textarea
-                  id="duplicate-urls"
-                  className="w-full min-h-[120px] p-2 border rounded-md"
-                  placeholder={`${window.location.origin}/page1\n${window.location.origin}/page2\n${window.location.origin}/page3`}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="similarity-threshold">Similarity Threshold (%)</Label>
-                <Input
-                  id="similarity-threshold"
-                  type="number"
-                  defaultValue="85"
-                  min="50"
-                  max="100"
-                />
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlsInput = document.getElementById('duplicate-urls') as HTMLTextAreaElement;
-                  const thresholdInput = document.getElementById('similarity-threshold') as HTMLInputElement;
-
-                  const urls = urlsInput?.value.split('\n').filter(u => u.trim());
-                  const similarityThreshold = parseInt(thresholdInput?.value || '85') / 100;
-
-                  if (!urls || urls.length < 2) {
-                    setDuplicateResults({
-                      error: 'Please enter at least 2 URLs',
-                      summary: { totalPages: 0, exactDuplicates: 0, nearDuplicates: 0, similarPages: 0, thinContent: 0, avgWordCount: 0, totalIssues: 0 }
-                    });
-                    return;
-                  }
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('detect-duplicate-content', {
-                      body: { urls, similarityThreshold, thinContentThreshold: 300 }
-                    });
-
-                    if (data?.success) {
-                      setDuplicateResults(data.data);
-                      logger.debug('Full duplicate content analysis:', data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to analyze content');
-                    }
-                  } catch (error: unknown) {
-                    setDuplicateResults({
-                      error: error.message || 'Failed to analyze content',
-                      summary: { totalPages: 0, exactDuplicates: 0, nearDuplicates: 0, similarPages: 0, thinContent: 0, avgWordCount: 0, totalIssues: 0 }
-                    });
-                  }
-                }}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Detect Duplicates
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Compares content across multiple pages to find exact duplicates, near-duplicates, and thin content.
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Analysis:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ Exact duplicate detection (100% match)</li>
-                  <li>✅ Near-duplicate detection (95%+ similar)</li>
-                  <li>✅ Similar content detection (configurable threshold)</li>
-                  <li>✅ Thin content detection (&lt;300 words)</li>
-                  <li>✅ Content similarity scoring</li>
-                </ul>
-              </div>
-
-              <DuplicateResults results={duplicateResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* duplicate-content analysis tab (US-553 AC1) */}
+        <SeoDuplicateContentTab results={duplicateResults} setResults={setDuplicateResults} />
 
         {/* Security Tab */}
-        <TabsContent value="security" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Security Headers Checker
-              </CardTitle>
-              <CardDescription>
-                Check HTTPS implementation and security headers
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="security-url">URL to Check</Label>
-                <Input
-                  id="security-url"
-                  type="url"
-                  placeholder={`${window.location.origin}/`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlInput = document.getElementById('security-url') as HTMLInputElement;
-                  const url = urlInput?.value || `${window.location.origin}/`;
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('check-security-headers', {
-                      body: { url }
-                    });
-
-                    if (data?.success) {
-                      setSecurityResults(data.data);
-                      logger.debug('Full security analysis:', data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to check security');
-                    }
-                  } catch (error: unknown) {
-                    setSecurityResults({
-                      error: error.message || 'Failed to check security',
-                      grade: 'F',
-                      overallScore: 0,
-                      protocol: 'unknown',
-                      isHttps: false,
-                      criticalIssues: 0,
-                      highIssues: 0,
-                      mediumIssues: 0,
-                      lowIssues: 0,
-                      checks: []
-                    });
-                  }
-                }}
-              >
-                <Shield className="h-4 w-4 mr-2" />
-                Check Security
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Validates HTTPS implementation and important security headers like HSTS, CSP, and X-Frame-Options.
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Security Checks:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ HTTPS implementation</li>
-                  <li>✅ Strict-Transport-Security (HSTS)</li>
-                  <li>✅ Content-Security-Policy (CSP)</li>
-                  <li>✅ X-Frame-Options</li>
-                  <li>✅ X-Content-Type-Options</li>
-                  <li>✅ Referrer-Policy</li>
-                  <li>✅ Permissions-Policy</li>
-                  <li>✅ Server information disclosure</li>
-                </ul>
-              </div>
-
-              <SecurityResults results={securityResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* security analysis tab (US-553 AC1) */}
+        <SeoSecurityTab results={securityResults} setResults={setSecurityResults} />
 
         {/* Link Structure Tab */}
-        <TabsContent value="link-structure" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Network className="h-5 w-5" />
-                Internal Link Analysis
-              </CardTitle>
-              <CardDescription>
-                Analyze link structure, PageRank scores, and find orphaned pages
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="link-url">Start URL (optional if using crawl ID)</Label>
-                <Input
-                  id="link-url"
-                  type="url"
-                  placeholder={`${window.location.origin}/`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="link-max-pages">Maximum Pages to Analyze</Label>
-                <Input
-                  id="link-max-pages"
-                  type="number"
-                  defaultValue="100"
-                  min="10"
-                  max="500"
-                />
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlInput = document.getElementById('link-url') as HTMLInputElement;
-                  const maxPagesInput = document.getElementById('link-max-pages') as HTMLInputElement;
-
-                  const startUrl = urlInput?.value || `${window.location.origin}/`;
-                  const maxPages = parseInt(maxPagesInput?.value || '100');
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('analyze-internal-links', {
-                      body: { startUrl, maxPages }
-                    });
-
-                    if (data?.success) {
-                      setLinkStructureResults(data.data);
-                      logger.debug('Full link analysis:', data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to analyze links');
-                    }
-                  } catch (error: unknown) {
-                    setLinkStructureResults({
-                      error: error.message || 'Failed to analyze links',
-                      summary: { totalPages: 0, totalLinks: 0, orphanedPages: 0, hubPages: 0, authorityPages: 0, avgInboundLinks: 0, avgOutboundLinks: 0, maxDepth: 0, avgDepth: 0 }
-                    });
-                  }
-                }}
-              >
-                <Network className="h-4 w-4 mr-2" />
-                Analyze Links
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Analyzes internal linking structure, calculates PageRank-style scores, and identifies orphaned pages.
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Analysis Includes:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ PageRank-style link scoring</li>
-                  <li>✅ Orphaned page detection</li>
-                  <li>✅ Hub page identification (many outbound links)</li>
-                  <li>✅ Authority page identification (many inbound links)</li>
-                  <li>✅ Link depth from homepage</li>
-                  <li>✅ Internal link graph visualization data</li>
-                </ul>
-              </div>
-
-              <LinkStructureResults results={linkStructureResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* link-structure analysis tab (US-553 AC1) */}
+        <SeoLinkStructureTab results={linkStructureResults} setResults={setLinkStructureResults} />
 
         {/* Mobile Check Tab */}
-        <TabsContent value="mobile-check" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Smartphone className="h-5 w-5" />
-                Mobile-First Checker
-              </CardTitle>
-              <CardDescription>
-                Comprehensive mobile usability and responsive design analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="mobile-url">Page URL to Check</Label>
-                <Input
-                  id="mobile-url"
-                  type="url"
-                  placeholder={`${window.location.origin}/`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlInput = document.getElementById('mobile-url') as HTMLInputElement;
-                  const url = urlInput?.value || `${window.location.origin}/`;
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('check-mobile-first', {
-                      body: { url }
-                    });
-
-                    if (data?.success) {
-                      setMobileResults(data.data);
-                      logger.debug('Full mobile analysis:', data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to check mobile usability');
-                    }
-                  } catch (error: unknown) {
-                    setMobileResults({
-                      error: error.message || 'Failed to check mobile usability',
-                      grade: 'F',
-                      overallScore: 0,
-                      highIssues: 0,
-                      mediumIssues: 0,
-                      lowIssues: 0,
-                      checks: []
-                    });
-                  }
-                }}
-              >
-                <Smartphone className="h-4 w-4 mr-2" />
-                Check Mobile
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Comprehensive mobile usability testing beyond viewport meta tags.
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Mobile Checks:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ Viewport meta tag configuration</li>
-                  <li>✅ Text readability (font sizes)</li>
-                  <li>✅ Responsive design (media queries)</li>
-                  <li>✅ Touch target sizes</li>
-                  <li>✅ Responsive images (srcset, sizes)</li>
-                  <li>✅ Fixed width elements</li>
-                  <li>✅ Mobile navigation patterns</li>
-                  <li>✅ Form input optimization</li>
-                </ul>
-              </div>
-
-              <MobileResults results={mobileResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* mobile-check analysis tab (US-553 AC1) */}
+        <SeoMobileCheckTab results={mobileResults} setResults={setMobileResults} />
 
         {/* Performance Budget Tab */}
-        <TabsContent value="budget" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Performance Budget Monitor
-              </CardTitle>
-              <CardDescription>
-                Track page size, resource counts, and performance budget compliance
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="budget-url">Page URL to Monitor</Label>
-                <Input
-                  id="budget-url"
-                  type="url"
-                  placeholder={`${window.location.origin}/`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="max-page-size">Max Page Size (MB)</Label>
-                  <Input
-                    id="max-page-size"
-                    type="number"
-                    defaultValue="3"
-                    min="1"
-                    max="10"
-                    step="0.5"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="max-requests">Max Requests</Label>
-                  <Input
-                    id="max-requests"
-                    type="number"
-                    defaultValue="50"
-                    min="10"
-                    max="200"
-                  />
-                </div>
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlInput = document.getElementById('budget-url') as HTMLInputElement;
-                  const pageSizeInput = document.getElementById('max-page-size') as HTMLInputElement;
-                  const requestsInput = document.getElementById('max-requests') as HTMLInputElement;
-
-                  const url = urlInput?.value || `${window.location.origin}/`;
-                  const maxPageSize = parseFloat(pageSizeInput?.value || '3') * 1024 * 1024;
-                  const maxRequests = parseInt(requestsInput?.value || '50');
-
-                  const budget = {
-                    maxPageSize,
-                    maxJsSize: 1024 * 1024,
-                    maxCssSize: 200 * 1024,
-                    maxImageSize: 1.5 * 1024 * 1024,
-                    maxFonts: 4,
-                    maxRequests,
-                    maxThirdParty: 10,
-                  };
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('monitor-performance-budget', {
-                      body: { url, budget }
-                    });
-
-                    if (data?.success) {
-                      setBudgetResults(data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to monitor performance');
-                    }
-                  } catch (error: unknown) {
-                    setBudgetResults({
-                      error: error.message || 'Failed to monitor performance',
-                      passedBudget: false,
-                      score: 0,
-                      checks: []
-                    });
-                  }
-                }}
-              >
-                <DollarSign className="h-4 w-4 mr-2" />
-                Check Budget
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Monitors page weight, resource counts, and alerts when budgets are exceeded.
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Tracks:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ Total page size</li>
-                  <li>✅ JavaScript bundle size</li>
-                  <li>✅ CSS file sizes</li>
-                  <li>✅ Image total size</li>
-                  <li>✅ Font count</li>
-                  <li>✅ Total HTTP requests</li>
-                  <li>✅ Third-party resources</li>
-                </ul>
-              </div>
-
-              <BudgetResults results={budgetResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* budget analysis tab (US-553 AC1) */}
+        <SeoBudgetTab results={budgetResults} setResults={setBudgetResults} />
           </div>
         </div>
       </Tabs>
