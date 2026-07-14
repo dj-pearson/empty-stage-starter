@@ -6,6 +6,7 @@ import { Platform, ActivityIndicator, View } from 'react-native';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import type { Session } from '@supabase/supabase-js';
 import { MobileErrorBoundary } from './mobile/components/MobileErrorBoundary';
+import { BiometricGate } from './mobile/components/BiometricGate';
 import { addBreadcrumb } from './mobile/lib/sentryMobile';
 import { ThemeProvider } from './mobile/contexts/ThemeContext';
 import { useOfflineSyncDriver } from './mobile/hooks/useOfflineSyncDriver';
@@ -60,7 +61,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  // Gate the authenticated tree behind biometric unlock when the user opts in.
+  // Inert (renders children directly) when there's no session or no opt-in.
+  return <BiometricGate active={!!session}>{children}</BiometricGate>;
 }
 
 /**
