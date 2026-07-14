@@ -17,6 +17,11 @@ import { sanitizeTextInput, INPUT_LIMITS } from '../../app/mobile/lib/validation
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 import { useTheme, type ThemeMode } from '../../app/mobile/contexts/ThemeContext';
 import { clearMobileSecureStorage } from '../../app/mobile/lib/secureStorageReset';
+import {
+  isBiometricAvailable,
+  authenticateBiometric,
+  getBiometricLabel,
+} from '../../app/mobile/lib/biometricAuth';
 
 const PREF_KEYS = {
   notifications: 'eatpal.profile.notifications',
@@ -79,6 +84,38 @@ export default function ProfileScreen() {
       console.error('Failed to persist pref', key, err);
     }
   }, []);
+
+  /**
+   * Turning biometric lock ON must not be able to lock the user out: we require
+   * that the device actually has an enrolled biometric AND that the user passes
+   * a confirming Face ID / Touch ID prompt before persisting the preference.
+   * Turning it OFF is unguarded. The Switch stays in sync with the real result.
+   */
+  const handleToggleBiometric = useCallback(async (next: boolean) => {
+    if (!next) {
+      setBiometricEnabled(false);
+      void persistPref(PREF_KEYS.biometric, false);
+      return;
+    }
+
+    const available = await isBiometricAvailable();
+    if (!available) {
+      Alert.alert(
+        'Biometrics unavailable',
+        'Set up Face ID or Touch ID in your device settings first, then try again.'
+      );
+      return;
+    }
+
+    const label = await getBiometricLabel();
+    const ok = await authenticateBiometric(`Confirm ${label} to enable app lock`);
+    if (!ok) {
+      // Auth cancelled/failed — leave the toggle off.
+      return;
+    }
+    setBiometricEnabled(true);
+    void persistPref(PREF_KEYS.biometric, true);
+  }, [persistPref]);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -351,7 +388,7 @@ export default function ProfileScreen() {
             <Text style={styles.settingLabel}>Biometric Lock</Text>
             <Switch
               value={biometricEnabled}
-              onValueChange={(v) => { setBiometricEnabled(v); void persistPref(PREF_KEYS.biometric, v); }}
+              onValueChange={(v) => { void handleToggleBiometric(v); }}
               trackColor={{ false: colors.border, true: colors.primaryLight }}
               thumbColor={biometricEnabled ? colors.primary : '#f4f3f4'}
               accessibilityLabel="Toggle biometric authentication"

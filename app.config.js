@@ -107,6 +107,14 @@ export default {
         }
       ],
       "expo-secure-store",
+      // Biometric quick-unlock (Face ID / Touch ID). The plugin injects the
+      // iOS NSFaceIDUsageDescription string below into Info.plist.
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "EatPal uses Face ID to unlock the app and keep your family's meal data private"
+        }
+      ],
       // US-126: push notifications. Using the project's existing brand
       // colour for the small-icon background; no custom sound until we
       // commission one.
