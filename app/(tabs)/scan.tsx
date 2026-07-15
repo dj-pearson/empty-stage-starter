@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client.mobile';
 import { queryOpenFoodFacts, isPlausibleBarcode, type OpenFoodFactsLookup } from '@/lib/open-food-facts';
 import { sanitizeTextInput } from '../../app/mobile/lib/validation';
 import { announceForAccessibility } from '../../app/mobile/lib/a11y';
+import { hapticSuccess, hapticWarning, hapticError } from '../../app/mobile/lib/haptics';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 
 /**
@@ -90,13 +91,16 @@ export default function ScanScreen() {
         const result = await queryOpenFoodFacts(cleaned);
         if (!result) {
           setNotFoundBarcode(cleaned);
+          hapticWarning();
           announceForAccessibility('Product not found');
           return;
         }
         setScannedFood({ ...result, source });
+        hapticSuccess();
         announceForAccessibility(`Found ${result.name}`);
       } catch (err) {
         console.error('OpenFoodFacts lookup failed:', err);
+        hapticError();
         Alert.alert('Lookup failed', 'Check your connection and try again.');
       } finally {
         setIsLooking(false);
@@ -140,11 +144,13 @@ export default function ScanScreen() {
         allergens: scannedFood.allergens,
       });
       if (error) throw error;
+      hapticSuccess();
       Alert.alert('Added!', `"${cleanName}" saved to your pantry.`);
       setScannedFood(null);
       setManualBarcode('');
     } catch (err) {
       console.error('Add food failed:', err);
+      hapticError();
       Alert.alert('Error', 'Could not save. Please try again.');
     } finally {
       setIsAdding(false);

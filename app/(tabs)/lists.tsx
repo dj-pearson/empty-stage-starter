@@ -18,6 +18,7 @@ import type { FoodCategory } from '@/types';
 import { sanitizeTextInput } from '../../app/mobile/lib/validation';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 import { suggestCategory, CATEGORIES } from '../../app/mobile/lib/unit-suggestions';
+import { hapticLight, hapticSuccess } from '../../app/mobile/lib/haptics';
 import { ItemDetailModal, type EditableItem } from '../../app/mobile/components/ItemDetailModal';
 import { BulkAddSheet } from '../../app/mobile/components/BulkAddSheet';
 import { QuickCategoryPicker } from '../../app/mobile/components/QuickCategoryPicker';
@@ -129,6 +130,10 @@ export default function ListsScreen() {
 
   const handleToggleCheck = async (item: GroceryItem) => {
     const newChecked = !item.checked;
+    // Tactile confirmation: a satisfying "success" pop when an item is ticked
+    // off the list, a lighter tap when un-checking. No-op off-device.
+    if (newChecked) hapticSuccess();
+    else hapticLight();
     // Optimistic local update — the user sees the check toggle instantly.
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: newChecked } : i));
     try {
