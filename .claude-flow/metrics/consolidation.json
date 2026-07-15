@@ -1,19 +1,16 @@
 {
-  "timestamp": "2026-07-15T03:11:18.451Z",
+  "timestamp": "2026-07-15T16:16:30.950Z",
   "distillationEnabled": true,
-  "patternsConsolidated": 1,
-  "memoryCleaned": 3,
-  "duplicatesRemoved": 2,
-  "episodes": 1,
-  "patternEmbeddings": 1,
+  "patternsConsolidated": 0,
+  "memoryCleaned": 0,
+  "duplicatesRemoved": 0,
+  "episodes": 0,
+  "patternEmbeddings": 0,
   "causalEdges": 0,
-  "promoted": 1,
-  "byProvenance": {
-    "oracle:test-exec": 1
-  },
-  "namespaces": [
-    "feedback"
-  ],
+  "promoted": 0,
+  "byProvenance": {},
+  "namespaces": [],
   "dryRun": false,
-  "corrupt": false
+  "corrupt": false,
+  "skipped": "no-db"
 }
