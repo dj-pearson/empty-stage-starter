@@ -75,9 +75,12 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
 import { logger } from "@/lib/logger";
+<<<<<<< HEAD
+=======
 import {
   CrawlResults,
 } from "./SEOResultsDisplay";
+>>>>>>> origin/main
 
 // AuditResult, SEOScore and the pure scoring logic live in src/lib/seoScore.ts
 // (unit-tested) so the scoring math is verifiable outside this large component (US-553 AC1).
@@ -99,10 +102,16 @@ import {
   SeoBudgetTab,
 } from "@/components/admin/seo/SeoAnalysisTabs";
 import {
+<<<<<<< HEAD
+  SeoSiteCrawlerTab,
+  SeoImageAnalysisTab,
+} from "@/components/admin/seo/SeoCrawlerTabs";
+=======
   SeoBacklinksTab,
   SeoBrokenLinksTab,
   SeoImageAnalysisTab,
 } from "@/components/admin/seo/SeoLinkAuditTabs";
+>>>>>>> origin/main
 
 interface KeywordData {
   keyword: string;
@@ -4024,29 +4033,13 @@ RESTful API available for integrations. Contact for API access.
           <ContentOptimizer />
         </TabsContent>
 
-        {/* Site Crawler Tab */}
-        <TabsContent value="site-crawler" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" />
-                Technical SEO Site Crawler
-              </CardTitle>
-              <CardDescription>
-                Crawl your entire site and analyze SEO issues (like Screaming Frog)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="crawler-url">Start URL</Label>
-                <Input
-                  id="crawler-url"
-                  type="url"
-                  placeholder={`${window.location.origin}/`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
+        {/* Site Crawler Tab (US-553 AC1) */}
+        <SeoSiteCrawlerTab results={crawlResults} setResults={setCrawlResults} />
 
+<<<<<<< HEAD
+        {/* Image Analysis Tab (US-553 AC1) */}
+        <SeoImageAnalysisTab results={imageResults} setResults={setImageResults} />
+=======
               <div className="space-y-2">
                 <Label htmlFor="max-pages">Maximum Pages to Crawl</Label>
                 <Input
@@ -4129,6 +4122,7 @@ RESTful API available for integrations. Contact for API access.
 
         {/* image SEO analyzer tab (US-553 AC1) */}
         <SeoImageAnalysisTab imageResults={imageResults} setImageResults={setImageResults} />
+>>>>>>> origin/main
 
         {/* Redirects Tab */}
         {/* redirects analysis tab (US-553 AC1) */}
