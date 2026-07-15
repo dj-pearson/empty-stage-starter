@@ -13,7 +13,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -76,10 +75,6 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
 import { logger } from "@/lib/logger";
-import {
-  CrawlResults,
-  ImageResults,
-} from "./SEOResultsDisplay";
 
 // AuditResult, SEOScore and the pure scoring logic live in src/lib/seoScore.ts
 // (unit-tested) so the scoring math is verifiable outside this large component (US-553 AC1).
@@ -100,6 +95,10 @@ import {
   SeoMobileCheckTab,
   SeoBudgetTab,
 } from "@/components/admin/seo/SeoAnalysisTabs";
+import {
+  SeoSiteCrawlerTab,
+  SeoImageAnalysisTab,
+} from "@/components/admin/seo/SeoCrawlerTabs";
 
 interface KeywordData {
   keyword: string;
@@ -4316,196 +4315,11 @@ RESTful API available for integrations. Contact for API access.
           <ContentOptimizer />
         </TabsContent>
 
-        {/* Site Crawler Tab */}
-        <TabsContent value="site-crawler" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" />
-                Technical SEO Site Crawler
-              </CardTitle>
-              <CardDescription>
-                Crawl your entire site and analyze SEO issues (like Screaming Frog)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="crawler-url">Start URL</Label>
-                <Input
-                  id="crawler-url"
-                  type="url"
-                  placeholder={`${window.location.origin}/`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
+        {/* Site Crawler Tab (US-553 AC1) */}
+        <SeoSiteCrawlerTab results={crawlResults} setResults={setCrawlResults} />
 
-              <div className="space-y-2">
-                <Label htmlFor="max-pages">Maximum Pages to Crawl</Label>
-                <Input
-                  id="max-pages"
-                  type="number"
-                  defaultValue="50"
-                  min="1"
-                  max="500"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="follow-external"
-                  className="rounded"
-                />
-                <Label htmlFor="follow-external" className="text-sm cursor-pointer">
-                  Follow external links
-                </Label>
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlInput = document.getElementById('crawler-url') as HTMLInputElement;
-                  const maxPagesInput = document.getElementById('max-pages') as HTMLInputElement;
-                  const followExternalInput = document.getElementById('follow-external') as HTMLInputElement;
-
-                  const startUrl = urlInput?.value || `${window.location.origin}/`;
-                  const maxPages = parseInt(maxPagesInput?.value || '50');
-                  const followExternal = followExternalInput?.checked || false;
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('crawl-site', {
-                      body: { startUrl, maxPages, followExternal }
-                    });
-
-                    if (data?.success) {
-                      setCrawlResults(data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to crawl site');
-                    }
-                  } catch (error: unknown) {
-                    setCrawlResults({
-                      error: error.message || 'Failed to crawl site',
-                      summary: { totalPages: 0, pagesWithIssues: 0 }
-                    });
-                  }
-                }}
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Start Crawl
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Crawls your entire site, finds SEO issues, maps internal links, and detects orphaned pages.
-                  No external API required!
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Features:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ Complete site crawling with link following</li>
-                  <li>✅ SEO issue detection (50+ checks per page)</li>
-                  <li>✅ Internal link graph mapping</li>
-                  <li>✅ Orphaned page detection</li>
-                  <li>✅ Content analysis (word count, headings)</li>
-                  <li>✅ Load time measurement</li>
-                </ul>
-              </div>
-
-              <CrawlResults results={crawlResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Image Analysis Tab */}
-        <TabsContent value="image-analysis" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Image className="h-5 w-5" />
-                Image SEO Analyzer
-              </CardTitle>
-              <CardDescription>
-                Scan all images for SEO issues and optimization opportunities
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="image-url">Page URL to Analyze</Label>
-                <Input
-                  id="image-url"
-                  type="url"
-                  placeholder={`${window.location.origin}/`}
-                  defaultValue={`${window.location.origin}/`}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="max-file-size">Max File Size (KB)</Label>
-                <Input
-                  id="max-file-size"
-                  type="number"
-                  defaultValue="200"
-                  min="50"
-                  max="2000"
-                />
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlInput = document.getElementById('image-url') as HTMLInputElement;
-                  const maxSizeInput = document.getElementById('max-file-size') as HTMLInputElement;
-
-                  const url = urlInput?.value || `${window.location.origin}/`;
-                  const maxFileSize = parseInt(maxSizeInput?.value || '200') * 1024;
-
-                  try {
-                    const { data, error } = await invokeEdgeFunction('analyze-images', {
-                      body: { url, maxFileSize }
-                    });
-
-                    if (data?.success) {
-                      setImageResults(data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to analyze images');
-                    }
-                  } catch (error: unknown) {
-                    setImageResults({
-                      error: error.message || 'Failed to analyze images',
-                      summary: { totalImages: 0, issues: [] }
-                    });
-                  }
-                }}
-              >
-                <Image className="h-4 w-4 mr-2" />
-                Analyze Images
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Scans all images on the page and checks for alt text, file sizes, formats, and dimensions.
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Checks:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ Missing or empty alt text</li>
-                  <li>✅ Missing width/height attributes</li>
-                  <li>✅ Oversized images</li>
-                  <li>✅ Unoptimized formats (recommends WebP)</li>
-                  <li>✅ Lazy loading implementation</li>
-                </ul>
-              </div>
-
-              <ImageResults results={imageResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Image Analysis Tab (US-553 AC1) */}
+        <SeoImageAnalysisTab results={imageResults} setResults={setImageResults} />
 
         {/* Redirects Tab */}
         {/* redirects analysis tab (US-553 AC1) */}
