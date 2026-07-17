@@ -74,23 +74,18 @@ auto_commit() {
 
     # Create commit message
     local branch=$(git branch --show-current)
-    local timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
     if [ -z "$message" ]; then
         message="$COMMIT_PREFIX: Auto-commit from Claude Code"
     fi
 
     # Commit
+    # Attribution policy (see CLAUDE.md > Attribution): a single Co-Authored-By
+    # trailer is the only Claude credit. No "Generated with" footer, no session
+    # link, no checkpoint boilerplate.
     if git commit -m "$message
 
-Automatic checkpoint created by Claude Code
-- Branch: $branch
-- Timestamp: $timestamp
-- Changes: $change_count file(s)
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>" --quiet 2>/dev/null; then
+Co-Authored-By: claude-flow <ruv@ruv.net>" --quiet 2>/dev/null; then
         log "Created commit: $message"
 
         # Push if enabled

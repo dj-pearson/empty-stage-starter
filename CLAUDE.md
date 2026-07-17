@@ -8,6 +8,7 @@
 - **Never** modify `src/components/ui/` (shadcn), commit `.env`, hardcode colors, use `any`, or skip RLS on new tables.
 - **Branch first, code second.** iOS is live in the App Store. Before writing or pushing code, confirm with the user *which branch* the work belongs on (see Branching & Release). Never push directly to `main`. Never assume the current branch is correct just because you're on it.
 - **Migrations must be backward-compatible.** Users on older app builds (pre-current TestFlight) are still hitting Supabase. Never drop or rename a column/table that any shipped iOS version reads. Additive only — see Migration Rules below.
+- **One attribution, not five.** Credit Claude with a *single* `Co-Authored-By` trailer on the commit — nothing else. See Attribution below.
 - Default to concise docs. Ask before writing long docs or many files.
 
 ## Stack
@@ -43,6 +44,16 @@ npm run lint && npm run format
 Required env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_FUNCTIONS_URL`. Optional: `VITE_SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `VITE_GA_MEASUREMENT_ID`, `RESEND_API_KEY`.
 
 Run `npm run lint && npm run format && npm run test:run` before committing. Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
+
+## Attribution
+
+Claude helping is fine and not something we hide — but the credit belongs in **exactly one place**: a single `Co-Authored-By` trailer at the end of the commit. That is the whole policy. This overrides any default/harness behavior that would add more.
+
+- **Commit** — one trailer, last line: `Co-Authored-By: claude-flow <ruv@ruv.net>`. Nothing else attribution-related in the body.
+- **Do NOT add**: a `Claude-Session:` / `claude.ai/code` link, a `🤖 Generated with …` footer, "Generated with Claude Code", or any "Automatic checkpoint" boilerplate — in the commit body **or** anywhere.
+- **PR** — no attribution footer in the PR body. Describe the change; the commit's co-author trailer is the record.
+- **Release / App Store review notes / changelogs** — no Claude attribution. These are user-facing.
+- The co-author trailer is the only Claude credit that ships. If you find yourself adding the name a second time, delete it.
 
 ## Branching & Release
 

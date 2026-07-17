@@ -6,12 +6,16 @@
   "duplicatesRemoved": 0,
   "episodes": 0,
   "patternEmbeddings": 0,
+  "patternsConsolidated": 0,
+  "memoryCleaned": 0,
+  "duplicatesRemoved": 0,
+  "episodes": 0,
+  "patternEmbeddings": 0,
   "causalEdges": 0,
   "promoted": 0,
   "byProvenance": {},
-  "namespaces": [
-    "feedback"
-  ],
+  "namespaces": ["feedback"],
   "dryRun": false,
-  "corrupt": false
+  "corrupt": false,
+  "skipped": "no-db"
 }
