@@ -17,9 +17,21 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(self), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=()
 
   # Cross-Origin policies
-  Cross-Origin-Embedder-Policy: credentialless
+  # NOTE: Cross-Origin-Embedder-Policy is intentionally NOT set. COEP (even
+  # 'credentialless') blocks cross-origin subresources/iframes that don't opt
+  # in via CORP/COEP, which breaks the Stripe Elements iframe (js.stripe.com)
+  # and third-party images the app renders. COOP + CORP below are safe and
+  # deliver most of the isolation benefit without that breakage.
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Resource-Policy: same-origin
+
+  # HTTP Strict Transport Security
+  # Kept in THIS single /* block on purpose. A second, separate `/*` block used
+  # to define HSTS on its own; Cloudflare Pages does not reliably merge two
+  # blocks that target the same path, so the duplicate `/*` caused every other
+  # global security header (CSP, X-Frame-Options, Permissions-Policy, …) to be
+  # dropped from the response. All global headers now live in one /* block.
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
   # DNS prefetch control
   X-DNS-Prefetch-Control: on
@@ -174,8 +186,4 @@
 # Preload critical resources
 /
   Link: </Logo-Green.webp>; rel=preload; as=image; type=image/webp
-  
-# HSTS for security
-/*
-  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
