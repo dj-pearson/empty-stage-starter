@@ -75,12 +75,6 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
 import { logger } from "@/lib/logger";
-<<<<<<< HEAD
-=======
-import {
-  CrawlResults,
-} from "./SEOResultsDisplay";
->>>>>>> origin/main
 
 // AuditResult, SEOScore and the pure scoring logic live in src/lib/seoScore.ts
 // (unit-tested) so the scoring math is verifiable outside this large component (US-553 AC1).
@@ -102,16 +96,13 @@ import {
   SeoBudgetTab,
 } from "@/components/admin/seo/SeoAnalysisTabs";
 import {
-<<<<<<< HEAD
   SeoSiteCrawlerTab,
   SeoImageAnalysisTab,
 } from "@/components/admin/seo/SeoCrawlerTabs";
-=======
+import {
   SeoBacklinksTab,
   SeoBrokenLinksTab,
-  SeoImageAnalysisTab,
 } from "@/components/admin/seo/SeoLinkAuditTabs";
->>>>>>> origin/main
 
 interface KeywordData {
   keyword: string;
@@ -4036,93 +4027,8 @@ RESTful API available for integrations. Contact for API access.
         {/* Site Crawler Tab (US-553 AC1) */}
         <SeoSiteCrawlerTab results={crawlResults} setResults={setCrawlResults} />
 
-<<<<<<< HEAD
         {/* Image Analysis Tab (US-553 AC1) */}
         <SeoImageAnalysisTab results={imageResults} setResults={setImageResults} />
-=======
-              <div className="space-y-2">
-                <Label htmlFor="max-pages">Maximum Pages to Crawl</Label>
-                <Input
-                  id="max-pages"
-                  type="number"
-                  defaultValue="50"
-                  min="1"
-                  max="500"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="follow-external"
-                  className="rounded"
-                />
-                <Label htmlFor="follow-external" className="text-sm cursor-pointer">
-                  Follow external links
-                </Label>
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  const urlInput = document.getElementById('crawler-url') as HTMLInputElement;
-                  const maxPagesInput = document.getElementById('max-pages') as HTMLInputElement;
-                  const followExternalInput = document.getElementById('follow-external') as HTMLInputElement;
-
-                  const startUrl = urlInput?.value || `${window.location.origin}/`;
-                  const maxPages = parseInt(maxPagesInput?.value || '50');
-                  const followExternal = followExternalInput?.checked || false;
-
-                  try {
-                    const { data } = await invokeEdgeFunction('crawl-site', {
-                      body: { startUrl, maxPages, followExternal }
-                    });
-
-                    if (data?.success) {
-                      setCrawlResults(data.data);
-                    } else {
-                      throw new Error(data?.error || 'Failed to crawl site');
-                    }
-                  } catch (error: unknown) {
-                    setCrawlResults({
-                      error: error.message || 'Failed to crawl site',
-                      summary: { totalPages: 0, pagesWithIssues: 0 }
-                    });
-                  }
-                }}
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Start Crawl
-              </Button>
-
-              <div className="rounded-lg border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground">
-                  <Info className="h-4 w-4 inline mr-2" />
-                  Crawls your entire site, finds SEO issues, maps internal links, and detects orphaned pages.
-                  No external API required!
-                </p>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                <h4 className="font-semibold mb-2">Features:</h4>
-                <ul className="space-y-1 ml-4">
-                  <li>✅ Complete site crawling with link following</li>
-                  <li>✅ SEO issue detection (50+ checks per page)</li>
-                  <li>✅ Internal link graph mapping</li>
-                  <li>✅ Orphaned page detection</li>
-                  <li>✅ Content analysis (word count, headings)</li>
-                  <li>✅ Load time measurement</li>
-                </ul>
-              </div>
-
-              <CrawlResults results={crawlResults} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* image SEO analyzer tab (US-553 AC1) */}
-        <SeoImageAnalysisTab imageResults={imageResults} setImageResults={setImageResults} />
->>>>>>> origin/main
 
         {/* Redirects Tab */}
         {/* redirects analysis tab (US-553 AC1) */}
