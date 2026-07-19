@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
@@ -62,6 +63,10 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
   const [lines, setLines] = useState<IngredientLine[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [servings, setServings] = useState(1);
+  const [customName, setCustomName] = useState('');
+  const [customQty, setCustomQty] = useState('1');
+  const [customUnit, setCustomUnit] = useState('');
+  const customKeyRef = useRef(0);
 
   useEffect(() => {
     if (!visible || !recipe) return;
@@ -69,7 +74,9 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
     (async () => {
       setLoading(true);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) return;
 
         const [ingredientsRes, foodsRes, groceryRes] = await Promise.all([
@@ -93,19 +100,20 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
 
         if (cancelled) return;
 
-        const ingredients = (ingredientsRes.data ?? []) as RecipeIngredientRow[];
+        // Live `recipe_ingredients` columns differ from the generated types
+        // (see RecipeBuilderSheet header). Cast at this boundary.
+        const ingredients = (ingredientsRes.data ?? []) as unknown as RecipeIngredientRow[];
         const foods = (foodsRes.data ?? []) as FoodRow[];
-        const foodById = new Map(foods.map(f => [f.id, f]));
+        const foodById = new Map(foods.map((f) => [f.id, f]));
         const groceryNames = new Set(
-          (groceryRes.data ?? []).map((g: any) => (g.name as string).toLowerCase()),
+          (groceryRes.data ?? []).map((g: { name: string }) => g.name.toLowerCase())
         );
 
-        const structured: IngredientLine[] = ingredients.map(ing => {
+        const structured: IngredientLine[] = ingredients.map((ing) => {
           const linked = ing.food_id ? foodById.get(ing.food_id) : undefined;
           const name = ing.ingredient_name;
-          const category = (linked?.category as FoodCategory | undefined)
-            ?? suggestCategory(name)
-            ?? 'snack';
+          const category =
+            (linked?.category as FoodCategory | undefined) ?? suggestCategory(name) ?? 'snack';
           return {
             key: `ing-${ing.id}`,
             name,
@@ -120,13 +128,12 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
         });
 
         const structuredFoodIds = new Set(
-          ingredients.map(i => i.food_id).filter(Boolean) as string[],
+          ingredients.map((i) => i.food_id).filter(Boolean) as string[]
         );
-        const remainingFoods = foods.filter(f => !structuredFoodIds.has(f.id));
-        const foodOnlyLines: IngredientLine[] = remainingFoods.map(f => {
-          const category = (f.category as FoodCategory | undefined)
-            ?? suggestCategory(f.name)
-            ?? 'snack';
+        const remainingFoods = foods.filter((f) => !structuredFoodIds.has(f.id));
+        const foodOnlyLines: IngredientLine[] = remainingFoods.map((f) => {
+          const category =
+            (f.category as FoodCategory | undefined) ?? suggestCategory(f.name) ?? 'snack';
           return {
             key: `food-${f.id}`,
             name: f.name,
@@ -144,22 +151,27 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
         setLines(merged);
         const defaultChecked = new Set(
           merged
-            .filter(l => l.inStockQty < l.quantity && !l.alreadyInList && !l.isOptional)
-            .map(l => l.key),
+            .filter((l) => l.inStockQty < l.quantity && !l.alreadyInList && !l.isOptional)
+            .map((l) => l.key)
         );
         setChecked(defaultChecked);
         setServings(1);
+        setCustomName('');
+        setCustomQty('1');
+        setCustomUnit('');
       } catch (err) {
         console.error('Failed loading recipe ingredients:', err);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [visible, recipe]);
 
   const toggle = (key: string) => {
-    setChecked(prev => {
+    setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -167,11 +179,38 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
     });
   };
 
+  // Add an item that isn't part of the recipe (the "can't add items not in the
+  // list" gap). It joins the list as a checked "Need to buy" line and is
+  // inserted along with everything else on Add.
+  const addCustomItem = () => {
+    const name = (customName ?? '').trim();
+    if (!name) return;
+    const qty = parseFloat(customQty);
+    const key = `custom-${customKeyRef.current++}`;
+    const line: IngredientLine = {
+      key,
+      name,
+      quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
+      unit: customUnit.trim(),
+      category: suggestCategory(name) ?? 'snack',
+      inStockQty: 0,
+      alreadyInList: false,
+      isOptional: false,
+    };
+    setLines((prev) => [line, ...prev]);
+    setChecked((prev) => new Set(prev).add(key));
+    setCustomName('');
+    setCustomQty('1');
+    setCustomUnit('');
+  };
+
   const grouped = useMemo(() => {
     const buckets: { need: IngredientLine[]; low: IngredientLine[]; stocked: IngredientLine[] } = {
-      need: [], low: [], stocked: [],
+      need: [],
+      low: [],
+      stocked: [],
     };
-    lines.forEach(l => {
+    lines.forEach((l) => {
       const scaled = l.quantity * servings;
       if (l.inStockQty <= 0) buckets.need.push(l);
       else if (l.inStockQty < scaled) buckets.low.push(l);
@@ -182,18 +221,22 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
 
   const handleAdd = async () => {
     if (!recipe) return;
-    const toAdd = lines.filter(l => checked.has(l.key));
+    const toAdd = lines.filter((l) => checked.has(l.key));
     if (toAdd.length === 0) return;
 
     setAdding(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
-      const inserts = toAdd.map(l => ({
+      const inserts = toAdd.map((l) => ({
         user_id: user.id,
         name: l.name,
-        quantity: Math.max(1, Math.round((l.quantity * servings - l.inStockQty) * 100) / 100) || l.quantity * servings,
+        quantity:
+          Math.max(1, Math.round((l.quantity * servings - l.inStockQty) * 100) / 100) ||
+          l.quantity * servings,
         unit: l.unit ?? '',
         category: l.category,
         checked: false,
@@ -217,7 +260,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
   if (!recipe) return null;
 
   const renderRow = (l: IngredientLine) => {
-    const cat = CATEGORIES.find(c => c.key === l.category);
+    const cat = CATEGORIES.find((c) => c.key === l.category);
     const isChecked = checked.has(l.key);
     const scaledQty = Math.round(l.quantity * servings * 100) / 100;
     return (
@@ -261,7 +304,9 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>Add to grocery</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>{recipe.name}</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {recipe.name}
+              </Text>
             </View>
             <TouchableOpacity onPress={onClose} accessibilityLabel="Close">
               <Text style={styles.closeText}>✕</Text>
@@ -273,7 +318,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
             <View style={styles.servingsCtrl}>
               <TouchableOpacity
                 style={styles.servingsBtn}
-                onPress={() => setServings(s => Math.max(1, s - 1))}
+                onPress={() => setServings((s) => Math.max(1, s - 1))}
                 accessibilityLabel="Decrease servings"
               >
                 <Text style={styles.servingsBtnText}>−</Text>
@@ -281,7 +326,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
               <Text style={styles.servingsValue}>{servings}</Text>
               <TouchableOpacity
                 style={styles.servingsBtn}
-                onPress={() => setServings(s => Math.min(20, s + 1))}
+                onPress={() => setServings((s) => Math.min(20, s + 1))}
                 accessibilityLabel="Increase servings"
               >
                 <Text style={styles.servingsBtnText}>+</Text>
@@ -295,6 +340,47 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
             </View>
           ) : (
             <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
+              <View style={styles.customBlock}>
+                <Text style={styles.sectionTitle}>➕ Add an item not in this recipe</Text>
+                <View style={styles.customRow}>
+                  <TextInput
+                    style={styles.customName}
+                    value={customName}
+                    onChangeText={setCustomName}
+                    placeholder="Item name"
+                    placeholderTextColor={colors.textSecondary}
+                    onSubmitEditing={addCustomItem}
+                    returnKeyType="done"
+                    accessibilityLabel="Custom item name"
+                  />
+                  <TextInput
+                    style={styles.customQty}
+                    value={customQty}
+                    onChangeText={setCustomQty}
+                    keyboardType="decimal-pad"
+                    placeholder="Qty"
+                    placeholderTextColor={colors.textSecondary}
+                    accessibilityLabel="Custom item quantity"
+                  />
+                  <TextInput
+                    style={styles.customUnit}
+                    value={customUnit}
+                    onChangeText={setCustomUnit}
+                    placeholder="Unit"
+                    placeholderTextColor={colors.textSecondary}
+                    accessibilityLabel="Custom item unit"
+                  />
+                  <TouchableOpacity
+                    style={[styles.customAdd, !customName.trim() && styles.customAddDisabled]}
+                    onPress={addCustomItem}
+                    disabled={!customName.trim()}
+                    accessibilityLabel="Add custom item"
+                  >
+                    <Text style={styles.customAddText}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {grouped.need.length > 0 && (
                 <>
                   <Text style={styles.sectionTitle}>🛒 Need to buy ({grouped.need.length})</Text>
@@ -314,9 +400,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
                 </>
               )}
               {lines.length === 0 && (
-                <Text style={styles.empty}>
-                  This recipe has no tracked ingredients yet.
-                </Text>
+                <Text style={styles.empty}>This recipe has no tracked ingredients yet.</Text>
               )}
             </ScrollView>
           )}
@@ -333,9 +417,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
               {adding ? (
                 <ActivityIndicator color={colors.background} size="small" />
               ) : (
-                <Text style={styles.saveText}>
-                  Add {totalSelected > 0 ? totalSelected : ''}
-                </Text>
+                <Text style={styles.saveText}>Add {totalSelected > 0 ? totalSelected : ''}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -356,48 +438,129 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
   handle: {
-    width: 40, height: 4, backgroundColor: colors.border,
-    borderRadius: 2, alignSelf: 'center', marginTop: spacing.sm,
+    width: 40,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: spacing.sm,
   },
   headerRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   title: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
   subtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
   closeText: { fontSize: fontSize.xl, color: colors.textSecondary, paddingHorizontal: spacing.sm },
   servingsRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   servingsLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
   servingsCtrl: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   servingsBtn: {
-    width: 36, height: 36, borderRadius: borderRadius.md, borderWidth: 1,
-    borderColor: colors.border, justifyContent: 'center', alignItems: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: colors.surface,
   },
   servingsBtnText: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
   servingsValue: {
-    fontSize: fontSize.md, fontWeight: '600', color: colors.text,
-    minWidth: 32, textAlign: 'center',
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+    minWidth: 32,
+    textAlign: 'center',
   },
   loading: { paddingVertical: spacing.xxl, alignItems: 'center' },
   body: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   sectionTitle: {
-    fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary,
-    marginTop: spacing.md, marginBottom: spacing.xs,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
   },
+  customBlock: {
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  customRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  customName: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    backgroundColor: colors.background,
+  },
+  customQty: {
+    width: 52,
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.xs,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    textAlign: 'center',
+    backgroundColor: colors.background,
+  },
+  customUnit: {
+    width: 60,
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.xs,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    backgroundColor: colors.background,
+  },
+  customAdd: {
+    height: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customAddDisabled: { opacity: 0.5 },
+  customAddText: { fontSize: fontSize.sm, color: colors.background, fontWeight: '700' },
   ingRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    paddingVertical: spacing.sm, minHeight: 48,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    minHeight: 48,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   checkbox: {
-    width: 22, height: 22, borderRadius: borderRadius.sm, borderWidth: 2,
-    borderColor: colors.border, justifyContent: 'center', alignItems: 'center',
+    width: 22,
+    height: 22,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   checkboxActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkmark: { fontSize: 12, color: colors.background, fontWeight: '700' },
@@ -406,24 +569,40 @@ const styles = StyleSheet.create({
   optional: { fontSize: fontSize.xs, color: colors.textSecondary, fontStyle: 'italic' },
   ingMeta: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
   badge: {
-    backgroundColor: colors.surface, paddingHorizontal: spacing.sm, paddingVertical: 2,
-    borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   badgeText: { fontSize: 10, color: colors.textSecondary, fontWeight: '600' },
   empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: spacing.xl },
   footer: {
-    flexDirection: 'row', gap: spacing.sm,
-    paddingHorizontal: spacing.lg, paddingTop: spacing.md,
-    borderTopWidth: 1, borderTopColor: colors.border,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   cancelBtn: {
-    flex: 1, height: 48, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border,
-    justifyContent: 'center', alignItems: 'center',
+    flex: 1,
+    height: 48,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cancelText: { fontSize: fontSize.md, color: colors.text, fontWeight: '600' },
   saveBtn: {
-    flex: 2, height: 48, borderRadius: borderRadius.md, backgroundColor: colors.primary,
-    justifyContent: 'center', alignItems: 'center',
+    flex: 2,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   saveBtnDisabled: { opacity: 0.5 },
   saveText: { fontSize: fontSize.md, color: colors.background, fontWeight: '700' },
