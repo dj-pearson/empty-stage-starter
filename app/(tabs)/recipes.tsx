@@ -6,6 +6,7 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   Image,
@@ -26,6 +27,10 @@ import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/th
 import { CATEGORIES } from '../../app/mobile/lib/unit-suggestions';
 import { RecipeAddToGroceryModal } from '../../app/mobile/components/RecipeAddToGroceryModal';
 import { RecipeAddToPlannerModal } from '../../app/mobile/components/RecipeAddToPlannerModal';
+import {
+  RecipeBuilderSheet,
+  type RecipeForEdit,
+} from '../../app/mobile/components/RecipeBuilderSheet';
 import { SearchField } from '../../app/mobile/components/SearchField';
 import {
   FilterSortSheet,
@@ -100,6 +105,8 @@ export default function RecipesScreen() {
   const [groceryTarget, setGroceryTarget] = useState<RecipeRow | null>(null);
   const [plannerTarget, setPlannerTarget] = useState<RecipeRow | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [builderVisible, setBuilderVisible] = useState(false);
+  const [builderRecipe, setBuilderRecipe] = useState<RecipeForEdit | null>(null);
 
   const patchFilters = useCallback(
     (patch: Partial<RecipeFilters>) => setFilters((prev) => ({ ...prev, ...patch })),
@@ -133,7 +140,13 @@ export default function RecipesScreen() {
           .in('recipe_id', ids);
         if (ingredients) {
           const byRecipe = new Map<string, string[]>();
-          for (const ing of ingredients as Array<{ recipe_id: string; ingredient_name: string }>) {
+          // Live schema uses `ingredient_name`; the generated types call it
+          // `name` (see RecipeBuilderSheet header). Cast at this boundary.
+          const ingredientRows = ingredients as unknown as Array<{
+            recipe_id: string;
+            ingredient_name: string;
+          }>;
+          for (const ing of ingredientRows) {
             const list = byRecipe.get(ing.recipe_id) ?? [];
             list.push(ing.ingredient_name);
             byRecipe.set(ing.recipe_id, list);
@@ -171,21 +184,22 @@ export default function RecipesScreen() {
         .select('id, ingredient_name, quantity, unit, is_optional, sort_order')
         .eq('recipe_id', r.id)
         .order('sort_order', { ascending: true, nullsFirst: false });
-      const mapped: IngredientView[] = (data ?? []).map(
-        (i: {
-          id: string;
-          ingredient_name: string;
-          quantity: number | null;
-          unit: string | null;
-          is_optional: boolean | null;
-        }) => ({
-          id: i.id,
-          name: i.ingredient_name,
-          quantity: i.quantity,
-          unit: i.unit,
-          is_optional: i.is_optional,
-        })
-      );
+      // Live schema uses `ingredient_name`/`is_optional`; the generated types
+      // differ (see RecipeBuilderSheet header). Cast at this boundary.
+      const rows = (data ?? []) as unknown as Array<{
+        id: string;
+        ingredient_name: string;
+        quantity: number | null;
+        unit: string | null;
+        is_optional: boolean | null;
+      }>;
+      const mapped: IngredientView[] = rows.map((i) => ({
+        id: i.id,
+        name: i.ingredient_name,
+        quantity: i.quantity,
+        unit: i.unit,
+        is_optional: i.is_optional,
+      }));
       setDetailIngredients(mapped);
     } catch (err) {
       console.error('Error loading ingredients:', err);
@@ -253,6 +267,55 @@ export default function RecipesScreen() {
     setTimeout(() => setFlash(null), 2500);
   };
 
+  const openCreateRecipe = () => {
+    setBuilderRecipe(null);
+    setBuilderVisible(true);
+  };
+
+  const openEditRecipe = (r: RecipeRow) => {
+    setBuilderRecipe({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      category: r.category,
+      image_url: r.image_url,
+      prep_time: r.prep_time,
+      cook_time: r.cook_time,
+      servings: r.servings,
+      difficulty_level: r.difficulty_level,
+      tags: r.tags,
+      instructions: r.instructions,
+      tips: r.tips,
+      food_ids: r.food_ids,
+    });
+    setDetailRecipe(null);
+    setBuilderVisible(true);
+  };
+
+  const confirmDeleteRecipe = (r: RecipeRow) => {
+    Alert.alert('Delete recipe', `Delete "${r.name}"? This can't be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setDetailRecipe(null);
+          setRecipes((prev) => prev.filter((x) => x.id !== r.id));
+          try {
+            // recipe_ingredients cascades on the recipes FK (ON DELETE CASCADE).
+            const { error } = await supabase.from('recipes').delete().eq('id', r.id);
+            if (error) throw error;
+            showFlash(`Deleted "${r.name}"`);
+          } catch (err) {
+            console.error('Delete recipe failed:', err);
+            Alert.alert('Error', 'Could not delete the recipe.');
+            fetchRecipes();
+          }
+        },
+      },
+    ]);
+  };
+
   const onRefresh = () => {
     setIsRefreshing(true);
     fetchRecipes();
@@ -272,7 +335,16 @@ export default function RecipesScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.screenTitle}>Recipes</Text>
-        <Text style={styles.count}>{filtered.length}</Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.count}>{filtered.length}</Text>
+          <TouchableOpacity
+            style={styles.newBtn}
+            onPress={openCreateRecipe}
+            accessibilityLabel="New recipe"
+          >
+            <Text style={styles.newBtnText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <SearchField
@@ -384,8 +456,17 @@ export default function RecipesScreen() {
             <Text style={styles.emptyText}>
               {filters.search || activeCount > 0
                 ? 'Try a different search or loosen your filters.'
-                : 'Create recipes on the web app to start meal planning.'}
+                : 'Tap + New to create your first recipe.'}
             </Text>
+            {!filters.search && activeCount === 0 && (
+              <TouchableOpacity
+                style={styles.emptyCta}
+                onPress={openCreateRecipe}
+                accessibilityLabel="New recipe"
+              >
+                <Text style={styles.emptyCtaText}>+ New recipe</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -420,7 +501,12 @@ export default function RecipesScreen() {
               <Text style={styles.detailHeaderTitle} numberOfLines={1}>
                 {detailRecipe.name}
               </Text>
-              <View style={{ width: 50 }} />
+              <TouchableOpacity
+                onPress={() => openEditRecipe(detailRecipe)}
+                accessibilityLabel="Edit recipe"
+              >
+                <Text style={styles.detailEdit}>Edit</Text>
+              </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
@@ -524,6 +610,14 @@ export default function RecipesScreen() {
                     <Text style={styles.bodyText}>{detailRecipe.tips}</Text>
                   </>
                 )}
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => confirmDeleteRecipe(detailRecipe)}
+                  accessibilityLabel="Delete recipe"
+                >
+                  <Text style={styles.deleteBtnText}>Delete recipe</Text>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </SafeAreaView>
@@ -545,6 +639,16 @@ export default function RecipesScreen() {
           showFlash(`Scheduled ${info.slot} on ${info.date} for ${info.kidCount || 'you'}`)
         }
       />
+
+      <RecipeBuilderSheet
+        visible={builderVisible}
+        recipe={builderRecipe}
+        onClose={() => setBuilderVisible(false)}
+        onSaved={(msg) => {
+          showFlash(msg);
+          fetchRecipes();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -561,16 +665,24 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   screenTitle: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   count: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
     fontWeight: '600',
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: borderRadius.full,
     overflow: 'hidden',
   },
+  newBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+  },
+  newBtnText: { fontSize: fontSize.sm, color: colors.background, fontWeight: '700' },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -653,6 +765,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   detailBack: { fontSize: fontSize.md, color: colors.primary, fontWeight: '600' },
+  detailEdit: { fontSize: fontSize.md, color: colors.primary, fontWeight: '600' },
   detailHeaderTitle: {
     fontSize: fontSize.md,
     color: colors.text,
@@ -712,4 +825,22 @@ const styles = StyleSheet.create({
   optional: { color: colors.textSecondary, fontStyle: 'italic' },
   emptyInline: { fontSize: fontSize.sm, color: colors.textSecondary, fontStyle: 'italic' },
   bodyText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 22 },
+  deleteBtn: {
+    marginTop: spacing.xl,
+    height: 48,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteBtnText: { fontSize: fontSize.md, color: colors.error, fontWeight: '700' },
+  emptyCta: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+  },
+  emptyCtaText: { fontSize: fontSize.md, color: colors.background, fontWeight: '700' },
 });
