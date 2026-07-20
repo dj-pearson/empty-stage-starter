@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   RefreshControl,
@@ -13,10 +12,26 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import type { FoodCategory } from '@/types';
+import {
+  DEFAULT_FOOD_FILTERS,
+  filterAndSortFoods,
+  foodStock,
+  stockCounts,
+  categoryCounts,
+  activeFoodFilterCount,
+  type FoodFilters,
+} from '@/lib/foodFilters';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 import { sanitizeTextInput } from '../../app/mobile/lib/validation';
 import { CATEGORIES, suggestCategory } from '../../app/mobile/lib/unit-suggestions';
 import { ItemDetailModal, type EditableItem } from '../../app/mobile/components/ItemDetailModal';
+import { SearchField } from '../../app/mobile/components/SearchField';
+import {
+  FilterSortSheet,
+  FilterButton,
+  type FilterGroup,
+} from '../../app/mobile/components/FilterSortSheet';
+import { usePersistedFilters } from '../../app/mobile/hooks/usePersistedFilters';
 
 interface FoodRow {
   id: string;
@@ -28,23 +43,21 @@ interface FoodRow {
   aisle: string | null;
 }
 
-type StockFilter = 'all' | 'low' | 'out';
-
-const LOW_STOCK_THRESHOLD = 2;
-
-function stockOf(qty: number | null): 'out' | 'low' | 'ok' {
-  const q = qty ?? 0;
-  if (q === 0) return 'out';
-  if (q <= LOW_STOCK_THRESHOLD) return 'low';
-  return 'ok';
-}
+const FOOD_SORT_OPTIONS = [
+  { key: 'name', label: 'A–Z' },
+  { key: 'stock-asc', label: 'Lowest stock' },
+  { key: 'category', label: 'Category' },
+];
 
 export default function PantryScreen() {
   const [foods, setFoods] = useState<FoodRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<StockFilter>('all');
+  const { filters, setFilters } = usePersistedFilters<FoodFilters>(
+    'eatpal.mobile.pantry.filters',
+    DEFAULT_FOOD_FILTERS
+  );
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailMode, setDetailMode] = useState<'add' | 'edit'>('add');
   const [detailInitial, setDetailInitial] = useState<EditableItem | undefined>(undefined);
@@ -54,7 +67,9 @@ export default function PantryScreen() {
 
   const fetchFoods = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data } = await supabase
@@ -72,28 +87,37 @@ export default function PantryScreen() {
     }
   }, []);
 
-  useEffect(() => { fetchFoods(); }, [fetchFoods]);
+  useEffect(() => {
+    fetchFoods();
+  }, [fetchFoods]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return foods.filter(f => {
-      if (q && !f.name.toLowerCase().includes(q)) return false;
-      const s = stockOf(f.quantity);
-      if (filter === 'low' && s !== 'low') return false;
-      if (filter === 'out' && s !== 'out') return false;
-      return true;
-    });
-  }, [foods, query, filter]);
+  const patchFilters = useCallback(
+    (patch: Partial<FoodFilters>) => setFilters((prev) => ({ ...prev, ...patch })),
+    [setFilters]
+  );
 
-  const counts = useMemo(() => {
-    const c = { all: foods.length, low: 0, out: 0 };
-    foods.forEach(f => {
-      const s = stockOf(f.quantity);
-      if (s === 'low') c.low++;
-      if (s === 'out') c.out++;
-    });
-    return c;
-  }, [foods]);
+  const filtered = useMemo(() => filterAndSortFoods(foods, filters), [foods, filters]);
+  const counts = useMemo(() => stockCounts(foods), [foods]);
+  const catCounts = useMemo(() => categoryCounts(foods), [foods]);
+  const activeCount = activeFoodFilterCount(filters);
+
+  const filterGroups = useMemo<FilterGroup[]>(
+    () => [
+      {
+        key: 'category',
+        title: 'Category',
+        multi: false,
+        options: CATEGORIES.map((c) => ({
+          key: c.key,
+          label: `${c.label} (${catCounts[c.key] ?? 0})`,
+          emoji: c.emoji,
+        })),
+        selected: filters.category ? [filters.category] : [],
+        onChange: (sel) => patchFilters({ category: (sel[0] as FoodCategory) ?? null }),
+      },
+    ],
+    [filters.category, catCounts, patchFilters]
+  );
 
   const showFlash = (msg: string) => {
     setFlash(msg);
@@ -102,16 +126,15 @@ export default function PantryScreen() {
 
   const adjustQty = async (food: FoodRow, delta: number) => {
     const next = Math.max(0, Math.round(((food.quantity ?? 0) + delta) * 100) / 100);
-    setFoods(prev => prev.map(f => f.id === food.id ? { ...f, quantity: next } : f));
+    setFoods((prev) => prev.map((f) => (f.id === food.id ? { ...f, quantity: next } : f)));
     try {
-      const { error } = await supabase
-        .from('foods')
-        .update({ quantity: next })
-        .eq('id', food.id);
+      const { error } = await supabase.from('foods').update({ quantity: next }).eq('id', food.id);
       if (error) throw error;
     } catch (err) {
       console.error('Failed to update quantity:', err);
-      setFoods(prev => prev.map(f => f.id === food.id ? { ...f, quantity: food.quantity } : f));
+      setFoods((prev) =>
+        prev.map((f) => (f.id === food.id ? { ...f, quantity: food.quantity } : f))
+      );
     }
   };
 
@@ -136,7 +159,9 @@ export default function PantryScreen() {
   const handleDetailSave = async (payload: EditableItem) => {
     setDetailVisible(false);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       if (detailMode === 'add') {
@@ -154,7 +179,10 @@ export default function PantryScreen() {
           .select('id, name, category, quantity, unit, is_safe, aisle')
           .single();
         if (error) throw error;
-        if (data) setFoods(prev => [...prev, data as FoodRow].sort((a, b) => a.name.localeCompare(b.name)));
+        if (data)
+          setFoods((prev) =>
+            [...prev, data as FoodRow].sort((a, b) => a.name.localeCompare(b.name))
+          );
       } else if (payload.id) {
         const updatePayload = {
           name: sanitizeTextInput(payload.name),
@@ -162,7 +190,9 @@ export default function PantryScreen() {
           unit: payload.unit ?? '',
           category: payload.category ?? 'snack',
         };
-        setFoods(prev => prev.map(f => f.id === payload.id ? { ...f, ...updatePayload } as FoodRow : f));
+        setFoods((prev) =>
+          prev.map((f) => (f.id === payload.id ? ({ ...f, ...updatePayload } as FoodRow) : f))
+        );
         const { error } = await supabase.from('foods').update(updatePayload).eq('id', payload.id);
         if (error) throw error;
       }
@@ -180,7 +210,7 @@ export default function PantryScreen() {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          setFoods(prev => prev.filter(f => f.id !== food.id));
+          setFoods((prev) => prev.filter((f) => f.id !== food.id));
           await supabase.from('foods').delete().eq('id', food.id);
         },
       },
@@ -200,7 +230,9 @@ export default function PantryScreen() {
   const handleGrocerySave = async (payload: EditableItem) => {
     setGroceryModalVisible(false);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
       const { error } = await supabase.from('grocery_items').insert({
         user_id: user.id,
@@ -220,7 +252,10 @@ export default function PantryScreen() {
     }
   };
 
-  const onRefresh = () => { setIsRefreshing(true); fetchFoods(); };
+  const onRefresh = () => {
+    setIsRefreshing(true);
+    fetchFoods();
+  };
 
   if (isLoading) {
     return (
@@ -245,33 +280,33 @@ export default function PantryScreen() {
         </TouchableOpacity>
       </View>
 
-      <TextInput
-        style={styles.search}
-        value={query}
-        onChangeText={setQuery}
+      <SearchField
+        value={filters.search}
+        onChangeText={(text) => patchFilters({ search: text })}
         placeholder="Search pantry…"
-        placeholderTextColor={colors.textSecondary}
         accessibilityLabel="Search pantry"
       />
 
       <View style={styles.filterRow}>
         <FilterChip
-          active={filter === 'all'}
+          active={filters.stock === 'all'}
           label={`All (${counts.all})`}
-          onPress={() => setFilter('all')}
+          onPress={() => patchFilters({ stock: 'all' })}
         />
         <FilterChip
-          active={filter === 'low'}
+          active={filters.stock === 'low'}
           label={`Low (${counts.low})`}
           tone="warning"
-          onPress={() => setFilter('low')}
+          onPress={() => patchFilters({ stock: filters.stock === 'low' ? 'all' : 'low' })}
         />
         <FilterChip
-          active={filter === 'out'}
+          active={filters.stock === 'out'}
           label={`Out (${counts.out})`}
           tone="error"
-          onPress={() => setFilter('out')}
+          onPress={() => patchFilters({ stock: filters.stock === 'out' ? 'all' : 'out' })}
         />
+        <View style={{ flex: 1 }} />
+        <FilterButton activeCount={activeCount} onPress={() => setFilterSheetOpen(true)} />
       </View>
 
       {flash && (
@@ -290,12 +325,16 @@ export default function PantryScreen() {
         maxToRenderPerBatch={20}
         windowSize={10}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh}
-            tintColor={colors.primary} colors={[colors.primary]} />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
         }
         renderItem={({ item }) => {
-          const cat = CATEGORIES.find(c => c.key === item.category);
-          const stock = stockOf(item.quantity);
+          const cat = CATEGORIES.find((c) => c.key === item.category);
+          const stock = foodStock(item.quantity);
           return (
             <View style={styles.itemRow}>
               <TouchableOpacity
@@ -307,7 +346,9 @@ export default function PantryScreen() {
               >
                 <View style={[styles.stockDot, styles[`stockDot_${stock}`]]} />
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
                   <Text style={styles.itemMeta}>
                     {cat?.emoji} {cat?.label}
                     {item.unit ? `  ·  ${item.unit}` : ''}
@@ -347,15 +388,37 @@ export default function PantryScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🥫</Text>
             <Text style={styles.emptyTitle}>
-              {query || filter !== 'all' ? 'No matches' : 'Pantry empty'}
+              {filters.search || activeCount > 0 || filters.stock !== 'all'
+                ? 'No matches'
+                : 'Pantry empty'}
             </Text>
             <Text style={styles.emptyText}>
-              {query || filter !== 'all'
+              {filters.search || activeCount > 0 || filters.stock !== 'all'
                 ? 'Try a different search or filter.'
                 : 'Add items you have on hand to track stock.'}
             </Text>
           </View>
         }
+      />
+
+      <FilterSortSheet
+        visible={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        title="Filter pantry"
+        groups={filterGroups}
+        sort={{
+          options: FOOD_SORT_OPTIONS,
+          value: filters.sortBy,
+          onChange: (value) => patchFilters({ sortBy: value as FoodFilters['sortBy'] }),
+        }}
+        onReset={() =>
+          setFilters((prev) => ({
+            ...DEFAULT_FOOD_FILTERS,
+            search: prev.search,
+            stock: prev.stock,
+          }))
+        }
+        activeCount={activeCount}
       />
 
       <ItemDetailModal
@@ -378,12 +441,18 @@ export default function PantryScreen() {
 }
 
 function FilterChip({
-  active, label, tone, onPress,
-}: { active: boolean; label: string; tone?: 'warning' | 'error'; onPress: () => void }) {
+  active,
+  label,
+  tone,
+  onPress,
+}: {
+  active: boolean;
+  label: string;
+  tone?: 'warning' | 'error';
+  onPress: () => void;
+}) {
   const toneStyle =
-    tone === 'warning' ? styles.chipWarning
-    : tone === 'error' ? styles.chipError
-    : undefined;
+    tone === 'warning' ? styles.chipWarning : tone === 'error' ? styles.chipError : undefined;
   return (
     <TouchableOpacity
       style={[styles.chip, active && styles.chipActive, active && toneStyle]}
@@ -400,28 +469,35 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   screenTitle: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
   addTopBtn: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-    backgroundColor: colors.primary, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
   },
   addTopBtnText: { fontSize: fontSize.sm, color: colors.background, fontWeight: '700' },
-  search: {
-    marginHorizontal: spacing.md, marginBottom: spacing.sm,
-    height: 44, borderWidth: 1, borderColor: colors.border,
-    borderRadius: borderRadius.md, paddingHorizontal: spacing.md,
-    fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background,
-  },
   filterRow: {
-    flexDirection: 'row', gap: spacing.xs,
-    paddingHorizontal: spacing.md, marginBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   chip: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.background,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -430,17 +506,27 @@ const styles = StyleSheet.create({
   chipText: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
   chipTextActive: { color: colors.background, fontWeight: '700' },
   flash: {
-    marginHorizontal: spacing.md, marginBottom: spacing.sm,
-    padding: spacing.sm, borderRadius: borderRadius.md,
-    backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: colors.primary,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   flashText: { fontSize: fontSize.sm, color: colors.primaryDark, fontWeight: '600' },
   listContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl },
   itemRow: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    backgroundColor: colors.background, borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
-    marginBottom: spacing.xs, borderWidth: 1, borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
     minHeight: 56,
   },
   itemTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -453,27 +539,41 @@ const styles = StyleSheet.create({
   itemMeta: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
   qtyBlock: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   qtyBtn: {
-    width: 30, height: 30, borderRadius: borderRadius.sm,
-    borderWidth: 1, borderColor: colors.border,
-    justifyContent: 'center', alignItems: 'center',
+    width: 30,
+    height: 30,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: colors.surface,
   },
   qtyBtnText: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
   qtyVal: {
-    minWidth: 28, textAlign: 'center',
-    fontSize: fontSize.sm, fontWeight: '700', color: colors.text,
+    minWidth: 28,
+    textAlign: 'center',
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.text,
   },
   cartBtn: {
-    width: 36, height: 36, borderRadius: borderRadius.md,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
     backgroundColor: colors.primary,
-    justifyContent: 'center', alignItems: 'center', marginLeft: spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.xs,
   },
   cartBtnIcon: { fontSize: fontSize.md },
   emptyState: { alignItems: 'center', paddingVertical: spacing.xxl },
   emptyIcon: { fontSize: 48, marginBottom: spacing.md },
   emptyTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
   emptyText: {
-    fontSize: fontSize.sm, color: colors.textSecondary, marginTop: spacing.sm,
-    paddingHorizontal: spacing.xl, textAlign: 'center',
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    textAlign: 'center',
   },
 });
