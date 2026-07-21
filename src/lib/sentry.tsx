@@ -1,11 +1,29 @@
-import * as Sentry from "@sentry/react";
-import { logger } from "@/lib/logger";
+import * as Sentry from '@sentry/react';
+import { logger } from '@/lib/logger';
+
+/**
+ * EatPal's Sentry DSN for this platform's project.
+ *
+ * A Sentry DSN is a public, client-side identifier (it is embedded in every
+ * shipped web bundle by design and cannot be used to read data) — it is NOT a
+ * secret. We bake it in as the default so error/perf events route to the
+ * correct Sentry project even when the deploy environment doesn't set
+ * `VITE_SENTRY_DSN`. An env var still overrides it (e.g. staging → its own DSN).
+ */
+const DEFAULT_SENTRY_DSN =
+  'https://5a588ac81d62a986ebd2f49a527b1e26@o4510398791352320.ingest.us.sentry.io/4511770287865856';
+
+/** Resolve the active DSN: explicit env override wins, else the platform default. */
+export function resolveSentryDsn(): string {
+  return import.meta.env.VITE_SENTRY_DSN || DEFAULT_SENTRY_DSN;
+}
 
 export function initializeSentry() {
   // Only initialize in production or if explicitly enabled
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
+    const dsn = resolveSentryDsn();
     // Skip if no DSN is configured
-    if (!import.meta.env.VITE_SENTRY_DSN) {
+    if (!dsn) {
       logger.warn('Sentry DSN not configured, skipping initialization');
       return;
     }
@@ -22,72 +40,72 @@ export function initializeSentry() {
       ];
 
       Sentry.init({
-        dsn: import.meta.env.VITE_SENTRY_DSN,
+        dsn,
         environment: import.meta.env.MODE,
 
-      // Performance Monitoring with replay
-      integrations,
+        // Performance Monitoring with replay
+        integrations,
 
-      // Performance Monitoring sample rates
-      tracesSampleRate: import.meta.env.MODE === 'production' ? 0.1 : 1.0,
+        // Performance Monitoring sample rates
+        tracesSampleRate: import.meta.env.MODE === 'production' ? 0.1 : 1.0,
 
-      // Session Replay sample rates
-      replaysSessionSampleRate: 0.1, // 10% of sessions
-      replaysOnErrorSampleRate: 1.0, // 100% of sessions with errors
+        // Session Replay sample rates
+        replaysSessionSampleRate: 0.1, // 10% of sessions
+        replaysOnErrorSampleRate: 1.0, // 100% of sessions with errors
 
-      // Ignore certain errors
-      ignoreErrors: [
-        // Browser extensions
-        'top.GLOBALS',
-        'chrome-extension://',
-        'moz-extension://',
-        // Network errors
-        'NetworkError',
-        'Failed to fetch',
-        // React hydration warnings
-        'Hydration failed',
-      ],
+        // Ignore certain errors
+        ignoreErrors: [
+          // Browser extensions
+          'top.GLOBALS',
+          'chrome-extension://',
+          'moz-extension://',
+          // Network errors
+          'NetworkError',
+          'Failed to fetch',
+          // React hydration warnings
+          'Hydration failed',
+        ],
 
-      // Filter sensitive data
-      beforeSend(event, _hint) {
-        // Remove sensitive data from event
-        if (event.request?.cookies) {
-          delete event.request.cookies;
-        }
+        // Filter sensitive data
+        beforeSend(event, _hint) {
+          // Remove sensitive data from event
+          if (event.request?.cookies) {
+            delete event.request.cookies;
+          }
 
-        if (event.request?.headers) {
-          delete event.request.headers['Authorization'];
-          delete event.request.headers['Cookie'];
-        }
+          if (event.request?.headers) {
+            delete event.request.headers['Authorization'];
+            delete event.request.headers['Cookie'];
+          }
 
-        // Remove PII from breadcrumbs
-        if (event.breadcrumbs) {
-          event.breadcrumbs = event.breadcrumbs.map(breadcrumb => {
-            if (breadcrumb.data) {
-              // Remove email, phone, etc.
-              const sanitized = { ...breadcrumb.data };
-              delete sanitized.email;
-              delete sanitized.phone;
-              delete sanitized.password;
-              return { ...breadcrumb, data: sanitized };
-            }
-            return breadcrumb;
-          });
-        }
+          // Remove PII from breadcrumbs
+          if (event.breadcrumbs) {
+            event.breadcrumbs = event.breadcrumbs.map((breadcrumb) => {
+              if (breadcrumb.data) {
+                // Remove email, phone, etc.
+                const sanitized = { ...breadcrumb.data };
+                delete sanitized.email;
+                delete sanitized.phone;
+                delete sanitized.password;
+                return { ...breadcrumb, data: sanitized };
+              }
+              return breadcrumb;
+            });
+          }
 
-        return event;
-      },
+          return event;
+        },
 
-      // Set user context (non-PII only)
-      beforeSendTransaction(transaction) {
-        // Add custom tags
-        transaction.tags = {
-          ...transaction.tags,
-          app_version: import.meta.env.VITE_APP_VERSION || '0.0.0',
-        };
-        return transaction;
-      },
-    });
+        // Set user context (non-PII only)
+        beforeSendTransaction(transaction) {
+          // Add custom tags
+          transaction.tags = {
+            ...transaction.tags,
+            app_version: import.meta.env.VITE_APP_VERSION || '0.0.0',
+          };
+          return transaction;
+        },
+      });
     } catch (error) {
       logger.error('Failed to initialize Sentry:', error);
     }
@@ -145,7 +163,7 @@ export function ErrorFallback({ error, resetError }: { error: Error; resetError:
               Try Again
             </button>
             <button
-              onClick={() => window.location.href = '/'}
+              onClick={() => (window.location.href = '/')}
               className="flex-1 px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 transition-colors"
             >
               Go Home

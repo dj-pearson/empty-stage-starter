@@ -5,23 +5,23 @@
  */
 
 // Import React first to ensure it's available before any components load
-import React from "react";
-import { logger } from "@/lib/logger";
-import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
+import React from 'react';
+import { logger } from '@/lib/logger';
+import { createRoot } from 'react-dom/client';
+import App from './App.tsx';
 
 // Only load the 2 most critical font weights eagerly (body + heading bold)
-import "@fontsource/inter/400.css";
-import "@fontsource/nunito-sans/700.css";
+import '@fontsource/inter/400.css';
+import '@fontsource/nunito-sans/700.css';
 
 // All other font weights loaded after first paint
 const loadDeferredFonts = () => {
-  import("@fontsource/inter/500.css");
-  import("@fontsource/inter/600.css");
-  import("@fontsource/inter/700.css");
-  import("@fontsource/nunito-sans/400.css");
-  import("@fontsource/nunito-sans/600.css");
-  import("@fontsource/nunito-sans/800.css");
+  import('@fontsource/inter/500.css');
+  import('@fontsource/inter/600.css');
+  import('@fontsource/inter/700.css');
+  import('@fontsource/nunito-sans/400.css');
+  import('@fontsource/nunito-sans/600.css');
+  import('@fontsource/nunito-sans/800.css');
 };
 
 if ('requestIdleCallback' in window) {
@@ -30,12 +30,12 @@ if ('requestIdleCallback' in window) {
   setTimeout(loadDeferredFonts, 100);
 }
 
-import "./index.css";
-import "./styles/mobile-first.css";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { initializeSentry } from "./lib/sentry";
-import { validateEnv } from "./lib/env";
-import { initWebVitals } from "./lib/webVitals";
+import './index.css';
+import './styles/mobile-first.css';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { initializeSentry, resolveSentryDsn } from './lib/sentry';
+import { validateEnv } from './lib/env';
+import { initWebVitals } from './lib/webVitals';
 
 // Validate environment variables (dev only, non-blocking)
 if (import.meta.env.DEV) {
@@ -60,7 +60,7 @@ if (typeof window !== 'undefined') {
 // Log environment info for debugging (only in development)
 debugLog('Starting application...');
 debugLog('Environment:', import.meta.env.MODE);
-debugLog('Sentry DSN configured:', !!import.meta.env.VITE_SENTRY_DSN);
+debugLog('Sentry DSN configured:', !!resolveSentryDsn());
 debugLog('Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
 
 // Defer Sentry initialization to after first render to reduce TBT
@@ -80,7 +80,7 @@ if ('requestIdleCallback' in window) {
 }
 
 // Wrap in global ErrorBoundary for crash recovery
-const rootElement = document.getElementById("root");
+const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Root element not found');
 }
@@ -103,7 +103,8 @@ try {
   logger.error('[EatPal] Failed to render app:', error);
   // Show a basic error message - use safe DOM methods to prevent XSS
   const container = document.createElement('div');
-  container.style.cssText = 'display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;';
+  container.style.cssText =
+    'display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; font-family: system-ui, -apple-system, sans-serif;';
 
   const content = document.createElement('div');
   content.style.cssText = 'max-width: 500px; text-align: center;';
@@ -114,10 +115,12 @@ try {
 
   const message = document.createElement('p');
   message.style.cssText = 'color: #6b7280; margin-bottom: 24px;';
-  message.textContent = 'We encountered an error while starting the app. Please try refreshing the page.';
+  message.textContent =
+    'We encountered an error while starting the app. Please try refreshing the page.';
 
   const button = document.createElement('button');
-  button.style.cssText = 'background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;';
+  button.style.cssText =
+    'background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;';
   button.textContent = 'Refresh Page';
   button.onclick = () => window.location.reload();
 
@@ -128,7 +131,8 @@ try {
   // In development mode, show error details safely using textContent
   if (import.meta.env.MODE === 'development') {
     const errorPre = document.createElement('pre');
-    errorPre.style.cssText = 'margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: left; overflow: auto; font-size: 12px;';
+    errorPre.style.cssText =
+      'margin-top: 24px; padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: left; overflow: auto; font-size: 12px;';
     errorPre.textContent = error instanceof Error ? error.message : String(error);
     content.appendChild(errorPre);
   }
