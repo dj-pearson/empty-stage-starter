@@ -1,7 +1,19 @@
 name: iOS App Store Deploy
 
-# Manual trigger with version input
+# Two ways in:
+#   * push to `develop` touching ios/**  → automatic TestFlight internal build,
+#     matching the branch table in CLAUDE.md. Version comes from
+#     MARKETING_VERSION in project.yml since a push carries no inputs.
+#   * workflow_dispatch                  → deliberate release with an explicit
+#     version, release notes, and the option to tag.
+# `main` is intentionally NOT auto-triggered: it is merge-only, and production
+# ships from a deliberate dispatch or a release/* branch.
 on:
+  push:
+    branches: [develop]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-app-store-deploy.yml'
   workflow_dispatch:
     inputs:
       version:
@@ -54,16 +66,34 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       build_number: ${{ steps.version.outputs.build_number }}
     steps:
-      - name: Validate version format
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve & validate version
         id: version
+        env:
+          # Passed via env rather than interpolated straight into the script:
+          # on an auto-trigger these are empty, and it keeps a dispatch input
+          # from being able to inject shell.
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUILD: ${{ inputs.build_number }}
         run: |
-          VERSION="${{ inputs.version }}"
+          VERSION="$INPUT_VERSION"
+          if [ -z "$VERSION" ]; then
+            # Automatic push trigger — no inputs. MARKETING_VERSION in
+            # project.yml is the single source of truth; it is the same value
+            # Xcode stamps into CFBundleShortVersionString.
+            VERSION="$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p' \
+              "$PROJECT_DIR/project.yml" | head -1)"
+            echo "No version input (auto-trigger) — using MARKETING_VERSION=$VERSION from project.yml"
+          fi
+
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Version must be in semver format (e.g., 1.2.0). Got: $VERSION"
+            echo "::error::Version must be in semver format (e.g., 1.2.0). Got: '$VERSION'"
             exit 1
           fi
 
-          BUILD="${{ inputs.build_number }}"
+          BUILD="$INPUT_BUILD"
           if [ -z "$BUILD" ]; then
             BUILD="$(date -u +%Y%m%d).${{ github.run_number }}"
           fi
@@ -723,7 +753,8 @@ jobs:
             echo "| **Version** | $APP_VERSION |"
             echo "| **Build** | $BUILD_NUMBER |"
             echo "| **Bundle ID** | ${{ env.BUNDLE_ID }} |"
-            echo "| **Release Notes** | ${{ inputs.release_notes }} |"
+            echo "| **Trigger** | ${{ github.event_name }} |"
+            echo "| **Release Notes** | ${{ inputs.release_notes || format('Automatic build from {0}', github.ref_name) }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # -------------------------------------------------------------------
@@ -732,6 +763,10 @@ jobs:
   tag-release:
     name: Tag Release
     needs: [validate, build-and-deploy]
+    # Only deliberate releases claim an `ios/v*` tag. Automatic develop builds
+    # upload to TestFlight without polluting the release tag namespace, which
+    # CLAUDE.md reserves for production deploys.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

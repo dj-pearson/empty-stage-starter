@@ -19,7 +19,11 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "1.0.0"
+    # Source of truth for the App Store marketing version. The deploy workflow
+    # reads this when it is triggered automatically by a push to `develop`;
+    # bump it here to ship a new version. CI overrides both of these at build
+    # time via MARKETING_VERSION= / CURRENT_PROJECT_VERSION= xcodebuild args.
+    MARKETING_VERSION: "1.0.9"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
