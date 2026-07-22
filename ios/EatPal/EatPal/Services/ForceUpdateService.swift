@@ -95,10 +95,12 @@ final class ForceUpdateService: ObservableObject {
     }
 
     /// Decide whether `current` is below `minRaw`. Pure so it can be unit
-    /// tested without a network round-trip. Fails OPEN (returns false) whenever
-    /// either side can't be parsed — an unknown build shape must never lock a
-    /// user out.
-    static func isUpdateRequired(current: String, minimum minRaw: String) -> Bool {
+    /// tested without a network round-trip — `nonisolated` because it touches
+    /// no actor state, which lets the synchronous XCTest cases call it directly
+    /// instead of hopping to the main actor. Fails OPEN (returns false)
+    /// whenever either side can't be parsed — an unknown build shape must never
+    /// lock a user out.
+    nonisolated static func isUpdateRequired(current: String, minimum minRaw: String) -> Bool {
         guard let current = BuildVersion(current),
               let minimum = BuildVersion(minRaw) else {
             return false
