@@ -171,7 +171,7 @@ export const EnhancedRecipeCard = memo(function EnhancedRecipeCard({
             {/* Three-dot menu for all actions */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" data-no-click>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" data-no-click aria-label="Recipe options">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>

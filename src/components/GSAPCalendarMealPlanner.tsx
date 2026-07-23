@@ -464,6 +464,7 @@ function DraggableMealItem({
                               size="icon"
                               className="h-5 w-5 p-0 hover:bg-accent shrink-0"
                               onClick={(e) => e.stopPropagation()}
+                              aria-label="Copy recipe to another child"
                             >
                               <MoreVertical className="h-3 w-3" />
                             </Button>
@@ -536,6 +537,7 @@ function DraggableMealItem({
                       <button
                         onClick={(e) => onToggleRecipeExpand(entry.recipe_id!, e)}
                         className="p-0.5 hover:bg-accent rounded-md transition-colors shrink-0 ml-auto"
+                        aria-label="Toggle ingredients"
                       >
                         {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                       </button>
@@ -643,6 +645,7 @@ function DraggableMealItem({
                             size="icon"
                             className="h-5 w-5 p-0 hover:bg-accent shrink-0 ml-auto"
                             onClick={(e) => e.stopPropagation()}
+                            aria-label="Copy food to another child"
                           >
                             <MoreVertical className="h-3 w-3" />
                           </Button>
@@ -1082,6 +1085,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
             onClick={() => setMobileViewDay(Math.max(0, mobileViewDay - 1))}
             disabled={mobileViewDay === 0}
             className="h-10 w-10"
+            aria-label="Previous day"
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
@@ -1102,6 +1106,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
             onClick={() => setMobileViewDay(Math.min(DAYS_IN_WEEK - 1, mobileViewDay + 1))}
             disabled={mobileViewDay === DAYS_IN_WEEK - 1}
             className="h-10 w-10"
+            aria-label="Next day"
           >
             <ChevronRight className="h-5 w-5" />
           </Button>

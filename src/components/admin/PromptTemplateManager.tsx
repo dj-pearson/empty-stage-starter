@@ -461,6 +461,7 @@ export function PromptTemplateManager() {
                               size="icon"
                               onClick={() => loadVersionHistory(template.id)}
                               title="Version History"
+                              aria-label="Version history"
                             >
                               <History className="h-4 w-4" />
                             </Button>
@@ -469,6 +470,7 @@ export function PromptTemplateManager() {
                               size="icon"
                               onClick={() => handleDuplicate(template)}
                               title="Duplicate"
+                              aria-label="Duplicate template"
                             >
                               <Copy className="h-4 w-4" />
                             </Button>
@@ -477,6 +479,7 @@ export function PromptTemplateManager() {
                               size="icon"
                               onClick={() => openEditDialog(template)}
                               title="Edit"
+                              aria-label="Edit template"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -486,6 +489,7 @@ export function PromptTemplateManager() {
                               onClick={() => requestDelete(template.id)}
                               className="text-destructive hover:text-destructive"
                               title="Delete"
+                              aria-label="Delete template"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

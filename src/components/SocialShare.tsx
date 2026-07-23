@@ -58,13 +58,13 @@ export function SocialShare({ title, text, url = window.location.href }: SocialS
         {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
         {copied ? 'Copied' : 'Copy Link'}
       </Button>
-      <Button onClick={() => window.open(shareUrls.facebook)} variant="outline" size="icon">
+      <Button onClick={() => window.open(shareUrls.facebook)} variant="outline" size="icon" aria-label="Share on Facebook">
         <Facebook className="h-4 w-4" />
       </Button>
-      <Button onClick={() => window.open(shareUrls.twitter)} variant="outline" size="icon">
+      <Button onClick={() => window.open(shareUrls.twitter)} variant="outline" size="icon" aria-label="Share on Twitter">
         <Twitter className="h-4 w-4" />
       </Button>
-      <Button onClick={() => window.location.href = shareUrls.email} variant="outline" size="icon">
+      <Button onClick={() => window.location.href = shareUrls.email} variant="outline" size="icon" aria-label="Share via email">
         <Mail className="h-4 w-4" />
       </Button>
     </div>

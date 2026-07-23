@@ -394,6 +394,7 @@ export function LiveActivityFeed() {
             size="icon"
             onClick={() => setAutoRefresh(!autoRefresh)}
             title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}
+            aria-label={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}
           >
             <RefreshCw
               className={`h-4 w-4 ${autoRefresh ? "animate-spin" : ""}`}
@@ -404,6 +405,7 @@ export function LiveActivityFeed() {
             size="icon"
             onClick={exportToCSV}
             title="Export to CSV"
+            aria-label="Export to CSV"
           >
             <Download className="h-4 w-4" />
           </Button>

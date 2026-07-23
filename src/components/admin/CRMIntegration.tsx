@@ -1075,6 +1075,7 @@ export function CRMIntegration() {
                   variant="ghost"
                   size="icon"
                   onClick={() => removeFieldMapping(index)}
+                  aria-label="Remove field mapping"
                 >
                   <XCircle className="h-4 w-4" />
                 </Button>

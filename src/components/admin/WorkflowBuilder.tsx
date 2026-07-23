@@ -730,6 +730,7 @@ export function WorkflowBuilder() {
                   size="icon"
                   onClick={() => moveNode(node.id, "up")}
                   disabled={index === 0}
+                  aria-label="Move step up"
                 >
                   <ChevronRight className="h-4 w-4 -rotate-90" />
                 </Button>
@@ -738,12 +739,13 @@ export function WorkflowBuilder() {
                   size="icon"
                   onClick={() => moveNode(node.id, "down")}
                   disabled={index === nodes.length - 1}
+                  aria-label="Move step down"
                 >
                   <ChevronRight className="h-4 w-4 rotate-90" />
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" aria-label="Step options">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -930,7 +932,7 @@ export function WorkflowBuilder() {
 
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label="Workflow options">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

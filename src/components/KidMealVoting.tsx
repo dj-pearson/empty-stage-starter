@@ -329,7 +329,7 @@ export function KidMealVoting({
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-3">
           {onBack && (
-            <Button variant="ghost" size="icon" onClick={onBack}>
+            <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back">
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}

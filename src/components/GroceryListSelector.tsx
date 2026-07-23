@@ -130,11 +130,11 @@ export function GroceryListSelector({
         </SelectContent>
       </Select>
 
-      <Button onClick={onCreateNew} variant="outline" size="icon">
+      <Button onClick={onCreateNew} variant="outline" size="icon" aria-label="Create new list">
         <Plus className="h-4 w-4" />
       </Button>
 
-      <Button onClick={onManageLists} variant="outline" size="icon">
+      <Button onClick={onManageLists} variant="outline" size="icon" aria-label="Manage lists">
         <Settings className="h-4 w-4" />
       </Button>
     </div>

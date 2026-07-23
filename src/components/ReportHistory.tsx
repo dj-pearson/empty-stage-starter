@@ -289,7 +289,7 @@ function ReportSummaryCard({ report, onView }: ReportSummaryCardProps) {
             </div>
           </div>
 
-          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onView(); }}>
+          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onView(); }} aria-label="View report">
             <Eye className="h-4 w-4" />
           </Button>
         </div>

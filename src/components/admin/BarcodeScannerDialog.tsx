@@ -583,6 +583,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                           size="icon"
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
                           className="h-10 w-10"
+                          aria-label="Decrease quantity"
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
@@ -600,6 +601,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                           size="icon"
                           onClick={() => setQuantity(quantity + 1)}
                           className="h-10 w-10"
+                          aria-label="Increase quantity"
                         >
                           <Plus className="h-4 w-4" />
                         </Button>

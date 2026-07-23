@@ -419,6 +419,7 @@ export function ScheduledPublishing() {
                         size="icon"
                         onClick={() => handleCancelSchedule(post.id)}
                         className="text-destructive hover:text-destructive"
+                        aria-label="Cancel schedule"
                       >
                         <X className="h-4 w-4" />
                       </Button>

@@ -323,7 +323,7 @@ export const CalendarMealPlanner = memo(function CalendarMealPlanner({
                         {otherKids.length > 0 && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={(e) => e.stopPropagation()} aria-label="Copy recipe to another child">
                                 <MoreVertical className="h-3 w-3" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -345,6 +345,7 @@ export const CalendarMealPlanner = memo(function CalendarMealPlanner({
                         <button
                           onClick={(e) => toggleRecipeExpand(entry.recipe_id!, e)}
                           className="p-0.5 hover:bg-accent rounded"
+                          aria-label="Toggle ingredients"
                         >
                           {isExpanded ? (
                             <ChevronUp className="h-3 w-3" />
@@ -440,7 +441,7 @@ export const CalendarMealPlanner = memo(function CalendarMealPlanner({
                   {otherKids.length > 0 && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={(e) => e.stopPropagation()} aria-label="Copy food to another child">
                           <MoreVertical className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -721,6 +722,7 @@ export const CalendarMealPlanner = memo(function CalendarMealPlanner({
             size="icon"
             onClick={() => setMobileViewDay(Math.max(0, mobileViewDay - 1))}
             disabled={mobileViewDay === 0}
+            aria-label="Previous day"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -737,6 +739,7 @@ export const CalendarMealPlanner = memo(function CalendarMealPlanner({
             size="icon"
             onClick={() => setMobileViewDay(Math.min(DAYS_IN_WEEK - 1, mobileViewDay + 1))}
             disabled={mobileViewDay === DAYS_IN_WEEK - 1}
+            aria-label="Next day"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

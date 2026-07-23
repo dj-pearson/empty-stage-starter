@@ -337,6 +337,7 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
             onPreviousWeek();
             setSelectedDayIndex(0);
           }}
+          aria-label="Previous week"
           className="h-9 w-9"
           aria-label="Previous week"
         >
@@ -360,6 +361,7 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
             onNextWeek();
             setSelectedDayIndex(0);
           }}
+          aria-label="Next week"
           className="h-9 w-9"
           aria-label="Next week"
         >
@@ -407,7 +409,7 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9 shrink-0">
+            <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="More options">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

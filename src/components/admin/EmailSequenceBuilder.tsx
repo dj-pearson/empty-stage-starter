@@ -718,7 +718,7 @@ export function EmailSequenceBuilder() {
 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" aria-label="Sequence options">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -812,12 +812,13 @@ export function EmailSequenceBuilder() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => openPreview(step)}
+                                  aria-label="Preview email"
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
+                                    <Button variant="ghost" size="icon" aria-label="Step options">
                                       <MoreVertical className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
