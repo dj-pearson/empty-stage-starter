@@ -34,12 +34,17 @@ function getSessionId(): string {
 
   const stored = sessionStorage.getItem(SESSION_KEY);
   if (stored) {
-    const { id, timestamp } = JSON.parse(stored);
-    // Check if session is still valid (30 min)
-    if (Date.now() - timestamp < SESSION_EXPIRY) {
-      // Refresh timestamp
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ id, timestamp: Date.now() }));
-      return id;
+    try {
+      const { id, timestamp } = JSON.parse(stored);
+      // Check if session is still valid (30 min)
+      if (id && Date.now() - timestamp < SESSION_EXPIRY) {
+        // Refresh timestamp
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ id, timestamp: Date.now() }));
+        return id;
+      }
+    } catch {
+      // Corrupt/legacy value — fall through and mint a fresh session id below
+      // instead of throwing out of every tracking call that reads it.
     }
   }
 

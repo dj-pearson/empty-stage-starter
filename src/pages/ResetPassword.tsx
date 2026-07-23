@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Helmet } from "react-helmet-async";
 import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { PasswordSchema } from "@/lib/validations";
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
@@ -25,14 +26,17 @@ export default function ResetPassword() {
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
+  // Reuse the shared PasswordSchema so reset enforces the same policy as signup
+  // (previously reset allowed a weaker 8-char password with no special char).
   const passwordRequirements = [
-    { label: "At least 8 characters", valid: password.length >= 8 },
+    { label: "At least 12 characters", valid: password.length >= 12 },
     { label: "Contains uppercase letter", valid: /[A-Z]/.test(password) },
     { label: "Contains lowercase letter", valid: /[a-z]/.test(password) },
     { label: "Contains number", valid: /[0-9]/.test(password) },
+    { label: "Contains special character", valid: /[^A-Za-z0-9]/.test(password) },
   ];
 
-  const isPasswordValid = passwordRequirements.every((req) => req.valid);
+  const isPasswordValid = PasswordSchema.safeParse(password).success;
   const doPasswordsMatch = password === confirmPassword && password.length > 0;
 
   const handleResetPassword = async (e: React.FormEvent) => {
