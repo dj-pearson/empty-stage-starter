@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
-import { checkFeatureLimit } from "@/lib/featureLimits";
+import { checkFeatureLimit, isPlanLimitError } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
@@ -103,6 +103,15 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
+        // Server-side plan-limit trigger rejected the insert — show the upgrade
+        // prompt instead of adding a child the server refused.
+        if (isPlanLimitError(error)) {
+          requestUpgradePrompt({
+            feature: 'Additional child profiles',
+            message: "You've reached your child profile limit. Upgrade to add more.",
+          });
+          return false;
+        }
         logger.error('Supabase addKid error:', error);
         setKids(prev => [...prev, { ...kid, id: generateId() }]);
       } else if (data) {
