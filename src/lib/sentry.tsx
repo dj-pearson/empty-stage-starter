@@ -36,7 +36,9 @@ export function initializeSentry() {
       // consent (compliance audit 2026-07). Error/performance monitoring is
       // retained under legitimate interest for security and reliability; only
       // the replay integration is added when the visitor has opted in.
-      const integrations: Sentry.Integration[] = [Sentry.browserTracingIntegration()];
+      // Type inferred from the integration return type — the installed
+      // @sentry/react does not export a `Sentry.Integration` type alias.
+      const integrations = [Sentry.browserTracingIntegration()];
       if (hasAnalyticsConsent()) {
         integrations.push(
           Sentry.replayIntegration({
