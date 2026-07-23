@@ -44,37 +44,47 @@ export function useAsync<T>(
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
   }, []);
 
-  const execute = useCallback(
-    async (...args: unknown[]) => {
-      setState({ data: null, error: null, loading: true });
+  // US-543: keep the caller's (often inline / unmemoized) asyncFunction and
+  // handlers in refs so `execute` is stable. Otherwise a new asyncFunction each
+  // render gave `execute` a new identity, and the immediate effect below
+  // (`[immediate, execute]`) re-fired every render — an unbounded refetch loop
+  // for any caller passing an inline function (which `useFetch` did by default).
+  const asyncFunctionRef = useRef(asyncFunction);
+  asyncFunctionRef.current = asyncFunction;
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
-      try {
-        const data = await asyncFunction(...args);
+  const execute = useCallback(async (...args: unknown[]) => {
+    setState({ data: null, error: null, loading: true });
 
-        if (isMountedRef.current) {
-          setState({ data, error: null, loading: false });
-          onSuccess?.(data);
-        }
+    try {
+      const data = await asyncFunctionRef.current(...args);
 
-        return data;
-      } catch (error) {
-        const err = error as Error;
-
-        if (isMountedRef.current) {
-          setState({ data: null, error: err, loading: false });
-          onError?.(err);
-        }
-
-        throw error;
+      if (isMountedRef.current) {
+        setState({ data, error: null, loading: false });
+        onSuccessRef.current?.(data);
       }
-    },
-    [asyncFunction, onSuccess, onError]
-  );
+
+      return data;
+    } catch (error) {
+      const err = error as Error;
+
+      if (isMountedRef.current) {
+        setState({ data: null, error: err, loading: false });
+        onErrorRef.current?.(err);
+      }
+
+      throw error;
+    }
+  }, []);
 
   useEffect(() => {
     if (immediate) {
@@ -151,6 +161,20 @@ export function useFetch<T>(
     onSuccess,
     onError,
   });
+
+  // `execute` is now stable (see useAsync), so the mount fetch above no longer
+  // re-runs on url change. Drive re-fetch on url change explicitly, skipping the
+  // initial mount (already handled by `immediate`) to avoid a duplicate fetch.
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    if (url) {
+      execute();
+    }
+  }, [url, execute]);
 
   const refetch = useCallback(() => {
     if (url) {

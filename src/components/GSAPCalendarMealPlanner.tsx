@@ -181,9 +181,9 @@ function DraggableMealItem({
   // Fire a "chip shown" event once per (entry, missingCount > 0) transition.
   useEffect(() => {
     if (missingCount > 0 && entry.recipe_id) {
-      analytics.trackEvent({
-        name: "plan_entry_missing_chip_shown",
-        properties: { recipe_id: entry.recipe_id, missing_count: missingCount },
+      analytics.trackEvent("plan_entry_missing_chip_shown", {
+        recipe_id: entry.recipe_id,
+        missing_count: missingCount,
       });
     }
   }, [missingCount, entry.recipe_id]);
@@ -385,7 +385,12 @@ function DraggableMealItem({
     return () => {
       draggableRef.current?.[0]?.kill();
     };
-  }, [entry, containerRef, cellRefs, findClosestCell, onMoveEntry]);
+    // Depend on entry's stable identity fields (id/date/meal_slot — all the drag
+    // handler reads) rather than the entry object, which is a fresh reference on
+    // every planEntries update (incl. the 300ms-debounced realtime sync). Using
+    // the object rebuilt every draggable on each tick — expensive on a full grid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry.id, entry.date, entry.meal_slot, containerRef, cellRefs, findClosestCell, onMoveEntry]);
 
   // Render recipe entry
   if (entry.recipe_id && recipe) {
@@ -484,12 +489,9 @@ function DraggableMealItem({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            analytics.trackEvent({
-                              name: "plan_entry_missing_chip_tapped",
-                              properties: {
-                                recipe_id: entry.recipe_id,
-                                missing_count: missingCount,
-                              },
+                            analytics.trackEvent("plan_entry_missing_chip_tapped", {
+                              recipe_id: entry.recipe_id,
+                              missing_count: missingCount,
                             });
                             onOpenMissingForRecipe(entry.recipe_id!);
                           }}

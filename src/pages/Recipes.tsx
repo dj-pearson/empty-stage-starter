@@ -296,13 +296,10 @@ export default function Recipes() {
         `Added ${touched} ${touched === 1 ? "item" : "items"} to grocery`,
         { description: recipe.name }
       );
-      analytics.trackEvent({
-        name: "recipe_add_missing_to_grocery",
-        properties: {
-          recipe_id: recipe.id,
-          missing_count: missingFoods.length,
-          total_ingredients: recipe.food_ids.length,
-        },
+      analytics.trackEvent("recipe_add_missing_to_grocery", {
+        recipe_id: recipe.id,
+        missing_count: missingFoods.length,
+        total_ingredients: recipe.food_ids.length,
       });
     },
     [addGroceryItemsMerged]

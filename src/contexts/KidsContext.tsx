@@ -4,11 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
-import { checkFeatureLimit } from "@/lib/featureLimits";
+import { checkFeatureLimit, isPlanLimitError } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { parseKidRow, parseKidRows } from "@/lib/normalizeEntities";
+import { parseKidRow, parseKidRows, upsertById } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -103,10 +103,20 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
+        // Server-side plan-limit trigger rejected the insert — show the upgrade
+        // prompt instead of adding a child the server refused.
+        if (isPlanLimitError(error)) {
+          requestUpgradePrompt({
+            feature: 'Additional child profiles',
+            message: "You've reached your child profile limit. Upgrade to add more.",
+          });
+          return false;
+        }
         logger.error('Supabase addKid error:', error);
         setKids(prev => [...prev, { ...kid, id: generateId() }]);
       } else if (data) {
-        setKids(prev => [...prev, data as unknown as Kid]);
+        const inserted = parseKidRow(data as Record<string, unknown>);
+        if (inserted) setKids(prev => upsertById(prev, inserted));
       }
       return true;
     }

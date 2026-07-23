@@ -8,7 +8,7 @@ import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 import { planGroceryMerge, splitIngredientBlock, type GroceryAddInput } from "@/lib/groceryMerge";
-import { parseGroceryItemRow } from "@/lib/normalizeEntities";
+import { parseGroceryItemRow, parseGroceryItemRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -119,7 +119,8 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
             logger.error('Supabase addGroceryItem error:', error);
             setGroceryItemsRaw(prev => [...prev, { ...item, id: generateId(), checked: false }]);
           } else if (data) {
-            setGroceryItemsRaw(prev => [...prev, data as unknown as GroceryItem]);
+            const inserted = parseGroceryItemRow(data as Record<string, unknown>);
+            if (inserted) setGroceryItemsRaw(prev => upsertById(prev, inserted));
           }
         });
     } else {
@@ -243,7 +244,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
                 ...plan.inserts.map(i => ({ ...i, unit: i.unit ?? '', category: i.category as GroceryItem['category'], id: generateId(), checked: false }) as GroceryItem),
               ]);
             } else if (data) {
-              setGroceryItemsRaw(prev => [...prev, ...(data as unknown as GroceryItem[])]);
+              setGroceryItemsRaw(prev => upsertManyById(prev, parseGroceryItemRows(data as unknown[])));
             }
           });
       } else {

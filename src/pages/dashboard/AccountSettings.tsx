@@ -332,21 +332,39 @@ export default function AccountSettings() {
 
     setDeleteLoading(true);
     try {
-      // Cascade delete all user data
-      await Promise.all([
-        supabase.from("plan_entries").delete().eq("user_id", user.id),
-        supabase.from("grocery_items").delete().eq("user_id", user.id),
-        supabase.from("foods").delete().eq("user_id", user.id),
-        supabase.from("recipes").delete().eq("user_id", user.id),
-        supabase.from("kids").delete().eq("user_id", user.id),
-      ]);
+      // 1. Cancel any live Stripe subscription first, so the user is not
+      //    billed after their account (and its subscription record) is gone.
+      //    Only a billable subscription that isn't already ending needs this.
+      const hasBillableSubscription =
+        (isActive || isTrialing || isPastDue) &&
+        !willCancelAtPeriodEnd &&
+        !subscription?.is_complementary;
 
-      // Sign out and redirect
+      if (hasBillableSubscription) {
+        const result = await cancel();
+        if (!result?.success) {
+          // Abort: deleting the account while the Stripe subscription is still
+          // live would leave the user billed with no way to manage it.
+          toast.error(
+            "We couldn't cancel your subscription. Please cancel it or contact support@tryeatpal.com before deleting your account."
+          );
+          return;
+        }
+      }
+
+      // 2. Delete the account server-side. The delete-account edge function
+      //    uses the service role to scrub every user-scoped table (including
+      //    grocery_lists and user_subscriptions) and removes the auth user —
+      //    replacing the previous partial, client-side cascade delete.
+      const { error } = await invokeEdgeFunction("delete-account", { body: {} });
+      if (error) throw error;
+
+      // 3. Sign out and redirect.
       await supabase.auth.signOut();
-      toast.success("Your data has been deleted. Redirecting...");
+      toast.success("Your account has been deleted. Redirecting...");
       window.location.href = "/";
     } catch (_err) {
-      toast.error("Failed to delete account data. Please contact support@tryeatpal.com.");
+      toast.error("Failed to delete your account. Please contact support@tryeatpal.com.");
     } finally {
       setDeleteLoading(false);
     }

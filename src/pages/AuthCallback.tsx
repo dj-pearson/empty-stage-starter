@@ -22,6 +22,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import { loginHistory, type LoginMethod } from '@/lib/login-history';
+import { sanitizeURL } from '@/lib/validations';
+
+/**
+ * Resolve a post-auth redirect to a safe INTERNAL path, matching the guard on
+ * Auth.tsx. Prevents a crafted redirect_to / stored oauth_redirect from sending
+ * the user to an arbitrary destination after login.
+ */
+function safeInternalRedirect(raw: string | null | undefined): string {
+  const sanitized = sanitizeURL(raw || '/dashboard');
+  return sanitized.startsWith('/') && !sanitized.startsWith('//')
+    ? sanitized
+    : '/dashboard';
+}
 import { trackSignup } from '@/lib/conversion-tracking';
 
 export default function AuthCallback() {
@@ -183,8 +196,11 @@ export default function AuthCallback() {
 
       setStatus('success');
 
-      // Get the stored redirect destination (or use override from URL param)
-      const storedRedirect = overrideRedirect || sessionStorage.getItem('oauth_redirect');
+      // Get the stored redirect destination (or use override from URL param),
+      // validated to an internal path to prevent open-redirect / path injection.
+      const storedRedirect = safeInternalRedirect(
+        overrideRedirect || sessionStorage.getItem('oauth_redirect'),
+      );
       sessionStorage.removeItem('oauth_redirect');
 
       // Check if onboarding is complete

@@ -63,16 +63,17 @@ export function useINPMonitor(): UseINPMonitorResult {
       setRating(currentINP !== null ? rateINP(currentINP) : null);
       setInteractions(entriesRef.current.length);
 
-      if (
-        !worstInteraction ||
-        entry.duration > worstInteraction.duration
-      ) {
-        setWorstInteraction(entry);
-      }
+      // Functional update so the effect can have an empty dep array. Depending
+      // on worstInteraction tore down and recreated the PerformanceObserver on
+      // every qualifying interaction (observer churn, dropped/double-counted
+      // entries). Create the observer once.
+      setWorstInteraction((prev) =>
+        !prev || entry.duration > prev.duration ? entry : prev,
+      );
     });
 
     return cleanup;
-  }, [worstInteraction]);
+  }, []);
 
   return { inp, rating, interactions, worstInteraction, reset };
 }

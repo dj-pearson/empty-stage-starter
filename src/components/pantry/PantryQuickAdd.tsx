@@ -73,13 +73,10 @@ export function PantryQuickAdd({ onAddOne, onAddMany }: Props) {
     try {
       await onAddOne(parsed);
       setValue("");
-      analytics.trackEvent({
-        name: "pantry_quick_add_submitted",
-        properties: {
-          parse_confidence: parsed.confidence,
-          had_explicit_unit: parsed.unit !== "",
-          path: "single",
-        },
+      analytics.trackEvent("pantry_quick_add_submitted", {
+        parse_confidence: parsed.confidence,
+        had_explicit_unit: parsed.unit !== "",
+        path: "single",
       });
       // Re-focus so the next item flows without mouse work.
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -103,14 +100,11 @@ export function PantryQuickAdd({ onAddOne, onAddMany }: Props) {
       setBulkValue("");
       setBulkOpen(false);
       toast.success(`Added ${parses.length} item${parses.length === 1 ? "" : "s"} to pantry`);
-      analytics.trackEvent({
-        name: "pantry_quick_add_submitted",
-        properties: {
-          parse_confidence:
-            parses.reduce((acc, p) => acc + p.confidence, 0) / parses.length,
-          line_count: parses.length,
-          path: "bulk",
-        },
+      analytics.trackEvent("pantry_quick_add_submitted", {
+        parse_confidence:
+          parses.reduce((acc, p) => acc + p.confidence, 0) / parses.length,
+        line_count: parses.length,
+        path: "bulk",
       });
     } catch (err) {
       logger.error("Pantry bulk-add failed:", err);

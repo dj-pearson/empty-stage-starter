@@ -146,7 +146,13 @@ export function formatRelativeTime(date: Date | string | number): string {
  */
 export function toISODate(date: Date | string | number): string {
   const d = new Date(date);
-  return d.toISOString().split('T')[0];
+  // Build from LOCAL parts. toISOString() converts to UTC first, which shifts
+  // the calendar day for users away from UTC (e.g. after ~4pm US/Pacific it
+  // returns tomorrow), so a date-keyed feature would write to the wrong day.
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -348,22 +354,26 @@ export function getMonthName(
  * Parse date from common formats
  */
 export function parseDate(dateString: string): Date | null {
-  // Try ISO format
-  const isoDate = new Date(dateString);
-  if (!isNaN(isoDate.getTime())) {
-    return isoDate;
+  // Try YYYY-MM-DD FIRST. new Date('YYYY-MM-DD') parses as UTC midnight, which
+  // renders as the previous day in negative-UTC timezones, so build a LOCAL
+  // date. (Previously this branch was unreachable — the generic new Date()
+  // below caught the string first and produced the off-by-one.)
+  const isoMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
   }
 
-  // Try MM/DD/YYYY
+  // Try MM/DD/YYYY (also a local date)
   const usMatch = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (usMatch) {
     return new Date(parseInt(usMatch[3]), parseInt(usMatch[1]) - 1, parseInt(usMatch[2]));
   }
 
-  // Try YYYY-MM-DD
-  const isoMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoMatch) {
-    return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
+  // Fall back to the generic parser for full ISO datetimes / RFC strings, which
+  // carry their own time + offset and should be parsed as-is.
+  const parsed = new Date(dateString);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
   }
 
   return null;

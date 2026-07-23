@@ -89,6 +89,33 @@ export const parseKidRows = (rows: unknown[]): Kid[] => parseRows(rows, kidRowSc
 export const parsePlanEntryRows = (rows: unknown[]): PlanEntry[] => parseRows(rows, planEntryRowSchema, normalizePlanEntryFromDB, 'plan_entry');
 export const parseGroceryItemRows = (rows: unknown[]): GroceryItem[] => parseRows(rows, groceryItemRowSchema, normalizeGroceryItemFromDB, 'grocery_item');
 
+/**
+ * Append an entity to a list, or replace the existing entry if one with the same
+ * id is already present. Used on insert-success so an optimistic push can't
+ * duplicate a row that the household realtime INSERT already appended (the
+ * WebSocket event can arrive before the insert HTTP promise resolves). Mirrors
+ * the dedupe-by-id logic in the applyXRealtime helpers.
+ */
+export function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
+  const idx = list.findIndex((x) => x.id === item.id);
+  if (idx === -1) return [...list, item];
+  const next = list.slice();
+  next[idx] = item;
+  return next;
+}
+
+/** Batch form of upsertById — appends or replaces each item by id, order-preserving. */
+export function upsertManyById<T extends { id: string }>(list: T[], items: T[]): T[] {
+  if (items.length === 0) return list;
+  const next = list.slice();
+  for (const item of items) {
+    const idx = next.findIndex((x) => x.id === item.id);
+    if (idx === -1) next.push(item);
+    else next[idx] = item;
+  }
+  return next;
+}
+
 export function normalizeGroceryItemFromDB(row: Row): GroceryItem {
   const quantity = Number(row.quantity);
   return {

@@ -215,7 +215,25 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     signedOutRef.current = false;
     const scope = `${userId}:${householdId}`;
     if (loadedScopeRef.current === scope) return;
+    const prevUserId = loadedScopeRef.current?.split(':')[0] ?? null;
     loadedScopeRef.current = scope;
+
+    // US-538 leak guard: if a DIFFERENT user resolves on this device without an
+    // intervening SIGNED_OUT event (account switch, token change), clear the
+    // previous user's in-memory data before loading the new user's. Foods/kids/
+    // recipes/grocery are overwritten wholesale below, but plan entries are
+    // MERGED with `prev` (mergeWindowedPlanEntries, to preserve out-of-window
+    // history), so without this clear user A's out-of-window entries would leak
+    // into user B's calendar. The awaited network load below runs after these
+    // state resets flush, so the merge sees an empty `prev`.
+    if (prevUserId && prevUserId !== userId) {
+      setFoods([]);
+      setKids([]);
+      setRecipes([]);
+      setActiveKidId(null);
+      setPlanEntriesState([]);
+      setGroceryItemsState([]);
+    }
 
     const loadUserData = async (retried = false): Promise<void> => {
       try {

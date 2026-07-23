@@ -3,11 +3,11 @@ import { Food } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
-import { checkFeatureLimit } from "@/lib/featureLimits";
+import { checkFeatureLimit, isPlanLimitError } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
-import { parseFoodRow, parseFoodRows } from "@/lib/normalizeEntities";
+import { parseFoodRow, parseFoodRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
 
 interface RealtimePayload<T> {
@@ -100,11 +100,21 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
+        // Server-side plan-limit trigger rejected the insert (client pre-check
+        // was bypassed/stale) — surface the upgrade prompt instead of adding a
+        // row the server refused.
+        if (isPlanLimitError(error)) {
+          requestUpgradePrompt({
+            feature: 'More pantry foods',
+            message: "You've reached your pantry food limit. Upgrade to add more.",
+          });
+          return false;
+        }
         logger.error('Supabase addFood error:', error);
         setFoods(prev => [...prev, { ...food, id: generateId() }]);
       } else if (data) {
         const inserted = parseFoodRow(data as Record<string, unknown>);
-        if (inserted) setFoods(prev => [...prev, inserted]);
+        if (inserted) setFoods(prev => upsertById(prev, inserted));
       }
       return true;
     }
@@ -163,11 +173,18 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         .select();
 
       if (error) {
+        if (isPlanLimitError(error)) {
+          requestUpgradePrompt({
+            feature: 'More pantry foods',
+            message: "You've reached your pantry food limit. Upgrade to add more.",
+          });
+          return false;
+        }
         logger.error('Supabase addFoods error:', error);
         const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
         setFoods(prev => [...prev, ...localFoods]);
       } else if (data) {
-        setFoods(prev => [...prev, ...parseFoodRows(data as unknown[])]);
+        setFoods(prev => upsertManyById(prev, parseFoodRows(data as unknown[])));
       }
       return true;
     }

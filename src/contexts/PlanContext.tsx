@@ -6,7 +6,7 @@ import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { parsePlanEntryRow } from "@/lib/normalizeEntities";
+import { parsePlanEntryRow, parsePlanEntryRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -104,7 +104,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
             logger.error('Supabase addPlanEntry error:', error);
             setPlanEntriesRaw(prev => [...prev, { ...entry, id: generateId() }]);
           } else if (data) {
-            setPlanEntriesRaw(prev => [...prev, data as unknown as PlanEntry]);
+            const inserted = parsePlanEntryRow(data as Record<string, unknown>);
+            if (inserted) setPlanEntriesRaw(prev => upsertById(prev, inserted));
           }
         });
     } else {
@@ -122,7 +123,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         const localEntries = entries.map(e => ({ ...e, id: generateId() }));
         setPlanEntriesRaw(prev => [...prev, ...localEntries]);
       } else if (data) {
-        setPlanEntriesRaw(prev => [...prev, ...(data as unknown as PlanEntry[])]);
+        setPlanEntriesRaw(prev => upsertManyById(prev, parsePlanEntryRows(data as unknown[])));
       }
     } else {
       const newEntries = entries.map(e => ({ ...e, id: generateId() }));

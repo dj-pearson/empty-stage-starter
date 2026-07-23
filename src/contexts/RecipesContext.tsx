@@ -6,6 +6,7 @@ import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
+import { upsertById } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -270,7 +271,7 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
       if (data) {
         const newRecipe = parseRecipeRow(data);
         if (newRecipe) {
-          setRecipes(prev => [...prev, newRecipe]);
+          setRecipes(prev => upsertById(prev, newRecipe));
           return newRecipe;
         }
       }

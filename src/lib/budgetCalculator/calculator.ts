@@ -140,7 +140,7 @@ function generateBudgetTips(
   // Weekly budget tip
   const weeklyBudget = Math.round((monthlyBudget / 4.33) * 100) / 100;
   tips.push(
-    `Aim for a weekly grocery budget of $${weeklyBudget} (approximately ${Math.round(
+    `Aim for a weekly grocery budget of ${formatCurrency(weeklyBudget)} (approximately ${formatCurrency(
       weeklyBudget / familySize
     )} per person).`
   );

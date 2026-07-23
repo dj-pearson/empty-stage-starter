@@ -34,12 +34,21 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
   } = options;
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [pullDistance, setPullDistance] = useState(0);
+  const [pullDistance, setPullDistanceState] = useState(0);
 
   const touchStartY = useRef<number>(0);
   const currentY = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtTop = useRef<boolean>(true);
+  // Mirror pullDistance in a ref so the touch-listener effect can read the
+  // latest value without depending on it. Depending on pullDistance re-ran the
+  // effect (removing + re-adding all four listeners) on every pixel of the pull,
+  // which could drop the gesture mid-drag.
+  const pullDistanceRef = useRef(0);
+  const setPullDistance = useCallback((value: number) => {
+    pullDistanceRef.current = value;
+    setPullDistanceState(value);
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !enabled) return;
@@ -90,7 +99,7 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
     };
 
     const handleTouchEnd = () => {
-      if (pullDistance >= threshold) {
+      if (pullDistanceRef.current >= threshold) {
         handleRefresh();
       } else {
         setPullDistance(0);
@@ -111,7 +120,7 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [pullDistance, threshold, handleRefresh, isRefreshing, enabled]);
+  }, [threshold, resistance, handleRefresh, isRefreshing, enabled, setPullDistance]);
 
   return {
     pullToRefreshRef: containerRef,
