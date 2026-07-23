@@ -17,8 +17,14 @@ final class CachedFood {
     var allergens: [String]?
     var barcode: String?
     var lastSyncedAt: Date
+    /// US-489: the id of the user whose session cached this row. Reads are
+    /// filtered by it so a previous account's cache can never be shown to a
+    /// different user who signs in on the same device. Defaulted so SwiftData
+    /// lightweight migration adds it to pre-existing rows (which then read as
+    /// "" — owned by no one — and are safely ignored).
+    var cachedByUserId: String = ""
 
-    init(from food: Food) {
+    init(from food: Food, cachedByUserId: String) {
         self.id = food.id
         self.name = food.name
         self.category = food.category
@@ -27,6 +33,7 @@ final class CachedFood {
         self.allergens = food.allergens
         self.barcode = food.barcode
         self.lastSyncedAt = Date()
+        self.cachedByUserId = cachedByUserId
     }
 
     func toFood(userId: String) -> Food {
@@ -50,13 +57,16 @@ final class CachedKid {
     var age: Int?
     var pickinessLevel: String?
     var lastSyncedAt: Date
+    /// US-489: see `CachedFood.cachedByUserId`.
+    var cachedByUserId: String = ""
 
-    init(from kid: Kid) {
+    init(from kid: Kid, cachedByUserId: String) {
         self.id = kid.id
         self.name = kid.name
         self.age = kid.age
         self.pickinessLevel = kid.pickinessLevel
         self.lastSyncedAt = Date()
+        self.cachedByUserId = cachedByUserId
     }
 
     func toKid(userId: String) -> Kid {
@@ -79,8 +89,10 @@ final class CachedGroceryItem {
     var unit: String
     var checked: Bool
     var lastSyncedAt: Date
+    /// US-489: see `CachedFood.cachedByUserId`.
+    var cachedByUserId: String = ""
 
-    init(from item: GroceryItem) {
+    init(from item: GroceryItem, cachedByUserId: String) {
         self.id = item.id
         self.name = item.name
         self.category = item.category
@@ -88,6 +100,7 @@ final class CachedGroceryItem {
         self.unit = item.unit
         self.checked = item.checked
         self.lastSyncedAt = Date()
+        self.cachedByUserId = cachedByUserId
     }
 
     func toGroceryItem(userId: String) -> GroceryItem {
@@ -117,8 +130,15 @@ final class PendingMutation {
     /// block the whole queue forever. Defaulted so SwiftData lightweight
     /// migration adds it to existing rows.
     var attemptCount: Int = 0
+    /// US-489: the id of the user who enqueued this mutation. The sync pass
+    /// only replays mutations belonging to the currently-authenticated user,
+    /// so one account's queued offline writes can never be replayed under a
+    /// different account's session. Defaulted for lightweight migration; a
+    /// legacy "" row is adopted by whoever is signed in at sync time (the
+    /// offline queue is effectively single-user per device).
+    var userId: String = ""
 
-    init(table: String, operation: String, entityId: String, payload: Data? = nil) {
+    init(table: String, operation: String, entityId: String, payload: Data? = nil, userId: String = "") {
         self.id = UUID().uuidString
         self.table = table
         self.operation = operation
@@ -126,6 +146,7 @@ final class PendingMutation {
         self.payload = payload
         self.createdAt = Date()
         self.attemptCount = 0
+        self.userId = userId
     }
 }
 
@@ -211,16 +232,21 @@ final class OfflineStore: ObservableObject {
     /// so updated rows refresh, server-side deletions are pruned, and a
     /// re-cache of an existing id can't 409 on the `.unique` constraint or
     /// leak unbounded duplicate rows.
-    func cacheFoods(_ foods: [Food]) {
+    func cacheFoods(_ foods: [Food], ownerUserId: String) {
         try? context.delete(model: CachedFood.self)
         for food in foods {
-            context.insert(CachedFood(from: food))
+            context.insert(CachedFood(from: food, cachedByUserId: ownerUserId))
         }
         try? context.save()
     }
 
     func loadCachedFoods(userId: String) -> [Food] {
+        // US-489: never serve a cache written by a different account. An empty
+        // userId (no session) matches nothing, so it returns [] rather than
+        // leaking a stale account's rows.
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedFood>(
+            predicate: #Predicate { $0.cachedByUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -229,16 +255,18 @@ final class OfflineStore: ObservableObject {
 
     // MARK: - Cache Kids
 
-    func cacheKids(_ kids: [Kid]) {
+    func cacheKids(_ kids: [Kid], ownerUserId: String) {
         try? context.delete(model: CachedKid.self)
         for kid in kids {
-            context.insert(CachedKid(from: kid))
+            context.insert(CachedKid(from: kid, cachedByUserId: ownerUserId))
         }
         try? context.save()
     }
 
     func loadCachedKids(userId: String) -> [Kid] {
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedKid>(
+            predicate: #Predicate { $0.cachedByUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
@@ -247,30 +275,44 @@ final class OfflineStore: ObservableObject {
 
     // MARK: - Cache Grocery Items
 
-    func cacheGroceryItems(_ items: [GroceryItem]) {
+    func cacheGroceryItems(_ items: [GroceryItem], ownerUserId: String) {
         try? context.delete(model: CachedGroceryItem.self)
         for item in items {
-            context.insert(CachedGroceryItem(from: item))
+            context.insert(CachedGroceryItem(from: item, cachedByUserId: ownerUserId))
         }
         try? context.save()
     }
 
     func loadCachedGroceryItems(userId: String) -> [GroceryItem] {
+        guard !userId.isEmpty else { return [] }
         let descriptor = FetchDescriptor<CachedGroceryItem>(
+            predicate: #Predicate { $0.cachedByUserId == userId },
             sortBy: [SortDescriptor(\.name)]
         )
         let cached = (try? context.fetch(descriptor)) ?? []
         return cached.map { $0.toGroceryItem(userId: userId) }
     }
 
+    /// US-489: drop all display caches (foods/kids/grocery) without touching
+    /// the pending-mutation queue. Called on sign-out so an account's cached
+    /// rows don't linger on disk; the queue is user-scoped and kept so a
+    /// departing user's un-synced writes still replay when they return.
+    func clearCachedData() {
+        try? context.delete(model: CachedFood.self)
+        try? context.delete(model: CachedKid.self)
+        try? context.delete(model: CachedGroceryItem.self)
+        try? context.save()
+    }
+
     // MARK: - Pending Mutations
 
-    func addPendingMutation(table: String, operation: String, entityId: String, payload: Data? = nil) {
+    func addPendingMutation(table: String, operation: String, entityId: String, payload: Data? = nil, userId: String) {
         let mutation = PendingMutation(
             table: table,
             operation: operation,
             entityId: entityId,
-            payload: payload
+            payload: payload,
+            userId: userId
         )
         context.insert(mutation)
         try? context.save()
@@ -303,34 +345,37 @@ final class OfflineStore: ObservableObject {
 
     /// Queue an insert with an encodable payload. The payload is JSON-encoded
     /// and decoded back during sync.
-    func enqueueInsert<T: Encodable>(_ payload: T, table: Table, entityId: String) {
+    func enqueueInsert<T: Encodable>(_ payload: T, table: Table, entityId: String, userId: String) {
         let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
         addPendingMutation(
             table: table.rawValue,
             operation: Operation.insert.rawValue,
             entityId: entityId,
-            payload: data
+            payload: data,
+            userId: userId
         )
     }
 
     /// Queue an update with an encodable update struct.
-    func enqueueUpdate<T: Encodable>(_ payload: T, table: Table, entityId: String) {
+    func enqueueUpdate<T: Encodable>(_ payload: T, table: Table, entityId: String, userId: String) {
         let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
         addPendingMutation(
             table: table.rawValue,
             operation: Operation.update.rawValue,
             entityId: entityId,
-            payload: data
+            payload: data,
+            userId: userId
         )
     }
 
     /// Queue a delete for a specific row id.
-    func enqueueDelete(table: Table, entityId: String) {
+    func enqueueDelete(table: Table, entityId: String, userId: String) {
         addPendingMutation(
             table: table.rawValue,
             operation: Operation.delete.rawValue,
             entityId: entityId,
-            payload: nil
+            payload: nil,
+            userId: userId
         )
     }
 
@@ -342,7 +387,20 @@ final class OfflineStore: ObservableObject {
     /// preserve queue ordering — the next sync pass retries from that point.
     func syncPendingMutations() async {
         guard !isSyncing else { return }
-        let mutations = getPendingMutations()
+
+        // US-489: resolve the authenticated user and only replay mutations
+        // that belong to them. Without a session there is no one to attribute
+        // writes to, so we replay nothing (and never route one account's
+        // queued writes through another account's session).
+        let uid = (try? await SupabaseManager.client.auth.session)?
+            .user.id.uuidString.lowercased() ?? ""
+        guard !uid.isEmpty else { return }
+
+        // A legacy mutation predating US-489 has userId == "" — adopt it for
+        // the current user (the offline queue is single-user per device) so
+        // items the old build would have lost are recovered rather than
+        // stranded forever.
+        let mutations = getPendingMutations().filter { $0.userId == uid || $0.userId.isEmpty }
         guard !mutations.isEmpty else {
             lastSyncError = nil
             return
@@ -354,7 +412,7 @@ final class OfflineStore: ObservableObject {
 
         for mutation in mutations {
             do {
-                try await replay(mutation)
+                try await replay(mutation, userId: uid)
                 clearPendingMutation(mutation)
             } catch {
                 // US-385: count the failure. A mutation that keeps failing is
@@ -402,7 +460,7 @@ final class OfflineStore: ObservableObject {
         pendingMutationCount = getPendingMutations().count
     }
 
-    private func replay(_ mutation: PendingMutation) async throws {
+    private func replay(_ mutation: PendingMutation, userId: String) async throws {
         let client = SupabaseManager.client
         let table = mutation.table
         let decoder = JSONDecoder.supabaseSnakeCase
@@ -420,21 +478,32 @@ final class OfflineStore: ObservableObject {
             // US-385: replay inserts as upsert-on-id so a row that already
             // landed (e.g. the request succeeded server-side but the response
             // was lost) refreshes instead of 409-ing and stalling the queue.
+            //
+            // US-489: rows are built optimistically with userId == "" (the
+            // real id is only known once a session resolves). Stamp the
+            // authenticated user here before upserting, otherwise Postgres
+            // rejects `user_id: ""` as an invalid uuid and every offline-
+            // created row is quarantined and lost.
             switch table {
             case Table.groceryItems.rawValue:
-                let item = try decoder.decode(GroceryItem.self, from: data)
+                var item = try decoder.decode(GroceryItem.self, from: data)
+                item.userId = userId
                 try await client.from(table).upsert(item, onConflict: "id").execute()
             case Table.foods.rawValue:
-                let food = try decoder.decode(Food.self, from: data)
+                var food = try decoder.decode(Food.self, from: data)
+                food.userId = userId
                 try await client.from(table).upsert(food, onConflict: "id").execute()
             case Table.planEntries.rawValue:
-                let entry = try decoder.decode(PlanEntry.self, from: data)
+                var entry = try decoder.decode(PlanEntry.self, from: data)
+                entry.userId = userId
                 try await client.from(table).upsert(entry, onConflict: "id").execute()
             case Table.kids.rawValue:
-                let kid = try decoder.decode(Kid.self, from: data)
+                var kid = try decoder.decode(Kid.self, from: data)
+                kid.userId = userId
                 try await client.from(table).upsert(kid, onConflict: "id").execute()
             case Table.recipes.rawValue:
-                let recipe = try decoder.decode(Recipe.self, from: data)
+                var recipe = try decoder.decode(Recipe.self, from: data)
+                recipe.userId = userId
                 try await client.from(table).upsert(recipe, onConflict: "id").execute()
             default:
                 break
