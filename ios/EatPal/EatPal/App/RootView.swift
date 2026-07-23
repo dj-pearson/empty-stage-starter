@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     // US-380: server-driven force-update gate (fails open).
     @StateObject private var forceUpdate = ForceUpdateService.shared
@@ -34,6 +35,14 @@ struct RootView: View {
         // gets into the app.
         .task {
             await forceUpdate.checkMinimumVersion()
+        }
+        // US-490: re-sync subscription entitlements whenever the app returns to
+        // the foreground so a renewal or a purchase made on another device is
+        // reflected mid-session. Cold-launch sync happens in StoreKitService.init.
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task { await StoreKitService.shared.refreshEntitlements() }
+            }
         }
     }
 }
