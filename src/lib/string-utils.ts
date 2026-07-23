@@ -331,11 +331,15 @@ export function extractDomain(urlOrEmail: string): string {
  * Format bytes to human-readable string
  */
 export function formatBytes(bytes: number, decimals: number = 2): string {
-  if (bytes === 0) return '0 Bytes';
+  // Guard non-positive / non-finite input: Math.log of 0 or a negative produces
+  // -Infinity/NaN, which rendered as "NaN undefined".
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 Bytes';
 
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  // Clamp the index so a very large value can't index past the array (which
+  // rendered as "1 undefined").
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
 
   return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
 }
@@ -350,7 +354,10 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
  * ```
  */
 export function formatNumber(num: number, decimals: number = 1): string {
-  if (num < 1000) return num.toString();
+  // Compare magnitude so negatives are abbreviated too (num < 1000 was true for
+  // every negative, so e.g. -5000 rendered unabbreviated as "-5000"). The
+  // scaling below already preserves the sign.
+  if (Math.abs(num) < 1000) return num.toString();
 
   const units = ['K', 'M', 'B', 'T'];
   const order = Math.floor(Math.log10(Math.abs(num)) / 3);

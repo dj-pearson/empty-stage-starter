@@ -102,7 +102,6 @@ function createMockQueryBuilder() {
     range: () => builder,
     order: () => builder,
     limit: () => builder,
-    offset: () => builder,
     single: () => builder,
     maybeSingle: () => builder,
     then: (resolve: (value: { data: null; error: typeof mockError }) => void) => {
