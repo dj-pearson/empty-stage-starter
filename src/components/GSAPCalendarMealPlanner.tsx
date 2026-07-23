@@ -181,9 +181,9 @@ function DraggableMealItem({
   // Fire a "chip shown" event once per (entry, missingCount > 0) transition.
   useEffect(() => {
     if (missingCount > 0 && entry.recipe_id) {
-      analytics.trackEvent({
-        name: "plan_entry_missing_chip_shown",
-        properties: { recipe_id: entry.recipe_id, missing_count: missingCount },
+      analytics.trackEvent("plan_entry_missing_chip_shown", {
+        recipe_id: entry.recipe_id,
+        missing_count: missingCount,
       });
     }
   }, [missingCount, entry.recipe_id]);
@@ -484,12 +484,9 @@ function DraggableMealItem({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            analytics.trackEvent({
-                              name: "plan_entry_missing_chip_tapped",
-                              properties: {
-                                recipe_id: entry.recipe_id,
-                                missing_count: missingCount,
-                              },
+                            analytics.trackEvent("plan_entry_missing_chip_tapped", {
+                              recipe_id: entry.recipe_id,
+                              missing_count: missingCount,
                             });
                             onOpenMissingForRecipe(entry.recipe_id!);
                           }}

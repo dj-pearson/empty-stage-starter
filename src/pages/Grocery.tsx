@@ -394,12 +394,9 @@ export default function Grocery() {
       if (before > 0 && after === 0) plan_entries_cleared++;
     }
     if (plan_entries_cleared > 0) {
-      analytics.trackEvent({
-        name: "missing_flags_cleared_after_pantry_move",
-        properties: {
-          plan_entries_cleared,
-          items_moved: moved.length,
-        },
+      analytics.trackEvent("missing_flags_cleared_after_pantry_move", {
+        plan_entries_cleared,
+        items_moved: moved.length,
       });
     }
 
