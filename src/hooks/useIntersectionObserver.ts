@@ -1,4 +1,4 @@
-import { useEffect, useState, RefObject } from 'react';
+import { useEffect, useState, useRef, RefObject } from 'react';
 import { logger } from "@/lib/logger";
 
 export interface UseIntersectionObserverOptions extends IntersectionObserverInit {
@@ -47,6 +47,10 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLElement>(
 
   const [entry, setEntry] = useState<IntersectionObserverEntry | null>(null);
   const [isIntersecting, setIsIntersecting] = useState<boolean>(initialIsIntersecting);
+  // Track the triggerOnce short-circuit in a ref instead of reading the
+  // isIntersecting state, so the effect no longer depends on isIntersecting —
+  // depending on it recreated the observer on every visibility toggle.
+  const hasTriggeredRef = useRef(false);
 
   useEffect(() => {
     const element = elementRef.current;
@@ -56,8 +60,8 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLElement>(
       return;
     }
 
-    // If already intersecting and triggerOnce, don't observe
-    if (triggerOnce && isIntersecting) {
+    // If already triggered and triggerOnce, don't observe again
+    if (triggerOnce && hasTriggeredRef.current) {
       return;
     }
 
@@ -68,6 +72,7 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLElement>(
 
         // If triggerOnce and now intersecting, stop observing
         if (triggerOnce && entry.isIntersecting) {
+          hasTriggeredRef.current = true;
           observer.unobserve(element);
         }
       },
@@ -83,7 +88,7 @@ export function useIntersectionObserver<T extends HTMLElement = HTMLElement>(
     return () => {
       observer.disconnect();
     };
-  }, [elementRef, threshold, root, rootMargin, triggerOnce, isIntersecting]);
+  }, [elementRef, threshold, root, rootMargin, triggerOnce]);
 
   return { isIntersecting, entry };
 }
@@ -105,7 +110,13 @@ export function useIntersectionObserverMultiple<T extends HTMLElement = HTMLElem
   elementRefs: RefObject<T>[],
   options: IntersectionObserverInit = {}
 ): Map<T, boolean> {
+  const { root = null, rootMargin = '0px', threshold = 0 } = options;
   const [visibilityMap, setVisibilityMap] = useState<Map<T, boolean>>(new Map());
+  // Depend on primitive option values (not the options object, which is a fresh
+  // {} every render) and the ref count. Previously [elementRefs, options] made
+  // the effect reconnect the observer on every render — callers typically pass a
+  // new array/options literal each time.
+  const thresholdKey = JSON.stringify(threshold);
 
   useEffect(() => {
     const elements = elementRefs.map((ref) => ref.current).filter(Boolean) as T[];
@@ -122,14 +133,17 @@ export function useIntersectionObserverMultiple<T extends HTMLElement = HTMLElem
         });
         return newMap;
       });
-    }, options);
+    }, { root, rootMargin, threshold });
 
     elements.forEach((element) => observer.observe(element));
 
     return () => {
       observer.disconnect();
     };
-  }, [elementRefs, options]);
+    // elementRefs is intentionally excluded (fresh array each render). Callers
+    // whose element SET changes without changing the count should memoize refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [root, rootMargin, thresholdKey, elementRefs.length]);
 
   return visibilityMap;
 }
