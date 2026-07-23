@@ -73,6 +73,10 @@ interface PlanWithDiscount extends SubscriptionPlan {
 export default function Pricing() {
   const [plans, setPlans] = useState<PlanWithDiscount[]>([]);
   const [loading, setLoading] = useState(true);
+  // Separate from `loading` (which gates the full-page "Loading plans..."
+  // spinner): tracks which plan's checkout/portal redirect is in flight so the
+  // pricing UI stays on screen instead of blanking behind the page spinner.
+  const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">(
     "monthly"
   );
@@ -194,7 +198,7 @@ export default function Pricing() {
     // Handle Free plan (downgrade = cancel subscription via Stripe Portal)
     if (plan.price_monthly === 0) {
       try {
-        setLoading(true);
+        setCheckoutPlanId(plan.id);
         const { data, error } = await invokeEdgeFunction("stripe-portal", {
           body: {
             returnUrl: `${window.location.origin}/pricing`,
@@ -213,14 +217,14 @@ export default function Pricing() {
       } catch (error: unknown) {
         logger.error("Portal redirect error:", error);
         toast.error("Failed to open subscription management. Please try again.");
-        setLoading(false);
+        setCheckoutPlanId(null);
       }
       return;
     }
 
     try {
-      setLoading(true);
-      
+      setCheckoutPlanId(plan.id);
+
       const { data, error } = await invokeEdgeFunction("create-checkout", {
         body: {
           planId: plan.id,
@@ -248,7 +252,7 @@ export default function Pricing() {
       } else {
         toast.error("Failed to start checkout. Please try again.");
       }
-      setLoading(false);
+      setCheckoutPlanId(null);
     }
   };
 
@@ -769,10 +773,10 @@ export default function Pricing() {
                     className="w-full active:scale-95 transition-transform"
                     variant={isPopular ? "default" : "outline"}
                     onClick={() => handleSelectPlan(plan)}
-                    disabled={user && currentPlanId === plan.id}
+                    disabled={checkoutPlanId !== null || (user && currentPlanId === plan.id)}
                     aria-label={`${getButtonText(plan)} - ${plan.name} plan at ${formatPrice(plan)}${plan.price_monthly > 0 ? ' per ' + billingCycle.slice(0, -2) : ''}`}
                   >
-                    {getButtonText(plan)}
+                    {checkoutPlanId === plan.id ? "Redirecting…" : getButtonText(plan)}
                   </Button>
                 </CardFooter>
               </Card>
@@ -982,10 +986,10 @@ export default function Pricing() {
                     className="w-full"
                     variant={isPopular ? "default" : "outline"}
                     onClick={() => handleSelectPlan(plan)}
-                    disabled={user && currentPlanId === plan.id}
+                    disabled={checkoutPlanId !== null || (user && currentPlanId === plan.id)}
                     aria-label={`${getButtonText(plan)} - ${plan.name} plan at ${formatPrice(plan)}${plan.price_monthly > 0 ? ' per ' + billingCycle.slice(0, -2) : ''}`}
                   >
-                    {getButtonText(plan)}
+                    {checkoutPlanId === plan.id ? "Redirecting…" : getButtonText(plan)}
                   </Button>
                 </CardFooter>
               </Card>
