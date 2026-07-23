@@ -15,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { PersonalityType, EmailCaptureData } from '@/types/quiz';
 import { getPersonalityName } from '@/lib/quiz/personalityTypes';
 import { captureEmailLead } from '@/lib/quiz/supabaseIntegration';
-import { Download, Mail, Gift, Loader2 } from 'lucide-react';
+import { Download, Mail, Gift } from 'lucide-react';
 
 interface EmailCaptureModalProps {
   isOpen: boolean;
