@@ -1,4 +1,4 @@
-import { lazy, ComponentType, useEffect } from 'react';
+import { lazy, ComponentType, useEffect, useRef } from 'react';
 
 /**
  * Enhanced lazy loading with preloading support
@@ -94,34 +94,38 @@ export function useLazyPreloadOnIntersect<T extends ComponentType<any>>(
   Component: T & { preload?: () => Promise<any> },
   options: IntersectionObserverInit = {}
 ) {
-  const { threshold = 0.1, rootMargin = '50px', ...rest } = options;
+  const { threshold = 0.1, rootMargin = '50px' } = options;
+  // Return a ref for the caller to attach (as the JSDoc shows). The previous
+  // version returned nothing and observed the first global [data-lazy-preload]
+  // element in the document, so the consumer's element was never observed and
+  // preloading either never fired or fired off an unrelated element.
+  const ref = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!Component.preload) return;
+    const element = ref.current;
+    if (!element) return;
 
-    let observer: IntersectionObserver;
-    const element = document.querySelector('[data-lazy-preload]');
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            Component.preload?.();
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold, rootMargin }
+    );
 
-    if (element) {
-      observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              Component.preload?.();
-              observer.disconnect();
-            }
-          });
-        },
-        { threshold, rootMargin, ...rest }
-      );
-
-      observer.observe(element);
-    }
+    observer.observe(element);
 
     return () => {
-      if (observer) observer.disconnect();
+      observer.disconnect();
     };
   }, [Component, threshold, rootMargin]);
+
+  return ref;
 }
 
 /**

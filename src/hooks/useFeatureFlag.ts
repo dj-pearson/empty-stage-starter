@@ -85,9 +85,12 @@ function getAllCachedFlags(): Record<string, boolean> | null {
  * @returns boolean indicating if the feature is enabled
  */
 export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): boolean {
-  // Check localStorage cache first for instant response
-  const cachedValue = getCachedFlag(flagKey);
-  const [isEnabled, setIsEnabled] = useState<boolean>(cachedValue ?? defaultValue);
+  // Seed from the localStorage cache for an instant response. Use a lazy
+  // initializer so the synchronous getItem + JSON.parse runs once on mount
+  // rather than on every render (the value is only used to seed initial state).
+  const [isEnabled, setIsEnabled] = useState<boolean>(
+    () => getCachedFlag(flagKey) ?? defaultValue,
+  );
 
   const checkFeatureFlag = useCallback(async () => {
     try {
