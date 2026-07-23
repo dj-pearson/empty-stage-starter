@@ -177,18 +177,29 @@ extension WatchConnectivityService: WCSessionDelegate {
         }
     }
 
-    /// Snapshot delivery — used on the watch side. The same delegate type
-    /// handles both directions so we don't ship two near-identical files.
+    /// User-info delivery — used in both directions. On the iPhone side this
+    /// carries a grocery toggle the watch queued while unreachable; on the
+    /// watch side it carries a snapshot.
     nonisolated func session(
         _ session: WCSession,
         didReceiveUserInfo userInfo: [String: Any] = [:]
     ) {
+        // US-491: when the iPhone is unreachable the watch falls back from
+        // sendMessage to transferUserInfo, which arrives here (not in
+        // didReceiveMessage). Handle the grocery toggle so check-offs made
+        // while the phone was asleep/in-pocket — the common shopping case —
+        // are persisted instead of silently dropped and later resurrected by
+        // the next snapshot.
+        if let toggleId = userInfo["grocery_toggle"] as? String {
+            Task { @MainActor in self.handleGroceryToggleFromWatch(itemId: toggleId) }
+            return
+        }
+
         guard let data = userInfo["snapshot"] as? Data,
               let snapshot = try? JSONDecoder().decode(WatchSnapshot.self, from: data) else {
             return
         }
         Task { @MainActor in
-            // The watch app's WatchSessionStore observes Notification.Name.watchSnapshotReceived.
             NotificationCenter.default.post(
                 name: .watchSnapshotReceived,
                 object: nil,
