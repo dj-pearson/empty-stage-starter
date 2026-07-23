@@ -197,16 +197,28 @@ export default function Grocery() {
       : planEntries.filter(e => e.kid_id === activeKidId);
     const generated = generateGroceryList(filteredEntries, foods);
     const extendedItems = groceryItems as ExtendedGroceryItem[];
-    const manual = extendedItems.filter(item => item.is_manual);
-    const checked = extendedItems.filter(item => item.checked && !item.is_manual);
-    const existingNames = new Set([
-      ...manual.map(i => i.name.toLowerCase()),
-      ...checked.map(i => i.name.toLowerCase())
-    ]);
-    const newItems = generated.filter(gen => !existingNames.has(gen.name.toLowerCase()));
-    setGroceryItems([...manual, ...checked, ...newItems]);
+
+    // Only the currently selected list is regenerated. Items on every OTHER list
+    // are left untouched — previously the wholesale setGroceryItems replace below
+    // dropped every unchecked, non-manual item, including those on other lists.
+    const sameList = (a?: string) => (a ?? null) === (selectedListId ?? null);
+    const otherLists = extendedItems.filter(item => !sameList(item.grocery_list_id));
+    const inSelectedList = extendedItems.filter(item => sameList(item.grocery_list_id));
+
+    // Within the selected list keep manual items and anything already purchased;
+    // the unchecked auto-generated items are what we regenerate from the plan.
+    const preserved = inSelectedList.filter(item => item.is_manual || item.checked);
+    const existingNames = new Set(preserved.map(i => i.name.toLowerCase()));
+
+    // Stamp new items with the selected list so they actually appear under it —
+    // filterItemsByList hides items whose grocery_list_id doesn't match.
+    const newItems = generated
+      .filter(gen => !existingNames.has(gen.name.toLowerCase()))
+      .map(gen => ({ ...gen, grocery_list_id: selectedListId ?? undefined }));
+
+    setGroceryItems([...otherLists, ...preserved, ...newItems]);
     toast.success(`Added ${newItems.length} items from meal plan`, {
-      description: `Preserved ${manual.length + checked.length} existing items`
+      description: `Preserved ${otherLists.length + preserved.length} existing items`
     });
   };
 
