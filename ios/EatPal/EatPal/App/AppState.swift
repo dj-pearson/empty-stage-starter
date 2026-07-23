@@ -382,10 +382,19 @@ final class AppState: ObservableObject {
             HapticManager.success()
             AnalyticsService.track(.foodAdded(via: .manual, category: food.category))
         } catch {
-            foods.removeAll { $0.id == food.id }
-            toast.show(error, as: { .save(entity: "food", underlying: $0) })
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-492: keep the optimistic row and queue the insert for
+                // replay instead of dropping the user's offline add. replay
+                // stamps the real user_id before upserting.
+                OfflineStore.shared.enqueueInsert(food, table: .foods, entityId: food.id, userId: currentUserId)
+                toast.info("Queued for sync", message: "\(food.name) will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                foods.removeAll { $0.id == food.id }
+                toast.show(error, as: { .save(entity: "food", underlying: $0) })
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -495,10 +504,19 @@ final class AppState: ObservableObject {
             HapticManager.success()
             AnalyticsService.track(.kidAdded)
         } catch {
-            kids.removeAll { $0.id == kid.id }
-            toast.show(error, as: { .save(entity: "child profile", underlying: $0) })
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-492: keep the optimistic child profile and queue for
+                // replay rather than losing the offline add.
+                if activeKidId == nil { activeKidId = kid.id }
+                OfflineStore.shared.enqueueInsert(kid, table: .kids, entityId: kid.id, userId: currentUserId)
+                toast.info("Queued for sync", message: "\(kid.name) will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                kids.removeAll { $0.id == kid.id }
+                toast.show(error, as: { .save(entity: "child profile", underlying: $0) })
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -625,6 +643,13 @@ final class AppState: ObservableObject {
                 )
             }
         } catch {
+            // US-492: unlike foods/kids/plan-entries, a recipe add is a
+            // multi-table write (recipes + recipe_ingredients). The offline
+            // replay queue only knows how to upsert the single `recipes` row,
+            // so queuing here would resurrect the recipe without its
+            // ingredients. Until replay learns recipe_ingredients, an offline
+            // recipe add is rolled back and surfaced rather than silently
+            // half-saved.
             recipes.removeAll { $0.id == recipe.id }
             toast.show(error, as: { .save(entity: "recipe", underlying: $0) })
             HapticManager.error()
@@ -722,10 +747,18 @@ final class AppState: ObservableObject {
             HapticManager.success()
             AnalyticsService.track(.mealPlanned(slot: entry.mealSlot, kidId: entry.kidId))
         } catch {
-            planEntries.removeAll { $0.id == entry.id }
-            toast.show(error, as: { .save(entity: "meal", underlying: $0) })
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-492: keep the optimistic plan entry and queue for replay
+                // rather than losing the offline add.
+                OfflineStore.shared.enqueueInsert(entry, table: .planEntries, entityId: entry.id, userId: currentUserId)
+                toast.info("Queued for sync", message: "Meal will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                planEntries.removeAll { $0.id == entry.id }
+                toast.show(error, as: { .save(entity: "meal", underlying: $0) })
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
