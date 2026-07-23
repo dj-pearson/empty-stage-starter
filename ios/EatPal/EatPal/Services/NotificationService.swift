@@ -27,7 +27,9 @@ final class NotificationService: ObservableObject {
             }
             return granted
         } catch {
-            print("Notification authorization error: \(error)")
+            // US-498: surface in Sentry rather than a lost print() so
+            // authorization failures are visible in production.
+            SentryService.capture(error, extras: ["context": "notification_authorization"])
             return false
         }
     }
@@ -36,7 +38,15 @@ final class NotificationService: ObservableObject {
     func checkAuthorizationStatus() async {
         let settings = await center.notificationSettings()
         authorizationStatus = settings.authorizationStatus
-        isAuthorized = settings.authorizationStatus == .authorized
+        // US-498: provisional and ephemeral grants also permit delivery, so
+        // treat them as authorized — otherwise a provisionally-authorized
+        // user's persisted daily reminders are never (re)scheduled on launch.
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            isAuthorized = true
+        default:
+            isAuthorized = false
+        }
     }
 
     /// Registers with APNs for remote push notifications.
@@ -98,6 +108,12 @@ final class NotificationService: ObservableObject {
 
     /// Schedules a grocery reminder for a specific time.
     func scheduleGroceryReminder(at date: Date, itemCount: Int) async {
+        // US-498/US-404: honour the global mute window here too. scheduleTopic
+        // already guards on this; a grocery reminder scheduled during an active
+        // mute would otherwise still be delivered by the system, breaking the
+        // mute guarantee.
+        if let mutedUntil, mutedUntil > Date() { return }
+
         let content = UNMutableNotificationContent()
         content.title = "Grocery Reminder"
         content.body = "You have \(itemCount) items on your grocery list."

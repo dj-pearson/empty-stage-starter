@@ -23,6 +23,10 @@ final class ThumbnailImageCache {
         diskCapacityBytes: Int = 150 * 1024 * 1024
     ) {
         memory.countLimit = memoryCountLimit
+        // US-498: also bound the in-memory cache by *bytes*. countLimit alone
+        // lets 200 full-resolution images sit resident; a totalCostLimit +
+        // per-image cost lets NSCache evict under memory pressure.
+        memory.totalCostLimit = memoryCapacityBytes
         let urlCache = URLCache(
             memoryCapacity: memoryCapacityBytes,
             diskCapacity: diskCapacityBytes,
@@ -39,7 +43,9 @@ final class ThumbnailImageCache {
     }
 
     func store(_ image: UIImage, for url: URL) {
-        memory.setObject(image, forKey: url as NSURL)
+        // US-498: cost = decoded bytes, so totalCostLimit can bound the cache.
+        let cost = (image.cgImage?.bytesPerRow ?? 0) * (image.cgImage?.height ?? 0)
+        memory.setObject(image, forKey: url as NSURL, cost: cost)
     }
 
     /// Returns the image for `url`, serving from the in-memory cache when

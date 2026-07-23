@@ -32,4 +32,11 @@ final class PantryDedupTests: XCTestCase {
         let pantry = [food(name: "Apple")]
         XCTAssertNil(PantryDedup.match(name: "   ", barcode: nil, in: pantry))
     }
+
+    func testStoredNameIsTrimmedBeforeComparing() {
+        // US-498: a row saved with trailing whitespace must still dedup.
+        let pantry = [food(name: "Milk ")]
+        let match = PantryDedup.match(name: "milk", barcode: nil, in: pantry)
+        XCTAssertEqual(match?.name, "Milk ", "A stored name with trailing space should still match")
+    }
 }

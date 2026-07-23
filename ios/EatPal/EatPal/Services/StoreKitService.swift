@@ -217,7 +217,9 @@ final class StoreKitService: ObservableObject {
     private func listenForTransactions() -> Task<Void, Never> {
         Task.detached { [weak self] in
             for await result in StoreKit.Transaction.updates {
-                guard let self else { continue }
+                // US-498: if self is gone the loop must exit, not spin forever
+                // draining Transaction.updates and dropping entitlement changes.
+                guard let self else { return }
                 do {
                     let transaction = try await self.checkVerified(result)
                     await self.updateCustomerProductStatus()

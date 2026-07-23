@@ -26,7 +26,11 @@ enum RecipeStepParser {
             .filter { !$0.isEmpty }
         if lines.count > 1 { return lines }
 
-        let ns = raw as NSString
+        // US-498: run the sentence fallback on the bullet-stripped single line,
+        // not the raw text — otherwise a lone "1. Preheat the oven" tokenizes
+        // into ["1.", "Preheat the oven"].
+        let single = lines.first ?? raw
+        let ns = single as NSString
         var sentences: [String] = []
         ns.enumerateSubstrings(
             in: NSRange(location: 0, length: ns.length),
@@ -36,6 +40,6 @@ enum RecipeStepParser {
                 sentences.append(s)
             }
         }
-        return sentences.count > 1 ? sentences : [raw]
+        return sentences.count > 1 ? sentences : [single]
     }
 }

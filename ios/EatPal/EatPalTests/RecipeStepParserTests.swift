@@ -24,4 +24,11 @@ final class RecipeStepParserTests: XCTestCase {
         XCTAssertTrue(RecipeStepParser.parse(nil).isEmpty)
         XCTAssertTrue(RecipeStepParser.parse("   ").isEmpty)
     }
+
+    func testSingleNumberedLineDoesNotEmitBareNumber() {
+        // US-498: a lone "1. Preheat the oven" must not tokenize into
+        // ["1.", "Preheat the oven"] — the sentence fallback runs on the
+        // bullet-stripped line.
+        XCTAssertEqual(RecipeStepParser.parse("1. Preheat the oven"), ["Preheat the oven"])
+    }
 }

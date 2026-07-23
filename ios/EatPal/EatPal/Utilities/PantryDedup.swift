@@ -14,6 +14,10 @@ enum PantryDedup {
         }
         let needle = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return nil }
-        return foods.first { $0.name.lowercased() == needle }
+        // US-498: trim the stored name too, so a row saved as "Milk " still
+        // dedups against an add of "milk" instead of creating a duplicate.
+        return foods.first {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == needle
+        }
     }
 }
