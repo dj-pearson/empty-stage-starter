@@ -226,10 +226,29 @@ final class SmartProductTests: XCTestCase {
     }
 
     func testUnitInferenceEggsAreDozen() {
-        // The rule keys on "egg " (with trailing space) so plural and
-        // singular hit the same row.
-        let r = UnitInference.infer(name: "egg carton")
-        XCTAssertEqual(r?.unit, "dozen")
+        // US-493: eggs match on whole-word tokens, so the bare singular/plural
+        // and compound forms all resolve to a dozen, while "eggplant" (a
+        // distinct token) does not.
+        XCTAssertEqual(UnitInference.infer(name: "eggs")?.unit, "dozen")
+        XCTAssertEqual(UnitInference.infer(name: "egg")?.unit, "dozen")
+        XCTAssertEqual(UnitInference.infer(name: "Large Eggs")?.unit, "dozen")
+        XCTAssertEqual(UnitInference.infer(name: "egg carton")?.unit, "dozen")
+        // "eggplant" must not be swept into the egg rule.
+        XCTAssertNotEqual(UnitInference.infer(name: "eggplant")?.unit, "dozen")
+    }
+
+    func testUnitInferenceCoconutMilkIsCanNotGallon() {
+        // US-493: the canned "coconut milk" rule must beat the generic "milk"
+        // rule; the "coconut milk drink" beverage stays a gallon.
+        XCTAssertEqual(UnitInference.infer(name: "coconut milk")?.unit, "can")
+        XCTAssertEqual(UnitInference.infer(name: "coconut milk drink")?.unit, "gal")
+    }
+
+    func testUnitInferenceNutButtersAreJarNotPound() {
+        // US-493: nut butters must beat the dairy "butter" rule.
+        XCTAssertEqual(UnitInference.infer(name: "peanut butter")?.unit, "jar")
+        XCTAssertEqual(UnitInference.infer(name: "almond butter")?.unit, "jar")
+        XCTAssertEqual(UnitInference.infer(name: "butter")?.unit, "lb")
     }
 
     func testUnitInferenceRiceIsBag() {

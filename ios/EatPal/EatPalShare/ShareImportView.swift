@@ -1,4 +1,6 @@
 import SwiftUI
+import ImageIO
+import UIKit
 
 /// US-143 / US-295: SwiftUI surface of the share extension.
 ///
@@ -290,19 +292,14 @@ private struct RecipeImportBranch: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        default:
-                            Color.secondary.opacity(0.1)
-                        }
-                    }
-                    .frame(height: 160)
-                    .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    // US-497: downsample rather than AsyncImage. The share
+                    // extension runs under a tight jetsam limit and a multi-MB
+                    // recipe hero image decoded at full resolution can push it
+                    // over and get the extension killed mid-import.
+                    DownsampledRemoteImage(url: url, maxPixel: 640)
+                        .frame(height: 160)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -567,5 +564,46 @@ private struct GroceryImportBranch: View {
         )
         PendingGroceryImportQueue.enqueue(pending)
         onDone()
+    }
+}
+
+/// US-497: a memory-bounded remote image for the share extension. Loads the
+/// bytes and downsamples via ImageIO to `maxPixel` *before* decoding, so a
+/// large source image never fully decodes into the extension's tight jetsam
+/// budget (which `AsyncImage` would do at native resolution).
+private struct DownsampledRemoteImage: View {
+    let url: URL
+    let maxPixel: CGFloat
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.secondary.opacity(0.1)
+            }
+        }
+        .task(id: url) {
+            image = await Self.downsample(url, maxPixel: maxPixel)
+        }
+    }
+
+    private static func downsample(_ url: URL, maxPixel: CGFloat) async -> UIImage? {
+        guard let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
     }
 }

@@ -15,6 +15,7 @@ enum EdgeFunctions {
         case invalidResponse
         case status(Int, String?)
         case decoding(String)
+        case authTokenUnavailable
 
         var errorDescription: String? {
             switch self {
@@ -26,6 +27,8 @@ enum EdgeFunctions {
                 return "Edge function returned \(code)" + (body.map { ": \($0)" } ?? "")
             case .decoding(let detail):
                 return "Couldn't decode edge function response: \(detail)"
+            case .authTokenUnavailable:
+                return "Your session expired. Please sign in again."
             }
         }
     }
@@ -74,7 +77,10 @@ enum EdgeFunctions {
             throw CallError.missingConfig
         }
 
-        let bearer = (await sessionAccessToken()) ?? anonKey
+        // US-496: distinguish "no session" (anonymous call is intended) from
+        // "session exists but token refresh failed" (throws) so an
+        // authenticated user's call is never silently downgraded to anon.
+        let bearer = (try await sessionAccessToken()) ?? anonKey
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -176,9 +182,20 @@ enum EdgeFunctions {
         return key
     }
 
-    /// Best-effort lookup of the current session's access token. Falls back
-    /// to `nil` if there's no session yet (cold launch, share extension, etc.).
-    private static func sessionAccessToken() async -> String? {
-        try? await SupabaseManager.client.auth.session.accessToken
+    /// Resolves the bearer token for an edge call.
+    /// - Returns the fresh access token when a session exists.
+    /// - Returns `nil` when there is genuinely no session (cold launch, share
+    ///   extension, signed out), so the caller falls back to the anon key.
+    /// - Throws `CallError.authTokenUnavailable` when a session exists but its
+    ///   token can't be produced/refreshed — US-496, so we don't silently send
+    ///   an authenticated user's request as anonymous (which then fails RLS or
+    ///   loses user context in a confusing way).
+    private static func sessionAccessToken() async throws -> String? {
+        guard SupabaseManager.client.auth.currentSession != nil else { return nil }
+        do {
+            return try await SupabaseManager.client.auth.session.accessToken
+        } catch {
+            throw CallError.authTokenUnavailable
+        }
     }
 }

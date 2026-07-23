@@ -105,9 +105,11 @@ final class AuthService {
             )
         }
 
-        // Best-effort local sign-out — even if the network call fails here,
-        // the server already removed the account so the session is dead.
-        try? await client.auth.signOut()
+        // US-498: the account is already deleted server-side, so force a LOCAL
+        // sign-out (scope: .local, no server round-trip that could fail) to
+        // reliably purge the keychain-stored session instead of leaving a
+        // still-valid JWT until it expires.
+        try? await client.auth.signOut(scope: .local)
     }
 
     // MARK: - Apple Relay Email Binding

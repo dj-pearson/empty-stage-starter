@@ -34,6 +34,12 @@ final class AppState: ObservableObject {
     private let toast = ToastManager.shared
     private var cancellables: Set<AnyCancellable> = []
 
+    /// US-489: the id of the currently-authenticated user, resolved on each
+    /// load. Used to scope the offline read-cache and the pending-mutation
+    /// queue to the signed-in account so no data crosses accounts on a shared
+    /// device. Empty when signed out.
+    private var currentUserId: String = ""
+
     init() {
         setupWidgetSnapshotSync()
     }
@@ -218,6 +224,11 @@ final class AppState: ObservableObject {
         isLoading = true
         errorMessage = nil
 
+        // US-489: resolve the signed-in user up front so the offline cache and
+        // the pending-mutation queue can be scoped to this account.
+        currentUserId = (try? await SupabaseManager.client.auth.session)?
+            .user.id.uuidString.lowercased() ?? ""
+
         do {
             async let fetchedFoods = dataService.fetchFoods()
             async let fetchedKids = dataService.fetchKids()
@@ -254,9 +265,9 @@ final class AppState: ObservableObject {
             // US-382: persist the fresh snapshot to the SwiftData read-cache so
             // a later offline launch shows last-synced data. cache* replaces
             // the prior snapshot wholesale (US-383) so it can't grow unbounded.
-            OfflineStore.shared.cacheFoods(loadedFoods)
-            OfflineStore.shared.cacheKids(loadedKids)
-            OfflineStore.shared.cacheGroceryItems(loadedGroceryItems)
+            OfflineStore.shared.cacheFoods(loadedFoods, ownerUserId: currentUserId)
+            OfflineStore.shared.cacheKids(loadedKids, ownerUserId: currentUserId)
+            OfflineStore.shared.cacheGroceryItems(loadedGroceryItems, ownerUserId: currentUserId)
 
             if activeKidId == nil, let firstKid = kids.first {
                 activeKidId = firstKid.id
@@ -276,6 +287,13 @@ final class AppState: ObservableObject {
             // US-295: same idea for grocery lines shared from Notes / Reminders.
             await drainPendingGroceryImports()
 
+            // US-494 (M2): a successful load means we're online — drain any
+            // offline writes queued while disconnected. Previously the queue
+            // only replayed on a network-restore transition, so a kill-while-
+            // offline / relaunch-online sequence (no transition) left it
+            // stranded. Fire-and-forget so it never blocks the UI paint.
+            Task { await OfflineStore.shared.syncPendingMutations() }
+
             // US-274: cache the household id on SmartProductService so
             // the resolver can include the household tier without an
             // extra round trip per add. Failure is non-fatal — the
@@ -290,8 +308,10 @@ final class AppState: ObservableObject {
             // read-cache so launching offline shows last-synced data instead
             // of empty lists. A non-connectivity error still surfaces.
             if Self.isConnectivityError(error) {
-                let userId = (try? await SupabaseManager.client.auth.session)?
-                    .user.id.uuidString.lowercased() ?? ""
+                // US-489: only load cache written by this same account. A
+                // different user (or no session) reads nothing, so a stale
+                // account's data can't surface on a shared device.
+                let userId = currentUserId
                 let cachedFoods = OfflineStore.shared.loadCachedFoods(userId: userId)
                 let cachedKids = OfflineStore.shared.loadCachedKids(userId: userId)
                 let cachedGrocery = OfflineStore.shared.loadCachedGroceryItems(userId: userId)
@@ -349,6 +369,14 @@ final class AppState: ObservableObject {
         groceryLists = []
         groceryItemSources = []
         activeKidId = nil
+        // US-489: drop the on-disk display cache so the signing-out account's
+        // rows (pantry, children's profiles, grocery list) don't linger for
+        // the next user. The pending-mutation queue is user-scoped and kept,
+        // so a departing user's un-synced writes still replay when they
+        // return. Reads are also gated by `cachedByUserId`, so this is
+        // defense-in-depth against a cache that outlives the session.
+        OfflineStore.shared.clearCachedData()
+        currentUserId = ""
     }
 
     // MARK: - Food Operations
@@ -361,10 +389,19 @@ final class AppState: ObservableObject {
             HapticManager.success()
             AnalyticsService.track(.foodAdded(via: .manual, category: food.category))
         } catch {
-            foods.removeAll { $0.id == food.id }
-            toast.show(error, as: { .save(entity: "food", underlying: $0) })
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-492: keep the optimistic row and queue the insert for
+                // replay instead of dropping the user's offline add. replay
+                // stamps the real user_id before upserting.
+                OfflineStore.shared.enqueueInsert(food, table: .foods, entityId: food.id, userId: currentUserId)
+                toast.info("Queued for sync", message: "\(food.name) will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                foods.removeAll { $0.id == food.id }
+                toast.show(error, as: { .save(entity: "food", underlying: $0) })
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -474,10 +511,19 @@ final class AppState: ObservableObject {
             HapticManager.success()
             AnalyticsService.track(.kidAdded)
         } catch {
-            kids.removeAll { $0.id == kid.id }
-            toast.show(error, as: { .save(entity: "child profile", underlying: $0) })
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-492: keep the optimistic child profile and queue for
+                // replay rather than losing the offline add.
+                if activeKidId == nil { activeKidId = kid.id }
+                OfflineStore.shared.enqueueInsert(kid, table: .kids, entityId: kid.id, userId: currentUserId)
+                toast.info("Queued for sync", message: "\(kid.name) will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                kids.removeAll { $0.id == kid.id }
+                toast.show(error, as: { .save(entity: "child profile", underlying: $0) })
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -604,6 +650,13 @@ final class AppState: ObservableObject {
                 )
             }
         } catch {
+            // US-492: unlike foods/kids/plan-entries, a recipe add is a
+            // multi-table write (recipes + recipe_ingredients). The offline
+            // replay queue only knows how to upsert the single `recipes` row,
+            // so queuing here would resurrect the recipe without its
+            // ingredients. Until replay learns recipe_ingredients, an offline
+            // recipe add is rolled back and surfaced rather than silently
+            // half-saved.
             recipes.removeAll { $0.id == recipe.id }
             toast.show(error, as: { .save(entity: "recipe", underlying: $0) })
             HapticManager.error()
@@ -701,10 +754,18 @@ final class AppState: ObservableObject {
             HapticManager.success()
             AnalyticsService.track(.mealPlanned(slot: entry.mealSlot, kidId: entry.kidId))
         } catch {
-            planEntries.removeAll { $0.id == entry.id }
-            toast.show(error, as: { .save(entity: "meal", underlying: $0) })
-            HapticManager.error()
-            throw error
+            if isNetworkError(error) {
+                // US-492: keep the optimistic plan entry and queue for replay
+                // rather than losing the offline add.
+                OfflineStore.shared.enqueueInsert(entry, table: .planEntries, entityId: entry.id, userId: currentUserId)
+                toast.info("Queued for sync", message: "Meal will save when you're back online.")
+                HapticManager.lightImpact()
+            } else {
+                planEntries.removeAll { $0.id == entry.id }
+                toast.show(error, as: { .save(entity: "meal", underlying: $0) })
+                HapticManager.error()
+                throw error
+            }
         }
     }
 
@@ -1182,7 +1243,7 @@ final class AppState: ObservableObject {
         } catch {
             if isNetworkError(error) {
                 // US-150: keep the optimistic update and queue for later replay.
-                OfflineStore.shared.enqueueInsert(item, table: .groceryItems, entityId: item.id)
+                OfflineStore.shared.enqueueInsert(item, table: .groceryItems, entityId: item.id, userId: currentUserId)
                 toast.info("Queued for sync", message: "\(item.name) will save when you're back online.")
                 HapticManager.lightImpact()
             } else {
@@ -1250,7 +1311,7 @@ final class AppState: ObservableObject {
             _ = removedSources // referenced in the rollback path below
         } catch {
             if isNetworkError(error) {
-                OfflineStore.shared.enqueueDelete(table: .groceryItems, entityId: id)
+                OfflineStore.shared.enqueueDelete(table: .groceryItems, entityId: id, userId: currentUserId)
                 HapticManager.lightImpact()
             } else {
                 groceryItems.append(contentsOf: removed)
@@ -1289,7 +1350,8 @@ final class AppState: ObservableObject {
                 OfflineStore.shared.enqueueUpdate(
                     GroceryItemUpdate(checked: checked),
                     table: .groceryItems,
-                    entityId: id
+                    entityId: id,
+                    userId: currentUserId
                 )
                 HapticManager.lightImpact()
                 await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")

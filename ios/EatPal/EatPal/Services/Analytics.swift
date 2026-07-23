@@ -93,9 +93,23 @@ enum AnalyticsService {
         ]
         var clean: [String: String] = [:]
         for (key, value) in props where !blocked.contains(key.lowercased()) {
-            clean[key] = value
+            // US-498: redact() previously filtered by key only, so an event
+            // carrying a free-form String value (a `reason:` built from an
+            // error's localizedDescription, a deep-link URL, a slug) leaked it
+            // verbatim into analytics/Sentry. Cap the length so a pathological
+            // value can't dump PII; the event vocabulary uses short
+            // enum-derived values, so normal events are unaffected.
+            clean[key] = Self.boundedValue(value)
         }
         return clean
+    }
+
+    /// US-498: hard cap on any analytics property value.
+    private static let maxValueLength = 64
+
+    private static func boundedValue(_ value: String) -> String {
+        guard value.count > maxValueLength else { return value }
+        return String(value.prefix(maxValueLength)) + "…"
     }
 
     private static var appVersion: String {

@@ -6,6 +6,9 @@ import Supabase
 enum ImageUploadService {
     private static let client = SupabaseManager.client
     private static let bucketName = "images"
+    /// US-498: hard ceiling on an uploaded JPEG so a pathological input can't
+    /// stream an unbounded blob to Storage even after the resize below.
+    private static let maxUploadBytes = 8 * 1024 * 1024
 
     enum ImageFolder: String {
         case foods
@@ -24,8 +27,14 @@ enum ImageUploadService {
         folder: ImageFolder,
         id: String
     ) async throws -> String {
-        guard let data = image.jpegData(compressionQuality: 0.8) else {
+        // US-498: bound the image here rather than trusting every caller to
+        // pre-resize. Downscale to a max dimension, then enforce a byte cap.
+        let bounded = resize(image, maxDimension: 1024)
+        guard let data = bounded.jpegData(compressionQuality: 0.8) else {
             throw ImageUploadError.compressionFailed
+        }
+        guard data.count <= maxUploadBytes else {
+            throw ImageUploadError.tooLarge
         }
 
         let path = "\(folder.rawValue)/\(id)-\(Int(Date().timeIntervalSince1970)).jpg"
@@ -71,6 +80,7 @@ enum ImageUploadService {
 enum ImageUploadError: LocalizedError {
     case compressionFailed
     case uploadFailed(String)
+    case tooLarge
 
     var errorDescription: String? {
         switch self {
@@ -78,6 +88,8 @@ enum ImageUploadError: LocalizedError {
             return "Failed to compress image."
         case .uploadFailed(let reason):
             return "Upload failed: \(reason)"
+        case .tooLarge:
+            return "That image is too large. Please choose a smaller one."
         }
     }
 }

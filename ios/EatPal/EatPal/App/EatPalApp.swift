@@ -86,7 +86,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        print("Failed to register for remote notifications: \(error)")
+        // US-498: surface APNs registration failures in Sentry rather than a
+        // lost print(), matching the handleDeviceToken success path.
+        SentryService.capture(error, extras: ["context": "apns_register_failed"])
     }
 
     // Handle notification presentation when app is in foreground

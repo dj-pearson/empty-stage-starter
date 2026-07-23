@@ -108,7 +108,22 @@ final class StoreKitService: ObservableObject {
 
     private init() {
         updateListenerTask = listenForTransactions()
-        Task { await loadProducts() }
+        Task {
+            await loadProducts()
+            // US-490: sync entitlements on cold launch. Transaction.updates
+            // only delivers *new/changed* transactions, so without this an
+            // active subscriber relaunching the app is treated as .free for
+            // the whole session (every tier gate locks them out). This walks
+            // the existing currentEntitlements and sets currentTier.
+            await updateCustomerProductStatus()
+        }
+    }
+
+    /// US-490: refresh entitlements from StoreKit's local `currentEntitlements`.
+    /// Cheap (no network) and safe to call on foreground; call sites use it to
+    /// pick up a renewal or a purchase made on another device mid-session.
+    func refreshEntitlements() async {
+        await updateCustomerProductStatus()
     }
 
     deinit {
@@ -202,7 +217,9 @@ final class StoreKitService: ObservableObject {
     private func listenForTransactions() -> Task<Void, Never> {
         Task.detached { [weak self] in
             for await result in StoreKit.Transaction.updates {
-                guard let self else { continue }
+                // US-498: if self is gone the loop must exit, not spin forever
+                // draining Transaction.updates and dropping entitlement changes.
+                guard let self else { return }
                 do {
                     let transaction = try await self.checkVerified(result)
                     await self.updateCustomerProductStatus()

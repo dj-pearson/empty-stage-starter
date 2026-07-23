@@ -130,10 +130,17 @@ final class VoiceInputService: ObservableObject {
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.request?.append(buffer)
-            Task { @MainActor [weak self] in
-                self?.updateInputLevel(from: buffer)
-            }
+            // US-495: the AVAudioPCMBuffer is only valid for the duration of
+            // this tap callback (it runs on the audio render thread). Append
+            // it and compute the meter level *here*, synchronously; only the
+            // resulting scalar crosses to the main actor. Reading the buffer
+            // later inside a @MainActor Task was an unsynchronised
+            // use-after-free of recycled audio memory. `request` is captured
+            // strongly so we also stop touching the @MainActor `self.request`
+            // from this thread.
+            request.append(buffer)
+            let level = VoiceInputService.normalisedLevel(from: buffer)
+            Task { @MainActor in self?.applyInputLevel(level) }
         }
 
         audioEngine.prepare()
@@ -199,10 +206,13 @@ final class VoiceInputService: ObservableObject {
         request = nil
     }
 
-    private func updateInputLevel(from buffer: AVAudioPCMBuffer) {
-        guard let channelData = buffer.floatChannelData?[0] else { return }
+    /// US-495: pure RMS → normalised meter level. `nonisolated` so it can run
+    /// on the audio render thread inside the tap block, where the buffer is
+    /// valid. Reads only the passed-in buffer; touches no shared state.
+    nonisolated static func normalisedLevel(from buffer: AVAudioPCMBuffer) -> Double {
+        guard let channelData = buffer.floatChannelData?[0] else { return 0 }
         let frameLength = Int(buffer.frameLength)
-        guard frameLength > 0 else { return }
+        guard frameLength > 0 else { return 0 }
 
         var sum: Float = 0
         for i in 0..<frameLength {
@@ -210,7 +220,10 @@ final class VoiceInputService: ObservableObject {
             sum += sample * sample
         }
         let rms = sqrt(sum / Float(frameLength))
-        let normalised = min(Double(rms) * 8.0, 1.0)  // visual scaling
+        return min(Double(rms) * 8.0, 1.0)  // visual scaling
+    }
+
+    private func applyInputLevel(_ normalised: Double) {
         // Smooth: 70% old, 30% new
         self.inputLevel = inputLevel * 0.7 + normalised * 0.3
     }

@@ -45,10 +45,10 @@ final class PantryQuickAddTests: XCTestCase {
     }
 
     func testBareEggsInfersDozen() {
-        // UnitInference's egg rule requires a trailing space in the key
-        // ("egg ") to avoid matching "eggplant". The parser passes the
-        // raw name so we exercise that boundary here.
-        let result = PantryQuickAddBar.parse("egg carton")
+        // US-493: UnitInference matches eggs on whole-word tokens, so the bare
+        // plural "eggs" (the commonest input) now resolves to a dozen — the
+        // old "egg " substring rule missed it.
+        let result = PantryQuickAddBar.parse("eggs")
         XCTAssertEqual(result?.row.unit, "dozen")
         XCTAssertEqual(result?.confidence, 0.7)
     }
