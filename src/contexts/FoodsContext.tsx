@@ -7,7 +7,7 @@ import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
-import { parseFoodRow, parseFoodRows } from "@/lib/normalizeEntities";
+import { parseFoodRow, parseFoodRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
 
 interface RealtimePayload<T> {
@@ -104,7 +104,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         setFoods(prev => [...prev, { ...food, id: generateId() }]);
       } else if (data) {
         const inserted = parseFoodRow(data as Record<string, unknown>);
-        if (inserted) setFoods(prev => [...prev, inserted]);
+        if (inserted) setFoods(prev => upsertById(prev, inserted));
       }
       return true;
     }
@@ -167,7 +167,7 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
         setFoods(prev => [...prev, ...localFoods]);
       } else if (data) {
-        setFoods(prev => [...prev, ...parseFoodRows(data as unknown[])]);
+        setFoods(prev => upsertManyById(prev, parseFoodRows(data as unknown[])));
       }
       return true;
     }

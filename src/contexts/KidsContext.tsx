@@ -8,7 +8,7 @@ import { checkFeatureLimit } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { parseKidRow, parseKidRows } from "@/lib/normalizeEntities";
+import { parseKidRow, parseKidRows, upsertById } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -106,7 +106,8 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
         logger.error('Supabase addKid error:', error);
         setKids(prev => [...prev, { ...kid, id: generateId() }]);
       } else if (data) {
-        setKids(prev => [...prev, data as unknown as Kid]);
+        const inserted = parseKidRow(data as Record<string, unknown>);
+        if (inserted) setKids(prev => upsertById(prev, inserted));
       }
       return true;
     }
