@@ -32,6 +32,17 @@ enum UnitInference {
             .lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return nil }
+
+        // US-493: eggs are matched on whole-word tokens, not a substring, so
+        // bare "eggs"/"egg" resolve to a dozen while "eggplant" (a different
+        // token) does not. The generic substring rules below can't express a
+        // word boundary, and the old `"egg "` token missed the two commonest
+        // inputs ("eggs", "egg") entirely.
+        let tokens = needle.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        if tokens.contains("egg") || tokens.contains("eggs") {
+            return Inference(unit: "dozen", quantity: 1)
+        }
+
         for (keywords, inference) in priorityOrderedRules {
             for kw in keywords where needle.contains(kw) {
                 return inference
@@ -44,12 +55,15 @@ enum UnitInference {
     /// usual unit + quantity. Order matters — compound and longer terms
     /// run first so "ice cream" doesn't match a generic "cream" rule.
     private static let priorityOrderedRules: [(keywords: [String], inference: Inference)] = [
-        // Eggs almost always sold by the dozen.
-        (["egg "], Inference(unit: "dozen", quantity: 1)),
+        // Eggs (whole-word "egg"/"eggs") are handled up front in `infer`.
 
         // Dairy beverages → gallon for milk, half-gallon for cream.
         (["whole milk", "skim milk", "almond milk", "oat milk", "soy milk", "coconut milk drink"],
          Inference(unit: "gal", quantity: 1)),
+        // US-493: canned coconut milk must beat the generic "milk" rule below,
+        // otherwise "coconut milk" matches milk→gal. The "coconut milk drink"
+        // beverage is matched above and correctly stays a gallon.
+        (["coconut milk"], Inference(unit: "can", quantity: 1)),
         (["milk"], Inference(unit: "gal", quantity: 1)),
         (["heavy cream", "half and half", "half-and-half"],
          Inference(unit: "pt", quantity: 1)),
@@ -62,6 +76,10 @@ enum UnitInference {
         (["block cheese", "cheddar", "mozzarella", "parmesan"],
          Inference(unit: "oz", quantity: 8)),
 
+        // US-493: nut butters & fruit spreads before the dairy "butter" rule,
+        // otherwise "peanut butter"/"almond butter" match butter→lb.
+        (["peanut butter", "almond butter", "jam", "jelly", "preserves"],
+         Inference(unit: "jar", quantity: 1)),
         // Butter.
         (["butter"], Inference(unit: "lb", quantity: 1)),
 
@@ -97,8 +115,6 @@ enum UnitInference {
          Inference(unit: "bottle", quantity: 1)),
         (["soy sauce", "vinegar", "ketchup", "mustard", "mayonnaise", "mayo", "hot sauce", "salsa"],
          Inference(unit: "bottle", quantity: 1)),
-        (["peanut butter", "almond butter", "jam", "jelly", "preserves"],
-         Inference(unit: "jar", quantity: 1)),
 
         // Canned goods.
         (["canned tomato", "diced tomato", "crushed tomato", "tomato sauce", "tomato paste"],
@@ -107,7 +123,6 @@ enum UnitInference {
          Inference(unit: "can", quantity: 2)),
         (["chicken stock", "beef stock", "vegetable stock", "broth"],
          Inference(unit: "can", quantity: 2)),
-        (["coconut milk"], Inference(unit: "can", quantity: 1)),
         (["tuna can"], Inference(unit: "can", quantity: 2)),
 
         // Beverages.

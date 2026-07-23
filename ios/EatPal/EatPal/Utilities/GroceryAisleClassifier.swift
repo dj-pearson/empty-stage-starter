@@ -23,6 +23,15 @@ extension GroceryAisle {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return .other }
 
+        // US-493: match eggs on whole-word tokens so bare "eggs"/"egg" (the
+        // commonest inputs) classify as `.eggs`, while "eggplant" (a distinct
+        // token, produce) does not. The old `"egg "` substring token missed
+        // both bare forms and dumped them in the giant `.other` bucket.
+        let tokens = needle.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        if tokens.contains("egg") || tokens.contains("eggs") {
+            return .eggs
+        }
+
         // Iterate in priority order — first match wins. Earlier entries
         // are more specific (compound words, prefixed terms) so they
         // beat shorter substrings.
@@ -62,8 +71,12 @@ extension GroceryAisle {
             "bread", "baguette", "ciabatta", "bun", "roll", "tortilla",
             "pita", "naan", "bagel", "english muffin", "sourdough", "focaccia"
         ]),
-        (.eggs, [
-            "egg yolk", "egg white", "egg "
+        // Eggs (whole-word "egg"/"eggs") are handled up front in `classify`.
+        // US-493: canned/shelf-stable milks must beat the dairy "milk"
+        // substring below, otherwise "evaporated milk" / "condensed milk" /
+        // "coconut milk" all land in `.dairy` instead of `.canned`.
+        (.canned, [
+            "coconut milk", "evaporated milk", "condensed milk", "sweetened condensed"
         ]),
         (.seafood, [
             "salmon", "tuna", "shrimp", "scallop", "crab", "lobster",
@@ -101,7 +114,6 @@ extension GroceryAisle {
         (.canned, [
             "canned", "tomato sauce", "tomato paste", "diced tomato",
             "crushed tomato", "tomato puree", "marinara", "broth", "stock",
-            "coconut milk", "evaporated milk", "condensed milk",
             "refried bean", "black bean", "kidney bean", "chickpea",
             "garbanzo", "cannellini", "pinto bean", "white bean"
         ]),

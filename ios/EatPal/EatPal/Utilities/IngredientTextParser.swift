@@ -90,20 +90,31 @@ enum IngredientTextParser {
         var idx = s.startIndex
         var collected: [Double] = []
         var sawAny = false
+        // US-493: true once we skip an explicit *range* separator ("-", en/em
+        // dash, or " to "). A plain space separates a mixed number ("1 1/2")
+        // and must NOT be read as a range, so it doesn't set this. The final
+        // total averages only genuine ranges and sums everything else.
+        var sawRangeSeparator = false
 
         // Loop because "1 1/2" or "1-2" or "1 to 2" emits multiple tokens.
         while idx < s.endIndex {
             // Skip a single leading separator between number tokens
-            // (space, hyphen, en/em dash, the literal " to ", or "-")
-            // but only after we've already seen at least one number.
+            // (space, hyphen, en/em dash, or the literal " to ") but only
+            // after we've already seen at least one number.
             if sawAny {
                 let rest = s[idx...]
                 if rest.hasPrefix(" to ") {
+                    sawRangeSeparator = true
                     idx = s.index(idx, offsetBy: 4)
                     continue
                 }
                 let sep = s[idx]
-                if sep == " " || sep == "-" || sep == "–" || sep == "—" {
+                if sep == "-" || sep == "–" || sep == "—" {
+                    sawRangeSeparator = true
+                    idx = s.index(after: idx)
+                    continue
+                }
+                if sep == " " {
                     idx = s.index(after: idx)
                     continue
                 }
@@ -159,6 +170,21 @@ enum IngredientTextParser {
                 continue
             }
 
+            // US-493: "<n>-<word>" (e.g. "15-ounce", "8-oz") is a hyphenated
+            // size descriptor, not a quantity or a range endpoint. If we
+            // already have a quantity, drop the whole descriptor and stop, so
+            // "1 15-ounce can black beans" parses as qty 1 / "can black beans"
+            // instead of averaging [1, 15] into 8.
+            if sawAny, end < s.endIndex, s[end] == "-",
+               s.index(after: end) < s.endIndex, s[s.index(after: end)].isLetter {
+                var wordEnd = s.index(after: end)
+                while wordEnd < s.endIndex, s[wordEnd].isLetter {
+                    wordEnd = s.index(after: wordEnd)
+                }
+                idx = wordEnd
+                break
+            }
+
             // Plain integer
             if let val = Double(s[idx..<end]) {
                 collected.append(val)
@@ -169,15 +195,13 @@ enum IngredientTextParser {
 
         guard !collected.isEmpty else { return (nil, s) }
 
-        // For a range ("1 to 2", "1-2") we collected two numbers and
-        // want their average. For mixed numbers ("1 1/2") we want the
-        // sum. Heuristic: if every collected value is < 1, sum them
-        // (likely a fraction sequence); otherwise if we collected more
-        // than two we sum (mixed); for exactly two where the second is
-        // larger than the first, average (range).
+        // US-493: average only a genuine range — exactly two numbers joined by
+        // a real range separator ("1-2", "1 to 2", "1/2 to 3/4"). Everything
+        // else sums, which is what a mixed number ("1 1/2") needs. Keying off
+        // the separator (not the magnitudes) fixes both fractional ranges
+        // (which the old `>= 1` guard summed) and the size-descriptor case.
         let total: Double
-        if collected.count == 2,
-           collected[0] >= 1, collected[1] >= 1, collected[1] > collected[0] {
+        if sawRangeSeparator, collected.count == 2 {
             total = (collected[0] + collected[1]) / 2.0
         } else {
             total = collected.reduce(0, +)
