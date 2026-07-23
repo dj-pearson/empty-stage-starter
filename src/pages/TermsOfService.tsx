@@ -93,8 +93,11 @@ const TermsOfService = () => {
 
             <h3 className="text-xl font-semibold mb-3 mt-6 text-foreground">Refunds and Cancellation</h3>
             <p className="text-muted-foreground leading-relaxed">
-              You may cancel your subscription at any time. Cancellations take effect at the end of the current billing 
-              period. We do not provide refunds for partial months or years, except as required by law or at our sole discretion.
+              You may cancel your subscription at any time. Cancellations take effect at the end of the current billing
+              period. We offer a 30-day money-back guarantee on your first paid subscription: if you request a refund within
+              30 days of your initial purchase, we will issue a full refund. After that 30-day window, we do not provide
+              refunds for partial months or years, except as required by law or at our sole discretion. To request a refund,
+              contact us at Support@TryEatPal.com.
             </p>
           </section>
 

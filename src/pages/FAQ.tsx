@@ -55,7 +55,7 @@ const faqData = [
   },
   {
     question: "Can I cancel my subscription anytime?",
-    answer: "Yes, you can cancel your subscription at any time. Your access will continue through the end of your current billing period. We don't offer refunds for partial months, but you won't be charged again after cancellation.",
+    answer: "Yes, you can cancel your subscription at any time. Your access will continue through the end of your current billing period. New subscriptions come with a 30-day money-back guarantee, so you can request a full refund within 30 days of your first purchase. After that window we don't offer refunds for partial months, but you won't be charged again after cancellation.",
     category: "Billing" as FAQCategory,
   },
   {

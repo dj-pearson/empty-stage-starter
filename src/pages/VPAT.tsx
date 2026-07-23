@@ -33,10 +33,10 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "1.4.1", name: "Use of Color", level: "A", conformance: "Supports", remarks: "Color is never the sole indicator. Icons, text, and patterns supplement color coding." },
   { criterion: "1.4.2", name: "Audio Control", level: "A", conformance: "Supports", remarks: "No auto-playing audio. All media requires user interaction." },
   { criterion: "2.1.1", name: "Keyboard", level: "A", conformance: "Supports", remarks: "All functionality accessible via keyboard. Custom components support standard keyboard patterns." },
-  { criterion: "2.1.2", name: "No Keyboard Trap", level: "A", conformance: "Supports", remarks: "Focus can always be moved using Tab/Escape. Modal dialogs properly trap and release focus." },
+  { criterion: "2.1.2", name: "No Keyboard Trap", level: "A", conformance: "Partially Supports", remarks: "Radix-based modal dialogs trap and release focus correctly. The custom accessibility-settings panel currently supports Escape-to-close but does not yet fully trap/restore focus; remediation in progress." },
   { criterion: "2.1.4", name: "Character Key Shortcuts", level: "A", conformance: "Supports", remarks: "Keyboard shortcuts use modifier keys (Ctrl/Cmd+K). Can be disabled in settings." },
   { criterion: "2.2.1", name: "Timing Adjustable", level: "A", conformance: "Supports", remarks: "Extended timeout option available in accessibility settings." },
-  { criterion: "2.2.2", name: "Pause, Stop, Hide", level: "A", conformance: "Supports", remarks: "Animations respect prefers-reduced-motion. Carousels have pause controls." },
+  { criterion: "2.2.2", name: "Pause, Stop, Hide", level: "A", conformance: "Partially Supports", remarks: "CSS animations respect prefers-reduced-motion globally. Some JavaScript-driven (Framer Motion) animations are not yet fully gated on prefers-reduced-motion; remediation in progress." },
   { criterion: "2.3.1", name: "Three Flashes or Below Threshold", level: "A", conformance: "Supports", remarks: "No content flashes more than 3 times per second." },
   { criterion: "2.4.1", name: "Bypass Blocks", level: "A", conformance: "Supports", remarks: "Skip to main content link implemented on all pages." },
   { criterion: "2.4.2", name: "Page Titled", level: "A", conformance: "Supports", remarks: "All pages have unique, descriptive titles via react-helmet-async." },
@@ -44,7 +44,7 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "2.4.4", name: "Link Purpose (In Context)", level: "A", conformance: "Supports", remarks: "Link text describes destination. Generic links have aria-label." },
   { criterion: "2.5.1", name: "Pointer Gestures", level: "A", conformance: "Supports", remarks: "No multipoint or path-based gestures required. Single pointer alternatives available." },
   { criterion: "2.5.2", name: "Pointer Cancellation", level: "A", conformance: "Supports", remarks: "Actions trigger on up-event. Abort mechanism available for drag operations." },
-  { criterion: "2.5.3", name: "Label in Name", level: "A", conformance: "Supports", remarks: "Visible labels included in accessible names. No mismatch between visual and accessible names." },
+  { criterion: "2.5.3", name: "Label in Name", level: "A", conformance: "Partially Supports", remarks: "Text controls include their visible label in the accessible name. A number of icon-only controls are being updated to expose accessible names; remediation in progress." },
   { criterion: "2.5.4", name: "Motion Actuation", level: "A", conformance: "Supports", remarks: "No motion-activated functionality. All features have standard input alternatives." },
   { criterion: "3.1.1", name: "Language of Page", level: "A", conformance: "Supports", remarks: "HTML lang=\"en\" attribute set on root element." },
   { criterion: "3.2.1", name: "On Focus", level: "A", conformance: "Supports", remarks: "Focus does not trigger unexpected context changes." },
@@ -52,14 +52,14 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "3.3.1", name: "Error Identification", level: "A", conformance: "Supports", remarks: "Form errors clearly identified with text and ARIA. Error messages linked to fields." },
   { criterion: "3.3.2", name: "Labels or Instructions", level: "A", conformance: "Supports", remarks: "All form fields have visible labels. Instructions provided for complex inputs." },
   { criterion: "4.1.1", name: "Parsing", level: "A", conformance: "Supports", remarks: "Valid HTML5. No duplicate IDs. Proper nesting maintained." },
-  { criterion: "4.1.2", name: "Name, Role, Value", level: "A", conformance: "Supports", remarks: "Custom components use appropriate ARIA roles, states, and properties." },
+  { criterion: "4.1.2", name: "Name, Role, Value", level: "A", conformance: "Partially Supports", remarks: "Custom components use appropriate ARIA roles, states, and properties. Some icon-only buttons do not yet expose an accessible name; an accessible-name remediation pass is in progress." },
 
   // Level AA Criteria
   { criterion: "1.2.4", name: "Captions (Live)", level: "AA", conformance: "Not Applicable", remarks: "No live audio content." },
   { criterion: "1.2.5", name: "Audio Description (Prerecorded)", level: "AA", conformance: "Not Applicable", remarks: "No prerecorded video content." },
   { criterion: "1.3.4", name: "Orientation", level: "AA", conformance: "Supports", remarks: "Content adapts to portrait and landscape. No orientation lock." },
   { criterion: "1.3.5", name: "Identify Input Purpose", level: "AA", conformance: "Supports", remarks: "Form inputs use appropriate autocomplete attributes." },
-  { criterion: "1.4.3", name: "Contrast (Minimum)", level: "AA", conformance: "Supports", remarks: "Text contrast ratio meets 4.5:1 for normal text, 3:1 for large text. High contrast mode available." },
+  { criterion: "1.4.3", name: "Contrast (Minimum)", level: "AA", conformance: "Partially Supports", remarks: "Text contrast meets 4.5:1 (normal) / 3:1 (large) in the default theme, and a high-contrast mode is available. Some components use hardcoded colors that do not remap under high-contrast mode; migration to semantic tokens is in progress." },
   { criterion: "1.4.4", name: "Resize Text", level: "AA", conformance: "Supports", remarks: "Text resizes up to 200% without loss of functionality. Font size settings available." },
   { criterion: "1.4.5", name: "Images of Text", level: "AA", conformance: "Supports", remarks: "No images of text used for content. Logo is exception per WCAG." },
   { criterion: "1.4.10", name: "Reflow", level: "AA", conformance: "Supports", remarks: "Content reflows at 320px width. No horizontal scrolling required." },
@@ -91,11 +91,10 @@ const getConformanceIcon = (conformance: ConformanceLevel) => {
 };
 
 const VPAT = () => {
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  // Fixed attestation date — a VPAT is a dated legal representation and must not
+  // silently re-date itself on every render (compliance audit 2026-07). Update
+  // this constant when the VPAT is formally re-reviewed.
+  const currentDate = 'July 23, 2026';
 
   const levelACriteria = wcagCriteria.filter(c => c.level === "A");
   const levelAACriteria = wcagCriteria.filter(c => c.level === "AA");

@@ -11,6 +11,7 @@ import { AccessibilityProvider } from '@/contexts/AccessibilityContext';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { SkipToContent } from '@/components/SkipToContent';
+import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { RouteAnnouncer } from '@/components/RouteAnnouncer';
@@ -136,6 +137,7 @@ const App = () => (
                 <BrowserRouter>
                   <SkipToContent />
                   <RouteAnnouncer />
+                  <CookieConsentBanner />
                   <DeferredComponents />
                   <UpgradePromptHost />
                   <Suspense fallback={<LoadingFallback message="Loading..." />}>

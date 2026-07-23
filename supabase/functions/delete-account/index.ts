@@ -22,6 +22,7 @@ const corsHeaders = {
 // Tables keyed by user_id that we scrub explicitly. Keep in alphabetical
 // order. Add entries as new user-scoped tables ship.
 const USER_SCOPED_TABLES = [
+  "backup_logs",
   "budget_calculations",
   "foods",
   "grocery_delivery",
@@ -42,6 +43,11 @@ const USER_SCOPED_TABLES = [
   "user_subscriptions",
   "voting_sessions",
 ] as const;
+
+// Marketing tables keyed by email rather than user_id, with no FK cascade to
+// auth.users. Without an explicit scrub the user's email survives account
+// deletion, leaving erasure incomplete (GDPR Art. 17 — compliance audit 2026-07).
+const EMAIL_SCOPED_TABLES = ["email_subscribers"] as const;
 
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -73,6 +79,7 @@ export default async (req: Request) => {
     return json({ error: "Unauthorized" }, 401);
   }
   const userId = userData.user.id;
+  const userEmail = userData.user.email ?? null;
 
   // 2. Service-role client for privileged deletes.
   const admin = createClient(supabaseUrl, serviceKey, {
@@ -87,6 +94,17 @@ export default async (req: Request) => {
       // Non-fatal: table might not exist in this env, or user had no rows.
       // We collect for diagnostics but keep deleting.
       failures[table] = error.message;
+    }
+  }
+
+  // 2b. Scrub email-keyed marketing rows so the user's email doesn't survive
+  //     deletion (these tables have no user_id and no cascade to auth.users).
+  if (userEmail) {
+    for (const table of EMAIL_SCOPED_TABLES) {
+      const { error } = await admin.from(table).delete().eq("email", userEmail);
+      if (error) {
+        failures[table] = error.message;
+      }
     }
   }
 

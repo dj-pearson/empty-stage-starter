@@ -35,7 +35,8 @@ export function EmailCaptureModal({
   const [email, setEmail] = useState('');
   const [childName, setChildName] = useState('');
   const [parentName, setParentName] = useState('');
-  const [acceptsMarketing, setAcceptsMarketing] = useState(true);
+  // Opt-in: marketing consent must not be pre-checked (GDPR Art. 4(11)/7).
+  const [acceptsMarketing, setAcceptsMarketing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const personalityName = getPersonalityName(personalityType);
