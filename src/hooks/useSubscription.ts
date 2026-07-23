@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
@@ -28,7 +28,23 @@ export function useSubscription() {
   const [actionLoading, setActionLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Guard subscription-state writes: realtime can fire fetchSubscription many
+  // times in quick succession, so ignore any response that isn't the latest
+  // in-flight fetch (out-of-order stale overwrite) or that lands after unmount.
+  const isMountedRef = useRef(true);
+  const fetchSeqRef = useRef(0);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchSubscription = async () => {
+    const seq = ++fetchSeqRef.current;
+    const apply = (fn: () => void) => {
+      if (isMountedRef.current && seq === fetchSeqRef.current) fn();
+    };
     try {
       setLoading(true);
 
@@ -53,13 +69,13 @@ export function useSubscription() {
       }
 
       if (data) {
-        setSubscription({
+        apply(() => setSubscription({
           ...(data as any),
           plan_name: (data as any).plan.name,
           billing_cycle: (data as any).billing_cycle || 'monthly',
           is_complementary: (data as any).is_complementary || false,
           complementary_subscription_id: (data as any).complementary_subscription_id || null,
-        } as any);
+        } as any));
       } else {
         // Check for active complementary subscription
         // @ts-ignore - RPC function exists but not in generated types
@@ -78,7 +94,7 @@ export function useSubscription() {
             .single();
 
           if (planData) {
-            setSubscription({
+            apply(() => setSubscription({
               id: (compData as any).id,
               user_id: user.id,
               plan_id: (compData as any).plan_id,
@@ -93,44 +109,55 @@ export function useSubscription() {
               stripe_subscription_id: null,
               is_complementary: true,
               complementary_subscription_id: (compData as any).id,
-            } as any);
+            } as any));
           } else {
-            setSubscription(null);
+            apply(() => setSubscription(null));
           }
         } else {
-          setSubscription(null);
+          apply(() => setSubscription(null));
         }
       }
     } catch (err: unknown) {
       logger.error("Error fetching subscription:", err);
     } finally {
-      setLoading(false);
+      apply(() => setLoading(false));
     }
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     fetchSubscription();
 
-    // Subscribe to real-time updates
-    logger.debug('Subscribing to subscription-updates');
-    const channel = supabase
-      .channel("subscription-updates")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_subscriptions",
-        },
-        () => {
-          fetchSubscription();
-        }
-      )
-      .subscribe();
+    // Scope the realtime channel to THIS user's own subscription row. Without a
+    // filter, every user's billing change woke every connected client with a
+    // refetch (needless fan-out); data isolation still relies on RLS, but the
+    // filter avoids the wasted work and is more robust if RLS is ever loosened.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (cancelled || !user) return;
+      logger.debug('Subscribing to subscription-updates');
+      channel = supabase
+        .channel(`subscription-updates:${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "user_subscriptions",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            fetchSubscription();
+          }
+        )
+        .subscribe();
+    });
 
     return () => {
+      cancelled = true;
       logger.debug('Unsubscribing from subscription-updates');
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, []);
 

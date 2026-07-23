@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
@@ -45,7 +45,23 @@ export function useUsageStats() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Guard state writes: realtime fires fetchStats repeatedly, so ignore any
+  // response that isn't the latest in-flight fetch (stale overwrite) or that
+  // lands after unmount.
+  const isMountedRef = useRef(true);
+  const fetchSeqRef = useRef(0);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fetchStats = async () => {
+    const seq = ++fetchSeqRef.current;
+    const apply = (fn: () => void) => {
+      if (isMountedRef.current && seq === fetchSeqRef.current) fn();
+    };
     try {
       setLoading(true);
       setError(null);
@@ -64,49 +80,61 @@ export function useUsageStats() {
 
       if (rpcError) throw rpcError;
 
-      setStats(data as unknown as UsageStats);
+      apply(() => setStats(data as unknown as UsageStats));
     } catch (err) {
       logger.error("Error fetching usage stats:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch usage stats");
+      apply(() =>
+        setError(err instanceof Error ? err.message : "Failed to fetch usage stats"),
+      );
     } finally {
-      setLoading(false);
+      apply(() => setLoading(false));
     }
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     fetchStats();
 
-    // Subscribe to real-time updates
-    logger.debug('Subscribing to usage-updates');
-    const channel = supabase
-      .channel("usage-updates")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_usage_tracking",
-        },
-        () => {
-          fetchStats();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_subscriptions",
-        },
-        () => {
-          fetchStats();
-        }
-      )
-      .subscribe();
+    // Scope both realtime channels to THIS user's rows, so another user's usage
+    // or billing change doesn't wake every connected client with a refetch.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (cancelled || !user) return;
+      logger.debug('Subscribing to usage-updates');
+      channel = supabase
+        .channel(`usage-updates:${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "user_usage_tracking",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            fetchStats();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "user_subscriptions",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            fetchStats();
+          }
+        )
+        .subscribe();
+    });
 
     return () => {
+      cancelled = true;
       logger.debug('Unsubscribing from usage-updates');
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, []);
 
