@@ -171,11 +171,18 @@ export default function Pantry() {
     ],
   });
 
-  // Track initial data loading
+  // Track initial data loading. Clear the skeleton as soon as data arrives, but
+  // also clear it shortly after mount so a genuinely empty pantry (e.g. a brand
+  // new user with zero foods and zero kids) reaches the EmptyPantryState instead
+  // of being stuck on the loading skeleton forever — the previous data-only gate
+  // never fired when both arrays stayed empty.
   useEffect(() => {
     if (foods.length > 0 || kids.length > 0) {
       setIsInitialLoading(false);
+      return;
     }
+    const timeout = setTimeout(() => setIsInitialLoading(false), 1200);
+    return () => clearTimeout(timeout);
   }, [foods, kids]);
 
   // Pull-to-refresh
