@@ -388,6 +388,11 @@ final class OfflineStore: ObservableObject {
     func syncPendingMutations() async {
         guard !isSyncing else { return }
 
+        // US-494: bail out when offline instead of burning replay attempts.
+        // This makes the pass safe to call unconditionally on launch and on
+        // foreground (US-494 M2), not just on a network-restore transition.
+        guard NetworkMonitor.shared.isConnected else { return }
+
         // US-489: resolve the authenticated user and only replay mutations
         // that belong to them. Without a session there is no one to attribute
         // writes to, so we replay nothing (and never route one account's
@@ -410,15 +415,25 @@ final class OfflineStore: ObservableObject {
         lastSyncError = nil
         defer { isSyncing = false }
 
+        // US-494 (M3): a failing mutation only blocks *its own entity's* later
+        // ops (an insert must land before its update/delete for the same id),
+        // not the entire queue. Unrelated rows keep draining in the same pass
+        // instead of head-of-line blocking behind one transient failure and
+        // waiting for the next reconnection.
+        var blockedEntityIds: Set<String> = []
+
         for mutation in mutations {
+            // Preserve per-entity ordering: skip this op if an earlier op for
+            // the same id failed this pass (it'll retry next pass, in order).
+            if blockedEntityIds.contains(mutation.entityId) { continue }
+
             do {
                 try await replay(mutation, userId: uid)
                 clearPendingMutation(mutation)
             } catch {
                 // US-385: count the failure. A mutation that keeps failing is
                 // quarantined (dropped + reported) so it can't permanently
-                // head-of-line block every later mutation; otherwise we break
-                // and preserve ordering for the next reconnection.
+                // block its entity's later ops.
                 mutation.attemptCount += 1
                 try? context.save()
 
@@ -433,7 +448,9 @@ final class OfflineStore: ObservableObject {
                         "attempts": mutation.attemptCount
                     ])
                     clearPendingMutation(mutation)
-                    continue // skip the poison mutation, keep draining
+                    // Dropped — later ops for this entity are no longer
+                    // blocked and may proceed.
+                    continue
                 }
 
                 SentryService.capture(error, extras: [
@@ -443,7 +460,8 @@ final class OfflineStore: ObservableObject {
                     "id": mutation.entityId,
                     "attempts": mutation.attemptCount
                 ])
-                break // preserve ordering; retry on next reconnection
+                // Block only this entity's later ops; keep draining the rest.
+                blockedEntityIds.insert(mutation.entityId)
             }
         }
 

@@ -42,6 +42,9 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 Task { await StoreKitService.shared.refreshEntitlements() }
+                // US-494 (M2): also try to drain the offline write queue on
+                // foreground; it no-ops when offline or empty.
+                Task { await OfflineStore.shared.syncPendingMutations() }
             }
         }
     }

@@ -287,6 +287,13 @@ final class AppState: ObservableObject {
             // US-295: same idea for grocery lines shared from Notes / Reminders.
             await drainPendingGroceryImports()
 
+            // US-494 (M2): a successful load means we're online — drain any
+            // offline writes queued while disconnected. Previously the queue
+            // only replayed on a network-restore transition, so a kill-while-
+            // offline / relaunch-online sequence (no transition) left it
+            // stranded. Fire-and-forget so it never blocks the UI paint.
+            Task { await OfflineStore.shared.syncPendingMutations() }
+
             // US-274: cache the household id on SmartProductService so
             // the resolver can include the household tier without an
             // extra round trip per add. Failure is non-fatal — the
