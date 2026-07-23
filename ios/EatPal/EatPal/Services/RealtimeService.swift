@@ -124,6 +124,64 @@ final class RealtimeService {
                 await self.handleRecipesChange(change, appState: appState)
             }
         })
+
+        // US-499 (M4): when the user is in a household we scope live updates by
+        // household_id, but a member's OWN rows whose household_id is null or
+        // predates the join still load via RLS and would otherwise receive no
+        // live updates (the load uses no filter; realtime does). Add a second,
+        // user_id-scoped subscription per table to cover them. The change
+        // handlers dedup by id (INSERT skips an existing id, UPDATE overwrites,
+        // DELETE removes), so a row matching both filters is applied
+        // idempotently. Solo users already filter by user_id, so this is
+        // household-only. Purely additive: no schema change, no effect on the
+        // load path or older clients.
+        if householdId != nil, let userId, !userId.isEmpty {
+            let userFilter = "user_id=eq.\(userId)"
+            await subscribeTable("foods", filter: userFilter, channelName: "foods-user-\(userId)", appState: appState) { change, state in
+                await self.handleFoodsChange(change, appState: state)
+            }
+            await subscribeTable("kids", filter: userFilter, channelName: "kids-user-\(userId)", appState: appState) { change, state in
+                await self.handleKidsChange(change, appState: state)
+            }
+            await subscribeTable("grocery_items", filter: userFilter, channelName: "grocery-user-\(userId)", appState: appState) { change, state in
+                await self.handleGroceryChange(change, appState: state)
+            }
+            await subscribeTable("plan_entries", filter: userFilter, channelName: "plan-user-\(userId)", appState: appState) { change, state in
+                await self.handlePlanChange(change, appState: state)
+            }
+            await subscribeTable("recipes", filter: userFilter, channelName: "recipes-user-\(userId)", appState: appState) { change, state in
+                await self.handleRecipesChange(change, appState: state)
+            }
+        }
+    }
+
+    /// US-499: set up one filtered channel + its listener task for `table`.
+    /// Factored out so the M4 user_id-scoped subscriptions don't duplicate the
+    /// channel/listener boilerplate. `handle` dispatches to the per-table
+    /// change handler.
+    private func subscribeTable(
+        _ table: String,
+        filter: String,
+        channelName: String,
+        appState: AppState,
+        handle: @escaping (AnyAction, AppState) async -> Void
+    ) async {
+        let channel = client.realtimeV2.channel(channelName)
+        let changes = channel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: table,
+            filter: filter
+        )
+        channels.append(channel)
+        await subscribeChannel(channel, name: table)
+
+        listenerTasks.append(Task { [weak appState] in
+            guard let appState else { return }
+            for await change in changes {
+                await handle(change, appState)
+            }
+        })
     }
 
     /// Subscribe to a channel and surface errors instead of swallowing them silently.
