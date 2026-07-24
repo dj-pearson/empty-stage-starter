@@ -555,7 +555,7 @@ export function SubscriptionManagement() {
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <CardTitle>{plan.name}</CardTitle>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditPlan(plan)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditPlan(plan)} aria-label="Edit plan">
                           <Edit className="h-4 w-4" />
                         </Button>
                       </div>

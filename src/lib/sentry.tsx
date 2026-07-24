@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react';
 import { logger } from '@/lib/logger';
+import { hasAnalyticsConsent } from '@/lib/consent';
 
 /**
  * EatPal's Sentry DSN for this platform's project.
@@ -30,14 +31,22 @@ export function initializeSentry() {
 
     try {
       // Initialize with both tracing and replay integrations
-      // Keeping them together prevents circular dependency issues
-      const integrations: Sentry.Integration[] = [
-        Sentry.browserTracingIntegration(),
-        Sentry.replayIntegration({
-          maskAllText: true,
-          blockAllMedia: true,
-        }),
-      ];
+      // Keeping them together prevents circular dependency issues.
+      // Session Replay records user sessions, so it is gated on analytics
+      // consent (compliance audit 2026-07). Error/performance monitoring is
+      // retained under legitimate interest for security and reliability; only
+      // the replay integration is added when the visitor has opted in.
+      // Type inferred from the integration return type — the installed
+      // @sentry/react does not export a `Sentry.Integration` type alias.
+      const integrations = [Sentry.browserTracingIntegration()];
+      if (hasAnalyticsConsent()) {
+        integrations.push(
+          Sentry.replayIntegration({
+            maskAllText: true,
+            blockAllMedia: true,
+          })
+        );
+      }
 
       Sentry.init({
         dsn,

@@ -76,7 +76,7 @@ export function PWAInstallPrompt() {
                 </Button>
               </div>
             </div>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleDismiss}>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleDismiss} aria-label="Dismiss install prompt">
               <X className="h-4 w-4" />
             </Button>
           </div>

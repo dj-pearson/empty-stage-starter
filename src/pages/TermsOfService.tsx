@@ -93,8 +93,11 @@ const TermsOfService = () => {
 
             <h3 className="text-xl font-semibold mb-3 mt-6 text-foreground">Refunds and Cancellation</h3>
             <p className="text-muted-foreground leading-relaxed">
-              You may cancel your subscription at any time. Cancellations take effect at the end of the current billing 
-              period. We do not provide refunds for partial months or years, except as required by law or at our sole discretion.
+              You may cancel your subscription at any time. Cancellations take effect at the end of the current billing
+              period. We offer a 30-day money-back guarantee on your first paid subscription: if you request a refund within
+              30 days of your initial purchase, we will issue a full refund. After that 30-day window, we do not provide
+              refunds for partial months or years, except as required by law or at our sole discretion. To request a refund,
+              contact us at Support@TryEatPal.com.
             </p>
           </section>
 
@@ -161,9 +164,26 @@ const TermsOfService = () => {
 
           <section>
             <h2 className="text-2xl font-heading font-bold mb-4 text-primary">9. Third-Party Services</h2>
-            <p className="text-muted-foreground leading-relaxed">
-              Our Service may contain links to third-party websites or services. We are not responsible for the content, 
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              Our Service may contain links to third-party websites or services. We are not responsible for the content,
               privacy policies, or practices of third-party sites. Your use of third-party services is at your own risk.
+            </p>
+            <h3 className="text-xl font-semibold mb-3 mt-6 text-foreground">Apple App Store (iOS)</h3>
+            <p className="text-muted-foreground leading-relaxed">
+              If you download EatPal from the Apple App Store, your license to use the app is also governed by Apple's
+              Licensed Application End User License Agreement (the "Apple Standard EULA"), available at{" "}
+              <a
+                href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline"
+              >
+                apple.com/legal/internet-services/itunes/dev/stdeula
+              </a>
+              . To the extent these Terms conflict with the Apple Standard EULA with respect to your use of the iOS app,
+              the Apple Standard EULA applies. Apple is not a party to these Terms and is not responsible for the app or
+              its content; Apple and its subsidiaries are third-party beneficiaries of these Terms with respect to the
+              iOS app.
             </p>
           </section>
 

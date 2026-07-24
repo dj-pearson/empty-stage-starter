@@ -354,10 +354,11 @@ export function SmartRestockSuggestions({
             Add All
           </Button>
           <Button 
-            onClick={() => setDismissed(true)} 
-            variant="ghost" 
+            onClick={() => setDismissed(true)}
+            variant="ghost"
             size="icon"
             className="h-8 w-8"
+            aria-label="Dismiss restock suggestions"
           >
             <X className="h-4 w-4" />
           </Button>

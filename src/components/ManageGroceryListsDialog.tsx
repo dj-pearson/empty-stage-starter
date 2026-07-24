@@ -253,6 +253,7 @@ export function ManageGroceryListsDialog({
                               size="icon"
                               onClick={() => handleSetDefault(list.id)}
                               title="Set as default"
+                              aria-label="Set as default list"
                             >
                               <Star className="h-4 w-4" />
                             </Button>
@@ -263,6 +264,7 @@ export function ManageGroceryListsDialog({
                               size="icon"
                               onClick={() => handleArchive(list.id, true)}
                               title="Archive"
+                              aria-label="Archive list"
                               disabled={list.id === currentListId}
                             >
                               <Archive className="h-4 w-4" />
@@ -273,6 +275,7 @@ export function ManageGroceryListsDialog({
                               size="icon"
                               onClick={() => handleArchive(list.id, false)}
                               title="Restore"
+                              aria-label="Restore list"
                             >
                               <ArchiveRestore className="h-4 w-4" />
                             </Button>
@@ -282,6 +285,7 @@ export function ManageGroceryListsDialog({
                             size="icon"
                             onClick={() => setDeleteId(list.id)}
                             title="Delete"
+                            aria-label="Delete list"
                             disabled={list.id === currentListId}
                           >
                             <Trash2 className="h-4 w-4" />

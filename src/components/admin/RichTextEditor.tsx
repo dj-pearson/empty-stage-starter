@@ -154,6 +154,7 @@ export function RichTextEditor({
             className="h-8 w-8"
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
+            aria-label="Undo"
           >
             <Undo className="h-4 w-4" />
           </Button>
@@ -163,6 +164,7 @@ export function RichTextEditor({
             className="h-8 w-8"
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().redo()}
+            aria-label="Redo"
           >
             <Redo className="h-4 w-4" />
           </Button>
@@ -362,7 +364,7 @@ export function RichTextEditor({
         {/* Image */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Insert image">
               <ImageIcon className="h-4 w-4" />
             </Button>
           </PopoverTrigger>

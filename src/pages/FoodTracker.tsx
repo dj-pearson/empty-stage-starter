@@ -42,6 +42,7 @@ export default function FoodTracker() {
               size="icon"
               onClick={() => manageKidsRef.current?.openForEdit("")}
               title="Manage Children"
+              aria-label="Manage children"
             >
               <Settings className="h-4 w-4" />
             </Button>

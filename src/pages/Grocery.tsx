@@ -627,7 +627,7 @@ export default function Grocery() {
             {/* More options menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="shrink-0">
+                <Button variant="ghost" size="icon" className="shrink-0" aria-label="More options">
                   <MoreHorizontal className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -886,6 +886,7 @@ export default function Grocery() {
                             className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, -1)}
                             disabled={item.quantity <= 1}
+                            aria-label="Decrease quantity"
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
@@ -897,6 +898,7 @@ export default function Grocery() {
                             size="icon"
                             className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, 1)}
+                            aria-label="Increase quantity"
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
@@ -990,6 +992,7 @@ export default function Grocery() {
                                 className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, -1)}
                                 disabled={item.quantity <= 1}
+                                aria-label="Decrease quantity"
                               >
                                 <Minus className="h-3 w-3" />
                               </Button>
@@ -1001,6 +1004,7 @@ export default function Grocery() {
                                 size="icon"
                                 className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, 1)}
+                                aria-label="Increase quantity"
                               >
                                 <Plus className="h-3 w-3" />
                               </Button>
@@ -1022,6 +1026,7 @@ export default function Grocery() {
                               size="icon"
                               className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                               onClick={() => handleDeleteItem(item.id)}
+                              aria-label="Delete item"
                             >
                               <X className="h-4 w-4" />
                             </Button>

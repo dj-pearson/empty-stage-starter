@@ -1,0 +1,7 @@
+# EatPal security contact (RFC 9116)
+Contact: mailto:security@tryeatpal.com
+Contact: mailto:Support@TryEatPal.com
+Expires: 2027-07-23T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://tryeatpal.com/.well-known/security.txt
+Policy: https://tryeatpal.com/terms

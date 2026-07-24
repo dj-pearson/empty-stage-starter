@@ -147,7 +147,7 @@ export function NotificationBell() {
 
   if (loading) {
     return (
-      <Button variant="ghost" size="icon" disabled>
+      <Button variant="ghost" size="icon" disabled aria-label="Notifications">
         <Bell className="h-5 w-5" />
       </Button>
     );
@@ -156,7 +156,7 @@ export function NotificationBell() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <Badge
@@ -235,6 +235,7 @@ export function NotificationBell() {
                         e.stopPropagation();
                         dismissNotification(notification.id);
                       }}
+                      aria-label="Dismiss notification"
                     >
                       <span className="text-xs">✕</span>
                     </Button>

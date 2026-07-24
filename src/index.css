@@ -603,6 +603,31 @@ All colors MUST be HSL.
 }
 
 /* =================================================================
+   SIMPLIFIED UI (reduce visual complexity)
+   ================================================================= */
+.simplified-ui .decorative,
+.simplified-ui [data-decorative="true"] {
+  display: none !important;
+}
+
+.simplified-ui * {
+  box-shadow: none !important;
+  background-image: none !important;
+  text-shadow: none !important;
+}
+
+/* =================================================================
+   VERBOSE DESCRIPTIONS (reveal supplementary helper text)
+   ================================================================= */
+[data-a11y-verbose] {
+  display: none;
+}
+
+.verbose-descriptions [data-a11y-verbose] {
+  display: block;
+}
+
+/* =================================================================
    ENHANCED FOCUS INDICATORS
    ================================================================= */
 .enhanced-focus *:focus-visible {

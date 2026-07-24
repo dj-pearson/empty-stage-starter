@@ -356,7 +356,7 @@ export function RecipeDetailView({
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-8 w-8">
+                    <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Recipe options">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -481,6 +481,7 @@ export function RecipeDetailView({
                         onClick={() =>
                           setServingMultiplier((prev) => Math.max(0.5, prev - 0.5))
                         }
+                        aria-label="Decrease servings"
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
@@ -494,6 +495,7 @@ export function RecipeDetailView({
                         onClick={() =>
                           setServingMultiplier((prev) => Math.min(5, prev + 0.5))
                         }
+                        aria-label="Increase servings"
                       >
                         <Plus className="h-3 w-3" />
                       </Button>

@@ -3,9 +3,24 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
+import { resetConsent } from "@/lib/consent";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAFT — COMPLIANCE AUDIT 2026-07. The GDPR, California (CCPA/CPRA), children's
+// privacy, cookie, data-retention, subprocessor, and AI-processing sections
+// below were drafted by the compliance audit to close known gaps. They are
+// REVIEW-READY DRAFTS and MUST be reviewed and approved by legal counsel before
+// this page is shipped. Do not treat as final legal copy.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PrivacyPolicy = () => {
   const seoConfig = getPageSEO("privacy");
+
+  const handleManageCookies = () => {
+    resetConsent();
+    // Reload so the consent banner reappears with a fresh (undecided) state.
+    if (typeof window !== "undefined") window.location.reload();
+  };
   return (
     <>
     <SEOHead {...seoConfig!} />
@@ -37,7 +52,7 @@ const PrivacyPolicy = () => {
       {/* Content */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
         <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">Privacy Policy</h1>
-        <p className="text-sm text-muted-foreground mb-8">Last Updated: October 28, 2025</p>
+        <p className="text-sm text-muted-foreground mb-8">Last Updated: July 23, 2026</p>
 
         <div className="prose prose-lg max-w-none space-y-8">
           <section>
@@ -91,31 +106,86 @@ const PrivacyPolicy = () => {
           </section>
 
           <section>
-            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">4. Children's Privacy</h2>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">4. Children's Privacy (COPPA)</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              EatPal is a service for <strong>parents, guardians, and caregivers</strong> — not for children. Our
+              accounts and features are intended for adults (18+). Children do not create accounts, log in, or interact
+              with EatPal directly, and we do not knowingly collect personal information directly from children under 13.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              To provide meal planning, a parent or guardian may create <strong>child profiles</strong> containing
+              information <em>about</em> a child (such as first name or nickname, age or date of birth, dietary
+              preferences, and allergens). This information is entered and controlled entirely by the adult account
+              holder, who is responsible for the accuracy of the information they provide and confirms they are the
+              child's parent or legal guardian, or are otherwise authorized to provide it.
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-4">
+              <li>Child-profile information is used only to power meal planning, allergen tracking, and recommendations for that child.</li>
+              <li>A parent/guardian can view, edit, or delete any child profile at any time from within the app, and can delete all child data by deleting the profile or the account.</li>
+              <li>We do not require a child to disclose more information than is reasonably necessary, and we do not condition participation on disclosing unnecessary information.</li>
+            </ul>
             <p className="text-muted-foreground leading-relaxed">
-              EatPal is designed for use by parents and caregivers. We do not knowingly collect personal information 
-              directly from children under 13. Child profiles created within parent accounts are managed entirely by 
-              parents/guardians. If you believe we have inadvertently collected information from a child, please contact 
-              us immediately at Support@TryEatPal.com.
+              If you believe a child under 13 has provided us information directly, or you wish to review or delete child
+              information associated with your account, contact us at Support@TryEatPal.com and we will act promptly.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-heading font-bold mb-4 text-primary">5. Information Sharing and Disclosure</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              We do not sell your personal information. We may share your information only in the following circumstances:
+              We do <strong>not sell</strong> your personal information, and we do not "share" it for cross-context
+              behavioral advertising. We disclose information only in the following circumstances:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-6">
+              <li><strong>Service Providers / Subprocessors:</strong> With the trusted vendors listed below who process data on our behalf under contract.</li>
+              <li><strong>Legal Requirements:</strong> When required by law or to protect our rights and safety.</li>
+              <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets.</li>
+              <li><strong>With Your Consent:</strong> When you explicitly authorize us to share information.</li>
+            </ul>
+
+            <h3 className="text-xl font-semibold mb-3 text-foreground">Our Subprocessors</h3>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              We use the following third-party service providers to operate EatPal. Each processes only the data needed
+              for its function:
             </p>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
-              <li><strong>Service Providers:</strong> With trusted third-party vendors who assist us in operating our platform 
-              (e.g., cloud hosting, payment processing, analytics)</li>
-              <li><strong>Legal Requirements:</strong> When required by law or to protect our rights and safety</li>
-              <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets</li>
-              <li><strong>With Your Consent:</strong> When you explicitly authorize us to share information</li>
+              <li><strong>Supabase</strong> — application database, authentication, and backend hosting (stores your account and app data).</li>
+              <li><strong>Stripe</strong> — payment and subscription processing (payment and billing information).</li>
+              <li><strong>Sentry</strong> — error and performance monitoring to keep the app reliable (diagnostic and, where you consent, session-replay data, with text and media masked).</li>
+              <li><strong>Google Analytics</strong> — usage analytics, loaded only where you consent (device and usage data, with IP anonymization).</li>
+              <li><strong>Resend</strong> — transactional and (with your consent) marketing email delivery (email address).</li>
+              <li><strong>AI providers (Anthropic, OpenAI, and/or Google)</strong> — power AI meal planning and coaching features (see Section 6).</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">6. Data Security</h2>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">6. AI Features and Automated Processing</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              Some features (such as AI meal plans and the AI coach) use third-party large-language-model providers
+              (Anthropic, OpenAI, and/or Google). When you use these features, we send the information needed to generate
+              a response — which may include a child's first name or nickname, age, allergens, and food preferences —
+              to the AI provider that fulfills the request.
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+              <li>We share only what is necessary to produce the requested output.</li>
+              <li>We do not use these features to make legal or similarly significant automated decisions about you.</li>
+              <li>You can avoid this processing by not using the AI features; core meal-planning features remain available.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">7. Data Retention</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              We retain your personal information for as long as your account is active or as needed to provide the
+              service. When you delete your account, we delete or de-identify your account and app data (including child
+              profiles) within a reasonable period, except where we must retain limited information to comply with legal
+              obligations, resolve disputes, prevent fraud, or enforce our agreements. Backups are retained on a rolling
+              basis and are overwritten in the ordinary course.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">8. Data Security</h2>
             <p className="text-muted-foreground leading-relaxed">
               We implement industry-standard security measures to protect your information, including encryption, 
               secure servers, and regular security audits. However, no method of transmission over the internet is 
@@ -124,40 +194,99 @@ const PrivacyPolicy = () => {
           </section>
 
           <section>
-            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">7. Your Rights and Choices</h2>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">9. Your Rights and Choices</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
               You have the right to:
             </p>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
-              <li>Access, update, or delete your personal information</li>
-              <li>Opt-out of marketing communications</li>
-              <li>Request a copy of your data</li>
+              <li>Access, update, or correct your personal information</li>
+              <li>Opt out of marketing communications at any time</li>
+              <li>Request a copy of your data (data portability)</li>
               <li>Delete your account and associated data</li>
-              <li>Object to processing of your information</li>
+              <li>Object to or restrict certain processing of your information</li>
             </ul>
             <p className="text-muted-foreground leading-relaxed mt-4">
-              To exercise these rights, contact us at Support@TryEatPal.com.
+              You can exercise most of these rights directly in the app: go to{" "}
+              <strong>Account Settings</strong> to export your data as a file or to permanently delete your account and
+              all associated data. You can also manage email preferences from your account. For any other request, or if
+              you need help, contact us at Support@TryEatPal.com and we will respond within the timeframe required by
+              applicable law. We will not discriminate against you for exercising these rights.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">8. Cookies and Tracking</h2>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">10. Cookies and Tracking</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              We use cookies and similar technologies in two categories:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-4">
+              <li><strong>Essential (always on):</strong> Strictly necessary to run the service — for example, keeping you signed in and remembering your preferences. These cannot be switched off.</li>
+              <li><strong>Analytics (consent required):</strong> Help us understand how the app is used so we can improve it (e.g., Google Analytics and Sentry session replay). These load <strong>only after you opt in</strong> via our cookie banner and stay off until then.</li>
+            </ul>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              When you first visit, we ask for your choice and set non-essential cookies only if you accept. You can
+              change your decision at any time:
+            </p>
+            <Button variant="outline" onClick={handleManageCookies}>
+              Manage cookie preferences
+            </Button>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">11. International Data Transfers</h2>
             <p className="text-muted-foreground leading-relaxed">
-              We use cookies and similar tracking technologies to enhance your experience, analyze usage, and deliver 
-              personalized content. You can control cookie preferences through your browser settings.
+              If you access our services from outside the United States, your information may be transferred to, stored,
+              and processed in the United States and other countries where we or our subprocessors operate. Where such
+              transfers are subject to data-protection law (e.g., from the EEA or UK), we rely on appropriate safeguards
+              such as the European Commission's Standard Contractual Clauses (and the UK Addendum) with the receiving
+              parties. You may contact us for more information about these safeguards.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">9. International Users</h2>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">12. Your European Privacy Rights (GDPR / UK GDPR)</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              If you are in the European Economic Area, the United Kingdom, or Switzerland, EatPal is the "controller"
+              of your personal data. We process your data on these lawful bases:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-4">
+              <li><strong>Contract</strong> — to provide the meal-planning service you sign up for.</li>
+              <li><strong>Consent</strong> — for analytics cookies and marketing communications (which you can withdraw at any time).</li>
+              <li><strong>Legitimate interests</strong> — to secure, maintain, and improve the service, balanced against your rights.</li>
+              <li><strong>Legal obligation</strong> — where we must process data to comply with law.</li>
+            </ul>
             <p className="text-muted-foreground leading-relaxed">
-              If you are accessing our services from outside the United States, please be aware that your information 
-              may be transferred to, stored, and processed in the United States where our servers are located.
+              In addition to the rights in Section 9, you have the right to withdraw consent at any time, and the right
+              to lodge a complaint with your local supervisory authority (in the UK, the ICO). Where we rely on consent,
+              withdrawing it does not affect processing already carried out. Contact us at Support@TryEatPal.com to
+              exercise any of these rights.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">10. Changes to This Policy</h2>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">13. Your California Privacy Rights (CCPA/CPRA)</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              If you are a California resident, you have the right to know, access, correct, and delete the personal
+              information we hold about you, and to be free from discrimination for exercising these rights.
+            </p>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              In the past 12 months we have collected the following categories of personal information: identifiers
+              (name, email), customer records (account and billing details), commercial information (subscription
+              history), internet/usage activity (app and analytics data), and — for the child profiles you create —
+              limited information about your children. We collect it for the purposes described in Section 3 and share
+              it only with the subprocessors listed in Section 5.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              <strong>We do not sell your personal information, and we do not share it for cross-context behavioral
+              advertising.</strong> Because we do not sell or share personal information, no "Do Not Sell or Share My
+              Personal Information" opt-out is required; if that ever changes, we will provide one. You may exercise your
+              California rights in the app (Account Settings) or by contacting Support@TryEatPal.com, and you may use an
+              authorized agent to submit a request on your behalf.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">14. Changes to This Policy</h2>
             <p className="text-muted-foreground leading-relaxed">
               We may update this Privacy Policy from time to time. We will notify you of any material changes by 
               posting the new policy on this page and updating the "Last Updated" date.
@@ -165,7 +294,7 @@ const PrivacyPolicy = () => {
           </section>
 
           <section>
-            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">11. Contact Us</h2>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">15. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed">
               If you have any questions or concerns about this Privacy Policy, please contact us at:
             </p>
@@ -230,7 +359,7 @@ const PrivacyPolicy = () => {
             </div>
           </div>
           <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-            <p>© 2025 EatPal. All rights reserved. Built with ❤️ for parents of picky eaters.</p>
+            <p>© 2026 EatPal. All rights reserved. Built with ❤️ for parents of picky eaters.</p>
           </div>
         </div>
       </footer>

@@ -90,6 +90,7 @@ export function SupportWidget() {
           size="icon"
           className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50 hover:scale-110 transition-transform"
           title="Get Support"
+          aria-label="Get support"
         >
           <HelpCircle className="h-6 w-6" />
         </Button>

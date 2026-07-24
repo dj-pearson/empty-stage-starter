@@ -4,11 +4,10 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle2, Mail, Phone, MessageSquare, FileText, ExternalLink } from "lucide-react";
 
 const Accessibility = () => {
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  // Fixed statement date — this is a published accessibility statement and
+  // should reflect the last real review, not today's render (compliance audit
+  // 2026-07). Update when the statement is formally re-reviewed.
+  const currentDate = 'July 23, 2026';
 
   return (
     <div className="min-h-screen bg-background">

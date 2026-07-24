@@ -334,7 +334,7 @@ export function ConversionFunnelDashboard() {
               <SelectItem value="90d">Last 90 days</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={fetchMetrics} disabled={isLoading}>
+          <Button variant="outline" size="icon" onClick={fetchMetrics} disabled={isLoading} aria-label="Refresh metrics">
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

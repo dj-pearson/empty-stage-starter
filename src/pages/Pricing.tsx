@@ -1208,7 +1208,7 @@ export default function Pricing() {
             <AccordionItem value="q5">
               <AccordionTrigger>What happens to my data if I cancel?</AccordionTrigger>
               <AccordionContent>
-                Your data is never deleted. When you cancel, your account reverts to the Free plan at the end of your billing period. You can upgrade again anytime to restore full access to all your saved meals, recipes, and tracking history.
+                Cancelling never deletes your data. When you cancel, your account reverts to the Free plan at the end of your billing period, and your saved meals, recipes, and tracking history are kept so you can upgrade again anytime to restore full access. If you'd rather remove your data entirely, you can permanently delete your account and all associated data at any time from your account settings.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="q6">

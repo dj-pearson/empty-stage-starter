@@ -439,6 +439,7 @@ export function AdminIntegrationManager() {
                               [selectedInt.id]: !prev[selectedInt.id],
                             }))
                           }
+                          aria-label={showApiKey[selectedInt.id] ? "Hide API key" : "Show API key"}
                         >
                           {showApiKey[selectedInt.id] ? (
                             <EyeOff className="h-4 w-4" />

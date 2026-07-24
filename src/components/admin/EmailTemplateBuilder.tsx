@@ -522,6 +522,7 @@ export function EmailTemplateBuilder() {
               e.stopPropagation();
               moveBlock(block.id, "up");
             }}
+            aria-label="Move block up"
           >
             <ChevronUp className="h-3 w-3" />
           </Button>
@@ -533,6 +534,7 @@ export function EmailTemplateBuilder() {
               e.stopPropagation();
               moveBlock(block.id, "down");
             }}
+            aria-label="Move block down"
           >
             <ChevronDown className="h-3 w-3" />
           </Button>
@@ -545,6 +547,7 @@ export function EmailTemplateBuilder() {
               e.stopPropagation();
               duplicateBlock(block.id);
             }}
+            aria-label="Duplicate block"
           >
             <Copy className="h-3 w-3" />
           </Button>
@@ -556,6 +559,7 @@ export function EmailTemplateBuilder() {
               e.stopPropagation();
               deleteBlock(block.id);
             }}
+            aria-label="Delete block"
           >
             <Trash2 className="h-3 w-3" />
           </Button>
@@ -584,6 +588,7 @@ export function EmailTemplateBuilder() {
             size="sm"
             onClick={undo}
             disabled={historyIndex <= 0}
+            aria-label="Undo"
           >
             <Undo className="h-4 w-4" />
           </Button>
@@ -592,6 +597,7 @@ export function EmailTemplateBuilder() {
             size="sm"
             onClick={redo}
             disabled={historyIndex >= history.length - 1}
+            aria-label="Redo"
           >
             <Redo className="h-4 w-4" />
           </Button>
@@ -715,6 +721,7 @@ export function EmailTemplateBuilder() {
                         variant="ghost"
                         size="icon"
                         onClick={() => deleteBlock(selectedBlock.id)}
+                        aria-label="Delete block"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
