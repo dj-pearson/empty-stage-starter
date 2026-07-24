@@ -149,3 +149,33 @@
 
 ## Backward‑compatibility note (per CLAUDE.md)
 Any DB change above must be additive — the schema is shared by shipped iOS builds. The marketing‑default fix (#5) is a new default on an existing column and is safe; adding consent/terms‑acceptance columns is `ADD COLUMN … NULL/DEFAULT`. No drops/renames/tightened constraints are required for this roadmap.
+
+---
+
+## Remediation status (this PR)
+
+Implemented on branch `claude/compliance-audit-docs-accessibility-a780au`:
+
+| # | Item | Status | Notes |
+|---|---|---|---|
+| P0‑1 | Consent management (banner, GA + Sentry replay gated, Consent Mode v2) | ✅ Done | `CookieConsentBanner`, `lib/consent.ts`, rewritten `ga-loader.js`, Sentry replay gated |
+| P0‑2 | Correct VPAT / Accessibility claims + fixed dates | ✅ Done | 5 criteria → "Partially Supports"; dates pinned |
+| P0‑3 | AI subprocessor disclosure | ✅ Done (disclosure) | Privacy Policy §5/§6 drafts; no‑train/zero‑retention flag on AI calls still TODO |
+| P1‑4 | Erasure gap (email_subscribers, backup_logs) | ✅ Done | `delete-account` scrubs email‑keyed rows |
+| P1‑5 | Marketing opt‑in (default false + UI) | ✅ Done | migration + both email‑capture modals |
+| P1‑6 | Icon‑button accessible names | ✅ Done | 81 buttons across 35 files |
+| P1‑7 | Refund & deletion contradictions | ✅ Done | Terms/FAQ/Pricing reconciled |
+| P1‑8 | Missing legal sections (CCPA, GDPR, cookie, subprocessors, retention, COPPA) | ✅ Drafted | **Counsel sign‑off required before ship** |
+| P2‑9 | Consent/terms‑acceptance record at signup | ✅ Done | required checkbox → user metadata (accepted, ts, version) |
+| P2‑10 | Parent/guardian + 18+ attestation | ✅ Done | same signup checkbox |
+| P2‑11 | Dead a11y toggles / widget focus‑trap / `MotionConfig` | ✅ Done | toggles wired, focus trapped+restored, app‑root reduced motion |
+| P2‑12 | a11y CI hardening | ✅ Mostly | fixed dead `/about`, scan legal pages, added `eslint-plugin-jsx-a11y` (warnings). Authed‑page scan still needs a login fixture (skipped placeholder) |
+| P2‑13 | Retention section + Apple EULA | ✅ Done (docs) | Privacy retention section + Terms Apple EULA reference. Auto‑purge job still TODO |
+| P3‑14 | security.txt + broaden export | ✅ Done | `/.well-known/security.txt`; export adds `quiz_responses`/`meal_voting` |
+
+**Still open (intentionally deferred):**
+- **AI no‑train/zero‑retention flags** on `ai-coach-chat` / `ai-meal-plan` requests (disclosure done; provider‑side flag not yet set).
+- **Retention auto‑purge** background job for inactive accounts (policy documented; no scheduled job yet).
+- **Hardcoded‑color → semantic‑token migration** (679 instances) — large mechanical sweep, deferred to avoid a noisy high‑risk diff.
+- **Authenticated‑page a11y scanning** — needs a Playwright auth fixture.
+- **Legal copy is DRAFT** — all new Privacy/Terms sections require counsel review before shipping; historical `accepts_marketing=true` rows are left as a marketing/legal decision.
