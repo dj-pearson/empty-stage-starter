@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -71,6 +72,11 @@ function RequirementIndicator({ met, label }: { met: boolean; label: string }) {
   );
 }
 
+// Version of the Terms/Privacy the signup consent is recorded against. Bump when
+// the policies change materially so re-acceptance can be required (compliance
+// audit 2026-07).
+const CONSENT_TERMS_VERSION = "2026-07-23";
+
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,6 +89,8 @@ const Auth = () => {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
+  // Signup consent: parent/guardian 18+ attestation + Terms/Privacy acceptance.
+  const [consentAccepted, setConsentAccepted] = useState(false);
   // OTP verification state
   const [showOtpVerification, setShowOtpVerification] = useState(false);
   const [otpCode, setOtpCode] = useState("");
@@ -233,6 +241,15 @@ const Auth = () => {
       return;
     }
 
+    // Require explicit consent + guardian/age attestation before creating an account.
+    if (!consentAccepted) {
+      toast.error("Please confirm", {
+        description:
+          "You must confirm you are 18+ and a parent/guardian, and accept the Terms and Privacy Policy.",
+      });
+      return;
+    }
+
     setLoading(true);
 
     // Block disposable / temporary email providers (list is admin-managed
@@ -248,7 +265,15 @@ const Auth = () => {
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        // Record a demonstrable consent trail on the user (GDPR Art. 7(1)):
+        // acceptance flag, timestamp, policy version, and guardian/18+ attestation.
+        data: {
+          full_name: fullName,
+          terms_accepted: true,
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: CONSENT_TERMS_VERSION,
+          is_guardian_18_plus: true,
+        },
       },
     });
 
@@ -788,11 +813,36 @@ const Auth = () => {
                         </p>
                       )}
                     </div>
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="signup-consent"
+                        checked={consentAccepted}
+                        onCheckedChange={(checked) => setConsentAccepted(checked === true)}
+                        className="mt-0.5"
+                        aria-describedby="signup-consent-desc"
+                      />
+                      <Label
+                        htmlFor="signup-consent"
+                        id="signup-consent-desc"
+                        className="text-xs font-normal leading-snug text-muted-foreground cursor-pointer"
+                      >
+                        I confirm I am 18 or older and the parent/guardian of any child whose information I add, and I
+                        agree to the{" "}
+                        <Link to="/terms" className="text-primary hover:underline">
+                          Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link to="/privacy" className="text-primary hover:underline">
+                          Privacy Policy
+                        </Link>
+                        .
+                      </Label>
+                    </div>
                     <LoadingButton
                       type="submit"
                       className="w-full h-11"
                       isLoading={loading}
-                      disabled={!isPasswordValid || emailValidation.isValid === false || password !== confirmPassword}
+                      disabled={!isPasswordValid || emailValidation.isValid === false || password !== confirmPassword || !consentAccepted}
                     >
                       Sign Up
                     </LoadingButton>
