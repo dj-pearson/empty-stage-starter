@@ -266,6 +266,8 @@ export default function AccountSettings() {
         groceryResult,
         mealPlanResult,
         subscriptionResult,
+        quizResult,
+        votingResult,
       ] = await Promise.all([
         supabase.from("kids").select("*").eq("user_id", user.id),
         supabase.from("foods").select("*").eq("user_id", user.id),
@@ -283,10 +285,12 @@ export default function AccountSettings() {
           .select("*, plan:subscription_plans(name)")
           .eq("user_id", user.id)
           .maybeSingle(),
+        supabase.from("quiz_responses").select("*").eq("user_id", user.id),
+        supabase.from("meal_voting").select("*").eq("user_id", user.id),
       ]);
 
       const exportData = {
-        schema_version: "1.0.0",
+        schema_version: "1.1.0",
         exported_at: new Date().toISOString(),
         user: {
           email: user.email,
@@ -301,6 +305,8 @@ export default function AccountSettings() {
         grocery_lists: groceryResult.data || [],
         meal_plans: mealPlanResult.data || [],
         subscription: subscriptionResult.data || null,
+        quiz_responses: quizResult.data || [],
+        meal_voting: votingResult.data || [],
       };
 
       const blob = new Blob([JSON.stringify(exportData, null, 2)], {
