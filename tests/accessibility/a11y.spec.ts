@@ -106,25 +106,48 @@ test.describe('Accessibility Tests - Public Pages', () => {
     expect(criticalViolations).toEqual([]);
   });
 
-  test('About page should have no critical accessibility violations', async ({ page }) => {
-    await page.goto('/about');
-    await page.waitForLoadState('networkidle');
+  // Public + legal pages that must be accessible (/about did not exist and was
+  // silently scanning the 404 page — replaced with real routes; compliance
+  // audit 2026-07).
+  const PUBLIC_PAGES: Array<{ name: string; path: string }> = [
+    { name: 'faq', path: '/faq' },
+    { name: 'contact', path: '/contact' },
+    { name: 'privacy', path: '/privacy' },
+    { name: 'terms', path: '/terms' },
+    { name: 'accessibility', path: '/accessibility' },
+  ];
 
-    const accessibilityScanResults = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
+  for (const { name, path: pagePath } of PUBLIC_PAGES) {
+    test(`${name} page should have no serious/critical accessibility violations`, async ({ page }) => {
+      await page.goto(pagePath);
+      await page.waitForLoadState('networkidle');
 
-    saveResults('about', accessibilityScanResults);
+      const accessibilityScanResults = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
 
-    if (accessibilityScanResults.violations.length > 0) {
-      console.log('About page violations:', formatViolations(accessibilityScanResults.violations));
-    }
+      saveResults(name, accessibilityScanResults);
 
-    const criticalViolations = accessibilityScanResults.violations.filter(
-      v => v.impact === 'critical' || v.impact === 'serious'
-    );
+      if (accessibilityScanResults.violations.length > 0) {
+        console.log(`${name} page violations:`, formatViolations(accessibilityScanResults.violations));
+      }
 
-    expect(criticalViolations).toEqual([]);
+      const criticalViolations = accessibilityScanResults.violations.filter(
+        v => v.impact === 'critical' || v.impact === 'serious'
+      );
+
+      expect(criticalViolations).toEqual([]);
+    });
+  }
+});
+
+// TODO (compliance audit 2026-07): authenticated pages (Dashboard, Pantry,
+// Recipes, Planner, Admin) are where icon-button density is highest but are not
+// covered here because they require a logged-in Playwright fixture. Add a
+// storage-state/auth fixture and scan those routes as a follow-up.
+test.describe('Accessibility Tests - Authenticated Pages', () => {
+  test.skip('dashboard pages should have no serious/critical violations (needs auth fixture)', async () => {
+    // Intentionally skipped until an authenticated Playwright fixture exists.
   });
 });
 
@@ -389,7 +412,7 @@ test.describe('Accessibility Tests - Responsive Design', () => {
 
 // Summary test that generates a full report
 test('Generate accessibility summary report', async ({ page }) => {
-  const pages = ['/', '/auth', '/pricing', '/about'];
+  const pages = ['/', '/auth', '/pricing', '/faq', '/contact', '/privacy', '/terms', '/accessibility'];
   const allViolations: any[] = [];
 
   for (const url of pages) {
