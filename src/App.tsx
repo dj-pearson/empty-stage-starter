@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { MotionConfig } from 'framer-motion';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,7 +8,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
 import { AppProvider } from '@/contexts/AppContext';
-import { AccessibilityProvider } from '@/contexts/AccessibilityContext';
+import { AccessibilityProvider, useAccessibility } from '@/contexts/AccessibilityContext';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { SkipToContent } from '@/components/SkipToContent';
@@ -124,6 +125,20 @@ function DeferredComponents() {
   );
 }
 
+/**
+ * Applies framer-motion's reduced-motion setting app-wide so JS/WAAPI-driven
+ * animations honor the user's preference (WCAG 2.3.3 / 2.2.2). "always" when the
+ * in-app toggle is on; otherwise defer to the OS-level prefers-reduced-motion.
+ */
+function ReducedMotionProvider({ children }: { children: ReactNode }) {
+  const { preferences } = useAccessibility();
+  return (
+    <MotionConfig reducedMotion={preferences.reducedMotion ? 'always' : 'user'}>
+      {children}
+    </MotionConfig>
+  );
+}
+
 const App = () => (
   <ErrorBoundary>
     <I18nextProvider i18n={i18n}>
@@ -131,6 +146,7 @@ const App = () => (
       <HelmetProvider>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AccessibilityProvider>
+            <ReducedMotionProvider>
             <TooltipProvider>
               <AppProvider>
                 <Sonner />
@@ -794,6 +810,7 @@ const App = () => (
                 </BrowserRouter>
               </AppProvider>
             </TooltipProvider>
+            </ReducedMotionProvider>
           </AccessibilityProvider>
         </ThemeProvider>
       </HelmetProvider>

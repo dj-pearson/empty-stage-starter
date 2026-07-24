@@ -250,9 +250,28 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
       root.classList.remove('high-contrast');
     }
 
-    // Font size
+    // Font size. `largeText` is a quick boolean shortcut to the "large" size;
+    // the granular `fontSize` control wins when it is set above default.
+    const effectiveFontSize =
+      preferences.fontSize === 'default' && preferences.largeText ? 'large' : preferences.fontSize;
     root.classList.remove('text-size-default', 'text-size-large', 'text-size-x-large');
-    root.classList.add(`text-size-${preferences.fontSize}`);
+    root.classList.add(`text-size-${effectiveFontSize}`);
+
+    // Simplified UI — reduces visual complexity (hides decorative elements,
+    // flattens shadows/gradients) via CSS in index.css.
+    if (preferences.simplifiedUI) {
+      root.classList.add('simplified-ui');
+    } else {
+      root.classList.remove('simplified-ui');
+    }
+
+    // Verbose descriptions — class hook that reveals supplementary helper text
+    // marked with [data-a11y-verbose] (see index.css).
+    if (preferences.verboseDescriptions) {
+      root.classList.add('verbose-descriptions');
+    } else {
+      root.classList.remove('verbose-descriptions');
+    }
 
     // Enhanced focus
     if (preferences.enhancedFocus) {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Accessibility, X, Settings, Eye, Type, MousePointer, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAccessibility } from '@/contexts/AccessibilityContext';
+import { useFocusTrap } from '@/components/SkipToContent';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,6 +29,12 @@ export function AccessibilityWidget() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Focus management: trap focus within the panel while open, and restore focus
+  // to the trigger button on close (WCAG 2.4.3 Focus Order).
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  useFocusTrap(panelRef, isOpen);
+
   const togglePanel = useCallback(() => {
     setIsOpen(prev => {
       const next = !prev;
@@ -39,6 +46,8 @@ export function AccessibilityWidget() {
   const handleClose = useCallback(() => {
     setIsOpen(false);
     announce('Accessibility settings panel closed', 'polite');
+    // Return focus to the trigger so keyboard users aren't dropped at the top.
+    triggerRef.current?.focus();
   }, [announce]);
 
   const handleToggle = useCallback((key: keyof typeof preferences, label: string) => {
@@ -67,6 +76,7 @@ export function AccessibilityWidget() {
     <>
       {/* Floating Trigger Button */}
       <button
+        ref={triggerRef}
         onClick={togglePanel}
         className={cn(
           'fixed bottom-20 left-4 z-50 md:bottom-6',
@@ -96,6 +106,7 @@ export function AccessibilityWidget() {
 
           {/* Panel */}
           <div
+            ref={panelRef}
             id="accessibility-widget-panel"
             role="dialog"
             aria-label="Quick accessibility settings"
