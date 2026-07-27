@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ArticleSchema } from '@/components/schema/ArticleSchema';
 import { BreadcrumbSchema } from '@/components/schema/BreadcrumbSchema';
 import { FAQSchema } from '@/components/schema/FAQSchema';
+import { HowToSchema } from '@/components/schema/HowToSchema';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import type { PseoPageRow, PseoPageContent } from '@/types/pseo';
@@ -139,6 +140,8 @@ export default function PseoPage() {
 
   const content = page.content as PseoPageContent;
   const faqs = 'faqs' in content ? content.faqs : [];
+  const howToSteps =
+    'steps' in content && Array.isArray(content.steps) ? content.steps : [];
   const breadcrumbSchemaItems = (page.breadcrumbs ?? []).map((b) => ({
     name: b.label,
     url: b.href,
@@ -161,6 +164,16 @@ export default function PseoPage() {
         datePublished={page.published_at ?? page.created_at}
         dateModified={page.updated_at}
       />
+
+      {/* HowTo schema for food-chaining guides — high-value GEO: makes the
+          step-by-step expansion extractable as a structured how-to answer. */}
+      {howToSteps.length > 0 && (
+        <HowToSchema
+          name={page.title}
+          description={page.meta_description}
+          steps={howToSteps.map((s) => ({ name: s.name, text: s.text }))}
+        />
+      )}
 
       {breadcrumbSchemaItems.length > 0 && (
         <BreadcrumbSchema items={breadcrumbSchemaItems} />

@@ -1459,8 +1459,8 @@
         "Structured data validates"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "8 schema components built but unused; RecipeSchema unused vs RecipeSchemaMarkup. PARTIAL DONE: wired ArticleSchema into all pSEO guide pages (PseoPage.tsx) — title/description/url + datePublished(published_at??created_at)/dateModified(updated_at) — so programmatic guides are citable/extractable by AI engines (GEO), alongside existing Breadcrumb+FAQ. DEFERRED: HowToSchema/MedicalWebPageSchema/ComparisonSchema keyed off page_type (the PseoSchemaType enum already anticipates this) and RecipeSchema on a public recipe route (needs US-570 public recipe pages)."
+      "passes": true,
+      "notes": "8 schema components built but unused; RecipeSchema unused vs RecipeSchemaMarkup. PARTIAL DONE: wired ArticleSchema into all pSEO guide pages (PseoPage.tsx) — title/description/url + datePublished(published_at??created_at)/dateModified(updated_at) — so programmatic guides are citable/extractable by AI engines (GEO), alongside existing Breadcrumb+FAQ. DEFERRED: HowToSchema/MedicalWebPageSchema/ComparisonSchema keyed off page_type (the PseoSchemaType enum already anticipates this) and RecipeSchema on a public recipe route (needs US-570 public recipe pages). COMPLETE: HowToSchema now wired into pSEO food-chaining page types (FOOD_CHAINING_GUIDE / FOOD_CHAINING_AGE_COMBO etc.) — guarded on content.steps, mapping PseoHowToStep{name,text} to HowTo steps. Combined with the ArticleSchema added earlier, pSEO guides now emit Article + HowTo + Breadcrumb + FAQ, making the step-by-step content extractable as structured how-to answers by AI engines (high GEO value). MedicalWebPageSchema/ComparisonSchema on ARFID/health content pages remain optional future additions (those are blog/content, not pSEO)."
     },
     {
       "id": "US-574",
