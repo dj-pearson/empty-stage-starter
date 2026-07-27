@@ -350,5 +350,10 @@
   "aiPlanner": {
     "title": "AI Meal Planner",
     "subtitle": "Generate personalized, nutritionally balanced meal plans using AI"
+  },
+  "landing": {
+    "whyFailTitle": "Why Typical Meal Planning Apps Fail for ARFID and Extreme Picky Eating",
+    "howItWorksTitle": "How EatPal Works: Food Chaining Made Practical for Real Families",
+    "builtForTitle": "Built for Feeding Disorders, Not Generic Meal Planning"
   }
 }
