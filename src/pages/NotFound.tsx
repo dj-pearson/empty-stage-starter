@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { logger } from "@/lib/logger";
@@ -7,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Home, DollarSign, HelpCircle, BookOpen, Mail, ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
@@ -47,9 +49,9 @@ export default function NotFound() {
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full text-center space-y-6">
           <div className="text-6xl font-bold text-primary">404</div>
-          <h1 className="text-2xl font-bold">Page not found</h1>
+          <h1 className="text-2xl font-bold">{t('notFound.title')}</h1>
           <p className="text-muted-foreground">
-            The page you're looking for doesn't exist or has been moved.
+            {t('notFound.text')}
           </p>
 
           <form onSubmit={handleSearch} className="flex gap-2">

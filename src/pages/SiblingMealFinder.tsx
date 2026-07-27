@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import { Users2, RefreshCw, Sparkles, ChefHat, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,6 +49,7 @@ const MEAL_SLOTS: { value: MealSlot; label: string }[] = [
 ];
 
 export default function SiblingMealFinder() {
+  const { t } = useTranslation();
   const { kids } = useKids();
   const { foods } = useFoods();
   const { recipes } = useRecipes();
@@ -324,12 +326,10 @@ export default function SiblingMealFinder() {
       <header className="space-y-2">
         <div className="flex items-center gap-2">
           <Users2 className="h-6 w-6 text-primary" aria-hidden="true" />
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sibling Meal Finder</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t('siblingMealFinder.title')}</h1>
         </div>
         <p className="text-muted-foreground">
-          Find one dinner that satisfies every selected kid. We balance hard constraints (allergens,
-          dietary restrictions) against soft ones (dislikes, favorites) and surface swaps or
-          split-plate ideas when no single recipe fits all.
+          {t('siblingMealFinder.subtitle')}
         </p>
         {liveMatchCount !== null && (
           <Badge variant="secondary" className="w-fit" data-testid="live-match-count">

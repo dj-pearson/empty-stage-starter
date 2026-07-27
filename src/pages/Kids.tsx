@@ -9,9 +9,11 @@ import { ManageKidsDialog, ManageKidsDialogRef } from "@/components/ManageKidsDi
 import { ChildIntakeQuestionnaire } from "@/components/ChildIntakeQuestionnaire";
 import { ChildProfileCard } from "@/components/ChildProfileCard";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 export default function Kids() {
+  const { t } = useTranslation();
   const { kids } = useKids();
   const { foods } = useFoods();
   const { planEntries } = usePlan();
@@ -48,9 +50,9 @@ export default function Kids() {
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">My Children</h1>
+            <h1 className="text-3xl font-bold mb-2">{t('kids.title')}</h1>
             <p className="text-muted-foreground">
-              Manage child profiles and food preferences
+              {t('kids.subtitle')}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -90,14 +92,13 @@ export default function Kids() {
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                     <UserCircle className="h-8 w-8 text-primary" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-2">Add Your First Child</h3>
+                  <h3 className="text-2xl font-bold mb-2">{t('kids.emptyTitle')}</h3>
                   <p className="text-muted-foreground max-w-xl mx-auto mb-6">
-                    Create a profile to get personalized meal plans, track food preferences,
-                    and monitor eating progress for your child.
+                    {t('kids.emptyText')}
                   </p>
                   <Button onClick={() => manageKidsRef.current?.openForEdit('')} size="lg" className="gap-2">
                     <UserPlus className="h-5 w-5" />
-                    Add Child
+                    {t('kids.addChild')}
                   </Button>
                 </div>
 

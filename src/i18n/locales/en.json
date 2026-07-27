@@ -281,5 +281,20 @@
     "subtitleEmpty": "Track and manage your family's food inventory",
     "emptyTitle": "Build Your Food Pantry",
     "emptyText": "Start by adding foods your family already loves. This helps create personalized meal plans for all your kids!"
+  },
+  "kids": {
+    "title": "My Children",
+    "subtitle": "Manage child profiles and food preferences",
+    "emptyTitle": "Add Your First Child",
+    "emptyText": "Create a profile to get personalized meal plans, track food preferences, and monitor eating progress for your child.",
+    "addChild": "Add Child"
+  },
+  "siblingMealFinder": {
+    "title": "Sibling Meal Finder",
+    "subtitle": "Find one dinner that satisfies every selected kid. We balance hard constraints (allergens, dietary restrictions) against soft ones (dislikes, favorites) and surface swaps or split-plate ideas when no single recipe fits all."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "The page you're looking for doesn't exist or has been moved."
   }
 }
