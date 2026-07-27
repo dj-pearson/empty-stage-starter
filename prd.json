@@ -1207,6 +1207,372 @@
       "priority": 3,
       "passes": false,
       "notes": "[Severity: Low | Category: maintainability | Source: code-review 2026-07-11] Files: src/components/admin/SEOManager.tsx (5593), src/pages/Pantry.tsx (1358), Grocery.tsx (1305), Pricing.tsx (1232), GSAPCalendarMealPlanner.tsx (1236). || ASSESSMENT 2026-07-11 (loop): AC3 SATISFIED — the named calculateInsights/calculateFamilyInsights duplication no longer exists; US-540 already extracted the single shared helper computeInsights (src/lib/insights.ts, handles both family + single-kid mode, unit-tested in insights.test.ts). AC1 (SEOManager 5593 lines: 57 useState, 29 async handlers, 13 supabase calls, 23 TabsContent in ONE function — 57 state vars shared across all 23 tabs) and AC2 (Pantry 1356 / Grocery 1306 lines, live user-facing) are LARGE refactors of untested live code (no SEOManager/Pantry/Grocery render tests). In an autonomous loop only types are verifiable, not render/effect-timing behavior, so a blind decomposition would risk subtle state-wiring regressions with no test net. NOT auto-completed: these need incremental human-reviewed PRs (extract one tab/hook at a time, verify each in a running app). passes stays false — 1 of 3 ACs met; the 2 headline decomposition ACs are deferred to reviewed incremental work, not faked. || PROGRESS 2026-07-12 (loop): AC2 now SATISFIED — Pantry.tsx and Grocery.tsx data derivations extracted from JSX into unit-tested pure helpers (src/lib/pantryData.ts +14 assertions, src/lib/groceryData.ts) called inside the existing useMemo wrappers; memoized subcomponents (PantryStatsBar/CategorySection/ListItem) already existed. AC1 STARTED (SEOManager 5593->~5399 lines): pure audit scoring + AuditResult/SEOScore types moved to unit-tested src/lib/seoScore.ts (computeSEOScore/getScoreColor, +4 assertions — this is the test net the review flagged as missing), and the static robots.txt/sitemap.xml/llms.txt editor tabs extracted to a presentational src/components/admin/seo/SeoFilesTabs.tsx (props-down, behavior-preserving, typecheck-verified). Each step: typecheck clean + full vitest suite green. passes stays false — 2 of 3 ACs met; remaining AC1 work is the stateful SEOManager tabs/data-hooks, extracted incrementally so each is verifiable, not faked. || PROGRESS 2026-07-12b (loop): AC1 further advanced — SEOManager 5593 -> 4536 lines. Extracted SeoStructuredDataTab (JSON-LD editor + validator) and SeoAnalysisTabs (6 leaf tabs: redirects/duplicate-content/security/link-structure/mobile-check/budget) as behavior-preserving props-down components under src/components/admin/seo/. Verified via ESLint (clean) + full vitest suite (1072 passing) + git-confirmed verbatim moves (the only clean-build type errors in the new files, e.g. 'XResults | null not assignable', are PRE-EXISTING patterns identical in the original SEOManager — zero new errors introduced). ENV NOTE: this session's container OOMs on a full `tsc -b` (needs ~4GB, gets SIGKILL/exit137, or GC-thrashes under a heap cap), so the authoritative clean typecheck must run in a fresh session / CI; earlier per-commit INCREMENTAL typechecks were 0-error. Remaining AC1: audit/keywords/competitors/pages/monitoring/performance/backlinks/broken-links/content/content-optimizer/site-crawler/image-analysis tabs + the async data-loaders (-> hooks; the riskier stateful half, best verified in a running app). passes stays false (2/3 ACs). || PROGRESS 2026-07-14 (loop): AC1 further advanced — SEOManager 4538 -> 4352 lines. Extracted the two self-contained leaf tabs site-crawler + image-analysis into src/components/admin/seo/SeoCrawlerTabs.tsx (SeoSiteCrawlerTab/SeoImageAnalysisTab) as behavior-preserving props-down components (results + setResults), matching the SeoAnalysisTabs pattern; removed the now-unused CrawlResults/ImageResults + Textarea imports from SEOManager. Verified: ESLint 0 errors on both files; production Vite build exit 0 (built 45s, SEOManager chunk resolves); full vitest suite 1072 passing (3 skipped). Committed on branch claude/us553-seomanager-decomp. Remaining AC1 = the stateful tabs (audit/keywords/competitors/pages/monitoring/performance/backlinks/broken-links/content) + their async data-loaders, which read/write shared component state and are best decomposed with a running-app test net. passes stays false (2/3 ACs; AC1 partial)."
+    },
+    {
+      "id": "US-554",
+      "title": "Auth-gate the update-user edge function",
+      "description": "As a security owner, I want update-user to require an authenticated admin caller so that no anon-key holder can grant themselves admin or ban users.",
+      "acceptanceCriteria": [
+        "supabase/functions/update-user/index.ts authenticates the caller via their Bearer token (auth.getUser) before any action",
+        "Caller must have role admin or root_admin in user_roles; otherwise 403",
+        "ban/unban/remove_admin/make_admin only execute after the admin check passes",
+        "Admin UserManagementDashboard/BulkUserManagement flows still work for real admins"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified vuln: service_role + CORS * + zero authorization; anon key satisfies default verify_jwt."
+    },
+    {
+      "id": "US-555",
+      "title": "Auth-gate the list-users edge function",
+      "description": "As a security owner, I want list-users to require an authenticated admin caller so that user PII is never returned to anonymous callers.",
+      "acceptanceCriteria": [
+        "supabase/functions/list-users/index.ts authenticates the caller and requires admin/root_admin before returning data",
+        "Non-admin/anon callers receive 401/403 and no user rows",
+        "Admin dashboards that consume list-users continue to work"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Verified vuln: returns every user email/role/last-sign-in to anyone with the public anon key."
+    },
+    {
+      "id": "US-556",
+      "title": "Remove and rotate the committed credential in cleanup-sensitive-data.txt",
+      "description": "As a security owner, I want the leaked credential removed from the repo and rotated so that the exposed secret cannot be used.",
+      "acceptanceCriteria": [
+        "cleanup-sensitive-data.txt removed from the working tree and git tracking",
+        "A follow-up task documents that the DB password / SUPABASE_ACCESS_TOKEN / Coolify password (same value) MUST be rotated by the user in Supabase + Coolify",
+        "git history purge is planned (rewrite-history.sh) and executed by the user (destructive, not auto-run on shared branches)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "USER ACTION REQUIRED for rotation + history purge. File is git-tracked and contains IP 209.145.59.219 + reused secret."
+    },
+    {
+      "id": "US-557",
+      "title": "Harden secret/PII hygiene: gitignore + repo scrub",
+      "description": "As a security owner, I want .env, PII CSVs, and signing material guaranteed untracked so that secrets cannot be committed accidentally.",
+      "acceptanceCriteria": [
+        "user_profiles_rows.csv, user_subscriptions_rows.csv removed from working tree (already gitignored)",
+        ".gitignore confirmed to cover .env, *.key, *.pem, *_rows.csv, *.mobileprovision, *.base64.txt",
+        "SECURITY.md notes the non-expiring anon/service JWT (exp ~2126) and recommends rotating the JWT signing secret"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ".env holds live service_role JWT + Coolify token; not tracked but present."
+    },
+    {
+      "id": "US-558",
+      "title": "Require auth on AI-generation edge functions (denial-of-wallet)",
+      "description": "As a cost owner, I want generate-* and parse-recipe to require auth so that anonymous callers cannot trigger paid LLM/image calls.",
+      "acceptanceCriteria": [
+        "generate-blog-content, generate-social-content, generate-image, parse-recipe require an authenticated caller (or the internal dispatch shared secret)",
+        "config.toml verify_jwt set appropriately or an in-function auth check added",
+        "Legitimate app/admin callers still function"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Currently verify_jwt=false + CORS * + no internal secret."
+    },
+    {
+      "id": "US-559",
+      "title": "Scope FOR ALL USING(true) RLS policies to service_role",
+      "description": "As a security owner, I want management RLS policies restricted to service_role so that authenticated users cannot read/write system tables.",
+      "acceptanceCriteria": [
+        "New additive migration replaces the unrestricted \"System can manage\" policies on rate_limits, backup_logs, email-automation, ai-cost-tracking with TO service_role",
+        "Per-user policies on those tables remain intact",
+        "Migration is additive/backward-compatible (no data loss)",
+        "RLS still allows the app to function"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Policies USING(true)/WITH CHECK(true) FOR ALL with no role restriction apply to all roles."
+    },
+    {
+      "id": "US-560",
+      "title": "Restrict CORS origins on privileged edge functions",
+      "description": "As a security owner, I want privileged endpoints to allow only app origins so that a victim browser cannot invoke them cross-origin.",
+      "acceptanceCriteria": [
+        "update-user, list-users, delete-account (and other admin/privileged fns) restrict Access-Control-Allow-Origin to the app domains",
+        "Preflight still works for allowed origins"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Blanket Access-Control-Allow-Origin: * on sensitive endpoints."
+    },
+    {
+      "id": "US-561",
+      "title": "Rate-limit anonymous quiz/lead INSERTs",
+      "description": "As a platform owner, I want anonymous lead/quiz inserts rate-limited so that the tables cannot be spam-flooded.",
+      "acceptanceCriteria": [
+        "Edge or DB-level rate limiting / captcha added for quiz_responses, budget_calculations, and analytics inserts made by anon",
+        "Insertable columns constrained",
+        "Legitimate quiz/calculator flows unaffected"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "anon WITH CHECK(true) inserts with no rate limiting."
+    },
+    {
+      "id": "US-562",
+      "title": "Move Apple signing material out of the repo directory",
+      "description": "As a release owner, I want distribution keys/profiles out of the project dir so that they cannot leak.",
+      "acceptanceCriteria": [
+        "EatPalDistribution.key, distribution.pem, *.mobileprovision, *.base64.txt moved to a secrets store / CI secure store",
+        "Documented location (by reference, never value)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Gitignored but present on disk. USER ACTION."
+    },
+    {
+      "id": "US-563",
+      "title": "Lazy-load framer-motion out of the app shell",
+      "description": "As a performance owner, I want framer-motion off the critical path so that initial bundle/route load is smaller.",
+      "acceptanceCriteria": [
+        "MotionConfig/ReducedMotionProvider no longer pulls framer-motion into the initial chunk on Landing",
+        "Reduced-motion still respected (CSS class or lazy wrapper)",
+        "Typecheck + build pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "src/App.tsx:2 eager import ~40-60KB on every route."
+    },
+    {
+      "id": "US-564",
+      "title": "Virtualize the Recipes grid/list",
+      "description": "As a user with many recipes, I want the recipe list virtualized so that scrolling is smooth and mount cost is low.",
+      "acceptanceCriteria": [
+        "Recipes.tsx uses @tanstack/react-virtual (already used in Pantry/Grocery) for the recipe views",
+        "Up to 200 recipe cards no longer all mount at once",
+        "Filtering/sorting still work"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Recipes.tsx:625,642 map all filteredRecipes."
+    },
+    {
+      "id": "US-565",
+      "title": "Use OptimizedImage / lazy loading in list cards",
+      "description": "As a user, I want recipe/suggestion card images lazy-loaded with dimensions so that CLS and eager fetches are eliminated.",
+      "acceptanceCriteria": [
+        "EnhancedRecipeCard.tsx and MealSuggestionCard.tsx use OptimizedImage/LqipImage or add loading=lazy + width/height + decoding=async",
+        "No layout shift on card image load"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Raw <img> at EnhancedRecipeCard.tsx:126, MealSuggestionCard.tsx:106."
+    },
+    {
+      "id": "US-566",
+      "title": "Narrow select(*) queries in AppContext load",
+      "description": "As a performance owner, I want each domain load to select only needed columns so that first-paint payload/parse time shrinks.",
+      "acceptanceCriteria": [
+        "AppContext.tsx:249-258 select() calls narrowed to columns the parse* helpers consume",
+        "App behavior unchanged"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "select(*) on kids/foods/recipes/plan_entries/grocery_items at mount."
+    },
+    {
+      "id": "US-567",
+      "title": "Migrate hot useApp() consumers to narrow context hooks",
+      "description": "As a performance owner, I want hot components on narrow hooks so that a single-slice change does not re-render all consumers.",
+      "acceptanceCriteria": [
+        "Identify highest-traffic useApp() consumers and migrate to useFoods/useGrocery/useKids/etc.",
+        "Re-render count drops on single-slice updates (spot-check)"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "useApp() memo deps include every slice (AppContext.tsx:460-484)."
+    },
+    {
+      "id": "US-568",
+      "title": "Batch/debounce realtime state updates",
+      "description": "As a performance owner, I want realtime events coalesced so that bulk operations do not cause N sequential re-renders.",
+      "acceptanceCriteria": [
+        "Realtime handlers in Foods/Grocery/Kids/Plan/Recipes contexts batch payloads within a microtask/frame before setState",
+        "Correctness preserved (last-write-wins by id)"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Each postgres change triggers an immediate setState."
+    },
+    {
+      "id": "US-569",
+      "title": "Remove/replace legacy large PNGs in public/",
+      "description": "As a performance owner, I want unused large PNGs dropped so that repo/deploy weight is reduced.",
+      "acceptanceCriteria": [
+        "Confirm no code references Icon_1024.png, Logo-Green.png, Logo-White.png, etc.",
+        "Remove unreferenced PNGs; ensure manifest/icons point at WebP/AVIF variants"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "WebP variants exist and are used; large PNGs appear legacy."
+    },
+    {
+      "id": "US-570",
+      "title": "Add prerender/SSG for content routes (SEO/GEO root fix)",
+      "description": "As a growth owner, I want blog/pSEO/recipe routes prerendered so that AI answer engines and crawlers see real content, not an empty shell.",
+      "acceptanceCriteria": [
+        "A prerender/SSG or edge bot-render path serves fully-rendered HTML with per-route head tags for /blog/:slug, /guides/:slug, and public recipe routes",
+        "Blog/pSEO content is present in initial HTML (not fetched client-side only)",
+        "Per-route canonical/title/description/OG correct in served HTML"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Highest-leverage fix. App is CSR-only; PseoPage.tsx:93-152 and BlogPost.tsx:43-113 fetch content client-side."
+    },
+    {
+      "id": "US-571",
+      "title": "Remove fabricated AggregateRating/Review schema",
+      "description": "As a compliance owner, I want review schema only when backed by real on-page reviews so that we avoid a Google manual action.",
+      "acceptanceCriteria": [
+        "index.html AggregateRating (4.8/2847) and unverifiable stat claims removed or replaced with real, on-page-visible review data",
+        "Structured-data validator passes without fake-review flags"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "index.html:59 hardcoded ratings with no on-page reviews."
+    },
+    {
+      "id": "US-572",
+      "title": "Fix sitemap coverage and robots sitemap reference",
+      "description": "As a growth owner, I want the sitemap to cover all content and robots to reference an existing sitemap so that crawlers index everything.",
+      "acceptanceCriteria": [
+        "Dynamic sitemap (functions/sitemap.xml.ts) serves /sitemap.xml including blog, pSEO, and public recipe URLs",
+        "Stale static public/sitemap.xml removed or regenerated so it does not shadow the dynamic one",
+        "robots.txt Sitemap: line points to an existing URL (no sitemap-index.xml 404)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Static sitemap ~18 routes, stale; robots references missing sitemap-index.xml."
+    },
+    {
+      "id": "US-573",
+      "title": "Wire unused schema components into content (GEO)",
+      "description": "As a growth owner, I want HowTo/MedicalWebPage/Comparison/Article schema on the right pages so that content is citable by AI engines.",
+      "acceptanceCriteria": [
+        "HowToSchema wired into food-chaining/how-to guides; MedicalWebPageSchema into ARFID/health pages; ComparisonSchema into comparison content; Article schema on pSEO",
+        "pSEO pages emit Article/HowTo in addition to Breadcrumb+FAQ",
+        "Structured data validates"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "8 schema components built but unused; RecipeSchema unused vs RecipeSchemaMarkup."
+    },
+    {
+      "id": "US-574",
+      "title": "Fix homepage meta: trim keywords, align positioning, valid image",
+      "description": "As a growth owner, I want accurate homepage meta so that titles/canonicals are correct and not spammy.",
+      "acceptanceCriteria": [
+        "Remove keyword-stuffed meta keywords",
+        "Align homepage title/description with primary consumer search intent (consistent with llms.txt)",
+        "SoftwareApplication schema screenshot points to an existing asset (not missing screenshot.png)",
+        "Resolve duplicate robots meta between index.html and SEOHead"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "index.html:11 keyword stuffing; :59 missing screenshot; B2B/consumer mismatch."
+    },
+    {
+      "id": "US-575",
+      "title": "Guard confetti and results-page animations with useReducedMotion",
+      "description": "As a user sensitive to motion, I want celebrations/animations suppressed when I prefer reduced motion so that the app is comfortable and accessible.",
+      "acceptanceCriteria": [
+        "confetti() calls in BudgetCalculatorResults/MealPlanGeneratorResults/PickyEaterQuizResults gated behind useReducedMotion",
+        "framer-motion in those results pages uses zeroed transitions when reduced motion is set"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "confetti fires unconditionally; results pages never read useReducedMotion."
+    },
+    {
+      "id": "US-576",
+      "title": "Make Grocery action controls keyboard/touch accessible",
+      "description": "As a keyboard/touch user, I want grocery item controls visible and reachable so that I can edit/delete items.",
+      "acceptanceCriteria": [
+        "Grocery.tsx hover-only controls add group-focus-within/focus-visible and are visible on coarse-pointer/touch devices",
+        "Icon button tap targets meet 44px (min h-11/w-11 on touch)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "opacity-0 group-hover:opacity-100 with h-7 w-7 (~28px) at Grocery.tsx:886-1027."
+    },
+    {
+      "id": "US-577",
+      "title": "Replace hardcoded palette colors with semantic tokens",
+      "description": "As a design-system owner, I want status colors on semantic tokens so that theming/dark-mode is consistent and colorblind-safe.",
+      "acceptanceCriteria": [
+        "Replace text-green-500/red-500/amber-500 etc. across app files with semantic tokens (success/destructive/warning)",
+        "State signaled by color also carries an icon or text label",
+        "src/components/ui/ untouched; user-configurable color-picker values excluded"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "~220 uses across ~78 files; some status color-only (Auth.tsx:763-764)."
+    },
+    {
+      "id": "US-578",
+      "title": "Adopt loading skeletons across data views",
+      "description": "As a user, I want skeletons while data loads so that pages do not flash blank.",
+      "acceptanceCriteria": [
+        "Data-fetching pages/dashboards use existing components in src/components/loading/ (RecipeCardSkeleton/ListSkeleton/etc.)",
+        "No blank-while-fetching on high-traffic data views"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Only 7/54 pages currently use skeletons."
+    },
+    {
+      "id": "US-579",
+      "title": "Add autoComplete + consistent iOS safe-area handling",
+      "description": "As a mobile user, I want proper autofill and no home-indicator overlap so that forms and layouts feel native.",
+      "acceptanceCriteria": [
+        "Form inputs get appropriate autoComplete (email/current-password/new-password/name)",
+        "Bottom-anchored/fixed mobile layouts use a shared safe-area utility instead of hardcoded pb-*"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "autoComplete in only 4 files; safe-area inconsistent (Analytics.tsx:118 pb-20)."
+    },
+    {
+      "id": "US-580",
+      "title": "i18n: extract page strings to t() (phased)",
+      "description": "As an i18n owner, I want app pages using t() so that the app can be localized.",
+      "acceptanceCriteria": [
+        "High-traffic app pages (Dashboard, Grocery, Analytics, FoodTracker, Recipes, Pantry, Auth) render user-facing copy via t()",
+        "New keys added under the correct namespace in en.json",
+        "No behavior change for en users"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "~52/54 pages hardcode strings; i18next wired but unused across app."
+    },
+    {
+      "id": "US-581",
+      "title": "Verify prod user_roles is not assigning admin to all users",
+      "description": "As a security owner, I want to confirm production role assignment so that users are not silently over-privileged.",
+      "acceptanceCriteria": [
+        "Confirm the exported CSV admin=all is a local artifact, not production state",
+        "If prod over-assigns admin, remediate role assignment"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "user_profiles_rows.csv shows role=admin on every row. USER/DATA verification."
+    },
+    {
+      "id": "US-582",
+      "title": "Audit remaining verify_jwt=false functions for required auth",
+      "description": "As a security owner, I want every public edge function reviewed so that only intentionally-public endpoints stay open.",
+      "acceptanceCriteria": [
+        "Enumerate all config.toml verify_jwt=false functions and classify each as intentionally public or needs-auth",
+        "Add auth to any that expose data or paid actions"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Many functions default verify_jwt=false; only some are intentionally public."
     }
   ]
 }
