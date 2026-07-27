@@ -1535,7 +1535,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": "autoComplete in only 4 files; safe-area inconsistent (Analytics.tsx:118 pb-20)."
+      "notes": "autoComplete in only 4 files; safe-area inconsistent (Analytics.tsx:118 pb-20). PARTIAL: added autoComplete to the signup form (email/new-password/new-password) — the main gap (sign-in already had it). Remaining forms + shared safe-area utility are a broader sweep, deferred."
     },
     {
       "id": "US-580",
