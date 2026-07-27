@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { Link } from "react-router-dom";
 import { PasswordSchema } from "@/lib/validations";
 
 export default function ResetPassword() {
+  const { t } = useTranslation();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -125,9 +127,9 @@ export default function ResetPassword() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Create New Password</CardTitle>
+            <CardTitle>{t('resetPassword.title')}</CardTitle>
             <CardDescription>
-              Enter a strong password for your account
+              {t('resetPassword.description')}
             </CardDescription>
           </CardHeader>
           <CardContent>

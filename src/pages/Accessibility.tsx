@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle2, Mail, Phone, MessageSquare, FileText, ExternalLink } from "lucide-react";
 
 const Accessibility = () => {
+  const { t } = useTranslation();
   // Fixed statement date — this is a published accessibility statement and
   // should reflect the last real review, not today's render (compliance audit
   // 2026-07). Update when the statement is formally re-reviewed.
@@ -46,7 +48,7 @@ const Accessibility = () => {
       {/* Main Content */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
         <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-          Accessibility Statement
+          {t('accessibility.title')}
         </h1>
         <p className="text-sm text-muted-foreground mb-8">
           Last Updated: {currentDate}

@@ -361,5 +361,12 @@
   },
   "authors": {
     "title": "Our Expert Authors"
+  },
+  "resetPassword": {
+    "title": "Create New Password",
+    "description": "Enter a strong password for your account"
+  },
+  "accessibility": {
+    "title": "Accessibility Statement"
   }
 }
