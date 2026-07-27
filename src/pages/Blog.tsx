@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ const contentPillars = [
 ];
 
 const Blog = () => {
+  const { t } = useTranslation();
   const seoConfig = getPageSEO("blog");
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [filteredPosts, setFilteredPosts] = useState<BlogPost[]>([]);
@@ -174,7 +176,7 @@ const Blog = () => {
       <section className="py-16 px-4 bg-gradient-to-b from-background to-secondary/10">
         <div className="container mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
-            EatPal Blog - Picky Eater Tips, ARFID Strategies & Family Nutrition
+            {t('blog.title')}
           </h1>
 
           {/* TL;DR for GEO */}
