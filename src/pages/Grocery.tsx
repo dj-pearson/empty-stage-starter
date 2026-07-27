@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
@@ -77,6 +78,7 @@ interface UserContribution {
 // the heavy list subtree can memoize on stable outputs (US-553 AC2).
 
 export default function Grocery() {
+  const { t } = useTranslation();
   const { foods, addFood, updateFood } = useFoods();
   const { kids, activeKidId } = useKids();
   const { planEntries } = usePlan();
@@ -617,9 +619,9 @@ export default function Grocery() {
                 <ShoppingCart className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">Grocery List</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{t('grocery.title')}</h1>
                 <p className="text-sm text-muted-foreground">
-                  {isFamilyMode ? "Household shopping list" : `Shopping for ${activeKid?.name || 'your child'}`}
+                  {isFamilyMode ? t('grocery.subtitleFamily') : t('grocery.subtitleChild', { name: activeKid?.name || 'your child' })}
                 </p>
               </div>
             </div>

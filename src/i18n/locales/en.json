@@ -263,5 +263,17 @@
     "successRate": "Success Rate",
     "outcomesDistribution": "Meal Outcomes Distribution",
     "topFoods": "Top 10 Foods Performance"
+  },
+  "recipes": {
+    "title": "Recipes & Meal Templates",
+    "subtitleFamily": "Family recipes for all children",
+    "subtitleChild": "Recipes for {{name}}",
+    "emptyTitle": "Create Your Recipe Collection",
+    "emptyText": "Recipes are meal templates that combine multiple foods. They make planning faster and help you create balanced, kid-friendly meals."
+  },
+  "grocery": {
+    "title": "Grocery List",
+    "subtitleFamily": "Household shopping list",
+    "subtitleChild": "Shopping for {{name}}"
   }
 }

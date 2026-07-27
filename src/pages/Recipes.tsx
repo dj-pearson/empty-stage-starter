@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -75,6 +76,7 @@ interface RecipeSuggestion {
 }
 
 export default function Recipes() {
+  const { t } = useTranslation();
   // US-331: subscribe only to the domain slices this page uses so a grocery
   // toggle or food edit elsewhere doesn't re-render the whole Recipes page.
   const { recipes, addRecipe, updateRecipe, deleteRecipe } = useRecipes();
@@ -433,11 +435,11 @@ export default function Recipes() {
         {/* Page header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold mb-2">Recipes & Meal Templates</h1>
+            <h1 className="text-3xl font-bold mb-2">{t('recipes.title')}</h1>
             <p className="text-muted-foreground">
               {isFamilyMode
-                ? "Family recipes for all children"
-                : `Recipes for ${kids.find((k) => k.id === activeKidId)?.name}`}
+                ? t('recipes.subtitleFamily')
+                : t('recipes.subtitleChild', { name: kids.find((k) => k.id === activeKidId)?.name })}
             </p>
             {isFamilyMode && kids.length > 1 && (
               <div className="flex gap-2 mt-3 flex-wrap">
@@ -530,10 +532,9 @@ export default function Recipes() {
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <ChefHat className="h-8 w-8 text-primary" />
               </div>
-              <h3 className="text-2xl font-bold mb-2">Create Your Recipe Collection</h3>
+              <h3 className="text-2xl font-bold mb-2">{t('recipes.emptyTitle')}</h3>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                Recipes are meal templates that combine multiple foods. They make planning faster
-                and help you create balanced, kid-friendly meals.
+                {t('recipes.emptyText')}
               </p>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
