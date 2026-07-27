@@ -1498,7 +1498,7 @@
       ],
       "priority": 7,
       "passes": false,
-      "notes": "opacity-0 group-hover:opacity-100 with h-7 w-7 (~28px) at Grocery.tsx:886-1027."
+      "notes": "opacity-0 group-hover:opacity-100 with h-7 w-7 (~28px) at Grocery.tsx:886-1027. PARTIAL: added group-focus-within:opacity-100 + focus-visible:opacity-100 to all 8 hover-reveal grocery controls so keyboard users can reveal/reach edit/delete/qty buttons (primary WCAG 2.1.1 gap fixed). DEFERRED: 44px tap-target (h-7 w-7) enlargement risks compact-list layout regression + touch-visible-on-coarse-pointer needs a Tailwind variant — follow-up."
     },
     {
       "id": "US-577",
