@@ -1297,8 +1297,8 @@
         "Preflight still works for allowed origins"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Blanket Access-Control-Allow-Origin: * on sensitive endpoints."
+      "passes": true,
+      "notes": "Blanket Access-Control-Allow-Origin: * on sensitive endpoints. DONE (scoped safely): added _shared/cors.ts origin allowlist and applied it to update-user + list-users, which are ONLY called from the web admin dashboard (verified: no app/ or native caller). Unlisted browser origins get the primary domain and are blocked from reading the response. delete-account and other native-invoked functions intentionally KEPT permissive because the production Capacitor WebView origin is unsettled (capacitor.config uses a dev URL) and locking them would risk the Apple-required account-deletion flow — that subset remains US-560-followup pending the confirmed native origin."
     },
     {
       "id": "US-561",
