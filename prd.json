@@ -1474,7 +1474,7 @@
       ],
       "priority": 7,
       "passes": false,
-      "notes": "index.html:11 keyword stuffing; :59 missing screenshot; B2B/consumer mismatch."
+      "notes": "index.html:11 keyword stuffing; :59 missing screenshot; B2B/consumer mismatch. PARTIAL: removed keyword-stuffed meta keywords; fixed SoftwareApplication schema screenshot (screenshot.png -> Cover.webp, real asset). DEFERRED to user: consumer-vs-B2B title/description positioning (business decision); duplicate index,follow robots meta between index.html and SEOHead is harmless/minor."
     },
     {
       "id": "US-575",
