@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +97,7 @@ const faqData = [
 ];
 
 const FAQ = () => {
+  const { t } = useTranslation();
   const seoConfig = getPageSEO("faq");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<FAQCategory>("All");
@@ -165,7 +167,7 @@ const FAQ = () => {
         {/* SEO-optimized heading structure */}
         <header className="mb-12">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-            Frequently Asked Questions About EatPal for Picky Eaters
+            {t('faq.title')}
           </h1>
 
           {/* TL;DR section for AI extraction (GEO optimization) */}

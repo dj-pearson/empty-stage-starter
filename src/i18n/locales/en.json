@@ -304,5 +304,14 @@
   "shareTarget": {
     "title": "Add to Grocery List",
     "subtitle": "Review items from your shared content"
+  },
+  "pricing": {
+    "title": "EatPal Pricing — Plans for Families & Feeding Therapists"
+  },
+  "faq": {
+    "title": "Frequently Asked Questions About EatPal for Picky Eaters"
+  },
+  "contact": {
+    "title": "Contact EatPal Support - Get Help with Picky Eater Meal Planning"
   }
 }
