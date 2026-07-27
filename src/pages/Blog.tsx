@@ -8,6 +8,7 @@ import { ArrowLeft, Search, Calendar, Clock, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { logger } from "@/lib/logger";
+import { CardSkeleton } from "@/components/loading";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
@@ -265,8 +266,16 @@ const Blog = () => {
       {/* Blog Posts */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-6xl" aria-busy={isLoading}>
         {isLoading ? (
-          <div className="text-center py-12" role="status" aria-live="polite">
-            <p className="text-muted-foreground">Loading articles...</p>
+          <div
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+            role="status"
+            aria-live="polite"
+            aria-label="Loading articles"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CardSkeleton key={i} />
+            ))}
+            <span className="sr-only">Loading articles…</span>
           </div>
         ) : filteredPosts.length === 0 ? (
           <div className="text-center py-12">
