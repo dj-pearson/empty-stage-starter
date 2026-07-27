@@ -313,5 +313,9 @@
   },
   "contact": {
     "title": "Contact EatPal Support - Get Help with Picky Eater Meal Planning"
+  },
+  "checkoutSuccess": {
+    "welcome": "Welcome to {{plan}}!",
+    "subtitle": "Your subscription is now active. Let's get started!"
   }
 }
