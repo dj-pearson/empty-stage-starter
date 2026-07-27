@@ -1511,7 +1511,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": "~220 uses across ~78 files; some status color-only (Auth.tsx:763-764)."
+      "notes": "~220 uses across ~78 files; some status color-only (Auth.tsx:763-764). PARTIAL: the audit assumed success/warning tokens existed — they did NOT (only destructive). Added --success/--warning tokens (light+dark, tuned to existing green-500/amber-500 so migration is visually neutral) to index.css + tailwind.config.ts, and migrated Auth.tsx validation states (green-500->success, red-500->destructive, amber-500->warning) as the reference pattern. DEFERRED: the ~78-file sweep needs visual QA (some green/red are decorative, not status) so it should be done in reviewable chunks rather than a blind flatten of intentional shades."
     },
     {
       "id": "US-578",

@@ -723,22 +723,22 @@ const Auth = () => {
                           aria-describedby={emailValidation.error ? "email-error" : undefined}
                           className={cn(
                             "h-11 pr-10 transition-colors",
-                            emailValidation.isValid === true && "border-green-500 focus-visible:ring-green-500",
-                            emailValidation.isValid === false && "border-red-500 focus-visible:ring-red-500"
+                            emailValidation.isValid === true && "border-success focus-visible:ring-success",
+                            emailValidation.isValid === false && "border-destructive focus-visible:ring-destructive"
                           )}
                         />
                         {emailTouched && email && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             {emailValidation.isValid ? (
-                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              <CheckCircle className="h-4 w-4 text-success" />
                             ) : (
-                              <XCircle className="h-4 w-4 text-red-500" />
+                              <XCircle className="h-4 w-4 text-destructive" />
                             )}
                           </div>
                         )}
                       </div>
                       {emailValidation.error && (
-                        <p id="email-error" className="text-xs text-red-500 flex items-center gap-1">
+                        <p id="email-error" className="text-xs text-destructive flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
                           {emailValidation.error}
                         </p>
@@ -762,8 +762,8 @@ const Auth = () => {
                           aria-describedby="password-requirements"
                           className={cn(
                             "h-11 pr-10 transition-colors",
-                            passwordTouched && isPasswordValid && "border-green-500 focus-visible:ring-green-500",
-                            passwordTouched && password && !isPasswordValid && "border-amber-500 focus-visible:ring-amber-500"
+                            passwordTouched && isPasswordValid && "border-success focus-visible:ring-success",
+                            passwordTouched && password && !isPasswordValid && "border-warning focus-visible:ring-warning"
                           )}
                         />
                         <Button
@@ -805,12 +805,12 @@ const Auth = () => {
                         aria-invalid={confirmPassword.length > 0 && password !== confirmPassword}
                         className={cn(
                           "h-11 transition-colors",
-                          confirmPassword.length > 0 && password === confirmPassword && "border-green-500 focus-visible:ring-green-500",
-                          confirmPassword.length > 0 && password !== confirmPassword && "border-red-500 focus-visible:ring-red-500"
+                          confirmPassword.length > 0 && password === confirmPassword && "border-success focus-visible:ring-success",
+                          confirmPassword.length > 0 && password !== confirmPassword && "border-destructive focus-visible:ring-destructive"
                         )}
                       />
                       {confirmPassword.length > 0 && password !== confirmPassword && (
-                        <p className="text-xs text-red-500 flex items-center gap-1">
+                        <p className="text-xs text-destructive flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
                           Passwords do not match
                         </p>
