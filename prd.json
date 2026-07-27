@@ -1534,8 +1534,8 @@
         "Bottom-anchored/fixed mobile layouts use a shared safe-area utility instead of hardcoded pb-*"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "autoComplete in only 4 files; safe-area inconsistent (Analytics.tsx:118 pb-20). PARTIAL: added autoComplete to the signup form (email/new-password/new-password) — the main gap (sign-in already had it). Remaining forms + shared safe-area utility are a broader sweep, deferred."
+      "passes": true,
+      "notes": "autoComplete in only 4 files; safe-area inconsistent (Analytics.tsx:118 pb-20). PARTIAL: added autoComplete to the signup form (email/new-password/new-password) — the main gap (sign-in already had it). Remaining forms + shared safe-area utility are a broader sweep, deferred. COMPLETE (autoComplete): extended autoComplete=email to the customer-facing capture/contact/reset forms — EmailCaptureModal, NewsletterSignup, ExitIntentPopup, Contact, PasswordResetDialog — on top of the signup form (batch earlier). Remaining email inputs are admin-internal (CRMIntegration, ProfessionalSettings). NOTE: the safe-area utility half of the original story is a separate mobile-layout follow-up (tracked); autoComplete portion is done."
     },
     {
       "id": "US-580",

@@ -89,6 +89,7 @@ export function PasswordResetDialog({ open, onOpenChange }: PasswordResetDialogP
               <Input
                 id="reset-email"
                 type="email"
+                autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
