@@ -1433,8 +1433,8 @@
         "Structured-data validator passes without fake-review flags"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "index.html:59 hardcoded ratings with no on-page reviews."
+      "passes": true,
+      "notes": "index.html:59 hardcoded ratings with no on-page reviews. FIXED: removed fabricated AggregateRating (4.8/2847) from index.html SoftwareApplication schema; JSON-LD re-validated. Unverifiable stat claims in description remain for US-574."
     },
     {
       "id": "US-572",
@@ -1485,8 +1485,8 @@
         "framer-motion in those results pages uses zeroed transitions when reduced motion is set"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "confetti fires unconditionally; results pages never read useReducedMotion."
+      "passes": true,
+      "notes": "confetti fires unconditionally; results pages never read useReducedMotion. FIXED: confetti in the 3 results pages now guarded by prefers-reduced-motion (inline matchMedia, no effect re-run). framer-motion already respects reduced motion globally via MotionConfig reducedMotion=user (App.tsx:136)."
     },
     {
       "id": "US-576",
