@@ -244,5 +244,11 @@
         "page": "Page {{page}} of {{total}}"
       }
     }
+  },
+  "foodTracker": {
+    "title": "Food Tracker",
+    "subtitle": "Track food attempts and build confidence over time",
+    "metaDescription": "Track food attempts and build your child's confidence with new foods over time",
+    "manageChildren": "Manage children"
   }
 }

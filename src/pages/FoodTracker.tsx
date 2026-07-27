@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useKids } from "@/contexts/AppContext";
 import { FoodSuccessTracker } from "@/components/FoodSuccessTracker";
@@ -9,13 +10,14 @@ import { Target, Settings } from "lucide-react";
 
 export default function FoodTracker() {
   const { kids } = useKids();
+  const { t } = useTranslation();
   const manageKidsRef = useRef<ManageKidsDialogRef>(null);
 
   return (
     <div className="container mx-auto py-6 px-4 max-w-7xl">
       <Helmet>
-        <title>Food Tracker - EatPal</title>
-        <meta name="description" content="Track food attempts and build your child's confidence with new foods over time" />
+        <title>{`${t('foodTracker.title')} - EatPal`}</title>
+        <meta name="description" content={t('foodTracker.metaDescription')} />
         <meta name="robots" content="noindex" />
       </Helmet>
       {/* Page Header */}
@@ -25,9 +27,9 @@ export default function FoodTracker() {
             <Target className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Food Tracker</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('foodTracker.title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Track food attempts and build confidence over time
+              {t('foodTracker.subtitle')}
             </p>
           </div>
         </div>
@@ -41,8 +43,8 @@ export default function FoodTracker() {
               variant="outline"
               size="icon"
               onClick={() => manageKidsRef.current?.openForEdit("")}
-              title="Manage Children"
-              aria-label="Manage children"
+              title={t('foodTracker.manageChildren')}
+              aria-label={t('foodTracker.manageChildren')}
             >
               <Settings className="h-4 w-4" />
             </Button>
