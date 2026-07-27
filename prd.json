@@ -1246,7 +1246,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "USER ACTION REQUIRED for rotation + history purge. File is git-tracked and contains IP 209.145.59.219 + reused secret. REPO-SIDE DONE: removed cleanup-sensitive-data.txt from git tracking + disk; added to .gitignore. BLOCKED on USER: rotate the reused secret in Supabase+Coolify and purge git history (rewrite-history.sh). Tracked in SECURITY.md Outstanding Remediation."
+      "notes": "USER ACTION REQUIRED for rotation + history purge. File is git-tracked and contains IP 209.145.59.219 + reused secret. REPO-SIDE DONE: removed cleanup-sensitive-data.txt from git tracking + disk; added to .gitignore. BLOCKED on USER: rotate the reused secret in Supabase+Coolify and purge git history (rewrite-history.sh). Tracked in SECURITY.md Outstanding Remediation. Verified rewrite-history.sh targets the exact leaked values (IP + secret) across .md/.ps1/.sh/.txt in all history, so the purge is functional. Added caveats to SECURITY.md: rotation is the PRIMARY fix (history scrub != rotation), the script uses deprecated filter-branch (prefer filter-repo/BFG), and it force-pushes --all (violates the no-force-push-shared-branches rule — coordinate + fresh clone). Repo-side is fully ready; the credential rotation in Supabase+Coolify and the coordinated history purge remain the USER action."
     },
     {
       "id": "US-557",
