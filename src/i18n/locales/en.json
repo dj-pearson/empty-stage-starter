@@ -368,5 +368,17 @@
   },
   "accessibility": {
     "title": "Accessibility Statement"
+  },
+  "privacyPolicy": {
+    "title": "Privacy Policy"
+  },
+  "termsOfService": {
+    "title": "Terms of Service"
+  },
+  "authCallback": {
+    "success": "Sign in successful!"
+  },
+  "oauthCallback": {
+    "processing": "Processing Authorization..."
   }
 }

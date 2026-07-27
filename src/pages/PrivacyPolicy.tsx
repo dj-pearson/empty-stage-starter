@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
@@ -14,6 +15,7 @@ import { resetConsent } from "@/lib/consent";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PrivacyPolicy = () => {
+  const { t } = useTranslation();
   const seoConfig = getPageSEO("privacy");
 
   const handleManageCookies = () => {
@@ -51,7 +53,7 @@ const PrivacyPolicy = () => {
 
       {/* Content */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
-        <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">Privacy Policy</h1>
+        <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">{t('privacyPolicy.title')}</h1>
         <p className="text-sm text-muted-foreground mb-8">Last Updated: July 23, 2026</p>
 
         <div className="prose prose-lg max-w-none space-y-8">

@@ -1,8 +1,10 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { logger } from "@/lib/logger";
 
 const OAuthCallback = () => {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -42,7 +44,7 @@ const OAuthCallback = () => {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <div className="text-center p-8 max-w-md">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-        <h2 className="text-xl font-semibold mb-2">Processing Authorization...</h2>
+        <h2 className="text-xl font-semibold mb-2">{t('oauthCallback.processing')}</h2>
         <p className="text-muted-foreground">
           Please wait while we complete your Google Search Console connection.
         </p>

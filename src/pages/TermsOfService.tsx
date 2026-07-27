@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 
 const TermsOfService = () => {
+  const { t } = useTranslation();
   const seoConfig = getPageSEO("terms");
   return (
     <>
@@ -36,7 +38,7 @@ const TermsOfService = () => {
 
       {/* Content */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
-        <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">Terms of Service</h1>
+        <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">{t('termsOfService.title')}</h1>
         <p className="text-sm text-muted-foreground mb-8">Last Updated: October 28, 2025</p>
 
         <div className="prose prose-lg max-w-none space-y-8">
