@@ -1271,8 +1271,8 @@
         "Legitimate app/admin callers still function"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Currently verify_jwt=false + CORS * + no internal secret."
+      "passes": true,
+      "notes": "Currently verify_jwt=false + CORS * + no internal secret. FIXED: generate-blog-content/social-content/image now requireAdmin; parse-recipe + parse-recipe-grocery now requireUser. Added service-role bypass in _shared/require-admin.ts so trusted server-to-server invokes (publish-scheduled-posts -> generate-social-content) still work. Admin dashboards send admin JWT; verified callers."
     },
     {
       "id": "US-559",

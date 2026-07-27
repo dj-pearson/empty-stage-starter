@@ -1,5 +1,6 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import type { AIImageSource } from '../_shared/ai-service-v2.ts';
+import { requireUser } from '../_shared/require-admin.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +18,15 @@ function detectMediaType(base64: string): AIImageSource['media_type'] {
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Authenticated users only: paid AI call + fetches arbitrary user URLs (SSRF surface).
+  const gate = await requireUser(req);
+  if (!gate.ok) {
+    return new Response(JSON.stringify({ error: gate.error ?? 'Unauthorized' }), {
+      status: gate.status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
