@@ -1349,7 +1349,7 @@
       ],
       "priority": 4,
       "passes": false,
-      "notes": "Recipes.tsx:625,642 map all filteredRecipes."
+      "notes": "Recipes.tsx:625,642 map all filteredRecipes. PROGRESS (list view done; grid deferred): virtualized the Recipes LIST view with @tanstack/react-virtual, mirroring the proven Pantry pattern exactly (listParentRef scroll container maxHeight 70vh, estimateSize 72, overscan 10, gated to >=50 items so small lists keep the plain flow layout). Typecheck clean. NEEDS VISUAL QA on the branch (scroll-in-box UX matches Pantry/Grocery). The responsive multi-column GRID view (grid-cols-1 xl:2 2xl:3, variable-height cards) is intentionally NOT virtualized — it needs runtime column-count + dynamic measurement that cannot be verified headlessly; documented as the remaining follow-up."
     },
     {
       "id": "US-565",

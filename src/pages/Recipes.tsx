@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -144,6 +145,19 @@ export default function Recipes() {
     totalCount,
     hasActiveFilters,
   } = useRecipeFilters({ recipes: collectionFilteredRecipes, foods });
+
+  // List-view virtualization (mirrors the proven Pantry pattern). Only engages
+  // for larger lists so small lists keep the simple flow layout. The grid view
+  // (responsive multi-column, variable-height cards) is intentionally not
+  // virtualized here — that needs column-count + dynamic measurement work.
+  const listParentRef = useRef<HTMLDivElement>(null);
+  const useVirtualList = viewMode === 'list' && filteredRecipes.length >= 50;
+  const listVirtualizer = useVirtualizer({
+    count: useVirtualList ? filteredRecipes.length : 0,
+    getScrollElement: () => listParentRef.current,
+    estimateSize: () => 72,
+    overscan: 10,
+  });
 
   // Fetch user data
   useEffect(() => {
@@ -637,6 +651,42 @@ export default function Recipes() {
                     onOrderIngredients={handleOrderIngredients}
                   />
                 ))}
+              </div>
+            ) : useVirtualList ? (
+              <div
+                ref={listParentRef}
+                className="border rounded-xl overflow-auto"
+                style={{ maxHeight: "70vh" }}
+                aria-live="polite"
+              >
+                <div style={{ height: `${listVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                  {listVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const recipe = filteredRecipes[virtualRow.index];
+                    return (
+                      <div
+                        key={recipe.id}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <RecipeListItem
+                          recipe={recipe}
+                          foods={foods}
+                          onView={handleView}
+                          onAddToGrocery={handleAddToGrocery}
+                          onAddToPlanner={(r) => {
+                            setViewingRecipe(r);
+                            setDetailOpen(true);
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="space-y-1">
