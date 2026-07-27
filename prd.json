@@ -1571,8 +1571,8 @@
         "Add auth to any that expose data or paid actions"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Many functions default verify_jwt=false; only some are intentionally public."
+      "passes": true,
+      "notes": "Many functions default verify_jwt=false; only some are intentionally public. DONE: enumerated all verify_jwt=false functions. Classified: agent-* = intentional Agentic-OS internal (server/cron-triggered, out of scope); stripe-webhook (signature-verified), health-check, generate-sitemap, nurture-unsubscribe/csat-rate (token-in-URL) = intentionally public; generate-*/parse-recipe handled in US-558. Gated two clear offenders with requireAdmin (service-role bypass preserves automated callers): update-blog-image (unauth service_role blog mutation + SSRF) and test-blog-webhook (unauth POST to arbitrary URL = SSRF/open-relay). NOTE: if any external automation calls these without the service key it must now send it."
     }
   ]
 }
