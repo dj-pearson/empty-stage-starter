@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useKids, usePlan } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import { logger } from "@/lib/logger";
 import { calculateAge } from "@/lib/utils";
 
 export default function AIPlanner() {
+  const { t } = useTranslation();
   const { kids, activeKidId, setActiveKidId } = useKids();
   const { addPlanEntries } = usePlan();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -87,10 +89,10 @@ export default function AIPlanner() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Sparkles className="h-8 w-8 text-primary" />
-            AI Meal Planner
+            {t('aiPlanner.title')}
           </h1>
           <p className="text-muted-foreground mt-2">
-            Generate personalized, nutritionally balanced meal plans using AI
+            {t('aiPlanner.subtitle')}
           </p>
         </div>
       </div>

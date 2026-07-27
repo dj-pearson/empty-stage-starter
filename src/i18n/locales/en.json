@@ -346,5 +346,9 @@
   "mealPlanResults": {
     "title": "Your 5-Day Meal Plan is Ready!",
     "subtitle": "Personalized for your family of {{familySize}}"
+  },
+  "aiPlanner": {
+    "title": "AI Meal Planner",
+    "subtitle": "Generate personalized, nutritionally balanced meal plans using AI"
   }
 }
