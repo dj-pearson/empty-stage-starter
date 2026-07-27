@@ -1460,7 +1460,7 @@
       ],
       "priority": 7,
       "passes": false,
-      "notes": "8 schema components built but unused; RecipeSchema unused vs RecipeSchemaMarkup."
+      "notes": "8 schema components built but unused; RecipeSchema unused vs RecipeSchemaMarkup. PARTIAL DONE: wired ArticleSchema into all pSEO guide pages (PseoPage.tsx) — title/description/url + datePublished(published_at??created_at)/dateModified(updated_at) — so programmatic guides are citable/extractable by AI engines (GEO), alongside existing Breadcrumb+FAQ. DEFERRED: HowToSchema/MedicalWebPageSchema/ComparisonSchema keyed off page_type (the PseoSchemaType enum already anticipates this) and RecipeSchema on a public recipe route (needs US-570 public recipe pages)."
     },
     {
       "id": "US-574",

@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { supabase } from '@/integrations/supabase/client';
+import { ArticleSchema } from '@/components/schema/ArticleSchema';
 import { BreadcrumbSchema } from '@/components/schema/BreadcrumbSchema';
 import { FAQSchema } from '@/components/schema/FAQSchema';
 import { Button } from '@/components/ui/button';
@@ -150,6 +151,16 @@ export default function PseoPage() {
         <meta name="description" content={page.meta_description} />
         <link rel="canonical" href={page.canonical_url} />
       </Helmet>
+
+      {/* Article schema makes these programmatic guides citable/extractable by
+          AI answer engines (GEO), in addition to Breadcrumb + FAQ. */}
+      <ArticleSchema
+        title={page.title}
+        description={page.meta_description}
+        url={page.canonical_url}
+        datePublished={page.published_at ?? page.created_at}
+        dateModified={page.updated_at}
+      />
 
       {breadcrumbSchemaItems.length > 0 && (
         <BreadcrumbSchema items={breadcrumbSchemaItems} />
