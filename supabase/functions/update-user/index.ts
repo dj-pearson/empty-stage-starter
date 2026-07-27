@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAdmin } from "../_shared/require-admin.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +11,15 @@ export default async (req: Request) => {
   }
 
   try {
+    // Authorization: caller must be an authenticated admin/root_admin.
+    const gate = await requireAdmin(req);
+    if (!gate.ok || !gate.admin) {
+      return new Response(
+        JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
+        { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { userId, action, value } = await req.json();
 
     if (!userId || !action) {
@@ -20,11 +29,9 @@ export default async (req: Request) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = gate.admin;
 
-    console.log(`Performing action ${action} for user ${userId}`);
+    console.log(`Admin ${gate.userId} performing action ${action} for user ${userId}`);
 
     switch (action) {
       case 'ban':

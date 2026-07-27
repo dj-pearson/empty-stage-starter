@@ -1219,8 +1219,8 @@
         "Admin UserManagementDashboard/BulkUserManagement flows still work for real admins"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Verified vuln: service_role + CORS * + zero authorization; anon key satisfies default verify_jwt."
+      "passes": true,
+      "notes": "Verified vuln: service_role + CORS * + zero authorization; anon key satisfies default verify_jwt. FIXED: added supabase/functions/_shared/require-admin.ts; update-user now calls requireAdmin (admin/root_admin) before any ban/make_admin action and uses the gated service-role client. Frontend invokeEdgeFunction sends the admin JWT so dashboards still work."
     },
     {
       "id": "US-555",
@@ -1232,8 +1232,8 @@
         "Admin dashboards that consume list-users continue to work"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Verified vuln: returns every user email/role/last-sign-in to anyone with the public anon key."
+      "passes": true,
+      "notes": "Verified vuln: returns every user email/role/last-sign-in to anyone with the public anon key. FIXED: list-users now requires admin via requireAdmin before returning PII; anon/non-admin get 401/403."
     },
     {
       "id": "US-556",
