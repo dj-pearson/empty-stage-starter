@@ -21,7 +21,14 @@
     "signOut": "Sign Out",
     "email": "Email",
     "password": "Password",
-    "forgotPassword": "Forgot password?"
+    "forgotPassword": "Forgot password?",
+    "checkEmail": "Check Your Email",
+    "welcome": "Welcome",
+    "welcomeDescription": "Sign in to your account or create a new one",
+    "valueProp": "Built on food chaining science for ARFID & picky eating",
+    "freeToStart": "Free to start. No credit card required.",
+    "tabSignUp": "Sign Up",
+    "tabSignIn": "Sign In"
   },
   "onboarding": {
     "welcomeTitle": "Welcome to EatPal",

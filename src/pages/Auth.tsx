@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -78,6 +79,7 @@ function RequirementIndicator({ met, label }: { met: boolean; label: string }) {
 const CONSENT_TERMS_VERSION = "2026-07-23";
 
 const Auth = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -629,7 +631,7 @@ const Auth = () => {
                         <Mail className="h-8 w-8 text-primary" />
                       </div>
                     </div>
-                    <CardTitle className="text-center">Check Your Email</CardTitle>
+                    <CardTitle className="text-center">{t('auth.checkEmail')}</CardTitle>
                     <CardDescription className="text-center">
                       We sent a 6-digit code to<br />
                       <span className="font-medium text-foreground">{pendingEmail}</span>
@@ -685,24 +687,24 @@ const Auth = () => {
               ) : (
                 <>
               <CardHeader>
-                <CardTitle>Welcome</CardTitle>
+                <CardTitle>{t('auth.welcome')}</CardTitle>
                 <CardDescription>
-                  Sign in to your account or create a new one
+                  {t('auth.welcomeDescription')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
                   <p className="text-sm font-semibold text-primary mb-1">
-                    Built on food chaining science for ARFID & picky eating
+                    {t('auth.valueProp')}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Free to start. No credit card required.
+                    {t('auth.freeToStart')}
                   </p>
                 </div>
               <Tabs defaultValue={defaultTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                  <TabsTrigger value="signin">Sign In</TabsTrigger>
+                  <TabsTrigger value="signup">{t('auth.tabSignUp')}</TabsTrigger>
+                  <TabsTrigger value="signin">{t('auth.tabSignIn')}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="signup">
