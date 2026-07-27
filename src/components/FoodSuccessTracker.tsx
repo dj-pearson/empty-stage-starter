@@ -96,7 +96,7 @@ const OUTCOMES = [
   { value: "success", label: "Success", icon: CheckCircle, color: "text-safe-food" },
   { value: "partial", label: "Partial", icon: Minus, color: "text-yellow-500" },
   { value: "refused", label: "Refused", icon: XCircle, color: "text-muted-foreground" },
-  { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-red-500" },
+  { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-destructive" },
 ];
 
 const MOODS = [
@@ -286,7 +286,7 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
       success: "bg-safe-food text-white",
       partial: "bg-yellow-500 text-white",
       refused: "bg-gray-500 text-white",
-      tantrum: "bg-red-500 text-white",
+      tantrum: "bg-destructive text-white",
     };
 
     return (
@@ -656,7 +656,7 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
                             "bg-safe-food": outcome.value === "success",
                             "bg-yellow-500": outcome.value === "partial",
                             "bg-gray-500": outcome.value === "refused",
-                            "bg-red-500": outcome.value === "tantrum",
+                            "bg-destructive": outcome.value === "tantrum",
                           })}
                           style={{ width: `${percentage}%` }}
                         />
