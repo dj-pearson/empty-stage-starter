@@ -1246,7 +1246,7 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "USER ACTION REQUIRED for rotation + history purge. File is git-tracked and contains IP 209.145.59.219 + reused secret."
+      "notes": "USER ACTION REQUIRED for rotation + history purge. File is git-tracked and contains IP 209.145.59.219 + reused secret. REPO-SIDE DONE: removed cleanup-sensitive-data.txt from git tracking + disk; added to .gitignore. BLOCKED on USER: rotate the reused secret in Supabase+Coolify and purge git history (rewrite-history.sh). Tracked in SECURITY.md Outstanding Remediation."
     },
     {
       "id": "US-557",
@@ -1258,8 +1258,8 @@
         "SECURITY.md notes the non-expiring anon/service JWT (exp ~2126) and recommends rotating the JWT signing secret"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ".env holds live service_role JWT + Coolify token; not tracked but present."
+      "passes": true,
+      "notes": ".env holds live service_role JWT + Coolify token; not tracked but present. DONE (repo-side): .gitignore broadened with cleanup-sensitive-data.txt, *.pem, *.key, *.mobileprovision, *.base64.txt, *_rows.csv. SECURITY.md documents non-expiring JWT rotation + local PII/signing artifact removal as user actions. Local PII CSVs left on disk (gitignored, git cannot restore) for user to delete."
     },
     {
       "id": "US-558",

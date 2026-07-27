@@ -589,7 +589,27 @@ We will publicly acknowledge responsible researchers who report valid vulnerabil
 
 ---
 
-**Last Updated:** November 13, 2025
+## Outstanding Remediation (audit 2026-07-26)
+
+These require action outside the repo and cannot be auto-resolved by a code change:
+
+1. **Rotate the leaked credential (US-556).** `cleanup-sensitive-data.txt` was git-tracked
+   and contained a server IP + a secret that was reused as the Postgres password,
+   `SUPABASE_ACCESS_TOKEN`, and the Coolify Postgres password. The file has been removed
+   from tracking and disk, but the secret **must be rotated** in Supabase and Coolify, and
+   the value **purged from git history** (see `rewrite-history.sh`, run by a maintainer —
+   destructive, do not run on shared branches without coordination).
+2. **Rotate long-lived JWTs (US-557).** The anon and `service_role` JWTs are issued with
+   `exp` ≈ 4920926760 (year ~2126), i.e. effectively non-expiring. Rotate the JWT signing
+   secret so a leaked token cannot be used indefinitely.
+3. **Remove local PII/signing artifacts (US-557/US-562).** `user_profiles_rows.csv`,
+   `user_subscriptions_rows.csv`, `EatPalDistribution.key`, `distribution.pem`, and the
+   `*.mobileprovision` files are gitignored but still present on disk. Delete them from the
+   working tree and keep signing material in a secrets manager / CI secure store.
+
+---
+
+**Last Updated:** July 26, 2026
 **Next Review:** December 13, 2025
 **Owner:** Engineering Team
 
