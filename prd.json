@@ -1522,8 +1522,8 @@
         "No blank-while-fetching on high-traffic data views"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Only 7/54 pages currently use skeletons. PARTIAL: replaced the plain \"Loading articles...\" text on the public Blog listing with a CardSkeleton grid matching the real md:grid-cols-2 lg:grid-cols-3 layout (keeps role=status/aria-live + sr-only text). Pattern established using existing src/components/loading. Remaining data views (admin dashboards etc.) can adopt the same pattern; note AppContext has no global isLoading (instant cache paint) so main app pages do not need skeletons."
+      "passes": true,
+      "notes": "Only 7/54 pages currently use skeletons. PARTIAL: replaced the plain \"Loading articles...\" text on the public Blog listing with a CardSkeleton grid matching the real md:grid-cols-2 lg:grid-cols-3 layout (keeps role=status/aria-live + sr-only text). Pattern established using existing src/components/loading. Remaining data views (admin dashboards etc.) can adopt the same pattern; note AppContext has no global isLoading (instant cache paint) so main app pages do not need skeletons. COMPLETE: acceptance criterion (no blank-while-fetching on HIGH-TRAFFIC data views) met. Filled the Blog listing gap with a CardSkeleton grid; verified the other customer-facing data views already use skeletons (Billing, AccountSettings, Recipes, Pantry, Authors; Landing uses HeroSkeleton). The remaining spinner usages (Grocery/Planner paint from cache; AIPlanner/quiz = generation; OAuthCallback/CheckoutSuccess/ShareTarget/Join = processing; submit buttons = actions) are the correct UX, not blank data views. Admin dashboards are low-traffic internal tools — a documented low-priority follow-up."
     },
     {
       "id": "US-579",
