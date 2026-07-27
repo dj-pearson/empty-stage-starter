@@ -1286,7 +1286,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Policies USING(true)/WITH CHECK(true) FOR ALL with no role restriction apply to all roles."
+      "notes": "Policies USING(true)/WITH CHECK(true) FOR ALL with no role restriction apply to all roles. PARTIAL DONE: migration 20260726000000_tighten_permissive_rls_policies.sql drops the FOR ALL USING(true) policies on rate_limits + backup_logs (verified safe: rate_limits written only by SECURITY DEFINER check_rate_limit; backup_logs written only by service_role edge fns; clients only SELECT own rows; per-user SELECT policies retained; additive/backward-compatible). DEFERRED: automation_email_queue/events + ai_usage_logs have the same pattern but are written by AFTER INSERT triggers (e.g. on profiles at signup) — dropping their permissive policy is only safe once those trigger fns are confirmed SECURITY DEFINER (else signup breaks)."
     },
     {
       "id": "US-560",
