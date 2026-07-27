@@ -1446,8 +1446,8 @@
         "robots.txt Sitemap: line points to an existing URL (no sitemap-index.xml 404)"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Static sitemap ~18 routes, stale; robots references missing sitemap-index.xml."
+      "passes": true,
+      "notes": "Static sitemap ~18 routes, stale; robots references missing sitemap-index.xml. FIXED: removed stale static public/sitemap.xml (17 URLs) so the Cloudflare Pages function functions/sitemap.xml.ts serves /sitemap.xml (delegates to generate-sitemap edge fn incl. blog/pSEO/recipes, with a static fallback). Removed the 404 sitemap-index.xml line from robots.txt. NOTE: verify in prod that the Pages function + generate-sitemap edge fn are deployed; worst case it serves the fallback list."
     },
     {
       "id": "US-573",

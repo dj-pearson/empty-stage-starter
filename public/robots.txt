@@ -197,7 +197,6 @@ Allow: /accessibility
 
 # Sitemap locations
 Sitemap: https://tryeatpal.com/sitemap.xml
-Sitemap: https://tryeatpal.com/sitemap-index.xml
 
 # AI/LLM information file
 # See https://tryeatpal.com/llms.txt for AI data usage guidelines
