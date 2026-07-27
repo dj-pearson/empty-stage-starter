@@ -325,5 +325,17 @@
   "blogPost": {
     "notFoundTitle": "Article Not Found",
     "notFoundText": "The article you're looking for doesn't exist or has been removed."
+  },
+  "pickyEaterQuiz": {
+    "title": "Picky Eater Food Personality Quiz",
+    "subtitle": "Discover your child's eating personality and get personalized strategies"
+  },
+  "budgetCalculator": {
+    "title": "Grocery Budget Calculator",
+    "subtitle": "Calculate your family's realistic grocery budget based on official USDA food cost data. Get personalized recommendations and money-saving tips."
+  },
+  "mealPlanGenerator": {
+    "title": "5-Day Meal Plan Generator",
+    "subtitle": "Get a personalized meal plan with recipes and grocery list tailored to your family's needs - including picky eaters!"
   }
 }

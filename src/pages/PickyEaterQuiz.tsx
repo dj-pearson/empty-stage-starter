@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +17,7 @@ import { SEOHead } from '@/components/SEOHead';
 import { getPageSEO } from '@/lib/seo-config';
 
 export default function PickyEaterQuiz() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [showIntro, setShowIntro] = useState(true);
   const [quizState, setQuizState] = useState<QuizState>({
@@ -112,10 +114,10 @@ export default function PickyEaterQuiz() {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-foreground mb-2">
-              Picky Eater Food Personality Quiz
+              {t('pickyEaterQuiz.title')}
             </h1>
             <p className="text-lg text-muted-foreground">
-              Discover your child's eating personality and get personalized strategies
+              {t('pickyEaterQuiz.subtitle')}
             </p>
           </div>
 

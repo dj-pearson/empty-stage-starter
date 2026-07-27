@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -90,6 +91,7 @@ function getMealPlanMilestoneText(percentage: number): string | null {
 }
 
 export default function MealPlanGenerator() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [sessionId] = useState(() => uuidv4());
   const prefersReducedMotion = useReducedMotion();
@@ -276,11 +278,10 @@ export default function MealPlanGenerator() {
               </div>
             </div>
             <h1 className="text-4xl font-bold text-foreground mb-4">
-              5-Day Meal Plan Generator
+              {t('mealPlanGenerator.title')}
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Get a personalized meal plan with recipes and grocery list tailored to your family's
-              needs - including picky eaters!
+              {t('mealPlanGenerator.subtitle')}
             </p>
           </div>
 
