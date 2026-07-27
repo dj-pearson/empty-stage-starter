@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { useTranslation } from "react-i18next";
 import { useFoods, useKids, usePlan } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ const RESULT_COLORS = {
 };
 
 export default function Analytics() {
+  const { t } = useTranslation();
   const { foods } = useFoods();
   const { activeKidId, kids, setActiveKidId } = useKids();
   const { planEntries } = usePlan();
@@ -118,17 +120,17 @@ export default function Analytics() {
       <div className="min-h-screen pb-20 md:pt-20 bg-background">
         <div className="container mx-auto px-4 py-8 max-w-6xl">
           <h1 className="text-3xl font-bold mb-2">
-            Food Analytics - {activeKid.name}
+            {t('analytics.title', { name: activeKid.name })}
           </h1>
-          <p className="text-muted-foreground mb-8">Track meal outcomes and food preferences</p>
+          <p className="text-muted-foreground mb-8">{t('analytics.subtitle')}</p>
           
           <Card className="p-12 text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <TrendingUp className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">No Data Yet</h3>
+            <h3 className="text-xl font-semibold mb-2">{t('analytics.noDataTitle')}</h3>
             <p className="text-muted-foreground">
-              Start tracking meals by marking them as Ate, Tasted, or Refused in the Planner
+              {t('analytics.noDataText')}
             </p>
           </Card>
         </div>
@@ -146,16 +148,16 @@ export default function Analytics() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">
-            Food Analytics - {activeKid.name}
+            {t('analytics.title', { name: activeKid.name })}
           </h1>
-          <p className="text-muted-foreground">Track meal outcomes and food preferences</p>
+          <p className="text-muted-foreground">{t('analytics.subtitle')}</p>
         </div>
 
         {/* Overall Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Total Tracked</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">{t('analytics.totalTracked')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold">{stats.total}</p>
@@ -164,7 +166,7 @@ export default function Analytics() {
           
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Ate</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">{t('analytics.ate')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-safe-food">{stats.ate}</p>
@@ -173,7 +175,7 @@ export default function Analytics() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Tasted</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">{t('analytics.tasted')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-secondary">{stats.tasted}</p>
@@ -182,7 +184,7 @@ export default function Analytics() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Refused</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">{t('analytics.refused')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-destructive">{stats.refused}</p>
@@ -191,7 +193,7 @@ export default function Analytics() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Success Rate</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">{t('analytics.successRate')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-primary">{stats.successRate}%</p>
@@ -204,7 +206,7 @@ export default function Analytics() {
           {/* Results Distribution */}
           <Card>
             <CardHeader>
-              <CardTitle>Meal Outcomes Distribution</CardTitle>
+              <CardTitle>{t('analytics.outcomesDistribution')}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -236,7 +238,7 @@ export default function Analytics() {
           {/* Top Foods Bar Chart */}
           <Card>
             <CardHeader>
-              <CardTitle>Top 10 Foods Performance</CardTitle>
+              <CardTitle>{t('analytics.topFoods')}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>

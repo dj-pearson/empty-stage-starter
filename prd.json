@@ -1548,7 +1548,7 @@
       ],
       "priority": 9,
       "passes": false,
-      "notes": "~52/54 pages hardcode strings; i18next wired but unused across app. IN PROGRESS (batch 1/N): established the per-page pattern and converted FoodTracker.tsx (title/subtitle/meta/aria) with a new foodTracker namespace in en.json. Safe/zero-regression (unwrapped strings stay English via i18next fallback), so this can proceed incrementally page-by-page. ~50 pages remain — this is a long-tail sweep of low current value (only en exists) but tracked and unblocked."
+      "notes": "~52/54 pages hardcode strings; i18next wired but unused across app. IN PROGRESS (batch 1/N): established the per-page pattern and converted FoodTracker.tsx (title/subtitle/meta/aria) with a new foodTracker namespace in en.json. Safe/zero-regression (unwrapped strings stay English via i18next fallback), so this can proceed incrementally page-by-page. ~50 pages remain — this is a long-tail sweep of low current value (only en exists) but tracked and unblocked. Batch 2: Analytics.tsx converted (title with {{name}} interpolation, subtitle, empty-state, stat card titles, chart section titles) + analytics namespace. ~48 pages remain."
     },
     {
       "id": "US-581",
