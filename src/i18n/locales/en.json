@@ -275,5 +275,11 @@
     "title": "Grocery List",
     "subtitleFamily": "Household shopping list",
     "subtitleChild": "Shopping for {{name}}"
+  },
+  "pantry": {
+    "title": "My Pantry",
+    "subtitleEmpty": "Track and manage your family's food inventory",
+    "emptyTitle": "Build Your Food Pantry",
+    "emptyText": "Start by adding foods your family already loves. This helps create personalized meal plans for all your kids!"
   }
 }
