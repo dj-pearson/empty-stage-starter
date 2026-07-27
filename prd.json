@@ -1384,8 +1384,8 @@
         "Re-render count drops on single-slice updates (spot-check)"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "useApp() memo deps include every slice (AppContext.tsx:460-484)."
+      "passes": true,
+      "notes": "useApp() memo deps include every slice (AppContext.tsx:460-484). RESOLVED — already done: verified only ONE component still uses useApp() (src/pages/Home.tsx); the rest already use the narrow hooks (useFoods/useGrocery/useKids/usePlan/useRecipes). Home is the full dashboard that reads every domain plus exportData/importData/resetAllData, so it legitimately needs the merged context — migrating it yields no re-render benefit. No further migration beneficial."
     },
     {
       "id": "US-568",
