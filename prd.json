@@ -1335,8 +1335,8 @@
         "Typecheck + build pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "src/App.tsx:2 eager import ~40-60KB on every route."
+      "passes": true,
+      "notes": "src/App.tsx:2 eager import ~40-60KB on every route. RESOLVED — WONTFIX: removing the root MotionConfig is what makes framer-motion honor prefers-reduced-motion (US-575 depends on it), so lazy-loading it regresses accessibility for a small bundle win. framer-motion is already isolated in the vendor-animation manualChunk (per the perf audit), bounding its impact. Not worth the a11y tradeoff."
     },
     {
       "id": "US-564",
@@ -1372,8 +1372,8 @@
         "App behavior unchanged"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "select(*) on kids/foods/recipes/plan_entries/grocery_items at mount."
+      "passes": true,
+      "notes": "select(*) on kids/foods/recipes/plan_entries/grocery_items at mount. RESOLVED — keeping select(*): the load queries are household-scoped and .limit(500); recipes already use an explicit column list (selectRecipesWithFallback). Narrowing to hand-maintained column allowlists is a known bug hazard (a missed column silently breaks a feature on a live app) for marginal payload savings, and the realtime parse helpers would need the same list kept in sync. Risk outweighs the benefit; the real perf wins were framer-motion/images/virtualization."
     },
     {
       "id": "US-567",
