@@ -1310,8 +1310,8 @@
         "Legitimate quiz/calculator flows unaffected"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "anon WITH CHECK(true) inserts with no rate limiting."
+      "passes": true,
+      "notes": "anon WITH CHECK(true) inserts with no rate limiting. DONE (DB-level mitigation): migration 20260727000000_quiz_insert_rate_limit.sql adds a SECURITY DEFINER BEFORE INSERT trigger capping quiz_responses at 30 inserts/session_id/hour (generous — never false-positives a real 1-2 submission; caps per-session floods). Additive/backward-compatible. NOTE: session_id can be rotated, so an edge-layer IP/captcha check remains the recommended stronger layer (product decision on which captcha). Extendable to budget_calculations similarly."
     },
     {
       "id": "US-562",
