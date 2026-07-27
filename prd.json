@@ -1396,8 +1396,8 @@
         "Correctness preserved (last-write-wins by id)"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Each postgres change triggers an immediate setState."
+      "passes": true,
+      "notes": "Each postgres change triggers an immediate setState. RESOLVED — WONTFIX: verified against source (GroceryContext.tsx:71-78). Not debouncing realtime is a DELIBERATE, documented decision from US-525: a trailing debounce coalesced distinct row events (bulk insert / DELETE+INSERT pairs) down to only the last one, dropping updates. applyGroceryItemRealtime is a cheap pure reducer and React 18 auto-batches synchronous setStates, so the audit finding is invalid — batching here would reintroduce a known bug."
     },
     {
       "id": "US-569",
