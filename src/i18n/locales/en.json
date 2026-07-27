@@ -337,5 +337,14 @@
   "mealPlanGenerator": {
     "title": "5-Day Meal Plan Generator",
     "subtitle": "Get a personalized meal plan with recipes and grocery list tailored to your family's needs - including picky eaters!"
+  },
+  "planner": {
+    "titleMobile": "Meal Planner",
+    "title": "Weekly Meal Planner",
+    "subtitle": "Plan meals for your family's week"
+  },
+  "mealPlanResults": {
+    "title": "Your 5-Day Meal Plan is Ready!",
+    "subtitle": "Personalized for your family of {{familySize}}"
   }
 }
