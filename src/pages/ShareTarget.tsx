@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
@@ -24,6 +25,7 @@ interface ShareData {
 }
 
 export default function ShareTarget() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { addGroceryItem } = useGrocery();
@@ -201,9 +203,9 @@ export default function ShareTarget() {
         <div className="flex items-center gap-3">
           <Share2 className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-lg font-semibold">Add to Grocery List</h1>
+            <h1 className="text-lg font-semibold">{t('shareTarget.title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Review items from your shared content
+              {t('shareTarget.subtitle')}
             </p>
           </div>
         </div>

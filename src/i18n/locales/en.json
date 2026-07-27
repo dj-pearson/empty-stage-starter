@@ -296,5 +296,13 @@
   "notFound": {
     "title": "Page not found",
     "text": "The page you're looking for doesn't exist or has been moved."
+  },
+  "budgetResults": {
+    "title": "Your Budget Results",
+    "subtitle": "Here's your personalized grocery budget for a family of {{familySize}}"
+  },
+  "shareTarget": {
+    "title": "Add to Grocery List",
+    "subtitle": "Review items from your shared content"
   }
 }
