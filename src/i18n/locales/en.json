@@ -317,5 +317,13 @@
   "checkoutSuccess": {
     "welcome": "Welcome to {{plan}}!",
     "subtitle": "Your subscription is now active. Let's get started!"
+  },
+  "progress": {
+    "title": "{{name}}'s Progress",
+    "subtitle": "Track growth, celebrate achievements, and review weekly progress"
+  },
+  "blogPost": {
+    "notFoundTitle": "Article Not Found",
+    "notFoundText": "The article you're looking for doesn't exist or has been removed."
   }
 }

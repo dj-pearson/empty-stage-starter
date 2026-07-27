@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProgressDashboard } from '@/components/ProgressDashboard';
@@ -9,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { TrendingUp, Trophy, Calendar } from 'lucide-react';
 
 export default function Progress() {
+  const { t } = useTranslation();
   const { kids, activeKidId } = useKids();
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -39,9 +41,9 @@ export default function Progress() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">{activeKid.name}'s Progress</h1>
+          <h1 className="text-3xl font-bold mb-2">{t('progress.title', { name: activeKid.name })}</h1>
           <p className="text-muted-foreground">
-            Track growth, celebrate achievements, and review weekly progress
+            {t('progress.subtitle')}
           </p>
         </div>
 
