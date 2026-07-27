@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { requireAdmin } from '../_shared/require-admin.ts';
 import {
   buildPromptFromContext,
   generateAndStoreImage,
@@ -32,6 +33,12 @@ export default async (req: Request) => {
       status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
+  // Admin-only: prevents anonymous callers from triggering paid image generation.
+  const gate = await requireAdmin(req);
+  if (!gate.ok) {
+    return json({ error: gate.error ?? 'Unauthorized' }, gate.status);
+  }
 
   try {
     const body = (await req.json()) as GenerateImageBody;

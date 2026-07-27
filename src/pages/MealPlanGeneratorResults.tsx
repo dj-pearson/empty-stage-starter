@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
@@ -32,6 +33,7 @@ interface LocationState {
 }
 
 export default function MealPlanGeneratorResults() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as LocationState;
@@ -46,12 +48,17 @@ export default function MealPlanGeneratorResults() {
       return;
     }
 
-    // Celebration confetti
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
+    // Celebration confetti — suppressed when the user prefers reduced motion (a11y).
+    if (
+      typeof window !== 'undefined' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+    }
 
     // Save to database
     const savePlan = async () => {
@@ -109,10 +116,10 @@ export default function MealPlanGeneratorResults() {
               </div>
             </div>
             <h1 className="text-4xl font-bold text-foreground mb-4">
-              Your 5-Day Meal Plan is Ready!
+              {t('mealPlanResults.title')}
             </h1>
             <p className="text-xl text-muted-foreground">
-              Personalized for your family of {input.familySize}
+              {t('mealPlanResults.subtitle', { familySize: input.familySize })}
             </p>
           </motion.div>
 

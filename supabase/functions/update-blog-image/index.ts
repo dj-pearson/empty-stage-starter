@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { requireAdmin } from "../_shared/require-admin.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +9,15 @@ const corsHeaders = {
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Admin/service only: mutates blog content and fetches arbitrary URLs (SSRF surface).
+  const gate = await requireAdmin(req);
+  if (!gate.ok) {
+    return new Response(JSON.stringify({ error: gate.error ?? 'Unauthorized' }), {
+      status: gate.status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {

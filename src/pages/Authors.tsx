@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { SEOHead } from "@/components/SEOHead";
 import { BreadcrumbSchema } from "@/components/schema";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -102,6 +103,7 @@ const fallbackAuthors: Author[] = [
 ];
 
 export default function Authors() {
+  const { t } = useTranslation();
   const canonicalUrl = "https://tryeatpal.com/authors";
   const [authors, setAuthors] = useState<Author[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -187,7 +189,7 @@ export default function Authors() {
         {/* Page Header */}
         <header className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Our Expert Authors
+            {t('authors.title')}
           </h1>
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
             Meet the team of licensed feeding therapy professionals behind

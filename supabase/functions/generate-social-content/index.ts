@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
+import { requireAdmin } from "../_shared/require-admin.ts";
 import {
   buildPromptFromContext,
   generateAndStoreImage,
@@ -49,6 +50,15 @@ const STANDALONE_TOPICS = [
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Admin-only: prevents anonymous callers from triggering paid LLM/image calls.
+  const gate = await requireAdmin(req);
+  if (!gate.ok) {
+    return new Response(JSON.stringify({ error: gate.error ?? "Unauthorized" }), {
+      status: gate.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {

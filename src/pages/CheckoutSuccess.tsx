@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 export default function CheckoutSuccess() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -104,9 +106,9 @@ export default function CheckoutSuccess() {
           <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-10 h-10 text-green-600 dark:text-green-400" />
           </div>
-          <h1 className="text-3xl font-bold mb-2">Welcome to {planName}!</h1>
+          <h1 className="text-3xl font-bold mb-2">{t('checkoutSuccess.welcome', { plan: planName })}</h1>
           <p className="text-muted-foreground">
-            Your subscription is now active. Let's get started!
+            {t('checkoutSuccess.subtitle')}
           </p>
         </div>
 

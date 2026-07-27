@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
@@ -77,6 +78,7 @@ interface UserContribution {
 // the heavy list subtree can memoize on stable outputs (US-553 AC2).
 
 export default function Grocery() {
+  const { t } = useTranslation();
   const { foods, addFood, updateFood } = useFoods();
   const { kids, activeKidId } = useKids();
   const { planEntries } = usePlan();
@@ -617,9 +619,9 @@ export default function Grocery() {
                 <ShoppingCart className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">Grocery List</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{t('grocery.title')}</h1>
                 <p className="text-sm text-muted-foreground">
-                  {isFamilyMode ? "Household shopping list" : `Shopping for ${activeKid?.name || 'your child'}`}
+                  {isFamilyMode ? t('grocery.subtitleFamily') : t('grocery.subtitleChild', { name: activeKid?.name || 'your child' })}
                 </p>
               </div>
             </div>
@@ -883,7 +885,7 @@ export default function Grocery() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, -1)}
                             disabled={item.quantity <= 1}
                             aria-label="Decrease quantity"
@@ -896,7 +898,7 @@ export default function Grocery() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, 1)}
                             aria-label="Increase quantity"
                           >
@@ -906,7 +908,7 @@ export default function Grocery() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                           onClick={() => setEditingItem(item)}
                           aria-label="Edit item"
                         >
@@ -915,7 +917,7 @@ export default function Grocery() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                           onClick={() => handleDeleteItem(item.id)}
                           aria-label="Delete item"
                         >
@@ -989,7 +991,7 @@ export default function Grocery() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, -1)}
                                 disabled={item.quantity <= 1}
                                 aria-label="Decrease quantity"
@@ -1002,7 +1004,7 @@ export default function Grocery() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, 1)}
                                 aria-label="Increase quantity"
                               >
@@ -1014,7 +1016,7 @@ export default function Grocery() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                               onClick={() => setEditingItem(item)}
                               aria-label="Edit item"
                             >
@@ -1024,7 +1026,7 @@ export default function Grocery() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                               onClick={() => handleDeleteItem(item.id)}
                               aria-label="Delete item"
                             >

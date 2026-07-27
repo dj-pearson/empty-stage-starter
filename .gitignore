@@ -138,6 +138,14 @@ user_profiles_rows.csv
 user_subscriptions_rows.csv
 android-native/app/release/app-release.aab
 
+# Secrets / PII — defense in depth (never commit)
+cleanup-sensitive-data.txt
+*.pem
+*.key
+*.mobileprovision
+*.base64.txt
+*_rows.csv
+
 # TypeScript incremental build cache (tsc -b) — machine-local
 *.tsbuildinfo
 scripts/ralph/.last-branch

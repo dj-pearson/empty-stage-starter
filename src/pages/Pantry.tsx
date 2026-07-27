@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 // CSS animations used instead of framer-motion for list rendering performance
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -96,6 +97,7 @@ interface FoodSuggestion {
 }
 
 export default function Pantry() {
+  const { t } = useTranslation();
   const {
     foods,
     addFood,
@@ -508,12 +510,12 @@ export default function Pantry() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold font-heading">
-                  My Pantry
+                  {t('pantry.title')}
                 </h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {foods.length > 0
                     ? `${foods.length} item${foods.length !== 1 ? "s" : ""} across ${CATEGORY_ORDER.filter((c) => categoryCounts[c] > 0).length} categories`
-                    : "Track and manage your family's food inventory"}
+                    : t('pantry.subtitleEmpty')}
                 </p>
               </div>
 
@@ -1198,11 +1200,10 @@ function EmptyPantryState({
           <Utensils className="h-8 w-8 text-primary" />
         </div>
         <h3 className="text-2xl font-bold font-heading mb-2">
-          Build Your Food Pantry
+          {t('pantry.emptyTitle')}
         </h3>
         <p className="text-muted-foreground max-w-md mx-auto">
-          Start by adding foods your family already loves. This helps create
-          personalized meal plans for all your kids!
+          {t('pantry.emptyText')}
         </p>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ interface BlogPostData {
 }
 
 const BlogPost = () => {
+  const { t } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const [post, setPost] = useState<BlogPostData | null>(null);
   const [relatedPosts, setRelatedPosts] = useState<any[]>([]);
@@ -328,9 +330,9 @@ const BlogPost = () => {
           </div>
         </header>
         <div className="container mx-auto px-4 py-24 text-center">
-          <h1 className="text-4xl font-heading font-bold mb-4 text-primary">Article Not Found</h1>
+          <h1 className="text-4xl font-heading font-bold mb-4 text-primary">{t('blogPost.notFoundTitle')}</h1>
           <p className="text-muted-foreground mb-8">
-            The article you're looking for doesn't exist or has been removed.
+            {t('blogPost.notFoundText')}
           </p>
           <Link to="/blog">
             <Button>Browse All Articles</Button>

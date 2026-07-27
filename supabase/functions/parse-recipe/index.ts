@@ -1,4 +1,5 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { requireUser } from '../_shared/require-admin.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,6 +35,15 @@ Extract all available information. If something is missing, use an empty string 
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Authenticated users only: paid AI call + fetches arbitrary user URLs (SSRF surface).
+  const gate = await requireUser(req);
+  if (!gate.ok) {
+    return new Response(JSON.stringify({ error: gate.error ?? 'Unauthorized' }), {
+      status: gate.status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {

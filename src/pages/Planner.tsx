@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ const SaveMealPlanTemplateDialog = lazy(() => import("@/components/SaveMealPlanT
 const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplateGallery").then(m => ({ default: m.MealPlanTemplateGallery })));
 
 export default function Planner() {
+  const { t } = useTranslation();
   const {
     foods,
     updateFood,
@@ -600,7 +602,7 @@ export default function Planner() {
           {/* Compact mobile header */}
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-xl font-bold text-foreground">
-              Meal Planner
+              {t('planner.titleMobile')}
             </h1>
             {activeKid && (
               <span className="text-sm font-medium text-primary">
@@ -670,13 +672,13 @@ export default function Planner() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold mb-2">
-                Weekly Meal Planner
+                {t('planner.title')}
                 {activeKid && (
                   <span className="text-primary"> - {activeKid.name}</span>
                 )}
               </h1>
               <p className="text-muted-foreground">
-                Plan meals for your family's week
+                {t('planner.subtitle')}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">

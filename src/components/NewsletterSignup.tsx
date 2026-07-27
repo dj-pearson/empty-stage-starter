@@ -52,6 +52,7 @@ export function NewsletterSignup({ className }: NewsletterSignupProps) {
       <form onSubmit={handleSubmit} className="flex gap-2">
         <Input
           type="email"
+          autoComplete="email"
           placeholder="your@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}

@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { Helmet } from 'react-helmet-async';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -38,6 +39,7 @@ function safeInternalRedirect(raw: string | null | undefined): string {
 import { trackSignup } from '@/lib/conversion-tracking';
 
 export default function AuthCallback() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
@@ -255,7 +257,7 @@ export default function AuthCallback() {
             <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mb-4">
               <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
-            <CardTitle>Sign in successful!</CardTitle>
+            <CardTitle>{t('authCallback.success')}</CardTitle>
             <CardDescription>Redirecting you to your dashboard...</CardDescription>
           </CardHeader>
         </Card>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { ArrowLeft, Search, Calendar, Clock, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { logger } from "@/lib/logger";
+import { CardSkeleton } from "@/components/loading";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 import { Footer } from "@/components/Footer";
@@ -54,6 +56,7 @@ const contentPillars = [
 ];
 
 const Blog = () => {
+  const { t } = useTranslation();
   const seoConfig = getPageSEO("blog");
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [filteredPosts, setFilteredPosts] = useState<BlogPost[]>([]);
@@ -173,7 +176,7 @@ const Blog = () => {
       <section className="py-16 px-4 bg-gradient-to-b from-background to-secondary/10">
         <div className="container mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-primary">
-            EatPal Blog - Picky Eater Tips, ARFID Strategies & Family Nutrition
+            {t('blog.title')}
           </h1>
 
           {/* TL;DR for GEO */}
@@ -265,8 +268,16 @@ const Blog = () => {
       {/* Blog Posts */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-6xl" aria-busy={isLoading}>
         {isLoading ? (
-          <div className="text-center py-12" role="status" aria-live="polite">
-            <p className="text-muted-foreground">Loading articles...</p>
+          <div
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+            role="status"
+            aria-live="polite"
+            aria-label="Loading articles"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <CardSkeleton key={i} />
+            ))}
+            <span className="sr-only">Loading articles…</span>
           </div>
         ) : filteredPosts.length === 0 ? (
           <div className="text-center py-12">

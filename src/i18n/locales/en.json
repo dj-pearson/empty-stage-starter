@@ -21,7 +21,14 @@
     "signOut": "Sign Out",
     "email": "Email",
     "password": "Password",
-    "forgotPassword": "Forgot password?"
+    "forgotPassword": "Forgot password?",
+    "checkEmail": "Check Your Email",
+    "welcome": "Welcome",
+    "welcomeDescription": "Sign in to your account or create a new one",
+    "valueProp": "Built on food chaining science for ARFID & picky eating",
+    "freeToStart": "Free to start. No credit card required.",
+    "tabSignUp": "Sign Up",
+    "tabSignIn": "Sign In"
   },
   "onboarding": {
     "welcomeTitle": "Welcome to EatPal",
@@ -244,5 +251,141 @@
         "page": "Page {{page}} of {{total}}"
       }
     }
+  },
+  "foodTracker": {
+    "title": "Food Tracker",
+    "subtitle": "Track food attempts and build confidence over time",
+    "metaDescription": "Track food attempts and build your child's confidence with new foods over time",
+    "manageChildren": "Manage children"
+  },
+  "analytics": {
+    "title": "Food Analytics - {{name}}",
+    "subtitle": "Track meal outcomes and food preferences",
+    "noDataTitle": "No Data Yet",
+    "noDataText": "Start tracking meals by marking them as Ate, Tasted, or Refused in the Planner",
+    "totalTracked": "Total Tracked",
+    "ate": "Ate",
+    "tasted": "Tasted",
+    "refused": "Refused",
+    "successRate": "Success Rate",
+    "outcomesDistribution": "Meal Outcomes Distribution",
+    "topFoods": "Top 10 Foods Performance"
+  },
+  "recipes": {
+    "title": "Recipes & Meal Templates",
+    "subtitleFamily": "Family recipes for all children",
+    "subtitleChild": "Recipes for {{name}}",
+    "emptyTitle": "Create Your Recipe Collection",
+    "emptyText": "Recipes are meal templates that combine multiple foods. They make planning faster and help you create balanced, kid-friendly meals."
+  },
+  "grocery": {
+    "title": "Grocery List",
+    "subtitleFamily": "Household shopping list",
+    "subtitleChild": "Shopping for {{name}}"
+  },
+  "pantry": {
+    "title": "My Pantry",
+    "subtitleEmpty": "Track and manage your family's food inventory",
+    "emptyTitle": "Build Your Food Pantry",
+    "emptyText": "Start by adding foods your family already loves. This helps create personalized meal plans for all your kids!"
+  },
+  "kids": {
+    "title": "My Children",
+    "subtitle": "Manage child profiles and food preferences",
+    "emptyTitle": "Add Your First Child",
+    "emptyText": "Create a profile to get personalized meal plans, track food preferences, and monitor eating progress for your child.",
+    "addChild": "Add Child"
+  },
+  "siblingMealFinder": {
+    "title": "Sibling Meal Finder",
+    "subtitle": "Find one dinner that satisfies every selected kid. We balance hard constraints (allergens, dietary restrictions) against soft ones (dislikes, favorites) and surface swaps or split-plate ideas when no single recipe fits all."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "The page you're looking for doesn't exist or has been moved."
+  },
+  "budgetResults": {
+    "title": "Your Budget Results",
+    "subtitle": "Here's your personalized grocery budget for a family of {{familySize}}"
+  },
+  "shareTarget": {
+    "title": "Add to Grocery List",
+    "subtitle": "Review items from your shared content"
+  },
+  "pricing": {
+    "title": "EatPal Pricing — Plans for Families & Feeding Therapists"
+  },
+  "faq": {
+    "title": "Frequently Asked Questions About EatPal for Picky Eaters"
+  },
+  "contact": {
+    "title": "Contact EatPal Support - Get Help with Picky Eater Meal Planning"
+  },
+  "checkoutSuccess": {
+    "welcome": "Welcome to {{plan}}!",
+    "subtitle": "Your subscription is now active. Let's get started!"
+  },
+  "progress": {
+    "title": "{{name}}'s Progress",
+    "subtitle": "Track growth, celebrate achievements, and review weekly progress"
+  },
+  "blogPost": {
+    "notFoundTitle": "Article Not Found",
+    "notFoundText": "The article you're looking for doesn't exist or has been removed."
+  },
+  "pickyEaterQuiz": {
+    "title": "Picky Eater Food Personality Quiz",
+    "subtitle": "Discover your child's eating personality and get personalized strategies"
+  },
+  "budgetCalculator": {
+    "title": "Grocery Budget Calculator",
+    "subtitle": "Calculate your family's realistic grocery budget based on official USDA food cost data. Get personalized recommendations and money-saving tips."
+  },
+  "mealPlanGenerator": {
+    "title": "5-Day Meal Plan Generator",
+    "subtitle": "Get a personalized meal plan with recipes and grocery list tailored to your family's needs - including picky eaters!"
+  },
+  "planner": {
+    "titleMobile": "Meal Planner",
+    "title": "Weekly Meal Planner",
+    "subtitle": "Plan meals for your family's week"
+  },
+  "mealPlanResults": {
+    "title": "Your 5-Day Meal Plan is Ready!",
+    "subtitle": "Personalized for your family of {{familySize}}"
+  },
+  "aiPlanner": {
+    "title": "AI Meal Planner",
+    "subtitle": "Generate personalized, nutritionally balanced meal plans using AI"
+  },
+  "landing": {
+    "whyFailTitle": "Why Typical Meal Planning Apps Fail for ARFID and Extreme Picky Eating",
+    "howItWorksTitle": "How EatPal Works: Food Chaining Made Practical for Real Families",
+    "builtForTitle": "Built for Feeding Disorders, Not Generic Meal Planning"
+  },
+  "blog": {
+    "title": "EatPal Blog - Picky Eater Tips, ARFID Strategies & Family Nutrition"
+  },
+  "authors": {
+    "title": "Our Expert Authors"
+  },
+  "resetPassword": {
+    "title": "Create New Password",
+    "description": "Enter a strong password for your account"
+  },
+  "accessibility": {
+    "title": "Accessibility Statement"
+  },
+  "privacyPolicy": {
+    "title": "Privacy Policy"
+  },
+  "termsOfService": {
+    "title": "Terms of Service"
+  },
+  "authCallback": {
+    "success": "Sign in successful!"
+  },
+  "oauthCallback": {
+    "processing": "Processing Authorization..."
   }
 }

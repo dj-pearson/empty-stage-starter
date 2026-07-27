@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
@@ -49,6 +50,7 @@ interface LocationState {
 }
 
 export default function BudgetCalculatorResults() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as LocationState;
@@ -66,12 +68,17 @@ export default function BudgetCalculatorResults() {
       return;
     }
 
-    // Celebration confetti
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
+    // Celebration confetti — suppressed when the user prefers reduced motion (a11y).
+    if (
+      typeof window !== 'undefined' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+    }
 
     // Save to database
     const saveCalculation = async () => {
@@ -187,9 +194,9 @@ export default function BudgetCalculatorResults() {
                 <DollarSign className="w-12 h-12 text-primary" />
               </div>
             </div>
-            <h1 className="text-4xl font-bold text-foreground mb-4">Your Budget Results</h1>
+            <h1 className="text-4xl font-bold text-foreground mb-4">{t('budgetResults.title')}</h1>
             <p className="text-xl text-muted-foreground">
-              Here's your personalized grocery budget for a family of {input.familySize}
+              {t('budgetResults.subtitle', { familySize: input.familySize })}
             </p>
           </motion.div>
 

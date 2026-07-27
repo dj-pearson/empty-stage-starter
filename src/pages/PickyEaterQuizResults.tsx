@@ -65,12 +65,17 @@ export default function PickyEaterQuizResults() {
     const quizResults = generateQuizResults(state.answers);
     setResults(quizResults);
 
-    // Celebrate with confetti
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
+    // Celebrate with confetti — suppressed when the user prefers reduced motion (a11y).
+    if (
+      typeof window !== 'undefined' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+    }
 
     // Save to database
     (async () => {

@@ -49,6 +49,14 @@ All colors MUST be HSL.
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Semantic status tokens (audit US-577). Tuned to the app's existing
+       green-500 / amber-500 usage so migrating class utilities is visually
+       neutral while centralizing status color for theming. */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 10%;
+
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 24 95% 53%;
@@ -126,6 +134,12 @@ All colors MUST be HSL.
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
+
+    /* Semantic status tokens — dark mode (audit US-577). */
+    --success: 142 60% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 90% 55%;
+    --warning-foreground: 0 0% 10%;
 
     --border: 217 33% 25%;
     --input: 217 33% 25%;

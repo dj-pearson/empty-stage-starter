@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -107,6 +108,7 @@ function getBudgetMilestoneText(percentage: number): string | null {
 }
 
 export default function BudgetCalculator() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [sessionId] = useState(() => uuidv4());
   const prefersReducedMotion = useReducedMotion();
@@ -265,11 +267,10 @@ export default function BudgetCalculator() {
               </div>
             </div>
             <h1 className="text-4xl font-bold text-foreground mb-4">
-              Grocery Budget Calculator
+              {t('budgetCalculator.title')}
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Calculate your family's realistic grocery budget based on official USDA food cost
-              data. Get personalized recommendations and money-saving tips.
+              {t('budgetCalculator.subtitle')}
             </p>
           </div>
 

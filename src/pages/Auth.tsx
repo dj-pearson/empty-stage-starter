@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { logger } from "@/lib/logger";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -78,6 +79,7 @@ function RequirementIndicator({ met, label }: { met: boolean; label: string }) {
 const CONSENT_TERMS_VERSION = "2026-07-23";
 
 const Auth = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -629,7 +631,7 @@ const Auth = () => {
                         <Mail className="h-8 w-8 text-primary" />
                       </div>
                     </div>
-                    <CardTitle className="text-center">Check Your Email</CardTitle>
+                    <CardTitle className="text-center">{t('auth.checkEmail')}</CardTitle>
                     <CardDescription className="text-center">
                       We sent a 6-digit code to<br />
                       <span className="font-medium text-foreground">{pendingEmail}</span>
@@ -685,24 +687,24 @@ const Auth = () => {
               ) : (
                 <>
               <CardHeader>
-                <CardTitle>Welcome</CardTitle>
+                <CardTitle>{t('auth.welcome')}</CardTitle>
                 <CardDescription>
-                  Sign in to your account or create a new one
+                  {t('auth.welcomeDescription')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
                   <p className="text-sm font-semibold text-primary mb-1">
-                    Built on food chaining science for ARFID & picky eating
+                    {t('auth.valueProp')}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Free to start. No credit card required.
+                    {t('auth.freeToStart')}
                   </p>
                 </div>
               <Tabs defaultValue={defaultTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                  <TabsTrigger value="signin">Sign In</TabsTrigger>
+                  <TabsTrigger value="signup">{t('auth.tabSignUp')}</TabsTrigger>
+                  <TabsTrigger value="signin">{t('auth.tabSignIn')}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="signup">
@@ -713,6 +715,7 @@ const Auth = () => {
                         <Input
                           id="signup-email"
                           type="email"
+                          autoComplete="email"
                           placeholder="you@example.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
@@ -722,22 +725,22 @@ const Auth = () => {
                           aria-describedby={emailValidation.error ? "email-error" : undefined}
                           className={cn(
                             "h-11 pr-10 transition-colors",
-                            emailValidation.isValid === true && "border-green-500 focus-visible:ring-green-500",
-                            emailValidation.isValid === false && "border-red-500 focus-visible:ring-red-500"
+                            emailValidation.isValid === true && "border-success focus-visible:ring-success",
+                            emailValidation.isValid === false && "border-destructive focus-visible:ring-destructive"
                           )}
                         />
                         {emailTouched && email && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             {emailValidation.isValid ? (
-                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              <CheckCircle className="h-4 w-4 text-success" />
                             ) : (
-                              <XCircle className="h-4 w-4 text-red-500" />
+                              <XCircle className="h-4 w-4 text-destructive" />
                             )}
                           </div>
                         )}
                       </div>
                       {emailValidation.error && (
-                        <p id="email-error" className="text-xs text-red-500 flex items-center gap-1">
+                        <p id="email-error" className="text-xs text-destructive flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
                           {emailValidation.error}
                         </p>
@@ -749,6 +752,7 @@ const Auth = () => {
                         <Input
                           id="signup-password"
                           type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
                           value={password}
                           onChange={(e) => {
                             setPassword(e.target.value);
@@ -760,8 +764,8 @@ const Auth = () => {
                           aria-describedby="password-requirements"
                           className={cn(
                             "h-11 pr-10 transition-colors",
-                            passwordTouched && isPasswordValid && "border-green-500 focus-visible:ring-green-500",
-                            passwordTouched && password && !isPasswordValid && "border-amber-500 focus-visible:ring-amber-500"
+                            passwordTouched && isPasswordValid && "border-success focus-visible:ring-success",
+                            passwordTouched && password && !isPasswordValid && "border-warning focus-visible:ring-warning"
                           )}
                         />
                         <Button
@@ -795,6 +799,7 @@ const Auth = () => {
                       <Input
                         id="signup-confirm-password"
                         type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
                         placeholder="Re-enter your password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -802,12 +807,12 @@ const Auth = () => {
                         aria-invalid={confirmPassword.length > 0 && password !== confirmPassword}
                         className={cn(
                           "h-11 transition-colors",
-                          confirmPassword.length > 0 && password === confirmPassword && "border-green-500 focus-visible:ring-green-500",
-                          confirmPassword.length > 0 && password !== confirmPassword && "border-red-500 focus-visible:ring-red-500"
+                          confirmPassword.length > 0 && password === confirmPassword && "border-success focus-visible:ring-success",
+                          confirmPassword.length > 0 && password !== confirmPassword && "border-destructive focus-visible:ring-destructive"
                         )}
                       />
                       {confirmPassword.length > 0 && password !== confirmPassword && (
-                        <p className="text-xs text-red-500 flex items-center gap-1">
+                        <p className="text-xs text-destructive flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" />
                           Passwords do not match
                         </p>

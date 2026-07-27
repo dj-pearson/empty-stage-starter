@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Mail, MessageSquare, Clock, HelpCircle, CheckCircle2, Send } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { captureContactFormLead } from "@/lib/lead-capture";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
@@ -21,6 +22,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 
 const Contact = () => {
+  const { t } = useTranslation();
   const seoConfig = getPageSEO("contact");
   const [formData, setFormData] = useState({
     name: "",
@@ -125,7 +127,7 @@ const Contact = () => {
           </div>
 
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-            Contact EatPal Support - Get Help with Picky Eater Meal Planning
+            {t('contact.title')}
           </h1>
 
           {/* TL;DR for GEO */}
@@ -194,6 +196,7 @@ const Contact = () => {
                     id="email"
                     name="email"
                     type="email"
+                    autoComplete="email"
                     placeholder="you@example.com"
                     value={formData.email}
                     onChange={handleChange}

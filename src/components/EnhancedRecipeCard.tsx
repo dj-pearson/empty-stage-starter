@@ -126,6 +126,8 @@ export const EnhancedRecipeCard = memo(function EnhancedRecipeCard({
             <img
               src={recipe.image_url}
               alt={recipe.name}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover"
             />
             <div className="absolute top-2 right-2 flex gap-2">

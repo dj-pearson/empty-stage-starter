@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { assertISODate } from "@/lib/query-sanitize";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
@@ -71,6 +72,7 @@ interface PlanWithDiscount extends SubscriptionPlan {
 }
 
 export default function Pricing() {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState<PlanWithDiscount[]>([]);
   const [loading, setLoading] = useState(true);
   // Separate from `loading` (which gates the full-page "Loading plans..."
@@ -492,7 +494,7 @@ export default function Pricing() {
 
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            EatPal Pricing — Plans for Families & Feeding Therapists
+            {t('pricing.title')}
           </h1>
 
           {/* TL;DR for GEO */}

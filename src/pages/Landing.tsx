@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -66,6 +67,7 @@ const loadGSAP = async () => {
 };
 
 const Landing = () => {
+  const { t } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -525,7 +527,7 @@ const Landing = () => {
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-                Why Typical Meal Planning Apps Fail for ARFID and Extreme Picky Eating
+                {t('landing.whyFailTitle')}
               </h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
                 If your child eats fewer than 10 foods, standard meal apps weren't built for you
@@ -608,7 +610,7 @@ const Landing = () => {
             <div className="animate-section text-center mb-16">
               <Badge className="mb-4 bg-primary/10 text-primary border-primary px-4 py-1 text-sm">The Solution</Badge>
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-                How EatPal Works: Food Chaining Made Practical for Real Families
+                {t('landing.howItWorksTitle')}
               </h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
                 Three simple steps to go from mealtime stress to steady, evidence-based progress
@@ -664,7 +666,7 @@ const Landing = () => {
           <div className="container mx-auto max-w-6xl relative z-10">
             <div className="animate-section text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-                Built for Feeding Disorders, Not Generic Meal Planning
+                {t('landing.builtForTitle')}
               </h2>
               <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
                 Three pillars that set EatPal apart for families managing ARFID, selective eating, and autism-related feeding challenges
