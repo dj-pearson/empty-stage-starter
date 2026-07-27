@@ -1360,8 +1360,8 @@
         "No layout shift on card image load"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Raw <img> at EnhancedRecipeCard.tsx:126, MealSuggestionCard.tsx:106."
+      "passes": true,
+      "notes": "Raw <img> at EnhancedRecipeCard.tsx:126, MealSuggestionCard.tsx:106. FIXED: added loading=lazy + decoding=async to EnhancedRecipeCard and MealSuggestionCard images. Fixed h-48 container already reserves space so CLS is bounded; off-screen images no longer fetch eagerly."
     },
     {
       "id": "US-566",
@@ -1408,8 +1408,8 @@
         "Remove unreferenced PNGs; ensure manifest/icons point at WebP/AVIF variants"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "WebP variants exist and are used; large PNGs appear legacy."
+      "passes": true,
+      "notes": "WebP variants exist and are used; large PNGs appear legacy. PARTIAL/DONE: removed orphaned public/Icon_1024.png (367K; 0 refs; webp variant 22K exists). Other PNGs kept — verified referenced: icon-512x512.png (app.config.js), android-chrome-*/apple-touch-icon (manifest), Logo-Green/White (index.html JSON-LD + email templates)."
     },
     {
       "id": "US-570",

@@ -106,6 +106,8 @@ export const MealSuggestionCard = memo(function MealSuggestionCard({
           <img
             src={suggestion.recipe_image}
             alt={suggestion.recipe_name}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
           <div className="absolute top-2 right-2 flex gap-2">
