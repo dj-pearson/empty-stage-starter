@@ -1559,8 +1559,8 @@
         "If prod over-assigns admin, remediate role assignment"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "user_profiles_rows.csv shows role=admin on every row. USER/DATA verification."
+      "passes": true,
+      "notes": "user_profiles_rows.csv shows role=admin on every row. USER/DATA verification. RESOLVED (code-verified): the audit CSV showed user_profiles.role=admin, but that column does NOT gate authorization. Verified the source of truth is public.user_roles: has_role() reads user_roles, and every admin RLS policy across the codebase uses EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=auth.uid() AND role=admin). user_roles.role DEFAULTs to user and handle_new_user() (signup trigger) never inserts admin — only the now-gated update-user edge fn (US-554) grants it. Migration 20260512000000_restore_handle_new_user already demotes every bogus user_profiles.role=admin row to office_staff (its own comment: real admin gating lives in user_roles; this is defense in depth). So there is no code path granting admin-for-all; the CSV is a stale export of the deprecated cosmetic column. USER may optionally spot-check prod public.user_roles, but no code remediation is needed."
     },
     {
       "id": "US-582",
