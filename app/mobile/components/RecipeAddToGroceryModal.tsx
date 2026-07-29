@@ -12,8 +12,41 @@ import {
 } from 'react-native';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import type { FoodCategory } from '@/types';
+import { convert } from '@/lib/unitNormalize';
+import {
+  ingredientMatchKey,
+  planGroceryMerge,
+  type ExistingGroceryItem,
+  type GroceryAddInput,
+} from '@/lib/groceryMerge';
 import { colors, spacing, fontSize, borderRadius } from '../lib/theme';
 import { suggestCategory, CATEGORIES } from '../lib/unit-suggestions';
+
+/**
+ * US-593: how much of `required` still needs buying given what's in the pantry.
+ *
+ * The old inline maths was `Math.max(1, qty * servings - inStockQty)`, which
+ * had two defects: it floored every amount at 1 (so a needed 0.5 tsp was
+ * inserted as 1 tsp) and it subtracted the pantry quantity regardless of unit
+ * (2 cup − 1 bag = 1). We now only subtract when the units genuinely convert,
+ * and fail safe toward buying the full amount when they don't.
+ */
+function requiredAfterStock(
+  required: number,
+  requiredUnit: string,
+  stocked: number,
+  stockedUnit: string
+): number {
+  if (!(stocked > 0)) return required;
+  const stockedInRequiredUnit = convert(
+    stocked,
+    stockedUnit || requiredUnit,
+    requiredUnit || stockedUnit
+  );
+  // Incomparable units (e.g. recipe in cups, pantry in bags) — buy it all.
+  if (stockedInRequiredUnit == null) return required;
+  return Math.max(0, required - stockedInRequiredUnit);
+}
 
 interface RecipeForGrocery {
   id: string;
@@ -45,6 +78,8 @@ type IngredientLine = {
   unit: string;
   category: FoodCategory;
   inStockQty: number;
+  /** Unit the pantry stock is stored in — needed to subtract it correctly. */
+  inStockUnit: string;
   alreadyInList: boolean;
   isOptional: boolean;
   sourceFoodId?: string;
@@ -61,6 +96,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [lines, setLines] = useState<IngredientLine[]>([]);
+  const [existing, setExisting] = useState<ExistingGroceryItem[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [servings, setServings] = useState(1);
   const [customName, setCustomName] = useState('');
@@ -93,21 +129,27 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
             : Promise.resolve({ data: [] as FoodRow[], error: null }),
           supabase
             .from('grocery_items')
-            .select('name, checked')
+            .select('id, name, quantity, unit, checked')
             .eq('user_id', user.id)
             .eq('checked', false),
         ]);
 
         if (cancelled) return;
 
+        // US-593: these errors used to be swallowed by `?? []`, so an RLS or
+        // schema failure looked identical to "this recipe has no ingredients".
+        const loadError = ingredientsRes.error ?? foodsRes.error ?? groceryRes.error;
+        if (loadError) throw loadError;
+
         // Live `recipe_ingredients` columns differ from the generated types
         // (see RecipeBuilderSheet header). Cast at this boundary.
         const ingredients = (ingredientsRes.data ?? []) as unknown as RecipeIngredientRow[];
         const foods = (foodsRes.data ?? []) as FoodRow[];
         const foodById = new Map(foods.map((f) => [f.id, f]));
-        const groceryNames = new Set(
-          (groceryRes.data ?? []).map((g: { name: string }) => g.name.toLowerCase())
-        );
+        const existingGrocery = (groceryRes.data ?? []) as ExistingGroceryItem[];
+        // US-593: match on the canonical ingredient key, not the raw lowercased
+        // name, so "Ground Beef 80/20" is recognised as "ground beef".
+        const groceryKeys = new Set(existingGrocery.map((g) => ingredientMatchKey(g.name)));
 
         const structured: IngredientLine[] = ingredients.map((ing) => {
           const linked = ing.food_id ? foodById.get(ing.food_id) : undefined;
@@ -121,7 +163,8 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
             unit: ing.unit ?? linked?.unit ?? '',
             category,
             inStockQty: linked?.quantity ?? 0,
-            alreadyInList: groceryNames.has(name.toLowerCase()),
+            inStockUnit: linked?.unit ?? '',
+            alreadyInList: groceryKeys.has(ingredientMatchKey(name)),
             isOptional: !!ing.is_optional,
             sourceFoodId: ing.food_id ?? undefined,
           };
@@ -141,7 +184,8 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
             unit: f.unit ?? '',
             category,
             inStockQty: f.quantity ?? 0,
-            alreadyInList: groceryNames.has(f.name.toLowerCase()),
+            inStockUnit: f.unit ?? '',
+            alreadyInList: groceryKeys.has(ingredientMatchKey(f.name)),
             isOptional: false,
             sourceFoodId: f.id,
           };
@@ -149,9 +193,15 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
 
         const merged = [...structured, ...foodOnlyLines];
         setLines(merged);
+        setExisting(existingGrocery);
         const defaultChecked = new Set(
           merged
-            .filter((l) => l.inStockQty < l.quantity && !l.alreadyInList && !l.isOptional)
+            .filter(
+              (l) =>
+                requiredAfterStock(l.quantity, l.unit, l.inStockQty, l.inStockUnit) > 0 &&
+                !l.alreadyInList &&
+                !l.isOptional
+            )
             .map((l) => l.key)
         );
         setChecked(defaultChecked);
@@ -161,6 +211,12 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
         setCustomUnit('');
       } catch (err) {
         console.error('Failed loading recipe ingredients:', err);
+        if (!cancelled) {
+          Alert.alert(
+            "Couldn't load ingredients",
+            'Check your connection and try again.'
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -194,6 +250,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
       unit: customUnit.trim(),
       category: suggestCategory(name) ?? 'snack',
       inStockQty: 0,
+      inStockUnit: '',
       alreadyInList: false,
       isOptional: false,
     };
@@ -212,8 +269,14 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
     };
     lines.forEach((l) => {
       const scaled = l.quantity * servings;
-      if (l.inStockQty <= 0) buckets.need.push(l);
-      else if (l.inStockQty < scaled) buckets.low.push(l);
+      if (l.inStockQty <= 0) {
+        buckets.need.push(l);
+        return;
+      }
+      // US-593: compare stock against the requirement unit-aware instead of
+      // comparing bare numbers across unrelated units.
+      const stillNeeded = requiredAfterStock(scaled, l.unit, l.inStockQty, l.inStockUnit);
+      if (stillNeeded > 0) buckets.low.push(l);
       else buckets.stocked.push(l);
     });
     return buckets;
@@ -231,23 +294,56 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const inserts = toAdd.map((l) => ({
-        user_id: user.id,
-        name: l.name,
-        quantity:
-          Math.max(1, Math.round((l.quantity * servings - l.inStockQty) * 100) / 100) ||
-          l.quantity * servings,
-        unit: l.unit ?? '',
-        category: l.category,
-        checked: false,
-        added_via: 'recipe',
-        source_recipe_id: recipe.id,
-      }));
+      // US-593: build the requested amounts with no quantity floor and with
+      // unit-aware pantry subtraction, then let planGroceryMerge stack them
+      // onto existing unchecked rows instead of inserting duplicates.
+      const requested: GroceryAddInput[] = toAdd
+        .map((l) => ({
+          name: l.name,
+          quantity:
+            Math.round(
+              requiredAfterStock(l.quantity * servings, l.unit, l.inStockQty, l.inStockUnit) * 100
+            ) / 100,
+          unit: l.unit ?? '',
+          category: l.category,
+          added_via: 'recipe',
+          source_recipe_id: recipe.id,
+        }))
+        .filter((i) => i.quantity > 0);
 
-      const { error } = await supabase.from('grocery_items').insert(inserts);
-      if (error) throw error;
+      if (requested.length === 0) {
+        Alert.alert('Nothing to add', 'Your pantry already covers these ingredients.');
+        return;
+      }
 
-      onAdded?.(toAdd.length);
+      const plan = planGroceryMerge(requested, existing);
+
+      if (plan.inserts.length > 0) {
+        const { error } = await supabase.from('grocery_items').insert(
+          plan.inserts.map((i) => ({
+            user_id: user.id,
+            name: i.name,
+            quantity: i.quantity,
+            unit: i.unit ?? '',
+            category: i.category,
+            checked: false,
+            added_via: i.added_via,
+            source_recipe_id: i.source_recipe_id,
+          }))
+        );
+        if (error) throw error;
+      }
+
+      for (const update of plan.updates) {
+        const { error } = await supabase
+          .from('grocery_items')
+          .update({ quantity: update.quantity, unit: update.unit })
+          .eq('id', update.id)
+          .eq('user_id', user.id);
+        if (error) throw error;
+      }
+
+      onAdded?.(plan.inserts.length + plan.updates.length);
       onClose();
     } catch (err) {
       console.error('Add to grocery failed:', err);
@@ -314,12 +410,14 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
           </View>
 
           <View style={styles.servingsRow}>
-            <Text style={styles.servingsLabel}>Servings</Text>
+            {/* US-593: this is a batch multiplier over the recipe's own yield,
+                not an absolute serving count — label it honestly. */}
+            <Text style={styles.servingsLabel}>Batches</Text>
             <View style={styles.servingsCtrl}>
               <TouchableOpacity
                 style={styles.servingsBtn}
                 onPress={() => setServings((s) => Math.max(1, s - 1))}
-                accessibilityLabel="Decrease servings"
+                accessibilityLabel="Decrease batches"
               >
                 <Text style={styles.servingsBtnText}>−</Text>
               </TouchableOpacity>
@@ -327,7 +425,7 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
               <TouchableOpacity
                 style={styles.servingsBtn}
                 onPress={() => setServings((s) => Math.min(20, s + 1))}
-                accessibilityLabel="Increase servings"
+                accessibilityLabel="Increase batches"
               >
                 <Text style={styles.servingsBtnText}>+</Text>
               </TouchableOpacity>

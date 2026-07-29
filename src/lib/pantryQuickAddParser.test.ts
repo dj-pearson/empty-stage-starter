@@ -7,7 +7,7 @@ describe('parsePantryQuickAddLine', () => {
       const r = parsePantryQuickAddLine('2 lb chicken breast')!;
       expect(r.name).toBe('chicken breast');
       expect(r.quantity).toBe(2);
-      expect(r.unit).toBe('lbs');
+      expect(r.unit).toBe('lb');
       expect(r.confidence).toBe(1.0);
     });
 
@@ -22,7 +22,7 @@ describe('parsePantryQuickAddLine', () => {
       const r = parsePantryQuickAddLine('1.5 lb ground beef')!;
       expect(r.name).toBe('ground beef');
       expect(r.quantity).toBe(1.5);
-      expect(r.unit).toBe('lbs');
+      expect(r.unit).toBe('lb');
     });
 
     it('"½ gallon milk"', () => {
@@ -36,13 +36,13 @@ describe('parsePantryQuickAddLine', () => {
       const r = parsePantryQuickAddLine('2 cups flour')!;
       expect(r.name).toBe('flour');
       expect(r.quantity).toBe(2);
-      expect(r.unit).toBe('cups');
+      expect(r.unit).toBe('cup');
     });
 
     it('"1 jar peanut butter"', () => {
       const r = parsePantryQuickAddLine('1 jar peanut butter')!;
       expect(r.name).toBe('peanut butter');
-      expect(r.unit).toBe('jars');
+      expect(r.unit).toBe('jar');
     });
 
     it('"3x apples"', () => {

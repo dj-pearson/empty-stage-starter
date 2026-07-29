@@ -51,6 +51,8 @@ enum UnitConverter {
         "pt": UnitDef(dimension: .volume, toBase: 473.176473),
         "qt": UnitDef(dimension: .volume, toBase: 946.352946),
         "gal": UnitDef(dimension: .volume, toBase: 3785.411784),
+        // US-583: the mobile unit picker offers "½ gal" for milk/cream.
+        "half gal": UnitDef(dimension: .volume, toBase: 1892.705892),
         // Mass (base: g)
         "g": UnitDef(dimension: .mass, toBase: 1),
         "kg": UnitDef(dimension: .mass, toBase: 1000),
@@ -84,14 +86,122 @@ enum UnitConverter {
         "piece": "count", "pieces": "count", "pcs": "count", "pc": "count",
         "unit": "count", "units": "count", "item": "count", "items": "count",
         "dozens": "dozen", "doz": "dozen",
+        // US-583: spellings the parsers emit that had no alias here, so a
+        // perfectly ordinary "2 tbsps" or "½ gal" resolved to nil.
+        "tbsps": "tbsp", "tsps": "tsp", "cs": "cup",
+        "½ gal": "half gal", "½ gallon": "half gal", "half gallon": "half gal",
     ]
+
+    /// Container ("package") units. These carry no fixed real-world size, so
+    /// they never convert into another unit — but two quantities of the SAME
+    /// container unit must still add up ("2 cans" + "1 can" = "3 can").
+    ///
+    /// US-583: before this, `canonical("cans")` returned nil, so the grocery
+    /// generator could not even sum a unit with itself and fell back to adding
+    /// bare numbers under whichever label it happened to see first.
+    private static let containerCanonicals: Set<String> = [
+        "pack", "bag", "jar", "bottle", "can", "box", "loaf", "bunch", "head",
+        "roll", "sleeve", "tube", "tray", "carton", "sachet", "stick",
+        "container", "case", "block", "fillet", "slice", "clove", "stalk",
+        "sprig", "pinch", "dash", "drop", "serving",
+    ]
+
+    private static let containerAliases: [String: String] = [
+        "packs": "pack", "package": "pack", "packages": "pack", "pkg": "pack", "pkgs": "pack",
+        "bags": "bag", "jars": "jar", "bottles": "bottle", "btl": "bottle", "btls": "bottle",
+        "cans": "can", "boxes": "box", "loaves": "loaf", "bunches": "bunch", "heads": "head",
+        "rolls": "roll", "sleeves": "sleeve", "tubes": "tube", "trays": "tray",
+        "cartons": "carton", "sachets": "sachet", "sticks": "stick",
+        "containers": "container", "tub": "container", "tubs": "container",
+        "cases": "case", "blocks": "block",
+        "fillets": "fillet", "filet": "fillet", "filets": "fillet",
+        "slices": "slice", "cloves": "clove", "stalks": "stalk", "sprigs": "sprig",
+        "pinches": "pinch", "dashes": "dash", "drops": "drop", "servings": "serving",
+    ]
+
+    /// The canonical container noun for `raw`, or nil when `raw` isn't a
+    /// container unit. Used to decide whether two non-convertible units are at
+    /// least the *same* unit and can therefore be added.
+    static func canonicalContainer(_ raw: String) -> String? {
+        let key = normalizedKey(raw)
+        guard !key.isEmpty else { return nil }
+        if containerCanonicals.contains(key) { return key }
+        return containerAliases[key]
+    }
+
+    /// Lowercase, trim, drop trailing periods ("tbsp." → "tbsp") and collapse
+    /// internal whitespace so lookups don't miss on formatting alone.
+    private static func normalizedKey(_ raw: String) -> String {
+        raw.lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ".", with: "")
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+    }
+
+    /// Add up `parts` (quantity, unit) into a single total.
+    ///
+    /// US-586: returns nil when the parts are genuinely incomparable (2 cup vs
+    /// 1 bag) so the caller can keep them as separate grocery lines rather than
+    /// fabricating a sum. When they ARE comparable the total is expressed in
+    /// the most frequently occurring unit, so "2 cup + 1 gal milk" reads back
+    /// as gallons rather than as the meaningless "3 cup".
+    static func combine(_ parts: [(quantity: Double, unit: String)]) -> (quantity: Double, unit: String)? {
+        let usable = parts.filter { $0.quantity.isFinite }
+        guard let first = usable.first else { return nil }
+        if usable.count == 1 { return (first.quantity, first.unit) }
+
+        let target = dominantUnit(of: usable)
+
+        // Measured units: convert everything into the target unit.
+        if canonical(target) != nil {
+            var total: Double = 0
+            for part in usable {
+                guard let converted = convert(part.quantity, from: part.unit, to: target) else {
+                    return nil
+                }
+                total += converted
+            }
+            return (total, target)
+        }
+
+        // Container units: only summable when every part is the same container.
+        if let targetContainer = canonicalContainer(target) {
+            for part in usable where canonicalContainer(part.unit) != targetContainer {
+                return nil
+            }
+            return (usable.reduce(0) { $0 + $1.quantity }, targetContainer)
+        }
+
+        // Unit-less / unrecognised: sum only when every label agrees.
+        let labels = Set(usable.map { normalizedKey($0.unit) })
+        guard labels.count == 1 else { return nil }
+        return (usable.reduce(0) { $0 + $1.quantity }, target)
+    }
+
+    /// Most frequently occurring unit label, preferring a real unit over an
+    /// empty one on ties so a labelled quantity wins over a bare number.
+    private static func dominantUnit(of parts: [(quantity: Double, unit: String)]) -> String {
+        var counts: [String: Int] = [:]
+        for part in parts {
+            counts[part.unit, default: 0] += 1
+        }
+        var best = parts[0].unit
+        var bestCount = -1
+        for part in parts {
+            let count = counts[part.unit] ?? 0
+            if count > bestCount || (count == bestCount && best.isEmpty && !part.unit.isEmpty) {
+                best = part.unit
+                bestCount = count
+            }
+        }
+        return best
+    }
 
     /// Normalizes a raw unit string to a canonical key, or nil if unknown /
     /// non-convertible (container units, empty strings).
     static func canonical(_ raw: String) -> String? {
-        let key = raw
-            .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = normalizedKey(raw)
         guard !key.isEmpty else { return nil }
         if table[key] != nil { return key }
         if let aliased = aliases[key] { return aliased }

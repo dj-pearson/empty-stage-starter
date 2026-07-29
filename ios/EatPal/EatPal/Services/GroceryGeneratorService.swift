@@ -85,20 +85,54 @@ enum GroceryGeneratorService {
         appState: AppState,
         skipPantryStocked: Bool
     ) -> Result {
+        // US-587: `Dictionary(uniqueKeysWithValues:)` TRAPS on a duplicate key,
+        // and nothing in the app prevents two grocery items sharing a
+        // lowercased name — so generating a list could hard-crash. Keep the
+        // first match instead.
         let existingByName = Dictionary(
-            uniqueKeysWithValues: appState.groceryItems.map {
-                ($0.name.lowercased(), $0.id)
-            }
+            appState.groceryItems.map { ($0.name.lowercased(), $0.id) },
+            uniquingKeysWith: { first, _ in first }
         )
-        let pantryNames = skipPantryStocked
-            ? Set(appState.foods.map { $0.name.lowercased() })
-            : Set<String>()
+        // US-588: index pantry stock by name so the skip decision can compare
+        // QUANTITIES rather than merely noticing that the name exists.
+        let pantryByName: [String: Food] = skipPantryStocked
+            ? Dictionary(
+                appState.foods.map { ($0.name.lowercased(), $0) },
+                uniquingKeysWith: { first, _ in first }
+              )
+            : [:]
 
         var items: [GroceryItem] = []
         var sources: [GroceryItemSource] = []
 
-        for (nameKey, candidate) in candidates {
-            if skipPantryStocked && pantryNames.contains(nameKey) { continue }
+        // US-594: dictionaries have no stable order, so iterating `candidates`
+        // directly made two runs over the same plan emit different orders.
+        let orderedCandidates = candidates
+            .sorted { lhs, rhs in
+                if lhs.value.category != rhs.value.category {
+                    return lhs.value.category < rhs.value.category
+                }
+                return lhs.value.displayName.localizedCaseInsensitiveCompare(rhs.value.displayName) == .orderedAscending
+            }
+
+        for (nameKey, candidate) in orderedCandidates {
+            var candidate = candidate
+
+            // US-588: only skip when pantry stock genuinely covers the
+            // requirement. A single egg in the pantry used to suppress a recipe
+            // needing a dozen. When the units don't convert we keep the item —
+            // failing safe toward buying rather than silently under-buying.
+            if skipPantryStocked, let stocked = pantryByName[nameKey] {
+                let stockedQty = stocked.quantity ?? 0
+                let stockedUnit = stocked.unit ?? ""
+                if let stockedInRecipeUnit = UnitConverter.convert(
+                    stockedQty, from: stockedUnit, to: candidate.unit
+                ) ?? sameUnitQuantity(stockedQty, stockedUnit, candidate.unit) {
+                    let shortfall = candidate.totalQuantity - stockedInRecipeUnit
+                    if shortfall <= 0 { continue }
+                    candidate.totalQuantity = shortfall
+                }
+            }
 
             let groceryItemId: String
             if let existingId = existingByName[nameKey] {
@@ -132,10 +166,11 @@ enum GroceryGeneratorService {
             }
         }
 
-        return Result(
-            items: items.sorted { $0.category < $1.category },
-            sources: sources
-        )
+        // US-594: `items` is already in (category, name) order from
+        // `orderedCandidates`. Sorting on `category` alone here would reshuffle
+        // same-category items non-deterministically, because Swift's sort is
+        // not stable — so sort on the full key or not at all.
+        return Result(items: items, sources: sources)
     }
 
     /// Walk a single recipe (no plan-entry context) into the candidates map,
@@ -262,6 +297,42 @@ enum GroceryGeneratorService {
         var aisleHint: String?
         var aisle: GroceryAisle
         var contributions: [Contribution]
+        /// US-586: every (qty, unit) pair folded into this candidate, kept so
+        /// the total can be recomputed unit-aware instead of accumulating bare
+        /// numbers under whichever unit happened to arrive first.
+        var measured: [(quantity: Double, unit: String)] = []
+    }
+
+    /// Quantity of `qty`/`fromUnit` expressed in `toUnit` when the two are the
+    /// *same* unit even though neither converts (container units like can/bag,
+    /// or two blank units). Returns nil when they genuinely differ.
+    private static func sameUnitQuantity(_ qty: Double, _ fromUnit: String, _ toUnit: String) -> Double? {
+        if let a = UnitConverter.canonicalContainer(fromUnit),
+           let b = UnitConverter.canonicalContainer(toUnit) {
+            return a == b ? qty : nil
+        }
+        let a = fromUnit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let b = toUnit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return a == b ? qty : nil
+    }
+
+    /// Fold `measured` into a single (quantity, unit) pair, preferring a
+    /// unit-aware total and falling back to the raw sum only when the parts are
+    /// genuinely incomparable (US-586).
+    private static func resolveTotal(
+        _ measured: [(quantity: Double, unit: String)],
+        fallbackQuantity: Double,
+        fallbackUnit: String
+    ) -> (quantity: Double, unit: String) {
+        guard !measured.isEmpty else { return (fallbackQuantity, fallbackUnit) }
+        if let combined = UnitConverter.combine(measured) {
+            return (round2(combined.quantity), combined.unit)
+        }
+        return (round2(fallbackQuantity), fallbackUnit)
+    }
+
+    private static func round2(_ value: Double) -> Double {
+        (value * 100).rounded() / 100
     }
 
     private struct Contribution {
@@ -383,8 +454,16 @@ enum GroceryGeneratorService {
             contributions: []
         )
         let qty = resolvedQty ?? 1
-        existing.totalQuantity += qty
-        if existing.unit.isEmpty, let unit = resolvedUnit { existing.unit = unit }
+        // US-586: record the pair, then recompute the total unit-aware. The old
+        // `totalQuantity += qty` added 2 cup and 1 gal into "3 cup".
+        existing.measured.append((quantity: qty, unit: resolvedUnit ?? ""))
+        let resolved = resolveTotal(
+            existing.measured,
+            fallbackQuantity: existing.totalQuantity + qty,
+            fallbackUnit: existing.unit.isEmpty ? (resolvedUnit ?? "") : existing.unit
+        )
+        existing.totalQuantity = resolved.quantity
+        existing.unit = resolved.unit
         existing.contributions.append(Contribution(
             recipeId: recipe.id,
             planEntryId: entry?.id,
@@ -415,6 +494,7 @@ enum GroceryGeneratorService {
             aisle: aisle,
             contributions: []
         )
+        existing.measured.append((quantity: 1, unit: existing.unit))
         existing.totalQuantity += 1
         existing.contributions.append(Contribution(
             recipeId: recipe?.id,
@@ -449,7 +529,15 @@ enum GroceryGeneratorService {
             aisle: aisle,
             contributions: []
         )
-        existing.totalQuantity += parsed.quantity ?? 1
+        let legacyQty = parsed.quantity ?? 1
+        existing.measured.append((quantity: legacyQty, unit: parsed.unit ?? ""))
+        let resolvedLegacy = resolveTotal(
+            existing.measured,
+            fallbackQuantity: existing.totalQuantity + legacyQty,
+            fallbackUnit: existing.unit.isEmpty ? (parsed.unit ?? "") : existing.unit
+        )
+        existing.totalQuantity = resolvedLegacy.quantity
+        existing.unit = resolvedLegacy.unit
         existing.contributions.append(Contribution(
             recipeId: recipe.id,
             planEntryId: entry?.id,

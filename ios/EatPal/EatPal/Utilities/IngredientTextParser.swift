@@ -282,13 +282,20 @@ enum IngredientTextParser {
     /// start of the name so the grocery list shows the noun, not the
     /// preparation. e.g. "whole red bell pepper" → "red bell pepper".
     private static let leadingFillers: Set<String> = [
+        // US-590: connectives left the noun buried — "1 head of lettuce"
+        // parsed to the name "of lettuce".
+        "of", "the",
         "whole", "fresh", "freshly", "ripe", "raw", "cooked",
-        "large", "small", "medium", "extra", "x-large", "xl",
+        "large", "small", "medium", "extra", "x-large", "xl", "jumbo",
         "organic", "free-range", "free range",
         "boneless", "skinless", "lean",
         "frozen", "thawed",
         "chopped", "diced", "minced", "sliced", "shredded", "grated",
-        "crushed", "ground", "peeled", "halved", "quartered",
+        // NOTE: "ground" is deliberately NOT a filler — stripping it turns
+        // "ground beef" into "beef" and "ground coffee" into "coffee". The word
+        // is load-bearing in a grocery name far more often than it is noise.
+        // Kept in sync with LEADING_FILLERS in src/lib/parse-grocery-text.ts.
+        "crushed", "peeled", "halved", "quartered",
         "softened", "melted", "cubed", "julienned"
     ]
 

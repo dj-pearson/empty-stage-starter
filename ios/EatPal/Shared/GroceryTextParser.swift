@@ -43,6 +43,10 @@ public enum GroceryTextParser {
             "tilapia", "cod", "crab", "lobster", "scallop", "clam", "mussel"
         ]),
         ("dairy", [
+            // US-591: closed compounds need their own entry, because
+            // word-boundary matching correctly refuses to see "milk" inside
+            // "buttermilk" (which is what stops "ham" matching "graham").
+            "buttermilk",
             "milk", "cheese", "yogurt", "butter", "cream", "sour cream", "cottage cheese",
             "mozzarella", "cheddar", "parmesan", "ricotta", "cream cheese",
             "half and half", "ice cream", "gelato", "kefir", "ghee"
@@ -68,35 +72,52 @@ public enum GroceryTextParser {
         ]),
         ("snack", [
             "cookie", "candy", "chocolate", "gummy", "granola bar", "pudding",
-            "trail mix", "nut", "almond", "peanut butter", "jelly", "jam", "honey",
+            "trail mix", "nut", "almond", "peanut butter", "almond butter",
+            "jelly", "jam", "honey",
             "syrup", "ketchup", "mustard", "mayo", "ranch", "salsa", "hummus",
-            "dressing", "sauce", "juice", "soda", "coffee", "tea", "kombucha"
+            "dressing", "sauce", "juice", "soda", "coffee", "tea", "kombucha",
+            // US-591: seasonings must beat the bare "pepper" vegetable rule so
+            // "salt and pepper to taste" isn't filed as produce.
+            "salt and pepper", "black pepper", "ground pepper", "peppercorn",
+            "salt", "sugar", "spice", "seasoning", "oil", "vinegar", "soy sauce"
         ])
     ]
 
+    /// US-583: canonical form is the SINGULAR noun, matching
+    /// `IngredientTextParser.unitTokens`, `UnitInference` and
+    /// `src/lib/parse-grocery-text.ts`. This map used to emit plurals ("lbs",
+    /// "cans") while the pantry stored singulars, so `UnitConverter` treated
+    /// two quantities of the same unit as incomparable and grocery amounts
+    /// never stacked.
     private static let unitMap: [String: String] = [
-        "lb": "lbs", "lbs": "lbs", "pound": "lbs", "pounds": "lbs",
+        "lb": "lb", "lbs": "lb", "pound": "lb", "pounds": "lb",
         "oz": "oz", "ounce": "oz", "ounces": "oz",
         "g": "g", "gram": "g", "grams": "g",
         "kg": "kg", "kilo": "kg", "kilos": "kg", "kilogram": "kg", "kilograms": "kg",
         "gal": "gal", "gallon": "gal", "gallons": "gal",
         "qt": "qt", "quart": "qt", "quarts": "qt",
         "pt": "pt", "pint": "pt", "pints": "pt",
-        "cup": "cups", "cups": "cups",
+        "cup": "cup", "cups": "cup",
         "tbsp": "tbsp", "tablespoon": "tbsp", "tablespoons": "tbsp",
         "tsp": "tsp", "teaspoon": "tsp", "teaspoons": "tsp",
-        "l": "L", "liter": "L", "liters": "L",
+        "l": "l", "liter": "l", "liters": "l",
         "ml": "ml", "milliliter": "ml", "milliliters": "ml",
         "bunch": "bunch", "bunches": "bunch",
-        "bag": "bags", "bags": "bags",
-        "box": "boxes", "boxes": "boxes",
-        "can": "cans", "cans": "cans",
-        "jar": "jars", "jars": "jars",
-        "bottle": "bottles", "bottles": "bottles",
-        "pack": "packs", "packs": "packs", "package": "packs", "packages": "packs",
+        "bag": "bag", "bags": "bag",
+        "box": "box", "boxes": "box",
+        "can": "can", "cans": "can",
+        "jar": "jar", "jars": "jar",
+        "bottle": "bottle", "bottles": "bottle",
+        "pack": "pack", "packs": "pack", "package": "pack", "packages": "pack",
         "dozen": "dozen",
-        "loaf": "loaves", "loaves": "loaves",
-        "stick": "sticks", "sticks": "sticks"
+        "loaf": "loaf", "loaves": "loaf",
+        "stick": "stick", "sticks": "stick",
+        "clove": "clove", "cloves": "clove",
+        "slice": "slice", "slices": "slice",
+        "head": "head", "heads": "head",
+        "container": "container", "containers": "container",
+        "carton": "carton", "cartons": "carton",
+        "ct": "count", "count": "count", "piece": "count", "pieces": "count"
     ]
 
     /// Word-form numbers commonly produced by SFSpeechRecognizer.
@@ -106,7 +127,22 @@ public enum GroceryTextParser {
         "eleven": 11, "twelve": 12, "half": 0.5, "quarter": 0.25
     ]
 
-    private static let sentinelTokens: Set<String> = ["of", "and", "also", "plus", "some"]
+    /// Filler dropped from the front of a name so the grocery list shows the
+    /// noun rather than the preparation or a connective.
+    ///
+    /// US-590/592: articles ("a", "the") and size/prep adjectives used to
+    /// survive, so "half a cup of milk" produced the name "A Cup Of Milk" and
+    /// "3 large eggs" produced "Large Eggs". Note that "ground" is deliberately
+    /// absent — see the matching note in `IngredientTextParser.leadingFillers`.
+    private static let sentinelTokens: Set<String> = [
+        "of", "and", "also", "plus", "some", "a", "an", "the",
+        "whole", "fresh", "freshly", "ripe", "raw", "cooked",
+        "large", "small", "medium", "extra", "jumbo",
+        "organic", "boneless", "skinless", "lean", "frozen", "thawed",
+        "chopped", "diced", "minced", "sliced", "shredded", "grated",
+        "crushed", "peeled", "halved", "quartered",
+        "softened", "melted", "cubed", "julienned"
+    ]
 
     // MARK: - Public API
 
@@ -116,8 +152,15 @@ public enum GroceryTextParser {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        // Split on common separators. Prefer newlines > commas > " and " / " also ".
-        let separators: CharacterSet = CharacterSet(charactersIn: "\n,;")
+        // US-592: comma splitting used to be unconditional, so "2 cloves
+        // garlic, minced" produced a phantom grocery item called "Minced" (and
+        // "1 onion, diced" one called "Diced"). Match the TS parser's guard:
+        // only comma-split a single-line list that has 2+ commas.
+        let newlineCount = trimmed.filter(\.isNewline).count
+        let commaCount = trimmed.filter { $0 == "," }.count
+        let separators: CharacterSet = (commaCount >= 2 && newlineCount == 0)
+            ? CharacterSet(charactersIn: "\n,;")
+            : CharacterSet(charactersIn: "\n;")
         var phrases = trimmed.components(separatedBy: separators)
 
         // If we didn't split at all (single utterance), try word-level conjunctions.
@@ -134,15 +177,31 @@ public enum GroceryTextParser {
             }
         }
 
+        // US-589: repeated names are SUMMED, not dropped. The old `seenNames`
+        // guard silently discarded the second mention, so "1/2 cup milk" then
+        // "2 tbsp milk" kept only the half cup and lost the tablespoons.
         var items: [ParsedGroceryItem] = []
-        var seenNames: Set<String> = []
+        var indexByName: [String: Int] = [:]
 
         for rawPhrase in phrases {
             guard let parsed = parsePhrase(rawPhrase) else { continue }
             let key = parsed.name.lowercased()
-            if seenNames.contains(key) { continue }
-            seenNames.insert(key)
-            items.append(parsed)
+            guard let existingIndex = indexByName[key] else {
+                indexByName[key] = items.count
+                items.append(parsed)
+                continue
+            }
+            // Only combine when the units agree; otherwise keep the larger
+            // quantity's line rather than inventing a cross-unit total (the
+            // share extension can't link UnitConverter — see project.yml).
+            if items[existingIndex].unit.caseInsensitiveCompare(parsed.unit) == .orderedSame {
+                items[existingIndex].quantity += parsed.quantity
+                items[existingIndex].confidence = min(
+                    items[existingIndex].confidence, parsed.confidence
+                )
+            } else if parsed.quantity > items[existingIndex].quantity {
+                items[existingIndex] = parsed
+            }
         }
 
         return items
@@ -154,6 +213,9 @@ public enum GroceryTextParser {
         // Clean leading bullets / numbers / checkboxes so we handle pasted lists too.
         var cleaned = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
         cleaned = stripListMarkers(cleaned)
+        // US-592: drop parentheticals so "1 (14.5 oz) can diced tomatoes" no
+        // longer yields a name beginning "(14.5".
+        cleaned = stripParentheticals(cleaned)
         guard cleaned.count >= 2 else { return nil }
 
         var tokens = cleaned
@@ -239,12 +301,33 @@ public enum GroceryTextParser {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Vulgar-fraction characters mapped to their decimal value. Kept in sync
+    /// with `IngredientTextParser.unicodeFractions`.
+    private static let unicodeFractions: [Character: Double] = [
+        "½": 0.5, "⅓": 1.0 / 3.0, "⅔": 2.0 / 3.0,
+        "¼": 0.25, "¾": 0.75,
+        "⅕": 0.2, "⅖": 0.4, "⅗": 0.6, "⅘": 0.8,
+        "⅙": 1.0 / 6.0, "⅚": 5.0 / 6.0,
+        "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875
+    ]
+
     private static func parseNumber(_ token: String) -> Double? {
         // Plain number / decimal
         if let value = Double(token), value > 0 { return value }
 
         // Word form
         if let value = numberWords[token] { return value }
+
+        // US-592: unicode vulgar fractions — "½ cup milk" used to leave the
+        // glyph stranded on the front of the ingredient name.
+        if token.count == 1, let first = token.first, let value = unicodeFractions[first] {
+            return value
+        }
+        // Mixed unicode form: "1½".
+        if let last = token.last, let fraction = unicodeFractions[last],
+           let whole = Double(token.dropLast()), whole > 0 {
+            return whole + fraction
+        }
 
         // Fraction "1/2", "3/4"
         let parts = token.split(separator: "/")
@@ -258,14 +341,74 @@ public enum GroceryTextParser {
         return nil
     }
 
+    /// Removes `(...)` groups (non-nested) and collapses the resulting spaces.
+    private static func stripParentheticals(_ input: String) -> String {
+        var result = ""
+        var depth = 0
+        for ch in input {
+            if ch == "(" { depth += 1; continue }
+            if ch == ")" { depth = max(0, depth - 1); continue }
+            if depth == 0 { result.append(ch) }
+        }
+        return result
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Flattened `(keyword, category)` rules ordered longest-keyword-first.
+    ///
+    /// US-591: length ordering is what makes "peanut butter" beat "butter" and
+    /// "ground beef" beat "beef" without a hand-maintained priority column.
+    private static let orderedCategoryRules: [(keyword: String, category: String)] = {
+        var flat: [(keyword: String, category: String)] = []
+        for (category, keywords) in categoryKeywords {
+            for keyword in keywords { flat.append((keyword, category)) }
+        }
+        return flat.sorted { $0.keyword.count > $1.keyword.count }
+    }()
+
+    /// US-591: whole-word (not substring) keyword matching.
+    ///
+    /// `lower.contains(keyword)` filed "graham crackers" under protein (it
+    /// contains "ham"), "hamburger buns" under protein, and "peanut butter"
+    /// under dairy. Mirrors the word-boundary fix already applied to
+    /// `UnitInference.infer` for "egg" vs "eggplant" (US-493).
     private static func inferCategory(_ name: String) -> String {
         let lower = name.lowercased()
-        for (category, keywords) in categoryKeywords {
-            if keywords.contains(where: { lower.contains($0) }) {
-                return category
-            }
+        for rule in orderedCategoryRules where containsWord(lower, rule.keyword) {
+            return rule.category
         }
         return "snack"
+    }
+
+    /// True when `keyword` appears in `haystack` on word boundaries, allowing a
+    /// trailing plural/`y` suffix so stems like "strawberr" still match
+    /// "strawberry"/"strawberries" while "ham" does not match "graham".
+    private static func containsWord(_ haystack: String, _ keyword: String) -> Bool {
+        guard !keyword.isEmpty else { return false }
+        var searchStart = haystack.startIndex
+        while let range = haystack.range(of: keyword, range: searchStart..<haystack.endIndex) {
+            let precededByLetter = range.lowerBound > haystack.startIndex
+                && haystack[haystack.index(before: range.lowerBound)].isLetter
+            if !precededByLetter {
+                // Allow an optional plural / "y" suffix, then require a
+                // non-letter (or end of string).
+                var after = range.upperBound
+                for suffix in ["ies", "es", "s", "y"] {
+                    if haystack[after...].hasPrefix(suffix) {
+                        after = haystack.index(after, offsetBy: suffix.count)
+                        break
+                    }
+                }
+                if after == haystack.endIndex || !haystack[after].isLetter {
+                    return true
+                }
+            }
+            searchStart = haystack.index(after: range.lowerBound)
+            if searchStart >= haystack.endIndex { break }
+        }
+        return false
     }
 
     private static func titleCase(_ s: String) -> String {

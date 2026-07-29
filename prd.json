@@ -1573,6 +1573,199 @@
       "priority": 9,
       "passes": true,
       "notes": "Many functions default verify_jwt=false; only some are intentionally public. DONE: enumerated all verify_jwt=false functions. Classified: agent-* = intentional Agentic-OS internal (server/cron-triggered, out of scope); stripe-webhook (signature-verified), health-check, generate-sitemap, nurture-unsubscribe/csat-rate (token-in-URL) = intentionally public; generate-*/parse-recipe handled in US-558. Gated two clear offenders with requireAdmin (service-role bypass preserves automated callers): update-blog-image (unauth service_role blog mutation + SSRF) and test-blog-webhook (unauth POST to arbitrary URL = SSRF/open-relay). NOTE: if any external automation calls these without the service key it must now send it."
+    },
+    {
+      "id": "US-583",
+      "title": "One canonical unit vocabulary across every parser, picker and comparator",
+      "description": "As a shopper, I want '2 cans' and '1 can' to be recognised as the same unit so that quantities stack instead of silently splitting into duplicate grocery lines.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: compare({qty:2,unit:'cans'},{qty:1,unit:'can'}) currently returns 'incomparable'; 13 of the 28 entries in app/mobile/lib/unit-suggestions.ts ALL_UNIT_OPTIONS are unrecognised by unitNormalize (½ gal, packs, bags, boxes, bottles, cans, jars, loaves, slices, blocks, fillets, containers, cartons)",
+        "src/lib/unitNormalize.ts recognises the plural form of every package unit (packs, bags, boxes, jars, cans, bottles, loaves, cartons, containers, heads, bunches, trays, tubes, sleeves, slices) and adds the missing singulars 'container', 'clove', 'block', 'fillet', 'stalk', 'sprig', 'pinch'",
+        "'½ gal' (and 'half gal'/'half gallon') normalises to volume 1892.7 ml",
+        "ios UnitConverter.swift alias table gains the same plural/alias coverage so iOS and web agree",
+        "Every writer emits the canonical SINGULAR form: parse-grocery-text.ts UNIT_MAP and GroceryTextParser.swift unitMap stop emitting plurals (lbs→lb, cups→cup, cans→can, bags→bag, boxes→box, jars→jar, bottles→bottle, packs→pack, loaves→loaf, sticks→stick, slices→slice)",
+        "ALL_UNIT_OPTIONS is reduced to units the normaliser understands; 'blocks'/'fillets' either gain normaliser entries or are removed from the picker",
+        "unitNormalize.test.ts pins singular==plural comparability for every package unit",
+        "npm run typecheck && npm run test:run pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "ROOT CAUSE of the recipe→grocery quantity failures. There are currently FOUR disagreeing unit vocabularies: IngredientTextParser.swift and UnitInference.swift emit singular; GroceryTextParser.swift and parse-grocery-text.ts emit plural; unitNormalize.ts only understands singular for package units; the mobile unit picker offers strings none of them share. Because compare()/sumQuantities() see 'cans' as family=unknown, every shortfall check degrades to 'incomparable' and every merge falls back to a raw numeric sum with a wrong label. || IMPLEMENTED (web verified, iOS unverified). Web: unitNormalize.ts now resolves every package plural via PACKAGE_ALIASES→canonical singular (PACKAGE_UNITS holds singulars only), adds container/case/block/fillet/slice/clove/stalk/sprig/pinch/dash/drop, and normalises '½ gal'/'half gallon' to 1892.71ml. All 28 ALL_UNIT_OPTIONS entries now normalise (was 15/28); compare(2 cans, 1 can) is 'greater' (was 'incomparable'). parse-grocery-text.ts UNIT_MAP now emits canonical SINGULAR. iOS: UnitConverter gains canonicalContainer()/containerAliases, a 'half gal' table entry, period-stripping in canonical(), and combine(). GroceryTextParser.swift unitMap switched to singular. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-584",
+      "title": "iOS URL import must preserve ingredient quantity and unit",
+      "description": "As someone importing a recipe from a website, I want '2 lbs chicken breast' to reach my grocery list as 2 lb, not as '1 servings'.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: RecipesView.applyParsed() links a pantry-matched ingredient with `selectedFoodIds.insert(match.id)` and discards the parsed quantity+unit entirely; GroceryGeneratorService.addFoodContribution then emits `totalQuantity += 1` with `unit: food.unit ?? \"servings\"`",
+        "applyParsed runs each parsed ingredient line through IngredientTextParser and retains (quantity, unit, name)",
+        "Import creates structured RecipeIngredient rows (recipe_ingredients) instead of only foodId links, so imported recipes take the same structured path as hand-built ones",
+        "A pantry-matched ingredient keeps BOTH the foodId link and its parsed quantity/unit",
+        "Importing 'https://…' with '2 lbs chicken breast' yields a grocery line of 2 lb chicken breast",
+        "New test in EatPalTests covers import → structured rows → grocery quantity"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is the single biggest reason imported recipes produce wrong grocery quantities. The structured-ingredient path (US-265) exists but URL import bypasses it completely, so every imported recipe falls back to the weakest legacy path. || IMPLEMENTED (iOS unverified). RecipesView.applyParsed now writes EVERY parsed ingredient line (matched and unmatched) into additionalIngredients, so AppState.addRecipe's existing RecipeIngredientLegacyParser derivation produces structured recipe_ingredients rows carrying quantity+unit for all of them — previously a pantry-matched line contributed only a foodId and reached the grocery list as '1 servings'. foodId links are still inserted alongside. Tests added in EatPalTests/GroceryQuantityAuditTests.swift. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-585",
+      "title": "Fix delimiter disagreement that splits one ingredient into two grocery items",
+      "description": "As a user, I want '1 onion, diced' to stay one grocery item rather than becoming '1 onion' plus a phantom item called 'diced'.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: RecipesView.applyParsed() joins unmatched ingredients with ', ' into additional_ingredients, but GroceryGeneratorService.splitLegacyIngredients() splits that field on ',' whenever it contains no newline — so any ingredient line containing a comma is torn in half",
+        "applyParsed joins unmatched ingredients with '\\n' (matching splitLegacyIngredients' documented newline contract)",
+        "splitLegacyIngredients prefers newline splitting and only falls back to comma for genuinely legacy comma blobs",
+        "Importing a recipe containing '1 onion, diced' and '2 cloves garlic, minced' produces exactly two grocery items, named 'onion' and 'garlic'",
+        "Regression test covers the comma-inside-ingredient case"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Writer/reader contract violation. splitLegacyIngredients' own doc comment says 'imports join ingredients with newlines' — applyParsed contradicts it. Cheap fix, immediately visible to users as phantom grocery items ('diced', 'minced', 'chopped', 'to taste'). || IMPLEMENTED (iOS unverified). applyParsed now joins ingredient lines with '\\n' instead of ', '. RecipeIngredientLegacyParser and GroceryGeneratorService.splitLegacyIngredients already preferred newlines and only comma-split as a legacy fallback — applyParsed was the sole writer breaking that contract, which is why '1 onion, diced' became an 'onion' row plus a phantom 'diced' row. The share extension (ShareImportView:389) and RecipeAppIntents already used newlines, confirming newline is the established convention. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-586",
+      "title": "GroceryGeneratorService must sum quantities unit-aware",
+      "description": "As a meal planner, I want a week needing 2 cups of milk and 1 gallon of milk to produce the real total, not '3 cups'.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: addStructuredIngredient does `existing.totalQuantity += qty` and keeps only the FIRST unit seen (`if existing.unit.isEmpty`), so mixed-unit contributions are added as bare numbers under the wrong label",
+        "Candidate accumulation converts each contribution via UnitConverter before adding when the units are compatible",
+        "When two contributions are genuinely incomparable (e.g. 2 cup vs 1 bag) they become separate grocery lines rather than a fabricated sum",
+        "The grocery line's displayed unit is the dominant unit of its contributions, with the total expressed in that unit",
+        "ShortfallCalculator/UnitConverter are reused — no new conversion table",
+        "New EatPalTests cases: 2 cup + 1 gal milk; 1 lb + 8 oz beef; 2 cup + 1 bag flour (must not merge)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "iOS already ships a correct UnitConverter that deliberately refuses container units; the generator simply never calls it. Mirrors the web sumQuantities() logic in src/lib/groceryMerge.ts. || IMPLEMENTED (iOS unverified). Candidate gains a `measured: [(quantity, unit)]` list; addStructuredIngredient/addLegacyName now recompute the total through UnitConverter.combine() instead of `totalQuantity += qty`. combine() converts within a dimension, sums identical container units, and returns nil for genuinely incomparable parts so the caller falls back rather than fabricating a number. 2 cup + 1 gal milk no longer becomes '3 cup'. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-587",
+      "title": "Crash: duplicate grocery item names trap Dictionary(uniqueKeysWithValues:)",
+      "description": "As a user with two grocery items of the same name, I want generating a list from my meal plan to work instead of crashing the app.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: GroceryGeneratorService.swift:89 builds `Dictionary(uniqueKeysWithValues: appState.groceryItems.map { ($0.name.lowercased(), $0.id) })`; Swift traps with 'Fatal error: Duplicate values for key' whenever two grocery items share a lowercased name, which nothing in the app prevents",
+        "Replace with a duplicate-tolerant build (Dictionary(_:uniquingKeysWith:)) keeping the first match",
+        "Audit the other four Dictionary(uniqueKeysWithValues:) call sites (GroceryView:248, JoyScoreChart:62/265-267, TonightModeService:150) — all key on id, confirm and document that they are safe",
+        "Regression test: two grocery items named 'Milk' and 'milk' generate without trapping"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Hard crash, not a soft failure. Reachable today: neither the iOS quick-add nor the Expo RecipeAddToGroceryModal dedupes names on insert, so duplicate names occur naturally. || IMPLEMENTED (iOS unverified). GroceryGeneratorService.swift:89 now uses Dictionary(_:uniquingKeysWith:) keeping the first match, so duplicate lowercased grocery names no longer trap. Audited the other four Dictionary(uniqueKeysWithValues:) sites — GroceryView:248, JoyScoreChart:62/265-267, TonightModeService:150 — all key on `id` and are safe. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-588",
+      "title": "Stop dropping pantry-stocked ingredients regardless of how little is stocked",
+      "description": "As a user with one egg in the pantry, I want a recipe needing a dozen eggs to still put eggs on my grocery list.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: buildResult() drops a candidate whenever `pantryNames.contains(nameKey)` — a name match alone, with no quantity comparison",
+        "The pantry skip compares required vs stocked quantity through UnitConverter and only skips when stock genuinely covers the requirement",
+        "When stock partially covers the requirement, the grocery line carries the shortfall (required − stocked), not the full amount and not zero",
+        "When the two units are incomparable the item is KEPT (fail-safe toward buying) and flagged",
+        "Pantry name matching uses IngredientNameMatcher, not raw lowercased equality",
+        "Tests: 1 egg stocked vs 12 required → 11 on the list; 2 lb stocked vs 1 lb required → skipped; 1 bag vs 2 cup → kept"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Currently the 'add missing only' path silently under-buys. Combined with US-586 this is the other half of 'wrong quantities on the grocery list'. || PARTIAL (iOS unverified). buildResult now compares pantry stock against the requirement via UnitConverter.convert (with a sameUnitQuantity fallback for container units) and subtracts the shortfall instead of dropping the candidate on a bare name match; incomparable units keep the item (fail-safe toward buying). STILL OWED: pantry matching is still exact lowercased-name equality — the criterion asking for IngredientNameMatcher is not yet done. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-589",
+      "title": "parseGroceryText must sum repeated ingredients instead of discarding them",
+      "description": "As a user pasting a recipe that lists milk twice, I want both amounts counted rather than the second one silently thrown away.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: parseGroceryText('1/2 cup milk\\n2 tbsp milk') returns exactly ONE item {quantity:0.5, unit:'cups'} — the 2 tbsp line is dropped by the `seenNames` guard",
+        "Repeated names are folded via the existing sumQuantities()/ingredientMatchKey() helpers in src/lib/groceryMerge.ts instead of being skipped",
+        "GroceryTextParser.swift's equivalent `seenNames` guard is fixed the same way",
+        "Test pins '1/2 cup milk' + '2 tbsp milk' → one item totalling ~0.63 cup (or 150 ml), never 0.5"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Straightforward data loss. The dedupe was meant to stop duplicate ROWS but it discards quantity instead of merging it — groceryMerge.ts already has the correct primitives, they just aren't wired into the parser. || IMPLEMENTED (web verified, iOS unverified). Web: parseGroceryText groups by ingredientMatchKey and folds repeats through sumQuantities; '1/2 cup milk' + '2 tbsp milk' is now one 0.63-cup line (was one 0.5-cup line with the tablespoons discarded). iOS: GroceryTextParser replaces the seenNames drop with an index map that sums same-unit repeats and keeps the larger quantity when units differ (the share extension target cannot link UnitConverter — see US-592). VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-590",
+      "title": "Port the Swift ingredient parser's competence to the web parser",
+      "description": "As a user pasting recipe text on the web, I want the same parse quality the iOS app already gives me.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE (all from src/lib/parse-grocery-text.ts today): '2-3 lbs chicken thighs' → name '-3 lbs chicken thighs' qty 2 unit ''; '2 cloves garlic, minced' → name 'cloves garlic, minced' unit ''; '1 head of lettuce' → name 'of lettuce'; '3 large eggs' → name 'large eggs'; 'a dozen eggs' → qty 1 unit '' name 'a dozen eggs'; '1 (14.5 oz) can diced tomatoes' silently discards the 14.5 oz package size; '0 bananas' → quantity 1",
+        "Ranges parse and average: '2-3 lbs' → 2.5 lb (matching IngredientTextParser's US-493 behaviour, including ' to ' and en/em dashes)",
+        "Hyphenated size descriptors are not mistaken for ranges: '1 15-ounce can black beans' → qty 1, unit can",
+        "Trailing descriptor clauses are stripped: '2 cloves garlic, minced' → qty 2, unit clove, name 'garlic'",
+        "Leading filler words are stripped ('of', 'whole', 'fresh', 'large', 'chopped', …) so '1 head of lettuce' → name 'lettuce' and '3 large eggs' → name 'eggs'",
+        "Word-form numbers parse: 'a dozen eggs' → qty 1 unit dozen name 'eggs'",
+        "Parenthetical package sizes are captured rather than dropped, so '1 (14.5 oz) can diced tomatoes' retains 14.5 oz as package-size metadata",
+        "quantity 0 is preserved as 0 (or the line rejected) rather than coerced to 1",
+        "The shared cases live in one table exercised by both parse-grocery-text.test.ts and IngredientTextParserTests.swift so the two implementations cannot drift again"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "IngredientTextParser.swift is materially better than parse-grocery-text.ts: it handles ranges, unicode fractions, parentheticals, filler words and the '15-ounce' descriptor case. The web parser handles none of them. Same product, two answers for the same paste. || PARTIAL (web verified). parse-grocery-text.ts rewritten as a tokenizing pipeline mirroring IngredientTextParser.swift: ranges averaged ('2-3 lbs' → 2.5 lb, plus ' to ' and en/em dashes), '15-ounce' treated as a size descriptor not a range endpoint, parenthetical package sizes captured into a new optional `packageSize` field, trailing descriptor clauses dropped, leading fillers stripped ('1 head of lettuce' → 'lettuce'), word-form numbers ('a dozen eggs'), glued multipliers ('3x'), and an explicit 0 preserved. 25 new regression tests, each naming the old wrong output. NOTE: 'ground' is deliberately NOT stripped as a filler (it would turn 'ground beef' into 'beef'); IngredientTextParser.swift was changed to match, and gained 'of'/'the'. STILL OWED: the single shared case table exercised by both the TS and Swift suites — the cases are currently duplicated across parse-grocery-text.test.ts and GroceryQuantityAuditTests.swift."
+    },
+    {
+      "id": "US-591",
+      "title": "Category inference must match on word boundaries, not substrings",
+      "description": "As a user, I want graham crackers filed under carbs, not protein.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: inferCategory('graham crackers') → 'protein' (substring 'ham'); 'salt and pepper to taste' → 'vegetable' (substring 'pepper'); 'peanut butter' → 'dairy' (substring 'butter' checked before snack)",
+        "Keyword matching is whole-word/token based, mirroring the US-493 fix already applied to UnitInference.infer for 'egg' vs 'eggplant'",
+        "Multi-word keywords ('ground beef', 'ice cream', 'peanut butter') are matched before single-word ones so the most specific rule wins",
+        "The same fix lands in GroceryTextParser.swift's inferCategory, which has the identical substring flaw",
+        "Tests cover graham crackers → carb, peanut butter → snack, coconut milk → not dairy-by-accident, eggplant → vegetable, corned beef → protein"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Wrong category means the wrong grocery aisle and the wrong pantry bucket. UnitInference.swift already solved exactly this class of bug for eggs (US-493) — the pattern just wasn't applied to the category dictionaries. || IMPLEMENTED (web verified, iOS unverified). Both parsers now flatten their category dictionaries into a longest-keyword-first rule list matched on word boundaries with an optional plural/'y' suffix. graham crackers → carb (was protein via 'ham'), hamburger buns → carb, peanut butter → snack (was dairy), 'salt and pepper to taste' → snack (was vegetable), eggplant → vegetable. Closed compounds that word-boundary matching legitimately cannot see ('buttermilk', 'flatbread', 'sourdough') were added explicitly, and seasoning phrasings were added to snack so they beat the bare 'pepper' produce rule. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-592",
+      "title": "GroceryTextParser.swift must not split every comma",
+      "description": "As a user pasting or dictating a list, I want '2 cloves garlic, minced' to stay one item instead of adding a grocery item called 'Minced'.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: GroceryTextParser.parse splits on CharacterSet(charactersIn: \"\\n,;\") unconditionally, while its TS counterpart guards comma splitting behind `commaCount >= 2 && newlineCount === 0`",
+        "Swift adopts the same guard: only comma-split a single-line input with 2+ commas and no newlines",
+        "GroceryTextParser delegates quantity/unit/name extraction to IngredientTextParser instead of maintaining a second, weaker tokenizer (no unicode fractions, no ranges, no parentheticals, no 'half a cup')",
+        "'1 (14.5 oz) can diced tomatoes' no longer yields a name beginning '(14.5'",
+        "'½ cup milk' parses as qty 0.5 unit cup",
+        "'2% milk' is not parsed as qty 2 name '% milk'",
+        "Tests added to EatPalTests covering each case above"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Two Swift parsers for the same job, and the weaker one is on the voice / paste / share-sheet path — the paths where input is messiest. Deleting its tokenizer in favour of IngredientTextParser removes the divergence rather than patching it. || PARTIAL — and one acceptance criterion is NOT ACHIEVABLE AS WRITTEN. The comma-split guard is done (only comma-split a single-line input with 2+ commas and no newlines), so '2 cloves garlic, minced' no longer emits a phantom 'Minced' item. Also added: parenthetical stripping (so '1 (14.5 oz) can diced tomatoes' no longer yields a name starting '(14.5'), unicode vulgar fractions incl. mixed '1½', and article/adjective filler stripping. '2% milk' was already safe (verified: '2%' is not parsed as a quantity). BLOCKED: 'delegate to IngredientTextParser' cannot be done as specified — project.yml gives EatPalShareExtension only `EatPalShare` + `Shared` sources, and IngredientTextParser/UnitConverter live under `EatPal/`, so referencing them would break the share-extension build. Doing this properly means MOVING IngredientTextParser.swift and UnitConverter.swift into Shared/ and updating project.yml; that structural change was left out of this pass because it cannot be compile-verified here. Until then the two Swift parsers are aligned by duplicated logic, not by delegation. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
+    },
+    {
+      "id": "US-593",
+      "title": "Expo RecipeAddToGroceryModal: quantity floor, cross-unit subtraction, and duplicate rows",
+      "description": "As a user adding a recipe to my grocery list from the mobile app, I want the amounts to be the amounts the recipe asked for.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE (app/mobile/components/RecipeAddToGroceryModal.tsx handleAdd): `Math.max(1, Math.round((l.quantity * servings - l.inStockQty) * 100) / 100) || l.quantity * servings` floors every quantity at 1, so a needed 0.5 tsp is inserted as 1 tsp; it also subtracts inStockQty across unrelated units (2 cup − 1 bag = 1); and the `|| …` fallback is unreachable because Math.max(1,…) is always truthy",
+        "Sub-1 quantities are preserved exactly (0.5 tsp stays 0.5 tsp)",
+        "Pantry stock is only subtracted when unitNormalize reports the units comparable; otherwise the full required amount is used",
+        "The modal routes inserts through planGroceryMerge() so re-adding a recipe stacks quantities instead of creating duplicate rows",
+        "The already-in-list check uses ingredientMatchKey() rather than raw lowercased name, so 'Ground Beef 80/20' matches 'ground beef'",
+        "The grouped need/low/stocked buckets compare stock unit-aware instead of comparing bare numbers",
+        "ingredientsRes/foodsRes/groceryRes errors are surfaced to the user instead of being swallowed by `?? []`",
+        "The servings stepper is labelled as a batch multiplier, or reads the recipe's own servings count so 'serves 4, I want 6' is expressible"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "The Expo modal never calls the groceryMerge helpers that exist for exactly this purpose. The Math.max(1,…) floor is the most user-visible defect: every fractional teaspoon/tablespoon in a recipe is silently rounded up to 1. || IMPLEMENTED (typechecked, no component test yet). RecipeAddToGroceryModal: the Math.max(1, …) floor is gone so 0.5 tsp stays 0.5 tsp; a new requiredAfterStock() only subtracts pantry stock when unitNormalize.convert reports the units compatible and otherwise buys the full amount; inserts route through planGroceryMerge so re-adding a recipe stacks instead of duplicating (updates applied via a scoped .eq('id').eq('user_id')); the already-in-list check and the pantry lookup use ingredientMatchKey; need/low/stocked buckets compare unit-aware; ingredientsRes/foodsRes/groceryRes errors are now surfaced via Alert instead of being swallowed by `?? []`; the stepper is relabelled 'Batches' (with matching a11y labels) since it multiplies the recipe's own yield. Verified by `tsc` over the file with path aliases (app/ is outside tsconfig.app.json's include, so `npm run typecheck` does not cover it). STILL OWED: a component/unit test for the modal."
+    },
+    {
+      "id": "US-594",
+      "title": "Grocery generation: deterministic ordering and O(n) lookups",
+      "description": "As a user, I want my generated grocery list in a stable order, and I want generation to stay fast on a full week's plan.",
+      "acceptanceCriteria": [
+        "AUDIT EVIDENCE: buildResult iterates an unordered `[String: Candidate]` dictionary and then sorts with `items.sorted { $0.category < $1.category }` — Swift's sort is not stable, so two runs over the same plan can emit different orders",
+        "Candidate iteration is deterministic (sort by category then display name)",
+        "accumulate/addStructuredIngredient/addFoodContribution stop doing `appState.recipes.first(where:)` and `appState.foods.first(where:)` inside nested loops; build id→entity dictionaries once per generation run",
+        "Generation over a 7-day × N-kid plan is measured before/after and the lookup count is O(entries) rather than O(entries × foods)",
+        "Existing GroceryGenerator tests still pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Correctness-adjacent (unstable order looks like items moving around between runs) plus a real O(n·m) hot path: 29 `.first(where:)` call sites across Services/Utilities, several inside per-entry loops. || PARTIAL (iOS unverified). Determinism done: buildResult iterates candidates sorted by (category, displayName) and the final unstable `items.sorted { $0.category < $1.category }` was removed, since Swift's sort is not stable and was reshuffling same-category items between runs. STILL OWED: the O(n·m) lookups — accumulate/addStructuredIngredient/addFoodContribution still call appState.recipes.first(where:)/appState.foods.first(where:) inside per-entry loops; hoisting those into id→entity dictionaries needs signature changes across four methods and was deferred. VERIFICATION LIMIT: this environment has no Swift toolchain (`swift`/`xcodebuild` absent), so all Swift changes are implemented and hand-reviewed but NOT compiled. Needs an Xcode build + EatPalTests run before this can be marked passing."
     }
   ]
 }
