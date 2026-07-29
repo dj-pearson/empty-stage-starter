@@ -206,7 +206,7 @@ export function DataImport() {
                     <tr key={i} className={row.valid ? "" : "bg-destructive/5"}>
                       <td className="p-2">
                         {row.valid ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <CheckCircle className="h-4 w-4 text-success" />
                         ) : (
                           <AlertCircle className="h-4 w-4 text-destructive" />
                         )}

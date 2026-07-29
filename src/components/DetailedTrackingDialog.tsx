@@ -48,7 +48,7 @@ const OUTCOMES = [
   { value: "success", label: "Success", icon: CheckCircle, color: "text-safe-food" },
   { value: "partial", label: "Partial", icon: Minus, color: "text-yellow-500" },
   { value: "refused", label: "Refused", icon: XCircle, color: "text-muted-foreground" },
-  { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-red-500" },
+  { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-destructive" },
 ];
 
 const MOODS = [
