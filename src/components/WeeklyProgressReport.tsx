@@ -285,7 +285,7 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
               {isSharing ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : shareSuccess ? (
-                <Check className="h-4 w-4 mr-2 text-green-500" />
+                <Check className="h-4 w-4 mr-2 text-success" />
               ) : (
                 <Share2 className="h-4 w-4 mr-2" />
               )}
