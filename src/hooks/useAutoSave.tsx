@@ -185,7 +185,7 @@ export function AutoSaveIndicator({
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <svg
-          className="h-4 w-4 text-green-500"
+          className="h-4 w-4 text-success"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
