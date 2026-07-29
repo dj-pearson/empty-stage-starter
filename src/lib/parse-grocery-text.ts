@@ -364,8 +364,13 @@ const UNIT_MAP: Record<string, string> = {
   pkgs: 'pack',
   dozen: 'dozen',
   doz: 'dozen',
-  ct: 'ct',
-  count: 'ct',
+  // US-590: canonical is "count", matching UnitInference.swift, the mobile unit
+  // picker and IngredientTextParser. The web parser used to emit "ct" while iOS
+  // wrote "count" for the same by-the-item produce.
+  ct: 'count',
+  count: 'count',
+  each: 'count',
+  ea: 'count',
   head: 'head',
   heads: 'head',
   loaf: 'loaf',
@@ -457,6 +462,11 @@ const NUMBER_WORDS: Record<string, number> = {
 const LEADING_FILLERS = new Set<string>([
   'of',
   'the',
+  // Articles survive a word-number quantity ("half a cup of milk"), so they
+  // have to be strippable too. Safe alongside NUMBER_WORDS because quantity
+  // extraction runs first — "a dozen eggs" still reads "a" as 1.
+  'a',
+  'an',
   'whole',
   'fresh',
   'freshly',
@@ -606,9 +616,14 @@ function extractQuantity(tokens: string[]): {
       continue;
     }
 
-    // Word number, but only as the very first token so "half and half" and
-    // "a la mode" style names aren't eaten mid-line.
+    // Word number, but only as the very first token so it can't be eaten
+    // mid-line. A word number immediately followed by "and"/"&" is part of a
+    // compound product name, not a quantity — "half and half" must stay a
+    // dairy item called "half and half", not 0.5 of something called "and
+    // half".
     if (collected.length === 0 && NUMBER_WORDS[tok.toLowerCase()] !== undefined) {
+      const next = (tokens[1] ?? '').toLowerCase();
+      if (next === 'and' || next === '&') break;
       collected.push(NUMBER_WORDS[tok.toLowerCase()]);
       tokens.shift();
       continue;

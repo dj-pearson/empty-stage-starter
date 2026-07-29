@@ -1,0 +1,177 @@
+{
+  "$comment": [
+    "US-590: THE single source of truth for ingredient-line parsing behaviour.",
+    "",
+    "EatPal parses ingredient lines on two platforms — src/lib/parse-grocery-text.ts",
+    "on web, and ios/EatPal/Shared/IngredientTextParser.swift on iOS (which the",
+    "voice / paste / share-sheet path delegates to). They drifted badly enough that",
+    "the same paste produced different quantities, so both test suites now load",
+    "THIS file and must agree on every case:",
+    "",
+    "  - src/lib/parse-grocery-text.test.ts   (loads via fs)",
+    "  - ios/EatPal/EatPalTests/SharedIngredientParseCasesTests.swift (loads via #filePath)",
+    "",
+    "Add a case here, not to one suite. `was` records the pre-audit output so a",
+    "regression is legible; it is documentation, not an assertion.",
+    "",
+    "Name comparison is case-insensitive: the web parser preserves the input's",
+    "casing while the iOS grocery path title-cases for display."
+  ],
+  "cases": [
+    {
+      "input": "2 lbs chicken breast",
+      "quantity": 2,
+      "unit": "lb",
+      "name": "chicken breast"
+    },
+    {
+      "input": "2-3 lbs chicken thighs",
+      "quantity": 2.5,
+      "unit": "lb",
+      "name": "chicken thighs",
+      "was": "web: name \"-3 lbs chicken thighs\", qty 2, unit \"\" — range unparsed"
+    },
+    {
+      "input": "1 to 3 cups flour",
+      "quantity": 2,
+      "unit": "cup",
+      "name": "flour",
+      "was": "web: \" to \" ranges unsupported"
+    },
+    {
+      "input": "1 1/2 cups sugar",
+      "quantity": 1.5,
+      "unit": "cup",
+      "name": "sugar",
+      "note": "mixed number SUMS; only a real range averages"
+    },
+    {
+      "input": "1/2 cup milk",
+      "quantity": 0.5,
+      "unit": "cup",
+      "name": "milk"
+    },
+    {
+      "input": "1/4 tsp cayenne",
+      "quantity": 0.25,
+      "unit": "tsp",
+      "name": "cayenne"
+    },
+    {
+      "input": "1 (14.5 oz) can diced tomatoes",
+      "quantity": 1,
+      "unit": "can",
+      "name": "tomatoes",
+      "was": "web: 14.5 oz package size silently discarded; iOS: name began \"(14.5\""
+    },
+    {
+      "input": "1 15-ounce can black beans",
+      "quantity": 1,
+      "unit": "can",
+      "name": "black beans",
+      "note": "hyphenated size descriptor, NOT a range endpoint (must not average to 8)"
+    },
+    {
+      "input": "2 cloves garlic, minced",
+      "quantity": 2,
+      "unit": "clove",
+      "name": "garlic",
+      "was": "web: name \"cloves garlic, minced\", unit \"\"; iOS: emitted a phantom item \"Minced\""
+    },
+    {
+      "input": "1 head of lettuce",
+      "quantity": 1,
+      "unit": "head",
+      "name": "lettuce",
+      "was": "web + iOS: name \"of lettuce\" — the connective survived"
+    },
+    {
+      "input": "3 large eggs",
+      "quantity": 3,
+      "unit": "",
+      "name": "eggs",
+      "was": "web: name \"large eggs\""
+    },
+    {
+      "input": "a dozen eggs",
+      "quantity": 1,
+      "unit": "dozen",
+      "name": "eggs",
+      "was": "web: qty 1, unit \"\", name \"a dozen eggs\" — word numbers unsupported"
+    },
+    {
+      "input": "two pounds of chicken",
+      "quantity": 2,
+      "unit": "lb",
+      "name": "chicken"
+    },
+    {
+      "input": "half a cup of milk",
+      "quantity": 0.5,
+      "unit": "cup",
+      "name": "milk",
+      "was": "web: name \"a cup of milk\" — the article survived"
+    },
+    {
+      "input": "1 lb ground beef",
+      "quantity": 1,
+      "unit": "lb",
+      "name": "ground beef",
+      "note": "\"ground\" is deliberately NOT a filler — stripping it yields \"beef\""
+    },
+    {
+      "input": "1 red bell pepper (thinly sliced)",
+      "quantity": 1,
+      "unit": "",
+      "name": "red bell pepper",
+      "note": "non-size parentheticals are dropped entirely"
+    },
+    {
+      "input": "1.5 lb salmon",
+      "quantity": 1.5,
+      "unit": "lb",
+      "name": "salmon"
+    },
+    {
+      "input": "2 ct avocados",
+      "quantity": 2,
+      "unit": "count",
+      "name": "avocados",
+      "was": "web emitted \"ct\" while iOS wrote \"count\"; iOS had no ct entry at all"
+    },
+    {
+      "input": "3 tbsp olive oil",
+      "quantity": 3,
+      "unit": "tbsp",
+      "name": "olive oil"
+    },
+    {
+      "input": "1 gallon whole milk",
+      "quantity": 1,
+      "unit": "gal",
+      "name": "milk",
+      "note": "\"gallon\" canonicalises to \"gal\" so it matches the pantry defaults"
+    },
+    {
+      "input": "2 packages cream cheese",
+      "quantity": 2,
+      "unit": "pack",
+      "name": "cream cheese",
+      "note": "\"packages\" canonicalises to \"pack\""
+    },
+    {
+      "input": "2% milk",
+      "quantity": 1,
+      "unit": "",
+      "name": "2% milk",
+      "note": "a percentage is a product descriptor, not a quantity — must not parse as qty 2 with the name \"% milk\""
+    },
+    {
+      "input": "1 pint half and half",
+      "quantity": 1,
+      "unit": "pt",
+      "name": "half and half",
+      "note": "compound product name; a bare \" and \" must not split it"
+    }
+  ]
+}

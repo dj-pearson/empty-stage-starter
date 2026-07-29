@@ -37,6 +37,7 @@ enum GroceryGeneratorService {
         // contributions (one per plan entry / recipe ingredient) so we can
         // emit source rows for each one after dedupe.
         var candidates: [String: Candidate] = [:]
+        let lookups = Lookups(appState: appState)
 
         for date in dates {
             let dateString = date.isoDateString
@@ -47,6 +48,7 @@ enum GroceryGeneratorService {
                         from: entry,
                         dateString: dateString,
                         appState: appState,
+                        lookups: lookups,
                         into: &candidates
                     )
                 }
@@ -69,8 +71,9 @@ enum GroceryGeneratorService {
         skipPantryStocked: Bool = true
     ) -> Result {
         var candidates: [String: Candidate] = [:]
+        let lookups = Lookups(appState: appState)
         for recipe in recipes {
-            accumulateRecipe(recipe, appState: appState, into: &candidates)
+            accumulateRecipe(recipe, appState: appState, lookups: lookups, into: &candidates)
         }
         return buildResult(from: candidates, appState: appState, skipPantryStocked: skipPantryStocked)
     }
@@ -95,12 +98,11 @@ enum GroceryGeneratorService {
         )
         // US-588: index pantry stock by name so the skip decision can compare
         // QUANTITIES rather than merely noticing that the name exists.
-        let pantryByName: [String: Food] = skipPantryStocked
-            ? Dictionary(
-                appState.foods.map { ($0.name.lowercased(), $0) },
-                uniquingKeysWith: { first, _ in first }
-              )
-            : [:]
+        let pantryFoods = skipPantryStocked ? appState.foods : []
+        let pantryByName: [String: Food] = Dictionary(
+            pantryFoods.map { ($0.name.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
 
         var items: [GroceryItem] = []
         var sources: [GroceryItemSource] = []
@@ -122,7 +124,20 @@ enum GroceryGeneratorService {
             // requirement. A single egg in the pantry used to suppress a recipe
             // needing a dozen. When the units don't convert we keep the item —
             // failing safe toward buying rather than silently under-buying.
-            if skipPantryStocked, let stocked = pantryByName[nameKey] {
+            // US-588: exact name is the fast path; fall back to
+            // IngredientNameMatcher's whole-word subset match so a pantry
+            // "garlic" is recognised in a candidate named "garlic cloves"
+            // without the raw-substring false positives ("oil" vs "broil").
+            // The scan only runs on an exact-match miss, so this stays cheap.
+            let stockedFood: Food? = skipPantryStocked
+                ? (pantryByName[nameKey] ?? pantryFoods.first {
+                    IngredientNameMatcher.matches(
+                        foodName: $0.name, ingredientLine: candidate.displayName
+                    )
+                  })
+                : nil
+
+            if let stocked = stockedFood {
                 let stockedQty = stocked.quantity ?? 0
                 let stockedUnit = stocked.unit ?? ""
                 if let stockedInRecipeUnit = UnitConverter.convert(
@@ -179,20 +194,21 @@ enum GroceryGeneratorService {
     private static func accumulateRecipe(
         _ recipe: Recipe,
         appState: AppState,
+        lookups: Lookups,
         into candidates: inout [String: Candidate]
     ) {
         if !recipe.ingredients.isEmpty {
             for ing in recipe.ingredients {
                 addStructuredIngredient(
                     ing, recipe: recipe, entry: nil, dateString: nil,
-                    appState: appState, into: &candidates
+                    appState: appState, lookups: lookups, into: &candidates
                 )
             }
         } else {
             for foodId in recipe.foodIds {
                 addFoodContribution(
                     foodId: foodId, recipe: recipe, entry: nil, dateString: nil,
-                    appState: appState, into: &candidates
+                    appState: appState, lookups: lookups, into: &candidates
                 )
             }
             if let extras = recipe.additionalIngredients, !extras.isEmpty {
@@ -284,6 +300,32 @@ enum GroceryGeneratorService {
         HapticManager.success()
     }
 
+    // MARK: - Lookups
+
+    /// US-594: id → entity indexes built ONCE per generation run.
+    ///
+    /// `accumulate` / `addStructuredIngredient` / `addFoodContribution` used to
+    /// call `appState.recipes.first(where:)` and `appState.foods.first(where:)`
+    /// inside per-plan-entry loops, making generation O(entries × foods). A
+    /// 7-day × N-kid plan re-scanned the whole pantry for every ingredient of
+    /// every meal.
+    private struct Lookups {
+        let recipesById: [String: Recipe]
+        let foodsById: [String: Food]
+
+        init(appState: AppState) {
+            // `uniquingKeysWith` rather than `uniqueKeysWithValues`: the latter
+            // traps on duplicate keys, and this is not the place to discover a
+            // duplicated id (see US-587).
+            recipesById = Dictionary(
+                appState.recipes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }
+            )
+            foodsById = Dictionary(
+                appState.foods.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }
+            )
+        }
+    }
+
     // MARK: - Candidate accumulation
 
     /// One in-progress grocery item being built. Many plan entries / many
@@ -353,11 +395,10 @@ enum GroceryGeneratorService {
         from entry: PlanEntry,
         dateString: String,
         appState: AppState,
+        lookups: Lookups,
         into candidates: inout [String: Candidate]
     ) {
-        let recipe = entry.recipeId.flatMap { rid in
-            appState.recipes.first(where: { $0.id == rid })
-        }
+        let recipe = entry.recipeId.flatMap { lookups.recipesById[$0] }
 
         if let recipe {
             if !recipe.ingredients.isEmpty {
@@ -368,6 +409,7 @@ enum GroceryGeneratorService {
                         entry: entry,
                         dateString: dateString,
                         appState: appState,
+                        lookups: lookups,
                         into: &candidates
                     )
                 }
@@ -380,6 +422,7 @@ enum GroceryGeneratorService {
                         entry: entry,
                         dateString: dateString,
                         appState: appState,
+                        lookups: lookups,
                         into: &candidates
                     )
                 }
@@ -403,6 +446,7 @@ enum GroceryGeneratorService {
                 entry: entry,
                 dateString: dateString,
                 appState: appState,
+                lookups: lookups,
                 into: &candidates
             )
         }
@@ -414,6 +458,7 @@ enum GroceryGeneratorService {
         entry: PlanEntry?,
         dateString: String?,
         appState: AppState,
+        lookups: Lookups,
         into candidates: inout [String: Candidate]
     ) {
         let trimmed = ing.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -430,9 +475,7 @@ enum GroceryGeneratorService {
         let resolvedUnit = ing.unit ?? parsed.unit
 
         let key = displayName.lowercased()
-        let linkedFood = ing.foodId.flatMap { fid in
-            appState.foods.first(where: { $0.id == fid })
-        }
+        let linkedFood = ing.foodId.flatMap { lookups.foodsById[$0] }
         let category = linkedFood?.category ?? "other"
         // Prefer the linked food's category mapping; fall back to a
         // name-keyword classifier so unlinked ingredients still land in
@@ -480,9 +523,10 @@ enum GroceryGeneratorService {
         entry: PlanEntry?,
         dateString: String?,
         appState: AppState,
+        lookups: Lookups,
         into candidates: inout [String: Candidate]
     ) {
-        guard let food = appState.foods.first(where: { $0.id == foodId }) else { return }
+        guard let food = lookups.foodsById[foodId] else { return }
         let key = food.name.lowercased()
         let aisle = GroceryAisle.fromLegacyCategory(food.category)
         var existing = candidates[key] ?? Candidate(

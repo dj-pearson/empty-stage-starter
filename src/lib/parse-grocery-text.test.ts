@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { parseGroceryText } from './parse-grocery-text';
 
 describe('parseGroceryText', () => {
@@ -253,4 +255,46 @@ describe('parseGroceryText — audit regressions', () => {
       expect(categoryOf('1 cup buttermilk')).toBe('dairy');
     });
   });
+});
+
+/**
+ * US-590: shared cross-platform case table.
+ *
+ * These cases live in tests/fixtures/ingredient-parse-cases.json and are
+ * asserted by BOTH this suite and
+ * ios/EatPal/EatPalTests/SharedIngredientParseCasesTests.swift, so the web and
+ * iOS ingredient parsers cannot drift apart again. Add cases to the fixture,
+ * not here.
+ */
+describe('parseGroceryText — shared cross-platform cases', () => {
+  // Resolved from the vitest root (vitest.config.ts sits at the repo root)
+  // rather than import.meta.url, which is not a file: URL under the jsdom
+  // environment this suite runs in.
+  const fixturePath = resolve(process.cwd(), 'tests/fixtures/ingredient-parse-cases.json');
+  const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')) as {
+    cases: Array<{
+      input: string;
+      quantity: number;
+      unit: string;
+      name: string;
+      was?: string;
+      note?: string;
+    }>;
+  };
+
+  it('the fixture is non-empty (guards against a silently broken path)', () => {
+    expect(fixture.cases.length).toBeGreaterThan(15);
+  });
+
+  for (const c of fixture.cases) {
+    const suffix = c.was ? ` (was: ${c.was})` : c.note ? ` — ${c.note}` : '';
+    it(`${JSON.stringify(c.input)} → ${c.quantity} ${c.unit || '(no unit)'} ${c.name}${suffix}`, () => {
+      const [item] = parseGroceryText(c.input);
+      expect(item, 'parser returned no item').toBeDefined();
+      expect(item.quantity).toBeCloseTo(c.quantity, 2);
+      expect(item.unit).toBe(c.unit);
+      // Case-insensitive: iOS title-cases for display, web preserves input.
+      expect(item.name.toLowerCase()).toBe(c.name.toLowerCase());
+    });
+  }
 });

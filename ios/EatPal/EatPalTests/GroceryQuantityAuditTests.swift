@@ -160,3 +160,81 @@ final class GroceryQuantityAuditTests: XCTestCase {
         XCTAssertEqual(rows[1].unit, "can")
     }
 }
+
+/// US-589 / US-591 / US-592: list-level behaviour of `GroceryTextParser` — the
+/// voice / paste / share-sheet path. Quantity/unit/name extraction itself is
+/// covered by the shared fixture in `SharedIngredientParseCasesTests`.
+final class GroceryTextParserAuditTests: XCTestCase {
+
+    /// Before: `parse` split on every comma unconditionally, so a preparation
+    /// descriptor became its own grocery item.
+    func testCommaDescriptorDoesNotBecomeItsOwnItem() {
+        let items = GroceryTextParser.parse("2 cloves garlic, minced")
+        XCTAssertEqual(items.count, 1, "\"minced\" must not become a grocery item")
+        XCTAssertEqual(items[0].name.lowercased(), "garlic")
+        XCTAssertEqual(items[0].quantity, 2)
+        XCTAssertEqual(items[0].unit, "clove")
+    }
+
+    func testCommaSeparatedShoppingListStillSplits() {
+        // 2+ commas on a single line is a genuine list, not a descriptor.
+        let items = GroceryTextParser.parse("milk, eggs, bread")
+        XCTAssertEqual(items.count, 3)
+    }
+
+    func testNewlineListSplits() {
+        let items = GroceryTextParser.parse("1 onion, diced\n2 lbs chicken")
+        XCTAssertEqual(items.count, 2, "newlines split; the inline comma does not")
+        XCTAssertEqual(items[0].name.lowercased(), "onion")
+    }
+
+    /// Before: " and " split unconditionally, so this became "1 pint half"
+    /// plus a second item called "half".
+    func testCompoundProductNameSurvivesTheAndSplit() {
+        let items = GroceryTextParser.parse("1 pint half and half")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name.lowercased(), "half and half")
+        XCTAssertEqual(items[0].category, "dairy")
+    }
+
+    func testSpokenConjunctionStillSplits() {
+        let items = GroceryTextParser.parse("two pounds of chicken and a dozen eggs")
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].quantity, 2)
+        XCTAssertEqual(items[0].unit, "lb")
+        XCTAssertEqual(items[1].unit, "dozen")
+    }
+
+    /// Before: `seenNames` dropped the second mention entirely.
+    func testRepeatedItemsAreSummedUnitAware() {
+        let items = GroceryTextParser.parse("1/2 cup milk\n2 tbsp milk")
+        XCTAssertEqual(items.count, 1)
+        // 118.29ml + 29.57ml = 147.87ml ≈ 0.63 cup
+        XCTAssertEqual(items[0].quantity, 0.625, accuracy: 0.01)
+        XCTAssertEqual(items[0].unit, "cup")
+    }
+
+    func testRepeatedSameUnitItemsSum() {
+        let items = GroceryTextParser.parse("1 lb beef\n2 lb beef")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].quantity, 3, accuracy: 0.01)
+    }
+
+    /// Before: substring matching filed these by the wrong keyword.
+    func testCategoryInferenceUsesWordBoundaries() {
+        XCTAssertEqual(GroceryTextParser.parse("graham crackers")[0].category, "carb")
+        XCTAssertEqual(GroceryTextParser.parse("hamburger buns")[0].category, "carb")
+        XCTAssertEqual(GroceryTextParser.parse("peanut butter")[0].category, "snack")
+        XCTAssertEqual(GroceryTextParser.parse("salt and pepper to taste")[0].category, "snack")
+        XCTAssertEqual(GroceryTextParser.parse("2 eggplant")[0].category, "vegetable")
+        XCTAssertEqual(GroceryTextParser.parse("1 cup buttermilk")[0].category, "dairy")
+    }
+
+    /// "2%" is not a quantity — the name must keep it.
+    func testPercentageIsNotReadAsAQuantity() {
+        let items = GroceryTextParser.parse("2% milk")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name.lowercased(), "2% milk")
+        XCTAssertEqual(items[0].category, "dairy")
+    }
+}

@@ -12,41 +12,15 @@ import {
 } from 'react-native';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import type { FoodCategory } from '@/types';
-import { convert } from '@/lib/unitNormalize';
 import {
   ingredientMatchKey,
   planGroceryMerge,
+  requiredAfterStock,
   type ExistingGroceryItem,
   type GroceryAddInput,
 } from '@/lib/groceryMerge';
 import { colors, spacing, fontSize, borderRadius } from '../lib/theme';
 import { suggestCategory, CATEGORIES } from '../lib/unit-suggestions';
-
-/**
- * US-593: how much of `required` still needs buying given what's in the pantry.
- *
- * The old inline maths was `Math.max(1, qty * servings - inStockQty)`, which
- * had two defects: it floored every amount at 1 (so a needed 0.5 tsp was
- * inserted as 1 tsp) and it subtracted the pantry quantity regardless of unit
- * (2 cup − 1 bag = 1). We now only subtract when the units genuinely convert,
- * and fail safe toward buying the full amount when they don't.
- */
-function requiredAfterStock(
-  required: number,
-  requiredUnit: string,
-  stocked: number,
-  stockedUnit: string
-): number {
-  if (!(stocked > 0)) return required;
-  const stockedInRequiredUnit = convert(
-    stocked,
-    stockedUnit || requiredUnit,
-    requiredUnit || stockedUnit
-  );
-  // Incomparable units (e.g. recipe in cups, pantry in bags) — buy it all.
-  if (stockedInRequiredUnit == null) return required;
-  return Math.max(0, required - stockedInRequiredUnit);
-}
 
 interface RecipeForGrocery {
   id: string;
@@ -325,7 +299,9 @@ export function RecipeAddToGroceryModal({ visible, recipe, onClose, onAdded }: P
             name: i.name,
             quantity: i.quantity,
             unit: i.unit ?? '',
-            category: i.category,
+            // `GroceryAddInput.category` is optional; every line we build sets
+            // it, but the column is NOT NULL so narrow it explicitly.
+            category: i.category ?? 'snack',
             checked: false,
             added_via: i.added_via,
             source_recipe_id: i.source_recipe_id,

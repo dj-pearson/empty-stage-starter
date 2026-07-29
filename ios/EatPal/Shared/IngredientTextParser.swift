@@ -4,7 +4,12 @@ import Foundation
 /// or `"1 whole red bell pepper (thinly sliced)"` into a clean
 /// `(quantity, unit, name)` triple.
 ///
-/// Used at three boundaries:
+/// US-592: lives under `Shared/` so the share extension and widget can link it
+/// too. `GroceryTextParser` (the voice / paste / share-sheet path) previously
+/// maintained a second, weaker tokenizer purely because it couldn't reach this
+/// file from the extension target — it now delegates here instead.
+///
+/// Used at four boundaries:
 /// - `RecipeIngredientLegacyParser` when migrating the comma-string
 ///   `additional_ingredients` blob into structured rows.
 /// - `GroceryGeneratorService.addStructuredIngredient` as a defensive
@@ -45,14 +50,27 @@ enum IngredientTextParser {
             return Parsed(quantity: nil, unit: nil, name: raw)
         }
 
+        // 2b. US-592: rewrite a leading word-form number into digits ("two
+        //     pounds of chicken" → "2 pounds of chicken", "a dozen eggs" →
+        //     "1 dozen eggs"). Done as a pre-pass because `extractQuantity`
+        //     scans characters, not tokens.
+        working = substitutingLeadingNumberWord(working)
+
         // 3. Pull off a leading quantity token. Handles plain numbers,
         //    decimals, ASCII fractions, mixed numbers, ranges, and the
         //    common Unicode vulgar fractions.
         var (quantity, afterQty) = extractQuantity(from: working)
         afterQty = afterQty.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // 3b. US-590: strip fillers BEFORE looking for a unit as well as after.
+        //     A word-number quantity can leave an article in front of the unit
+        //     ("half a cup of milk" → "0.5 a cup of milk"), and without this the
+        //     unit was never found and the name came out as "cup of milk".
+        //     Mirrors the strip → unit → strip order in parse-grocery-text.ts.
+        let beforeUnit = stripLeadingFillers(afterQty, keepingAtLeastOneToken: true)
+
         // 4. Pull off a leading unit token if recognised.
-        var (unit, afterUnit) = extractUnit(from: afterQty)
+        var (unit, afterUnit) = extractUnit(from: beforeUnit)
         afterUnit = afterUnit.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // 5. Strip leading filler words from the remaining name —
@@ -70,6 +88,35 @@ enum IngredientTextParser {
         if quantity == nil { unit = nil }
 
         return Parsed(quantity: quantity, unit: unit, name: finalName)
+    }
+
+    // MARK: - Word-form numbers
+
+    /// Word-form numbers, kept in sync with `NUMBER_WORDS` in
+    /// src/lib/parse-grocery-text.ts.
+    private static let numberWords: [String: Double] = [
+        "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+        "eleven": 11, "twelve": 12, "half": 0.5, "quarter": 0.25
+    ]
+
+    /// Replaces a leading word-form number with its digit form.
+    ///
+    /// A word number immediately followed by "and"/"&" is part of a compound
+    /// product name, not a quantity — "half and half" must stay a dairy item
+    /// called "half and half", not 0.5 of something called "and half".
+    private static func substitutingLeadingNumberWord(_ s: String) -> String {
+        let parts = s.split(separator: " ", omittingEmptySubsequences: true)
+        guard let first = parts.first,
+              let value = numberWords[String(first).lowercased()] else { return s }
+        if parts.count >= 2 {
+            let second = String(parts[1]).lowercased()
+            if second == "and" || second == "&" { return s }
+        }
+        let digits = value == value.rounded()
+            ? String(Int(value))
+            : String(value)
+        return ([digits] + parts.dropFirst().map(String.init)).joined(separator: " ")
     }
 
     // MARK: - Quantity
@@ -136,6 +183,14 @@ enum IngredientTextParser {
             // ascii-fraction suffix.
             var end = idx
             while end < s.endIndex, s[end].isNumber { end = s.index(after: end) }
+
+            // US-592: "2%" is a product descriptor ("2% milk", "80% lean"), not
+            // a quantity. Stop without consuming so the digits stay in the name;
+            // the TS parser already behaved this way because it requires a token
+            // to match /^\d+(\.\d+)?$/ in full.
+            if end < s.endIndex, s[end] == "%" {
+                break
+            }
 
             // Decimal: "1.5"
             if end < s.endIndex, s[end] == ".",
@@ -230,12 +285,19 @@ enum IngredientTextParser {
             ("pint", ["pint", "pints", "pt"]),
             ("quart", ["quart", "quarts", "qt"]),
             ("gallon", ["gallon", "gallons", "gal"]),
+            // US-590: "dozen" had no entry, so "a dozen eggs" produced the name
+            // "dozen eggs" with no unit.
+            ("dozen", ["dozen", "dozens", "doz"]),
             ("clove", ["clove", "cloves"]),
             ("can", ["can", "cans"]),
             ("jar", ["jar", "jars"]),
             ("bottle", ["bottle", "bottles"]),
             ("package", ["package", "packages", "pkg", "pkgs", "pack", "packs"]),
             ("piece", ["piece", "pieces", "pc", "pcs"]),
+            // US-590: "count"/"ct" is what UnitInference and the mobile unit
+            // picker use for by-the-item produce, but this parser had no entry
+            // for it — "2 ct eggs" left "ct" stuck on the front of the name.
+            ("count", ["count", "counts", "ct", "each", "ea"]),
             ("slice", ["slice", "slices"]),
             ("stalk", ["stalk", "stalks"]),
             ("head", ["head", "heads"]),
@@ -283,8 +345,11 @@ enum IngredientTextParser {
     /// preparation. e.g. "whole red bell pepper" → "red bell pepper".
     private static let leadingFillers: Set<String> = [
         // US-590: connectives left the noun buried — "1 head of lettuce"
-        // parsed to the name "of lettuce".
-        "of", "the",
+        // parsed to the name "of lettuce". Articles survive a word-number
+        // quantity ("half a cup of milk") so they must be strippable too;
+        // safe because quantity extraction runs first, so "a dozen eggs"
+        // still reads "a" as 1.
+        "of", "the", "a", "an",
         "whole", "fresh", "freshly", "ripe", "raw", "cooked",
         "large", "small", "medium", "extra", "x-large", "xl", "jumbo",
         "organic", "free-range", "free range",
@@ -299,11 +364,18 @@ enum IngredientTextParser {
         "softened", "melted", "cubed", "julienned"
     ]
 
-    private static func stripLeadingFillers(_ s: String) -> String {
+    /// - Parameter keepingAtLeastOneToken: when true, never strips the final
+    ///   remaining token, so a name that is *entirely* filler ("fresh") survives
+    ///   instead of becoming an empty string.
+    private static func stripLeadingFillers(
+        _ s: String,
+        keepingAtLeastOneToken: Bool = false
+    ) -> String {
         var rest = s
         while true {
             let parts = rest.split(separator: " ", omittingEmptySubsequences: true)
             guard let first = parts.first else { return rest }
+            if keepingAtLeastOneToken && parts.count <= 1 { return rest }
             if leadingFillers.contains(String(first).lowercased()) {
                 rest = parts.dropFirst().joined(separator: " ")
             } else {
