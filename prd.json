@@ -1573,6 +1573,496 @@
       "priority": 9,
       "passes": true,
       "notes": "Many functions default verify_jwt=false; only some are intentionally public. DONE: enumerated all verify_jwt=false functions. Classified: agent-* = intentional Agentic-OS internal (server/cron-triggered, out of scope); stripe-webhook (signature-verified), health-check, generate-sitemap, nurture-unsubscribe/csat-rate (token-in-URL) = intentionally public; generate-*/parse-recipe handled in US-558. Gated two clear offenders with requireAdmin (service-role bypass preserves automated callers): update-blog-image (unauth service_role blog mutation + SSRF) and test-blog-webhook (unauth POST to arbitrary URL = SSRF/open-relay). NOTE: if any external automation calls these without the service key it must now send it."
+    },
+    {
+      "id": "US-583",
+      "title": "Planner mutations must surface Supabase errors instead of showing false success",
+      "description": "As a parent, I want to know when a planner change did not save so that I do not trust a plan the server never accepted.",
+      "acceptanceCriteria": [
+        "moveSlot, moveDate, duplicateNextDay, markResult and deleteEntry in app/(tabs)/meals.tsx each inspect the returned { error } and throw or surface it",
+        "PlannerEntryActionSheet.wrap() shows a user-visible failure (Alert or inline error) instead of only console.error, and does NOT close the sheet on failure",
+        "No success flash is shown for a write that failed",
+        "Regression test asserts that a mocked Supabase error produces an error path and no success flash",
+        "Typecheck and lint pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] app/(tabs)/meals.tsx:477 (moveSlot), :483 (moveDate), :505 (duplicateNextDay), :511 (markResult), :557 (deleteEntry) all discard the { error } returned by .update()/.delete()/.insert(). app/mobile/components/PlannerEntryActionSheet.tsx:96-97 catches and only console.errors, then wrap() closes the sheet at :95. Failure scenario: an RLS denial or offline write resolves without throwing -> sheet closes -> showFlash(\"Moved to Dinner\") -> refresh() re-fetches and the entry is unchanged. The parent is told every failed move/delete/result succeeded."
+    },
+    {
+      "id": "US-584",
+      "title": "Wire the offline write-queue into planner and pantry writes (banner currently lies)",
+      "description": "As a parent planning meals with no signal, I want my changes replayed when I reconnect so that the offline banner tells the truth.",
+      "acceptanceCriteria": [
+        "Planner inserts/updates/deletes in app/(tabs)/meals.tsx enqueue plan.insert / plan.update / plan.delete via enqueueOp when the live write fails",
+        "Pantry quantity stepper and edits in app/(tabs)/pantry.tsx enqueue food.update on failure",
+        "Grocery quick-add, bulk-add and detail-save in app/(tabs)/lists.tsx enqueue grocery.insert on failure (today only grocery.toggle enqueues)",
+        "Every QueuedOpKind handled by useOfflineSyncDriver has at least one producer; any kind with no producer is removed from the executor",
+        "Tests cover: offline write is queued, drain replays it, and the optimistic UI is retained (mirrors the existing grocery.toggle pattern)",
+        "Typecheck and lint pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] app/mobile/hooks/useOfflineSyncDriver.ts:36-63 implements executor cases for grocery.insert, plan.insert, plan.update, plan.delete, food.update and kid.insert, but grep across app/ shows exactly ONE enqueueOp call site: app/(tabs)/lists.tsx:151 (grocery.toggle). All other cases are dead code with no producer. Meanwhile app/(tabs)/meals.tsx:685-687 renders \"Offline - changes will sync when you reconnect\" while every planner write goes straight to Supabase with no queue fallback, so offline planner edits are silently lost. Same banner + same gap in lists.tsx:466-468 for adds/edits/deletes."
+    },
+    {
+      "id": "US-585",
+      "title": "Fix recipe_ingredients column drift: iOS-built recipes render blank on web",
+      "description": "As a parent who builds a recipe on my phone, I want its ingredients to appear on the web app so that the two platforms show the same recipe.",
+      "acceptanceCriteria": [
+        "RecipeBuilderSheet writes the canonical structured column name (and dual-writes legacy ingredient_name where that column exists, per the additive-only migration rules)",
+        "Mobile reads use name with an ingredient_name fallback so recipes created by either platform render on both",
+        "A follow-up backfill migration sets name = ingredient_name for rows where name IS NULL (the 20260531 reconcile backfill was one-time and cannot fix rows written since)",
+        "group_label and optional_notes are preserved when a web-created recipe is edited on mobile (they are currently dropped)",
+        "Stale in-code comments claiming \"live schema uses ingredient_name; the generated types call it name\" are corrected — the reconcile migration makes name canonical",
+        "Test asserts a mobile-shaped insert is readable by the web select shape",
+        "Typecheck and lint pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] supabase/migrations/20260531000000_reconcile_recipe_ingredients_schema.sql adds `name` as the canonical structured column (\"the structured columns the current app selects (name, quantity, unit, group_label, optional_notes, sort_order)\"), drops NOT NULL from legacy ingredient_name, and backfills name FROM ingredient_name ONE TIME (WHERE name IS NULL). But app/mobile/components/RecipeBuilderSheet.tsx:288-296 writes ingredient_name / is_optional and never name / optional_notes, and app/(tabs)/recipes.tsx:139,184 read ingredient_name. Mobile is self-consistent but diverges from web: src/contexts/RecipesContext.tsx:58 selects name -> blank ingredient lines, and src/lib/recipeShortfall.ts:54,157 computes shortfall against empty names. On a DB where only 20260430000001_create_recipe_ingredients.sql ran there is no ingredient_name column at all, so the mobile insert fails outright. The comments at recipes.tsx:143-144 and the RecipeBuilderSheet header assert the opposite of the migration and are wrong."
+    },
+    {
+      "id": "US-586",
+      "title": "Fix UTC date rollover across every mobile date strip and \"today\" computation",
+      "description": "As a parent in a US timezone, I want the app to agree with my calendar in the evening so that I am not editing tomorrow's plan.",
+      "acceptanceCriteria": [
+        "A shared local-date helper (local YYYY-MM-DD, not toISOString) replaces every new Date().toISOString().split(\"T\")[0] in app/",
+        "app/(tabs)/meals.tsx todayIso and buildDayStrip, app/(tabs)/index.tsx today, PlannerEntryActionSheet.buildDayStrip and RecipeAddToPlannerModal.buildDateStrip all use it",
+        "The chip labelled \"Today\" writes today's local date for both negative and positive UTC offsets",
+        "Unit tests pin the helper at UTC-8, UTC+0 and UTC+13 around local midnight",
+        "RecipeAddToPlannerModal recomputes its date strip when reopened so a backgrounded app does not label yesterday \"Today\"",
+        "Typecheck and lint pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] app/(tabs)/meals.tsx:57-59 todayIso() returns the UTC date, so for US users after ~5-8pm local the planner defaults to TOMORROW. Same pattern: app/(tabs)/index.tsx:38-40 (dashboard shows tomorrow's entries while the greeting at :164-168 renders the local date via toLocaleDateString — the two disagree on one screen), meals.tsx:69 and :496, PlannerEntryActionSheet.tsx:55,60 (day grid and isToday badge off by one east of Greenwich), RecipeAddToPlannerModal.tsx:46-50. RecipeAddToPlannerModal.tsx:69 also memoizes the strip with [] and the modal never unmounts, so the labels go stale across midnight."
+    },
+    {
+      "id": "US-587",
+      "title": "Make recipe save atomic and stop swipe-dismiss from destroying an in-progress recipe",
+      "description": "As a parent typing a 10-ingredient recipe one-handed, I want my work protected from an accidental swipe and from a partial save so that I never lose it.",
+      "acceptanceCriteria": [
+        "Editing a recipe no longer deletes all recipe_ingredients before the re-insert succeeds — use an upsert/diff or a transactional RPC so a failed insert cannot leave zero ingredients",
+        "RecipeBuilderSheet guards Cancel, hardware back and iOS swipe-to-dismiss with an \"Discard changes?\" confirm when the form is dirty",
+        "An in-progress recipe is persisted as a local draft and restored if the sheet is dismissed or the app is killed",
+        "The sheet wraps its ScrollView in KeyboardAvoidingView so Instructions / Tips / Photo are reachable with the keyboard up",
+        "Save is disabled (with a reason) when the recipe has zero ingredients",
+        "Typecheck and lint pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] app/mobile/components/RecipeBuilderSheet.tsx:272-306 — edit path is update recipes -> DELETE FROM recipe_ingredients WHERE recipe_id -> insert. If the insert errors at :305 the delete has already committed: the user sees \"Could not save the recipe\" (:312) and the recipe now has ZERO ingredients plus food_ids: [] from the preceding update. No transaction, no rollback. Separately :327-332 — presentationStyle=\"pageSheet\" is swipe-dismissible on iOS and onRequestClose/Cancel call onClose immediately with no dirty check and no draft, so one accidental downward swipe destroys the whole form. No KeyboardAvoidingView (:356-360) while the tall multiline fields sit at the bottom (:570-599). canSave (:225) checks only the name."
+    },
+    {
+      "id": "US-588",
+      "title": "Per-kid meal results — record \"Ava ate it, Ben refused\"",
+      "description": "As a parent of more than one child, I want to log a different outcome per child for the same food so that acceptance tracking reflects reality.",
+      "acceptanceCriteria": [
+        "PlannerEntryActionSheet exposes a per-kid result row for each kid in entry.perKid when the group covers more than one kid",
+        "markResult writes only the selected kid's plan_entries row instead of .in(\"id\", allIds)",
+        "A \"same for everyone\" shortcut still sets all kids in one tap",
+        "The planner row summarises mixed outcomes (e.g. \"1 ate · 1 refused\") rather than showing only the first non-null result",
+        "Marking a result does not close the action sheet, so several kids can be logged in one visit",
+        "Tests cover: per-kid write touches one row; mixed-result summary rendering",
+        "Typecheck and lint pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: High | Category: missing-feature | Source: ios-deep-dive 2026-07-29] This is the core picky-eater data the product exists to capture, and it is currently impossible on iOS. PlannerEntryGroup already carries the per-kid rows ({kidId, entryId}, app/mobile/components/PlannerEntryActionSheet.tsx:31) and the header even advertises \"· N kids\" (:120), but no per-kid UI exists. app/(tabs)/meals.tsx:510-513 markResult writes every kid at once via .in(\"id\", ids(entry)). Display collapses to \"first non-null result wins\" (meals.tsx:88). Also PlannerEntryActionSheet.tsx:95 wrap() closes the sheet after every success, so logging 3 items = 6 taps + 3 sheet animations, and the active styling on the result chips (:186-210) is never seen."
+    },
+    {
+      "id": "US-589",
+      "title": "Render and support the snack2 and try_bite meal slots on iOS",
+      "description": "As a parent who plans a Try Bite, I want it visible and editable on my phone so that iOS is not silently hiding part of my plan.",
+      "acceptanceCriteria": [
+        "app/(tabs)/meals.tsx SLOTS and PlannerEntryActionSheet SLOT_OPTIONS cover all six MealSlot values (breakfast, lunch, dinner, snack1, snack2, try_bite)",
+        "An entry created on web in snack2 or try_bite renders, and can be moved, marked and deleted, on iOS",
+        "The slot subtitle in the action sheet never falls through to the raw enum key",
+        "Try Bite is presented as a first-class ritual (distinct label/emoji), not just a fifth slot",
+        "Test asserts groupEntries surfaces all six slots and that the header count matches rendered rows",
+        "Typecheck and lint pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] src/types/index.ts:3 defines six slots: breakfast | lunch | dinner | snack1 | snack2 | try_bite. app/(tabs)/meals.tsx:29-34 lists only four, and app/mobile/components/PlannerEntryActionSheet.tsx:14-19 SLOT_OPTIONS the same four. Failure scenario: a parent plans a Try Bite on web -> the row IS fetched (meals.tsx:171-211), IS counted in the header \"N planned\" (:593,602) and IS counted in the day-strip dots (:205-210), but groupEntries (:79-103) is called per-slot from the 4-item SLOTS list (:718-719) so it never renders. The header says \"3 planned\" while 2 rows appear, and there is no way on iOS to see, move or delete the third. PlannerSearchSheet.tsx:81 already has a try_bite emoji, so the concept is half-wired."
+    },
+    {
+      "id": "US-590",
+      "title": "A planned recipe should be one planner entry, not one row per ingredient",
+      "description": "As a parent who adds \"Taco Night\" to Friday dinner, I want to see one entry I can manage as a unit so that removing it is one action.",
+      "acceptanceCriteria": [
+        "Adding a recipe to the planner produces a single visible entry per kid, grouped by recipe_id",
+        "groupEntries groups recipe-backed rows by recipe_id (not food_id|recipe_id) so a 5-ingredient recipe is one row named after the recipe",
+        "Removing / moving / duplicating that entry acts on all of its underlying rows in one action",
+        "The entry can be expanded to see the ingredients it covers",
+        "Tests cover grouping and the single-action remove",
+        "Typecheck and lint pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: High | Category: ux | Source: ios-deep-dive 2026-07-29] app/mobile/components/RecipeAddToPlannerModal.tsx:113-123 inserts one plan_entries row per ingredient per kid (5-ingredient recipe x 3 kids = 15 rows). app/(tabs)/meals.tsx:83 keys groups on `${food_id}|${recipe_id}` so the planner then shows FIVE separate rows (\"Tortillas\", \"Cheddar\", \"Ground beef\", ...) instead of one \"Taco Night\". Removing the recipe afterwards = 5 separate action-sheet visits, each with its own Remove tap. The flash at recipes.tsx:638-640 reinforces the illusion that one thing was scheduled. Same explosion via the planner search path (meals.tsx:378-387)."
+    },
+    {
+      "id": "US-591",
+      "title": "Multi-select in the planner search sheet (one item per open today)",
+      "description": "As a parent building a dinner from three things, I want to pick them all in one pass so that I am not reopening the same sheet three times.",
+      "acceptanceCriteria": [
+        "PlannerSearchSheet supports selecting multiple items before a single \"Add N to <slot>\" confirm; the sheet stays open while selecting",
+        "onSubmitEditing is wired so the Return key actions the \"Add new\" row (the row already renders ↵ as its affordance)",
+        "The pantry/recipes/grocery fetch is bounded (limit + query-driven) and cached per open rather than re-fetching three unbounded tables on every open",
+        "Results are ordered usefully (recently planned / frequently used first) instead of alphabetically",
+        "A load failure shows a distinct error state with retry, not the \"Nothing yet\" empty state",
+        "New items created from the \"Add new\" row prompt for quantity and unit instead of saving quantity 0 / unit \"\"",
+        "The deduct-from-pantry and auto-grocery toggles are visible from the planner or reset per open, not silent session state",
+        "Typecheck and lint pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: ux | Source: ios-deep-dive 2026-07-29] app/mobile/components/PlannerSearchSheet.tsx onPick -> app/(tabs)/meals.tsx:464 setSearchSlot(null) closes the sheet after ONE pick. A day of 4 slots x 2 items = 8 open/close cycles, and each open re-fetches all foods + all recipes + unchecked grocery names with no .limit() (:108-149, :121-133) = 24 unbounded queries. :284 sets returnKeyType=\"search\" with no onSubmitEditing while :442 renders ↵ as the add affordance — pressing Return does nothing. Load failure only console.errors (:140-141) and falls through to \"Nothing yet / Type to search your pantry and recipes\" (:346-351) with no retry. Ordering is .order(\"name\") (:126). deduct/autoGrocery default true (:105-106) and are deliberately not reset on open (:109-112), so a tap silently decrements pantry stock by 1 regardless of unit (meals.tsx:358). \"Add new\" inserts quantity 0 / unit \"\" (meals.tsx:428-436)."
+    },
+    {
+      "id": "US-592",
+      "title": "Week view and bulk planner operations (copy day, copy week, multi-date schedule)",
+      "description": "As a parent who plans Sunday for the week, I want to see and fill a week at once so that I am not tapping through seven single days.",
+      "acceptanceCriteria": [
+        "The planner offers a week view alongside the day view, showing all slots for 7 days",
+        "\"Copy this day to…\" and \"Copy this week to next week\" bulk actions exist",
+        "Duplicate targets an arbitrary date, not only tomorrow",
+        "A whole slot can be moved to another day in one action",
+        "The date range is not capped at a hardcoded 14-day window; back-filling more than one day in the past is possible",
+        "RecipeAddToPlannerModal supports scheduling one recipe on several dates in one pass and detects that the recipe is already on that day+slot",
+        "Typecheck and lint pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: missing-feature | Source: ios-deep-dive 2026-07-29] No bulk operations exist anywhere in the planner. app/mobile/components/PlannerEntryActionSheet.tsx:166 duplicate is tomorrow-only; :47-52,:103 buildDayStrip(entry.date, 14) starts at i = -1 so the reachable range is entry.date-1 .. entry.date+12 while the hint at :161 claims \"any day in the next two weeks\" — you can back-fill exactly one day. app/(tabs)/meals.tsx:120 dayStrip is 14 days centred -3. RecipeAddToPlannerModal.tsx:43,47,69 is forward-only from today (i starts at 0), so yesterday's dinner cannot be back-filled, nothing beyond +13 days can be planned, single-date only (:182), and onClose fires on success (:141) so Tue + Fri is two full passes. No duplicate detection — tapping Add twice silently doubles every row."
+    },
+    {
+      "id": "US-593",
+      "title": "Planner header count and day-strip dots should count meals, not database rows",
+      "description": "As a parent, I want the \"N planned\" count to match what I see on screen so that the header is not confusing.",
+      "acceptanceCriteria": [
+        "The header count reflects grouped entries (what is rendered), not raw plan_entries rows multiplied by kid count",
+        "Day-strip dot counts are deduped per day by entry signature — the stale comment claiming this already happens is either made true or removed",
+        "Test asserts a 2-item dinner for 3 kids reports \"2 planned\", not \"6 planned\"",
+        "Typecheck and lint pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: correctness | Source: ios-deep-dive 2026-07-29] app/(tabs)/meals.tsx:593 totalToday = entries.length (raw rows for the selected date), rendered as \"· N planned\" at :602. With 3 kids and 2 dinner foods the header reads \"6 planned\" while the UI shows 2 rows. Compounded by US-589: snack2/try_bite rows are counted here but never rendered. The comment at :206-208 says \"Per-day signature dedupe so family doesn't double-count duplicated rows\" but the code below it does no dedupe at all — it increments once per row."
+    },
+    {
+      "id": "US-594",
+      "title": "Stop tearing down the planner realtime channel on every date tap",
+      "description": "As a parent scrolling the day strip, I want the app to stay responsive so that changing days does not churn a realtime subscription.",
+      "acceptanceCriteria": [
+        "The plan_entries realtime subscription is created once per user and does not resubscribe when selectedDate or kids changes",
+        "The subscription callback reads the current date/kids from a ref (or the effect depends on user id only)",
+        "Test or manual trace confirms one subscribe per mount, not one per date change",
+        "Typecheck and lint pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: efficiency | Source: ios-deep-dive 2026-07-29] app/(tabs)/meals.tsx:233-268 the realtime effect depends on [refresh]. refresh (:216-226) depends on kids, loadKids, loadEntries and selectedDate; loadEntries (:160-214) depends on dayStrip; dayStrip (:120) is memoized on selectedDate. So every day-strip tap changes selectedDate -> dayStrip -> loadEntries -> refresh -> the effect cleanup runs supabase.removeChannel and a brand-new channel is subscribed. Same churn when kids first loads."
+    },
+    {
+      "id": "US-595",
+      "title": "Make \"Ready to cook\" actually mean \"you have the ingredients\"",
+      "description": "As a parent at 5pm, I want to see the recipes I can cook right now with what is in the pantry so that I stop opening the fridge and guessing.",
+      "acceptanceCriteria": [
+        "isReadyToCook consults pantry stock for the recipe's ingredients instead of returning ingredientCount > 0",
+        "Recipe cards show a \"have N of M ingredients\" indicator, and the shortfall is one tap from the card",
+        "A \"cook now\" sort ranks recipes by fewest missing ingredients",
+        "The existing web shortfall helper (src/lib/recipeShortfall.ts) is reused rather than reimplemented",
+        "Unit tests cover: all in stock, one short, optional ingredients excluded from the shortfall",
+        "Typecheck and lint pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] src/lib/recipeFilters.ts:122-124 isReadyToCook = ingredientCountOf(recipe) > 0 — it means \"has at least one ingredient row\", not \"you have them\". No pantry stock is consulted anywhere in recipeFilters.ts. The chip is labelled \"Ready to cook ✅\" (app/(tabs)/recipes.tsx:81), promises the pantry-aware what-can-I-cook flow parents actually want, and matches nearly every recipe. src/lib/recipeShortfall.ts already computes exactly this on web and is unused by mobile."
+    },
+    {
+      "id": "US-596",
+      "title": "Recipe and pantry search: typo tolerance, debounce, and do not persist stale queries",
+      "description": "As a parent typing fast one-handed, I want \"brocoli\" to find broccoli and I do not want yesterday's search still filtering my list on cold start.",
+      "acceptanceCriteria": [
+        "Search adds bounded typo tolerance (edit distance 1 for tokens of 4+ chars) on top of the existing exact/prefix/boundary tiers",
+        "The free-text search string is excluded from the persisted filter payload so a relaunch shows the full list",
+        "Search input is debounced (~150-200ms) before re-running the filter over the full list",
+        "Pantry search covers category, unit and aisle — not just name — bringing it level with recipe search",
+        "When a query is present and relevance overrides the chosen sort, the sort control indicates it is inert",
+        "Unit tests cover typo matches, the non-persisted search key, and the fields searched",
+        "Typecheck and lint pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: ux | Source: ios-deep-dive 2026-07-29] src/lib/mobileSearch.ts:44-51 fieldTokenScore is tiered exact(10)/prefix(6)/word-boundary(4)/substring(2) with AND semantics across tokens (:73) — good, but there is NO edit distance, so \"chickn\" and \"brocoli\" match nothing despite the file comment at :1-15 calling it \"fuzzy\". src/lib/foodFilters.ts:95 searches pantry `name` only (weight 3) while unit/category/aisle are fetched and unsearchable; src/lib/recipeFilters.ts:187-194 searches name(3)+description(1)+tags(2)+ingredients(1), so pantry is markedly weaker than its sibling. app/mobile/components/SearchField.tsx:33 fires onChangeText per keystroke straight into the filter (app/(tabs)/pantry.tsx:285,99) with no debounce — only the storage write is debounced (usePersistedFilters.ts:54-63). usePersistedFilters persists the whole filter object INCLUDING `search`, so a stale query survives relaunch and the pantry looks empty on cold start. foodFilters.ts:104 silently ignores sortBy when a query is present while FilterSortSheet.tsx:118-134 still shows the sort chip as selected."
+    },
+    {
+      "id": "US-597",
+      "title": "Recipes built on the phone must be able to satisfy the app's own filters",
+      "description": "As a parent who creates a recipe on iOS, I want it to appear under \"Kid approved\" and rank in the kid-friendly sort so that my own recipes are not invisible to my own filters.",
+      "acceptanceCriteria": [
+        "RecipeBuilderSheet lets the parent set kid_friendly_score (or it is derived from logged results) — the field is currently never written",
+        "A recipe created on the phone can satisfy the \"Kid approved\" filter and rank in the kid-friendly sort",
+        "food_ids is populated from ingredients that resolve to pantry foods automatically (by name match), not only from an explicitly tapped 🔗 chip",
+        "A recipe with unlinked free-text ingredients can still be added to the planner — the \"open this recipe on the web to link ingredients\" dead ends are removed",
+        "Tests cover: score round-trip, auto-linking by name, and planning a free-text-only recipe",
+        "Typecheck and lint pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] Two linked dead ends. (1) app/mobile/components/RecipeBuilderSheet.tsx:248-261 never writes kid_friendly_score, but app/(tabs)/recipes.tsx:230-249 and src/lib/recipeFilters.ts:118-120,160-165 filter and sort on it — so a phone-built recipe can never match the \"Kid approved\" chip the same screen offers. (2) RecipeBuilderSheet.tsx:244-246,260 derives food_ids ONLY from ingredients where the user tapped a suggestion chip, while the placeholder at :397 invites the opposite (\"Ingredient (any name — not just pantry)\"). A free-text recipe saves with food_ids: [] and is then refused by both planner entry points: RecipeAddToPlannerModal.tsx:259 permanently disables Add to plan (banner at :243-247), and PlannerSearchSheet.tsx:191-197 says \"Open this recipe on the web to link ingredients\". Same stale web-dead-end copy at meals.tsx:375 and recipes.tsx:586. This reintroduces the exact complaint the builder header (:26-29) claims to have fixed."
+    },
+    {
+      "id": "US-598",
+      "title": "Recipe photo from the camera roll instead of pasting a URL",
+      "description": "As a parent on a phone, I want to attach a photo I already took so that I am not asked for a URL I do not have.",
+      "acceptanceCriteria": [
+        "RecipeBuilderSheet offers \"Choose photo\" / \"Take photo\" via expo-image-picker, uploading to Supabase Storage and storing the resulting URL",
+        "The manual URL field remains available as a fallback and is sanitized like every sibling field",
+        "Upload shows progress and a failure path that does not lose the rest of the form",
+        "Images are size-capped/compressed before upload",
+        "Typecheck and lint pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: ux | Source: ios-deep-dive 2026-07-29] app/mobile/components/RecipeBuilderSheet.tsx:590-599 is a plain \"Photo URL\" TextInput — the only way to give a recipe an image on iOS. Parents have a photo in the camera roll, not a URL, so in practice every phone-built recipe falls back to the 🍽️ placeholder (app/(tabs)/recipes.tsx:403-405). The value also bypasses sanitization: :253 is imageUrl.trim() || null while every sibling field uses sanitizeTextInput."
+    },
+    {
+      "id": "US-599",
+      "title": "Ingredient entry: unit picker and reorderable rows in the recipe builder",
+      "description": "As a parent entering a recipe, I want to pick units from a list and reorder ingredients so that my units stay consistent and the list reads in cooking order.",
+      "acceptanceCriteria": [
+        "The unit field offers ALL_UNIT_OPTIONS (already exported and unused in this sheet) with free text as a fallback",
+        "Ingredient rows can be reordered (drag or up/down), and sort_order reflects the new order",
+        "The pantry-link suggestion chips clear on blur instead of persisting until a link is tapped",
+        "Ingredient count is shown and gates Save (see US-587)",
+        "Typecheck and lint pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "[Severity: Low | Category: ux | Source: ios-deep-dive 2026-07-29] app/mobile/components/RecipeBuilderSheet.tsx:433-439 is an 80pt free-text unit input, while app/mobile/lib/unit-suggestions.ts:68-74 already exports ALL_UNIT_OPTIONS and is not used here — guaranteeing cups/Cups/c drift that breaks the pantry matching US-595 and US-597 depend on. :295 writes sort_order from array position but the only mutations are append (:187) and remove (:199), so \"flour should come first\" means deleting and re-adding every row below it. focusedKey is set on name focus (:396) and only cleared on link (:208), never on blur, so tapping into Qty leaves the suggestion chips rendered (:409-422) and the layout jumping."
+    },
+    {
+      "id": "US-600",
+      "title": "Add search to the grocery list",
+      "description": "As a parent standing in an aisle with a 60-item list, I want to search it so that I can find one item without scrolling.",
+      "acceptanceCriteria": [
+        "The Lists screen has a SearchField matching the Pantry/Recipes pattern, searching name, notes, category and unit",
+        "Search works in both grouped and flat modes and shows a distinct \"no matches\" empty state",
+        "Section headers and counts reflect the filtered set",
+        "Typecheck and lint pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: missing-feature | Source: ios-deep-dive 2026-07-29] app/(tabs)/lists.tsx has no search at all — no SearchField import, no query state. Pantry (pantry.tsx:283-289) and Recipes (recipes.tsx:350-355) both have one. The only ways to find an item in a long list are scrolling the SectionList (lists.tsx:537-569) or toggling to flat mode (:525-534). This is the most direct answer to \"grocery, maybe easier\"."
+    },
+    {
+      "id": "US-601",
+      "title": "\"Clear bought items\" bulk action after a shopping trip",
+      "description": "As a parent who just finished shopping, I want to clear everything I ticked off in one action so that I am not long-pressing thirty items.",
+      "acceptanceCriteria": [
+        "A \"Clear bought (N)\" action removes all checked items in one request, with a single undo",
+        "An \"Uncheck all\" action exists for reusing a recurring list",
+        "The fetch does not accumulate every item ever bought — checked items are bounded (recent only) or archived",
+        "Test covers bulk clear and its undo",
+        "Typecheck and lint pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "[Severity: High | Category: missing-feature | Source: ios-deep-dive 2026-07-29] app/(tabs)/lists.tsx:340-342 pushes all checked items into a \"Bought\" section that grows forever. The ONLY delete path is long-press on a single row (:402 -> handleDeleteItem :346), and each delete opens a 5s undo banner (:597-611) that also force-commits the previous pending delete (:349-354). Clearing 30 bought items after one shopping trip is 30 long-presses with a banner fighting each one. fetchItems (:68-72) has no limit and no checked filter, so the list re-downloads the full purchase history on every open and every realtime event (:109-110)."
+    },
+    {
+      "id": "US-602",
+      "title": "Swipe gestures on grocery and pantry rows",
+      "description": "As an iOS user, I want to swipe a row to check or delete it so that the app behaves the way every other list app does.",
+      "acceptanceCriteria": [
+        "Grocery rows support swipe-to-delete (with the existing undo) and swipe-to-check",
+        "Pantry rows support swipe-to-delete, and pantry delete gains the same undo affordance grocery already has",
+        "Long-press remains as a fallback and the accessibility hints are updated to describe both",
+        "Actions remain reachable by VoiceOver via accessibilityActions",
+        "Typecheck and lint pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: ux | Source: ios-deep-dive 2026-07-29] Delete is long-press-only on both list screens: app/(tabs)/lists.tsx:402 and app/(tabs)/pantry.tsx:340-346 (with accessibilityHint \"Long press to delete\"). No swipe anywhere in app/. Inconsistent destructive behaviour between the two: lists.tsx:346-377 implements a full 5s optimistic undo banner, while pantry.tsx:206-218 discards the delete result entirely (no error handling, no undo) so a failed delete leaves the row gone locally and still present in the DB until refresh."
+    },
+    {
+      "id": "US-603",
+      "title": "Order the grocery list by store aisle, not just food category",
+      "description": "As a parent walking a store, I want the list ordered the way I walk it so that I am not doubling back.",
+      "acceptanceCriteria": [
+        "Grocery grouping offers an aisle mode backed by the existing foods.aisle data, alongside the current category mode",
+        "Items added from the pantry or a recipe carry the aisle through to the grocery row",
+        "Aisle order is user-reorderable and persisted",
+        "Items with no aisle fall into a clearly labelled bucket",
+        "Typecheck and lint pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: missing-feature | Source: ios-deep-dive 2026-07-29] app/(tabs)/lists.tsx:330-344 groups only by FoodCategory (protein/dairy/…), which is a nutrition taxonomy, not a shopping route. foods.aisle already exists and is already SELECTed by the pantry (app/(tabs)/pantry.tsx:77,179) and typed on FoodRow (:43) but is never read anywhere in app/ — grep returns only those three lines. The data to do this is present and unused."
+    },
+    {
+      "id": "US-604",
+      "title": "Bulk-insert grocery adds and make the bulk-paste preview editable",
+      "description": "As a parent pasting a 30-item list, I want it added in one request and I want to fix a mis-parsed line before it lands.",
+      "acceptanceCriteria": [
+        "Quick-add and bulk-add issue a single bulk insert instead of one request per parsed item",
+        "The BulkAddSheet preview allows per-line edit and remove (and per-line include/exclude) before confirming",
+        "Silently de-duplicated lines are surfaced to the user rather than dropped without notice",
+        "A partial failure reports which lines failed instead of a blanket \"Failed to add items\"",
+        "Typecheck and lint pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: efficiency | Source: ios-deep-dive 2026-07-29] app/(tabs)/lists.tsx:203-211 and :230-238 both do Promise.all(parsed.map(insertOne)) — insertOne (:158-178) is a single-row insert with .select().single(), so a 30-item paste fires 30 separate round trips and any one failure throws the whole Promise.all into a generic Alert(\"Failed to add items\", :242). app/mobile/components/BulkAddSheet.tsx:92-108 renders a read-only preview, so one mis-parsed line means going back into the raw textarea. src/lib/parse-grocery-text.ts:200-211 silently de-dupes by lowercased name, so pasting \"2 milk\" and \"1 milk\" drops one line with no notice and the preview count just does not match what was pasted. The archived PRD specified \"checkboxes per parsed item\" (archive/2026-07-07-platform-hardening-v2/prd.json:2655)."
+    },
+    {
+      "id": "US-605",
+      "title": "Deduplicate grocery adds across the pantry, recipe and planner entry points",
+      "description": "As a parent, I want adding the same thing twice to bump the quantity rather than create a second line so that my list is not full of duplicates.",
+      "acceptanceCriteria": [
+        "Adding an item already on the unchecked list merges (bumps quantity / notes) instead of inserting a duplicate, across the pantry restock button, RecipeAddToGroceryModal and the planner auto-grocery path",
+        "RecipeAddToGroceryModal's alreadyInList becomes an actual guard, not just a display hint",
+        "Fractional quantities are preserved rather than rounded up to 1",
+        "Changing the servings multiplier re-evaluates which lines are pre-checked",
+        "The servings control is seeded from the recipe's own servings/default_servings instead of always starting at 1",
+        "Tests cover: duplicate merge, fractional quantity, servings re-evaluation",
+        "Typecheck and lint pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: correctness | Source: ios-deep-dive 2026-07-29] Three entry points, inconsistent dedupe. app/(tabs)/pantry.tsx:237-246 inserts with no duplicate check at all — tapping 🛒 twice creates two rows. app/mobile/components/RecipeAddToGroceryModal.tsx:124 computes alreadyInList but only displays it (:287-291), so a ticked already-present line inserts a second row (:222-248); the check also only considers unchecked items (:98). Only app/(tabs)/meals.tsx:283-291 ensureGroceryItem actually guards (ilike + checked=false). Also RecipeAddToGroceryModal.tsx:237-239 Math.max(1, …) inflates 0.5 tsp salt to 1 tsp and its || fallback is unreachable; :152-156 computes defaultChecked once against un-scaled quantity so bumping servings (:321-333) moves lines into \"Low stock\" without checking them and the parent under-orders; :65,157 always starts servings at 1 though recipes.servings / default_servings exist."
+    },
+    {
+      "id": "US-606",
+      "title": "Checking off a grocery item should restock the pantry",
+      "description": "As a parent, I want items I bought to show up in my pantry so that stock levels stay true without double entry.",
+      "acceptanceCriteria": [
+        "Checking a grocery item offers (or is configured) to increment the matching pantry food's quantity, creating the food if it does not exist",
+        "The link is traceable — a grocery item added from the pantry restock button knows which food it came from",
+        "Unchecking reverses the increment",
+        "The behaviour is opt-in/visible, not a silent side effect",
+        "Tests cover: check restocks, uncheck reverses, unmatched name creates a food",
+        "Typecheck and lint pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: missing-feature | Source: ios-deep-dive 2026-07-29] The pantry -> grocery edge exists (app/(tabs)/pantry.tsx:220-253, added_via \"restock\") but the reverse edge does not: app/(tabs)/lists.tsx:131-156 handleToggleCheck writes only { checked }. So a parent who restocks from the pantry, shops, and ticks everything off still has a pantry showing zero of everything and must re-enter every quantity by hand. Note the planner already silently decrements pantry stock on plan (meals.tsx:357-361), so stock drifts down and is never replenished."
+    },
+    {
+      "id": "US-607",
+      "title": "Surface safe foods and try bites on iOS — the picky-eater model is invisible",
+      "description": "As a parent of a selective eater, I want to mark and see safe foods and try bites on my phone so that the app supports the approach it is built around.",
+      "acceptanceCriteria": [
+        "is_safe and is_try_bite are visible on pantry rows and editable in the item detail sheet — they are currently hardcoded on insert and never shown",
+        "The pantry offers a \"safe foods\" filter, and the planner search sheet flags safe foods and try bites",
+        "The planner can compose a plate as \"safe food + try bite\", the pattern the try_bite slot exists for",
+        "New foods created from the planner, pantry and scan flows let the parent choose rather than defaulting silently to is_safe: true",
+        "Tests cover the filter and the round-trip of both flags",
+        "Typecheck and lint pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: High | Category: missing-feature | Source: ios-deep-dive 2026-07-29] The safe-food / try-bite distinction is the product's core differentiator and is entirely invisible and unsettable on iOS. Every mobile insert hardcodes is_safe: true, is_try_bite: false — app/(tabs)/meals.tsx:434-435, app/(tabs)/pantry.tsx:176-177, app/(tabs)/scan.tsx:130-131. pantry.tsx:42,77,179 declares and SELECTs is_safe but never renders it; grep across app/ shows no other reads. app/mobile/components/ItemDetailModal.tsx has no control for either flag. app/mobile/components/PlannerSearchSheet.tsx:81 has a try_bite emoji for a slot that iOS cannot even render (US-589)."
+    },
+    {
+      "id": "US-608",
+      "title": "Kid acceptance history and insights on iOS",
+      "description": "As a parent, I want to see what each child has accepted over time so that logging results pays off in something I can act on.",
+      "acceptanceCriteria": [
+        "A per-kid view shows accepted / tasted / refused history and the trend for a food over repeated exposures",
+        "\"Wins\" (foods that moved from refused to tasted or ate) are surfaced",
+        "The existing web insight helpers (src/lib/insights.ts and the food-success tracking components) are reused rather than reimplemented",
+        "The view is reachable from both the planner and the kid profile",
+        "Depends on US-588 — per-kid results must exist before per-kid history is meaningful",
+        "Typecheck and lint pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "[Severity: High | Category: missing-feature | Source: ios-deep-dive 2026-07-29] iOS captures plan_entries.result (app/(tabs)/meals.tsx:510-513) but never shows it back beyond a coloured row and a \"· ate it\" suffix on the current day (:751, :767-769). There is no history, no per-food exposure trend, no cross-day view — so the logging a parent does has no visible payoff on the device where they do it. Web already has the analysis: src/lib/insights.ts computeInsights (shared helper noted in US-540/US-553) and the FoodSuccessTracker components. Blocked on US-588: today results are written for all kids at once, so per-kid history would be fiction."
+    },
+    {
+      "id": "US-609",
+      "title": "Fix the Scan tab: no camera preview despite a camera permission prompt",
+      "description": "As a parent, I want barcode scanning to actually scan, or to stop asking for camera access it never uses.",
+      "acceptanceCriteria": [
+        "Either a live CameraView barcode scanner is implemented, or the camera permission request, flashlight control and \"Point your camera at a food barcode\" copy are removed",
+        "No iOS camera permission is requested for a capability the build does not ship (App Store guideline 5.1.1 risk)",
+        "A scan result can be added to the grocery list as well as the pantry",
+        "The scanned barcode is preserved when the parent falls back to manual entry",
+        "The \"saved to your pantry\" confirmation is true — the Pantry tab reflects the new item without a manual pull-to-refresh",
+        "The Scan screen has a visible way back, and Scan is reachable from somewhere other than a single Home quick action",
+        "Typecheck and lint pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "[Severity: High | Category: correctness | Source: ios-deep-dive 2026-07-29] app/(tabs)/scan.tsx:49-73 dynamically imports expo-camera and requests camera permission on mount; expo-camera@17.0.8 still exports the legacy shim so cameraSupported becomes true — but grep for CameraView across app/ returns ZERO hits, so no preview is ever rendered. Consequences: the help text becomes \"Point your camera at a food barcode to scan\" (:166) over a black placeholder that cannot scan; the flashlight button (:197-207) only swaps 💡/🔦 (flashOn at :46,200 is inert); and iOS shows a permission prompt for a non-existent feature, which is an App Store 5.1.1 review risk. The file header at :24-26 still lists \"Camera scan via expo-camera\" as path 1. The only real path is the manual barcode field (:214-225) -> OpenFoodFacts (:91) -> one \"Add to My Foods\" insert (:126-145) -> Alert dead end (:148) saying \"saved to your pantry\", but pantry.tsx fetches only on mount (:90-92) with no useFocusEffect and no realtime on foods, so the item does not appear until pull-to-refresh. The not-found card (:290-293) tells the user to add it manually with no button and the barcode is lost — ItemDetailModal has no barcode field. added_via \"barcode\" was anticipated by supabase/migrations/20251014000000_grocery_recipe_phase1.sql:120 and is never written."
+    },
+    {
+      "id": "US-610",
+      "title": "Close the pantry and home dead ends with cross-screen navigation",
+      "description": "As a parent, I want to move between pantry, recipes and my list without backing out to a tab bar so that the app feels joined up.",
+      "acceptanceCriteria": [
+        "Pantry offers \"what can I cook with this\" into Recipes (depends on US-595) and a bulk \"add all out-of-stock to grocery\"",
+        "Home's quick actions include Pantry",
+        "Home's unreachable \"No meals planned\" empty state is either made reachable or removed",
+        "Pantry refetches on focus (or subscribes to foods realtime) so items added from Scan or the web appear without a pull-to-refresh",
+        "Typecheck and lint pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: ux | Source: ios-deep-dive 2026-07-29] app/(tabs)/pantry.tsx and app/(tabs)/scan.tsx never import expo-router — the only router.push calls in the whole tab group are the three on Home (app/(tabs)/index.tsx:227,236,245 plus :289). Home links to Meals/Scan/Lists but never Pantry. Pantry already computes counts.out (:100) and has an \"Out\" filter (:302-307) but restocking 8 empty items is 8 modal round-trips. No useFocusEffect / useIsFocused anywhere in app/, and no realtime on foods (unlike lists.tsx:91-122), so Pantry is stale after any external write. app/(tabs)/index.tsx:299-307 ListEmptyComponent can never render because data={MEAL_SLOTS} is a module-level 4-element constant (:29,146) — a user with zero plan entries sees four \"+ Add\" cards, never the empty state."
+    },
+    {
+      "id": "US-611",
+      "title": "Fix pantry and item-modal correctness bugs (qty 0 restock, sticky category, partial filter reset)",
+      "description": "As a parent, I want the pantry to keep the state I set so that editing a name does not change my stock and Reset actually resets.",
+      "acceptanceCriteria": [
+        "Editing an out-of-stock item preserves quantity 0 instead of silently setting it to 1",
+        "The category chip can be deselected in add mode — the suggestion effect must not immediately re-apply it",
+        "\"Reset all filters\" clears the stock filter too, or the button and the active-count badge are made consistent with what it actually resets",
+        "Category counts in the filter sheet respect the active stock filter",
+        "Pantry delete handles its error result and offers the same undo grocery has (see US-602)",
+        "Regression tests cover the qty-0 edit and the category deselect",
+        "Typecheck and lint pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "[Severity: Medium | Category: correctness | Source: ios-deep-dive 2026-07-29] app/mobile/components/ItemDetailModal.tsx:84 quantity: qty == null || qty <= 0 ? 1 : qty — but 0 is a first-class pantry state (foodStock(0) === \"out\", src/lib/foodFilters.ts:28; the \"Out\" chip filters on it, pantry.tsx:302-307; the row stepper clamps to 0 not 1, pantry.tsx:128). Open a 0-qty item, fix a typo, Save -> quantity becomes 1 and it drops out of the Out filter. validateNumericInput accepts 0 (app/mobile/lib/validation.ts:71) so the modal is the sole cause. ItemDetailModal.tsx:66-68: the effect re-applies suggestedCategory whenever category is falsy AND has category in its deps, so tapping the active chip to deselect (:184) is immediately undone for any name matching SUGGESTIONS. app/(tabs)/pantry.tsx:414-420 onReset preserves prev.stock while activeFoodFilterCount counts stock !== \"all\" (foodFilters.ts:55-60), so \"Reset all filters\" (FilterSortSheet.tsx:144) leaves the badge reading 1 and the list filtered. pantry.tsx:101,104-120 catCounts is computed from all foods, so with stock=\"Out\" the sheet offers \"Protein (12)\" and shows 2 rows."
+    },
+    {
+      "id": "US-612",
+      "title": "i18n coverage for the mobile tabs (currently zero)",
+      "description": "As a maintainer, I want mobile copy to go through i18next like the web app so that adding a locale does not mean rewriting every screen.",
+      "acceptanceCriteria": [
+        "User-facing strings in app/(tabs)/*.tsx and app/mobile/components/*.tsx render via useTranslation() with keys in src/i18n/locales/en.json",
+        "Numbers and dates use Intl.* so a locale switch also localizes formatting",
+        "A lint rule or test flags new hardcoded user-facing literals in app/",
+        "Typecheck and lint pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "[Severity: Low | Category: maintainability | Source: ios-deep-dive 2026-07-29] CLAUDE.md (US-347) requires new user-facing copy to go through useTranslation(), but the mobile tabs have zero coverage — every string is a hardcoded literal: \"Pantry\" (app/(tabs)/pantry.tsx:273), \"Search pantry…\" (:286), \"Today's Summary\" (app/(tabs)/index.tsx:202), \"Scan Food\" (app/(tabs)/scan.tsx:171), \"Grocery List\" (app/(tabs)/lists.tsx:452), \"Plan\" (app/(tabs)/meals.tsx:599). No i18next import anywhere in app/."
+    },
+    {
+      "id": "US-613",
+      "title": "Mobile convention cleanup: remove `any`, dead code and a11y gaps",
+      "description": "As a maintainer, I want the mobile tabs to follow the project conventions so that the CI gate and screen readers both behave.",
+      "acceptanceCriteria": [
+        "The `any` usages in app/(tabs)/index.tsx and app/(tabs)/lists.tsx are typed properly (CLAUDE.md forbids any)",
+        "Dead code is removed: the Scan icon map entry, the inert flashOn state, unread selects, and the unreachable \"you\" fallback in the planner flash",
+        "announceForAccessibility is moved out of render bodies into effects so it fires once instead of on every render",
+        "QuickCategoryPicker's backdrop and inert sheet wrapper stop presenting as unlabelled buttons to VoiceOver, and category chips get accessibilityRole",
+        "The SearchField clear button meets the 48dp target the rest of the codebase enforces",
+        "The \"Reset\" result chip in PlannerEntryActionSheet does not render as active for a brand-new entry",
+        "Typecheck and lint pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "[Severity: Low | Category: maintainability | Source: ios-deep-dive 2026-07-29] any: app/(tabs)/index.tsx:92 mealsData.map((entry: any) …) and app/(tabs)/lists.tsx:475 width percentage `as any`. Dead code: app/(tabs)/_layout.tsx:12 Scan icon (screen is href: null at :83-88 with no tabBarIcon); app/(tabs)/scan.tsx:46,200 flashOn; RecipeAddToGroceryModal.tsx:96 `checked` selected but never read; RecipeAddToPlannerModal.tsx:110-111 [null] kid branches and :122 `result: null as null`; recipes.tsx:639 `|| \"you\"` unreachable because size 0 short-circuits earlier. announceForAccessibility called from render bodies: app/(tabs)/index.tsx:124, meals.tsx:578, lists.tsx:435 — re-fires every render while loading. QuickCategoryPicker.tsx:23-24,31-36 unlabelled full-screen backdrop TouchableOpacity + onPress={() => {}} on the card (announced but inert) + accessibilityState without accessibilityRole. SearchField.tsx:42-50 ✕ is ~32dp vs the 48dp used at ItemDetailModal.tsx:258 and index.tsx:329. PlannerEntryActionSheet.tsx:207 Reset chip renders active whenever result == null."
     }
   ]
 }
