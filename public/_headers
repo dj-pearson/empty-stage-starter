@@ -14,7 +14,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
 
   # Feature policy (privacy)
-  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(self), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=()
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(self), usb=(), magnetometer=(), gyroscope=(), accelerometer=()
 
   # Cross-Origin policies
   # NOTE: Cross-Origin-Embedder-Policy is intentionally NOT set. COEP (even
@@ -54,7 +54,10 @@
   #   (an injected <img src=evil?data=…>) already requires script execution, which the hardened
   #   script-src now blocks — so the marginal benefit is low and the breakage risk is high.
   # Self-hosted Supabase: api.tryeatpal.com, functions.tryeatpal.com
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://js.stripe.com https://*.tryeatpal.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com https://*.sentry.io; frame-src 'self' https://js.stripe.com https://hooks.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;
+  # Cloudflare Web Analytics is auto-injected by Pages into every response: it loads
+  #   static.cloudflareinsights.com/beacon.min.js and beacons to cloudflareinsights.com/cdn-cgi/rum.
+  #   Both must be allowed or the console logs a CSP violation on every page load.
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://js.stripe.com https://static.cloudflareinsights.com https://*.tryeatpal.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://api.tryeatpal.com https://functions.tryeatpal.com wss://api.tryeatpal.com https://api.stripe.com https://*.sentry.io https://cloudflareinsights.com; frame-src 'self' https://js.stripe.com https://hooks.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; block-all-mixed-content;
 
   # Report CSP violations (for monitoring)
   # Content-Security-Policy-Report-Only: default-src 'self'; report-uri /api/csp-report;

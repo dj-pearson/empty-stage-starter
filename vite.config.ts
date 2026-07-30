@@ -77,12 +77,29 @@ export default defineConfig(({ mode }) => ({
         // Manual chunking for better caching and smaller initial bundles
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            // Sentry MUST be claimed first. @sentry/core ships integrations named
+            // after the libraries they instrument (zoderrors.js, graphqlclient.js,
+            // prisma.js, …). A later rule doing a loose id.includes('zod') steals
+            // zoderrors.js into vendor-forms, while the rest of @sentry/core stays
+            // here — @sentry/core/index re-exports it, so the two chunks import each
+            // other. Circular ESM chunks hit the TDZ on load
+            // ("Cannot access 'X' before initialization") and blank the whole app.
+            // Keep sentry+replay together for the same reason.
+            if (id.includes('@sentry')) {
+              return 'vendor-sentry';
+            }
             // React Router (separate chunk for route changes)
             if (id.includes('react-router')) {
               return 'vendor-router';
             }
-            // Form libraries (only loaded on pages with forms)
-            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
+            // Form libraries (only loaded on pages with forms).
+            // Match on the package directory, not a bare substring, so unrelated
+            // packages with "zod"/"hookform" in an inner filename aren't captured.
+            if (
+              /[\\/]node_modules[\\/]react-hook-form[\\/]/.test(id) ||
+              /[\\/]node_modules[\\/]zod[\\/]/.test(id) ||
+              /[\\/]node_modules[\\/]@hookform[\\/]/.test(id)
+            ) {
               return 'vendor-forms';
             }
             // Supabase (database operations)
@@ -101,11 +118,7 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('gsap')) {
               return 'vendor-gsap';
             }
-            // Sentry (error tracking - keep together to avoid circular dependencies)
-            // DO NOT split sentry and sentry-replay - causes TDZ errors in production
-            if (id.includes('@sentry')) {
-              return 'vendor-sentry';
-            }
+            // (Sentry is claimed at the top of this function — see note there.)
             // TipTap editor and its CJS dependencies (only loaded on blog/CMS pages)
             // highlight.js and react-syntax-highlighter are CommonJS — they must stay
             // in the same chunk as lowlight/@tiptap to avoid cross-chunk CJS interop failures
