@@ -13,7 +13,39 @@
  * Pure + dependency-light so both the web grocery flows and the test suite can
  * use it, and so iOS can mirror the same canonical behaviour.
  */
-import { normalize, convert } from "@/lib/unitNormalize";
+import { normalize, convert } from '@/lib/unitNormalize';
+
+/**
+ * US-593: how much of `required` still needs buying, given pantry stock.
+ *
+ * Lives here rather than inline in the mobile modal so it is unit-testable —
+ * `vitest.config.ts` only collects `src/**`, and there is no React Native
+ * preset for rendering the modal itself.
+ *
+ * The inline version this replaces was
+ * `Math.max(1, qty * servings - inStockQty)`, which had two defects:
+ *   1. it floored every amount at 1, so a needed 0.5 tsp became 1 tsp;
+ *   2. it subtracted the pantry quantity regardless of unit (2 cup − 1 bag = 1).
+ *
+ * Stock is only subtracted when the units genuinely convert; otherwise we fail
+ * safe toward buying the full amount rather than under-buying.
+ */
+export function requiredAfterStock(
+  required: number,
+  requiredUnit: string,
+  stocked: number,
+  stockedUnit: string
+): number {
+  if (!Number.isFinite(required)) return 0;
+  if (!(stocked > 0)) return required;
+  const stockedInRequiredUnit = convert(
+    stocked,
+    stockedUnit || requiredUnit,
+    requiredUnit || stockedUnit
+  );
+  if (stockedInRequiredUnit == null) return required;
+  return Math.max(0, required - stockedInRequiredUnit);
+}
 
 export interface GroceryAddInput {
   name: string;
@@ -43,15 +75,78 @@ export interface GroceryMergePlan {
 
 /** Unit / packaging words that shouldn't influence what an item *is*. */
 const UNIT_NOISE = new Set<string>([
-  "lb", "lbs", "pound", "pounds", "oz", "ounce", "ounces",
-  "g", "gram", "grams", "kg", "kilo", "kilogram", "kilograms",
-  "ml", "l", "liter", "litre", "liters", "litres",
-  "tsp", "teaspoon", "teaspoons", "tbsp", "tablespoon", "tablespoons",
-  "cup", "cups", "pt", "pint", "pints", "qt", "quart", "quarts", "gal", "gallon",
-  "clove", "cloves", "can", "cans", "jar", "jars", "bag", "bags", "box", "boxes",
-  "package", "packages", "pkg", "piece", "pieces", "pc", "pcs", "slice", "slices",
-  "bunch", "bunches", "head", "heads", "stick", "sticks", "dozen", "pack", "packs",
-  "container", "containers", "bottle", "bottles", "stalk", "stalks", "sprig", "sprigs",
+  'lb',
+  'lbs',
+  'pound',
+  'pounds',
+  'oz',
+  'ounce',
+  'ounces',
+  'g',
+  'gram',
+  'grams',
+  'kg',
+  'kilo',
+  'kilogram',
+  'kilograms',
+  'ml',
+  'l',
+  'liter',
+  'litre',
+  'liters',
+  'litres',
+  'tsp',
+  'teaspoon',
+  'teaspoons',
+  'tbsp',
+  'tablespoon',
+  'tablespoons',
+  'cup',
+  'cups',
+  'pt',
+  'pint',
+  'pints',
+  'qt',
+  'quart',
+  'quarts',
+  'gal',
+  'gallon',
+  'clove',
+  'cloves',
+  'can',
+  'cans',
+  'jar',
+  'jars',
+  'bag',
+  'bags',
+  'box',
+  'boxes',
+  'package',
+  'packages',
+  'pkg',
+  'piece',
+  'pieces',
+  'pc',
+  'pcs',
+  'slice',
+  'slices',
+  'bunch',
+  'bunches',
+  'head',
+  'heads',
+  'stick',
+  'sticks',
+  'dozen',
+  'pack',
+  'packs',
+  'container',
+  'containers',
+  'bottle',
+  'bottles',
+  'stalk',
+  'stalks',
+  'sprig',
+  'sprigs',
 ]);
 
 /** True for pure numbers, fractions, ratios ("80/20"), and percentages. */
@@ -61,10 +156,10 @@ function isNumericToken(tok: string): boolean {
 
 /** Crude singulariser — enough to align "eggs"/"egg", "tomatoes"/"tomato". */
 function singularize(word: string): string {
-  if (word.length <= 3 || word.endsWith("ss")) return word;
-  if (word.endsWith("ies")) return word.slice(0, -3) + "y";
-  if (word.endsWith("oes")) return word.slice(0, -2);
-  if (word.endsWith("s")) return word.slice(0, -1);
+  if (word.length <= 3 || word.endsWith('ss')) return word;
+  if (word.endsWith('ies')) return word.slice(0, -3) + 'y';
+  if (word.endsWith('oes')) return word.slice(0, -2);
+  if (word.endsWith('s')) return word.slice(0, -1);
   return word;
 }
 
@@ -79,10 +174,10 @@ function singularize(word: string): string {
  *   "red onion"          → "onion red"     (distinct from "onion" — kept apart)
  */
 export function ingredientMatchKey(name: string): string {
-  const cleaned = (name ?? "")
+  const cleaned = (name ?? '')
     .toLowerCase()
-    .replace(/\([^)]*\)/g, " ") // strip parentheticals
-    .replace(/[.,;]/g, " ");
+    .replace(/\([^)]*\)/g, ' ') // strip parentheticals
+    .replace(/[.,;]/g, ' ');
   const tokens = cleaned
     .split(/\s+/)
     .map((t) => t.trim())
@@ -90,12 +185,12 @@ export function ingredientMatchKey(name: string): string {
     .filter((t) => !isNumericToken(t))
     .filter((t) => !UNIT_NOISE.has(t))
     .map(singularize);
-  return tokens.sort().join(" ");
+  return tokens.sort().join(' ');
 }
 
 /** Render a quantity without trailing zeros: 2 → "2", 1.5 → "1.5", 0.25 → "0.25". */
 export function formatQuantity(qty: number): string {
-  if (!Number.isFinite(qty)) return "0";
+  if (!Number.isFinite(qty)) return '0';
   const rounded = Math.round(qty * 100) / 100;
   return String(rounded);
 }
@@ -108,14 +203,14 @@ function round2(n: number): number {
 function dominantUnit(parts: { unit?: string | null }[]): string {
   const counts = new Map<string, number>();
   for (const p of parts) {
-    const u = (p.unit ?? "").trim();
+    const u = (p.unit ?? '').trim();
     counts.set(u, (counts.get(u) ?? 0) + 1);
   }
-  let best = "";
+  let best = '';
   let bestCount = -1;
   for (const [u, c] of counts) {
     // Prefer a real unit over the empty/placeholder one on ties.
-    if (c > bestCount || (c === bestCount && u !== "" && best === "")) {
+    if (c > bestCount || (c === bestCount && u !== '' && best === '')) {
       best = u;
       bestCount = c;
     }
@@ -129,27 +224,31 @@ function dominantUnit(parts: { unit?: string | null }[]): string {
  * unit ("1 lb" + "1 lb" → 2 "lb"). Mixed/unknown families fall back to a raw
  * numeric sum keeping the dominant unit label.
  */
-export function sumQuantities(
-  parts: { quantity: number; unit?: string | null }[]
-): { quantity: number; unit: string } {
+export function sumQuantities(parts: { quantity: number; unit?: string | null }[]): {
+  quantity: number;
+  unit: string;
+} {
   const cleaned = parts.filter((p) => Number.isFinite(p.quantity));
-  if (cleaned.length === 0) return { quantity: 0, unit: "" };
+  if (cleaned.length === 0) return { quantity: 0, unit: '' };
   if (cleaned.length === 1) {
-    return { quantity: round2(cleaned[0].quantity), unit: (cleaned[0].unit ?? "").trim() };
+    return { quantity: round2(cleaned[0].quantity), unit: (cleaned[0].unit ?? '').trim() };
   }
 
   const target = dominantUnit(cleaned);
   const norms = cleaned.map((p) => normalize(p.quantity, p.unit));
   const families = new Set(norms.map((n) => n.family));
 
-  if (families.size === 1 && !families.has("unknown")) {
+  if (families.size === 1 && !families.has('unknown')) {
     const canonicalTotal = norms.reduce((s, n) => s + n.qty, 0);
     const canonicalUnit = norms[0].canonicalUnit;
     const converted = convert(canonicalTotal, canonicalUnit, target || canonicalUnit);
     if (converted != null) {
       return { quantity: round2(converted), unit: target };
     }
-    return { quantity: round2(canonicalTotal), unit: canonicalUnit === "piece" ? target : canonicalUnit };
+    return {
+      quantity: round2(canonicalTotal),
+      unit: canonicalUnit === 'piece' ? target : canonicalUnit,
+    };
   }
 
   // Mixed or unknown families — best-effort raw sum.
@@ -162,7 +261,7 @@ function pickDisplayName(names: string[]): string {
   let best = names[0];
   let bestScore = Infinity;
   for (const n of names) {
-    const tokenCount = ingredientMatchKey(n).split(" ").filter(Boolean).length;
+    const tokenCount = ingredientMatchKey(n).split(' ').filter(Boolean).length;
     const score = tokenCount * 1000 + n.length; // fewer tokens, then shorter
     if (score < bestScore) {
       best = n;
@@ -183,22 +282,22 @@ export function splitIngredientBlock(text: string): GroceryAddInput[] {
   if (!text) return [];
   const lines = text
     .split(/\r?\n|·|•|;/)
-    .flatMap((l) => (l.includes("\n") ? l.split("\n") : [l]))
+    .flatMap((l) => (l.includes('\n') ? l.split('\n') : [l]))
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  const QTY = "(\\d+\\s*\\/\\s*\\d+|\\d+(?:\\.\\d+)?|[¼½¾⅓⅔⅛])";
-  const UNIT = Array.from(UNIT_NOISE).join("|");
-  const re = new RegExp(`^\\s*(${QTY})?\\s*(${UNIT})?\\s+(.*)$`, "i");
+  const QTY = '(\\d+\\s*\\/\\s*\\d+|\\d+(?:\\.\\d+)?|[¼½¾⅓⅔⅛])';
+  const UNIT = Array.from(UNIT_NOISE).join('|');
+  const re = new RegExp(`^\\s*(${QTY})?\\s*(${UNIT})?\\s+(.*)$`, 'i');
 
   const out: GroceryAddInput[] = [];
   for (const line of lines) {
     const m = line.match(re);
     if (m && m[4]) {
       const qty = m[1] ? parseFraction(m[1]) : 1;
-      out.push({ name: m[4].trim(), quantity: qty, unit: (m[3] ?? "").trim() });
+      out.push({ name: m[4].trim(), quantity: qty, unit: (m[3] ?? '').trim() });
     } else {
-      out.push({ name: line, quantity: 1, unit: "" });
+      out.push({ name: line, quantity: 1, unit: '' });
     }
   }
   return out;
@@ -206,10 +305,17 @@ export function splitIngredientBlock(text: string): GroceryAddInput[] {
 
 function parseFraction(s: string): number {
   const t = s.trim();
-  const glyphs: Record<string, number> = { "¼": 0.25, "½": 0.5, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3, "⅛": 0.125 };
+  const glyphs: Record<string, number> = {
+    '¼': 0.25,
+    '½': 0.5,
+    '¾': 0.75,
+    '⅓': 1 / 3,
+    '⅔': 2 / 3,
+    '⅛': 0.125,
+  };
   if (glyphs[t] != null) return glyphs[t];
-  if (t.includes("/")) {
-    const [a, b] = t.split("/").map((x) => parseFloat(x));
+  if (t.includes('/')) {
+    const [a, b] = t.split('/').map((x) => parseFloat(x));
     if (b) return a / b;
   }
   const n = parseFloat(t);
@@ -246,7 +352,7 @@ export function planGroceryMerge(
   }
 
   const inserts: GroceryAddInput[] = [];
-  const updates: GroceryMergePlan["updates"] = [];
+  const updates: GroceryMergePlan['updates'] = [];
 
   for (const key of order) {
     const group = groups.get(key)!;

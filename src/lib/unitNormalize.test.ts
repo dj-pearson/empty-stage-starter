@@ -17,7 +17,12 @@ const closeTo = (actual: number, expected: number, tol = 0.005) => {
 describe('unitNormalize.normalize', () => {
   describe('mass family (canonical: g)', () => {
     it('grams pass through unchanged', () => {
-      expect(normalize(500, 'g')).toEqual({ qty: 500, canonicalUnit: 'g', family: 'mass', recognised: true });
+      expect(normalize(500, 'g')).toEqual({
+        qty: 500,
+        canonicalUnit: 'g',
+        family: 'mass',
+        recognised: true,
+      });
     });
     it('kg → g', () => {
       const r = normalize(2, 'kg');
@@ -148,14 +153,84 @@ describe('unitNormalize.normalize', () => {
       expect(normalize(1, 'bunch').family).toBe('package');
       expect(normalize(1, 'head').family).toBe('package');
     });
+
+    /**
+     * US-583: the parsers normalise to plurals ("2 cans") while the pantry
+     * defaults are singular ("1 can"). Before this, every plural fell through
+     * to family 'unknown', so `compare` reported 'incomparable' for two
+     * quantities of the *same* unit and grocery amounts never stacked.
+     */
+    it('every package plural collapses to its canonical singular', () => {
+      const pairs: [string, string][] = [
+        ['packs', 'pack'],
+        ['packages', 'pack'],
+        ['pkgs', 'pack'],
+        ['bags', 'bag'],
+        ['jars', 'jar'],
+        ['cans', 'can'],
+        ['boxes', 'box'],
+        ['bottles', 'bottle'],
+        ['loaves', 'loaf'],
+        ['bunches', 'bunch'],
+        ['heads', 'head'],
+        ['rolls', 'roll'],
+        ['cartons', 'carton'],
+        ['containers', 'container'],
+        ['tubs', 'container'],
+        ['sticks', 'stick'],
+        ['slices', 'slice'],
+        ['cloves', 'clove'],
+        ['blocks', 'block'],
+        ['fillets', 'fillet'],
+        ['stalks', 'stalk'],
+        ['sprigs', 'sprig'],
+      ];
+      for (const [plural, singular] of pairs) {
+        const r = normalize(1, plural);
+        expect(r.family, `${plural} family`).toBe('package');
+        expect(r.canonicalUnit, `${plural} canonical`).toBe(singular);
+        expect(r.recognised, `${plural} recognised`).toBe(true);
+      }
+    });
+
+    it('singular and plural of the same unit are comparable', () => {
+      expect(compare({ qty: 2, unit: 'cans' }, { qty: 1, unit: 'can' })).toBe('greater');
+      expect(compare({ qty: 1, unit: 'bag' }, { qty: 2, unit: 'bags' })).toBe('less');
+      expect(compare({ qty: 2, unit: 'boxes' }, { qty: 2, unit: 'box' })).toBe('equal');
+    });
+
+    it('recipe-scale package units are recognised (slice / clove / stalk)', () => {
+      expect(normalize(2, 'slices').family).toBe('package');
+      expect(normalize(3, 'cloves').canonicalUnit).toBe('clove');
+      expect(normalize(2, 'stalks').family).toBe('package');
+    });
+
+    it('distinct package nouns stay incomparable', () => {
+      expect(compare({ qty: 2, unit: 'cans' }, { qty: 2, unit: 'bags' })).toBe('incomparable');
+      expect(compare({ qty: 1, unit: 'cloves' }, { qty: 1, unit: 'head' })).toBe('incomparable');
+    });
+  });
+
+  describe('half-gallon (US-583)', () => {
+    it('"½ gal" normalises to volume, not unknown', () => {
+      const r = normalize(1, '½ gal');
+      expect(r.family).toBe('volume');
+      expect(r.recognised).toBe(true);
+      closeTo(r.qty, 1892.71);
+    });
+    it('two half-gallons equal one gallon', () => {
+      expect(compare({ qty: 2, unit: '½ gal' }, { qty: 1, unit: 'gal' })).toBe('equal');
+    });
+    it('spelled-out variants also resolve', () => {
+      expect(normalize(1, 'half gallon').family).toBe('volume');
+      expect(normalize(1, 'half gal').family).toBe('volume');
+    });
   });
 
   describe('unknown family', () => {
-    it('"slice" is not in the table → unknown', () => {
-      expect(normalize(2, 'slice').family).toBe('unknown');
-    });
     it('garbage strings stay unknown', () => {
       expect(normalize(2, 'asdf').recognised).toBe(false);
+      expect(normalize(2, 'asdf').family).toBe('unknown');
     });
   });
 

@@ -96,6 +96,13 @@ const VOLUME: Record<string, number> = {
   gal: 3785.41, // US gallon (approx)
   gallon: 3785.41,
   gallons: 3785.41,
+  // US-583: the mobile unit picker offers "½ gal" as a first-class option
+  // (milk/cream are bought that way), so it has to normalise rather than fall
+  // through to `unknown` and poison every downstream comparison.
+  '½ gal': 1892.71,
+  '½ gallon': 1892.71,
+  'half gal': 1892.71,
+  'half gallon': 1892.71,
 };
 
 const COUNT: Record<string, number> = {
@@ -118,38 +125,90 @@ const COUNT: Record<string, number> = {
  * We keep their canonical = the package noun and compare structurally — same
  * canonical = comparable, different canonical inside the family = incomparable.
  *
- * This list mirrors the package-shaped defaults in iOS UnitInference.swift.
+ * This list mirrors the package-shaped defaults in iOS UnitInference.swift and
+ * holds ONLY canonical singular nouns — every alias and plural is resolved
+ * through PACKAGE_ALIASES first (see `normalize`).
  */
 const PACKAGE_UNITS = new Set<string>([
   'pack',
-  'package',
-  'pkg',
   'bag',
   'jar',
   'bottle',
-  'btl',
   'can',
   'box',
   'loaf',
   'bunch',
   'head',
   'roll',
-  'rolls',
   'sleeve',
   'tube',
   'tray',
   'carton',
   'sachet',
   'stick',
-  'sticks',
+  // US-583: units the parsers and the mobile picker already emit but which had
+  // no entry here, so they normalised to family 'unknown' and silently made
+  // every comparison/merge involving them incomparable.
+  'container',
+  'case',
+  'block',
+  'fillet',
+  'slice',
+  'clove',
+  'stalk',
+  'sprig',
+  'pinch',
+  'dash',
+  'drop',
 ]);
 
+/**
+ * Every accepted spelling → its canonical package noun.
+ *
+ * US-583: the plural forms matter as much as the abbreviations. The recipe
+ * parsers normalise to plurals ("2 cans", "3 bags") while the pantry defaults
+ * are singular ("1 can", "1 bag"), so without these entries `compare` reported
+ * `incomparable` for two quantities of the identical unit — the root cause of
+ * grocery quantities failing to stack.
+ */
 const PACKAGE_ALIASES: Record<string, string> = {
   pkg: 'pack',
+  pkgs: 'pack',
   package: 'pack',
+  packages: 'pack',
+  packs: 'pack',
   btl: 'bottle',
+  btls: 'bottle',
+  bottles: 'bottle',
+  bags: 'bag',
+  jars: 'jar',
+  cans: 'can',
+  boxes: 'box',
+  loaves: 'loaf',
+  bunches: 'bunch',
+  heads: 'head',
   rolls: 'roll',
+  sleeves: 'sleeve',
+  tubes: 'tube',
+  trays: 'tray',
+  cartons: 'carton',
+  sachets: 'sachet',
   sticks: 'stick',
+  containers: 'container',
+  tub: 'container',
+  tubs: 'container',
+  cases: 'case',
+  blocks: 'block',
+  fillets: 'fillet',
+  filet: 'fillet',
+  filets: 'fillet',
+  slices: 'slice',
+  cloves: 'clove',
+  stalks: 'stalk',
+  sprigs: 'sprig',
+  pinches: 'pinch',
+  dashes: 'dash',
+  drops: 'drop',
 };
 
 /** Inputs that indicate the user knew the qty but not the unit. */
@@ -161,12 +220,15 @@ function canonicaliseToken(input: string | null | undefined): string {
   return String(input)
     .trim()
     .toLowerCase()
-    .replace(/\./g, '')          // tbsp. → tbsp
-    .replace(/[\s_-]+/g, ' ');   // collapse whitespace / underscores / hyphens
+    .replace(/\./g, '') // tbsp. → tbsp
+    .replace(/[\s_-]+/g, ' '); // collapse whitespace / underscores / hyphens
 }
 
 /** Look up a unit in the per-family tables, returning a Normalized result. */
-export function normalize(qty: number | string | null | undefined, unit?: string | null): Normalized {
+export function normalize(
+  qty: number | string | null | undefined,
+  unit?: string | null
+): Normalized {
   const numericQty = typeof qty === 'number' ? qty : parseFloat(String(qty ?? ''));
   const safeQty = Number.isFinite(numericQty) ? numericQty : 0;
 
@@ -188,16 +250,27 @@ export function normalize(qty: number | string | null | undefined, unit?: string
     return { qty: safeQty * MASS[token], canonicalUnit: 'g', family: 'mass', recognised: true };
   }
   if (token in VOLUME) {
-    return { qty: safeQty * VOLUME[token], canonicalUnit: 'ml', family: 'volume', recognised: true };
+    return {
+      qty: safeQty * VOLUME[token],
+      canonicalUnit: 'ml',
+      family: 'volume',
+      recognised: true,
+    };
   }
   if (token in COUNT) {
-    return { qty: safeQty * COUNT[token], canonicalUnit: 'piece', family: 'count', recognised: true };
+    return {
+      qty: safeQty * COUNT[token],
+      canonicalUnit: 'piece',
+      family: 'count',
+      recognised: true,
+    };
   }
 
-  // Package family: canonicalise via alias table.
-  if (PACKAGE_UNITS.has(token)) {
-    const canonical = PACKAGE_ALIASES[token] ?? token;
-    return { qty: safeQty, canonicalUnit: canonical, family: 'package', recognised: true };
+  // Package family: resolve aliases/plurals FIRST, then check membership, so
+  // PACKAGE_UNITS only ever has to list canonical singular nouns (US-583).
+  const packageCanonical = PACKAGE_ALIASES[token] ?? token;
+  if (PACKAGE_UNITS.has(packageCanonical)) {
+    return { qty: safeQty, canonicalUnit: packageCanonical, family: 'package', recognised: true };
   }
 
   // Unknown — surface qty/unit as-is so callers can render but not compare.

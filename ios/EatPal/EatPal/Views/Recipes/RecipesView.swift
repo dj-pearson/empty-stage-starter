@@ -1568,28 +1568,41 @@ struct AddRecipeView: View {
         if servings.isEmpty, let s = parsed.servings { servings = s }
         if remoteImageUrl == nil { remoteImageUrl = parsed.imageUrl }
 
-        // Link any parsed ingredient that fuzzy-matches an existing pantry
-        // food; everything else goes into additionalIngredients so the user
-        // still has the text even if we couldn't auto-link it.
-        var unmatched: [String] = []
+        // Link any parsed ingredient that fuzzy-matches an existing pantry food
+        // so pantry debit / shortfall can resolve it.
+        //
+        // US-584: EVERY ingredient line — matched or not — also goes into
+        // `additionalIngredients`, because `AppState.addRecipe` derives the
+        // structured `recipe_ingredients` rows (with quantity + unit) from that
+        // blob. Previously a matched ingredient contributed only a foodId, so
+        // "2 lbs chicken breast" reached the grocery list as "1 servings".
+        //
+        // US-585: the lines are joined with NEWLINES, not ", ".
+        // `RecipeIngredientLegacyParser` only comma-splits when no newline is
+        // present, so a comma join tore "1 onion, diced" into an "onion" row
+        // plus a bogus "diced" row — and the same for every ", minced",
+        // ", chopped" and ", to taste" descriptor.
+        var matched = 0
         for ingredient in parsed.ingredients {
             if let match = fuzzyMatchFood(ingredient) {
                 selectedFoodIds.insert(match.id)
-            } else {
-                unmatched.append(ingredient)
+                matched += 1
             }
         }
-        if !unmatched.isEmpty {
-            let existing = additionalIngredients.trimmingCharacters(in: .whitespaces)
+
+        let ingredientLines = parsed.ingredients
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !ingredientLines.isEmpty {
+            let existing = additionalIngredients.trimmingCharacters(in: .whitespacesAndNewlines)
             additionalIngredients = existing.isEmpty
-                ? unmatched.joined(separator: ", ")
-                : existing + ", " + unmatched.joined(separator: ", ")
+                ? ingredientLines.joined(separator: "\n")
+                : existing + "\n" + ingredientLines.joined(separator: "\n")
         }
 
         importedFrom = URL(string: sourceURL)?.host ?? sourceURL
 
         let totalIngredients = parsed.ingredients.count
-        let matched = totalIngredients - unmatched.count
         ToastManager.shared.success(
             "Imported recipe",
             message: "\(parsed.name) · \(matched)/\(totalIngredients) ingredients linked"
