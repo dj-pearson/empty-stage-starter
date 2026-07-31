@@ -8,7 +8,13 @@
   "background_color": "#ffffff",
   "theme_color": "#10b981",
   "orientation": "portrait-primary",
-  "categories": ["health", "lifestyle", "food", "productivity", "medical"],
+  "categories": [
+    "health",
+    "lifestyle",
+    "food",
+    "productivity",
+    "medical"
+  ],
   "lang": "en-US",
   "dir": "ltr",
   "icons": [
@@ -43,88 +49,30 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/screenshot-mobile-1.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "platform": "narrow",
-      "label": "Kids meal planning for picky eaters on mobile"
-    },
-    {
-      "src": "/screenshot-mobile-2.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "platform": "narrow",
-      "label": "Safe foods library and allergen tracking"
-    },
-    {
-      "src": "/screenshot-desktop-1.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "platform": "wide",
-      "label": "Weekly meal planner for picky eaters"
-    },
-    {
-      "src": "/screenshot-desktop-2.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "platform": "wide",
-      "label": "Grocery list generation and nutrition tracking"
-    }
-  ],
   "shortcuts": [
     {
       "name": "Meal Planner",
       "short_name": "Planner",
       "description": "Create weekly meal plans for picky eaters",
-      "url": "/dashboard/planner",
-      "icons": [
-        {
-          "src": "/icon-calendar.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "url": "/dashboard/planner"
     },
     {
-      "name": "Vote on Meals",
-      "short_name": "Vote",
-      "description": "Kids vote on upcoming meals",
-      "url": "/vote",
-      "icons": [
-        {
-          "src": "/icon-food.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "name": "Grocery List",
+      "short_name": "Grocery",
+      "description": "Your auto-generated grocery list",
+      "url": "/dashboard/grocery"
     },
     {
-      "name": "Meal Suggestions",
-      "short_name": "Suggest",
-      "description": "Get AI meal suggestions",
-      "url": "/suggestions",
-      "icons": [
-        {
-          "src": "/icon-food.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "name": "Recipes",
+      "short_name": "Recipes",
+      "description": "Browse and add recipes",
+      "url": "/dashboard/recipes"
     },
     {
-      "name": "Grocery Delivery",
-      "short_name": "Delivery",
-      "description": "Order groceries for delivery",
-      "url": "/delivery",
-      "icons": [
-        {
-          "src": "/icon-cart.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "name": "Build a Meal Plan",
+      "short_name": "New Plan",
+      "description": "Generate a 5-day plan from your child's safe foods",
+      "url": "/meal-plan"
     }
   ],
   "related_applications": [],
@@ -141,7 +89,9 @@
       "files": [
         {
           "name": "image",
-          "accept": ["image/*"]
+          "accept": [
+            "image/*"
+          ]
         }
       ]
     }

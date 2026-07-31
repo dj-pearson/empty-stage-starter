@@ -94,3 +94,34 @@ describe('index.html static head', () => {
     expect(html).not.toMatch(/SearchAction/i);
   });
 });
+
+describe('og:image dimensions match the real file', () => {
+  /** Minimal WebP header parse — enough for the VP8X/VP8 shapes sharp emits. */
+  function webpSize(buffer: Buffer): { width: number; height: number } {
+    const fourCC = buffer.subarray(12, 16).toString('ascii');
+    if (fourCC === 'VP8X') {
+      return {
+        width: buffer.readUIntLE(24, 3) + 1,
+        height: buffer.readUIntLE(27, 3) + 1,
+      };
+    }
+    if (fourCC === 'VP8 ') {
+      return {
+        width: buffer.readUInt16LE(26) & 0x3fff,
+        height: buffer.readUInt16LE(28) & 0x3fff,
+      };
+    }
+    throw new Error(`unsupported WebP chunk: ${fourCC}`);
+  }
+
+  it('declares the actual pixel size of public/Cover.webp', () => {
+    // og:image:width/height are hints scrapers lay the card out from BEFORE fetching the
+    // file. These said 1200x630 (the conventional OG size) while the file is 1536x1024,
+    // so every social preview was laid out against the wrong box.
+    const cover = readFileSync(path.resolve(__dirname, '../../public/Cover.webp'));
+    const { width, height } = webpSize(cover);
+
+    expect(metaContent('property', 'og:image:width')).toBe(String(width));
+    expect(metaContent('property', 'og:image:height')).toBe(String(height));
+  });
+});

@@ -1,5 +1,24 @@
 import { Helmet } from "react-helmet-async";
 
+/**
+ * The site-wide default social share image, with its REAL dimensions.
+ *
+ * These were previously hardcoded as 1200x630 for every page and every image — the
+ * conventional Open Graph size, but not this file's actual size, and certainly not the
+ * size of the per-post images blog articles pass in. Scrapers lay the card out from the
+ * declared numbers before fetching, so the mismatch produced cropped or letterboxed
+ * previews.
+ *
+ * NOTE: 1536x1024 is 3:2. Open Graph wants ~1.91:1 and Twitter's summary_large_image
+ * wants 2:1, so this image still gets centre-cropped in most cards. A purpose-made
+ * 1200x630 export would render better; declaring the truth is the correctness fix.
+ */
+const DEFAULT_OG_IMAGE = {
+  url: "https://tryeatpal.com/Cover.webp",
+  width: 1536,
+  height: 1024,
+} as const;
+
 export interface SEOProps {
   title: string;
   description: string;
@@ -8,6 +27,14 @@ export interface SEOProps {
   ogType?: string;
   ogImage?: string;
   ogImageAlt?: string;
+  /**
+   * Real pixel dimensions of `ogImage`. Only pass these when you actually know them —
+   * og:image:width/height are layout hints scrapers trust before they fetch the file, so
+   * a wrong value crops or letterboxes the card. When omitted (the usual case for a
+   * per-post image) the tags are not emitted and the scraper measures the image itself.
+   */
+  ogImageWidth?: number;
+  ogImageHeight?: number;
   twitterCard?: "summary" | "summary_large_image";
   aiPurpose?: string;
   aiAudience?: string;
@@ -44,8 +71,12 @@ export function SEOHead({
   keywords,
   canonicalUrl,
   ogType = "website",
-  ogImage = "https://tryeatpal.com/Cover.webp",
+  ogImage = DEFAULT_OG_IMAGE.url,
   ogImageAlt = "EatPal - AI-Powered Kids Meal Planning for Picky Eaters",
+  // Default to the real size of the default image; a caller passing its own ogImage
+  // without dimensions gets no width/height tags rather than the wrong ones.
+  ogImageWidth = ogImage === DEFAULT_OG_IMAGE.url ? DEFAULT_OG_IMAGE.width : undefined,
+  ogImageHeight = ogImage === DEFAULT_OG_IMAGE.url ? DEFAULT_OG_IMAGE.height : undefined,
   twitterCard = "summary_large_image",
   aiPurpose,
   aiAudience,
@@ -104,8 +135,12 @@ export function SEOHead({
       <meta property="og:description" content={description} />
       <meta property="og:image" content={ogImage} />
       <meta property="og:image:secure_url" content={ogImage} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
+      {ogImageWidth !== undefined && (
+        <meta property="og:image:width" content={String(ogImageWidth)} />
+      )}
+      {ogImageHeight !== undefined && (
+        <meta property="og:image:height" content={String(ogImageHeight)} />
+      )}
       <meta property="og:image:alt" content={ogImageAlt} />
       <meta property="og:locale" content="en_US" />
       <meta
