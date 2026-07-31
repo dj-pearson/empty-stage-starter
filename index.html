@@ -4,58 +4,62 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Primary Meta Tags - Optimized for Feeding Therapy Platform & Strategic Positioning -->
-    <title>EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research</title>
-    <meta name="title" content="EatPal - The Operating System for Feeding Therapy | AI, Professionals & Research" />
-    <meta name="description" content="Industry-standard platform for feeding therapy: 70%+ AI prediction accuracy, 200+ therapists, 100K+ behavioral data points, insurance integration, HIPAA-compliant professional tools, research marketplace, and community ecosystem. Transform ARFID, autism feeding, and selective eating." />
-    <meta name="author" content="EatPal - Kids Meal Planning Experts" />
-    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-    <meta name="language" content="English" />
-    <meta name="revisit-after" content="7 days" />
-    <meta name="rating" content="General" />
-    <meta name="distribution" content="global" />
+    <!--
+      IMPORTANT: every tag below that SEOHead also emits carries data-rh="true".
+      react-helmet-async claims and removes tags marked with that attribute when it
+      mounts, so the runtime head REPLACES these defaults instead of appending a
+      second, contradicting copy of them. Without it the DOM ends up with two
+      og:title/og:description/canonical tags and social scrapers read the first one.
+
+      These defaults describe the HOMEPAGE, because index.html is also the SPA
+      fallback document. They are pinned to seoConfig.home by
+      tests/seo-static-head.test.ts — change them in src/lib/seo-config.ts, not here.
+    -->
+    <title data-rh="true">EatPal: ARFID &amp; Picky Eater Meal Planner | Food Chaining Science</title>
+    <meta data-rh="true" name="title" content="EatPal: ARFID &amp; Picky Eater Meal Planner | Food Chaining Science" />
+    <meta data-rh="true" name="description" content="The #1 AI-powered meal planner for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science. Go from 5 safe foods to 50+. Start free." />
+    <meta data-rh="true" name="author" content="EatPal Team" />
+    <meta data-rh="true" name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
     <!-- Canonical URL -->
-    <link rel="canonical" href="https://tryeatpal.com/" />
+    <link data-rh="true" rel="canonical" href="https://tryeatpal.com/" />
 
-    <!-- RSS and Atom Feeds - Important for SEO, content syndication, and feed readers -->
-    <link rel="alternate" type="application/rss+xml" title="EatPal Blog RSS Feed" href="https://tryeatpal.com/rss.xml" />
-    <link rel="alternate" type="application/atom+xml" title="EatPal Blog Atom Feed" href="https://tryeatpal.com/feed.xml" />
+    <!-- RSS and Atom Feeds - content syndication and feed readers -->
+    <link data-rh="true" rel="alternate" type="application/rss+xml" title="EatPal Blog RSS Feed" href="https://tryeatpal.com/rss.xml" />
+    <link data-rh="true" rel="alternate" type="application/atom+xml" title="EatPal Blog Atom Feed" href="https://tryeatpal.com/feed.xml" />
 
-    <!-- Open Graph / Facebook - Optimized for Social Sharing -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://tryeatpal.com/" />
-    <meta property="og:site_name" content="EatPal - The Operating System for Feeding Therapy" />
-    <meta property="og:title" content="EatPal - The Operating System for Feeding Therapy | AI + Professional Platform" />
-    <meta property="og:description" content="Industry-defining platform combining 70%+ AI prediction accuracy, professional therapy tools for 200+ therapists, 100K+ behavioral data insights, and thriving community marketplace. Making feeding therapy predictable, accessible, and effective for ARFID, autism, and selective eating." />
-    <meta property="og:image" content="https://tryeatpal.com/Cover.webp" />
-    <meta property="og:image:secure_url" content="https://tryeatpal.com/Cover.webp" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="EatPal - AI-Powered Kids Meal Planning for Picky Eaters" />
-    <meta property="og:locale" content="en_US" />
+    <!-- Open Graph / Facebook -->
+    <meta data-rh="true" property="og:type" content="website" />
+    <meta data-rh="true" property="og:url" content="https://tryeatpal.com/" />
+    <meta data-rh="true" property="og:site_name" content="EatPal - Kids Meal Planning for Picky Eaters" />
+    <meta data-rh="true" property="og:title" content="EatPal: ARFID &amp; Picky Eater Meal Planner | Food Chaining Science" />
+    <meta data-rh="true" property="og:description" content="The #1 AI-powered meal planner for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science. Go from 5 safe foods to 50+. Start free." />
+    <meta data-rh="true" property="og:image" content="https://tryeatpal.com/Cover.webp" />
+    <meta data-rh="true" property="og:image:secure_url" content="https://tryeatpal.com/Cover.webp" />
+    <meta data-rh="true" property="og:image:width" content="1536" />
+    <meta data-rh="true" property="og:image:height" content="1024" />
+    <meta data-rh="true" property="og:image:alt" content="EatPal - AI-Powered Kids Meal Planning for Picky Eaters" />
+    <meta data-rh="true" property="og:locale" content="en_US" />
 
-    <!-- Twitter Card - Optimized for Twitter Sharing -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://tryeatpal.com/" />
-    <meta name="twitter:site" content="@eatpal" />
-    <meta name="twitter:creator" content="@eatpal" />
-    <meta name="twitter:title" content="EatPal - The Operating System for Feeding Therapy | AI + Professionals + Research" />
-    <meta name="twitter:description" content="Industry-standard platform: AI predictions (70%+ accuracy), professional tools (200+ therapists), behavioral research (100K+ data points), community marketplace. The Salesforce of feeding therapy." />
-    <meta name="twitter:image" content="https://tryeatpal.com/Cover.webp" />
-    <meta name="twitter:image:alt" content="EatPal - The #1 Kids Meal Planning App for Picky Eaters" />
+    <!-- Twitter Card -->
+    <meta data-rh="true" name="twitter:card" content="summary_large_image" />
+    <meta data-rh="true" name="twitter:url" content="https://tryeatpal.com/" />
+    <meta data-rh="true" name="twitter:site" content="@eatpal" />
+    <meta data-rh="true" name="twitter:creator" content="@eatpal" />
+    <meta data-rh="true" name="twitter:title" content="EatPal: ARFID &amp; Picky Eater Meal Planner | Food Chaining Science" />
+    <meta data-rh="true" name="twitter:description" content="The #1 AI-powered meal planner for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science. Go from 5 safe foods to 50+. Start free." />
+    <meta data-rh="true" name="twitter:image" content="https://tryeatpal.com/Cover.webp" />
+    <meta data-rh="true" name="twitter:image:alt" content="EatPal - AI-Powered Kids Meal Planning for Picky Eaters" />
 
-    <!-- AI Search Optimization - Perplexity, ChatGPT, Google AI -->
-    <meta name="ai:purpose" content="EatPal is the industry-standard operating system for feeding therapy, combining four strategic pillars: (1) AI Predictive Engine with 70%+ food acceptance prediction accuracy through data network effects from thousands of families, (2) Professional Platform serving 200+ feeding therapists with practice management, insurance billing, HIPAA-compliant tools, and therapist lock-in network effects, (3) Data Insights Marketplace licensing anonymized behavioral datasets to universities, food manufacturers, insurance companies for research and product innovation, (4) Community Ecosystem marketplace with 500+ user-generated meal plans, therapist directory, and two-sided network effects. Built for families managing ARFID, autism feeding challenges, and selective eating disorders." />
-    <meta name="ai:primary_audience" content="Feeding therapists, pediatric dietitians, occupational therapists seeking practice management software; Parents of children with ARFID, autism spectrum feeding issues, severe selective eating; University researchers studying feeding disorders; Food manufacturers developing sensory-friendly products; Insurance companies evaluating feeding therapy ROI; Healthcare systems implementing feeding intervention programs" />
-    <meta name="ai:key_features" content="AI predictive engine with 70%+ accuracy, machine learning food acceptance models, texture and flavor bridging algorithms, professional therapist dashboard, multi-client management, SOAP note documentation, insurance superbill generation, CPT and ICD-10 coding, telehealth integration, HIPAA-compliant data storage, anonymized research datasets with 100K+ food attempts, GDPR and IRB compliance, community marketplace with 500+ meal plan templates, therapist directory with 200+ professionals, peer coaching network, user-generated content platform, evidence-based protocol library" />
-    <meta name="ai:use_cases" content="Predicting food acceptance success rates for individual children, managing feeding therapy practice with multiple clients, documenting therapy sessions with insurance billing, submitting insurance claims for feeding therapy, conducting feeding disorder research, licensing behavioral data for product development, finding feeding therapists specializing in ARFID or autism, accessing evidence-based meal plan templates, collaborating between parents and therapists, tracking therapy outcomes and ROI, training peer parent coaches, building sensory-friendly food products based on acceptance data, calculating intervention cost-effectiveness for payers" />
-    <meta name="citation_name" content="EatPal - The Operating System for Feeding Therapy" />
-    <meta name="citation_description" content="EatPal is the industry-standard operating system for feeding therapy combining AI-powered predictive intelligence (70%+ accuracy), professional practice management tools for 200+ therapists, research-grade behavioral datasets with 100K+ food attempts, and community marketplace with network effects. The platform creates defensible competitive moats through data network effects, therapist lock-in, first-mover research advantage, and community ecosystem effects." />
-
-    <!-- Structured Data for AI Understanding -->
+    <!--
+      Brand-identity structured data only. Everything page-specific (SoftwareApplication,
+      FAQPage, WebPage, Breadcrumb) is owned by the schema components in
+      src/components/schema/ and is baked into the static HTML by the prerender step,
+      so it is NOT duplicated here. Deliberately NOT marked data-rh: Helmet manages the
+      `script` tag type on pages that pass structuredData, and would otherwise delete this.
+    -->
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","@id":"https://tryeatpal.com/#application","name":"EatPal - The Operating System for Feeding Therapy","applicationCategory":"HealthApplication","operatingSystem":"Web, iOS, Android","offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","description":"Free trial available"},"description":"EatPal is the industry-standard operating system for feeding therapy, combining AI Predictive Engine (70%+ accuracy), Professional Platform for 200+ therapists with insurance integration, Data Insights Marketplace with 100K+ behavioral data points, and Community Ecosystem with 500+ resources. Built for ARFID, autism feeding challenges, and selective eating disorders with defensible competitive moats through data network effects, therapist lock-in, and first-mover research advantage.","featureList":["AI Predictive Engine with 70%+ food acceptance accuracy","Machine learning food bridging and texture progression","Data network effects improving predictions for all users","Professional therapist dashboard and practice management","Multi-client management for feeding therapists","Insurance billing and superbill generation","HIPAA-compliant SOAP note documentation","Telehealth integration for remote therapy sessions","Anonymized research datasets with 100K+ food attempts","GDPR and IRB-compliant data licensing","Community marketplace with 500+ meal plan templates","Therapist directory with 200+ professionals","Peer parent coaching network","Evidence-based protocol library"],"screenshot":"https://tryeatpal.com/Cover.webp"},{"@type":"Organization","@id":"https://tryeatpal.com/#organization","name":"EatPal","url":"https://tryeatpal.com","logo":{"@type":"ImageObject","url":"https://tryeatpal.com/Logo-Green.png","width":600,"height":600},"description":"EatPal is the operating system for feeding therapy, combining AI predictions, professional tools, research marketplace, and community ecosystem to serve families and therapists managing ARFID, autism feeding, and selective eating disorders.","sameAs":["https://facebook.com/eatpal","https://twitter.com/eatpal","https://instagram.com/eatpal"],"contactPoint":{"@type":"ContactPoint","contactType":"Customer Support","email":"support@tryeatpal.com","availableLanguage":"English"}},{"@type":"WebSite","@id":"https://tryeatpal.com/#website","url":"https://tryeatpal.com","name":"EatPal - The Operating System for Feeding Therapy","description":"The industry-standard platform combining AI predictions, professional therapy tools, research marketplace, and community ecosystem for feeding therapy","publisher":{"@id":"https://tryeatpal.com/#organization"},"potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://tryeatpal.com/search?q={search_term_string}"},"query-input":"required name=search_term_string"}},{"@type":"BreadcrumbList","@id":"https://tryeatpal.com/#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://tryeatpal.com/"}]},{"@type":"FAQPage","@id":"https://tryeatpal.com/#faq","mainEntity":[{"@type":"Question","name":"What is EatPal and how does it help with picky eaters?","acceptedAnswer":{"@type":"Answer","text":"EatPal is a specialized meal planning app designed specifically for parents of picky eaters and children with selective eating challenges. It helps you create personalized weekly meal plans using foods your child will actually eat, while systematically introducing new foods through daily try bites. The app tracks safe foods, manages allergens, generates grocery lists automatically, and monitors your child's nutrition and progress."}},{"@type":"Question","name":"How does EatPal handle meal planning for children with ARFID or severe picky eating?","acceptedAnswer":{"@type":"Answer","text":"EatPal is specifically designed to support families managing ARFID (Avoidant/Restrictive Food Intake Disorder) and severe picky eating. The app respects your child's safe food list while using evidence-based strategies to gradually expand food acceptance. You can track safe foods, set personalized try bite schedules, monitor sensory preferences, track allergens, and adjust meal plans based on your child's acceptance patterns. Our AI learns from your child's eating history to suggest appropriate new foods."}},{"@type":"Question","name":"Can EatPal plan meals for multiple children with different food preferences?","acceptedAnswer":{"@type":"Answer","text":"Yes! EatPal supports multi-child meal planning. You can create separate profiles for each child, track their individual safe foods, allergens, and preferences, generate personalized meal plans for each child, coordinate family meals, and manage individual try bite schedules. The app makes it easy to plan meals for a household with multiple picky eaters who have different food preferences."}},{"@type":"Question","name":"What is a 'try bite' and how does EatPal use them?","acceptedAnswer":{"@type":"Answer","text":"A try bite is a small, pressure-free food exposure technique used to gradually introduce new foods to picky eaters. EatPal automatically includes one try bite suggestion in each day's meal plan, selecting foods based on your child's eating history, similar safe foods, and nutritional needs. This evidence-based approach helps expand your child's food repertoire without mealtime battles. You can track whether your child ate, tasted, or refused each try bite to help the AI learn and improve suggestions."}},{"@type":"Question","name":"How does EatPal generate grocery lists?","acceptedAnswer":{"@type":"Answer","text":"EatPal automatically generates organized grocery lists based on your weekly meal plans. The app calculates quantities needed, organizes items by store category, tracks inventory levels, alerts you to low stock on safe foods, and removes items already in your pantry. You can customize the list, share it with family members, and check off items as you shop."}},{"@type":"Question","name":"Is EatPal suitable for toddlers and young children?","acceptedAnswer":{"@type":"Answer","text":"Absolutely! EatPal is perfect for toddlers, preschoolers, and elementary-aged children. The app accommodates the unique needs of young picky eaters including limited food repertoires, sensory sensitivities, developmental feeding stages, age-appropriate portion sizes, and toddler-friendly meal ideas. Many parents use EatPal starting when their toddler first shows signs of picky eating."}},{"@type":"Question","name":"What makes EatPal different from regular meal planning apps?","acceptedAnswer":{"@type":"Answer","text":"Unlike generic meal planning apps, EatPal is specifically designed for the challenges of picky eating and selective eating disorders. Key differences include: AI trained on picky eating strategies, safe food library management, evidence-based try bite system, allergen and sensory preference tracking, progress monitoring for food acceptance, no recipe assumptions (works with your child's actual preferences), multi-child support for different eating patterns, and nutrition monitoring for limited diets."}}]}]}
+    {"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://tryeatpal.com/#organization","name":"EatPal","url":"https://tryeatpal.com","logo":"https://tryeatpal.com/Logo-Green.webp","description":"EatPal is the only AI-powered meal planning platform using food chaining therapy to help parents systematically expand their child's diet. Evidence-based approach for picky eaters, ARFID, and selective eating.","sameAs":["https://facebook.com/eatpal","https://twitter.com/eatpal","https://instagram.com/eatpal"],"contactPoint":{"@type":"ContactPoint","contactType":"Customer Support","email":"support@tryeatpal.com","availableLanguage":"English"}},{"@type":"WebSite","@id":"https://tryeatpal.com/#website","url":"https://tryeatpal.com","name":"EatPal","description":"AI-powered meal planning for ARFID, extreme picky eating, and autism-related feeding challenges, built on food chaining science","publisher":{"@id":"https://tryeatpal.com/#organization"},"inLanguage":"en-US"}]}
     </script>
 
     <!-- Mobile App Meta Tags -->
@@ -98,17 +102,17 @@
     <div id="root"></div>
     <noscript>
       <div style="padding: 2rem; text-align: center; font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #10b981; margin-bottom: 1rem;">EatPal - The Operating System for Feeding Therapy</h1>
+        <h1 style="color: #10b981; margin-bottom: 1rem;">EatPal - Meal Planning for Picky Eaters &amp; ARFID</h1>
         <p style="color: #6b7280; margin-bottom: 1.5rem;">
-          EatPal is an AI-powered meal planning platform for families with picky eaters, ARFID, and selective eating challenges.
+          EatPal is an AI-powered meal planning app for families with picky eaters, ARFID, and selective eating challenges.
           Our platform uses food chaining science to help children expand their food acceptance.
         </p>
         <p style="color: #374151; margin-bottom: 1rem;">
           <strong>Key Features:</strong>
         </p>
         <ul style="text-align: left; color: #6b7280; padding-left: 1.5rem;">
-          <li>AI-powered meal planning with 70%+ food acceptance prediction</li>
-          <li>Food chaining algorithm based on texture and flavor matching</li>
+          <li>AI-powered meal planning built on food chaining methodology</li>
+          <li>Food chaining suggestions based on texture and flavor matching</li>
           <li>Multi-child meal planning with allergen tracking</li>
           <li>Auto-generated grocery lists organized by category</li>
           <li>Progress tracking and nutrition analytics</li>

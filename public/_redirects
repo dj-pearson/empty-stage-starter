@@ -28,6 +28,19 @@
 /grocery/ /grocery 301
 /dashboard/ /dashboard 301
 
+# Legacy pSEO URLs -> the /guides/ mount point.
+# pseo_pages.slug already carries its own prefix ('food-chaining/chicken-nuggets') and
+# the generator writes canonical_url as /guides/<slug>, so /guides is the canonical
+# surface. These 301s make sure any link or index entry pointing at the old
+# un-namespaced paths lands on the URL the page declares as canonical, instead of the
+# SPA 404 those paths served before.
+/food-chaining/* /guides/food-chaining/:splat 301
+/challenges/* /guides/challenges/:splat 301
+/age/* /guides/age/:splat 301
+/meals/* /guides/meals/:splat 301
+/dietary/* /guides/dietary/:splat 301
+/food-challenge/* /guides/food-challenge/:splat 301
+
 # Note: CloudFlare Pages automatically handles SPA fallback
 # Static files are served first, then index.html for all other routes
 # No explicit /* /index.html 200 rule needed (causes infinite loop warning)

@@ -1,5 +1,24 @@
 import { Helmet } from "react-helmet-async";
 
+/**
+ * The site-wide default social share image, with its REAL dimensions.
+ *
+ * These were previously hardcoded as 1200x630 for every page and every image — the
+ * conventional Open Graph size, but not this file's actual size, and certainly not the
+ * size of the per-post images blog articles pass in. Scrapers lay the card out from the
+ * declared numbers before fetching, so the mismatch produced cropped or letterboxed
+ * previews.
+ *
+ * NOTE: 1536x1024 is 3:2. Open Graph wants ~1.91:1 and Twitter's summary_large_image
+ * wants 2:1, so this image still gets centre-cropped in most cards. A purpose-made
+ * 1200x630 export would render better; declaring the truth is the correctness fix.
+ */
+const DEFAULT_OG_IMAGE = {
+  url: "https://tryeatpal.com/Cover.webp",
+  width: 1536,
+  height: 1024,
+} as const;
+
 export interface SEOProps {
   title: string;
   description: string;
@@ -8,6 +27,14 @@ export interface SEOProps {
   ogType?: string;
   ogImage?: string;
   ogImageAlt?: string;
+  /**
+   * Real pixel dimensions of `ogImage`. Only pass these when you actually know them —
+   * og:image:width/height are layout hints scrapers trust before they fetch the file, so
+   * a wrong value crops or letterboxes the card. When omitted (the usual case for a
+   * per-post image) the tags are not emitted and the scraper measures the image itself.
+   */
+  ogImageWidth?: number;
+  ogImageHeight?: number;
   twitterCard?: "summary" | "summary_large_image";
   aiPurpose?: string;
   aiAudience?: string;
@@ -44,8 +71,12 @@ export function SEOHead({
   keywords,
   canonicalUrl,
   ogType = "website",
-  ogImage = "https://tryeatpal.com/Cover.webp",
+  ogImage = DEFAULT_OG_IMAGE.url,
   ogImageAlt = "EatPal - AI-Powered Kids Meal Planning for Picky Eaters",
+  // Default to the real size of the default image; a caller passing its own ogImage
+  // without dimensions gets no width/height tags rather than the wrong ones.
+  ogImageWidth = ogImage === DEFAULT_OG_IMAGE.url ? DEFAULT_OG_IMAGE.width : undefined,
+  ogImageHeight = ogImage === DEFAULT_OG_IMAGE.url ? DEFAULT_OG_IMAGE.height : undefined,
   twitterCard = "summary_large_image",
   aiPurpose,
   aiAudience,
@@ -104,8 +135,12 @@ export function SEOHead({
       <meta property="og:description" content={description} />
       <meta property="og:image" content={ogImage} />
       <meta property="og:image:secure_url" content={ogImage} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
+      {ogImageWidth !== undefined && (
+        <meta property="og:image:width" content={String(ogImageWidth)} />
+      )}
+      {ogImageHeight !== undefined && (
+        <meta property="og:image:height" content={String(ogImageHeight)} />
+      )}
       <meta property="og:image:alt" content={ogImageAlt} />
       <meta property="og:locale" content="en_US" />
       <meta
@@ -144,36 +179,26 @@ export function SEOHead({
         <meta name="ai:key_features" content={aiKeyFeatures} />
       )}
       {aiUseCases && <meta name="ai:use_cases" content={aiUseCases} />}
-      <meta name="citation_name" content={`${fullTitle}`} />
-      <meta name="citation_description" content={description} />
 
-      {/* Additional GEO Meta Tags for AI Crawlers */}
-      <meta
-        name="subject"
-        content={
-          keywords || "picky eating, meal planning, food chaining therapy"
-        }
-      />
-      <meta name="abstract" content={description} />
-      <meta
-        name="topic"
-        content="Picky eating, feeding therapy, food chaining, selective eating, ARFID"
-      />
-      <meta name="summary" content={description} />
-      <meta
-        name="Classification"
-        content="Health & Wellness, Parenting, Meal Planning"
-      />
       <meta name="author" content={author} />
-      <meta name="reply-to" content="Support@TryEatPal.com" />
-      <meta name="url" content={canonicalUrl} />
-      <meta name="identifier-URL" content={canonicalUrl} />
 
-      {/* Enhanced Robots directives for AI crawlers */}
-      <meta name="googlebot" content={robots} />
-      <meta name="bingbot" content={robots} />
-      <meta name="slurp" content={robots} />
-      <meta name="DuckDuckBot" content={robots} />
+      {/*
+        Removed here, deliberately — every one of these was emitted on every page and
+        baked into every prerendered file, and no search or AI engine consumes any of them:
+
+          citation_name / citation_description  Highwire Press tags for scholarly
+                                                articles; meaningless on product pages.
+          subject                               was set to the raw keywords string, so it
+                                                repeated the keyword list a second time.
+          abstract / summary                    verbatim duplicates of the description.
+          topic / Classification                non-standard, no consumer.
+          reply-to / url / identifier-URL       non-standard; canonical already states the URL.
+          googlebot / bingbot / slurp /         byte-identical copies of the robots tag
+          DuckDuckBot                           above, which already applies to all of them.
+
+        The ai:* tags are kept: they are this site's deliberate GEO strategy and are
+        populated per page from src/lib/seo-config.ts.
+      */}
 
       {/* Structured Data (JSON-LD) */}
       {structuredData && (

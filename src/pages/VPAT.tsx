@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
+import { SEOHead } from "@/components/SEOHead";
+import { getPageSEO } from "@/lib/seo-config";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle2, AlertCircle, MinusCircle } from "lucide-react";
 import {
@@ -106,13 +107,9 @@ const VPAT = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Helmet>
-        <title>VPAT - Accessibility Conformance Report - EatPal</title>
-        <meta name="description" content="EatPal Voluntary Product Accessibility Template (VPAT) - WCAG 2.1 Level AA Conformance Report documenting accessibility compliance." />
-        <meta property="og:title" content="VPAT - Accessibility Conformance Report - EatPal" />
-        <meta property="og:description" content="WCAG 2.1 Level AA Conformance Report for EatPal meal planning platform." />
-        <meta property="og:type" content="website" />
-      </Helmet>
+      {/* SEOHead rather than a bare Helmet — see the note in Accessibility.tsx: only
+          SEOHead emits a canonical, and index.html's default is Helmet-managed. */}
+      <SEOHead {...getPageSEO("vpat")!} />
 
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">

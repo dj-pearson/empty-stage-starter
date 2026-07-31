@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Helmet } from "react-helmet-async";
+import { SEOHead } from "@/components/SEOHead";
+import { getPageSEO } from "@/lib/seo-config";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle2, Mail, Phone, MessageSquare, FileText, ExternalLink } from "lucide-react";
 
@@ -13,13 +14,10 @@ const Accessibility = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Helmet>
-        <title>Accessibility Statement - EatPal</title>
-        <meta name="description" content="EatPal's commitment to digital accessibility. Learn about our WCAG 2.1 AA compliance, accessibility features, and how to request accommodations." />
-        <meta property="og:title" content="Accessibility Statement - EatPal" />
-        <meta property="og:description" content="EatPal's commitment to digital accessibility. WCAG 2.1 AA compliance, accessibility features, and accommodation requests." />
-        <meta property="og:type" content="website" />
-      </Helmet>
+      {/* SEOHead rather than a bare Helmet: it is the only thing that emits a canonical
+          link, and index.html's default canonical is Helmet-managed (data-rh), so a page
+          that renders any Helmet without one ends up declaring no canonical at all. */}
+      <SEOHead {...getPageSEO("accessibility")!} />
 
       {/* Header */}
       <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">

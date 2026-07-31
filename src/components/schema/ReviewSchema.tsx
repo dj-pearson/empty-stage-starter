@@ -24,15 +24,23 @@ export interface ReviewSchemaProps {
 /**
  * ReviewSchema - Aggregate review and rating structured data
  *
- * This component generates Product schema with AggregateRating markup
- * to enable star ratings in Google search results.
+ * ⚠️ DO NOT USE THIS ON A PAGE ABOUT EATPAL ITSELF.
  *
- * Benefits:
- * - ⭐ Star ratings displayed in search results
- * - 📈 20-35% increase in click-through rate (CTR)
- * - 🎯 Prominent placement in Google SERPs
- * - 🤖 Better understanding by AI search engines
- * - 💪 Enhanced E-E-A-T signals
+ * Google's structured data policy prohibits "self-serving reviews": review or
+ * aggregateRating markup about an entity, published on a site controlled by that
+ * entity. Such markup is ineligible for review rich results, and inventing the
+ * ratings behind it (a hardcoded ratingValue/reviewCount that no review store backs)
+ * is a spam violation that can trigger a manual action suppressing rich results for
+ * the entire domain — not just the offending page.
+ * https://developers.google.com/search/docs/appearance/structured-data/review-snippet
+ *
+ * This component was removed from the homepage for exactly that reason. It is kept
+ * only for pages that review a THIRD-PARTY item (e.g. a comparison page rating another
+ * product), where the ratings come from a real, auditable review store.
+ *
+ * Before using it, both must be true:
+ *   1. The item reviewed is not EatPal or an EatPal offering.
+ *   2. ratingValue/reviewCount are read from real stored reviews, not literals.
  *
  * Usage:
  * ```tsx
