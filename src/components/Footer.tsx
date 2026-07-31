@@ -93,6 +93,14 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
+                {/* The footer renders on every marketing page, so this is the crawl path
+                    into the guide library. Without it the entire /guides cluster is
+                    orphaned — reachable only from the sitemap and from other guides. */}
+                <Link to="/guides" className="hover:text-primary transition-colors">
+                  Guides
+                </Link>
+              </li>
+              <li>
                 <Link to="/auth" className="hover:text-primary transition-colors">
                   Get Started
                 </Link>

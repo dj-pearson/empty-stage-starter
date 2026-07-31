@@ -46,8 +46,12 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
     title: "EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science",
     description:
       "The #1 AI-powered meal planner for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science. Go from 5 safe foods to 50+. Start free.",
+    // Trimmed from 23 phrases to the handful the page actually targets. Google ignores
+    // this tag outright; a 23-term list is only visible to the engines that read it as a
+    // keyword-stuffing signal. The long-tail terms belong on the pages that serve them
+    // (the /guides cluster), not stacked on the homepage.
     keywords:
-      "ARFID meal plan for kids, ARFID meal planner, food chaining, food chaining therapy, food chaining for picky eaters, food chaining examples, picky eater meal plan app, selective eating disorder, feeding therapy at home tools, ARFID treatment for children, autism feeding therapy, safe foods picky eaters, sensory food preferences, picky eater meal planner, AI meal planning for kids, texture progression, food acceptance prediction, evidence-based feeding therapy, pediatric feeding disorder, try bite methodology, food chaining platform, ARFID diagnosis help, avoidant restrictive food intake disorder",
+      "ARFID meal planner, picky eater meal planner, food chaining, food chaining for picky eaters, selective eating disorder, autism feeding therapy, safe foods picky eaters",
     canonicalUrl: `${baseUrl}/`,
     aiPurpose:
       "EatPal is the #1 AI-powered platform specifically designed for ARFID (Avoidant/Restrictive Food Intake Disorder), extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists, it implements food chaining—the proven feeding therapy method developed by Cheri Fraker, RD and Laura Walbert, SLP. EatPal helps parents systematically expand their child's diet from 5 foods to 50+ by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, it makes gradual changes in taste, texture, or appearance. With 2,000+ families helped and 100K+ mealtime data points, EatPal combines evidence-based food chaining methodology with AI-powered meal planning (70%+ prediction accuracy), progress tracking, and grocery automation. It serves both parents at home and feeding therapists in clinical practice.",
@@ -501,6 +505,30 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
         url: `${baseUrl}/accessibility`,
         name: "EatPal Accessibility Statement",
         description: "WCAG 2.1 AA compliance and accessibility features",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+      },
+    ],
+  },
+
+  guides: {
+    title: "Picky Eater & ARFID Guides | Food Chaining by Food, Age & Mealtime",
+    description:
+      "Practical guides for feeding picky eaters and children with ARFID. Browse food chaining plans by safe food, by feeding challenge, by your child's age, or by the mealtime you're struggling with.",
+    keywords:
+      "picky eater guides, ARFID guides, food chaining examples, food chaining by food, picky eating by age, mealtime strategies, selective eating help",
+    canonicalUrl: `${baseUrl}/guides`,
+    aiPurpose:
+      "The EatPal guide library is a collection of practical, step-by-step guides for expanding a child's diet using food chaining. Guides are organised along four axes: a specific safe food the child already accepts, a feeding challenge (ARFID, sensory aversion, autism-related feeding difficulty), the child's age group, and the mealtime that is hardest. Each guide gives concrete steps a parent can try in the coming week.",
+    aiAudience:
+      "Parents searching for what to do about a specific food or a specific mealtime, families newly navigating an ARFID diagnosis, caregivers of autistic children with sensory food aversions, feeding therapists looking for home-practice material to share with clients",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/guides#webpage`,
+        url: `${baseUrl}/guides`,
+        name: "EatPal Guides - Food Chaining for Picky Eaters and ARFID",
+        description:
+          "Guides for expanding a child's diet with food chaining, organised by safe food, feeding challenge, age and mealtime.",
         isPartOf: { "@id": `${baseUrl}/#website` },
       },
     ],

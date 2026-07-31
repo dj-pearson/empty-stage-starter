@@ -84,6 +84,7 @@ const ShareTarget = lazy(() => import('./pages/ShareTarget'));
 
 // pSEO programmatic pages
 const PseoPage = lazy(() => import('./pages/pseo/PseoPage'));
+const GuidesIndex = lazy(() => import('./pages/pseo/GuidesIndex'));
 const PseoAdminPage = lazy(() => import('./pages/PseoAdmin'));
 
 /**
@@ -785,6 +786,20 @@ const App = () => (
                         `/:dimension1/:dimension2` was a catch-all that swallowed every
                         unmatched two-segment URL on the site.
                       */}
+                      {/* Exact /guides is the library hub — every generated guide's first
+                          breadcrumb points here, and it is the only public entry point into
+                          the cluster. React Router ranks this static path above the splat
+                          below, so the splat only ever sees /guides/<something>. */}
+                      <Route
+                        path="/guides"
+                        element={
+                          <RouteErrorBoundary>
+                            <Suspense fallback={<LoadingFallback />}>
+                              <GuidesIndex />
+                            </Suspense>
+                          </RouteErrorBoundary>
+                        }
+                      />
                       <Route
                         path="/guides/*"
                         element={

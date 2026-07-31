@@ -144,36 +144,26 @@ export function SEOHead({
         <meta name="ai:key_features" content={aiKeyFeatures} />
       )}
       {aiUseCases && <meta name="ai:use_cases" content={aiUseCases} />}
-      <meta name="citation_name" content={`${fullTitle}`} />
-      <meta name="citation_description" content={description} />
 
-      {/* Additional GEO Meta Tags for AI Crawlers */}
-      <meta
-        name="subject"
-        content={
-          keywords || "picky eating, meal planning, food chaining therapy"
-        }
-      />
-      <meta name="abstract" content={description} />
-      <meta
-        name="topic"
-        content="Picky eating, feeding therapy, food chaining, selective eating, ARFID"
-      />
-      <meta name="summary" content={description} />
-      <meta
-        name="Classification"
-        content="Health & Wellness, Parenting, Meal Planning"
-      />
       <meta name="author" content={author} />
-      <meta name="reply-to" content="Support@TryEatPal.com" />
-      <meta name="url" content={canonicalUrl} />
-      <meta name="identifier-URL" content={canonicalUrl} />
 
-      {/* Enhanced Robots directives for AI crawlers */}
-      <meta name="googlebot" content={robots} />
-      <meta name="bingbot" content={robots} />
-      <meta name="slurp" content={robots} />
-      <meta name="DuckDuckBot" content={robots} />
+      {/*
+        Removed here, deliberately — every one of these was emitted on every page and
+        baked into every prerendered file, and no search or AI engine consumes any of them:
+
+          citation_name / citation_description  Highwire Press tags for scholarly
+                                                articles; meaningless on product pages.
+          subject                               was set to the raw keywords string, so it
+                                                repeated the keyword list a second time.
+          abstract / summary                    verbatim duplicates of the description.
+          topic / Classification                non-standard, no consumer.
+          reply-to / url / identifier-URL       non-standard; canonical already states the URL.
+          googlebot / bingbot / slurp /         byte-identical copies of the robots tag
+          DuckDuckBot                           above, which already applies to all of them.
+
+        The ai:* tags are kept: they are this site's deliberate GEO strategy and are
+        populated per page from src/lib/seo-config.ts.
+      */}
 
       {/* Structured Data (JSON-LD) */}
       {structuredData && (

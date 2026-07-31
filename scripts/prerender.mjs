@@ -113,8 +113,12 @@ async function discoverDynamicRoutes(config) {
   if (!supabaseUrl || !anonKey) {
     console.warn(
       '[prerender] VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY not set — skipping dynamic routes.\n' +
-        '            Blog posts will ship as client-rendered only. Set both in the build environment\n' +
-        '            (Cloudflare Pages > Settings > Environment variables) to prerender them.'
+        '            Blog posts and every /guides/* pSEO page will ship client-rendered only,\n' +
+        '            so the crawlers that do not run JavaScript (GPTBot, PerplexityBot, ClaudeBot,\n' +
+        '            social scrapers) will see the SPA shell instead of the content at those URLs.\n' +
+        '            Set both in the build environment (Cloudflare Pages > Settings > Environment\n' +
+        '            variables) to prerender them. This is the single highest-impact setting for\n' +
+        '            getting the programmatic content indexed.'
     );
     return [];
   }
