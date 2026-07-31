@@ -505,6 +505,29 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
       },
     ],
   },
+
+  vpat: {
+    title: "VPAT - Accessibility Conformance Report | EatPal",
+    description:
+      "EatPal's Voluntary Product Accessibility Template (VPAT): a WCAG 2.1 Level AA conformance report documenting how the meal planning platform meets each success criterion.",
+    keywords:
+      "eatpal vpat, voluntary product accessibility template, WCAG 2.1 AA conformance report, section 508 compliance, accessibility conformance",
+    canonicalUrl: `${baseUrl}/accessibility/vpat`,
+    aiPurpose:
+      "The EatPal VPAT is a formal Voluntary Product Accessibility Template documenting conformance with WCAG 2.1 Level AA across the meal planning platform. Procurement teams, schools, clinics, and health systems use it to evaluate EatPal against accessibility requirements before purchase.",
+    aiAudience:
+      "Procurement and compliance teams evaluating accessibility before purchase, school districts and health systems with Section 508 requirements, accessibility auditors, feeding clinics assessing assistive technology support",
+    structuredData: [
+      {
+        "@type": "WebPage",
+        "@id": `${baseUrl}/accessibility/vpat#webpage`,
+        url: `${baseUrl}/accessibility/vpat`,
+        name: "EatPal VPAT - Accessibility Conformance Report",
+        description: "WCAG 2.1 Level AA conformance report for the EatPal platform",
+        isPartOf: { "@id": `${baseUrl}/#website` },
+      },
+    ],
+  },
 };
 
 /**

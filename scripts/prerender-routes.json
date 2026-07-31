@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "Routes prerendered to static HTML after `vite build` (see scripts/prerender.mjs).",
+    "Only public, unauthenticated, indexable routes belong here. Anything behind",
+    "ProtectedRoute would snapshot a logged-out redirect, and anything noindex gains",
+    "nothing from being prerendered.",
+    "Blog posts and other DB-backed routes are discovered at build time instead — see",
+    "the `dynamic` section below — because their slugs are not known statically."
+  ],
+  "static": [
+    "/",
+    "/pricing",
+    "/faq",
+    "/contact",
+    "/blog",
+    "/privacy",
+    "/terms",
+    "/accessibility",
+    "/accessibility/vpat",
+    "/picky-eater-quiz",
+    "/budget-calculator",
+    "/meal-plan"
+  ],
+  "dynamic": {
+    "$comment": [
+      "Each entry runs a PostgREST query against VITE_SUPABASE_URL and expands one route",
+      "per row. Skipped with a warning when Supabase credentials are absent from the build",
+      "environment, so a credential-less build still succeeds with the static routes."
+    ],
+    "sources": [
+      {
+        "name": "blog posts",
+        "table": "blog_posts",
+        "select": "slug",
+        "filter": "status=eq.published",
+        "pattern": "/blog/:slug",
+        "limit": 500
+      },
+      {
+        "$comment": "pseo_pages.slug already contains its own multi-segment path prefix, so the pattern only adds the /guides mount point.",
+        "name": "pSEO guides",
+        "table": "pseo_pages",
+        "select": "slug",
+        "filter": "generation_status=eq.published",
+        "pattern": "/guides/:slug",
+        "limit": 2000
+      }
+    ]
+  }
+}

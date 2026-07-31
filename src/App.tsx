@@ -3,7 +3,7 @@ import { MotionConfig } from 'framer-motion';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
@@ -85,6 +85,19 @@ const ShareTarget = lazy(() => import('./pages/ShareTarget'));
 // pSEO programmatic pages
 const PseoPage = lazy(() => import('./pages/pseo/PseoPage'));
 const PseoAdminPage = lazy(() => import('./pages/PseoAdmin'));
+
+/**
+ * Redirect a legacy un-namespaced pSEO URL to its /guides/ equivalent.
+ *
+ * `/food-chaining/chicken-nuggets` -> `/guides/food-chaining/chicken-nuggets`.
+ * `replace` keeps the dead URL out of the history stack. The authoritative 301 lives in
+ * public/_redirects so crawlers see a real redirect status rather than a JS hop.
+ */
+function LegacyGuideRedirect({ prefix }: { prefix: string }) {
+  const rest = useParams()['*'] ?? '';
+  const target = rest ? `/guides/${prefix}/${rest}` : `/guides/${prefix}`;
+  return <Navigate to={target} replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -755,9 +768,25 @@ const App = () => (
                           }
                         />
                       </Route>
-                      {/* pSEO programmatic pages */}
+                      {/*
+                        pSEO programmatic pages.
+
+                        `pseo_pages.slug` is a FULL multi-segment path
+                        ('food-chaining/chicken-nuggets', 'challenges/arfid/dinner') and
+                        src/lib/pseo/generator.ts writes canonical_url and breadcrumbs as
+                        `/guides/<slug>`. A single splat mounted at /guides therefore serves
+                        every page type at every depth, and the URL a page declares as its
+                        canonical is the URL that actually resolves.
+
+                        This replaces four routes that between them served nothing:
+                        `/food-chaining/:safeFood` and `/guides/:guideSlug` matched a fixed
+                        segment count so the 3-segment challenge/age pages had no route at
+                        all, none of them supplied the `:slug` param PseoPage read, and
+                        `/:dimension1/:dimension2` was a catch-all that swallowed every
+                        unmatched two-segment URL on the site.
+                      */}
                       <Route
-                        path="/food-chaining/:safeFood"
+                        path="/guides/*"
                         element={
                           <RouteErrorBoundary>
                             <Suspense fallback={<LoadingFallback />}>
@@ -766,36 +795,17 @@ const App = () => (
                           </RouteErrorBoundary>
                         }
                       />
-                      <Route
-                        path="/food-chaining/:safeFood/:modifier"
-                        element={
-                          <RouteErrorBoundary>
-                            <Suspense fallback={<LoadingFallback />}>
-                              <PseoPage />
-                            </Suspense>
-                          </RouteErrorBoundary>
-                        }
-                      />
-                      <Route
-                        path="/guides/:guideSlug"
-                        element={
-                          <RouteErrorBoundary>
-                            <Suspense fallback={<LoadingFallback />}>
-                              <PseoPage />
-                            </Suspense>
-                          </RouteErrorBoundary>
-                        }
-                      />
-                      <Route
-                        path="/:dimension1/:dimension2"
-                        element={
-                          <RouteErrorBoundary>
-                            <Suspense fallback={<LoadingFallback />}>
-                              <PseoPage />
-                            </Suspense>
-                          </RouteErrorBoundary>
-                        }
-                      />
+                      {/*
+                        Legacy un-namespaced pSEO URLs. public/_redirects issues a real 301
+                        for these at the CDN; this client-side Navigate only covers in-app
+                        navigation and direct hits that bypass the redirect rule.
+                      */}
+                      <Route path="/food-chaining/*" element={<LegacyGuideRedirect prefix="food-chaining" />} />
+                      <Route path="/challenges/*" element={<LegacyGuideRedirect prefix="challenges" />} />
+                      <Route path="/age/*" element={<LegacyGuideRedirect prefix="age" />} />
+                      <Route path="/meals/*" element={<LegacyGuideRedirect prefix="meals" />} />
+                      <Route path="/dietary/*" element={<LegacyGuideRedirect prefix="dietary" />} />
+                      <Route path="/food-challenge/*" element={<LegacyGuideRedirect prefix="food-challenge" />} />
                       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                       <Route
                         path="*"

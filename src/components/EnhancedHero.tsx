@@ -213,8 +213,16 @@ export function EnhancedHero() {
           ref={headlineRef}
           className="text-5xl md:text-7xl font-heading font-bold mb-8 leading-tight tracking-tight"
         >
+          {/*
+            The H1 is the strongest on-page relevance signal a page has, and this one
+            used to read "Turn Mealtime Battles Into Steady Progress, One Safe Bite at a
+            Time" — evocative, but containing none of the terms the page targets
+            (picky eater / ARFID / meal planner / food chaining). The keyword phrase now
+            leads; the original emotional line is kept as the second half so the brand
+            voice survives.
+          */}
           <span className="text-foreground">
-            Turn Mealtime Battles Into
+            Meal Planning for Picky Eaters &amp; ARFID
           </span>
           <br />
           <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent drop-shadow-sm">

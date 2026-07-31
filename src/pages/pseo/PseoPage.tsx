@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { supabase } from '@/integrations/supabase/client';
 import { ArticleSchema } from '@/components/schema/ArticleSchema';
@@ -9,6 +9,7 @@ import { HowToSchema } from '@/components/schema/HowToSchema';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import type { PseoPageRow, PseoPageContent } from '@/types/pseo';
+import { slugFromPathname } from '@/lib/pseo/slug';
 
 const FoodChainingGuide = lazy(() => import('./FoodChainingGuide'));
 const ChallengeMealOccasion = lazy(() => import('./ChallengeMealOccasion'));
@@ -29,6 +30,13 @@ function LoadingState() {
 function NotFoundState() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
+      {/* Soft 404: the SPA can only answer 200, so tell crawlers not to index the
+          "Page not found" body. Without this, an unpublished or mistyped guide URL
+          gets indexed as a thin duplicate of every other missing guide. */}
+      <Helmet>
+        <title>Page not found - EatPal</title>
+        <meta name="robots" content="noindex, follow" />
+      </Helmet>
       <div className="max-w-md w-full text-center space-y-6">
         <div className="text-6xl font-bold text-primary">404</div>
         <h1 className="text-2xl font-bold">Page not found</h1>
@@ -87,7 +95,14 @@ function renderContent(page: PseoPageRow) {
 }
 
 export default function PseoPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  const params = useParams();
+  // The slug is the pathname minus the /guides mount point. This used to read
+  // `useParams().slug` — a param name no pSEO route ever declared, so it was always
+  // undefined and every programmatic page rendered the 404 state below.
+  // Prefer the splat the route captured; fall back to parsing the pathname so the
+  // component still resolves if it is ever mounted on a differently-shaped route.
+  const slug = slugFromPathname(params['*'] ? `/guides/${params['*']}` : location.pathname);
   const [page, setPage] = useState<PseoPageRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isNotFound, setIsNotFound] = useState(false);

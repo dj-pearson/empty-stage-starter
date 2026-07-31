@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { storeSameAs } from "@/lib/app-store";
 
 /**
  * OrganizationSchema - Site-wide organization structured data
@@ -28,21 +29,20 @@ export function OrganizationSchema() {
       "availableLanguage": "English",
       "areaServed": "US",
     },
+    // sameAs is how search engines consolidate the website, the social profiles and the
+    // App Store listing into ONE entity. It was an empty array of comments while
+    // index.html's Organization node (same @id) listed the socials — so the two
+    // contradicted each other and the profiles were never claimed. The store URLs are
+    // appended only when VITE_APP_STORE_APP_ID / VITE_PLAY_STORE_PACKAGE are configured.
     "sameAs": [
-      // Add your social profiles here when available
-      // "https://twitter.com/eatpal",
-      // "https://facebook.com/eatpal",
-      // "https://instagram.com/eatpal",
-      // "https://linkedin.com/company/eatpal",
+      "https://facebook.com/eatpal",
+      "https://twitter.com/eatpal",
+      "https://instagram.com/eatpal",
+      ...storeSameAs(),
     ],
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": {
-        "@type": "EntryPoint",
-        "urlTemplate": "https://tryeatpal.com/search?q={search_term_string}",
-      },
-      "query-input": "required name=search_term_string",
-    },
+    // NOTE: no SearchAction / sitelinks-searchbox here. It used to target
+    // https://tryeatpal.com/search?q={search_term_string}, but the app has no /search
+    // route — the advertised endpoint 404s. Re-add it only alongside a real search page.
   };
 
   return (

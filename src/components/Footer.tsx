@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/app-store";
 
 export const Footer = () => {
   return (
@@ -35,6 +36,38 @@ export const Footer = () => {
             <p className="text-sm text-muted-foreground leading-relaxed">
               Making meal planning simple and stress-free for families with picky eaters.
             </p>
+            {/*
+              The site had no link to the App Store listing anywhere, despite the iOS app
+              being the channel that actually gets discovered. These render only once
+              VITE_APP_STORE_APP_ID / VITE_PLAY_STORE_PACKAGE are set — see
+              src/lib/app-store.ts — so nothing ships a broken store link.
+            */}
+            {(APP_STORE_URL || PLAY_STORE_URL) && (
+              <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                {APP_STORE_URL && (
+                  <li>
+                    <a
+                      href={APP_STORE_URL}
+                      className="hover:text-primary transition-colors"
+                      rel="noopener"
+                    >
+                      Download EatPal for iPhone &amp; iPad
+                    </a>
+                  </li>
+                )}
+                {PLAY_STORE_URL && (
+                  <li>
+                    <a
+                      href={PLAY_STORE_URL}
+                      className="hover:text-primary transition-colors"
+                      rel="noopener"
+                    >
+                      Get EatPal on Google Play
+                    </a>
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
           <div>
             <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
