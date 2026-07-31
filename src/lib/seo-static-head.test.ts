@@ -125,3 +125,44 @@ describe('og:image dimensions match the real file', () => {
     expect(metaContent('property', 'og:image:height')).toBe(String(height));
   });
 });
+
+describe('index.html Organization node agrees with OrganizationSchema', () => {
+  /**
+   * Both emit a node with @id https://tryeatpal.com/#organization. JSON-LD consumers
+   * merge nodes by @id, so a property defined differently in each resolves arbitrarily —
+   * which is what happened to `logo` (Logo-Green.png as an ImageObject vs
+   * Logo-Green.webp as a string) and `description`. Google picks the Organization logo
+   * for knowledge panels, so "arbitrary" is not good enough.
+   *
+   * index.html cannot import the component, so the values are duplicated. This test is
+   * what keeps the duplication honest.
+   */
+  const staticOrg = (() => {
+    const block = html.match(
+      /<script type="application\/ld\+json">\s*(\{[\s\S]*?\})\s*<\/script>/
+    );
+    const graph = JSON.parse(block![1])['@graph'] as Record<string, unknown>[];
+    return graph.find((node) => node['@type'] === 'Organization')!;
+  })();
+
+  const componentSource = readFileSync(
+    path.resolve(__dirname, '../components/schema/OrganizationSchema.tsx'),
+    'utf8'
+  );
+
+  it('uses the same @id', () => {
+    expect(staticOrg['@id']).toBe('https://tryeatpal.com/#organization');
+    expect(componentSource).toContain('"@id": "https://tryeatpal.com/#organization"');
+  });
+
+  it('uses the same logo', () => {
+    expect(componentSource).toContain(`"logo": "${staticOrg.logo}"`);
+  });
+
+  it('uses the same description', () => {
+    // Collapse whitespace: the component wraps the string across source lines.
+    const collapsed = componentSource.replace(/\s+/g, ' ');
+    const description = String(staticOrg.description).replace(/\s+/g, ' ');
+    expect(collapsed).toContain(description);
+  });
+});
