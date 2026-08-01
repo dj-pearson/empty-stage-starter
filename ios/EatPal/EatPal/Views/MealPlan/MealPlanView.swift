@@ -691,6 +691,17 @@ struct PlanEntryRow: View {
     /// US-348: present the missing-ingredients sheet for an actionable badge.
     @State private var coverageShortfallContext: CoverageShortfall?
 
+    /// US-608: the ladder row this entry is an exposure for, when there is
+    /// one. Only active rows get the one-tap controls — a paused or mastered
+    /// food is not something we should be asking about at the table.
+    private var ladderRow: KidFoodLadder? {
+        guard entry.recipeId == nil,
+              let row = appState.ladderRow(kidId: entry.kidId, foodId: entry.foodId),
+              row.ladderStatus == .active
+        else { return nil }
+        return row
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             if let recipe = recipe {
@@ -701,8 +712,17 @@ struct PlanEntryRow: View {
             } else {
                 let cat = FoodCategory(rawValue: food?.category ?? "")
                 Text(cat?.icon ?? "🍽")
-                Text(food?.name ?? "Unknown Food")
-                    .font(.subheadline)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(food?.name ?? "Unknown Food")
+                        .font(.subheadline)
+                    // US-608: name the step, so the parent knows what is
+                    // actually being asked of the child at this meal.
+                    if let ladderRow = ladderRow {
+                        Text("\(ladderRow.rung.emoji) \(ladderRow.rung.displayName)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             // US-348: pantry-coverage badge (advisory; never debits).
@@ -720,6 +740,12 @@ struct PlanEntryRow: View {
                     .padding(.vertical, 4)
                     .background(resultColor(mealResult).opacity(0.15), in: Capsule())
                     .foregroundStyle(resultColor(mealResult))
+            } else if let ladderRow = ladderRow {
+                // US-608: three taps, no modal. The full detail sheet is
+                // still reachable from the tracker for parents who want to
+                // capture mood, prep and strategies — this is the version
+                // that survives an actual dinner.
+                LadderQuickLogControls(row: ladderRow, planEntryId: entry.id, mealSlot: slot.rawValue)
             } else {
                 Button("Log") {
                     showingResultPicker = true
