@@ -277,6 +277,107 @@ export function selectDueExposures(
   return { scheduled, skipped };
 }
 
+/** A plan_entries row this module wants written, in DB shape. */
+export interface ExposurePlanEntryRow {
+  kid_id: string;
+  food_id: string;
+  date: string;
+  meal_slot: SchedulerMealSlot;
+  is_primary_dish: boolean;
+}
+
+export interface ExposurePlanWrite {
+  entries: ExposurePlanEntryRow[];
+  /**
+   * Ladder rows to update with what was actually chosen, so the board can
+   * show the real pairing rather than the one we guessed at last week.
+   */
+  ladderPatches: Array<{
+    id: string;
+    paired_safe_food_id: string;
+    preferred_meal_slot: SchedulerMealSlot;
+  }>;
+}
+
+/**
+ * Turn selected exposures into the rows that go on the plan.
+ *
+ * The anchor is written as a plan entry too when it is not already on that
+ * plate. "Served beside a trusted food" has to be true on the plan the parent
+ * reads, not just an attribute on a ladder row they never open — otherwise
+ * the anchor is a promise the app makes to itself.
+ *
+ * `existingEntries` is every plan entry already on the target date for this
+ * kid, so re-running a day is idempotent: nothing is duplicated.
+ */
+export function buildExposurePlanWrites(
+  scheduled: ScheduledExposure[],
+  date: string,
+  existingEntries: Array<{ foodId: string; mealSlot: string }>
+): ExposurePlanWrite {
+  const occupied = new Set(
+    existingEntries.map((e) => `${e.mealSlot.toLowerCase()}::${e.foodId}`)
+  );
+  const entries: ExposurePlanEntryRow[] = [];
+  const ladderPatches: ExposurePlanWrite['ladderPatches'] = [];
+
+  const push = (kidId: string, foodId: string, slot: SchedulerMealSlot) => {
+    const key = `${slot}::${foodId}`;
+    if (occupied.has(key)) return;
+    occupied.add(key);
+    entries.push({
+      kid_id: kidId,
+      food_id: foodId,
+      date,
+      meal_slot: slot,
+      // The exposure is never the centre of the meal — that is the anchor's
+      // job, and a try bite billed as the main dish is a different ask.
+      is_primary_dish: false,
+    });
+  };
+
+  for (const exposure of scheduled) {
+    push(exposure.kidId, exposure.anchorFoodId, exposure.mealSlot);
+    push(exposure.kidId, exposure.foodId, exposure.mealSlot);
+
+    ladderPatches.push({
+      id: exposure.ladderRowId,
+      paired_safe_food_id: exposure.anchorFoodId,
+      preferred_meal_slot: exposure.mealSlot,
+    });
+  }
+
+  return { entries, ladderPatches };
+}
+
+/**
+ * Per-food acceptance rate (0..1) from attempt history, used to rank anchors.
+ *
+ * `partial` counts as half: a food a child engages with but does not finish
+ * is a better landing pad than one they have refused outright, and worse than
+ * one they reliably eat.
+ */
+export function successRatesFromAttempts(
+  attempts: Array<{ foodId: string | null; outcome: string | null }>
+): Map<string, number> {
+  const tally = new Map<string, { score: number; total: number }>();
+
+  for (const attempt of attempts) {
+    if (!attempt.foodId) continue;
+    const entry = tally.get(attempt.foodId) ?? { score: 0, total: 0 };
+    entry.total += 1;
+    if (attempt.outcome === 'success') entry.score += 1;
+    else if (attempt.outcome === 'partial') entry.score += 0.5;
+    tally.set(attempt.foodId, entry);
+  }
+
+  const rates = new Map<string, number>();
+  for (const [foodId, { score, total }] of tally) {
+    if (total > 0) rates.set(foodId, score / total);
+  }
+  return rates;
+}
+
 function pickSlot(
   row: SchedulableLadderRow,
   usedSlots: Set<string>,

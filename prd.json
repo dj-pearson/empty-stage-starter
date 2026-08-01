@@ -1851,7 +1851,7 @@
         "npm run test:run passes"
       ],
       "passes": true,
-      "notes": "DONE. src/lib/ladderScheduler.ts — pure. Enforces the 3/day cap, one-per-slot, stressful-slot exclusion, blanket pause, allergen hard-exclusion (including on an explicitly paired anchor, so a stale pairing cannot outrank an allergen), texture-dislike deprioritisation, and skip-when-no-anchor. Returns skips with reasons so the UI can explain an empty day. VERIFIED: 25 unit tests green. NOT DONE: nothing calls selectDueExposures yet — the writer that turns its output into plan_entries rows is not built, so no exposure is auto-scheduled in the running app. That is the next piece of work on this story."
+      "notes": "DONE. Pure selector (src/lib/ladderScheduler.ts) plus the writer that was missing on the first pass: buildExposurePlanWrites turns selected exposures into plan_entries rows and successRatesFromAttempts ranks anchors from attempt history (partial counts as half a success). The ANCHOR IS WRITTEN AS A PLAN ENTRY TOO — 'served beside a trusted food' has to be true on the plan the parent reads, not just an attribute on a ladder row they never open. Exposures are never is_primary_dish. useFoodLadder.scheduleDueExposures gathers the signals (food_properties textures, per-food acceptance, what is already on the plate) and persists; all judgement stays in the pure module. Idempotent per day: re-running dedupes against existing entries. The chosen anchor and slot are written back to the ladder row so the board shows the real pairing. VERIFIED: 36 unit tests incl. anchor-on-plate, no-duplicate, idempotency, per-slot separation. NOT DONE: scheduling is parent-triggered ('Plan today's steps' on the board) — there is no automatic daily job, so nothing runs unattended yet. NOT VERIFIED: never executed against a real database."
     },
     {
       "id": "US-600",
@@ -1868,7 +1868,7 @@
         "npm run test:run passes"
       ],
       "passes": true,
-      "notes": "DONE (data layer + web hook). src/hooks/useFoodLadder.ts closes plan -> attempt -> ladder, finally reading plan_entries.food_attempt_id. buildQuickLogWrites is pure and exported (following buildMealVoteUpsert) so the tap-to-outcome mapping is pinned by tests. Attempt is recorded at the rung the child was ASKED for, not the rung they land on. Optimistic with non-destructive rollback; a failed plan back-link is logged but does not roll back. VERIFIED: 12 tests green incl. rollback on ladder-write and attempt-insert failure. NOT DONE: the web Planner/TodayMeals surfaces do not yet render the inline three-button control — the hook is ready, the web plan-entry UI is not wired. iOS has its control (US-608)."
+      "notes": "DONE (hook + a working surface). src/hooks/useFoodLadder.ts closes plan -> attempt -> ladder, reading plan_entries.food_attempt_id for the first time. buildQuickLogWrites is pure and exported so the tap-to-outcome mapping is pinned by tests. Attempt recorded at the rung the child was ASKED for, not the one they land on. Optimistic with non-destructive rollback; a failed plan back-link is logged but not rolled back. src/components/LadderQuickLogControls.tsx now renders the three controls, wired into the board's 'Due today' section — so the loop is usable end to end on web. VERIFIED: 12 hook tests incl. rollback on both failure paths; lint + impeccable clean. NOT DONE: the controls are NOT yet inline on Planner/TodayMeals plan entries. TodayMeals aggregates entries into a food_ids array per slot, so mapping a ladder row onto an individual food in that shape is a real refactor, not a drop-in. Board-level logging works today; inline plan-entry logging is still open."
     },
     {
       "id": "US-601",
@@ -1917,8 +1917,8 @@
         "No change to the k-anonymity floor or the server-side aggregation contract",
         "Tests cover: mastery creates no duplicate ladder row for an already-tracked food, and opt-out suppresses the contribution"
       ],
-      "passes": false,
-      "notes": "NOT STARTED. Mastery -> chaining handoff and Win Network contribution."
+      "passes": true,
+      "notes": "DONE. src/lib/ladderMastery.ts is pure: selectHandoffCandidates ranks chain targets by the existing similarity score, excludes the mastered food, anything already on this child's ladder (any status), and anything matching the child's allergens however well it scores; caps the offer at 3 because a wall of options is its own kind of pressure. Each candidate is pre-paired with the mastered food as its anchor. buildWinContribution keys the contribution to the ladder row id ('ladder:<id>') mirroring how US-296 reuses an attempt UUID — a row can only be mastered once, so a replay cannot inflate cross-family counts — and returns null when the household has opted out via usePickyWinSharePref or a food has no usable name. Wired into useFoodLadder.quickLog, fired ONLY after the ladder write is durable (offering 'what's next' for a mastery that failed to save would be worse than saying nothing) and best-effort throughout, so a failure never surfaces as an error on top of good news. Surfaced as a dismissible card on the board. VERIFIED: 14 unit tests; lint clean. NOT VERIFIED: the get_food_chain_suggestions RPC shape is mapped from the call site in FoodChainingRecommendations.tsx but has never been exercised against a live database here. NOT DONE: no iOS surface for the handoff yet — this is web only."
     },
     {
       "id": "US-604",

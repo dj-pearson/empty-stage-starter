@@ -25,6 +25,22 @@ import {
   type LadderStatus,
   type Rung,
 } from '@/lib/exposureLadder';
+import { bucketPickiness, contributeChainNetworkSuccess } from '@/lib/chainNetwork';
+import {
+  buildWinContribution,
+  selectHandoffCandidates,
+  type ChainSuggestion,
+  type MasteryCandidate,
+} from '@/lib/ladderMastery';
+import {
+  buildExposurePlanWrites,
+  selectDueExposures,
+  successRatesFromAttempts,
+  type SchedulableLadderRow,
+  type SchedulerFood,
+  type SchedulerKid,
+  type SchedulerResult,
+} from '@/lib/ladderScheduler';
 
 /** What a one-tap control reports. Mapped to a food_attempts outcome. */
 export type QuickLogResult = 'accepted' | 'held' | 'refused';
@@ -195,10 +211,36 @@ export function buildQuickLogWrites(args: {
   };
 }
 
-export function useFoodLadder(activeKidId: string | null | undefined) {
+export interface UseFoodLadderOptions {
+  /** Kid record, used for the Win Network pickiness bucket and allergens. */
+  kid?: { pickiness_level?: string | null; allergens?: string[] } | null;
+  /** Food names/allergens for building mastery candidates. */
+  foods?: Array<{ id: string; name: string; allergens?: string[] }>;
+  /** usePickyWinSharePref — a household that opted out contributes nothing. */
+  shareWins?: boolean;
+}
+
+export function useFoodLadder(
+  activeKidId: string | null | undefined,
+  options: UseFoodLadderOptions = {}
+) {
   const [rows, setRows] = useState<LadderRow[]>([]);
   const [loading, setLoading] = useState(false);
   const backfilledKids = useRef<Set<string>>(new Set());
+  /** US-603: targets offered after a food graduates. */
+  const [masteryCandidates, setMasteryCandidates] = useState<MasteryCandidate[]>([]);
+  const [masteredFoodName, setMasteredFoodName] = useState<string | null>(null);
+
+  // Held in a ref so the mastery handler is not rebuilt (and quickLog's
+  // identity does not churn) every time the pantry array is replaced.
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  // quickLog needs the current ladder to filter already-tracked foods out of
+  // the mastery handoff, but must not take `rows` as a dependency — that
+  // would rebuild the callback on every log and churn every consumer.
+  const rowsRef = useRef<LadderRow[]>([]);
+  rowsRef.current = rows;
 
   const load = useCallback(async (kidId: string) => {
     const { data, error } = await supabase
@@ -298,6 +340,73 @@ export function useFoodLadder(activeKidId: string | null | undefined) {
   );
 
   /**
+   * US-603: a food just graduated — offer what to chain to next, and tell
+   * the Win Network.
+   *
+   * Best-effort throughout. A failure here must never surface as an error on
+   * top of what is, for the parent, unambiguously good news.
+   */
+  const handleMastery = useCallback(async (row: LadderRow, currentRows: LadderRow[]) => {
+    const { kid, foods = [], shareWins = true } = optionsRef.current;
+    const foodById = new Map(foods.map((f) => [f.id, f]));
+    const masteredFood = foodById.get(row.foodId);
+
+    try {
+      const contribution = buildWinContribution({
+        ladderRowId: row.id,
+        sourceFoodName: row.pairedSafeFoodId
+          ? foodById.get(row.pairedSafeFoodId)?.name ?? ''
+          : masteredFood?.name ?? '',
+        targetFoodName: masteredFood?.name ?? '',
+        pickinessBucket: bucketPickiness(kid?.pickiness_level),
+        shareEnabled: shareWins,
+      });
+
+      if (contribution) {
+        void contributeChainNetworkSuccess(contribution);
+      }
+    } catch (error) {
+      logger.warn('Win Network contribution failed after mastery:', error);
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('get_food_chain_suggestions', {
+        source_food: row.foodId,
+        limit_count: 10,
+      });
+      if (error) throw error;
+
+      const suggestions: ChainSuggestion[] = (data ?? []).map(
+        (s: { food_id: string; food_name: string; similarity_score: number; reasons: string[] }) => ({
+          foodId: s.food_id,
+          foodName: s.food_name,
+          similarityScore: s.similarity_score ?? 0,
+          reasons: s.reasons ?? [],
+        })
+      );
+
+      const candidates = selectHandoffCandidates(suggestions, {
+        masteredFoodId: row.foodId,
+        ladderFoodIds: currentRows.map((r) => r.foodId),
+        kidAllergens: kid?.allergens ?? [],
+        allergensByFoodId: new Map(foods.map((f) => [f.id, f.allergens ?? []])),
+      });
+
+      if (candidates.length > 0) {
+        setMasteryCandidates(candidates);
+        setMasteredFoodName(masteredFood?.name ?? null);
+      }
+    } catch (error) {
+      logger.warn('Could not load next-step suggestions after mastery:', error);
+    }
+  }, []);
+
+  const dismissMastery = useCallback(() => {
+    setMasteryCandidates([]);
+    setMasteredFoodName(null);
+  }, []);
+
+  /**
    * US-600: one tap logs the attempt, links it to the plan entry, and moves
    * the ladder — all from a single control at the table.
    *
@@ -350,6 +459,12 @@ export function useFoodLadder(activeKidId: string | null | undefined) {
 
         if (ladderError) throw ladderError;
 
+        // US-603: only after the win is durable. Offering "what's next" for
+        // a mastery that failed to save would be worse than saying nothing.
+        if (nextState.status === 'mastered' && previous.status !== 'mastered') {
+          void handleMastery({ ...previous, ...nextState }, rowsRef.current);
+        }
+
         return true;
       } catch (error) {
         logger.error('Quick log failed:', error);
@@ -357,7 +472,7 @@ export function useFoodLadder(activeKidId: string | null | undefined) {
         return false;
       }
     },
-    []
+    [handleMastery]
   );
 
   const patchRow = useCallback(
@@ -476,6 +591,138 @@ export function useFoodLadder(activeKidId: string | null | undefined) {
     return true;
   }, [rows]);
 
+
+  /**
+   * US-599: put today's due exposures on the plan.
+   *
+   * Reads the signals the scheduler needs (sensory properties, acceptance
+   * history, what is already on the plate), asks the pure scheduler what
+   * should happen, then writes it. All the judgement lives in the pure
+   * module; this function only gathers and persists.
+   *
+   * Safe to call repeatedly for the same day — `buildExposurePlanWrites`
+   * dedupes against the entries already on that date.
+   */
+  const scheduleDueExposures = useCallback(
+    async (args: {
+      date?: string;
+      foods: Array<{ id: string; name: string; is_safe: boolean; allergens?: string[] }>;
+      kid: { id: string; allergens?: string[]; texture_dislikes?: string[] };
+    }): Promise<SchedulerResult | null> => {
+      const { foods, kid } = args;
+      const date = args.date ?? todayIsoDate();
+      if (!activeKidId || rows.length === 0) return null;
+
+      try {
+        const foodIds = foods.map((f) => f.id);
+
+        const [propsResult, attemptsResult, planResult] = await Promise.all([
+          // Texture only matters for foods we might schedule, so this is
+          // scoped to the pantry rather than the whole properties table.
+          supabase
+            .from('food_properties')
+            .select('food_id, texture_primary')
+            .in('food_id', foodIds),
+          supabase.from('food_attempts').select('food_id, outcome').eq('kid_id', activeKidId),
+          supabase
+            .from('plan_entries')
+            .select('food_id, meal_slot')
+            .eq('kid_id', activeKidId)
+            .eq('date', date),
+        ]);
+
+        const textureByFoodId = new Map<string, string | null>(
+          (propsResult.data ?? []).map((p) => [p.food_id as string, p.texture_primary])
+        );
+
+        const schedulerFoods: SchedulerFood[] = foods.map((f) => ({
+          id: f.id,
+          name: f.name,
+          isSafe: f.is_safe,
+          allergens: f.allergens ?? [],
+          texturePrimary: textureByFoodId.get(f.id) ?? null,
+        }));
+
+        const schedulerKid: SchedulerKid = {
+          id: kid.id,
+          allergens: kid.allergens ?? [],
+          textureDislikes: kid.texture_dislikes ?? [],
+          // No UI exists yet for marking a meal stressful; the scheduler
+          // honours the field, so wiring it is a UI change, not a rules one.
+          stressfulSlots: [],
+          // A blanket pause is stored per-row (pauseAll flips each active row
+          // to paused), so there is no separate kid-level flag to read here.
+          // Paused rows are excluded by status either way.
+          laddersPaused: false,
+        };
+
+        const schedulable: SchedulableLadderRow[] = rows.map((r) => ({
+          id: r.id,
+          kidId: r.kidId,
+          foodId: r.foodId,
+          currentRung: r.currentRung,
+          status: r.status,
+          nextDueOn: r.nextDueOn,
+          pairedSafeFoodId: r.pairedSafeFoodId,
+          preferredMealSlot: r.preferredMealSlot,
+          preferredPrep: r.preferredPrep,
+        }));
+
+        const existing = (planResult.data ?? []).map((e) => ({
+          foodId: e.food_id as string,
+          mealSlot: e.meal_slot as string,
+        }));
+
+        const result = selectDueExposures(schedulable, {
+          date,
+          kid: schedulerKid,
+          foodsById: new Map(schedulerFoods.map((f) => [f.id, f])),
+          successRateByFoodId: successRatesFromAttempts(
+            (attemptsResult.data ?? []).map((a) => ({
+              foodId: a.food_id,
+              outcome: a.outcome,
+            }))
+          ),
+          occupiedSlots: existing.map((e) => e.mealSlot),
+        });
+
+        if (result.scheduled.length === 0) return result;
+
+        const { entries, ladderPatches } = buildExposurePlanWrites(
+          result.scheduled,
+          date,
+          existing
+        );
+
+        if (entries.length > 0) {
+          const { error } = await supabase.from('plan_entries').insert(entries);
+          if (error) throw error;
+        }
+
+        // Record the pairing that was actually chosen so the board shows the
+        // real anchor rather than one we guessed at last week.
+        await Promise.all(
+          ladderPatches.map((patch) =>
+            supabase
+              .from('kid_food_ladder')
+              .update({
+                paired_safe_food_id: patch.paired_safe_food_id,
+                preferred_meal_slot: patch.preferred_meal_slot,
+              })
+              .eq('id', patch.id)
+          )
+        );
+
+        setRows(await load(activeKidId));
+        return result;
+      } catch (error) {
+        logger.error('Failed to schedule due exposures:', error);
+        return null;
+      }
+    },
+    [activeKidId, rows, load]
+  );
+
   const grouped = useMemo(() => {
     const byStatus: Record<LadderStatus, LadderRow[]> = {
       active: [],
@@ -501,6 +748,10 @@ export function useFoodLadder(activeKidId: string | null | undefined) {
     addFoodToLadder,
     removeFromLadder,
     backfillFromHistory,
+    scheduleDueExposures,
+    masteryCandidates,
+    masteredFoodName,
+    dismissMastery,
     reload: useCallback(async () => {
       if (!activeKidId) return;
       try {

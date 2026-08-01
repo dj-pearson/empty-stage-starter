@@ -446,6 +446,22 @@
       "saved": "Logged — nice work showing up for it.",
       "failed": "Could not save that just now. Nothing was lost; try again in a moment.",
       "srHint": "Logs this exposure at the {{rung}} step"
+    },
+    "planToday": "Plan today's steps",
+    "scheduling": "Planning…",
+    "scheduled": "Added {{count}} step(s) to today's plan, each next to a safe food.",
+    "nothingDue": "Nothing is due today — everything is resting or already planned.",
+    "scheduleFailed": "Could not build today's plan just now. Nothing was changed.",
+    "dueTodayTitle": "Due today",
+    "dueTodayBody": "What's being asked today, and one tap to say how it went.",
+    "mastery": {
+      "title": "That one's made it",
+      "titleFor": "{{food}} made it",
+      "body": "Nice. When you're ready, here's what pairs naturally with it — each one would start gently, served alongside the food they just got comfortable with. No rush.",
+      "because": "Similar {{reasons}}",
+      "start": "Start this one",
+      "started": "Added {{food}} at the first step.",
+      "notNow": "Not right now"
     }
   }
 }

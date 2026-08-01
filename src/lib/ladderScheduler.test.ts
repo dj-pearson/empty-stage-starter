@@ -11,10 +11,13 @@ import { describe, it, expect } from 'vitest';
 import {
   MAX_ACTIVE_EXPOSURES,
   SCHEDULABLE_SLOTS,
+  buildExposurePlanWrites,
   hasAllergenConflict,
   hasDislikedTexture,
   selectAnchor,
   selectDueExposures,
+  successRatesFromAttempts,
+  type ScheduledExposure,
   type SchedulableLadderRow,
   type SchedulerContext,
   type SchedulerFood,
@@ -331,5 +334,112 @@ describe('selectDueExposures', () => {
     for (const exposure of scheduled) {
       expect(SCHEDULABLE_SLOTS).toContain(exposure.mealSlot);
     }
+  });
+});
+
+describe('buildExposurePlanWrites', () => {
+  const exposure = (over: Partial<ScheduledExposure> = {}): ScheduledExposure => ({
+    ladderRowId: 'l1',
+    kidId: 'kid-1',
+    foodId: 'broccoli',
+    rung: 'touching',
+    mealSlot: 'dinner',
+    anchorFoodId: 'pasta',
+    preferredPrep: null,
+    ...over,
+  });
+
+  it('writes the anchor onto the plate as well as the exposure', () => {
+    const { entries } = buildExposurePlanWrites([exposure()], DATE, []);
+
+    expect(entries.map((e) => e.food_id)).toEqual(['pasta', 'broccoli']);
+    // "Served beside a trusted food" has to be true on the plan the parent
+    // reads, not just an attribute on a ladder row they never open.
+    expect(entries.every((e) => e.meal_slot === 'dinner')).toBe(true);
+    expect(entries.every((e) => e.date === DATE)).toBe(true);
+  });
+
+  it('never bills an exposure as the main dish', () => {
+    const { entries } = buildExposurePlanWrites([exposure()], DATE, []);
+    expect(entries.every((e) => e.is_primary_dish === false)).toBe(true);
+  });
+
+  it('does not duplicate a food already on that plate', () => {
+    const { entries } = buildExposurePlanWrites([exposure()], DATE, [
+      { foodId: 'pasta', mealSlot: 'dinner' },
+    ]);
+
+    expect(entries.map((e) => e.food_id)).toEqual(['broccoli']);
+  });
+
+  it('is idempotent — re-running a fully scheduled day writes nothing', () => {
+    const first = buildExposurePlanWrites([exposure()], DATE, []);
+    const second = buildExposurePlanWrites(
+      [exposure()],
+      DATE,
+      first.entries.map((e) => ({ foodId: e.food_id, mealSlot: e.meal_slot }))
+    );
+
+    expect(second.entries).toHaveLength(0);
+  });
+
+  it('treats the same food in a different slot as a separate plate', () => {
+    const { entries } = buildExposurePlanWrites([exposure()], DATE, [
+      { foodId: 'pasta', mealSlot: 'lunch' },
+    ]);
+    expect(entries.map((e) => e.food_id)).toEqual(['pasta', 'broccoli']);
+  });
+
+  it('records the pairing that was actually chosen back onto the ladder row', () => {
+    const { ladderPatches } = buildExposurePlanWrites([exposure()], DATE, []);
+
+    expect(ladderPatches).toEqual([
+      { id: 'l1', paired_safe_food_id: 'pasta', preferred_meal_slot: 'dinner' },
+    ]);
+  });
+
+  it('handles several exposures across different slots', () => {
+    const { entries, ladderPatches } = buildExposurePlanWrites(
+      [
+        exposure({ ladderRowId: 'l1', foodId: 'broccoli', mealSlot: 'dinner' }),
+        exposure({ ladderRowId: 'l2', foodId: 'pepper', mealSlot: 'lunch', anchorFoodId: 'toast' }),
+      ],
+      DATE,
+      []
+    );
+
+    expect(entries).toHaveLength(4);
+    expect(ladderPatches).toHaveLength(2);
+  });
+});
+
+describe('successRatesFromAttempts', () => {
+  it('scores a partial as half a success', () => {
+    const rates = successRatesFromAttempts([
+      { foodId: 'f1', outcome: 'success' },
+      { foodId: 'f1', outcome: 'partial' },
+    ]);
+    expect(rates.get('f1')).toBeCloseTo(0.75);
+  });
+
+  it('drags a repeatedly refused food to the bottom', () => {
+    const rates = successRatesFromAttempts([
+      { foodId: 'f1', outcome: 'refused' },
+      { foodId: 'f1', outcome: 'refused' },
+    ]);
+    expect(rates.get('f1')).toBe(0);
+  });
+
+  it('ignores attempts with no food attached', () => {
+    const rates = successRatesFromAttempts([
+      { foodId: null, outcome: 'success' },
+      { foodId: 'f1', outcome: 'success' },
+    ]);
+    expect(rates.size).toBe(1);
+    expect(rates.get('f1')).toBe(1);
+  });
+
+  it('returns nothing for an empty history', () => {
+    expect(successRatesFromAttempts([]).size).toBe(0);
   });
 });

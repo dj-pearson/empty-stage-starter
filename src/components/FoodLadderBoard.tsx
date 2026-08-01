@@ -24,11 +24,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Pause, Play, ChevronDown, Trash2, Sparkles } from 'lucide-react';
+import {
+  MoreHorizontal,
+  Pause,
+  Play,
+  ChevronDown,
+  Trash2,
+  Sparkles,
+  CalendarPlus,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useFoods, useKids } from '@/contexts/AppContext';
-import { useFoodLadder, type LadderRow } from '@/hooks/useFoodLadder';
+import { usePickyWinSharePref } from '@/hooks/usePickyWinSharePref';
+import { LadderQuickLogControls } from '@/components/LadderQuickLogControls';
+import { useFoodLadder, todayIsoDate, type LadderRow } from '@/hooks/useFoodLadder';
 import { RUNGS, RUNG_META, rungIndex, type LadderStatus } from '@/lib/exposureLadder';
 
 /** Display order puts what is moving first and what is finished last. */
@@ -168,21 +178,64 @@ export function FoodLadderBoard() {
   const { t } = useTranslation();
   const { activeKidId, kids } = useKids();
   const { foods } = useFoods();
+  const { enabled: shareWins } = usePickyWinSharePref();
+  const activeKidRecord = kids.find((k) => k.id === activeKidId) ?? null;
   const {
     rows,
     grouped,
     loading,
+    quickLog,
     pause,
     resume,
     pauseAll,
     stepDown,
     removeFromLadder,
     backfillFromHistory,
-  } = useFoodLadder(activeKidId);
+    scheduleDueExposures,
+    masteryCandidates,
+    masteredFoodName,
+    dismissMastery,
+    addFoodToLadder,
+  } = useFoodLadder(activeKidId, {
+    kid: activeKidRecord,
+    foods,
+    shareWins,
+  });
 
   const [backfilling, setBackfilling] = useState(false);
-  const activeKid = kids.find((k) => k.id === activeKidId);
+  const [scheduling, setScheduling] = useState(false);
+  const activeKid = activeKidRecord;
   const foodNameById = useMemo(() => new Map(foods.map((f) => [f.id, f.name])), [foods]);
+
+  /**
+   * What is actually being asked of this child today. Kept separate from the
+   * status sections below: "what do I do at dinner" and "how is this food
+   * going overall" are different questions, and a parent standing in the
+   * kitchen is only asking the first one.
+   */
+  const dueToday = useMemo(() => {
+    const today = todayIsoDate();
+    return grouped.active.filter((row) => row.nextDueOn !== null && row.nextDueOn <= today);
+  }, [grouped.active]);
+
+  const handleSchedule = async () => {
+    if (!activeKid) return;
+    setScheduling(true);
+    try {
+      const result = await scheduleDueExposures({ foods, kid: activeKid });
+      if (!result) {
+        toast.error(t('foodLadder.scheduleFailed'));
+        return;
+      }
+      toast.success(
+        result.scheduled.length > 0
+          ? t('foodLadder.scheduled', { count: result.scheduled.length })
+          : t('foodLadder.nothingDue')
+      );
+    } finally {
+      setScheduling(false);
+    }
+  };
 
   const handleBackfill = async () => {
     if (!activeKidId) return;
@@ -256,12 +309,110 @@ export function FoodLadderBoard() {
         </div>
 
         {grouped.active.length > 0 ? (
-          <Button variant="outline" onClick={handlePauseAll}>
-            <Pause className="mr-2 h-4 w-4" aria-hidden="true" />
-            {t('foodLadder.pauseEverything')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleSchedule} disabled={scheduling}>
+              <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+              {scheduling ? t('foodLadder.scheduling') : t('foodLadder.planToday')}
+            </Button>
+            <Button variant="outline" onClick={handlePauseAll}>
+              <Pause className="mr-2 h-4 w-4" aria-hidden="true" />
+              {t('foodLadder.pauseEverything')}
+            </Button>
+          </div>
         ) : null}
       </div>
+
+      {masteryCandidates.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              {masteredFoodName
+                ? t('foodLadder.mastery.titleFor', { food: masteredFoodName })
+                : t('foodLadder.mastery.title')}
+            </CardTitle>
+            <CardDescription>{t('foodLadder.mastery.body')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ul className="divide-y divide-border">
+              {masteryCandidates.map((candidate) => (
+                <li
+                  key={candidate.foodId}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">{candidate.foodName}</p>
+                    {candidate.reasons.length > 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {t('foodLadder.mastery.because', {
+                          reasons: candidate.reasons.join(', '),
+                        })}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (await addFoodToLadder(candidate.foodId, candidate.anchorFoodId)) {
+                        toast.success(
+                          t('foodLadder.mastery.started', { food: candidate.foodName })
+                        );
+                        dismissMastery();
+                      }
+                    }}
+                  >
+                    {t('foodLadder.mastery.start')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <Button variant="ghost" size="sm" onClick={dismissMastery}>
+              {t('foodLadder.mastery.notNow')}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {dueToday.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t('foodLadder.dueTodayTitle')}</CardTitle>
+            <CardDescription>{t('foodLadder.dueTodayBody')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-border">
+              {dueToday.map((row) => {
+                const foodName = foodNameById.get(row.foodId) ?? t('foodLadder.unknownFood');
+                const anchorName = row.pairedSafeFoodId
+                  ? foodNameById.get(row.pairedSafeFoodId) ?? null
+                  : null;
+
+                return (
+                  <li
+                    key={row.id}
+                    className="flex flex-wrap items-start justify-between gap-3 py-4"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium text-foreground">{foodName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {anchorName
+                          ? t('foodLadder.servedWith', { food: anchorName })
+                          : t('foodLadder.noAnchorYet')}
+                      </p>
+                    </div>
+                    <LadderQuickLogControls
+                      row={row}
+                      foodName={foodName}
+                      mealSlot={row.preferredMealSlot}
+                      onLog={quickLog}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {SECTION_ORDER.map((status) => {
         const section = grouped[status];
