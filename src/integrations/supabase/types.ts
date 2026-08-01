@@ -5691,6 +5691,106 @@ export type Database = {
           },
         ]
       }
+      kid_food_ladder: {
+        Row: {
+          consecutive_holds: number
+          consecutive_refusals: number
+          consecutive_successes: number
+          created_at: string
+          current_rung: string
+          food_id: string
+          id: string
+          kid_id: string
+          last_attempt_at: string | null
+          next_due_on: string | null
+          paired_safe_food_id: string | null
+          paused_reason: string | null
+          preferred_meal_slot: string | null
+          preferred_prep: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          consecutive_holds?: number
+          consecutive_refusals?: number
+          consecutive_successes?: number
+          created_at?: string
+          current_rung?: string
+          food_id: string
+          id?: string
+          kid_id: string
+          last_attempt_at?: string | null
+          next_due_on?: string | null
+          paired_safe_food_id?: string | null
+          paused_reason?: string | null
+          preferred_meal_slot?: string | null
+          preferred_prep?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          consecutive_holds?: number
+          consecutive_refusals?: number
+          consecutive_successes?: number
+          created_at?: string
+          current_rung?: string
+          food_id?: string
+          id?: string
+          kid_id?: string
+          last_attempt_at?: string | null
+          next_due_on?: string | null
+          paired_safe_food_id?: string | null
+          paused_reason?: string | null
+          preferred_meal_slot?: string | null
+          preferred_prep?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kid_food_ladder_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kid_food_ladder_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["food_id"]
+          },
+          {
+            foreignKeyName: "kid_food_ladder_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["kid_id"]
+          },
+          {
+            foreignKeyName: "kid_food_ladder_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kid_food_ladder_paired_safe_food_id_fkey"
+            columns: ["paired_safe_food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kid_food_ladder_paired_safe_food_id_fkey"
+            columns: ["paired_safe_food_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["food_id"]
+          },
+        ]
+      }
       kid_meal_creations: {
         Row: {
           badges_earned: string[] | null
