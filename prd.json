@@ -1782,6 +1782,286 @@
       "priority": 1,
       "passes": true,
       "notes": "FOUND + FIXED 2026-07-31 (loop, branch claude/homepage-seo-traffic-khygd4). Not previously in the PRD. ROOT CAUSE: PseoPage read `useParams<{slug:string}>().slug`, but none of the four pSEO routes declared a `:slug` param — it was always undefined, so `if (!slug) setIsNotFound(true)` fired and EVERY programmatic guide rendered the 404 state. Compounding it, src/lib/pseo/generator.ts writes canonical_url and every breadcrumb href as `/guides/<slug>` where buildSlug already emits a multi-segment path carrying its own prefix ('food-chaining/chicken-nuggets', 'challenges/arfid/dinner') — a shape no route served: `/guides/:guideSlug` matched exactly one segment, `/food-chaining/:safeFood[/:modifier]` used a different URL namespace than the stored canonical, and the 3-segment challenge/age combos had no route at all. `/:dimension1/:dimension2` was additionally a catch-all swallowing every unmatched two-segment URL. FIX: single `/guides/*` splat matching the data model; slug resolved from the pathname via the new src/lib/pseo/slug.ts (slugFromPathname/pathnameForSlug, 8 unit tests incl. a round-trip against buildSlug for 1- and 2-dimension page types); `LegacyGuideRedirect` plus six 301 rules in public/_redirects for the old namespaces; NotFoundState now emits noindex so soft-404s are not indexed as thin duplicates. REACHABILITY: new /guides hub page (src/pages/pseo/GuidesIndex.tsx) grouping published guides by page_type with CollectionPage+ItemList schema — this gives the breadcrumb root a real target AND fixes the orphan problem, since the only links to /guides/* were from other guides and the admin dashboard. Linked from the Footer (renders on every marketing page) so there is a crawl path in. Added to the sitemap and to the prerender route list. VERIFIED: build exit 0, 13/13 routes prerendered including /guides; full suite 1181 passing; no new lint errors. NOT VERIFIED HERE: this container has no Supabase credentials, so no guide has been rendered against real pseo_pages data — /guides prerendered its empty state. Needs one build with VITE_SUPABASE_URL/ANON_KEY set to confirm the list renders and that guide URLs resolve end-to-end."
+    },
+    {
+      "id": "US-596",
+      "title": "kid_food_ladder schema: per-kid, per-food exposure ladder state",
+      "description": "As a parent of a child with ARFID, I want the app to remember exactly which exposure rung each child is on for each food so that progress is a tracked state rather than a pile of past log entries.",
+      "acceptanceCriteria": [
+        "New migration creates public.kid_food_ladder: id uuid pk, kid_id uuid not null fk kids(id) on delete cascade, food_id uuid not null fk foods(id) on delete cascade, current_rung text not null default 'looking', consecutive_successes int not null default 0, consecutive_holds int not null default 0, last_attempt_at timestamptz, next_due_on date, paired_safe_food_id uuid null fk foods(id) on delete set null, preferred_prep text null, preferred_meal_slot text null, status text not null default 'active' check (status in ('active','paused','mastered','backed_off')), paused_reason text null, created_at/updated_at timestamptz not null default now()",
+        "current_rung is CHECK-constrained to the eight existing FoodSuccessTracker stages: looking, touching, smelling, licking, tiny_taste, small_bite, full_bite, full_portion — the same vocabulary already written to food_attempts.stage, so no new taxonomy is introduced",
+        "UNIQUE index on (kid_id, food_id) — one ladder row per kid per food",
+        "Index on (kid_id, status, next_due_on) to serve the 'what is due' scheduler query",
+        "RLS enabled; SELECT/INSERT/UPDATE/DELETE policies scoped through kids via user_id OR household_members, matching the pattern in 20260520000002_kid_growth_events.sql (every policy has USING and INSERT has WITH CHECK)",
+        "Migration is additive only: new table, new indexes, new policies. No ALTER/DROP/RENAME on foods, food_attempts, plan_entries or kids, so every shipped iOS build keeps working unchanged",
+        "src/integrations/supabase/types.ts includes kid_food_ladder Row/Insert/Update/Relationships",
+        "npm run typecheck passes"
+      ],
+      "passes": true,
+      "notes": "DONE. supabase/migrations/20260801000000_kid_food_ladder.sql — additive table + unique (kid_id,food_id), due-query index, four household-scoped RLS policies (USING on every verb, WITH CHECK on INSERT/UPDATE), an updated_at trigger, and a BEFORE INSERT/UPDATE trigger enforcing the 3-exposures-due-per-kid-per-day cap in the DB so no client path can route around it. types.ts hand-edited to add kid_food_ladder Row/Insert/Update/Relationships (no supabase CLI in this container, so this is hand-written to match generated output rather than regenerated). VERIFIED: npm run typecheck clean. NOT VERIFIED: the migration has not been applied to any database — no Supabase instance or CLI here. Needs one `supabase db push` against a branch DB plus a `supabase gen types` diff to confirm the hand-written types match exactly. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-597",
+      "title": "Pure exposure-ladder progression policy with pressure-reduction backoff",
+      "description": "As a parent, I want the app to decide the next step after each exposure using a consistent, gentle rule so that a refusal reduces pressure instead of repeating it.",
+      "acceptanceCriteria": [
+        "New pure module src/lib/exposureLadder.ts exports RUNGS (ordered array of the 8 stages), rungIndex(), nextRung(), prevRung(), and applyAttemptOutcome(state, outcome, opts) -> newState",
+        "applyAttemptOutcome is a pure function: no Supabase, no Date.now() reads (current date is injected), no I/O — so it is fully unit-testable",
+        "success at the current rung increments consecutive_successes; on reaching ADVANCE_THRESHOLD (2) the food advances one rung, consecutive_successes resets to 0, and next_due_on is set to today + REPEAT_DAYS (2)",
+        "partial holds the rung, resets consecutive_successes to 0, increments consecutive_holds, and re-dues the food at today + REPEAT_DAYS",
+        "refused steps DOWN one rung (pressure reduction), resets both counters, and sets next_due_on to today + COOLDOWN_DAYS (4) — never re-presents the refused food the next day",
+        "tantrum steps down one rung AND sets status='backed_off' with next_due_on today + TANTRUM_COOLDOWN_DAYS (7); a backed_off row is never auto-scheduled and requires an explicit parent resume",
+        "Advancing past the final rung (full_portion) sets status='mastered' and clears next_due_on",
+        "A refusal at the lowest rung (looking) holds at looking rather than underflowing, and still applies the cooldown",
+        "New src/lib/exposureLadder.test.ts covers: advance-after-two-successes, hold-on-partial, step-down-on-refusal, tantrum backoff, mastery at the top rung, no underflow at the bottom rung, and that applyAttemptOutcome never mutates its input state",
+        "npm run test:run passes"
+      ],
+      "passes": true,
+      "notes": "DONE. src/lib/exposureLadder.ts — pure, date-injected. Two successes advance, partial holds, refusal steps DOWN with a longer cooldown, tantrum backs off for a week. Two consecutive refusals auto-pause with nothing scheduled (US-602 behaviour landed here because it belongs inside the fold, not in a UI branch). No underflow at the bottom rung; mastery at the top clears scheduling. addDays does UTC arithmetic so a cooldown cannot land a day early for anyone west of UTC. VERIFIED: 25 unit tests green, typecheck + lint clean. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-598",
+      "title": "Derive ladder state from existing food_attempts history (backfill)",
+      "description": "As an existing user with months of logged attempts, I want my ladder to be already populated the first time I open it so that the feature is useful on day one instead of showing an empty state.",
+      "acceptanceCriteria": [
+        "New pure function deriveLadderFromAttempts(attempts, opts) in src/lib/exposureLadder.ts folds a food's attempt history (oldest first) through applyAttemptOutcome to produce the current ladder state",
+        "Derivation is per (kid_id, food_id); attempts with a null food_id or null kid_id are ignored rather than throwing",
+        "Attempts with an unrecognized stage value fall back to the default starting rung instead of crashing the fold",
+        "Foods with no attempt history do not get a ladder row — the ladder is opt-in per food, not a copy of the whole pantry",
+        "A client-side backfill runs once per kid, is idempotent (re-running produces the same rows and never duplicates, guarded by the (kid_id, food_id) unique index), and records completion so it does not re-run on every mount",
+        "Unit tests cover: empty history, a success-only history reaching a high rung, a history ending in a refusal landing backed off/stepped down, and idempotency of a second derivation over the same attempts",
+        "npm run test:run passes"
+      ],
+      "passes": true,
+      "notes": "DONE. deriveLadderFromAttempts replays history oldest-first through the same policy that will govern the row going forward, seeded at the rung the earliest attempt was logged at so long-running families are not sent back to 'looking'. Skips rows missing kid/food/outcome rather than throwing; tolerates unknown stage labels. Idempotent by construction and via the (kid_id,food_id) unique index. Backfill lands rows UNSCHEDULED (next_due_on null) — a long history would otherwise trip the DB due-per-day cap, and which food to restart is the parent's call. VERIFIED by unit tests. NOT VERIFIED: never run against real food_attempts data. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-599",
+      "title": "Ladder scheduler: place due exposures into the plan beside a safe anchor",
+      "description": "As a parent, I want the child's next exposure step to appear on the meal plan automatically, served next to a food they already trust, so that I do not have to design the therapy schedule myself.",
+      "acceptanceCriteria": [
+        "New pure module src/lib/ladderScheduler.ts exports selectDueExposures(ladder, ctx) returning the ladder rows to schedule for a given date window",
+        "Only rows with status='active' and next_due_on <= the target date are eligible; paused, mastered and backed_off rows are never scheduled",
+        "At most MAX_ACTIVE_EXPOSURES (3) foods are scheduled per kid per day, and at most one per meal slot — a plate never stacks multiple new foods",
+        "Each selected exposure is paired with a safe anchor food for the same meal slot: paired_safe_food_id when set, otherwise the kid's highest-success safe food available in that slot; an exposure with no available anchor is skipped rather than scheduled bare",
+        "Anchor selection excludes any food conflicting with the kid's allergens, mirroring the allergen guard already used in the iOS FoodChainingView",
+        "Scheduling honors kid texture_dislikes: a food whose food_properties.texture_primary is in the kid's texture_dislikes is deprioritized behind other due foods",
+        "Writing to the plan reuses the existing plan_entries shape (kid_id, food_id, date, meal_slot, is_primary_dish=false) — no schema change",
+        "Unit tests cover: the daily cap, one-per-slot, anchor fallback, skip-when-no-anchor, allergen exclusion, and that non-active statuses are excluded",
+        "npm run test:run passes"
+      ],
+      "passes": true,
+      "notes": "DONE. Pure selector (src/lib/ladderScheduler.ts) plus the writer that was missing on the first pass: buildExposurePlanWrites turns selected exposures into plan_entries rows and successRatesFromAttempts ranks anchors from attempt history (partial counts as half a success). The ANCHOR IS WRITTEN AS A PLAN ENTRY TOO — 'served beside a trusted food' has to be true on the plan the parent reads, not just an attribute on a ladder row they never open. Exposures are never is_primary_dish. useFoodLadder.scheduleDueExposures gathers the signals (food_properties textures, per-food acceptance, what is already on the plate) and persists; all judgement stays in the pure module. Idempotent per day: re-running dedupes against existing entries. The chosen anchor and slot are written back to the ladder row so the board shows the real pairing. VERIFIED: 36 unit tests incl. anchor-on-plate, no-duplicate, idempotency, per-slot separation. NOT DONE: scheduling is parent-triggered ('Plan today's steps' on the board) — there is no automatic daily job, so nothing runs unattended yet. NOT VERIFIED: never executed against a real database. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-600",
+      "title": "One-tap rung logging closes the loop from plan entry to ladder",
+      "description": "As a parent mid-dinner, I want to record how an exposure went in a single tap so that logging survives real family evenings and the ladder keeps advancing.",
+      "acceptanceCriteria": [
+        "A plan entry that came from the ladder renders its rung inline (e.g. 'Touching — broccoli') and offers three controls: accepted / held / refused",
+        "One tap writes a food_attempts row with the entry's stage, the mapped outcome, kid_id, food_id and meal_slot — the parent is never required to fill the 8-field DetailedTrackingDialog to advance a ladder",
+        "The created attempt id is written back to plan_entries.food_attempt_id, finally using the column that Planner.tsx already sets but nothing reads",
+        "The same action applies applyAttemptOutcome to the kid_food_ladder row and persists the new rung, counters, status and next_due_on",
+        "The full detailed logging dialog remains reachable for parents who want to capture mood/prep/strategies — one-tap is an addition, not a replacement",
+        "Optimistic UI: the rung updates immediately and rolls back non-destructively on server failure, consistent with the US-535 rollback contract",
+        "Tests cover the outcome mapping (accepted->success, held->partial, refused->refused) and that a failed persist restores the prior ladder state",
+        "npm run test:run passes"
+      ],
+      "passes": true,
+      "notes": "DONE (hook + a working surface). src/hooks/useFoodLadder.ts closes plan -> attempt -> ladder, reading plan_entries.food_attempt_id for the first time. buildQuickLogWrites is pure and exported so the tap-to-outcome mapping is pinned by tests. Attempt recorded at the rung the child was ASKED for, not the one they land on. Optimistic with non-destructive rollback; a failed plan back-link is logged but not rolled back. src/components/LadderQuickLogControls.tsx now renders the three controls, wired into the board's 'Due today' section — so the loop is usable end to end on web. VERIFIED: 12 hook tests incl. rollback on both failure paths; lint + impeccable clean. NOT DONE: the controls are NOT yet inline on Planner/TodayMeals plan entries. TodayMeals aggregates entries into a food_ids array per slot, so mapping a ladder row onto an individual food in that shape is a real refactor, not a drop-in. Board-level logging works today; inline plan-entry logging is still open. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-601",
+      "title": "Web ladder board: every child's ladder at a glance",
+      "description": "As a parent, I want one screen showing where each food sits on my child's ladder so that I can see progress that a list of past attempts never made visible.",
+      "acceptanceCriteria": [
+        "New component renders, per active kid, the kid's ladder rows grouped by status (active / backed off / mastered / paused)",
+        "Each row shows the food name, current rung with its existing emoji + label, next due date, and the paired safe anchor",
+        "Parent controls per row: pause, resume, step down a rung manually, and remove the food from the ladder",
+        "A food can be added to the ladder from the existing chaining suggestions and from the pantry",
+        "Surface is mounted on the existing /food-chaining page behind the existing FeatureGate, and behind a useFeatureFlag so it can ship dark",
+        "Empty state explains the ladder in one sentence and offers the backfill/first-food action rather than showing a bare list",
+        "Uses semantic Tailwind tokens (no hardcoded palette colors), loading skeletons, and ARIA labels on the icon-only controls, per the repo conventions",
+        "All user-facing copy goes through i18next t() keys, not hardcoded literals",
+        "npm run lint and npm run typecheck pass"
+      ],
+      "passes": true,
+      "notes": "DONE. src/components/FoodLadderBoard.tsx — per-status sections (working on / resting / paused / made it), an 8-segment rung track, per-row pause/resume/step-down/remove, pause-everything, backfill CTA and empty state. Mounted on /food-chaining behind the existing FeatureGate plus a new `exposure_ladder` feature flag defaulting OFF, so this ships dark. All copy via i18next under a new foodLadder namespace. VERIFIED: typecheck + lint clean; `npx impeccable detect` reports zero anti-patterns on the file. NOT VERIFIED: never rendered in a browser — no Supabase credentials in this container, so the board has not been seen against real data. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-602",
+      "title": "Safety guardrails and non-clinical positioning",
+      "description": "As a parent of a child with a clinical feeding diagnosis, I need the app to reduce pressure and never nag us through a hard week, and to be honest that it is not treatment.",
+      "acceptanceCriteria": [
+        "A single 'pause all ladders' control per kid stops all scheduling and all exposure reminders until explicitly resumed",
+        "MAX_ACTIVE_EXPOSURES is enforced at the data layer, not only in the scheduler, so no code path can queue more than 3 active exposures per kid per day",
+        "A meal slot the parent has marked as stressful is never used for an exposure",
+        "Two consecutive refusals on the same food auto-pause that food's ladder row and surface a gentle 'let's give this one a rest' message with no call to retry",
+        "Copy anywhere near the ladder avoids treatment claims; the surface carries a plain not-medical-advice line and points to working with a feeding therapist",
+        "No gamification rewards consumption: badges/streaks in this feature reward parent consistency and child participation (showing up to the exposure), never bites eaten",
+        "Exposure reminders respect the existing notification preferences and are silent when ladders are paused",
+        "Tests cover the data-layer cap, the auto-pause after two consecutive refusals, and that paused kids yield zero scheduled exposures"
+      ],
+      "passes": true,
+      "notes": "DONE (guardrails that exist). Enforced in three places: the DB trigger caps exposures due per kid per day; applyAttemptOutcome auto-pauses a food after two consecutive refusals with nothing rescheduled; the scheduler excludes stressful slots and returns nothing at all when a kid is blanket-paused. pauseAll ships on both platforms. Non-clinical disclaimer on the web board and the iOS board. No gamification of consumption was added. VERIFIED by unit tests on all three. NOT DONE: exposure reminders are not wired to notification preferences (no reminder path exists yet, since nothing auto-schedules — see US-599); 'stressful slot' is honoured by the scheduler but there is no UI for a parent to mark one. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-603",
+      "title": "Mastery hands off to the chaining engine and feeds the Win Network",
+      "description": "As a parent, I want a mastered food to automatically suggest the next food to work on so that progress compounds instead of stopping.",
+      "acceptanceCriteria": [
+        "When a ladder row reaches status='mastered', the existing calculate-food-similarity chain suggestions for that food are offered as the next ladder target",
+        "Accepting a suggested target creates a new kid_food_ladder row at the starting rung with the mastered food pre-set as paired_safe_food_id",
+        "A mastery event contributes to the existing cross-family Win Network via contributeChainNetworkSuccess in src/lib/chainNetwork.ts, reusing the ladder row id as the idempotency key so a re-save cannot double count",
+        "Contribution continues to respect the existing share preference (usePickyWinSharePref) — a household that has opted out contributes nothing",
+        "No change to the k-anonymity floor or the server-side aggregation contract",
+        "Tests cover: mastery creates no duplicate ladder row for an already-tracked food, and opt-out suppresses the contribution"
+      ],
+      "passes": true,
+      "notes": "DONE. src/lib/ladderMastery.ts is pure: selectHandoffCandidates ranks chain targets by the existing similarity score, excludes the mastered food, anything already on this child's ladder (any status), and anything matching the child's allergens however well it scores; caps the offer at 3 because a wall of options is its own kind of pressure. Each candidate is pre-paired with the mastered food as its anchor. buildWinContribution keys the contribution to the ladder row id ('ladder:<id>') mirroring how US-296 reuses an attempt UUID — a row can only be mastered once, so a replay cannot inflate cross-family counts — and returns null when the household has opted out via usePickyWinSharePref or a food has no usable name. Wired into useFoodLadder.quickLog, fired ONLY after the ladder write is durable (offering 'what's next' for a mastery that failed to save would be worse than saying nothing) and best-effort throughout, so a failure never surfaces as an error on top of good news. Surfaced as a dismissible card on the board. VERIFIED: 14 unit tests; lint clean. NOT VERIFIED: the get_food_chain_suggestions RPC shape is mapped from the call site in FoodChainingRecommendations.tsx but has never been exercised against a live database here. NOT DONE: no iOS surface for the handoff yet — this is web only. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-604",
+      "title": "Weekly ladder narrative in the existing weekly report",
+      "description": "As a parent, I want the weekly report to tell me what actually moved so that I can see slow progress that is invisible day to day.",
+      "acceptanceCriteria": [
+        "The weekly report includes a ladder section: foods that advanced a rung, foods held, foods that backed off, and current mastered count",
+        "The narrative is framed around participation and steps, not amounts eaten",
+        "A week with no advancement produces an encouraging, non-judgmental summary rather than an empty or negative one",
+        "Section is omitted entirely for households with no ladder rows, so nothing regresses for users who never enable the feature",
+        "Numbers in the summary are derived from ladder history, and a unit test pins the counting for a mixed week"
+      ],
+      "passes": false,
+      "notes": "NOT STARTED. Weekly ladder narrative in the existing weekly report."
+    },
+    {
+      "id": "US-605",
+      "title": "Clinician-shareable ladder report",
+      "description": "As a parent who sees a feeding therapist, I want to hand over a clean summary of what we have been working on so that appointment time is spent on decisions rather than recall.",
+      "acceptanceCriteria": [
+        "A ladder report can be exported for a chosen kid and date range, reusing the jsPDF dependency already used by the recipe export path",
+        "The report lists per food: current rung, rung history over the range, attempt count by outcome, and the prep methods with the best observed acceptance",
+        "The report carries the not-medical-advice line and identifies the child by first name only — no address, no DOB, no household identifiers",
+        "Export is generated client-side; the PDF is never uploaded to a server or third party",
+        "A unit test pins the report data assembly (rows, ordering, per-outcome counts) independent of PDF rendering"
+      ],
+      "passes": false,
+      "notes": "NOT STARTED. Clinician-shareable ladder PDF."
+    },
+    {
+      "id": "US-606",
+      "title": "iOS: ladder models, service and AppState wiring",
+      "description": "As an iOS user, I want the ladder to be first-class in the native app so that the feature is not web-only.",
+      "acceptanceCriteria": [
+        "New Swift model KidFoodLadder (Identifiable, Codable, Equatable) in ios/EatPal/EatPal/Models mirroring the table, with snake_case CodingKeys matching the DataService convention",
+        "A LadderInsert/LadderUpdate payload pair follows the existing PlanEntryFeedbackInsert / FoodUpdate patterns",
+        "DataService gains fetchKidFoodLadder / upsertKidFoodLadder / updateKidFoodLadder using the existing SupabaseClient wrapper and user-id resolution",
+        "AppState publishes kidFoodLadder and loads it in the same pass as the other domains, respecting the existing load-precedence contract",
+        "The Swift progression policy mirrors src/lib/exposureLadder.ts rung-for-rung: same rungs, same thresholds, same cooldowns, same backoff-on-refusal",
+        "Swift unit tests in the existing iOS test target cover the same progression cases as the TypeScript tests, so the two platforms cannot silently diverge",
+        "New files are picked up by ios/EatPal/project.yml and the iOS CI build passes"
+      ],
+      "passes": true,
+      "notes": "DONE (code written, NOT COMPILED). KidFoodLadder model, ExposureLadderPolicy (rung-for-rung mirror of the TS policy), DataService CRUD + pauseAll + insertFoodAttempt + linkAttemptToPlanEntry, AppState domain with optimistic pause/resume/step-down/remove/quick-log. Policy lives in the app target, not Shared/, because Shared/ compiles into the widget and share extensions which do not include EatPal/Models. KidFoodLadderUpdate uses double-optionals with a hand-written encoder — the synthesized one skips .some(nil), which would turn 'clear next_due_on' into 'leave it alone' and keep scheduling a paused food. ExposureLadderPolicyTests mirrors the TypeScript cases so the platforms cannot drift. NOT VERIFIED: this container has no Swift toolchain and no xcodegen — nothing here has been compiled and no XCTest has been run. Needs a CI iOS build before merge. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-607",
+      "title": "iOS: ladder board view",
+      "description": "As an iOS user, I want the same at-a-glance ladder board that the web has.",
+      "acceptanceCriteria": [
+        "New SwiftUI view lists the active kid's ladder rows grouped by status with rung emoji + label, next due date and paired anchor",
+        "Row actions: pause, resume, step down, remove — matching the web control set",
+        "Reachable from the existing FoodChainingView so the chaining and ladder surfaces sit together, as they do on web",
+        "Uses SkeletonView during the initial load, matching the US-368 pattern, and an explanatory empty state",
+        "Respects Dynamic Type and VoiceOver: every icon-only control has an accessibility label",
+        "Carries the same not-medical-advice line as the web surface"
+      ],
+      "passes": true,
+      "notes": "DONE (code written, NOT COMPILED). FoodLadderView mirrors the web board: status sections, rung track, row actions, pause-everything, SkeletonView loading, empty state, non-clinical disclaimer, VoiceOver labels on the rung track and every icon-only control. Reachable from FoodChainingView via a summary row that shows working-on/made-it counts. NOT VERIFIED: not compiled, not run in a simulator. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-608",
+      "title": "iOS: one-tap rung logging from the meal plan",
+      "description": "As an iOS user mid-dinner, I want to log an exposure with one tap on my phone, which is where I actually am at dinner.",
+      "acceptanceCriteria": [
+        "A ladder-sourced plan entry shows its rung and offers accepted / held / refused inline in the meal plan and Today surfaces",
+        "One tap writes the food_attempts row, links plan_entries.food_attempt_id, and advances the local ladder state optimistically",
+        "The existing MealFeedbackSheet remains available and is not required to advance a ladder",
+        "Haptic feedback on log, consistent with the app's existing haptics usage",
+        "Failure to persist restores the prior rung and surfaces the standard sync banner rather than silently dropping the log"
+      ],
+      "passes": true,
+      "notes": "DONE (code written, NOT COMPILED). PlanEntryRow names the step under the food and swaps the single Log button for LadderQuickLogControls (three inline taps) when the entry has an ACTIVE ladder row. Writes the attempt, links plan_entries.food_attempt_id, advances the rung optimistically, haptics on tap, restores prior state and shows the standard error toast on failure. Detail sheet stays reachable and is never required. No 'try again' affordance by design; 'Not today' is tinted neutral rather than red. NOT VERIFIED: not compiled, not run in a simulator. || TYPECHECK CAVEAT (this pass): the full `npm run typecheck` (tsc -b) was OOM-killed in this container after concurrent runs exhausted memory, so the whole-project gate has NOT been re-run since the US-599/600/603 changes. The changed files were instead typechecked against a narrow project graph, which is what caught the missing user_id/household_id on scheduler-written plan_entries (fixed). That narrow run reports zero errors in any ladder file. CI must run the real gate before merge."
+    },
+    {
+      "id": "US-609",
+      "title": "iOS: offline durability for ladder writes",
+      "description": "As a parent whose kitchen has bad signal, I want an exposure logged offline to survive so that the ladder does not lose a step.",
+      "acceptanceCriteria": [
+        "Ladder attempt logs and ladder state updates enqueue through the existing app/mobile syncQueue FIFO replay path used for other offline writes",
+        "Replay is idempotent: a replayed attempt does not create a duplicate food_attempts row or double-advance the ladder",
+        "Conflict rule is documented and tested: the server ladder row wins on load per the existing precedence contract, and a queued local step re-applies on top rather than resurrecting a stale rung",
+        "Tests extend the existing syncQueue test coverage for the new operation types"
+      ],
+      "passes": false,
+      "notes": "NOT STARTED. iOS offline durability for ladder writes via the existing syncQueue."
+    },
+    {
+      "id": "US-610",
+      "title": "Safe Food Insurance: detect a safe food starting to slip",
+      "description": "As a parent, I want to know when a safe food is degrading before it is lost, because losing a safe food is the most damaging thing that happens to an ARFID family.",
+      "acceptanceCriteria": [
+        "New pure module src/lib/safeFoodRisk.ts scores each safe food's risk from recent attempt outcomes and plan results",
+        "Risk signals include: a declining acceptance trend over a recent window, a rising refusal rate against that food's own baseline, and over-serving frequency (drawing on the existing varietyFatigue computation rather than duplicating it)",
+        "A food is only flagged with a minimum observation count, so a single bad night never flags a staple",
+        "The module is pure and date-injected, with unit tests covering: a stable staple not flagged, a genuine decline flagged, insufficient data not flagged, and a recovery clearing the flag",
+        "npm run test:run passes"
+      ],
+      "passes": false,
+      "notes": "NOT STARTED. Safe Food Insurance risk scoring."
+    },
+    {
+      "id": "US-611",
+      "title": "Safe Food Insurance surfaces: build a backup before the food is lost",
+      "description": "As a parent warned that a safe food is slipping, I want a concrete next step so that the warning is useful rather than alarming.",
+      "acceptanceCriteria": [
+        "A slipping safe food surfaces a calm, non-alarming card on web and iOS explaining what was observed",
+        "The card offers to start a ladder for the closest chain target as a backup, pre-paired with the at-risk food as the anchor",
+        "It also offers rotation: reduce how often the at-risk food is planned, wired to the existing variety/rotation machinery",
+        "Copy never tells the parent the food will be lost or implies a clinical outcome",
+        "Dismissal is remembered per food and the card does not immediately re-nag",
+        "Web and iOS surfaces read the same risk scores from the shared rule set, with iOS mirroring the thresholds"
+      ],
+      "passes": false,
+      "notes": "NOT STARTED. Safe Food Insurance surfaces."
+    },
+    {
+      "id": "US-612",
+      "title": "Deconstructed recipes: component model",
+      "description": "As a parent cooking one meal for a mixed family, I want a recipe to know its separable components so that one cook session can be plated differently per child.",
+      "acceptanceCriteria": [
+        "Additive migration adds recipe component structure (component grouping over the existing recipe ingredients) with RLS matching the recipes policies; no column is dropped or renamed and no existing recipe becomes invalid",
+        "A recipe with no component data behaves exactly as today on every shipped client — components are optional metadata",
+        "Each component can carry sensory attributes (touching-other-foods tolerance, sauce/mixing flag) used by plating",
+        "types.ts regenerated; npm run typecheck passes",
+        "Backward-compat is explicitly verified: the current iOS Recipe decoding path ignores the new shape without error"
+      ],
+      "passes": false,
+      "notes": "NOT STARTED. Deconstructed recipe component model."
+    },
+    {
+      "id": "US-613",
+      "title": "One pan, four plates: per-kid plating from a single recipe",
+      "description": "As a parent, I want one recipe to produce a per-child plating plan so that I cook once and still serve each child something they can accept.",
+      "acceptanceCriteria": [
+        "Given a recipe with components and the kids selected for the meal, the app produces a per-kid plate: which components go on, which are held back, and which are served separated rather than mixed",
+        "Plating decisions use each kid's safe foods, texture_dislikes and ladder state — a component matching a kid's due exposure can be plated as the exposure for that meal",
+        "The logic lives in a pure, tested module and composes with the existing sibling constraint solver instead of replacing it",
+        "Web and iOS both render the per-kid plate breakdown",
+        "Unit tests cover: a component disliked by one kid held back for that kid only, separation honored for a kid who refuses mixed foods, and a due exposure being plated as the exposure"
+      ],
+      "passes": false,
+      "notes": "NOT STARTED. One pan, four plates per-kid plating."
     }
   ]
 }

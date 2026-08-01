@@ -387,5 +387,81 @@
   },
   "oauthCallback": {
     "processing": "Processing Authorization..."
+  },
+  "foodLadder": {
+    "title": "Exposure ladder",
+    "titleFor": "{{name}}'s ladder",
+    "subtitle": "Where each food sits right now, and what comes next. Small steps, at your child's pace — a food that gets a no simply steps back and rests.",
+    "selectAChild": "Choose a child to see their ladder.",
+    "unknownFood": "Removed food",
+    "emptyTitle": "Start a ladder",
+    "emptyBody": "A ladder tracks each food one small step at a time — from just looking at it, through touching and smelling, all the way to a full portion. If you have logged food attempts before, we can build the ladder from that history.",
+    "backfillCta": "Build from our history",
+    "backfilling": "Building…",
+    "backfillFound": "Added {{count}} foods to the ladder from your history.",
+    "backfillEmpty": "No past attempts to build from yet — add a food to start a ladder.",
+    "pauseEverything": "Pause everything",
+    "pausedAll": "All ladders paused. Nothing will be scheduled until you resume.",
+    "servedWith": "Served with {{food}}",
+    "noAnchorYet": "No safe food paired yet",
+    "nextDue": "next on {{date}}",
+    "restingAfterRefusals": "resting after two no's",
+    "restingAfterUpset": "resting after a hard meal",
+    "rungTrackLabel": "{{rung}} — step {{step}} of {{total}}",
+    "rowActionsLabel": "Options for {{food}}",
+    "disclaimer": "EatPal helps you keep track and keep things steady. It is not medical advice or treatment. If mealtimes are affecting your child's growth or wellbeing, a feeding therapist or your pediatrician is the right next step.",
+    "rungs": {
+      "looking": "Looking",
+      "touching": "Touching",
+      "smelling": "Smelling",
+      "licking": "Licking",
+      "tiny_taste": "Tiny taste",
+      "small_bite": "Small bite",
+      "full_bite": "Full bite",
+      "full_portion": "Full portion"
+    },
+    "sections": {
+      "active": {
+        "title": "Working on",
+        "body": "These come back around on their own schedule."
+      },
+      "backed_off": {
+        "title": "Resting",
+        "body": "A meal went badly, so these have stepped back and are taking a longer break. Bring them back whenever you feel ready."
+      },
+      "paused": {
+        "title": "Paused",
+        "body": "Nothing scheduled for these. They will wait as long as you need."
+      },
+      "mastered": {
+        "title": "Made it",
+        "body": "Eaten as a full portion. These are part of the rotation now."
+      }
+    },
+    "quickLog": {
+      "prompt": "How did {{food}} go?",
+      "accepted": "Went well",
+      "held": "Partway",
+      "refused": "Not today",
+      "saved": "Logged — nice work showing up for it.",
+      "failed": "Could not save that just now. Nothing was lost; try again in a moment.",
+      "srHint": "Logs this exposure at the {{rung}} step"
+    },
+    "planToday": "Plan today's steps",
+    "scheduling": "Planning…",
+    "scheduled": "Added {{count}} step(s) to today's plan, each next to a safe food.",
+    "nothingDue": "Nothing is due today — everything is resting or already planned.",
+    "scheduleFailed": "Could not build today's plan just now. Nothing was changed.",
+    "dueTodayTitle": "Due today",
+    "dueTodayBody": "What's being asked today, and one tap to say how it went.",
+    "mastery": {
+      "title": "That one's made it",
+      "titleFor": "{{food}} made it",
+      "body": "Nice. When you're ready, here's what pairs naturally with it — each one would start gently, served alongside the food they just got comfortable with. No rush.",
+      "because": "Similar {{reasons}}",
+      "start": "Start this one",
+      "started": "Added {{food}} at the first step.",
+      "notNow": "Not right now"
+    }
   }
 }
