@@ -23,6 +23,9 @@ final class AppState: ObservableObject {
     /// the AI prompt enrichment triggers `loadPlanEntryFeedback()`.
     @Published var planEntryFeedback: [PlanEntryFeedback] = []
 
+    /// US-606: exposure ladder rows for the household's children.
+    @Published var kidFoodLadder: [KidFoodLadder] = []
+
     @Published var activeKidId: String?
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -279,6 +282,11 @@ final class AppState: ObservableObject {
             // US-231: feedback isn't on the critical path of the meal planner
             // so it loads in the background after primary data is on screen.
             Task { await loadPlanEntryFeedback() }
+
+            // US-606: same for the exposure ladder — the board and the
+            // one-tap controls both tolerate arriving a beat late, and
+            // neither should hold up the planner rendering.
+            Task { await loadKidFoodLadder() }
 
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
@@ -1223,6 +1231,237 @@ final class AppState: ObservableObject {
         planEntryFeedback
             .filter { $0.planEntryId == planEntryId }
             .max { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
+    }
+
+    // MARK: - Exposure Ladder (US-606 / US-608)
+
+    /// Background-loadable, same contract as the feedback load: a transient
+    /// failure leaves the previous rows in place rather than blanking the
+    /// board.
+    func loadKidFoodLadder() async {
+        do {
+            kidFoodLadder = try await dataService.fetchKidFoodLadder()
+        } catch {
+            SentryService.capture(error, extras: ["context": "loadKidFoodLadder"])
+        }
+    }
+
+    /// Ladder rows for one child, or for the active child when none is given.
+    func ladderRows(for kidId: String? = nil) -> [KidFoodLadder] {
+        guard let id = kidId ?? activeKidId else { return [] }
+        return kidFoodLadder.filter { $0.kidId == id }
+    }
+
+    func ladderRow(kidId: String, foodId: String) -> KidFoodLadder? {
+        kidFoodLadder.first { $0.kidId == kidId && $0.foodId == foodId }
+    }
+
+    /// US-608: one tap logs the exposure, links it back to the plan entry,
+    /// and moves the ladder.
+    ///
+    /// The attempt is recorded at the rung the child was actually *asked
+    /// for*, not the rung they land on afterwards — asked to lick, refused,
+    /// attempt says licking and the ladder drops to smelling. Getting that
+    /// backwards would corrupt the history the ladder is derived from.
+    ///
+    /// Optimistic: the row moves immediately and is restored on failure, so
+    /// a parent is never left looking at a rung that did not persist.
+    @discardableResult
+    func quickLogExposure(
+        row: KidFoodLadder,
+        result: QuickLogResult,
+        planEntryId: String? = nil,
+        mealSlot: String? = nil
+    ) async -> Bool {
+        guard let index = kidFoodLadder.firstIndex(where: { $0.id == row.id }) else {
+            return false
+        }
+
+        let previous = kidFoodLadder[index]
+        let askedRung = previous.rung
+        let now = ISO8601DateFormatter().string(from: Date())
+        let nextState = ExposureLadderPolicy.apply(
+            LadderState(row: previous),
+            outcome: result.outcome,
+            today: ExposureLadderPolicy.todayIso(),
+            attemptAt: now
+        )
+
+        applyLadderState(nextState, at: index)
+        HapticManager.selection()
+
+        do {
+            let attemptId = try await dataService.insertFoodAttempt(
+                FoodAttemptInsert(
+                    kidId: previous.kidId,
+                    foodId: previous.foodId,
+                    stage: askedRung.rawValue,
+                    outcome: result.outcome.rawValue,
+                    attemptedAt: now,
+                    mealSlot: mealSlot ?? previous.preferredMealSlot,
+                    preparationMethod: previous.preferredPrep
+                )
+            )
+
+            if let planEntryId, let attemptId {
+                // A failed back-link leaves the attempt and the ladder both
+                // correct; only the reference is missing, which is not worth
+                // discarding a parent's log for at the dinner table.
+                do {
+                    try await dataService.linkAttemptToPlanEntry(
+                        planEntryId: planEntryId,
+                        attemptId: attemptId,
+                        result: result.planResult
+                    )
+                    if let entryIndex = planEntries.firstIndex(where: { $0.id == planEntryId }) {
+                        planEntries[entryIndex].foodAttemptId = attemptId
+                        planEntries[entryIndex].result = result.planResult
+                    }
+                } catch {
+                    SentryService.capture(error, extras: ["context": "linkAttemptToPlanEntry"])
+                }
+            }
+
+            try await dataService.updateKidFoodLadder(
+                previous.id,
+                updates: ExposureLadderPolicy.update(from: nextState)
+            )
+
+            AnalyticsService.track(.mealResultLogged(
+                result: "ladder_\(result.rawValue)",
+                kidId: previous.kidId
+            ))
+            return true
+        } catch {
+            if let restoreIndex = kidFoodLadder.firstIndex(where: { $0.id == previous.id }) {
+                kidFoodLadder[restoreIndex] = previous
+            }
+            HapticManager.error()
+            toast.show(error, as: { .save(entity: "exposure", underlying: $0) })
+            return false
+        }
+    }
+
+    /// US-602: one control stops every ladder for a child.
+    @discardableResult
+    func pauseAllLadders(kidId: String) async -> Bool {
+        let previous = kidFoodLadder
+
+        for index in kidFoodLadder.indices
+        where kidFoodLadder[index].kidId == kidId
+            && kidFoodLadder[index].ladderStatus == .active {
+            kidFoodLadder[index].status = LadderStatus.paused.rawValue
+            kidFoodLadder[index].pausedReason = "parent"
+            kidFoodLadder[index].nextDueOn = nil
+        }
+
+        do {
+            try await dataService.pauseAllKidFoodLadders(kidId: kidId)
+            return true
+        } catch {
+            kidFoodLadder = previous
+            toast.show(error, as: { .save(entity: "ladder", underlying: $0) })
+            return false
+        }
+    }
+
+    @discardableResult
+    func pauseLadder(_ row: KidFoodLadder) async -> Bool {
+        var state = LadderState(row: row)
+        state.status = .paused
+        state.pausedReason = "parent"
+        state.nextDueOn = nil
+        return await persistLadderState(state, for: row)
+    }
+
+    @discardableResult
+    func resumeLadder(_ row: KidFoodLadder) async -> Bool {
+        var state = LadderState(row: row)
+        state.status = .active
+        state.pausedReason = nil
+        state.consecutiveRefusals = 0
+        state.nextDueOn = ExposureLadderPolicy.todayIso()
+        return await persistLadderState(state, for: row)
+    }
+
+    /// Manual pressure release — a parent can always make a step gentler.
+    @discardableResult
+    func stepDownLadder(_ row: KidFoodLadder) async -> Bool {
+        var state = LadderState(row: row)
+        state.rung = state.rung.previous
+        state.consecutiveSuccesses = 0
+        return await persistLadderState(state, for: row)
+    }
+
+    @discardableResult
+    func addFoodToLadder(
+        kidId: String,
+        foodId: String,
+        pairedSafeFoodId: String? = nil
+    ) async -> Bool {
+        do {
+            try await dataService.insertKidFoodLadder(
+                KidFoodLadderInsert(
+                    kidId: kidId,
+                    foodId: foodId,
+                    nextDueOn: ExposureLadderPolicy.todayIso(),
+                    pairedSafeFoodId: pairedSafeFoodId
+                )
+            )
+            await loadKidFoodLadder()
+            return true
+        } catch {
+            toast.show(error, as: { .save(entity: "ladder", underlying: $0) })
+            return false
+        }
+    }
+
+    @discardableResult
+    func removeFromLadder(_ row: KidFoodLadder) async -> Bool {
+        let previous = kidFoodLadder
+        kidFoodLadder.removeAll { $0.id == row.id }
+
+        do {
+            try await dataService.deleteKidFoodLadder(row.id)
+            return true
+        } catch {
+            kidFoodLadder = previous
+            toast.show(error, as: { .delete(entity: "ladder", underlying: $0) })
+            return false
+        }
+    }
+
+    private func applyLadderState(_ state: LadderState, at index: Int) {
+        kidFoodLadder[index].currentRung = state.rung.rawValue
+        kidFoodLadder[index].consecutiveSuccesses = state.consecutiveSuccesses
+        kidFoodLadder[index].consecutiveHolds = state.consecutiveHolds
+        kidFoodLadder[index].consecutiveRefusals = state.consecutiveRefusals
+        kidFoodLadder[index].status = state.status.rawValue
+        kidFoodLadder[index].nextDueOn = state.nextDueOn
+        kidFoodLadder[index].lastAttemptAt = state.lastAttemptAt
+        kidFoodLadder[index].pausedReason = state.pausedReason
+    }
+
+    private func persistLadderState(_ state: LadderState, for row: KidFoodLadder) async -> Bool {
+        guard let index = kidFoodLadder.firstIndex(where: { $0.id == row.id }) else {
+            return false
+        }
+        let previous = kidFoodLadder[index]
+        applyLadderState(state, at: index)
+
+        do {
+            try await dataService.updateKidFoodLadder(
+                row.id,
+                updates: ExposureLadderPolicy.update(from: state)
+            )
+            return true
+        } catch {
+            if let restoreIndex = kidFoodLadder.firstIndex(where: { $0.id == previous.id }) {
+                kidFoodLadder[restoreIndex] = previous
+            }
+            toast.show(error, as: { .save(entity: "ladder", underlying: $0) })
+            return false
+        }
     }
 
     // MARK: - Grocery Operations

@@ -37,6 +37,22 @@ struct FoodChainingView: View {
         appState.tryBiteFoods.filter { !hasAllergenConflict($0) }
     }
 
+    /// US-607: one line of state for the ladder entry point, so the row says
+    /// something useful before it is tapped.
+    private var ladderSummary: String {
+        let rows = appState.ladderRows()
+        if rows.isEmpty { return "Track each food one small step at a time" }
+
+        let working = rows.filter { $0.ladderStatus == .active }.count
+        let mastered = rows.filter { $0.ladderStatus == .mastered }.count
+        if working == 0 {
+            return mastered > 0 ? "\(mastered) made it · nothing scheduled" : "Nothing scheduled"
+        }
+        return mastered > 0
+            ? "\(working) working on · \(mastered) made it"
+            : "\(working) working on"
+    }
+
     // US-474: case-insensitive name filter for the selectors.
     private func matching(_ foods: [Food], _ query: String) -> [Food] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -62,6 +78,32 @@ struct FoodChainingView: View {
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+
+                // US-607: chaining answers "what next"; the ladder answers
+                // "where are we now". They belong together, same as on web.
+                NavigationLink {
+                    FoodLadderView()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label("Exposure ladder", systemImage: "stairs")
+                                .font(.headline)
+                            Text(ladderSummary)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding()
+                    .background(
+                        Color(.secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
+                }
+                .buttonStyle(.plain)
 
                 // US-368: skeletons during the initial pantry load so the
                 // selectors don't flash their "mark some foods" empty hints.

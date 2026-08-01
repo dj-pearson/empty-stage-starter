@@ -404,6 +404,76 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Exposure Ladder (US-596 / US-606)
+
+    func fetchKidFoodLadder() async throws -> [KidFoodLadder] {
+        try await client.from("kid_food_ladder")
+            .select()
+            .execute()
+            .value
+    }
+
+    func insertKidFoodLadder(_ row: KidFoodLadderInsert) async throws {
+        try await client.from("kid_food_ladder")
+            .insert(row)
+            .execute()
+    }
+
+    func updateKidFoodLadder(_ id: String, updates: KidFoodLadderUpdate) async throws {
+        try await client.from("kid_food_ladder")
+            .update(updates)
+            .eq("id", value: id)
+            .execute()
+    }
+
+    func deleteKidFoodLadder(_ id: String) async throws {
+        try await client.from("kid_food_ladder")
+            .delete()
+            .eq("id", value: id)
+            .execute()
+    }
+
+    /// Pauses every active ladder for one child in a single statement
+    /// (US-602). Scoped server-side so a partially-applied pause is not
+    /// possible — a parent asking for quiet gets all of it.
+    func pauseAllKidFoodLadders(kidId: String) async throws {
+        try await client.from("kid_food_ladder")
+            .update(
+                KidFoodLadderUpdate(
+                    status: LadderStatus.paused.rawValue,
+                    nextDueOn: .some(nil),
+                    pausedReason: .some("parent")
+                )
+            )
+            .eq("kid_id", value: kidId)
+            .eq("status", value: LadderStatus.active.rawValue)
+            .execute()
+    }
+
+    /// Inserts a one-tap exposure log and returns the new attempt's id so the
+    /// caller can write it back onto the originating plan entry.
+    func insertFoodAttempt(_ attempt: FoodAttemptInsert) async throws -> String? {
+        let rows: [FoodAttemptIdRow] = try await client.from("food_attempts")
+            .insert(attempt)
+            .select("id")
+            .execute()
+            .value
+        return rows.first?.id
+    }
+
+    /// Closes the loop back onto the plan entry: links the attempt and
+    /// records the parent-visible result.
+    func linkAttemptToPlanEntry(
+        planEntryId: String,
+        attemptId: String,
+        result: String
+    ) async throws {
+        try await client.from("plan_entries")
+            .update(["food_attempt_id": attemptId, "result": result])
+            .eq("id", value: planEntryId)
+            .execute()
+    }
+
     // MARK: - Grocery Items
 
     func fetchGroceryItems() async throws -> [GroceryItem] {
