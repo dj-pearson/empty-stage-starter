@@ -249,7 +249,10 @@ export function useFoodLadder(
       .eq('kid_id', kidId);
 
     if (error) throw error;
-    return (data ?? []).map((row) => normalizeLadderRow(row as LadderDbRow));
+    // Cast through unknown: the row type inferred from a select-column string
+    // does not structurally overlap LadderDbRow under every tsconfig, and
+    // normalizeLadderRow already defends against unexpected values.
+    return (data ?? []).map((row) => normalizeLadderRow(row as unknown as LadderDbRow));
   }, []);
 
   useEffect(() => {
@@ -614,6 +617,21 @@ export function useFoodLadder(
       if (!activeKidId || rows.length === 0) return null;
 
       try {
+        // plan_entries.user_id is NOT NULL and household_id scopes RLS, so an
+        // insert without them is rejected outright. Everything else on this
+        // path is derived from the ladder; ownership has to come from the
+        // session, exactly as PlanContext does it.
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return null;
+
+        const { data: member } = await supabase
+          .from('household_members')
+          .select('household_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
         const foodIds = foods.map((f) => f.id);
 
         const [propsResult, attemptsResult, planResult] = await Promise.all([
@@ -695,7 +713,13 @@ export function useFoodLadder(
         );
 
         if (entries.length > 0) {
-          const { error } = await supabase.from('plan_entries').insert(entries);
+          const { error } = await supabase.from('plan_entries').insert(
+            entries.map((entry) => ({
+              ...entry,
+              user_id: user.id,
+              household_id: member?.household_id ?? null,
+            }))
+          );
           if (error) throw error;
         }
 
