@@ -516,5 +516,27 @@
       "generatedNote": "Generated on this device by EatPal. Not uploaded or shared automatically.",
       "filename": "{{name}}-ladder-summary-{{from}}"
     }
+  },
+  "plating": {
+    "title": "One pan, four plates",
+    "subtitle": "Cook it once, then plate it per child. Anything taken off is listed so you can see what changed and why.",
+    "onPlate": "On the plate",
+    "separated": "Keep apart",
+    "heldBack": "Held back",
+    "exposureBadge": "{{component}} is tonight's step",
+    "blockedBadge": "Not this dish",
+    "blockedBody": "Something {{name}} cannot have is part of the dish itself and cannot be taken off. Serve {{name}} something else tonight.",
+    "emptyBody": "Nothing here works for {{name}} tonight — everything would come off the plate.",
+    "reasons": {
+      "allergen": "{{food}} — {{detail}}",
+      "dietary": "{{food}} — {{detail}}",
+      "disliked": "not a fan of {{food}}",
+      "texture": "{{texture}} is a texture they avoid",
+      "noTouching": "would make everything touch",
+      "componentSeparate": "needs its own space",
+      "dueExposure": "today's ladder step ({{rung}})",
+      "safeFood": "{{food}} is a safe food",
+      "cannotHoldBack": "cannot be taken off — it is the dish"
+    }
   }
 }
