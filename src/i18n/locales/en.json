@@ -462,6 +462,31 @@
       "start": "Start this one",
       "started": "Added {{food}} at the first step.",
       "notNow": "Not right now"
+    },
+    "weekly": {
+      "title": "The ladder this week",
+      "defaultChild": "Your child",
+      "exposureCount_one": "{{count}} exposure",
+      "exposureCount_other": "{{count}} exposures",
+      "foodCount_one": "{{count}} food",
+      "foodCount_other": "{{count}} foods",
+      "andMore_one": "{{count}} more",
+      "andMore_other": "{{count}} more",
+      "headline": "{{name}} showed up to {{exposures}} across {{foods}}.",
+      "headlineAdvanced": "{{name}} showed up to {{exposures}} across {{foods}}, and {{advanced}} moved up a step.",
+      "headlineEmpty": "No steps were logged this week — {{name}}'s ladder is right where you left it.",
+      "moveWithRungs": "{{food}} ({{from}} → {{to}})",
+      "moveAtRung": "{{food}} at {{rung}}",
+      "moveToRung": "{{food}} to {{rung}}",
+      "movedUp": "Moved up: {{foods}}. Steps like that come from turning up, not from finishing a plate.",
+      "mastered_one": "{{foods}} reached the top of the ladder this week and joined the regular rotation.",
+      "mastered_other": "{{foods}} reached the top of the ladder this week and joined the regular rotation.",
+      "held": "Held steady: {{foods}}. Staying on the same step is how a food becomes familiar — that is the work, not a pause in it.",
+      "backedOff": "Eased back: {{foods}}. Dropping to a gentler step after a hard meal is the plan working, and it comes back around after a rest.",
+      "noAdvancement": "No steps changed this week. That is what most weeks look like — repeat exposure at the same step is what builds familiarity, and {{name}} kept showing up for it.",
+      "nothingLogged": "Nothing was logged on the ladder this week, and that is allowed. Ladders keep their place, so you can pick up exactly where things stood whenever you are both ready.",
+      "masteredTotal_one": "{{count}} food has been mastered so far.",
+      "masteredTotal_other": "{{count}} foods have been mastered so far."
     }
   }
 }

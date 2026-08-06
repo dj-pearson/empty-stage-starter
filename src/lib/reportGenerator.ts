@@ -32,6 +32,17 @@ export interface ReportData {
     ate: number;
     successRate: number;
   }[];
+  /**
+   * US-604: exposure-ladder narrative, already rendered to copy by the caller
+   * (which owns the i18n context). Absent for households with no ladder
+   * history — the PDF then looks exactly as it did before the feature.
+   */
+  ladder?: {
+    title: string;
+    headline: string;
+    lines: string[];
+    masteredCount: number;
+  };
 }
 
 /**
@@ -212,6 +223,31 @@ export async function generateProgressReportPDF(
     yPos += lines.length * 5 + 10;
   }
 
+  // Ladder narrative (US-604). Placed after the food list because it reads as
+  // the "what actually moved" close to the week, not as a statistic.
+  if (reportData.ladder) {
+    if (yPos > 220) {
+      pdf.addPage();
+      yPos = margin;
+    }
+
+    addText(reportData.ladder.title, 16, true);
+    yPos += 2;
+    addText(reportData.ladder.headline, 11, false, [110, 110, 110]);
+    yPos += 3;
+
+    reportData.ladder.lines.forEach((line) => {
+      if (yPos > 265) {
+        pdf.addPage();
+        yPos = margin;
+      }
+      addText(line, 11, false, [60, 60, 60]);
+      yPos += 3;
+    });
+
+    yPos += 5;
+  }
+
   // Footer
   pdf.setTextColor(150, 150, 150);
   pdf.setFontSize(9);
@@ -366,6 +402,11 @@ export function generateShareText(reportData: ReportData): string {
   if (reportData.stats.newFoodsAccepted.length > 0) {
     lines.push('');
     lines.push(`🎉 New Foods Accepted: ${reportData.stats.newFoodsAccepted.map(f => f.name).join(', ')}`);
+  }
+
+  if (reportData.ladder) {
+    lines.push('');
+    lines.push(`🪜 ${reportData.ladder.title}: ${reportData.ladder.headline}`);
   }
 
   lines.push('');
