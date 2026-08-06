@@ -487,6 +487,34 @@
       "nothingLogged": "Nothing was logged on the ladder this week, and that is allowed. Ladders keep their place, so you can pick up exactly where things stood whenever you are both ready.",
       "masteredTotal_one": "{{count}} food has been mastered so far.",
       "masteredTotal_other": "{{count}} foods have been mastered so far."
+    },
+    "report": {
+      "cta": "Share with a clinician",
+      "dialogTitle": "Ladder summary for your clinician",
+      "dialogBody": "A one-page summary of what you have been working on: where each food sits, how it got there, and which preparations went best. It is built on your device and saved to your downloads — nothing is uploaded.",
+      "from": "From",
+      "to": "To",
+      "generate": "Download PDF",
+      "generating": "Building…",
+      "rangeInvalid": "Pick an end date on or after the start date.",
+      "empty": "No ladder activity in that range yet. Try a wider range.",
+      "failed": "Could not build the summary. Please try again.",
+      "ready": "Saved {{filename}} to your downloads.",
+      "title": "Exposure ladder summary",
+      "totalsLine": "{{foods}} foods · {{attempts}} logged attempts · {{mastered}} at a full portion",
+      "currentRung": "Now",
+      "startedAt": "At the start of this range",
+      "history": "Steps",
+      "attempts": "Attempts",
+      "preps": "Best preparations",
+      "noPreps": "No preparation was recorded often enough to compare.",
+      "noAttempts": "No attempts logged in this range.",
+      "outcomeSuccess": "accepted",
+      "outcomePartial": "partial",
+      "outcomeRefused": "declined",
+      "outcomeTantrum": "distress",
+      "generatedNote": "Generated on this device by EatPal. Not uploaded or shared automatically.",
+      "filename": "{{name}}-ladder-summary-{{from}}"
     }
   }
 }

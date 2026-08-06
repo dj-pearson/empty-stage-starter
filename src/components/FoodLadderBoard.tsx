@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LadderReportDialog } from '@/components/LadderReportDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -308,18 +309,36 @@ export function FoodLadderBoard() {
           </p>
         </div>
 
-        {grouped.active.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={handleSchedule} disabled={scheduling}>
-              <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
-              {scheduling ? t('foodLadder.scheduling') : t('foodLadder.planToday')}
-            </Button>
-            <Button variant="outline" onClick={handlePauseAll}>
-              <Pause className="mr-2 h-4 w-4" aria-hidden="true" />
-              {t('foodLadder.pauseEverything')}
-            </Button>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {/* US-605: available whenever there is a ladder at all — a paused or
+              mastered-only board is still worth taking to an appointment. */}
+          {activeKid ? (
+            <LadderReportDialog
+              kidId={activeKid.id}
+              /* First token only: kids.name is free text and some families
+                 store a full name there. The report must not carry one. */
+              kidFirstName={activeKid.name.trim().split(/\s+/)[0] || activeKid.name}
+              ladderRows={rows.map((row) => ({
+                foodId: row.foodId,
+                currentRung: row.currentRung,
+                status: row.status,
+              }))}
+              foodNameById={foodNameById}
+            />
+          ) : null}
+          {grouped.active.length > 0 ? (
+            <>
+              <Button variant="outline" onClick={handleSchedule} disabled={scheduling}>
+                <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+                {scheduling ? t('foodLadder.scheduling') : t('foodLadder.planToday')}
+              </Button>
+              <Button variant="outline" onClick={handlePauseAll}>
+                <Pause className="mr-2 h-4 w-4" aria-hidden="true" />
+                {t('foodLadder.pauseEverything')}
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {masteryCandidates.length > 0 ? (
