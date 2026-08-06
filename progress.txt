@@ -167,3 +167,14 @@ US-613 WEB HALF DONE, story stays passes:false (AC4 needs the iOS render too; no
 - Surfaces: PerKidPlateBreakdown.tsx (i18n plating.* in en.json) + optional `plates` prop on SiblingMealResultCard (omitted => card identical to before) + useRecipePlates.ts batching ONE set of queries for the whole result list. Wired at all 3 card call sites in SiblingMealFinder.tsx.
 - Tests: platePlanner.test.ts (15). Suite = 1332 passed, still only the pre-existing Auth.test.tsx jsdom failure.
 NEXT for US-613: Swift mirror of planPlates + per-kid plate UI on iOS.
+
+## /loop iteration 2026-08-06 (6) — US-611 web half (Safe Food Insurance surfaces)
+US-611 WEB HALF DONE, story stays passes:false (AC6 needs the iOS surface + mirrored thresholds; no Swift toolchain).
+- src/lib/safeFoodAlerts.ts (pure): selectSafeFoodAlerts(rows, dismissals, now) -> worst-first, capped at 2, each with offerRotation + observation signals. Dismissal is PER FOOD for 14 days; the ONLY override is a watch->at_risk escalation (new information). De-escalation is not an override. A bad stored timestamp counts as expired, never as "silence forever".
+- Backup offer reuses selectHandoffCandidates (US-603) with the at-risk food as masteredFoodId, so the target is never already on the ladder and never an allergen, and arrives pre-paired via anchorFoodId; the CTA calls addFoodToLadder(target, anchor).
+- Rotation offer appears ONLY when the over_served signal is present, and routes to the sibling meal finder (same destination as the variety banner's existing CTA).
+- Copy (safeFood.* in en.json) is descriptive, never predictive — no "losing this food", no clinical framing. Percentages via Intl.NumberFormat.
+- Surfaces: SafeFoodInsuranceCard + SafeFoodInsuranceSection mounted on Home, gated behind the SAME exposure_ladder flag (default OFF). With the flag off useFoodLadder gets a null kid and does no work, so live Home is untouched. Dismissals in localStorage, not the DB.
+- Tests: safeFoodAlerts.test.ts (13). Suite = 1345 passed, still only the pre-existing Auth.test.tsx jsdom failure.
+NOTE: Home.tsx has 4 PRE-EXISTING eslint errors (unused Users import, unused caught error, 2 no-unused-expressions) — verified identical on the stashed tree, not introduced here.
+REMAINING NOT-STARTED: nothing web-actionable is left in this epic. US-609 is iOS-only; US-611/US-613 need their Swift halves; US-583..594 need an Xcode build.

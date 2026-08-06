@@ -538,5 +538,28 @@
       "safeFood": "{{food}} is a safe food",
       "cannotHoldBack": "cannot be taken off — it is the dish"
     }
+  },
+  "safeFood": {
+    "title": "{{food}} has been going differently",
+    "body": "Nothing here needs fixing today. This is just what the last couple of weeks looked like for {{food}}, in case it is useful to know now rather than later.",
+    "observationsLabel": "What we noticed",
+    "observations": {
+      "decliningAcceptance": "Accepted less often lately than {{food}} usually is — about {{recent}} of servings, against {{baseline}} before.",
+      "risingRefusals": "Turned down more often than usual — about {{recent}} of servings, against {{baseline}} before.",
+      "overServed": "Served {{shortCount}} times this week and {{longCount}} times over four weeks."
+    },
+    "backupTitle": "Build a backup",
+    "backupBody": "{{food}} works, so something close to it has a good chance too. Starting a ladder for {{target}} keeps {{food}} as the anchor beside it — no pressure on either one.",
+    "backupCta": "Start a ladder for {{target}}",
+    "backupAdded": "{{target}} added to the ladder, paired with {{food}}.",
+    "backupFailed": "Could not add that to the ladder. Please try again.",
+    "backupNone": "No close match to suggest yet — adding more foods helps us find one.",
+    "rotationTitle": "Give it some room",
+    "rotationBody": "{{food}} is on the menu a lot at the moment. Spacing it out can help it stay interesting.",
+    "rotationCta": "Find other meals",
+    "dismiss": "Dismiss",
+    "dismissed": "We won't bring {{food}} up again for a while.",
+    "levelWatch": "Worth a look",
+    "levelAtRisk": "Worth some attention"
   }
 }
