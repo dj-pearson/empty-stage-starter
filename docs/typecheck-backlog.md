@@ -15,7 +15,9 @@ via [`scripts/ci/typecheck-ratchet.sh`](../scripts/ci/typecheck-ratchet.sh).
   ([`scripts/ci/no-new-any.sh`](../scripts/ci/no-new-any.sh)) fails on any newly
   ADDED explicit `any` in changed `src/` files.
 
-Current baseline: see `.ci/typecheck-baseline.txt` (was ~1537 at introduction).
+Current baseline: see `.ci/typecheck-baseline.txt` — **1257**, ratcheted down from the
+1537 measured at introduction (2026-08-06). The drop came from US-536/US-546 and the
+stories after them, not from excluding anything: the ratchet only ever moves down.
 
 ## Shrink plan
 
