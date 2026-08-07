@@ -28,7 +28,10 @@ import {
   applyRelaxation,
   familyWins as curateFamilyWins,
   minKidScore as computeMinKidScore,
+  kidToSolverKid,
+  recipeToSolverRecipe,
 } from '@/lib/siblingMealFinder';
+import { useRecipePlates } from '@/hooks/useRecipePlates';
 import type { SolverResult } from '@/lib/siblingConstraintSolver';
 import { analytics } from '@/lib/analytics';
 import { logger } from '@/lib/logger';
@@ -100,6 +103,38 @@ export default function SiblingMealFinder() {
     (r: SolverResult): number => computeMinKidScore(r),
     []
   );
+
+  /**
+   * US-613: per-kid plating for whichever recipes are on screen. Loaded in one
+   * batch rather than per card, and absent entirely for recipes that have
+   * never been broken into components.
+   */
+  const resultRecipeIds = useMemo(
+    () => (results ?? []).filter((r) => !r.excluded).map((r) => r.recipeId),
+    [results]
+  );
+
+  const solverRecipesForPlating = useMemo(() => {
+    if (resultRecipeIds.length === 0) return [];
+    const foodById = new Map(foods.map((f) => [f.id, f]));
+    const wanted = new Set(resultRecipeIds);
+    return recipes.filter((r) => wanted.has(r.id)).map((r) => recipeToSolverRecipe(r, foodById));
+  }, [recipes, foods, resultRecipeIds]);
+
+  const platingKids = useMemo(
+    () =>
+      selectedKidsObj.map((k) => ({
+        ...kidToSolverKid(k),
+        textureDislikes: k.texture_dislikes ?? null,
+      })),
+    [selectedKidsObj]
+  );
+
+  const { platesByRecipe } = useRecipePlates({
+    recipes: solverRecipesForPlating,
+    kids: platingKids,
+    today: todayIso(),
+  });
 
   const runSolver = useCallback(() => {
     if (kids.length === 0) {
@@ -517,6 +552,7 @@ export default function SiblingMealFinder() {
               onUse={handleUse}
               onCook={handleCook}
               isAccepted={acceptedRecipeId === r.recipeId}
+              plates={platesByRecipe.get(r.recipeId)}
             />
           ))}
         </section>
@@ -539,6 +575,7 @@ export default function SiblingMealFinder() {
               onUse={handleUse}
               onCook={handleCook}
               isAccepted={acceptedRecipeId === r.recipeId}
+              plates={platesByRecipe.get(r.recipeId)}
             />
           ))}
         </section>
@@ -558,6 +595,7 @@ export default function SiblingMealFinder() {
                 onUse={handleUse}
                 onCook={handleCook}
                 isAccepted={acceptedRecipeId === r.recipeId}
+                plates={platesByRecipe.get(r.recipeId)}
               />
             ))}
         </section>

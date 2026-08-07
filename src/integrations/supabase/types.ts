@@ -8496,12 +8496,85 @@ export type Database = {
           },
         ]
       }
-      recipe_ingredients: {
-        // Hand-patched 2026-05-05 to match migration
-        // 20260430000001_create_recipe_ingredients.sql. Re-run
+      recipe_components: {
+        // Hand-patched 2026-08-06 to match migration
+        // 20260806000000_recipe_components.sql. Re-run
         // `supabase gen types typescript --local` after the next
         // schema change to regenerate.
         Row: {
+          can_be_held_back: boolean
+          can_touch_other_foods: boolean
+          created_at: string
+          food_id: string | null
+          id: string
+          is_mixed_in: boolean
+          name: string
+          notes: string | null
+          recipe_id: string
+          sort_order: number
+          textures: string[]
+          updated_at: string
+        }
+        Insert: {
+          can_be_held_back?: boolean
+          can_touch_other_foods?: boolean
+          created_at?: string
+          food_id?: string | null
+          id?: string
+          is_mixed_in?: boolean
+          name: string
+          notes?: string | null
+          recipe_id: string
+          sort_order?: number
+          textures?: string[]
+          updated_at?: string
+        }
+        Update: {
+          can_be_held_back?: boolean
+          can_touch_other_foods?: boolean
+          created_at?: string
+          food_id?: string | null
+          id?: string
+          is_mixed_in?: boolean
+          name?: string
+          notes?: string | null
+          recipe_id?: string
+          sort_order?: number
+          textures?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_components_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_components_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["food_id"]
+          },
+          {
+            foreignKeyName: "recipe_components_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_ingredients: {
+        // Hand-patched 2026-05-05 to match migration
+        // 20260430000001_create_recipe_ingredients.sql, and 2026-08-06 for
+        // component_id (20260806000000_recipe_components.sql). Re-run
+        // `supabase gen types typescript --local` after the next
+        // schema change to regenerate.
+        Row: {
+          component_id: string | null
           created_at: string
           food_id: string | null
           group_label: string | null
@@ -8514,6 +8587,7 @@ export type Database = {
           unit: string | null
         }
         Insert: {
+          component_id?: string | null
           created_at?: string
           food_id?: string | null
           group_label?: string | null
@@ -8526,6 +8600,7 @@ export type Database = {
           unit?: string | null
         }
         Update: {
+          component_id?: string | null
           created_at?: string
           food_id?: string | null
           group_label?: string | null
@@ -8538,6 +8613,13 @@ export type Database = {
           unit?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "recipe_ingredients_component_id_fkey"
+            columns: ["component_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_components"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "recipe_ingredients_food_id_fkey"
             columns: ["food_id"]

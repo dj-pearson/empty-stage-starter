@@ -36,6 +36,7 @@ import { TodayMeals } from "@/components/TodayMeals";
 import { QuickLogModal } from "@/components/QuickLogModal";
 import { TonightModeCard } from "@/components/TonightModeCard";
 import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
+import { SafeFoodInsuranceSection } from "@/components/SafeFoodInsuranceSection";
 import { MostRepeatedMealsCard } from "@/components/MostRepeatedMealsCard";
 import { SeasonalRecallCard } from "@/components/SeasonalRecallCard";
 import { KidBirthdayCard } from "@/components/KidBirthdayCard";
@@ -248,6 +249,9 @@ export default function Home() {
 
         {/* Variety Fatigue nudge (US-298) */}
         <VarietyFatigueBanner surface="home" />
+
+        {/* Safe Food Insurance (US-611) — silent unless a safe food is slipping */}
+        <SafeFoodInsuranceSection surface="home" />
 
         {/* Variety Fatigue insight: top repeated meals this month (US-298) */}
         <MostRepeatedMealsCard />

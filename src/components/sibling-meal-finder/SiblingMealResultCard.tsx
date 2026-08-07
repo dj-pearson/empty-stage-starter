@@ -3,12 +3,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Check, ChefHat, Clock, ImageIcon, Repeat, Sparkles, UtensilsCrossed } from 'lucide-react';
 import type { SolverResult } from '@/lib/siblingConstraintSolver';
+import { PerKidPlateBreakdown } from '@/components/PerKidPlateBreakdown';
+import type { KidPlate } from '@/lib/platePlanner';
 
 interface Props {
   result: SolverResult;
   onUse: (result: SolverResult) => void;
   onCook: (result: SolverResult) => void;
   isAccepted?: boolean;
+  /**
+   * US-613: per-kid plating, present only when this recipe has been broken
+   * into components. Omitted for every recipe that has not, so the card looks
+   * exactly as it did before the feature.
+   */
+  plates?: KidPlate[];
 }
 
 const TIER_META: Record<
@@ -35,7 +43,7 @@ const TIER_META: Record<
   },
 };
 
-export function SiblingMealResultCard({ result, onUse, onCook, isAccepted }: Props) {
+export function SiblingMealResultCard({ result, onUse, onCook, isAccepted, plates }: Props) {
   const meta = TIER_META[result.resolutionType];
   const TierIcon = meta.icon;
 
@@ -166,6 +174,8 @@ export function SiblingMealResultCard({ result, onUse, onCook, isAccepted }: Pro
               </ul>
             </div>
           )}
+
+          {plates && plates.length > 0 && <PerKidPlateBreakdown plates={plates} />}
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button

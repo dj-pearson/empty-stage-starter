@@ -20,8 +20,11 @@ import {
   Copy
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isWithinInterval } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useLadderWeek } from '@/hooks/useLadderWeek';
+import { renderLadderWeekly } from '@/lib/ladderWeeklyText';
 import {
   generateProgressReportPDF,
   downloadBlob,
@@ -40,6 +43,7 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
   const { planEntries } = usePlan();
   const { foods } = useFoods();
   const { kids, activeKidId } = useKids();
+  const { t, i18n } = useTranslation();
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
@@ -173,6 +177,32 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
     return messages;
   }, [stats, mealsByDay, targetKid, previousWeekRate]);
 
+  // US-604: the exposure ladder's side of the week. Derived from attempt
+  // history rather than from plan results, because a ladder step is about
+  // participation — a food can move up in a week where very little was eaten.
+  const foodNames = useMemo(
+    () => Object.fromEntries(foods.map(f => [f.id, f.name])),
+    [foods]
+  );
+
+  const { summary: ladderSummary } = useLadderWeek({
+    kidId: targetKidId,
+    weekStart: format(weekStartDate, 'yyyy-MM-dd'),
+    weekEnd: format(weekEndDate, 'yyyy-MM-dd'),
+    foodNames,
+  });
+
+  const ladderText = useMemo(
+    () =>
+      ladderSummary
+        ? renderLadderWeekly(ladderSummary, t, {
+            kidName: targetKid?.name ?? '',
+            locale: i18n.language,
+          })
+        : null,
+    [ladderSummary, t, targetKid, i18n.language]
+  );
+
   // Build report data object for PDF generation
   const reportData: ReportData = useMemo(() => ({
     kidName: targetKid?.name || 'Child',
@@ -189,7 +219,17 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
       ate: day.ate,
       successRate: day.successRate,
     })),
-  }), [targetKid, weekStartDate, weekEndDate, stats, insights, mealsByDay]);
+    // Omitted for households with no ladder history, so the PDF is unchanged
+    // for everyone who never enabled the feature.
+    ladder: ladderText
+      ? {
+          title: ladderText.title,
+          headline: ladderText.headline,
+          lines: ladderText.lines,
+          masteredCount: ladderSummary?.masteredCount ?? 0,
+        }
+      : undefined,
+  }), [targetKid, weekStartDate, weekEndDate, stats, insights, mealsByDay, ladderText, ladderSummary]);
 
   const handleShare = async () => {
     if (!targetKid) return;
@@ -410,6 +450,37 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
             <div className="text-xs text-muted-foreground mt-1">Try Bites</div>
           </div>
         </div>
+
+        {/* Ladder narrative (US-604). Absent entirely when the household has
+            never used the ladder — no empty state, no placeholder. */}
+        {ladderText && (
+          <section aria-labelledby="weekly-ladder-heading">
+            <h3 id="weekly-ladder-heading" className="font-semibold mb-1">
+              {ladderText.title}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-3">{ladderText.headline}</p>
+            <div className="space-y-2">
+              {ladderText.lines.map((line, index) => (
+                <p key={index} className="text-sm leading-relaxed max-w-[70ch]">
+                  {line}
+                </p>
+              ))}
+            </div>
+            {ladderSummary && ladderSummary.foodsWorkedOn > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  ...ladderSummary.advanced,
+                  ...ladderSummary.held,
+                  ...ladderSummary.backedOff,
+                ].map(move => (
+                  <Badge key={move.foodId} variant="secondary" className="font-normal">
+                    {move.foodName} · {t(`foodLadder.rungs.${move.toRung}`)}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Coming Up Next Week */}
         <div className="bg-muted/50 rounded-lg p-4 border-dashed border-2">
