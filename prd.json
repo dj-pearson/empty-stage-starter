@@ -2162,8 +2162,8 @@
         "Migration is policy-only and additive: RLS stays enabled, no table/column/type changes, so src/integrations/supabase/types.ts is unaffected",
         "The migration header records why each drop is safe, matching the house style of the earlier lock-down migrations"
       ],
-      "passes": false,
-      "notes": "Source: full-codebase security & correctness review (2026-08-08), branch claude/codebase-comprehensive-review-refuve. HIGH/H4, from 20251220000000_admin_tables.sql. Each policy is declared FOR ALL ... WITH CHECK (TRUE) with no TO clause, so it applies to PUBLIC including anon. For INSERT that is unambiguous: anyone holding the anon key (which ships in the web bundle) can POST rows to /rest/v1/revenue_metrics_daily and poison MRR/ARR/churn on the admin dashboard; revenue_churn_predictions is keyed to auth.users(id) so per-user risk scores can be written for arbitrary accounts. A full final-state resolve of all 200 migrations (tracking CREATE/DROP POLICY in order) shows 47 live permissive policies, but the rest are intentional public-read (blog taxonomy, nutrition) or lead-capture inserts (quiz, waitlist). These four are the ones that are neither. Same class the team already retired in 20260514000000 and 20260726000000 — these were simply out of scope then."
+      "passes": true,
+      "notes": "IMPLEMENTED + VERIFIED 2026-08-08 via supabase/migrations/20260808000000_tighten_analytics_rls.sql. Dropped the four FOR ALL ... WITH CHECK (TRUE) policies that carried no TO clause and therefore applied to PUBLIC including anon. Backward-compatibility verified BEFORE writing the migration, not assumed: (a) no edge function writes to any of the four; (b) the only client references are three .select('*') reads in src/components/admin/RevenueOperationsCenter.tsx (lines 113, 127, 168), and the admin-only SELECT policies are untouched; (c) the real writers are update_all_churn_predictions() and trigger_churn_interventions(), both confirmed SECURITY DEFINER in 20251220000000_admin_tables.sql (parsed the function bodies rather than eyeballing — an earlier definition of trigger_churn_interventions() in 20251109000002 is plain plpgsql, but the later CREATE OR REPLACE supersedes it), and SECURITY DEFINER bypasses RLS; (d) workflow_executions has no writer in the repo at all. Re-ran the full final-state policy resolver afterwards: all four tables now carry ONLY admin-gated policies. Policy-only and additive — RLS stays enabled, no table/column/type change, so types.ts and every shipped iOS build are unaffected. Also re-asserted ENABLE ROW LEVEL SECURITY (idempotent) and documented each table's writer in a COMMENT."
     },
     {
       "id": "US-621",
@@ -2218,6 +2218,20 @@
       ],
       "passes": false,
       "notes": "Source: full-codebase security & correctness review (2026-08-08), branch claude/codebase-comprehensive-review-refuve. MEDIUM/M5, src/pages/Auth.tsx:445-446. Harmless at runtime — the key is ignored — but it is evidence that the branch users hit when Google/Apple sign-in is down has never been exercised. Pair the test with US-621, which is what makes an Auth-page test meaningful again."
+    },
+    {
+      "id": "US-625",
+      "title": "Resolve the duplicate 20260110000000 migration prefix that is failing CI",
+      "description": "As a developer, I want the migration-prefix gate green, so that it can keep catching the ordering ambiguity it was written to catch instead of being ignored as permanently red.",
+      "acceptanceCriteria": [
+        "Determine whether 20260110000000_storage_analytics_tables.sql has already been applied to production (check supabase_migrations.schema_migrations)",
+        "If APPLIED: add 20260110000000 to the GRANDFATHERED list in scripts/ci/check-migration-prefixes.sh with a comment explaining why, matching how the other 7 pre-existing dupes are handled — renaming an applied migration gives it a new version that Supabase would RE-RUN",
+        "If NOT APPLIED: renumber the newer file to a unique, monotonically-increasing timestamp instead of grandfathering it",
+        "bash scripts/ci/check-migration-prefixes.sh exits 0",
+        "Confirm no other gate is silently red on main at the same time"
+      ],
+      "passes": false,
+      "notes": "Found 2026-08-08 while adding the US-620 migration. `bash scripts/ci/check-migration-prefixes.sh` exits 1 on a CLEAN HEAD — verified by stashing all local changes — so this is pre-existing and unrelated to the review work. Duplicate prefix 20260110000000 is shared by _storage_analytics_features.sql (committed 2026-06-13, fd52437) and _storage_analytics_tables.sql (committed 2026-07-15, 8ffb549); the later file created the collision and was never added to the script's GRANDFATHERED list. The gate is a HARD step in ci.yml:142-143 (no continue-on-error), inside the same job that boots Supabase, so it fails the pipeline. Together with US-621 that is TWO hard CI gates currently red on main. Deliberately NOT auto-fixed here: choosing between grandfathering and renumbering requires knowing whether the migration is already applied in production, and guessing wrong either re-runs an applied migration or permanently hides a real ordering ambiguity."
     }
   ]
 }
