@@ -70,7 +70,6 @@ const FUNCTIONS_MAP: { [key: string]: string } = {
   "run-scheduled-audit": "./functions/run-scheduled-audit/index.ts",
   "schedule-meal-reminders": "./functions/schedule-meal-reminders/index.ts",
   "schedule-weekly-reports": "./functions/schedule-weekly-reports/index.ts",
-  "send-auth-email": "./functions/send-auth-email/index.ts",
   "send-emails": "./functions/send-emails/index.ts",
   "send-seo-notification": "./functions/send-seo-notification/index.ts",
   "seo-audit": "./functions/seo-audit/index.ts",

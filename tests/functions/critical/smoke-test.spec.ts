@@ -19,7 +19,6 @@ const CRITICAL_ENDPOINTS = [
   { name: 'manage-subscription', path: '/functions/v1/manage-subscription', method: 'POST', auth: true },
   { name: 'ai-meal-plan', path: '/functions/v1/ai-meal-plan', method: 'POST', auth: true },
   { name: 'list-users', path: '/functions/v1/list-users', method: 'GET', auth: true },
-  { name: 'send-auth-email', path: '/functions/v1/send-auth-email', method: 'POST', auth: true },
   { name: 'generate-weekly-report', path: '/functions/v1/generate-weekly-report', method: 'POST', auth: true },
   { name: 'test-ai-model', path: '/functions/v1/test-ai-model', method: 'POST', auth: false },
 ];
