@@ -1,5 +1,6 @@
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
+import { isDuplicateInsertError } from "../_shared/stripe-webhook-logic.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -32,6 +33,67 @@ export default async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // US-616 / US-519: idempotency. Stripe redelivers events (retries, manual
+    // resends), and re-running a handler re-fires its side effects — most
+    // visibly a duplicate row in `subscription_events`, which is an append-only
+    // audit log rather than an idempotent upsert. Claim the event id first; the
+    // PRIMARY KEY on stripe_webhook_events turns a redelivery into a no-op.
+    //
+    // Ordering is NOT guarded here on purpose: handleSubscriptionChange already
+    // re-fetches the live subscription from Stripe before writing, which applies
+    // current truth rather than whatever snapshot the (possibly stale) event
+    // carried. That is a stronger guarantee than comparing event.created, so
+    // adding a second mechanism would only add a way to wrongly skip an event.
+    // We still record last_stripe_event_created so the column is populated for
+    // any future guard.
+    const eventCreated: number | null =
+      typeof event.created === "number" ? event.created : null;
+
+    const { error: dedupeError } = await supabase
+      .from("stripe_webhook_events")
+      .insert({ event_id: event.id, event_type: event.type, event_created: eventCreated });
+
+    if (dedupeError) {
+      if (isDuplicateInsertError(dedupeError)) {
+        console.log(`Duplicate delivery of ${event.id} (${event.type}) — skipping`);
+        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+      // Deliberately FAIL OPEN. If the dedup table is unavailable we would
+      // rather double-apply an upsert-shaped handler than halt every
+      // subscription sync — a stalled webhook desyncs paying users' access,
+      // which is the worse outcome.
+      console.error("stripe_webhook_events insert failed; processing anyway:", dedupeError);
+    }
+
+    try {
+      await handleEvent(supabase, event, eventCreated);
+    } catch (handlerErr) {
+      // Release the idempotency claim so Stripe's retry is not swallowed as a
+      // duplicate — otherwise a transient failure permanently drops the event.
+      await supabase.from("stripe_webhook_events").delete().eq("event_id", event.id);
+      throw handlerErr;
+    }
+
+    return new Response(JSON.stringify({ received: true }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200,
+    });
+  } catch (err) {
+    console.error("Webhook error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });
+  }
+};
+
+async function handleEvent(
+  supabase: ReturnType<typeof createClient>,
+  event: Stripe.Event,
+  eventCreated: number | null,
+) {
+  {
     // Handle different event types
     switch (event.type) {
       case "checkout.session.completed": {
@@ -95,17 +157,44 @@ export default async (req: Request) => {
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
-
-    return new Response(JSON.stringify({ received: true }), {
-      headers: { "Content-Type": "application/json" },
-      status: 200,
-    });
-  } catch (err) {
-    console.error("Webhook error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });
   }
-};
+
+  // Record the ordering marker for the events that carry subscription identity,
+  // so last_stripe_event_created is populated going forward (US-519 column).
+  await recordEventOrdering(supabase, event, eventCreated);
+}
+
+/**
+ * Best-effort write of `user_subscriptions.last_stripe_event_created`. Never
+ * throws: this is bookkeeping for a future ordering guard, not part of the
+ * billing decision, so a failure here must not fail the webhook.
+ */
+async function recordEventOrdering(
+  supabase: any,
+  event: Stripe.Event,
+  eventCreated: number | null,
+) {
+  if (eventCreated === null) return;
+  try {
+    const obj = event.data.object as { id?: string; subscription?: string; customer?: string };
+    const subscriptionId =
+      event.type.startsWith("customer.subscription.") ? obj.id : obj.subscription;
+
+    if (subscriptionId) {
+      await supabase
+        .from("user_subscriptions")
+        .update({ last_stripe_event_created: eventCreated })
+        .eq("stripe_subscription_id", subscriptionId);
+    } else if (obj.customer) {
+      await supabase
+        .from("user_subscriptions")
+        .update({ last_stripe_event_created: eventCreated })
+        .eq("stripe_customer_id", obj.customer);
+    }
+  } catch (err) {
+    console.error("Failed to record last_stripe_event_created (non-fatal):", err);
+  }
+}
 
 async function handleCheckoutCompleted(supabase: any, session: Stripe.Checkout.Session) {
   const customerId = session.customer as string;
