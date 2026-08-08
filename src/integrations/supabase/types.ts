@@ -15035,6 +15035,10 @@ export type Database = {
       }
       cleanup_old_activity_logs: { Args: never; Returns: undefined }
       cleanup_rate_limits: { Args: never; Returns: number }
+      clear_login_rate_limit: {
+        Args: { p_action?: string; p_identifier: string }
+        Returns: undefined
+      }
       create_admin_alert: {
         Args: {
           p_alert_data?: Json
@@ -15566,6 +15570,10 @@ export type Database = {
           new_score: number
           old_score: number
         }[]
+      }
+      record_failed_login: {
+        Args: { p_action?: string; p_identifier: string }
+        Returns: undefined
       }
       refresh_analytics_views: { Args: never; Returns: undefined }
       refresh_blog_materialized_views: { Args: never; Returns: undefined }

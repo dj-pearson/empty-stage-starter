@@ -364,17 +364,18 @@ const Auth = () => {
 
     setLoading(true);
 
-    // Server-side rate limit check (authoritative enforcement)
+    // Server-side rate limit check (authoritative enforcement).
+    // US-617: this is READ-ONLY — it no longer records an attempt, so calling
+    // it cannot throttle anyone, and the limit is a server constant rather than
+    // something we pass in. Only record_failed_login() below consumes budget.
     try {
       const { data: rlData, error: rlError } = await supabase.rpc('check_rate_limit', {
         p_identifier: email,
         p_action: 'login',
-        p_max_attempts: 5,
-        p_window_seconds: 900,
       });
       if (!rlError && rlData === false) {
         setLoading(false);
-        toast.error("Account temporarily locked", { description: "Too many failed attempts. Please try again in 15 minutes." });
+        toast.error("Too many failed attempts", { description: "Please wait 15 minutes before trying again." });
         return;
       }
     } catch {
@@ -389,8 +390,11 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
-      // Record failed attempt for rate limiting
+      // Record failed attempt for rate limiting (client-side, fast feedback)
       recordAttempt(email);
+      // US-617: and server-side — only a genuine failure consumes budget, so a
+      // user signing in successfully on several devices is never locked out.
+      void supabase.rpc('record_failed_login', { p_identifier: email, p_action: 'login' });
       // Log failed login attempt
       loginHistory.logFailedLogin(email, 'password', error.message);
 
@@ -403,6 +407,10 @@ const Auth = () => {
     } else if (data.user) {
       // Clear rate limit on successful login
       clearRateLimit(email);
+      // US-617: clear the SERVER window too. clearRateLimit() above only clears
+      // this browser's localStorage copy, which is why a real user could still
+      // be locked out by their own earlier failures.
+      void supabase.rpc('clear_login_rate_limit', { p_identifier: email, p_action: 'login' });
       // Log successful login
       loginHistory.logLogin(data.user.id, email, 'password');
     }
