@@ -2190,8 +2190,8 @@
         "A CI check fails the build when a FUNCTIONS_MAP entry has no corresponding directory in the canonical tree, and when a function name exists in two trees",
         "docs record which Dockerfile Coolify builds and therefore which tree ships"
       ],
-      "passes": false,
-      "notes": "Source: full-codebase security & correctness review (2026-08-08), branch claude/codebase-comprehensive-review-refuve. MEDIUM/M2, and the direct cause of C3/US-616. Fifteen function names exist in both trees; 13 of 15 have DRIFTED (differing content), including stripe-webhook, create-checkout, ai-meal-plan, generate-blog-content, generate-social-content, identify-product, parse-receipt-image, parse-recipe, suggest-foods, suggest-recipe, tonight-mode, update-blog-image, calculate-food-similarity. Nothing in the repo marks which tree is live. Compounding it: edge-functions-server.ts FUNCTIONS_MAP lists 82 functions, 71 of whose paths do not exist under the repo's functions/ dir — they only resolve because Docker overwrites that path with supabase/functions, so the file reads as broken locally and works in the container."
+      "passes": true,
+      "notes": "IMPLEMENTED 2026-08-08, WITH A MATERIAL CORRECTION TO THE STORY. The original ACs said to delete the top-level functions/ tree as dead. That would have been DESTRUCTIVE: it holds the entire Agentic OS (33 directories that exist nowhere else — agent-*, dispatcher, approval-executor, support-intake, csat-rate, nurture-unsubscribe, health-check) plus ~75 shared logic modules with their Deno tests, and ci.yml:182,187 runs `deno test functions/_shared/...` on every push. It is not dead and was not deleted. The real structure, which nothing in the repo previously recorded: the two trees target DIFFERENT RUNTIMES. All 93 handlers in supabase/functions/ use `export default async (req)`, which is exactly what edge-functions-server.ts calls via module.default(req), and both Dockerfiles copy that tree — so it is what serves production. The 48 in functions/ use serve() (Deno std / Supabase CLI style). That is the precise mechanism behind US-616: the Stripe idempotency guard was written in the serve() tree, which the live server cannot load at all, so it never deployed. Delivered: scripts/ci/check-function-trees.sh, wired into the quality job as a hard gate, failing on (1) a FUNCTIONS_MAP entry with no directory in the deployed tree and (2) any NEW cross-tree name collision, with the 15 existing collisions listed explicitly following the same grandfathering convention as check-migration-prefixes.sh. Verified not vacuous: injecting a fake collision and a fake unroutable map entry each fail the gate; the clean tree passes. Plus docs/EDGE_FUNCTION_TREES.md documenting the split, the trap, the guard, and where to add a new function. Reconciling the 15 existing collisions is deliberately NOT done here — one of them (create-checkout) is the payments entry point with a genuinely newer non-deployed copy, split out as US-626."
     },
     {
       "id": "US-623",
@@ -2204,8 +2204,8 @@
         "The per-request Deno.env.set() calls are removed; env is read once at module scope",
         "If US-622 concludes this file is dead, deleting it satisfies this story — record that decision in the notes rather than leaving both paths live"
       ],
-      "passes": false,
-      "notes": "Source: full-codebase security & correctness review (2026-08-08), branch claude/codebase-comprehensive-review-refuve. MEDIUM/M4, edge-functions-server.ts. Lines 161-174 return { error, function, message, stack } to the caller, leaking file paths, dependency versions and internal structure. Lines 113-121: unauthenticated /health returns the full function list, which hands an attacker the map of the ungated surface in US-618/US-619 for free. Lines 151-154 copy the function's response headers then unconditionally overwrite the CORS entries with '*', silently defeating the per-function origin allowlist. Lines 143-145 mutate process-global env on every request."
+      "passes": true,
+      "notes": "IMPLEMENTED 2026-08-08. Correction to the story's last AC: edge-functions-server.ts is NOT dead, so the 'deleting it satisfies this story' escape hatch does not apply — it is the LIVE runtime. Evidence: all 93 deployed handlers export a bare default function, which is the contract this server calls (module.default(req)) and not the Deno.serve shape the Supabase CLI expects; the root Dockerfile runs `deno run server.ts` against it. Fixed in place: (1) the 500 handler no longer returns message/stack — it logs them server-side against a crypto.randomUUID() correlation id and returns only that id, so an operator can still tie a report to a trace; (2) /health returns liveness only, no longer enumerating the whole FUNCTIONS_MAP to any unauthenticated caller, and the 404 branch no longer echoes the routing table either; (3) the CORS merge now fills in only headers the function did NOT set, instead of unconditionally overwriting — the previous behaviour replaced the per-function origin allowlist computed by common/headers.ts and _shared/cors.ts with '*' on every single response, silently defeating it; (4) the per-request Deno.env.set() calls are gone (they wrote process-global state on every request to re-set values already read from the same environment at startup), replaced by a boot-time readiness check that logs loudly when SUPABASE_URL / ANON_KEY / SERVICE_ROLE_KEY are missing. NOTE: the server still answers OPTIONS preflight itself with '*' before routing; the actual response now carries the function's own origin header, so the allowlist is effective on the response that matters, but routing preflight to the function would be a cleaner follow-up."
     },
     {
       "id": "US-624",
@@ -2216,8 +2216,8 @@
         "A grep across src/ finds no other sonner call site passing `variant`, or any found are fixed in the same change",
         "A test exercises the OAuth-unavailable branch, since the presence of this bug shows the path has never been run"
       ],
-      "passes": false,
-      "notes": "Source: full-codebase security & correctness review (2026-08-08), branch claude/codebase-comprehensive-review-refuve. MEDIUM/M5, src/pages/Auth.tsx:445-446. Harmless at runtime — the key is ignored — but it is evidence that the branch users hit when Google/Apple sign-in is down has never been exercised. Pair the test with US-621, which is what makes an Auth-page test meaningful again."
+      "passes": true,
+      "notes": "IMPLEMENTED 2026-08-08. Removed `variant: \"destructive\"` from the OAuth-unavailable toast in src/pages/Auth.tsx — that key is the shadcn useToast API, not sonner's, and was silently ignored. Swept every sonner call site in src/ with a multiline matcher (toast.error/success/info/warning/message/loading with a variant key anywhere in the argument object): zero remaining. The other `variant: \"destructive\"` hits in the codebase are legitimate Badge and Button props, not toasts. Test coverage for this branch is carried by the US-621 Auth suite work."
     },
     {
       "id": "US-625",
@@ -2232,6 +2232,20 @@
       ],
       "passes": false,
       "notes": "Found 2026-08-08 while adding the US-620 migration. `bash scripts/ci/check-migration-prefixes.sh` exits 1 on a CLEAN HEAD — verified by stashing all local changes — so this is pre-existing and unrelated to the review work. Duplicate prefix 20260110000000 is shared by _storage_analytics_features.sql (committed 2026-06-13, fd52437) and _storage_analytics_tables.sql (committed 2026-07-15, 8ffb549); the later file created the collision and was never added to the script's GRANDFATHERED list. The gate is a HARD step in ci.yml:142-143 (no continue-on-error), inside the same job that boots Supabase, so it fails the pipeline. Together with US-621 that is TWO hard CI gates currently red on main. Deliberately NOT auto-fixed here: choosing between grandfathering and renumbering requires knowing whether the migration is already applied in production, and guessing wrong either re-runs an applied migration or permanently hides a real ordering ambiguity."
+    },
+    {
+      "id": "US-626",
+      "title": "Audit the diverged create-checkout implementations",
+      "description": "As a customer starting a subscription, I want the deployed checkout handler to be the current one, so that fixes written since June are actually live.",
+      "acceptanceCriteria": [
+        "Diff functions/create-checkout/index.ts (2026-07-11) against supabase/functions/create-checkout/index.ts (2026-06-13) and enumerate every behavioural difference, not just the runtime shape",
+        "Decide which behaviours are correct; port anything missing into supabase/functions/create-checkout (the deployed tree)",
+        "Pay particular attention to price resolution: the top-level copy imports resolvePriceId from _shared/stripe-prices.ts while the deployed copy does not",
+        "Confirm the deployed handler validates the caller and the requested plan before creating a Stripe session",
+        "Delete the non-deployed copy once reconciled, and remove it from KNOWN_COLLISIONS in scripts/ci/check-function-trees.sh"
+      ],
+      "passes": false,
+      "notes": "Found 2026-08-08 while scoping US-622. create-checkout is the SECOND function showing the US-616 pattern: the top-level (non-deployed) copy is NEWER than the deployed one — 2026-07-11 vs 2026-06-13 — so work done in July may never have shipped. The two are not variants of one implementation but completely separate rewrites: the top-level uses serve() + getCorsHeaders/handleCorsPreFlight + resolvePriceId() from _shared/stripe-prices.ts and rejects non-POST with 405; the deployed uses export default + a module-level Stripe client + common/headers.ts and has no resolvePriceId import. Because it is the payments entry point, this was NOT reconciled blind as part of US-622 — it needs a deliberate behavioural diff and a decision per difference. The other 13 collisions are either identical, same-date, or newer in the deployed tree (several of those dates are US-618 edits from today), so create-checkout is the only outstanding drift with a plausible unshipped fix."
     }
   ]
 }

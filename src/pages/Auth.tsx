@@ -450,8 +450,12 @@ const Auth = () => {
       const checkResponse = await fetch(`${functionsUrl}/oauth-proxy`, { method: 'HEAD' });
       if (!checkResponse.ok && checkResponse.status === 404) {
         // Edge function not deployed yet - show helpful error
-        toast.error("OAuth Not Available", { description: "The OAuth service is being set up. Please try email/password sign-in for now, or try again later.",
-          variant: "destructive" });
+        // US-624: `variant` is the shadcn useToast API, not sonner's — it was
+        // silently ignored. sonner's toast.error is already the error styling.
+        toast.error("OAuth Not Available", {
+          description:
+            "The OAuth service is being set up. Please try email/password sign-in for now, or try again later.",
+        });
         return;
       }
     } catch (e) {
