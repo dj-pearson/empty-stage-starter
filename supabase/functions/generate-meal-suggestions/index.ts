@@ -1,4 +1,5 @@
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from '../common/headers.ts';
+import { requireUser } from '../_shared/require-admin.ts';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
 /**
@@ -89,6 +90,16 @@ export default async (req: Request) => {
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // US-618: this endpoint spends model tokens and the runtime is
+  // --no-verify-jwt, so in-function auth is the only gate.
+  const gate = await requireUser(req);
+  if (!gate.ok) {
+    return new Response(
+      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
+      { status: gate.status, headers: jsonHeaders },
+    );
   }
 
   try {

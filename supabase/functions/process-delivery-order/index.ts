@@ -1,5 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from '../common/headers.ts';
+import { requireUser } from '../_shared/require-admin.ts';
+
+/**
+ * Minimal structural type for the two authorization lookups below. The rest of
+ * this file predates the no-`any` rule; the new code does not add to that debt.
+ */
+type SupabaseLike = ReturnType<typeof createClient>;
 
 /**
  * Process Delivery Order
@@ -32,9 +39,61 @@ interface ProcessOrderRequest {
   deliveryWindow?: { start: string; end: string };
 }
 
+/**
+ * US-619: confirm the caller may act on `householdId`.
+ * Returns the household id when the caller is a member, otherwise null.
+ */
+async function memberOfHousehold(
+  supabase: SupabaseLike,
+  userId: string,
+  householdId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('household_members')
+    .select('household_id')
+    .eq('household_id', householdId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return !!data;
+}
+
+/**
+ * US-619: confirm the caller owns `orderId`, either directly or through a
+ * household they belong to. The handlers below run with the service role, so
+ * without this an anonymous body could name any order id.
+ */
+async function canAccessOrder(
+  supabase: SupabaseLike,
+  userId: string,
+  orderId: string,
+): Promise<boolean> {
+  const { data: order } = await supabase
+    .from('grocery_delivery_orders')
+    .select('user_id, household_id')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (!order) return false;
+  if (order.user_id === userId) return true;
+  if (order.household_id) return memberOfHousehold(supabase, userId, order.household_id);
+  return false;
+}
+
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // US-619: this handler runs with the service role, which bypasses RLS, and
+  // the runtime is --no-verify-jwt. Without an in-function gate any anonymous
+  // caller could read, submit or cancel another household's grocery order by
+  // naming its id in the body.
+  const gate = await requireUser(req);
+  if (!gate.ok) {
+    return new Response(
+      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
+      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   try {
@@ -44,6 +103,34 @@ export default async (req: Request) => {
     );
 
     const request: ProcessOrderRequest = await req.json();
+
+    // Trust the verified token, never the body. A service-role caller (a
+    // scheduled function invoking this one) has no user id of its own and is
+    // already trusted, so it keeps whatever the body supplied.
+    if (gate.role !== 'service') {
+      if (!gate.userId) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      request.userId = gate.userId;
+
+      // Every action is authorized, not just the mutating ones: `estimate` and
+      // `status` leak another household's basket and address otherwise.
+      if (request.householdId && !(await memberOfHousehold(supabaseClient, gate.userId, request.householdId))) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (request.orderId && !(await canAccessOrder(supabaseClient, gate.userId, request.orderId))) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
 
     console.log(`Processing delivery order action: ${request.action}`);
 
