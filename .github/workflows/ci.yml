@@ -32,6 +32,12 @@ jobs:
 
       - run: npm ci
 
+      # US-614: committed-credential gate. HARD gate from day one — unlike the
+      # lint/typecheck backlogs there is nothing pre-existing to burn down, and
+      # a leaked key cannot be fixed after the fact by editing the file.
+      - name: Check for committed secrets
+        run: bash scripts/ci/check-committed-secrets.sh
+
       # ESLint. The repo carries a large PRE-EXISTING lint backlog (mostly
       # @typescript-eslint/no-explicit-any and unused caught-errors — see
       # US-342). The no-console rule (US-343) is fully satisfied. Until the

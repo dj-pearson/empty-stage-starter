@@ -395,6 +395,24 @@ SENTRY_AUTH_TOKEN=xxx
 - ✅ Different keys per environment
 - ✅ Minimum privilege principle
 
+**Automated enforcement (US-614):** `scripts/ci/check-committed-secrets.sh` runs
+as a hard gate in the `quality` job of `.github/workflows/ci.yml`. It scans
+tracked files for complete PEM private-key blocks (header alone is not enough —
+setup docs legitimately show an elided one), Stripe live/restricted keys, AWS
+access key ids, and service-role JWTs. Run it locally with
+`bash scripts/ci/check-committed-secrets.sh`.
+
+#### Credential rotation log
+
+| Date | Credential | Reason | Status |
+| --- | --- | --- | --- |
+| 2026-08-08 | Sign in with Apple ES256 signing key (`.p8`) | Committed as a PEM literal in `generate-apple-secret.js`, tracked on `main` from 2026-05-10 (`0ae51f7`) and therefore permanently exposed in git history. Found by the US-614 codebase review. | ⚠️ **Revocation pending** — must be revoked in the Apple Developer portal (Certificates, Identifiers & Profiles → Keys) and reissued. The code no longer contains the key, but **that does not remediate the leak**; only revocation does. |
+
+`generate-apple-secret.js` now reads `APPLE_TEAM_ID`, `APPLE_KEY_ID`,
+`APPLE_CLIENT_ID` and `APPLE_PRIVATE_KEY` from the environment and exits with an
+actionable error if any is missing. Load them from Infisical
+(`npm run infisical:load`) — never paste a key back into the file.
+
 ---
 
 ## Dependency Vulnerabilities (US-524)
