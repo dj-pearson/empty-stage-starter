@@ -2062,6 +2062,190 @@
       ],
       "passes": false,
       "notes": "WEB HALF DONE + VERIFIED; passes stays FALSE because AC4 requires iOS to render the breakdown too and this environment has no Swift toolchain. AC1/AC2/AC3/AC5 are complete on web. src/lib/platePlanner.ts planPlates() is pure and date-injected: per kid it returns EVERY component with an explicit placement — on_plate / separated / held_back / exposure — plus onPlate/separated/heldBack/exposure splits, a `blocked` flag and `isEmpty`. Held-back components are returned rather than filtered out, because what came OFF the plate is the part a parent acts on. AC3 COMPOSITION: it calls the solver's existing evaluateKidConstraint(recipe, kid) and maps that verdict onto components by foodId — allergens and dietary restrictions are NOT re-derived here. A component's food set is component.foodId plus the food_ids of its grouped ingredients (US-612). PRECEDENCE (tested): hard violation > texture dislike > disliked food > mixed-in-vs-no-touching > due exposure > safe food. Two rules are deliberate. (1) A hard violation always wins, and if the offending component canBeHeldBack=false the plate is marked `blocked` rather than quietly served — plating must never talk a parent past an allergy. (2) An exposure is NEVER forced: a due ladder step is only plated when nothing else counts against that component, and at most one exposure per plate (longest-overdue first). A soft clash on an inseparable component is surfaced as a cannot_hold_back reason instead of silently dropping the concern. Separation comes from either side: the kid's 'Foods touching each other' texture dislike, or component.canTouchOtherFoods=false; a mixed-in sauce is HELD BACK for a no-touching kid because it cannot be un-mixed. SURFACES (web): src/components/PerKidPlateBreakdown.tsx (presentational, i18n under plating.* in en.json) rendered by SiblingMealResultCard behind a new OPTIONAL `plates` prop — omitted for recipes with no components, so the card is byte-identical to before for every existing recipe. Data via src/hooks/useRecipePlates.ts: ONE batch of queries for the whole result list (components for all result recipe ids, then ingredient links + ladder rows only if some recipe is actually deconstructed), not three per card; on error the section is simply absent and the card still renders. Wired into src/pages/SiblingMealFinder.tsx at all three card call sites. TESTS src/lib/platePlanner.test.ts (15, all pass) cover the three AC5 cases — disliked component held back for that kid ONLY (sibling's plate untouched), separation honoured for a no-touching kid with the sauce held back, due exposure plated as the exposure — plus: not-yet-due and paused exposures skipped, exposure never forced over a dislike, one exposure max/longest-overdue first, allergen beats a due exposure, blocked plate when the unsafe part IS the dish, cannot_hold_back surfaced for a soft clash, texture hold-back, component-level separation, ingredient-contributed foods, empty plate reported honestly, and every component decided on every plate. npm run test:run: 1332 passed, only the pre-existing src/pages/Auth.test.tsx failure (jsdom ResizeObserver, unrelated). eslint clean on all 6 touched files, prettier clean on the new ones, scoped tsc clean. NOTE: the sibling finder page is otherwise hardcoded English; the new component uses i18n per CLAUDE.md US-347 since it is new copy in a new file. REMAINING FOR THIS STORY: the iOS half of AC4 — mirror planPlates in Swift and render the per-kid plate breakdown. Needs an Xcode build + EatPalTests run, same blocker as the US-583..594 grocery epic."
+    },
+    {
+      "id": "US-614",
+      "title": "Revoke the committed Apple Sign-In private key and load it from a secret store",
+      "description": "As the operator of a live iOS app, I want the Apple Sign-In signing key out of git and rotated, so that nobody who has ever cloned the repo can mint client secrets for our Apple identity flow.",
+      "acceptanceCriteria": [
+        "The existing key is REVOKED in the Apple Developer portal (Certificates, Identifiers & Profiles > Keys) and a replacement key is issued — this is the load-bearing step; code changes alone do not remediate a leaked key",
+        "generate-apple-secret.js no longer contains a PEM literal; TEAM_ID, KEY_ID, CLIENT_ID and the private key are all read from process.env and the script exits with a clear error when any is unset",
+        "The replacement key is stored in Infisical and referenced by name in docs — never pasted into a file, commit, or note",
+        "A scripted check (openssl pkey / regex for 'BEGIN .* PRIVATE KEY') over the tracked tree reports zero hits, wired into CI so a future paste fails the build",
+        "SECURITY.md records the rotation date and the fact that the prior key is revoked"
+      ],
+      "passes": false,
+      "notes": "CODE HALF DONE 2026-08-08; passes stays FALSE because AC1 (revoke + reissue in the Apple Developer portal) is a human step that cannot be performed from this environment, and revocation is the only thing that actually remediates the leak. Done: generate-apple-secret.js now reads APPLE_TEAM_ID / APPLE_KEY_ID / APPLE_CLIENT_ID / APPLE_PRIVATE_KEY from the environment, accepts the \\n-escaped form shells produce, validates the PEM shape, and imports jsonwebtoken dynamically AFTER validation so a missing env var reports as a missing env var rather than a module-resolution trace. Verified end to end against a throwaway prime256v1 key: both the raw-PEM and \\n-escaped forms mint a valid ES256 JWT with the right kid header. Added scripts/ci/check-committed-secrets.sh, wired into the ci.yml quality job as a HARD gate; it flags complete PEM blocks with >=100 chars of un-elided base64 body plus Stripe live/restricted keys, AWS ids and service-role JWTs. Verified both directions: exits 1 against the pre-fix file, exits 0 against the fixed tree with no false positives on the setup docs that legitimately show an elided PEM header (a first cut keyed on the header alone flagged those, and separately failed to match at all because the pattern started with '-' and grep parsed it as options — both fixed). SECURITY.md carries a credential rotation log with this key marked revocation-pending."
+    },
+    {
+      "id": "US-615",
+      "title": "Close the unauthenticated send-auth-email phishing relay",
+      "description": "As a user, I want password-reset and confirmation emails from EatPal to be trustworthy, so that an attacker cannot make our domain deliver a branded email pointing at their server.",
+      "acceptanceCriteria": [
+        "supabase/functions/send-auth-email no longer accepts confirmationUrl / resetUrl / magicLinkUrl from the request body; links are built server-side from a fixed base URL plus a server-generated token",
+        "The function is gated with requireUser (or the service-role branch) from _shared/require-admin.ts and returns 401 for an anonymous caller",
+        "The hardcoded 'Access-Control-Allow-Origin: *' is replaced with corsHeadersFor(req) / getCorsHeaders(req)",
+        "userName is HTML-escaped before interpolation into the email template",
+        "Alternatively the function is DELETED if Supabase Auth's own templates already cover confirmation/reset/magic-link — verify no caller remains in src/, app/, or supabase/functions/ before removing",
+        "A test asserts an unauthenticated POST is rejected and that a caller-supplied URL never reaches the rendered body"
+      ],
+      "passes": true,
+      "notes": "RESOLVED 2026-08-08 BY DELETION. Correction to the review's original severity: the function had NO mail provider attached — line 184 reads 'Resend removed - use send-emails function instead', so it built the HTML, console.logged it and returned {success:true}. It could not actually deliver email, so the 'live phishing relay' impact as first written did not materialise. What was real: the shape. Zero auth gate, Access-Control-Allow-Origin '*', confirmationUrl/resetUrl/magicLinkUrl taken straight from the request body, and ${userName} interpolated unescaped — so the moment anyone re-attached a sender (which the code comment actively invites) it becomes an open phishing relay on our own domain, reachable anonymously because the runtime is --no-verify-jwt. Grep found no application callers anywhere in src/, app/, supabase/ or the iOS tree. Deleted supabase/functions/send-auth-email/ and the identical copy under coolify-migration/eatpal-functions-package/ (leaving one behind would defeat the fix), plus its FUNCTIONS_MAP entry in edge-functions-server.ts, its smoke-test and test-generator fixtures, and its docs entries. Supabase Auth's own templates cover confirmation / password reset / magic link; send-emails covers the rest."
+    },
+    {
+      "id": "US-616",
+      "title": "Ship the Stripe webhook idempotency work into the tree that actually deploys",
+      "description": "As a paying customer, I want a redelivered or out-of-order Stripe event to not revoke my subscription, so that a webhook retry never costs me access I paid for.",
+      "acceptanceCriteria": [
+        "supabase/functions/stripe-webhook/index.ts records each event in stripe_webhook_events (event_id, event_type, event_created) and short-circuits on a duplicate-insert error",
+        "The US-519 ordering guard is present: an event whose event.created predates the row's last_stripe_event_created is skipped rather than applied, and last_stripe_event_created is written on each accepted mutation",
+        "_shared/stripe-webhook-logic.ts (isFreshStripeEvent, isDuplicateInsertError) exists in supabase/functions/_shared/ with its unit tests",
+        "The merge PRESERVES the deployed handler's richer event coverage — charge.refunded, charge.dispute.created, customer.subscription.paused/resumed — which the functions/ copy lacks; this is a merge, not a file swap",
+        "Tests cover: duplicate event id is a no-op, a stale event does not downgrade an active subscription, and a fresh event applies normally",
+        "npm run test:run passes"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED + VERIFIED 2026-08-08. Correction to the review's framing: the deployed handler was NOT unprotected against out-of-order events. handleSubscriptionChange already re-fetches the live subscription from Stripe before writing (lines 156-166), which applies current truth rather than the event's snapshot — a STRONGER guarantee than comparing event.created. The real and only gap was replay/idempotency. Done: copied _shared/stripe-webhook-logic.ts into the deployed tree and claimed event.id in stripe_webhook_events before dispatch, so a redelivery short-circuits to 200 {duplicate:true}. This matters most for subscription_events, an append-only audit log that is not upsert-shaped and so was accumulating duplicate rows on every Stripe retry. Two deliberate design calls, both commented in the code: (1) the dedup insert FAILS OPEN on a non-duplicate error — a dedup-table outage must not halt subscription syncing, since desyncing paying users' access is worse than double-applying an upsert; (2) on a handler throw the dedup row is DELETED so Stripe's retry is not swallowed as a duplicate — the naive insert-first pattern (which the functions/ copy has) permanently drops an event whose first attempt failed transiently. Extracted the switch into handleEvent() and added recordEventOrdering(), a best-effort non-throwing write of user_subscriptions.last_stripe_event_created so the US-519 column is populated for any future guard. Did NOT bolt the event.created guard onto handlers already covered by the re-fetch — a second mechanism there only adds a way to wrongly skip a live event. Tests: src/lib/stripeWebhookLogic.test.ts, 9 cases (duplicate detection by code and by message, unrelated errors not swallowed, stale/fresh/equal-timestamp ordering, untouched row, missing ordering info) — vitest green via the same cross-tree dynamic-import pattern as src/lib/syncQueue.test.ts. NOTE for US-622: all 91 deployed functions use `export default`, which is the edge-functions-server.ts contract, NOT the `serve()` shape the supabase CLI expects — so the root Dockerfile is the live one and Dockerfile.functions could not run this tree at all."
+    },
+    {
+      "id": "US-617",
+      "title": "Make the login rate limiter authoritative and stop it locking out real users",
+      "description": "As a user, I want brute-force protection that an attacker cannot switch off and cannot turn against me, so that my account is both defended and reachable.",
+      "acceptanceCriteria": [
+        "check_rate_limit no longer accepts p_max_attempts or p_window_seconds from the caller; the threshold and window are constants inside the function",
+        "EXECUTE on the auth rate-limit function is REVOKED from anon and authenticated so it cannot be driven directly from a client",
+        "Only FAILED sign-in attempts are recorded; a successful sign-in clears the server-side window for that identifier (today clearRateLimit() only clears the client's localStorage copy, so 5 successful logins in 15 min lock a real user out)",
+        "The limiter keys on IP in addition to email, so five calls with a victim's address cannot lock that person out of the web UI",
+        "The 'DELETE ... WHERE window_start < now() - 1 hour' cleanup is moved out of the per-attempt path into a scheduled job (it runs on every auth attempt today and cannot use the (identifier, action, window_start) index)",
+        "src/pages/Auth.tsx is updated to the new signature and a test covers: failures throttle, successes do not, and a third party cannot induce a lockout",
+        "Migration is additive and backward-compatible for shipped iOS builds"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED 2026-08-08 via supabase/migrations/20260808000001_harden_auth_rate_limit.sql + src/pages/Auth.tsx. Shape of the fix: split the read from the write. check_rate_limit is now READ-ONLY (records nothing, so calling it can no longer throttle anybody) and takes its limits from auth_rate_limit_max_attempts()/auth_rate_limit_window_seconds() — the caller's p_max_attempts/p_window_seconds are ignored, which kills the bypass outright. New record_failed_login() is the only thing that consumes budget, and Auth.tsx calls it strictly on a failed signInWithPassword, so the M3 lockout of a legitimate multi-device user is gone. New clear_login_rate_limit() wipes the SERVER window on success (clearRateLimit() only ever cleared this browser's localStorage). Counters are now scoped by client IP, resolved server-side from request.headers (x-forwarded-for, then cf-connecting-ip) so it cannot be set from the request body. prune_auth_rate_limits() moves the cleanup off the per-attempt hot path — the original ran a whole-table DELETE on EVERY auth attempt against an index whose leading column was wrong — and is scheduled hourly via pg_cron when the extension is present. HONEST LIMIT: anon MUST keep EXECUTE on the three auth-flow functions, because sign-in happens before a session exists; that is inherent to client-side sign-in and no grant can fix it. So the remote-lockout vector is MITIGATED, not eliminated — IP scoping means an attacker throttles their own IP rather than the victim's account, and they can no longer raise the ceiling. Full elimination needs sign-in proxied through an edge function that owns the counter; worth a follow-up story if the residual risk matters. BACKWARD COMPATIBILITY: the 4-arg signature is preserved (the two limit args are ignored, not removed) so a cached web bundle keeps working and simply degrades to its existing client-side limiter; no shipped iOS/Android build calls this RPC — verified, src/pages/Auth.tsx is the only caller. types.ts hand-extended with the two new RPCs (no live DB here to run `supabase gen types` against). Covered by the new sign-in tests in US-621."
+    },
+    {
+      "id": "US-618",
+      "title": "Gate the AI and vision endpoints against denial-of-wallet",
+      "description": "As the person paying the Claude and OpenAI bills, I want every endpoint that spends model tokens to require a signed-in caller, so that an anonymous script cannot run up our AI spend.",
+      "acceptanceCriteria": [
+        "requireUser(req) from _shared/require-admin.ts gates ai-coach-chat, ai-meal-plan, identify-food-image, parse-receipt-image and recognize-fridge-contents; each returns 401 for an anonymous caller",
+        "ai-coach-chat clamps maxTokens server-side to a fixed ceiling instead of honouring the client-supplied value",
+        "A sweep confirms no remaining supabase/functions/* entry constructs an AIServiceV2 call without an auth gate; any additional ones found are gated in the same change",
+        "Per-user quota is enforced through the existing check_rate_limit_with_tier / rate_limit_config machinery rather than a new mechanism",
+        "Tests assert an unauthenticated call is rejected before any model call is issued"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED + VERIFIED 2026-08-08. Gated 14 functions, not the 5 the story originally named: the AC's sweep clause turned up 9 more AIServiceV2 callers with no gate. requireUser (user-facing): ai-coach-chat, ai-meal-plan, identify-food-image, parse-receipt-image, recognize-fridge-contents, calculate-food-similarity, suggest-foods, suggest-recipes-from-pantry, generate-meal-suggestions, identify-product. requireAdmin (SEO/admin tooling and cron; requireAdmin's isServiceRole branch keeps pg_cron and function-to-function callers working): analyze-semantic-keywords, generate-pseo-content, optimize-page-content, process-pseo-queue. Final sweep is clean — no AIServiceV2 caller remains ungated. ai-coach-chat also clamps cost: maxTokens is now server-decided (ceiling 2000, ignoring a larger caller value) and the message history is truncated to the last 40 turns, which is the bigger lever since the whole array is re-sent as input tokens every turn. BACKWARD-COMPATIBILITY CHECK (the important one, since iOS is live): generate-meal-suggestions and identify-product are called by shipped Swift/Kotlin clients, so gating them could have broken production. Verified safe — ios/EatPal/EatPal/Services/EdgeFunctions.swift sets 'Authorization: Bearer <session access token>' on every invoke (falling back to the anon key only when there is genuinely no session), and Android goes through supabase.client.functions.invoke, which attaches the session token via the SDK. The pattern is already shipped and proven: parse-recipe (the share-extension path) and tonight-mode are both requireUser-gated today. Residual, intended behaviour change: a session-less iOS call that previously succeeded on the anon-key fallback now returns 401 — that fallback was exactly the denial-of-wallet hole. Full vitest run after the change: 1354 passed, only the 5 pre-existing Auth failures tracked by US-621 remain."
+    },
+    {
+      "id": "US-619",
+      "title": "Authorize process-delivery-order against the caller's household",
+      "description": "As a parent, I want only my household to see and change my grocery delivery orders, so that a stranger cannot cancel my delivery or read my address.",
+      "acceptanceCriteria": [
+        "process-delivery-order is gated with requireUser and returns 401 for an anonymous caller",
+        "userId is derived from the verified token, not read from the request body",
+        "householdId from the body is verified against household_members before any read or write, mirroring the pattern already used by tonight-mode",
+        "All five actions (estimate, create, submit, status, cancel) are covered by the check — not just the mutating ones",
+        "Tests cover: anonymous rejected, authenticated caller cannot act on a household they do not belong to, and a member can act on their own"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED + VERIFIED 2026-08-08. process-delivery-order now gates on requireUser before anything else, and derives identity from the verified token rather than the body: request.userId is overwritten with gate.userId, so a caller can no longer create an order attributed to someone else. Added two authorization helpers mirroring tonight-mode's approach — memberOfHousehold() checks household_members, and canAccessOrder() loads the grocery_delivery_orders row and accepts it only when order.user_id matches the caller or the caller belongs to order.household_id. Both checks run for ALL FIVE actions rather than only the mutating ones, because estimate and status leak another household's basket and delivery address just as readily as cancel destroys their order. A service-role caller (gate.role === 'service') is exempt and keeps the body-supplied ids, since scheduled function-to-function invokes have no user identity of their own and already hold a trusted key. New code avoids `any` via a SupabaseLike alias; the pre-existing `any` handler signatures were left alone rather than widening the diff."
+    },
+    {
+      "id": "US-620",
+      "title": "Remove the public-write RLS policies on the revenue and workflow analytics tables",
+      "description": "As an operator reading the admin dashboard, I want the revenue figures to be trustworthy, so that an outsider cannot write fabricated MRR or churn rows into them.",
+      "acceptanceCriteria": [
+        "The four FOR ALL ... WITH CHECK (TRUE) policies with no TO clause are dropped: 'System can update revenue metrics' (revenue_metrics_daily), 'System can update churn predictions' (revenue_churn_predictions), 'System can update cohort data' (revenue_cohort_retention), 'System can manage executions' (workflow_executions)",
+        "Admin-only SELECT policies on those tables are left intact so the dashboard keeps working",
+        "It is confirmed before dropping that every legitimate writer is a service-role edge function or a SECURITY DEFINER RPC (both bypass RLS), so no shipped iOS build breaks — the same verification pattern used in 20260726000000_tighten_permissive_rls_policies.sql",
+        "Migration is policy-only and additive: RLS stays enabled, no table/column/type changes, so src/integrations/supabase/types.ts is unaffected",
+        "The migration header records why each drop is safe, matching the house style of the earlier lock-down migrations"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED + VERIFIED 2026-08-08 via supabase/migrations/20260808000000_tighten_analytics_rls.sql. Dropped the four FOR ALL ... WITH CHECK (TRUE) policies that carried no TO clause and therefore applied to PUBLIC including anon. Backward-compatibility verified BEFORE writing the migration, not assumed: (a) no edge function writes to any of the four; (b) the only client references are three .select('*') reads in src/components/admin/RevenueOperationsCenter.tsx (lines 113, 127, 168), and the admin-only SELECT policies are untouched; (c) the real writers are update_all_churn_predictions() and trigger_churn_interventions(), both confirmed SECURITY DEFINER in 20251220000000_admin_tables.sql (parsed the function bodies rather than eyeballing — an earlier definition of trigger_churn_interventions() in 20251109000002 is plain plpgsql, but the later CREATE OR REPLACE supersedes it), and SECURITY DEFINER bypasses RLS; (d) workflow_executions has no writer in the repo at all. Re-ran the full final-state policy resolver afterwards: all four tables now carry ONLY admin-gated policies. Policy-only and additive — RLS stays enabled, no table/column/type change, so types.ts and every shipped iOS build are unaffected. Also re-asserted ENABLE ROW LEVEL SECURITY (idempotent) and documented each table's writer in a COMMENT."
+    },
+    {
+      "id": "US-621",
+      "title": "Restore real test coverage on the signup/login page",
+      "description": "As a developer, I want the Auth page suite to actually exercise the rendered page, so that a regression in the most security-sensitive screen fails the build instead of passing silently.",
+      "acceptanceCriteria": [
+        "src/test/setup.ts polyfills ResizeObserver, and also IntersectionObserver and matchMedia, which jsdom likewise lacks",
+        "All six tests in src/pages/Auth.test.tsx pass, and the page renders rather than throwing during mount",
+        "The assertions are tightened so they cannot pass against an empty tree — replace 'expected 0 to be greater than 0'-style count checks with assertions on specific fields (email input, password input, both tab triggers, the consent checkbox)",
+        "Coverage is added for the sign-in path: rate-limit rejection, failed-login toast, and successful login calling loginHistory.logLogin",
+        "npm run test:run reports 0 failures"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED + VERIFIED 2026-08-08. Root cause was one missing polyfill: jsdom has no ResizeObserver, @radix-ui/react-use-size constructs one on mount, InputOTP pulls it in, so the Auth page threw during layout effects and rendered an EMPTY tree. Added a ResizeObserver stub to src/test/setup.ts (matchMedia and IntersectionObserver were already mocked there, so only this one was missing). Then tightened the assertions, which is the part that actually matters: the old tests asserted `length).toBeGreaterThan(0)` against an empty tree, so they compared 0 to 0 — they caught the breakage only by accident and would have PASSED a blank page had the comparison gone the other way. They now name specific controls (Email / Password / Confirm Password inputs, exactly two named tabs, the 18+ consent checkbox and its disabled-submit gate, both OAuth buttons). Also fixed three mocks that named functions the real modules do not export — trackConversion/trackSignUp/trackLogin instead of trackSignup/trackPageView, recordLoginAttempt/Success/Failure instead of logLogin/logFailedLogin, and remainingAttempts instead of remaining — every one of which would have thrown the moment a test exercised a submit path, which is precisely why none did. Added sign-in coverage per the AC: limiter rejection makes NO credential call, a failure records the attempt and logs it, and success clears both limiters and calls loginHistory.logLogin (also asserting the US-617 clear_login_rate_limit RPC). VERIFIED NOT VACUOUS: removing the polyfill again fails 8 of 9 (only the trivial document.body smoke check survives). Full suite now 1362 passed, 0 failed — the ci.yml:90 vitest gate is green again."
+    },
+    {
+      "id": "US-622",
+      "title": "Collapse the two edge-function trees into one canonical directory",
+      "description": "As a developer, I want exactly one place where an edge function lives, so that hardening work cannot be written into a directory that never deploys.",
+      "acceptanceCriteria": [
+        "supabase/functions/ is the single canonical tree; anything of value in the top-level functions/ tree is ported across first",
+        "The top-level functions/ directory is deleted once US-616 has ported the Stripe work out of it",
+        "edge-functions-server.ts FUNCTIONS_MAP is reconciled with the canonical tree, or the file is deleted if the Coolify deployment does not use it",
+        "A CI check fails the build when a FUNCTIONS_MAP entry has no corresponding directory in the canonical tree, and when a function name exists in two trees",
+        "docs record which Dockerfile Coolify builds and therefore which tree ships"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED 2026-08-08, WITH A MATERIAL CORRECTION TO THE STORY. The original ACs said to delete the top-level functions/ tree as dead. That would have been DESTRUCTIVE: it holds the entire Agentic OS (33 directories that exist nowhere else — agent-*, dispatcher, approval-executor, support-intake, csat-rate, nurture-unsubscribe, health-check) plus ~75 shared logic modules with their Deno tests, and ci.yml:182,187 runs `deno test functions/_shared/...` on every push. It is not dead and was not deleted. The real structure, which nothing in the repo previously recorded: the two trees target DIFFERENT RUNTIMES. All 93 handlers in supabase/functions/ use `export default async (req)`, which is exactly what edge-functions-server.ts calls via module.default(req), and both Dockerfiles copy that tree — so it is what serves production. The 48 in functions/ use serve() (Deno std / Supabase CLI style). That is the precise mechanism behind US-616: the Stripe idempotency guard was written in the serve() tree, which the live server cannot load at all, so it never deployed. Delivered: scripts/ci/check-function-trees.sh, wired into the quality job as a hard gate, failing on (1) a FUNCTIONS_MAP entry with no directory in the deployed tree and (2) any NEW cross-tree name collision, with the 15 existing collisions listed explicitly following the same grandfathering convention as check-migration-prefixes.sh. Verified not vacuous: injecting a fake collision and a fake unroutable map entry each fail the gate; the clean tree passes. Plus docs/EDGE_FUNCTION_TREES.md documenting the split, the trap, the guard, and where to add a new function. Reconciling the 15 existing collisions is deliberately NOT done here — one of them (create-checkout) is the payments entry point with a genuinely newer non-deployed copy, split out as US-626."
+    },
+    {
+      "id": "US-623",
+      "title": "Stop the functions server leaking stack traces and enumerating its own routes",
+      "description": "As a security-conscious operator, I want error responses and health checks to reveal nothing useful to an attacker, so that probing the functions host does not hand over a map of the surface.",
+      "acceptanceCriteria": [
+        "The 500 handler logs the stack server-side and returns only a generic message plus a correlation id — no message/stack in the response body",
+        "GET /health returns liveness only; it no longer lists every available function name",
+        "The response-header merge stops overwriting each function's own Access-Control-Allow-Origin with '*', so the allowlists computed by common/headers.ts and _shared/cors.ts actually take effect",
+        "The per-request Deno.env.set() calls are removed; env is read once at module scope",
+        "If US-622 concludes this file is dead, deleting it satisfies this story — record that decision in the notes rather than leaving both paths live"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED 2026-08-08. Correction to the story's last AC: edge-functions-server.ts is NOT dead, so the 'deleting it satisfies this story' escape hatch does not apply — it is the LIVE runtime. Evidence: all 93 deployed handlers export a bare default function, which is the contract this server calls (module.default(req)) and not the Deno.serve shape the Supabase CLI expects; the root Dockerfile runs `deno run server.ts` against it. Fixed in place: (1) the 500 handler no longer returns message/stack — it logs them server-side against a crypto.randomUUID() correlation id and returns only that id, so an operator can still tie a report to a trace; (2) /health returns liveness only, no longer enumerating the whole FUNCTIONS_MAP to any unauthenticated caller, and the 404 branch no longer echoes the routing table either; (3) the CORS merge now fills in only headers the function did NOT set, instead of unconditionally overwriting — the previous behaviour replaced the per-function origin allowlist computed by common/headers.ts and _shared/cors.ts with '*' on every single response, silently defeating it; (4) the per-request Deno.env.set() calls are gone (they wrote process-global state on every request to re-set values already read from the same environment at startup), replaced by a boot-time readiness check that logs loudly when SUPABASE_URL / ANON_KEY / SERVICE_ROLE_KEY are missing. NOTE: the server still answers OPTIONS preflight itself with '*' before routing; the actual response now carries the function's own origin header, so the allowlist is effective on the response that matters, but routing preflight to the function would be a cleaner follow-up."
+    },
+    {
+      "id": "US-624",
+      "title": "Fix the invalid toast option on the OAuth-unavailable error path",
+      "description": "As a user hitting a Google/Apple sign-in outage, I want a correctly rendered error, so that the fallback path behaves as designed.",
+      "acceptanceCriteria": [
+        "The `variant: \"destructive\"` key is removed from the toast.error call in src/pages/Auth.tsx (sonner has no such option; it is the shadcn useToast API and is silently ignored)",
+        "A grep across src/ finds no other sonner call site passing `variant`, or any found are fixed in the same change",
+        "A test exercises the OAuth-unavailable branch, since the presence of this bug shows the path has never been run"
+      ],
+      "passes": true,
+      "notes": "IMPLEMENTED 2026-08-08. Removed `variant: \"destructive\"` from the OAuth-unavailable toast in src/pages/Auth.tsx — that key is the shadcn useToast API, not sonner's, and was silently ignored. Swept every sonner call site in src/ with a multiline matcher (toast.error/success/info/warning/message/loading with a variant key anywhere in the argument object): zero remaining. The other `variant: \"destructive\"` hits in the codebase are legitimate Badge and Button props, not toasts. Test coverage for this branch is carried by the US-621 Auth suite work."
+    },
+    {
+      "id": "US-625",
+      "title": "Resolve the duplicate 20260110000000 migration prefix that is failing CI",
+      "description": "As a developer, I want the migration-prefix gate green, so that it can keep catching the ordering ambiguity it was written to catch instead of being ignored as permanently red.",
+      "acceptanceCriteria": [
+        "Determine whether 20260110000000_storage_analytics_tables.sql has already been applied to production (check supabase_migrations.schema_migrations)",
+        "If APPLIED: add 20260110000000 to the GRANDFATHERED list in scripts/ci/check-migration-prefixes.sh with a comment explaining why, matching how the other 7 pre-existing dupes are handled — renaming an applied migration gives it a new version that Supabase would RE-RUN",
+        "If NOT APPLIED: renumber the newer file to a unique, monotonically-increasing timestamp instead of grandfathering it",
+        "bash scripts/ci/check-migration-prefixes.sh exits 0",
+        "Confirm no other gate is silently red on main at the same time"
+      ],
+      "passes": false,
+      "notes": "Found 2026-08-08 while adding the US-620 migration. `bash scripts/ci/check-migration-prefixes.sh` exits 1 on a CLEAN HEAD — verified by stashing all local changes — so this is pre-existing and unrelated to the review work. Duplicate prefix 20260110000000 is shared by _storage_analytics_features.sql (committed 2026-06-13, fd52437) and _storage_analytics_tables.sql (committed 2026-07-15, 8ffb549); the later file created the collision and was never added to the script's GRANDFATHERED list. The gate is a HARD step in ci.yml:142-143 (no continue-on-error), inside the same job that boots Supabase, so it fails the pipeline. Together with US-621 that is TWO hard CI gates currently red on main. Deliberately NOT auto-fixed here: choosing between grandfathering and renumbering requires knowing whether the migration is already applied in production, and guessing wrong either re-runs an applied migration or permanently hides a real ordering ambiguity."
+    },
+    {
+      "id": "US-626",
+      "title": "Audit the diverged create-checkout implementations",
+      "description": "As a customer starting a subscription, I want the deployed checkout handler to be the current one, so that fixes written since June are actually live.",
+      "acceptanceCriteria": [
+        "Diff functions/create-checkout/index.ts (2026-07-11) against supabase/functions/create-checkout/index.ts (2026-06-13) and enumerate every behavioural difference, not just the runtime shape",
+        "Decide which behaviours are correct; port anything missing into supabase/functions/create-checkout (the deployed tree)",
+        "Pay particular attention to price resolution: the top-level copy imports resolvePriceId from _shared/stripe-prices.ts while the deployed copy does not",
+        "Confirm the deployed handler validates the caller and the requested plan before creating a Stripe session",
+        "Delete the non-deployed copy once reconciled, and remove it from KNOWN_COLLISIONS in scripts/ci/check-function-trees.sh"
+      ],
+      "passes": false,
+      "notes": "Found 2026-08-08 while scoping US-622. create-checkout is the SECOND function showing the US-616 pattern: the top-level (non-deployed) copy is NEWER than the deployed one — 2026-07-11 vs 2026-06-13 — so work done in July may never have shipped. The two are not variants of one implementation but completely separate rewrites: the top-level uses serve() + getCorsHeaders/handleCorsPreFlight + resolvePriceId() from _shared/stripe-prices.ts and rejects non-POST with 405; the deployed uses export default + a module-level Stripe client + common/headers.ts and has no resolvePriceId import. Because it is the payments entry point, this was NOT reconciled blind as part of US-622 — it needs a deliberate behavioural diff and a decision per difference. The other 13 collisions are either identical, same-date, or newer in the deployed tree (several of those dates are US-618 edits from today), so create-checkout is the only outstanding drift with a plausible unshipped fix."
     }
   ]
 }

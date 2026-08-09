@@ -36,6 +36,19 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
 } as any;
 
+// Mock ResizeObserver.
+// US-621: jsdom does not implement it, and @radix-ui/react-use-size constructs
+// one on mount. Without this stub any tree containing a Radix primitive that
+// measures itself — InputOTP on the Auth page, for one — throws during layout
+// effects and renders NOTHING, so assertions counting elements silently match
+// zero instead of failing loudly.
+global.ResizeObserver = class ResizeObserver {
+  constructor(_callback: ResizeObserverCallback) {}
+  disconnect() {}
+  observe(_target: Element, _options?: ResizeObserverOptions) {}
+  unobserve(_target: Element) {}
+} as unknown as typeof globalThis.ResizeObserver;
+
 // Mock localStorage and sessionStorage with in-memory store
 const createStorageMock = () => {
   let store: Record<string, string> = {};

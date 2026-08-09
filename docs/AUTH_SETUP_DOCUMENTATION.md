@@ -262,7 +262,7 @@ verify_jwt = false  # Public endpoint
 
 Categories:
 - **AI Services:** `ai-meal-plan`, `suggest-foods`, `suggest-recipe`, `analyze-content`
-- **Auth:** `send-auth-email`, `oauth-token-refresh`
+- **Auth:** `oauth-token-refresh` (`send-auth-email` removed in US-615)
 - **Payments:** `create-checkout`, `stripe-webhook`, `manage-subscription`
 - **Email:** `send-emails`, `process-email-sequences`
 - **Blog:** `generate-blog-content`, `publish-scheduled-posts`

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { requireUser } from '../_shared/require-admin.ts';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
 const corsHeaders = {
@@ -20,6 +21,16 @@ interface RecipeSuggestion {
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // US-618: this endpoint spends model tokens and the runtime is
+  // --no-verify-jwt, so in-function auth is the only gate.
+  const gate = await requireUser(req);
+  if (!gate.ok) {
+    return new Response(
+      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
+      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   try {

@@ -481,10 +481,6 @@ export function generateTestData(functionName: string): Record<string, unknown> 
       planId: 'test-plan-id',
       billingCycle: 'monthly',
     },
-    'send-auth-email': {
-      email: 'test@example.com',
-      emailType: 'welcome',
-    },
     'generate-blog-content': {
       topic: 'Test Topic',
       style: 'educational',

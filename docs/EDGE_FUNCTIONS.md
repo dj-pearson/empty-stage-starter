@@ -216,32 +216,12 @@ Provides standardized headers for all Edge Functions:
 
 ### Authentication & Email
 
-#### `send-auth-email`
-
-**Purpose**: Send branded authentication emails (confirmation, password reset, magic link).
-
-**Method**: `POST`
-
-**Request Body**:
-```json
-{
-  "email": "string",
-  "type": "confirmation | password_reset | magic_link",
-  "confirmationUrl": "string (optional)",
-  "resetUrl": "string (optional)",
-  "magicLinkUrl": "string (optional)",
-  "userName": "string (optional)"
-}
-```
-
-**Response**:
-```json
-{
-  "success": true
-}
-```
-
----
+> **Removed (US-615):** `send-auth-email` was deleted on 2026-08-08. It took the
+> confirmation/reset/magic-link URL straight from the request body, had no auth
+> gate and `Access-Control-Allow-Origin: *`, so re-attaching a mail provider to
+> it would have turned it into an open phishing relay on our own domain. It had
+> no sender and no callers. Confirmation, password-reset and magic-link mail is
+> handled by Supabase Auth's own templates; use `send-emails` for everything else.
 
 #### `send-emails`
 
