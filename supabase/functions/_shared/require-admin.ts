@@ -118,14 +118,25 @@ export async function requireAdmin(
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data: roleRow, error: roleErr } = await admin
+  // Filter in JS rather than with .in("role", allowedRoles). role is the
+  // app_role enum, so passing a label the enum does not define ("root_admin"
+  // on deployments that never added it) makes Postgres reject the whole
+  // comparison with 22P02 -- which surfaced as a 403 for genuine admins.
+  const { data: roleRows, error: roleErr } = await admin
     .from("user_roles")
     .select("role")
-    .eq("user_id", userData.user.id)
-    .in("role", allowedRoles)
-    .maybeSingle();
+    .eq("user_id", userData.user.id);
 
-  if (roleErr || !roleRow) {
+  // A failed lookup is not the same as "caller is not an admin". Reporting a
+  // broken query as 403 sends the operator to fix permissions that are fine.
+  if (roleErr) {
+    return { ok: false, status: 500, error: "Role lookup failed" };
+  }
+
+  const match = (roleRows ?? []).find((r) =>
+    allowedRoles.includes((r as { role: string }).role)
+  );
+  if (!match) {
     return { ok: false, status: 403, error: "Forbidden: admin role required" };
   }
 
@@ -133,7 +144,7 @@ export async function requireAdmin(
     ok: true,
     status: 200,
     userId: userData.user.id,
-    role: (roleRow as { role: string }).role,
+    role: (match as { role: string }).role,
     admin,
   };
 }

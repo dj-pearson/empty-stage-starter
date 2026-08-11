@@ -312,24 +312,34 @@ STRICT OUTPUT: Return ONLY valid JSON (RFC 8259), no markdown, no code fences, n
         } else if (postData && webhookUrl) {
           // Send to webhook for social media distribution
           try {
+            // Shape must match handleResendToWebhook in SocialMediaManager.tsx:
+            // both feed the same Make hook, and the scenario maps post.id,
+            // post.title, post.short_form_content and post.long_form_content.
+            // The old flat shape (post_id / short_form / long_form) left every
+            // one of those mappings empty.
             const webhookPayload = {
-              type: "social_post_published",
-              post_id: postData.id,
-              title: socialContent.title || "",
-              short_form: socialContent.twitter || "",
-              long_form: socialContent.facebook || "",
-              url: linkUrl,
-              images: socialImageUrl ? [socialImageUrl] : [],
-              hashtags:
-                hashtags.length > 0
-                  ? hashtags
-                  : [
-                      "EatPal",
-                      "ARFID",
-                      "FoodChaining",
-                      "FeedingTherapy",
-                    ],
-              published_at: new Date().toISOString(),
+              event: "social_post_published",
+              post: {
+                id: postData.id,
+                title: socialContent.title || "",
+                short_form_content: socialContent.twitter || "",
+                long_form_content: socialContent.facebook || "",
+                content: linkUrl,
+                platforms: [],
+                scheduled_for: null,
+                image_urls: socialImageUrl ? [socialImageUrl] : [],
+                hashtags:
+                  hashtags.length > 0
+                    ? hashtags
+                    : [
+                        "EatPal",
+                        "ARFID",
+                        "FoodChaining",
+                        "FeedingTherapy",
+                      ],
+              },
+              timestamp: new Date().toISOString(),
+              resent: false,
             };
 
             console.log("Sending social webhook:", webhookUrl);
