@@ -127,6 +127,42 @@ export async function invokeEdgeFunction<T = unknown>(
   }
 }
 
+export interface WebhookRelayResult {
+  /** True when the far end answered 2xx. */
+  ok: boolean;
+  /** The remote status, not this relay's status. */
+  status: number;
+  /** First 2000 chars of the remote body, for webhook_logs. */
+  body: string;
+}
+
+/**
+ * POST a payload to an external webhook through the send-webhook Edge Function.
+ *
+ * Never fetch(webhook_url) from the browser. The CSP in public/_headers pins
+ * connect-src to a fixed allowlist, so a direct call is refused before it
+ * leaves the page and surfaces as an opaque "Failed to fetch". Widening the
+ * allowlist would not hold either -- webhook_url is configurable per account,
+ * so the next host an admin picks breaks the same way. The relay runs
+ * server-side, where neither CSP nor CORS applies.
+ *
+ * Throws when the relay itself could not be reached. A non-2xx from the far
+ * end is returned in `ok`/`status`, since that is an answer rather than a
+ * failure and the caller usually wants to log it.
+ */
+export async function sendWebhook(
+  webhookUrl: string,
+  payload: unknown,
+): Promise<WebhookRelayResult> {
+  const { data, error } = await invokeEdgeFunction<WebhookRelayResult>(
+    'send-webhook',
+    { body: { webhookUrl, payload } },
+  );
+  if (error) throw error;
+  if (!data) throw new Error('send-webhook returned no result');
+  return data;
+}
+
 /**
  * Legacy compatibility wrapper for invokeEdgeFunction()
  *

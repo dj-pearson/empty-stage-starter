@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { invokeEdgeFunction, sendWebhook } from '@/lib/edge-functions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -247,11 +247,7 @@ export function SocialMediaManager() {
           published_at: new Date().toISOString()
         };
 
-        const response = await fetch(globalAccount.webhook_url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(webhookPayload),
-        });
+        const relay = await sendWebhook(globalAccount.webhook_url, webhookPayload);
 
         // Log webhook call
         await supabase.from("webhook_logs").insert([
@@ -260,14 +256,14 @@ export function SocialMediaManager() {
             platform: 'facebook' as unknown as string, // Use a default platform for logging
             webhook_url: globalAccount.webhook_url,
             request_payload: webhookPayload,
-            response_status: response.status,
-            response_body: await response.text(),
-            success: response.ok,
+            response_status: relay.status,
+            response_body: relay.body,
+            success: relay.ok,
           },
         ]);
 
-        if (!response.ok) {
-          toast.error(`Webhook returned status ${response.status}`);
+        if (!relay.ok) {
+          toast.error(`Webhook returned status ${relay.status}`);
           return;
         }
       } catch (webhookError) {
@@ -323,28 +319,24 @@ export function SocialMediaManager() {
 
       // Send to webhook
       logger.debug("Resending to webhook:", globalAccount.webhook_url);
-      const webhookResponse = await fetch(globalAccount.webhook_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "social_post_published",
-          post: {
-            id: post.id,
-            title: post.title,
-            short_form_content: post.short_form_content,
-            long_form_content: post.long_form_content,
-            content: post.content,
-            platforms: post.platforms,
-            scheduled_for: post.scheduled_for,
-            image_urls: post.image_urls,
-          },
-          timestamp: new Date().toISOString(),
-          resent: true,
-        }),
+      const relay = await sendWebhook(globalAccount.webhook_url, {
+        event: "social_post_published",
+        post: {
+          id: post.id,
+          title: post.title,
+          short_form_content: post.short_form_content,
+          long_form_content: post.long_form_content,
+          content: post.content,
+          platforms: post.platforms,
+          scheduled_for: post.scheduled_for,
+          image_urls: post.image_urls,
+        },
+        timestamp: new Date().toISOString(),
+        resent: true,
       });
 
-      if (!webhookResponse.ok) {
-        throw new Error("Failed to send to webhook");
+      if (!relay.ok) {
+        throw new Error(`Webhook returned status ${relay.status}`);
       }
 
       toast.success("Post resent to webhook!");

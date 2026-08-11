@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { invokeEdgeFunction, sendWebhook } from '@/lib/edge-functions';
 import BlogInternalLinker from "@/components/admin/BlogInternalLinker";
 import PromptTemplateManager from "@/components/admin/PromptTemplateManager";
 import ScheduledPublishing from "@/components/admin/ScheduledPublishing";
@@ -268,16 +268,12 @@ export function BlogCMSManager() {
         published_at: new Date().toISOString(),
       };
 
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(webhookPayload),
-      });
+      const relay = await sendWebhook(webhookUrl, webhookPayload);
 
-      if (response.ok) {
+      if (relay.ok) {
         toast.success("Webhook resent successfully!");
       } else {
-        toast.error(`Webhook returned status ${response.status}`);
+        toast.error(`Webhook returned status ${relay.status}`);
       }
     } catch (error: unknown) {
       logger.error("Error resending webhook:", error);
@@ -395,17 +391,14 @@ export function BlogCMSManager() {
       const webhookUrl = localStorage.getItem("blog_webhook_url");
       if (webhookUrl && content.social) {
         try {
-          await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            mode: "no-cors",
-            body: JSON.stringify({
-              type: "blog_post_generated",
-              title: content.title,
-              excerpt: content.excerpt,
-              social_versions: content.social,
-              timestamp: new Date().toISOString(),
-            }),
+          // Was mode:"no-cors", which made every failure invisible. The relay
+          // returns the real remote status, so a bad hook is now loggable.
+          await sendWebhook(webhookUrl, {
+            type: "blog_post_generated",
+            title: content.title,
+            excerpt: content.excerpt,
+            social_versions: content.social,
+            timestamp: new Date().toISOString(),
           });
         } catch (e) {
           logger.error("Webhook error:", e);

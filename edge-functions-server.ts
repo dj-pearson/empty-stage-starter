@@ -76,6 +76,7 @@ const FUNCTIONS_MAP: { [key: string]: string } = {
   "schedule-weekly-reports": "./functions/schedule-weekly-reports/index.ts",
   "send-emails": "./functions/send-emails/index.ts",
   "send-seo-notification": "./functions/send-seo-notification/index.ts",
+  "send-webhook": "./functions/send-webhook/index.ts",
   "seo-audit": "./functions/seo-audit/index.ts",
   "stripe-webhook": "./functions/stripe-webhook/index.ts",
   "suggest-foods": "./functions/suggest-foods/index.ts",
