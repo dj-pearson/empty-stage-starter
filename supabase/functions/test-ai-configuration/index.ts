@@ -12,8 +12,8 @@
  */
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { requireAdmin } from '../_shared/require-admin.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,55 +27,24 @@ export default async (req: Request) => {
   }
 
   try {
-    // Get Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Get authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Was a hand-rolled copy of the admin gate that ran
+    //   .eq('role', 'root_admin')
+    // against user_roles.role, which is the app_role enum. Postgres rejects a
+    // label the enum does not define (22P02), so rolesError was always set and
+    // every caller got 403 "Unauthorized: root_admin role required" -- the same
+    // answer a genuine non-admin gets. Use the shared gate, which compares in
+    // JS and cannot hit that.
+    const gate = await requireAdmin(req, ['root_admin']);
+    if (!gate.ok) {
       return new Response(
-        JSON.stringify({ error: 'Authorization header required' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
+        {
+          status: gate.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
-
-    // Extract token
-    const token = authHeader.replace('Bearer ', '');
-
-    // Verify user is root_admin
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid authorization token' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    // Check if user is root_admin
-    const { data: roles, error: rolesError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'root_admin')
-      .maybeSingle();
-
-    if (rolesError || !roles) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: root_admin role required' }),
-        { 
-          status: 403, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
+    const supabase = gate.admin!;
 
     // Parse request
     const { testType = 'full' } = await req.json().catch(() => ({}));
@@ -84,7 +53,7 @@ export default async (req: Request) => {
     const aiService = new AIServiceV2();
 
     // Run test
-    console.log(`[test-ai-configuration] Running ${testType} test for user ${user.id}`);
+    console.log(`[test-ai-configuration] Running ${testType} test for user ${gate.userId ?? gate.role}`);
     const testResults = await aiService.testConfiguration();
 
     // Get environment configuration from database

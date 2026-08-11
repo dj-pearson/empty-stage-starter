@@ -24,6 +24,11 @@ import { assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 const PUBLIC_ALLOWLIST = new Set<string>([
   'health-check', // liveness probe; returns only coarse status, no user data
   'support-intake', // public "contact us" form submission (rate-limited server-side)
+  // Serves the public sitemap.xml. Search-engine crawlers fetch it unauthenticated
+  // by definition, and it exposes only URLs that are already public. Classified as
+  // intentionally public in prd.json (US-558 sweep) but never added here, which is
+  // why this gate has been failing.
+  'generate-sitemap',
 ]);
 
 /**

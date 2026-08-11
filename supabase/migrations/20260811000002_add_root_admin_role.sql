@@ -1,0 +1,15 @@
+-- app_role defines only ('admin', 'user'), yet root_admin is assumed to exist in
+-- two places:
+--
+--   * supabase/functions/test-ai-configuration gates on it, and comparing the
+--     enum against an undefined label fails with 22P02 rather than simply not
+--     matching -- so every caller got a 403 that read like a permissions
+--     decision instead of the query error it was.
+--   * the ai_model_configurations and ai_environment_config RLS policies added
+--     in 20260204000000 compare role::text = 'root_admin'. The ::text cast is
+--     what keeps those from erroring, and it is also why they quietly match
+--     nobody.
+--
+-- Adding the label makes the tier real. It grants nothing by itself: no row in
+-- user_roles carries root_admin until one is inserted deliberately.
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'root_admin';
