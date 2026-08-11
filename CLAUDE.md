@@ -2,7 +2,7 @@
 
 > Meal planning & nutrition tracking. Vite 7 + React 19 + TS 5.8 + Supabase + Expo 54.
 
-## Critical Rules
+## Critical Rules 
 
 - **No real secrets** in any file — use placeholders (`sk_live_XXXX`, `REPLACE_WITH_...`). If one is committed: stop, alert user, replace.
 - **Never** modify `src/components/ui/` (shadcn), commit `.env`, hardcode colors, use `any`, or skip RLS on new tables.
