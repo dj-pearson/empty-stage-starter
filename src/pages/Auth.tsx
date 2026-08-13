@@ -267,6 +267,11 @@ const Auth = () => {
       email,
       password,
       options: {
+        // The confirmation email carries BOTH a link and a 6-digit code. Signup
+        // below verifies the code, so this only governs the link -- and without
+        // it GoTrue falls back to SITE_URL, which Coolify pins to the Kong
+        // gateway, so clicking the link landed on a 401 JSON body.
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
         // Record a demonstrable consent trail on the user (GDPR Art. 7(1)):
         // acceptance flag, timestamp, policy version, and guardian/18+ attestation.
         data: {
