@@ -1,4 +1,10 @@
 # Cloudflare Pages Configuration
+#
+# pages_build_output_dir is REQUIRED by Pages and every line of this file
+# was commented out, so `wrangler pages deploy` refused with "missing the
+# pages_build_output_dir field". Vite builds to dist/ (see package.json).
+pages_build_output_dir = "dist"
+
 # name = "eatpal-empty-stage"
 # compatibility_date = "2024-12-19"
 # pages_build_output_dir = "dist"
