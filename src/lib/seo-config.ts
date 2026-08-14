@@ -20,10 +20,10 @@ export const coreEntities = {
   targetAudience: "Feeding Therapists, Parents of Children with ARFID/Autism, Researchers, Food Manufacturers",
   primaryConditions: ["ARFID", "Autism Feeding Challenges", "Selective Eating Disorders", "Pediatric Feeding Disorders"],
   strategicPillars: [
-    "AI Predictive Engine (70%+ accuracy, data network effects)",
-    "Professional Platform (200+ therapists, insurance integration, therapist lock-in)",
-    "Data Insights Marketplace (100K+ data points, research licensing, first-mover advantage)",
-    "Community Ecosystem (500+ resources, two-sided marketplace, network effects)",
+    "AI Predictive Engine (data network effects)",
+    "Professional Platform (insurance integration, therapist lock-in)",
+    "Data Insights Marketplace (research licensing, first-mover advantage)",
+    "Community Ecosystem (two-sided marketplace, network effects)",
   ],
   competitiveMoats: [
     "Data Network Effects",
@@ -32,7 +32,7 @@ export const coreEntities = {
     "Community Network Effects",
   ],
   keyFeatures: [
-    "AI Predictive Food Acceptance (70%+ accuracy)",
+    "AI Predictive Food Acceptance",
     "Professional Therapist Dashboard",
     "Insurance Billing & Superbills",
     "HIPAA-Compliant Platform",
@@ -44,8 +44,13 @@ export const coreEntities = {
 export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
   home: {
     title: "EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science",
+    // Every number and superlative that used to sit in this file's copy - "#1",
+    // "200+ feeding therapists", "2,000+ families helped", "100K+ mealtime data
+    // points", "70%+ prediction accuracy" - was unsourced, and two of them
+    // contradicted llms.txt, which simultaneously claimed "over 10,000 families".
+    // What replaced them describes what the product does, which is checkable.
     description:
-      "The #1 AI-powered meal planner for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science. Go from 5 safe foods to 50+. Start free.",
+      "AI meal planning for ARFID, extreme picky eating, and autism-related feeding challenges. Built on food chaining, the feeding-therapy method that grows a child's diet by changing one attribute at a time. Start free.",
     // Trimmed from 23 phrases to the handful the page actually targets. Google ignores
     // this tag outright; a 23-term list is only visible to the engines that read it as a
     // keyword-stuffing signal. The long-tail terms belong on the pages that serve them
@@ -54,11 +59,11 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
       "ARFID meal planner, picky eater meal planner, food chaining, food chaining for picky eaters, selective eating disorder, autism feeding therapy, safe foods picky eaters",
     canonicalUrl: `${baseUrl}/`,
     aiPurpose:
-      "EatPal is the #1 AI-powered platform specifically designed for ARFID (Avoidant/Restrictive Food Intake Disorder), extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists, it implements food chaining—the proven feeding therapy method developed by Cheri Fraker, RD and Laura Walbert, SLP. EatPal helps parents systematically expand their child's diet from 5 foods to 50+ by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, it makes gradual changes in taste, texture, or appearance. With 2,000+ families helped and 100K+ mealtime data points, EatPal combines evidence-based food chaining methodology with AI-powered meal planning (70%+ prediction accuracy), progress tracking, and grocery automation. It serves both parents at home and feeding therapists in clinical practice.",
+      "EatPal is an AI meal planning platform for ARFID (Avoidant/Restrictive Food Intake Disorder), extreme picky eating, and autism-related feeding challenges. It implements food chaining, the feeding therapy method developed by Cheri Fraker, RD and Laura Walbert, SLP, which expands a child's diet by building 'chains' from foods the child already accepts. Instead of introducing a completely new food, each step changes one attribute - taste, texture, shape, or preparation - while keeping the rest familiar. EatPal combines that methodology with AI-generated meal plans, try-bite exposure tracking, progress charts, and automated grocery lists. It serves both parents at home and feeding therapists in clinical practice.",
     aiAudience:
       "Parents of children recently diagnosed with ARFID seeking immediate meal planning help, families managing ARFID (Avoidant/Restrictive Food Intake Disorder) who need structured feeding support, caregivers of children with autism spectrum feeding challenges and sensory food issues, parents dealing with extreme picky eating (fewer than 10 accepted foods), families looking for feeding therapy techniques to use at home between therapy sessions, pediatric SLPs, OTs, and dietitians seeking a professional platform for food chaining with clients, feeding clinics wanting data-driven tools for multi-client management",
     aiKeyFeatures:
-      "AI-powered food chaining engine specifically designed for ARFID and feeding disorders, 70%+ prediction accuracy on which new foods a child is most likely to accept, 1000+ pre-built food chain examples from chicken nuggets to grilled chicken, texture/brand/flavor pattern detection for sensory-sensitive children, try bite methodology with exposure tracking (15-20 exposures per food), professional therapist portal for shared goals and session coordination, insurance-compatible progress documentation, safe food library with allergen and sensory preference tracking, automated grocery lists from meal plans, multi-child support, progress charts showing acceptance rates over time, 100K+ behavioral data points powering AI recommendations",
+      "AI food chaining engine designed for ARFID and feeding disorders, predictions for which new foods a child is most likely to accept, pre-built food chain examples from chicken nuggets to grilled chicken, texture/brand/flavor pattern detection for sensory-sensitive children, try bite methodology with exposure tracking (15-20 exposures per food), professional therapist portal for shared goals and session coordination, insurance-compatible progress documentation, safe food library with allergen and sensory preference tracking, automated grocery lists from meal plans, multi-child support, progress charts showing acceptance rates over time",
     aiUseCases:
       "Getting a structured meal plan immediately after an ARFID diagnosis, creating food chains to help a child with ARFID transition from chicken nuggets to grilled chicken, tracking sensory preferences (texture, taste, temperature) to guide food introductions for autism, planning meals that include both safe foods and one try bite per day, monitoring how many times a child has been exposed to each new food (research shows 15-20 exposures needed), extending feeding therapy progress into the home between sessions, managing food acceptance progress for multiple picky eaters in one family, generating grocery lists with safe foods to prevent mealtime anxiety, finding food chaining examples for specific safe foods like mac and cheese or french fries, implementing feeding therapy techniques at home without a therapist visit, predicting which new foods a child is most likely to accept based on current sensory profile, using professional tools to coordinate feeding therapy across therapists and families",
     structuredData: [
@@ -68,7 +73,7 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
         url: `${baseUrl}/`,
         name: "EatPal: ARFID & Picky Eater Meal Planner | Food Chaining Science",
         description:
-          "The #1 AI-powered meal planning platform for ARFID, extreme picky eating, and autism-related feeding challenges. Built with 200+ feeding therapists using food chaining science.",
+          "AI meal planning for ARFID, extreme picky eating, and autism-related feeding challenges, built on food chaining science.",
         isPartOf: {
           "@id": `${baseUrl}/#website`,
         },
@@ -169,13 +174,13 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
             },
           },
         ],
-        aggregateRating: {
-          "@type": "AggregateRating",
-          ratingValue: "4.8",
-          ratingCount: "2847",
-          bestRating: "5",
-          worstRating: "1",
-        },
+        // No aggregateRating here. It used to assert 4.8 from 2847 ratings, which
+        // nothing backs. Google treats ratings a site publishes about its own product
+        // as self-serving: ineligible for rich results, and a manual-action risk when
+        // the numbers are invented. index.html and SoftwareAppSchema were already
+        // cleaned of the same figures; this copy survived because the test that guards
+        // it (src/lib/seo-static-head.test.ts) only reads the static head.
+        // Re-add only from a real, auditable rating store.
       },
     ],
   },

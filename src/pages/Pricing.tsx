@@ -1170,7 +1170,7 @@ export default function Pricing() {
             { icon: <X className="h-5 w-5" />, text: "Cancel anytime" },
             { icon: <FileText className="h-5 w-5" />, text: "No long-term contracts" },
             { icon: <Lock className="h-5 w-5" />, text: "256-bit SSL encryption" },
-            { icon: <Users className="h-5 w-5" />, text: "2,000+ families trust EatPal" },
+            { icon: <Users className="h-5 w-5" />, text: "Built for families managing picky eating and ARFID" },
           ].map((item, i) => (
             <div key={i} className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
               <div className="p-2 rounded-full bg-muted">{item.icon}</div>

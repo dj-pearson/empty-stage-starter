@@ -190,6 +190,11 @@ export default function PickyEaterQuizResults() {
           name="description"
           content={`Your child's eating personality: ${personalityDef.name}. Get personalized strategies and meal plans.`}
         />
+        {/* Rendered entirely from the quiz answers held in client state. A crawler
+            arriving cold has no answers, so it indexes an empty result shell: one
+            thin near-duplicate competing with /picky-eater-quiz, which is the page
+            we actually want ranking. Keep `follow` so the links still pass through. */}
+        <meta name="robots" content="noindex, follow" />
       </Helmet>
 
       <div id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 via-background to-primary/3 dark:from-primary/10 dark:via-background dark:to-primary/5">

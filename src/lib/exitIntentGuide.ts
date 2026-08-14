@@ -352,7 +352,7 @@ function generateGuideEmailHTML(guideUrl: string): string {
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td align="center" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #94A3B8; padding-bottom: 15px;">
-                    Join 2,000+ parents who've ended mealtime battles
+                    A calmer way through mealtime battles
                   </td>
                 </tr>
                 <tr>

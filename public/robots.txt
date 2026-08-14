@@ -1,6 +1,6 @@
 # EatPal - Kids Meal Planning for Picky Eaters
 # Optimized for Traditional & AI Search Engines
-# Last Updated: 2026-03-07
+# Last Updated: 2026-08-14
 
 # ===========================================
 # Traditional Search Engine Crawlers
@@ -176,8 +176,12 @@ Disallow: /auth/
 Disallow: /seo-dashboard/
 Disallow: /search-traffic/
 Disallow: /oauth/
-Disallow: /checkout-success
-Disallow: /share-target
+# The first two previously read /checkout-success and /share-target, neither of which
+# is a route this app serves, so those pages were never actually blocked. /join is the
+# invite-acceptance page: noindex in its own <head>, blocked here too.
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
 Disallow: /search?
 Disallow: /*?sort=
 Disallow: /*?filter=
@@ -186,8 +190,9 @@ Disallow: /*?page=
 # Allow public pages explicitly
 Allow: /
 Allow: /pricing
-Allow: /about
 Allow: /blog/
+Allow: /guides
+Allow: /authors
 Allow: /faq
 Allow: /contact
 Allow: /picky-eater-quiz

@@ -170,6 +170,9 @@ export default function BudgetCalculatorResults() {
           name="description"
           content="Your personalized grocery budget based on USDA data with meal suggestions and money-saving tips."
         />
+        {/* Renders from calculator input held in client state; see the note in
+            PickyEaterQuizResults.tsx. /budget-calculator is the indexable page. */}
+        <meta name="robots" content="noindex, follow" />
       </Helmet>
 
       <div id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 to-background py-12 px-4 sm:px-6 lg:px-8">

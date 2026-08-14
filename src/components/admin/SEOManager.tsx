@@ -1792,7 +1792,7 @@ export function SEOManager() {
     <image:image>
       <image:loc>${baseUrl}/Cover.webp</image:loc>
       <image:title>EatPal - Kids Meal Planning for Picky Eaters</image:title>
-      <image:caption>The #1 meal planning app for picky eaters and selective eating</image:caption>
+      <image:caption>Meal planning for picky eaters and selective eating</image:caption>
     </image:image>
   </url>
 
@@ -1954,13 +1954,10 @@ RESTful API available for integrations. Contact for API access.
         priceCurrency: "USD",
         availability: "https://schema.org/InStock",
       },
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: "4.8",
-        ratingCount: "127",
-        bestRating: "5",
-        worstRating: "1",
-      },
+      // No aggregateRating. This generator used to emit 4.8 from 127 ratings, which
+      // nothing backs; a site publishing ratings about its own product is self-serving
+      // markup, ineligible for rich results and a manual-action risk when invented.
+      // Wire it to a real rating store before re-adding.
       creator: {
         "@type": "Organization",
         name: "EatPal",

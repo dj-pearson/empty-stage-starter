@@ -45,6 +45,10 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/guides', changefreq: 'weekly', priority: '0.8' },
   { path: '/budget-calculator', changefreq: 'monthly', priority: '0.7' },
   { path: '/faq', changefreq: 'monthly', priority: '0.7' },
+  // /authors self-noindexes while public.blog_authors is empty (see src/pages/Authors.tsx),
+  // so until real author rows exist this URL is submitted and then declined. Populate the
+  // table, or drop this line, rather than leaving it in that state indefinitely.
+  { path: '/authors', changefreq: 'monthly', priority: '0.6' },
   { path: '/contact', changefreq: 'monthly', priority: '0.6' },
   { path: '/accessibility', changefreq: 'yearly', priority: '0.4' },
   { path: '/accessibility/vpat', changefreq: 'yearly', priority: '0.3' },
@@ -123,10 +127,20 @@ export default async (req: Request): Promise<Response> => {
       });
     }
 
+    // Only guides at or above the indexable tier are submitted. The rest stay
+    // published and linked but carry noindex, so listing them here would submit URLs
+    // we are simultaneously telling Google not to index.
+    //
+    // MAX_INDEXABLE_TIER is 1. This is a Deno edge function and cannot import from
+    // src/, so the value is duplicated: the source of truth and the reasoning live in
+    // src/lib/pseo/indexability.ts. Change both together, plus prerender-routes.json.
+    const MAX_INDEXABLE_TIER = 1;
+
     const { data: guides, error: guidesError } = await supabase
       .from('pseo_pages')
       .select('slug, updated_at')
-      .eq('generation_status', 'published');
+      .eq('generation_status', 'published')
+      .lte('tier', MAX_INDEXABLE_TIER);
 
     if (guidesError) throw guidesError;
 

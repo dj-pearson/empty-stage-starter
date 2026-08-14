@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SEOHead } from "@/components/SEOHead";
 import { BreadcrumbSchema } from "@/components/schema";
@@ -45,69 +45,31 @@ interface SocialLinks {
   experience?: string;
 }
 
-// Fallback authors for when database is empty or unavailable
-// These should be replaced with real author data in the database
-const fallbackAuthors: Author[] = [
-  {
-    id: "dr-sarah-johnson",
-    name: "Dr. Sarah Johnson",
-    credentials: "Ph.D., RDN, LD",
-    title: "Lead Nutrition Scientist & Content Director",
-    bio: "Dr. Sarah Johnson is a registered dietitian nutritionist with over 15 years of experience specializing in pediatric nutrition and feeding disorders. She completed her Ph.D. in Nutritional Sciences at Cornell University with a focus on food chaining interventions for children with ARFID. Dr. Johnson has worked with over 500 families to implement evidence-based feeding strategies.",
-    expertise: [
-      "Pediatric Nutrition",
-      "ARFID Treatment",
-      "Food Chaining Therapy",
-      "Selective Eating Disorders",
-      "Evidence-Based Feeding Interventions",
-    ],
-    experience: "15+ years in pediatric feeding therapy, 500+ families helped",
-    articleCount: 47,
-    email: "sarah@tryeatpal.com",
-    linkedin: "https://linkedin.com/in/drsarahjohnson",
-  },
-  {
-    id: "emily-martinez",
-    name: "Emily Martinez",
-    credentials: "MS, OTR/L, SOS Certified",
-    title: "Pediatric Occupational Therapist",
-    bio: "Emily Martinez is an occupational therapist specializing in sensory-based feeding challenges. She is SOS (Sequential Oral Sensory) Approach certified and has extensive training in food chaining methodology. Emily has worked in pediatric feeding clinics for 10 years and has helped families navigate autism spectrum feeding issues, sensory processing disorders, and extreme selective eating.",
-    expertise: [
-      "Sensory Processing & Feeding",
-      "SOS Approach",
-      "Autism Spectrum Feeding",
-      "Texture Progression",
-      "Occupational Therapy for Feeding",
-    ],
-    experience: "10+ years in pediatric OT, specialized in feeding therapy",
-    articleCount: 32,
-    email: "emily@tryeatpal.com",
-  },
-  {
-    id: "michael-chen",
-    name: "Michael Chen",
-    credentials: "MS, CCC-SLP",
-    title: "Speech-Language Pathologist",
-    bio: "Michael Chen is a speech-language pathologist with expertise in oral motor development and pediatric dysphagia. He has worked extensively with children who have complex feeding challenges including those with developmental delays, autism, and structural abnormalities. Michael brings 12 years of clinical experience and a focus on parent-led home-based interventions.",
-    expertise: [
-      "Oral Motor Development",
-      "Pediatric Dysphagia",
-      "Speech Therapy for Feeding",
-      "Parent Coaching",
-      "Home-Based Interventions",
-    ],
-    experience: "12+ years in speech-language pathology, feeding specialist",
-    articleCount: 28,
-    email: "michael@tryeatpal.com",
-  },
-];
+/**
+ * There is deliberately no fallback author list here.
+ *
+ * This file used to carry three placeholder clinicians: a "Dr. Sarah Johnson" with a
+ * Cornell Ph.D. and a linkedin.com/in/drsarahjohnson URL, plus an OT and an SLP, all
+ * invented, each with specific credentials and claims like "500+ families helped".
+ * They rendered whenever blog_authors was empty or unreachable, behind a small
+ * "sample data" banner.
+ *
+ * That was survivable only because /authors had no route and nothing linked to it. It
+ * is not survivable now: the page is routed, prerendered into static HTML, listed in
+ * the sitemap, linked from the sitewide footer, and emits Person schema. Fabricated
+ * licensed clinicians asserted as the authority behind ARFID and pediatric feeding
+ * advice is misrepresentation to parents making decisions for their kids, and it is
+ * exactly the pattern search engines penalise as deceptive E-E-A-T.
+ *
+ * When there are no authors in the database the page now says so and sets noindex.
+ * Populate public.blog_authors with real people to make it indexable.
+ */
 
 export default function Authors() {
   const { t } = useTranslation();
   const canonicalUrl = "https://tryeatpal.com/authors";
   const [authors, setAuthors] = useState<Author[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
     async function fetchAuthors() {
@@ -119,16 +81,13 @@ export default function Authors() {
 
         if (error) {
           logger.error("Error fetching authors:", error);
-          setAuthors(fallbackAuthors);
-          setUsingFallback(true);
+          setAuthors([]);
           return;
         }
 
         if (!data || data.length === 0) {
-          // No authors in database, use fallback
-          logger.info("No authors found in database, using fallback data");
-          setAuthors(fallbackAuthors);
-          setUsingFallback(true);
+          logger.info("No authors found in blog_authors; rendering the empty state.");
+          setAuthors([]);
           return;
         }
 
@@ -153,11 +112,9 @@ export default function Authors() {
         });
 
         setAuthors(mappedAuthors);
-        setUsingFallback(false);
       } catch (error) {
         logger.error("Error in fetchAuthors:", error);
-        setAuthors(fallbackAuthors);
-        setUsingFallback(true);
+        setAuthors([]);
       } finally {
         setIsLoading(false);
       }
@@ -166,9 +123,57 @@ export default function Authors() {
     fetchAuthors();
   }, []);
 
+  /**
+   * Person entities for every author on the page.
+   *
+   * The bios here are the E-E-A-T evidence behind health content about ARFID and
+   * pediatric feeding. The credentials were already rendered for human readers, but
+   * nothing on the page declared them as machine-readable entities, so no search or
+   * answer engine could connect "EatPal says X about ARFID" to a licensed clinician.
+   * `knowsAbout` is the field that does that work: it is what resolves an author to a
+   * topic when an engine decides whose claim to quote.
+   */
+  const authorSchema = useMemo(() => {
+    if (authors.length === 0) return undefined;
+
+    return {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      "@id": `${canonicalUrl}#authors`,
+      url: canonicalUrl,
+      name: "EatPal Authors and Clinical Reviewers",
+      description:
+        "Registered dietitians, occupational therapists, and feeding specialists who write and review EatPal's picky eating, food chaining, and ARFID content.",
+      isPartOf: { "@id": "https://tryeatpal.com/#website" },
+      publisher: { "@id": "https://tryeatpal.com/#organization" },
+      mainEntity: authors.map((author) => ({
+        "@type": "Person",
+        "@id": `${canonicalUrl}#${author.id}`,
+        name: author.name,
+        ...(author.credentials && { honorificSuffix: author.credentials }),
+        ...(author.title && { jobTitle: author.title }),
+        ...(author.bio && { description: author.bio }),
+        ...(author.avatarUrl && { image: author.avatarUrl }),
+        ...(author.expertise.length > 0 && { knowsAbout: author.expertise }),
+        worksFor: { "@id": "https://tryeatpal.com/#organization" },
+        ...(() => {
+          // sameAs is how an engine reconciles this Person with the same human on
+          // LinkedIn or X. An empty array is worse than no property, so omit it.
+          const sameAs = [author.linkedin, author.twitter].filter(Boolean);
+          return sameAs.length > 0 ? { sameAs } : {};
+        })(),
+      })),
+    };
+  }, [authors, canonicalUrl]);
+
   return (
     <>
+      {/* noindex below: an author page with no authors is a credentials page that
+          proves nothing. Keep it out of the index until blog_authors has real people
+          in it, rather than ranking an empty promise of expertise. */}
       <SEOHead
+        structuredData={authorSchema}
+        noindex={!isLoading && authors.length === 0}
         title="Our Expert Authors - Feeding Therapy Specialists | EatPal"
         description="Meet EatPal's team of registered dietitians, occupational therapists, and feeding specialists. Our authors bring decades of combined experience in pediatric nutrition, ARFID treatment, and evidence-based feeding therapy."
         keywords="feeding therapy experts, pediatric dietitians, occupational therapists, ARFID specialists, food chaining experts, picky eater experts, nutrition scientists"
@@ -231,10 +236,10 @@ export default function Authors() {
         {/* Authors Grid */}
         {!isLoading && (
           <>
-            {usingFallback && (
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-8 text-center">
-                <p className="text-amber-800 dark:text-amber-200 text-sm">
-                  Author profiles are being set up. Displaying sample data.
+            {authors.length === 0 && (
+              <div className="border rounded-lg p-8 mb-8 text-center">
+                <p className="text-muted-foreground">
+                  Author profiles are being set up and will be published here shortly.
                 </p>
               </div>
             )}

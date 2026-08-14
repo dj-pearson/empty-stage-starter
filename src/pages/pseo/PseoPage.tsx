@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import type { PseoPageRow, PseoPageContent } from '@/types/pseo';
 import { slugFromPathname } from '@/lib/pseo/slug';
+import { isGuideIndexable } from '@/lib/pseo/indexability';
 
 const FoodChainingGuide = lazy(() => import('./FoodChainingGuide'));
 const ChallengeMealOccasion = lazy(() => import('./ChallengeMealOccasion'));
@@ -106,6 +107,16 @@ export default function PseoPage() {
   const [page, setPage] = useState<PseoPageRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isNotFound, setIsNotFound] = useState(false);
+  /**
+   * Whether this guide is allowed into the search index (see @/lib/pseo/indexability).
+   *
+   * Read straight off the fetched row rather than through PseoPageRow, because that
+   * type does not describe this table - it is missing `slug`, `content`,
+   * `meta_description`, `canonical_url`, `breadcrumbs` and `related_pages`, all of
+   * which this component reads, which is why the fetch below casts through `unknown`.
+   * Narrowing the raw row here keeps the gate honest regardless of that drift.
+   */
+  const [isIndexable, setIsIndexable] = useState(false);
 
   useEffect(() => {
     if (!slug) {
@@ -132,6 +143,7 @@ export default function PseoPage() {
       if (error || !data) {
         setIsNotFound(true);
       } else {
+        setIsIndexable(isGuideIndexable(data as { tier?: number | null }));
         setPage(data as unknown as PseoPageRow);
       }
 
@@ -168,6 +180,12 @@ export default function PseoPage() {
         <title>{page.title} - EatPal</title>
         <meta name="description" content={page.meta_description} />
         <link rel="canonical" href={page.canonical_url} />
+        {/* Guides below the indexable tier stay live, linked and useful, but are kept
+            out of the index while the domain builds authority. `follow` is deliberate:
+            link equity still flows from here to the guides that are indexed. See
+            @/lib/pseo/indexability for why, and for the two other places that must
+            agree with this. */}
+        {!isIndexable && <meta name="robots" content="noindex, follow" />}
       </Helmet>
 
       {/* Article schema makes these programmatic guides citable/extractable by

@@ -1,9 +1,7 @@
-import { useRef, useEffect, useState, useCallback, lazy, Suspense } from 'react';
+import { useRef, useEffect, lazy, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useInView } from '@/hooks/useInView';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 // Dynamic import: Three.js bundle (~250KB) only loads on desktop viewports
 const LazyFoodOrbit = lazy(() =>
@@ -20,76 +18,6 @@ const loadGSAP = async () => {
   return gsapModule.gsap;
 };
 
-/**
- * Animated counter that counts up from 0 to a target value when in view.
- * Respects prefers-reduced-motion by showing the final value immediately.
- */
-function AnimatedCounter({
-  end,
-  suffix = '',
-  prefix = '',
-  decimals = 0,
-  duration = 2000,
-  inView,
-  reducedMotion,
-}: {
-  end: number;
-  suffix?: string;
-  prefix?: string;
-  decimals?: number;
-  duration?: number;
-  inView: boolean;
-  reducedMotion: boolean;
-}) {
-  const [count, setCount] = useState(0);
-  const hasAnimated = useRef(false);
-
-  useEffect(() => {
-    if (!inView || hasAnimated.current) return;
-    hasAnimated.current = true;
-
-    if (reducedMotion) {
-      setCount(end);
-      return;
-    }
-
-    let startTime: number | null = null;
-    let animationFrame: number;
-
-    const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-
-      // Ease out cubic for natural deceleration
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(eased * end);
-
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
-      } else {
-        setCount(end);
-      }
-    };
-
-    animationFrame = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrame) cancelAnimationFrame(animationFrame);
-    };
-  }, [inView, end, duration, reducedMotion]);
-
-  let formatted: string;
-  if (decimals > 0) {
-    formatted = `${prefix}${count.toFixed(decimals)}${suffix}`;
-  } else {
-    const rounded = Math.floor(count);
-    formatted = rounded >= 1000
-      ? `${prefix}${(rounded / 1000).toFixed(rounded >= 10000 ? 0 : 1).replace(/\.0$/, '')}K${suffix}`
-      : `${prefix}${rounded.toLocaleString()}${suffix}`;
-  }
-
-  return <>{formatted}</>;
-}
 
 /**
  * Enhanced Hero Section with Trust Signals and 3D Elements
@@ -100,16 +28,6 @@ export function EnhancedHero() {
   const headlineRef = useRef<HTMLHeadingElement>(null);
   const subheadlineRef = useRef<HTMLParagraphElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
-  const statsRef = useRef<HTMLDivElement>(null);
-  const { ref: statsInViewRef, inView: statsInView } = useInView({ threshold: 0.3, triggerOnce: true });
-  const reducedMotion = useReducedMotion();
-
-  // Merge the two refs for the stats container
-  const setStatsRef = useCallback((node: HTMLDivElement | null) => {
-    (statsRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-    (statsInViewRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-  }, [statsInViewRef]);
-
   useEffect(() => {
     let mounted = true;
 
@@ -133,16 +51,6 @@ export function EnhancedHero() {
           { y: 20, opacity: 0 },
           { y: 0, opacity: 1, duration: 0.8 },
           "-=0.6"
-        )
-        .fromTo(".stat-card",
-          { y: 30, opacity: 0 },
-          {
-            y: 0,
-            opacity: 1,
-            duration: 0.6,
-            stagger: 0.1
-          },
-          "-=0.4"
         );
 
       // Ambient background animation - optimized 2D
@@ -185,12 +93,17 @@ export function EnhancedHero() {
     };
   }, []);
 
-  const stats: Array<{ numericValue: number; suffix: string; label: string; icon: string; decimals?: number }> = [
-    { numericValue: 2000, suffix: '+', label: 'Families Helped', icon: '👨‍👩‍👧' },
-    { numericValue: 200, suffix: '+', label: 'Feeding Therapists', icon: '🩺' },
-    { numericValue: 100, suffix: 'K+', label: 'Mealtime Data Points', icon: '📊' },
-    { numericValue: 4.8, suffix: '', label: 'Parent Rating', icon: '⭐', decimals: 1 },
-  ];
+  /*
+   * The animated trust-signal row that used to sit here is gone. It counted up to
+   * "2,000+ Families Helped", "200+ Feeding Therapists", "100K+ Mealtime Data Points"
+   * and a "4.8 Parent Rating" - none of it sourced, and the families figure
+   * contradicted llms.txt, which claimed over 10,000 at the same time. Invented
+   * traction is the worst thing to put in a hero: it is the first thing a visitor
+   * reads and the easiest claim to disprove.
+   *
+   * Put it back when the numbers are real and can be pointed at. Until then the hero
+   * leads on the method, which is true and is the actual differentiator.
+   */
 
   return (
     <section ref={containerRef} className="relative py-20 bg-gradient-to-b from-background via-trust-softPink/5 to-secondary/10 overflow-hidden min-h-[85vh] flex items-center">
@@ -238,7 +151,6 @@ export function EnhancedHero() {
           An AI-powered meal planning app built on{' '}
           <span className="text-foreground font-medium">food chaining science</span>{' '}
           to help families with extreme picky eating, ARFID, and autism-related feeding challenges.
-          Created alongside feeding therapists and backed by 100K+ real mealtime data points.
         </p>
 
         {/* CTA Buttons */}
@@ -281,31 +193,6 @@ export function EnhancedHero() {
           required • Evidence-based food chaining methodology
         </p>
 
-        {/* Animated Stats - Trust Signals */}
-        <div
-          ref={setStatsRef}
-          className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mt-20"
-        >
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="stat-card group cursor-default bg-card/60 dark:bg-card/20 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-sm hover:shadow-md transition-all"
-            >
-              <div className="text-3xl mb-3">{stat.icon}</div>
-              <div className="text-3xl md:text-4xl font-heading font-bold text-primary mb-2 transition-colors group-hover:text-primary/80">
-                <AnimatedCounter
-                  end={stat.numericValue}
-                  suffix={stat.suffix}
-                  decimals={stat.decimals ?? 0}
-                  duration={2000}
-                  inView={statsInView}
-                  reducedMotion={reducedMotion}
-                />
-              </div>
-              <div className="text-xs md:text-sm text-muted-foreground font-medium">{stat.label}</div>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   );

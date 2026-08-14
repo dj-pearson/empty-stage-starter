@@ -64,6 +64,7 @@ const FAQ = lazy(() => import('./pages/FAQ'));
 const Contact = lazy(() => import('./pages/Contact'));
 const Blog = lazy(() => import('./pages/Blog'));
 const BlogPost = lazy(() => import('./pages/BlogPost'));
+const Authors = lazy(() => import('./pages/Authors'));
 const SEODashboard = lazy(() => import('./pages/SEODashboard'));
 const SearchTrafficDashboard = lazy(() => import('./pages/SearchTrafficDashboard'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
@@ -281,6 +282,20 @@ const App = () => (
                         element={
                           <RouteErrorBoundary>
                             <BlogPost />
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      {/* The author bios behind every blog byline. src/pages/Authors.tsx
+                          declared https://tryeatpal.com/authors as its canonical but had no
+                          route, so that URL served the SPA 404 and the credentials that back
+                          our feeding-therapy content were unreachable to readers and crawlers
+                          alike. Feeding/ARFID content is health advice; the reviewer bios are
+                          the E-E-A-T evidence for it. */}
+                      <Route
+                        path="/authors"
+                        element={
+                          <RouteErrorBoundary>
+                            <Authors />
                           </RouteErrorBoundary>
                         }
                       />

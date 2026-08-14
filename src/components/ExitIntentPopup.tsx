@@ -121,7 +121,7 @@ export function ExitIntentPopup({
           <div className="hidden md:flex md:col-span-2 bg-gradient-to-br from-primary to-primary/80 p-6 flex-col justify-center items-center text-white">
             <div className="text-6xl mb-4">🍽️</div>
             <p className="text-center text-sm opacity-90">
-              Join 2,000+ parents who've ended mealtime battles
+              A calmer way through mealtime battles
             </p>
           </div>
 

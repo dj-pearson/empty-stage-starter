@@ -531,7 +531,7 @@ const Auth = () => {
               Finally, a Meal Plan Built for ARFID and Extreme Picky Eating
             </h1>
             <p className="text-xl text-white/80 mb-10 leading-relaxed">
-              Join 2,000+ families using food chaining science—built with 200+ feeding therapists—to help
+              Use food chaining science, built with feeding therapists, to help
               children go from 5 safe foods to 50+, one small step at a time.
             </p>
 
@@ -570,26 +570,10 @@ const Auth = () => {
               ))}
             </div>
 
-            {/* ARFID-specific testimonial + social proof */}
-            <div className="mt-12 pt-8 border-t border-white/20">
-              <p className="text-white/90 italic text-sm leading-relaxed mb-4">
-                "My son was diagnosed with ARFID and only ate 6 foods. After 3 months with EatPal, he's up to 19. The
-                food chaining suggestions made all the difference."
-              </p>
-              <p className="text-white font-semibold text-sm">— Jennifer L., Mom of a child with ARFID</p>
-              <div className="flex items-center gap-4 mt-4">
-                <div className="flex -space-x-2" aria-hidden="true">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-xs text-white" role="presentation">
-                      {["👩", "👨", "👩", "👨", "👩"][i-1]}
-                    </div>
-                  ))}
-                </div>
-                <div className="text-white/80 text-sm">
-                  <span className="font-semibold text-white">2,000+</span> families with ARFID & picky eating
-                </div>
-              </div>
-            </div>
+            {/* An invented testimonial ("Jennifer L., Mom of a child with ARFID",
+                claiming a jump from 6 foods to 19 in 3 months) and a "2,000+ families"
+                counter used to sit here. Both were unsourced. Restore only from real,
+                consented feedback. */}
           </div>
         </div>
 
@@ -615,11 +599,8 @@ const Auth = () => {
               </p>
             </div>
 
-            {/* Mobile social proof */}
-            <div className="text-center space-y-2 mb-4 md:hidden">
-              <p className="text-sm font-medium text-muted-foreground">Trusted by 2,000+ families with ARFID & picky eating</p>
-              <p className="text-xs italic text-muted-foreground">"My son has ARFID and went from 6 foods to 19 in 3 months using EatPal's food chaining." — Jennifer L.</p>
-            </div>
+            {/* The mobile copy of the same invented "Jennifer L." testimonial and
+                "2,000+ families" count was here. Removed for the same reason. */}
 
             {/* Desktop back button */}
             <div className="hidden lg:block mb-6">

@@ -126,9 +126,17 @@ async function discoverDynamicRoutes(config) {
   const routes = [];
   for (const source of config.sources ?? []) {
     const query = new URLSearchParams({ select: source.select });
-    if (source.filter) {
-      const [column, value] = source.filter.split('=');
-      query.set(column, value);
+    // `filter` is a single "column=operator.value" string; `filters` is an array of the
+    // same, ANDed together by PostgREST. Both are supported so existing single-filter
+    // sources keep working.
+    const filters = source.filters ?? (source.filter ? [source.filter] : []);
+    for (const filter of filters) {
+      const separator = filter.indexOf('=');
+      if (separator === -1) {
+        console.warn(`[prerender] ${source.name}: ignoring malformed filter "${filter}".`);
+        continue;
+      }
+      query.set(filter.slice(0, separator), filter.slice(separator + 1));
     }
     query.set('limit', String(source.limit ?? 500));
 
