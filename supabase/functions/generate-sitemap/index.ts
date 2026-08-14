@@ -45,6 +45,10 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/guides', changefreq: 'weekly', priority: '0.8' },
   { path: '/budget-calculator', changefreq: 'monthly', priority: '0.7' },
   { path: '/faq', changefreq: 'monthly', priority: '0.7' },
+  // /authors self-noindexes while public.blog_authors is empty (see src/pages/Authors.tsx),
+  // so until real author rows exist this URL is submitted and then declined. Populate the
+  // table, or drop this line, rather than leaving it in that state indefinitely.
+  { path: '/authors', changefreq: 'monthly', priority: '0.6' },
   { path: '/contact', changefreq: 'monthly', priority: '0.6' },
   { path: '/accessibility', changefreq: 'yearly', priority: '0.4' },
   { path: '/accessibility/vpat', changefreq: 'yearly', priority: '0.3' },

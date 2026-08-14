@@ -101,6 +101,14 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
+                {/* Same reasoning as /guides above: /authors carries the clinical
+                    credentials behind our feeding content and had no inbound link
+                    anywhere on the site. */}
+                <Link to="/authors" className="hover:text-primary transition-colors">
+                  Our Experts
+                </Link>
+              </li>
+              <li>
                 <Link to="/auth" className="hover:text-primary transition-colors">
                   Get Started
                 </Link>

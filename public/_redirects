@@ -28,6 +28,14 @@
 /grocery/ /grocery 301
 /dashboard/ /dashboard 301
 
+# public/llms.txt advertised /features/kids-meal-planning and /solutions/arfid-meal-planning
+# to every AI crawler for months. Neither was ever a route, so both served the SPA 404.
+# The llms.txt entries are gone now; these 301s catch anything that cached them.
+/features/kids-meal-planning /guides 301
+/solutions/arfid-meal-planning /guides 301
+/features/* /guides 301
+/solutions/* /guides 301
+
 # Legacy pSEO URLs -> the /guides/ mount point.
 # pseo_pages.slug already carries its own prefix ('food-chaining/chicken-nuggets') and
 # the generator writes canonical_url as /guides/<slug>, so /guides is the canonical

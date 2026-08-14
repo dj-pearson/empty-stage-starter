@@ -91,7 +91,13 @@ export async function onRequest(context: { env: { VITE_SUPABASE_URL?: string; VI
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://tryeatpal.com/auth</loc>
+    <loc>https://tryeatpal.com/guides</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/authors</loc>
     <lastmod>${today}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -120,31 +126,14 @@ export async function onRequest(context: { env: { VITE_SUPABASE_URL?: string; VI
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
-  <url>
-    <loc>https://tryeatpal.com/api/docs</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.4</priority>
-  </url>
-  <url>
-    <loc>https://tryeatpal.com/picky-eater-quiz/results</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://tryeatpal.com/budget-calculator/results</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://tryeatpal.com/meal-plan/results</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
 </urlset>`;
+    // Deliberately absent from this fallback, all of which used to be listed here:
+    //   /auth               - login form, nothing to rank for
+    //   /api/docs           - noindex in its own <head> and Disallow'd in robots.txt;
+    //                         submitting it contradicted both
+    //   /*/results          - the quiz, budget and meal-plan result pages render from
+    //                         client state, so a crawler hitting them cold gets an empty
+    //                         shell. They are noindex now (see each page's <Helmet>).
 
     return new Response(fallbackSitemap, {
       headers: {

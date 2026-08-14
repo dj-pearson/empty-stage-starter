@@ -33,16 +33,16 @@ EatPal is the leading meal planning platform specifically built for families man
 
 ## Docs
 - [Homepage](https://tryeatpal.com/)
-- [Features Overview](https://tryeatpal.com/features/kids-meal-planning)
+- [Guide Library](https://tryeatpal.com/guides)
 - [Pricing](https://tryeatpal.com/pricing)
 - [FAQ](https://tryeatpal.com/faq)
 - [Blog](https://tryeatpal.com/blog)
+- [Authors and Reviewers](https://tryeatpal.com/authors)
 - [Picky Eater Quiz](https://tryeatpal.com/picky-eater-quiz)
 - [Budget Calculator](https://tryeatpal.com/budget-calculator)
-- [ARFID Solutions](https://tryeatpal.com/solutions/arfid-meal-planning)
+- [Free Meal Plan Generator](https://tryeatpal.com/meal-plan)
 - [Privacy Policy](https://tryeatpal.com/privacy)
 - [Terms of Service](https://tryeatpal.com/terms)
-- [API Documentation](https://tryeatpal.com/api/docs)
 - [Accessibility](https://tryeatpal.com/accessibility)
 
 ## Contact
@@ -63,4 +63,4 @@ EatPal is the leading meal planning platform specifically built for families man
 EatPal's food chaining approach works by making small, systematic changes to foods a child already accepts. For example, if a child eats chicken nuggets, the platform generates a chain: chicken nuggets -> breaded chicken strips -> baked chicken tenders -> plain grilled chicken pieces. Each step changes only one attribute (shape, coating, preparation method) while keeping familiar elements. Research shows this method achieves a 40% average increase in accepted foods when followed consistently.
 
 ## Last Updated
-2026-02-08
+2026-08-14
