@@ -56,6 +56,7 @@ CREATE INDEX IF NOT EXISTS idx_sibling_meal_resolutions_kid_ids
 
 ALTER TABLE sibling_meal_resolutions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users view household sibling resolutions" ON sibling_meal_resolutions;
 CREATE POLICY "Users view household sibling resolutions"
   ON sibling_meal_resolutions FOR SELECT
   USING (
@@ -64,6 +65,7 @@ CREATE POLICY "Users view household sibling resolutions"
     )
   );
 
+DROP POLICY IF EXISTS "Users insert sibling resolutions for own household" ON sibling_meal_resolutions;
 CREATE POLICY "Users insert sibling resolutions for own household"
   ON sibling_meal_resolutions FOR INSERT
   WITH CHECK (
@@ -73,6 +75,7 @@ CREATE POLICY "Users insert sibling resolutions for own household"
     )
   );
 
+DROP POLICY IF EXISTS "Users update household sibling resolutions" ON sibling_meal_resolutions;
 CREATE POLICY "Users update household sibling resolutions"
   ON sibling_meal_resolutions FOR UPDATE
   USING (
@@ -81,6 +84,7 @@ CREATE POLICY "Users update household sibling resolutions"
     )
   );
 
+DROP POLICY IF EXISTS "Users delete household sibling resolutions" ON sibling_meal_resolutions;
 CREATE POLICY "Users delete household sibling resolutions"
   ON sibling_meal_resolutions FOR DELETE
   USING (
@@ -89,10 +93,12 @@ CREATE POLICY "Users delete household sibling resolutions"
     )
   );
 
+DROP POLICY IF EXISTS "Admins manage all sibling resolutions" ON sibling_meal_resolutions;
 CREATE POLICY "Admins manage all sibling resolutions"
   ON sibling_meal_resolutions FOR ALL
   USING (public.has_role(auth.uid(), 'admin'));
 
+DROP TRIGGER IF EXISTS update_sibling_meal_resolutions_updated_at ON sibling_meal_resolutions;
 CREATE TRIGGER update_sibling_meal_resolutions_updated_at
   BEFORE UPDATE ON sibling_meal_resolutions
   FOR EACH ROW

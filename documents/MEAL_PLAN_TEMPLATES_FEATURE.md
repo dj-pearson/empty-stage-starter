@@ -6,7 +6,7 @@ The Meal Plan Templates feature allows parents to save successful meal plans as 
 
 ## What Was Built
 
-### 1. Database Schema (`supabase/migrations/20251110000001_meal_plan_templates.sql`)
+### 1. Database Schema (`supabase/migrations/20251110000008_meal_plan_templates.sql`)
 
 **Two new tables:**
 

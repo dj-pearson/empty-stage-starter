@@ -57,28 +57,28 @@ CREATE TABLE IF NOT EXISTS public.login_history (
 -- ============================================
 
 -- Primary lookup indexes
-CREATE INDEX idx_login_history_user_id ON public.login_history(user_id);
-CREATE INDEX idx_login_history_email ON public.login_history(email);
-CREATE INDEX idx_login_history_logged_in_at ON public.login_history(logged_in_at DESC);
+CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON public.login_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_login_history_email ON public.login_history(email);
+CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON public.login_history(logged_in_at DESC);
 
 -- Security monitoring indexes
-CREATE INDEX idx_login_history_ip_address ON public.login_history(ip_address);
-CREATE INDEX idx_login_history_success ON public.login_history(success);
-CREATE INDEX idx_login_history_device_fingerprint ON public.login_history(device_fingerprint);
+CREATE INDEX IF NOT EXISTS idx_login_history_ip_address ON public.login_history(ip_address);
+CREATE INDEX IF NOT EXISTS idx_login_history_success ON public.login_history(success);
+CREATE INDEX IF NOT EXISTS idx_login_history_device_fingerprint ON public.login_history(device_fingerprint);
 
 -- Analytics indexes
-CREATE INDEX idx_login_history_login_method ON public.login_history(login_method);
-CREATE INDEX idx_login_history_device_type ON public.login_history(device_type);
-CREATE INDEX idx_login_history_country ON public.login_history(country_code);
-CREATE INDEX idx_login_history_browser ON public.login_history(browser_name);
-CREATE INDEX idx_login_history_os ON public.login_history(os_name);
+CREATE INDEX IF NOT EXISTS idx_login_history_login_method ON public.login_history(login_method);
+CREATE INDEX IF NOT EXISTS idx_login_history_device_type ON public.login_history(device_type);
+CREATE INDEX IF NOT EXISTS idx_login_history_country ON public.login_history(country_code);
+CREATE INDEX IF NOT EXISTS idx_login_history_browser ON public.login_history(browser_name);
+CREATE INDEX IF NOT EXISTS idx_login_history_os ON public.login_history(os_name);
 
 -- Composite indexes for common queries
-CREATE INDEX idx_login_history_user_time
+CREATE INDEX IF NOT EXISTS idx_login_history_user_time
   ON public.login_history(user_id, logged_in_at DESC);
-CREATE INDEX idx_login_history_analytics
+CREATE INDEX IF NOT EXISTS idx_login_history_analytics
   ON public.login_history(logged_in_at DESC, login_method, device_type, success);
-CREATE INDEX idx_login_history_geo_time
+CREATE INDEX IF NOT EXISTS idx_login_history_geo_time
   ON public.login_history(country_code, logged_in_at DESC);
 
 -- ============================================
@@ -91,11 +91,13 @@ ALTER TABLE public.login_history ENABLE ROW LEVEL SECURITY;
 -- ============================================
 
 -- Users can view their own login history
+DROP POLICY IF EXISTS "Users can view own login history" ON public.login_history;
 CREATE POLICY "Users can view own login history"
   ON public.login_history FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Admins can view all login history
+DROP POLICY IF EXISTS "Admins can view all login history" ON public.login_history;
 CREATE POLICY "Admins can view all login history"
   ON public.login_history FOR SELECT
   USING (
@@ -107,11 +109,13 @@ CREATE POLICY "Admins can view all login history"
   );
 
 -- Allow inserts from authenticated users and service role
+DROP POLICY IF EXISTS "Allow login history inserts" ON public.login_history;
 CREATE POLICY "Allow login history inserts"
   ON public.login_history FOR INSERT
   WITH CHECK (true);
 
 -- Allow updates only by service role (for logout tracking)
+DROP POLICY IF EXISTS "Service role can update login history" ON public.login_history;
 CREATE POLICY "Service role can update login history"
   ON public.login_history FOR UPDATE
   USING (true)

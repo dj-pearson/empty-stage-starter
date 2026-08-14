@@ -64,6 +64,7 @@ ALTER TABLE meal_plan_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meal_plan_template_entries ENABLE ROW LEVEL SECURITY;
 
 -- Users can view their own templates and admin templates
+DROP POLICY IF EXISTS "Users can view own and admin templates" ON meal_plan_templates;
 CREATE POLICY "Users can view own and admin templates"
   ON meal_plan_templates
   FOR SELECT
@@ -76,6 +77,7 @@ CREATE POLICY "Users can view own and admin templates"
   );
 
 -- Users can create templates in their household
+DROP POLICY IF EXISTS "Users can create templates" ON meal_plan_templates;
 CREATE POLICY "Users can create templates"
   ON meal_plan_templates
   FOR INSERT
@@ -87,6 +89,7 @@ CREATE POLICY "Users can create templates"
   );
 
 -- Users can update their own templates
+DROP POLICY IF EXISTS "Users can update own templates" ON meal_plan_templates;
 CREATE POLICY "Users can update own templates"
   ON meal_plan_templates
   FOR UPDATE
@@ -98,6 +101,7 @@ CREATE POLICY "Users can update own templates"
   );
 
 -- Users can delete their own templates
+DROP POLICY IF EXISTS "Users can delete own templates" ON meal_plan_templates;
 CREATE POLICY "Users can delete own templates"
   ON meal_plan_templates
   FOR DELETE
@@ -109,6 +113,7 @@ CREATE POLICY "Users can delete own templates"
   );
 
 -- Template entries inherit permissions from parent template
+DROP POLICY IF EXISTS "Users can view template entries" ON meal_plan_template_entries;
 CREATE POLICY "Users can view template entries"
   ON meal_plan_template_entries
   FOR SELECT
@@ -123,6 +128,7 @@ CREATE POLICY "Users can view template entries"
     )
   );
 
+DROP POLICY IF EXISTS "Users can create template entries" ON meal_plan_template_entries;
 CREATE POLICY "Users can create template entries"
   ON meal_plan_template_entries
   FOR INSERT
@@ -136,6 +142,7 @@ CREATE POLICY "Users can create template entries"
     )
   );
 
+DROP POLICY IF EXISTS "Users can update template entries" ON meal_plan_template_entries;
 CREATE POLICY "Users can update template entries"
   ON meal_plan_template_entries
   FOR UPDATE
@@ -149,6 +156,7 @@ CREATE POLICY "Users can update template entries"
     )
   );
 
+DROP POLICY IF EXISTS "Users can delete template entries" ON meal_plan_template_entries;
 CREATE POLICY "Users can delete template entries"
   ON meal_plan_template_entries
   FOR DELETE
@@ -163,11 +171,13 @@ CREATE POLICY "Users can delete template entries"
   );
 
 -- Admins have full access to templates
+DROP POLICY IF EXISTS "Admins can manage all templates" ON meal_plan_templates;
 CREATE POLICY "Admins can manage all templates"
   ON meal_plan_templates
   FOR ALL
   USING (public.has_role(auth.uid(), 'admin'));
 
+DROP POLICY IF EXISTS "Admins can manage all template entries" ON meal_plan_template_entries;
 CREATE POLICY "Admins can manage all template entries"
   ON meal_plan_template_entries
   FOR ALL
@@ -183,6 +193,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS update_meal_plan_template_updated_at_trigger ON meal_plan_templates;
 CREATE TRIGGER update_meal_plan_template_updated_at_trigger
   BEFORE UPDATE ON meal_plan_templates
   FOR EACH ROW

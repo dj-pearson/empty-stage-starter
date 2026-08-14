@@ -107,22 +107,30 @@ public enum GroceryTextParser {
         var phrases = trimmed.components(separatedBy: separators)
 
         // If we didn't split at all (single utterance), try word-level conjunctions.
+        //
+        // US-592 follow-up: this used to mark connectors with "," and then split
+        // on ",", which re-split commas the guard above had deliberately kept —
+        // "2 cloves garlic, minced" came back out as garlic + a phantom
+        // "minced". Mark with a newline instead and split on that: reaching this
+        // branch means `trimmed` has no newline, because one would have split at
+        // the guard, so the marker cannot collide with the user's own text.
         if phrases.count == 1 {
+            let marker = "\n"
             var working = trimmed
-                .replacingOccurrences(of: " and also ", with: ",")
-                .replacingOccurrences(of: " and then ", with: ",")
+                .replacingOccurrences(of: " and also ", with: marker)
+                .replacingOccurrences(of: " and then ", with: marker)
             // US-592: a bare " and " is only a separator when it isn't sitting
             // inside a compound product name. "1 pint half and half" used to
             // split into "1 pint half" + "half", and "salt and pepper to taste"
             // into two items. Driven off the category dictionary itself, so
             // adding a compound keyword there automatically protects it.
             if !containsCompoundKeyword(trimmed) {
-                working = working.replacingOccurrences(of: " and ", with: ",")
+                working = working.replacingOccurrences(of: " and ", with: marker)
             }
             let connectorSplit = working
-                .replacingOccurrences(of: " also ", with: ",")
-                .replacingOccurrences(of: " plus ", with: ",")
-                .components(separatedBy: ",")
+                .replacingOccurrences(of: " also ", with: marker)
+                .replacingOccurrences(of: " plus ", with: marker)
+                .components(separatedBy: marker)
             if connectorSplit.count > 1 {
                 phrases = connectorSplit
             }
