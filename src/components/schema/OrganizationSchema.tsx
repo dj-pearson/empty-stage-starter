@@ -20,7 +20,7 @@ export function OrganizationSchema() {
     "url": "https://tryeatpal.com",
     "logo": "https://tryeatpal.com/Logo-Green.webp",
     "description":
-      "EatPal is the only AI-powered meal planning platform using food chaining therapy to help parents systematically expand their child's diet. Evidence-based approach for picky eaters, ARFID, and selective eating.",
+      "EatPal is a meal planning platform that applies food chaining therapy to help parents systematically expand their child's diet. Evidence-based approach for picky eaters, ARFID, and selective eating.",
     "foundingDate": "2024",
     "contactPoint": {
       "@type": "ContactPoint",

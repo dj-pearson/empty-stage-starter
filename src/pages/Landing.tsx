@@ -195,7 +195,7 @@ const Landing = () => {
   const faqs = [
     {
       question: "What is food chaining?",
-      answer: "Food chaining is an evidence-based feeding therapy technique that introduces new foods by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, we make gradual changes in taste, texture, or appearance. For example, chicken nuggets → chicken strips → grilled chicken tenders. EatPal is the only platform that automates food chaining with AI-powered suggestions."
+      answer: "Food chaining is an evidence-based feeding therapy technique that introduces new foods by building 'chains' from foods a child already accepts. Instead of forcing completely new foods, we make gradual changes in taste, texture, or appearance. For example, chicken nuggets → chicken strips → grilled chicken tenders. EatPal automates food chaining with AI-powered suggestions."
     },
     {
       question: "How is EatPal different from other meal planning apps?",
@@ -207,7 +207,7 @@ const Landing = () => {
     },
     {
       question: "Does EatPal work for ARFID (Avoidant/Restrictive Food Intake Disorder)?",
-      answer: "Yes! EatPal is designed for families managing ARFID, autism spectrum feeding challenges, and extreme selective eating. Our food chaining approach aligns with evidence-based ARFID treatment protocols. Many feeding therapists recommend EatPal to their clients. The platform tracks sensory preferences, safe foods, and progress over time."
+      answer: "Yes! EatPal is designed for families managing ARFID, autism spectrum feeding challenges, and extreme selective eating. Our food chaining approach aligns with evidence-based ARFID treatment protocols. The platform tracks sensory preferences, safe foods, and progress over time."
     },
     {
       question: "My child was just diagnosed with ARFID—what should I do first?",
@@ -255,8 +255,12 @@ const Landing = () => {
         published on that entity's own site is ineligible for review rich results and
         risks a manual action against the whole domain. The homepage previously emitted
         Product + AggregateRating (4.8 from 2847 reviews) plus three named Review nodes,
-        all hardcoded in this file. The on-page testimonials stay (they are marketing
-        copy); only the structured-data claim is gone. See src/components/schema/ReviewSchema.tsx.
+        all hardcoded in this file. See src/components/schema/ReviewSchema.tsx.
+
+        The on-page testimonials that this note used to exempt as "marketing copy" are
+        gone too. Invented quotes attributed to named parents and a named SLP are
+        fabricated endorsements whether or not they carry schema markup, and the
+        rendered page is what a parent actually reads.
       */}
 
       <div ref={containerRef} className="min-h-screen bg-background overflow-x-hidden">
@@ -465,7 +469,7 @@ const Landing = () => {
                   <Stethoscope className="h-5 w-5 text-primary" />
                 </div>
                 <p className="text-sm text-muted-foreground leading-snug">
-                  <span className="font-semibold text-foreground">Built with 200+ feeding therapists</span>{' '}
+                  <span className="font-semibold text-foreground">Built with feeding therapists</span>{' '}
                   and pediatric dietitians
                 </p>
               </div>
@@ -653,8 +657,8 @@ const Landing = () => {
                   description: "Our AI is grounded in food chaining science—the proven feeding therapy method. It detects patterns in textures, brands, and flavors your child already accepts, then builds bridges to new foods.",
                   bullets: [
                     "AI-powered food chains based on your child's unique sensory profile",
-                    "70%+ prediction accuracy on which new foods your child is most likely to accept",
-                    "Progress reports backed by 100K+ mealtime data points from real families",
+                    "Predictions for which new foods your child is most likely to accept",
+                    "Progress reports showing acceptance and exposure counts over time",
                   ],
                 },
                 {
@@ -670,7 +674,7 @@ const Landing = () => {
                 {
                   icon: Stethoscope,
                   title: "Designed With Feeding Therapists",
-                  description: "EatPal was built alongside 200+ SLPs, OTs, and pediatric dietitians. It supports the work being done in therapy sessions and extends it into the home.",
+                  description: "EatPal was built alongside SLPs, OTs, and pediatric dietitians. It supports the work being done in therapy sessions and extends it into the home.",
                   bullets: [
                     "Supports food logs, safe-food lists, and sensory preference tracking for therapy alignment",
                     "Optional therapist portal for shared goals, session notes, and family coordination",
@@ -707,71 +711,19 @@ const Landing = () => {
           </div>
         </section>
 
-        {/* Social Proof / Testimonials Section */}
-        <section className="cv-auto py-24 px-4 bg-gradient-to-br from-primary/5 to-secondary/10">
-          <div className="container mx-auto max-w-6xl">
-            <div className="animate-section text-center mb-16">
-              <h2 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">
-                Trusted by Parents Just Like You
-              </h2>
-              <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                Real families, real progress, real peace of mind at mealtimes
-              </p>
-            </div>
+        {/*
+          The "Trusted by Parents Just Like You" section was removed, not rewritten.
 
-            <div className="animate-grid grid md:grid-cols-3 gap-8">
-              {[
-                {
-                  quote: "My 4-year-old went from eating chicken nuggets every night to trying 12 new foods in 2 months. The progress tracking showed me it was actually working!",
-                  name: "Sarah M.",
-                  detail: "Mom of 2"
-                },
-                {
-                  quote: "I used to spend 2 hours every Sunday planning meals. Now it takes 10 minutes. The auto-grocery list is a game-changer.",
-                  name: "Mike T.",
-                  detail: "Dad of 3"
-                },
-                {
-                  quote: "My son has ARFID and this is the first tool that actually helped us make measurable progress. The food chaining suggestions are brilliant.",
-                  name: "Jennifer L.",
-                  detail: "Mom of 1"
-                }
-              ].map((testimonial, index) => (
-                <div key={index} className="animate-item h-full">
-                  <Card className="h-full bg-background/60 backdrop-blur-md border-none shadow-md">
-                    <CardContent className="pt-6">
-                      <div className="text-4xl text-primary mb-4 font-serif">"</div>
-                      <p className="text-muted-foreground mb-6 leading-relaxed italic">
-                        {testimonial.quote}
-                      </p>
-                      <div className="border-t border-primary/10 pt-4">
-                        <p className="font-semibold text-primary">{testimonial.name}</p>
-                        <p className="text-sm text-muted-foreground">{testimonial.detail}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              ))}
-            </div>
+          It carried three testimonials attributed to named parents - "Sarah M., Mom of
+          2", "Mike T., Dad of 3", "Jennifer L., Mom of 1" - with quotes about specific
+          outcomes ("12 new foods in 2 months"), above a bar reading "4.8 out of 5
+          stars", "2,000+ families" and "50,000+ meals planned". None of it was sourced.
+          Invented testimonials are fabricated reviews: they mislead parents deciding how
+          to feed a child, and under the FTC endorsement rules they are not a grey area.
 
-            <div className="animate-section text-center mt-12">
-              <div className="inline-flex items-center gap-8 flex-wrap justify-center bg-card/80 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-border/50">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-primary" aria-hidden="true">⭐⭐⭐⭐⭐</div>
-                  <p className="text-sm text-muted-foreground mt-2">4.8 out of 5 stars</p>
-                </div>
-                <div className="text-center border-l border-primary/20 pl-8">
-                  <div className="text-3xl font-bold text-primary">2,000+</div>
-                  <p className="text-sm text-muted-foreground mt-2">families</p>
-                </div>
-                <div className="text-center border-l border-primary/20 pl-8">
-                  <div className="text-3xl font-bold text-primary">50,000+</div>
-                  <p className="text-sm text-muted-foreground mt-2">meals planned</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+          Restore this section from real, attributable feedback with consent. Until the
+          quotes are real, no section is better than an invented one.
+        */}
 
         {/* FAQ Section with enhanced content for SEO */}
         <section className="cv-auto py-24 px-4 bg-gradient-to-br from-secondary/5 to-background">
@@ -903,39 +855,34 @@ const Landing = () => {
                   </Link>
                 </div>
 
-                {/* Right - Stats/Proof */}
+                {/* Right - What the therapist plan actually includes.
+                    This column used to hold four stat tiles ("200+ Feeding therapists
+                    & dietitians", "100K+ Behavioral data points", "70%+ AI prediction
+                    accuracy", "50% Less admin time reported") above a testimonial from
+                    "Dr. Rachel K., Pediatric Feeding Specialist, SLP". None of the
+                    figures were sourced and the clinician was invented. Fabricated
+                    clinical endorsement is the worst version of this on a page about
+                    feeding children, so it is replaced with capabilities that can be
+                    checked against the product. */}
                 <div className="space-y-6">
                   <Card className="bg-card border-primary/10 shadow-lg">
                     <CardContent className="pt-6">
-                      <div className="grid grid-cols-2 gap-6">
+                      <ul className="space-y-4">
                         {[
-                          { value: "200+", label: "Feeding therapists & dietitians", icon: Users },
-                          { value: "100K+", label: "Behavioral data points", icon: Brain },
-                          { value: "70%+", label: "AI prediction accuracy", icon: TrendingUp },
-                          { value: "50%", label: "Less admin time reported", icon: Calendar },
-                        ].map((stat, index) => {
-                          const StatIcon = stat.icon;
+                          { icon: Users, text: "Manage multiple clients from one dashboard, each with their own safe-food library and chain history" },
+                          { icon: Brain, text: "Shared food chains and goals, so home practice matches what happens in session" },
+                          { icon: TrendingUp, text: "Exposure and acceptance tracking that exports as progress documentation" },
+                          { icon: Calendar, text: "Session notes and family coordination in the same place as the meal plan" },
+                        ].map((item, index) => {
+                          const ItemIcon = item.icon;
                           return (
-                            <div key={index} className="text-center p-4">
-                              <StatIcon className="h-6 w-6 text-primary mx-auto mb-2" />
-                              <div className="text-2xl font-bold text-primary">{stat.value}</div>
-                              <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
-                            </div>
+                            <li key={index} className="flex items-start gap-3">
+                              <ItemIcon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                              <p className="text-sm text-muted-foreground leading-relaxed">{item.text}</p>
+                            </li>
                           );
                         })}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-card/60 backdrop-blur-sm border-none">
-                    <CardContent className="pt-6">
-                      <p className="text-muted-foreground italic leading-relaxed">
-                        "EatPal gave us a structured way to track food chains and share progress with families.
-                        It's replaced three separate tools we were using before."
-                      </p>
-                      <div className="border-t border-primary/10 pt-3 mt-4">
-                        <p className="font-semibold text-primary text-sm">Dr. Rachel K.</p>
-                        <p className="text-xs text-muted-foreground">Pediatric Feeding Specialist, SLP</p>
-                      </div>
+                      </ul>
                     </CardContent>
                   </Card>
                 </div>
@@ -1057,7 +1004,7 @@ const Landing = () => {
                 Ready to Make Mealtimes Calmer?
               </h2>
               <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-                Join 2,000+ families using food chaining science to help their children safely discover new foods
+                Use food chaining science to help your child safely discover new foods
               </p>
 
               {/* Benefits list */}
@@ -1113,9 +1060,9 @@ const Landing = () => {
                       </div>
                     ))}
                   </div>
-                  <span className="text-white/80 text-sm ml-2">2,000+ happy parents</span>
+                  <span className="text-white/80 text-sm ml-2">Built for families with picky eaters</span>
                 </div>
-                <div className="text-white/80 text-sm"><span aria-hidden="true">⭐⭐⭐⭐⭐</span> 4.8/5 rating</div>
+                <div className="text-white/80 text-sm">Free forever plan</div>
               </div>
             </div>
           </div>

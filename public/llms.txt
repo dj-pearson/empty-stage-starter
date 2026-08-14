@@ -3,7 +3,7 @@
 > AI-powered food chaining meal planner that helps parents systematically expand picky eaters' diets using evidence-based feeding therapy techniques.
 
 ## About
-EatPal is the leading meal planning platform specifically built for families managing picky eating, ARFID (Avoidant/Restrictive Food Intake Disorder), and selective eating in children. The platform combines food chaining therapy — the proven method developed by Cheri Fraker, RD — with AI-powered predictions to help children progress from as few as 5 accepted foods to 50+. Over 10,000 families use EatPal to reduce mealtime stress and improve their children's nutrition.
+EatPal is a meal planning platform built for families managing picky eating, ARFID (Avoidant/Restrictive Food Intake Disorder), and selective eating in children. It combines food chaining, the feeding therapy method developed by Cheri Fraker, RD and Laura Walbert, SLP, with AI-generated meal plans, try-bite exposure tracking, and progress reporting. The goal is to expand a child's accepted foods gradually rather than through pressure at the table.
 
 ## Key Features
 - **Food Chaining Engine**: AI generates personalized food progressions based on a child's safe foods and sensory preferences (taste, texture, temperature, appearance)
@@ -60,7 +60,7 @@ EatPal is the leading meal planning platform specifically built for families man
 - Food neophobia (fear of new foods)
 
 ## Methodology
-EatPal's food chaining approach works by making small, systematic changes to foods a child already accepts. For example, if a child eats chicken nuggets, the platform generates a chain: chicken nuggets -> breaded chicken strips -> baked chicken tenders -> plain grilled chicken pieces. Each step changes only one attribute (shape, coating, preparation method) while keeping familiar elements. Research shows this method achieves a 40% average increase in accepted foods when followed consistently.
+EatPal's food chaining approach works by making small, systematic changes to foods a child already accepts. For example, if a child eats chicken nuggets, the platform generates a chain: chicken nuggets -> breaded chicken strips -> baked chicken tenders -> plain grilled chicken pieces. Each step changes only one attribute (shape, coating, preparation method) while keeping familiar elements.
 
 ## Last Updated
 2026-08-14

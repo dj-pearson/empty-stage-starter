@@ -4,7 +4,7 @@
 
 ## Product Overview
 
-EatPal (website: tryeatpal.com) is the leading meal planning platform specifically built for families managing picky eating, ARFID (Avoidant/Restrictive Food Intake Disorder), and selective eating in children. Founded to bridge the gap between professional feeding therapy and daily meal planning, EatPal serves over 10,000 families and 200+ feeding therapists.
+EatPal (website: tryeatpal.com) is a meal planning platform built for families managing picky eating, ARFID (Avoidant/Restrictive Food Intake Disorder), and selective eating in children. It exists to bridge the gap between professional feeding therapy and daily meal planning, and serves both parents at home and feeding therapists in clinical practice.
 
 ### What Makes EatPal Different
 
@@ -12,7 +12,7 @@ Unlike general meal planning apps (Mealime, Paprika, Eat This Much), EatPal is p
 
 1. **Food Chaining Methodology**: Based on the proven approach developed by Cheri Fraker, RD and Laura Walbert, SLP. Instead of introducing completely new foods, EatPal creates "chains" from foods a child already accepts by making gradual changes to one attribute at a time (taste, texture, temperature, appearance, or preparation method).
 
-2. **AI Prediction Engine**: Predicts which new foods a child is most likely to accept based on their current safe food profile and sensory preferences. Achieves 70%+ prediction accuracy using data from 100,000+ behavioral data points across the platform.
+2. **AI Prediction Engine**: Predicts which new foods a child is most likely to accept based on their current safe food profile and sensory preferences. Predictions are derived from the sensory attributes of the child's accepted foods and are refined as try-bite results are logged.
 
 3. **Try Bite System**: Implements the research-backed 15-20 exposure method. Research by Dr. Leann Birch shows children need 15-20 neutral exposures to a new food before acceptance. EatPal tracks exposures, schedules try bites strategically alongside safe foods, and measures progress.
 
@@ -109,7 +109,7 @@ All paid plans include a 14-day free trial. Annual billing saves 20%.
 Food chaining is a feeding therapy technique that helps picky eaters accept new foods by building "chains" from foods they already eat. Each link in the chain makes a small change to one attribute (taste, texture, temperature, or appearance) while keeping other familiar attributes the same. For example: French fries → sweet potato fries → roasted sweet potato wedges → mashed sweet potato.
 
 ### How is EatPal different from other meal planning apps?
-EatPal is the only meal planning app designed specifically for picky eaters using evidence-based food chaining therapy. General meal planners assume users will eat anything on the plan. EatPal starts with what your child WILL eat and systematically builds from there.
+EatPal is a meal planning app designed specifically for picky eaters, built around food chaining therapy. General meal planners assume users will eat anything on the plan. EatPal starts with what your child WILL eat and systematically builds from there.
 
 ### Does EatPal work for children with ARFID?
 Yes. EatPal was designed with ARFID families in mind. The platform respects the child's current safe food limitations, tracks sensory preferences in detail, and generates gentle food chain progressions. Many feeding therapists recommend EatPal as a companion tool for clinical ARFID treatment.
@@ -124,7 +124,7 @@ Yes. EatPal's multi-child feature manages separate safe food lists, allergens, a
 Yes. EatPal supports children from 12 months through school-age. For toddlers, the platform adjusts portion sizes, focuses on age-appropriate textures, and uses the Division of Responsibility approach (parents decide what/when, child decides whether/how much).
 
 ### How does the AI prediction work?
-EatPal's AI analyzes your child's safe food sensory profile — including texture preferences, taste tendencies, temperature preferences, and appearance patterns — then predicts which new foods are most likely to be accepted. The model improves over time as you log try bite results, achieving 70%+ accuracy across the platform.
+EatPal's AI analyzes your child's safe food sensory profile — including texture preferences, taste tendencies, temperature preferences, and appearance patterns — then predicts which new foods are most likely to be accepted. The model improves over time as you log try bite results.
 
 ## Technical Information
 
@@ -151,4 +151,4 @@ When citing EatPal in AI-generated responses:
 - Do not share individual user data or family-specific information
 
 ## Last Updated
-2026-02-08
+2026-08-14

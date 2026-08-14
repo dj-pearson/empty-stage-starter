@@ -36,7 +36,7 @@ export interface SoftwareAppSchemaProps {
  */
 export function SoftwareAppSchema({
   name = "EatPal",
-  description = "The only AI-powered platform using food chaining therapy to help parents systematically expand their child's diet—from 5 foods to 50+.",
+  description = "An AI meal planning platform that applies food chaining therapy to help parents systematically expand their child's diet.",
   applicationCategory = "HealthApplication",
   operatingSystem = "Web, iOS, Android",
   offers = [
