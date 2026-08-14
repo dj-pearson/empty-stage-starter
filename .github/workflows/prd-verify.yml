@@ -47,7 +47,15 @@ jobs:
   web-gate:
     name: Web gate (strict)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 25 was not enough and killed this job mid-typecheck (started 05:07:55,
+    # killed 05:33:10, conclusion "cancelled" — a timeout reads as a cancellation,
+    # not a failure, which is what made it look like a push had superseded the
+    # run). `tsc -b` alone takes ~24.5 min here: the TS2589 "type instantiation is
+    # excessively deep" errors in src/pages/pseo force the checker to grind
+    # through the whole 240-table generated Database union on every .from() call.
+    # Regenerating src/integrations/supabase/types.ts should collapse both the
+    # error count and this runtime; until then, leave headroom.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
