@@ -339,7 +339,6 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
           }}
           aria-label="Previous week"
           className="h-9 w-9"
-          aria-label="Previous week"
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -363,7 +362,6 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
           }}
           aria-label="Next week"
           className="h-9 w-9"
-          aria-label="Next week"
         >
           <ChevronRight className="h-5 w-5" />
         </Button>

@@ -47,22 +47,14 @@ jobs:
 
       # ESLint. The repo carries a large PRE-EXISTING lint backlog (mostly
       # @typescript-eslint/no-explicit-any and unused caught-errors — see
-      # US-342). The no-console rule (US-343) is fully satisfied. Until the
-      # backlog is burned down this step is NON-BLOCKING (same treatment as the
-      # typecheck below): it surfaces the count as a warning annotation but does
-      # not fail the pipeline, so merges stay unblocked. Flip continue-on-error
-      # to false once the count hits zero.
-      - name: Lint (non-blocking until backlog cleared)
-        continue-on-error: true
-        run: |
-          set +e
-          npm run lint 2>&1 | tee /tmp/lint.log
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            count=$(grep -cE '  error  ' /tmp/lint.log || true)
-            echo "::warning title=Lint backlog::eslint reported ${count} error(s). Non-blocking for now; burn the backlog down (US-342), then make this a hard gate."
-          fi
-          exit 0
+      # US-342). The no-console rule (US-343) is fully satisfied. This used to be
+      # a continue-on-error step that always exited 0, so nothing stopped the
+      # backlog growing. It is now a RATCHET on .ci/lint-baseline.txt, same
+      # contract as the typecheck ratchet below: the count can only shrink. When
+      # it hits 0, set the baseline to 0 and promote `npm run lint` to a plain
+      # hard gate.
+      - name: Lint ratchet
+        run: bash scripts/ci/lint-ratchet.sh
 
       # Real type-check (the old `tsc --noEmit` checked zero files — root
       # tsconfig has files:[]). `npm run typecheck` runs `tsc -b` over the
@@ -325,7 +317,26 @@ jobs:
           name: dist
           path: dist/
 
+      # wrangler-action fails with "In a non-interactive environment, it's
+      # necessary to set a CLOUDFLARE_API_TOKEN" when the secret is absent, which
+      # is indistinguishable from a broken deploy in the run list. Check first and
+      # skip with a loud annotation instead. The `secrets` context is not
+      # available in a job-level `if`, hence the step-output dance.
+      - name: Check Cloudflare credentials
+        id: cf
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CF_API_TOKEN" ] && [ -n "$CF_ACCOUNT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Production deploy skipped::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are not set on this repository. dist/ was built and uploaded but nothing was published to tryeatpal.com. Add both repository secrets to re-enable the deploy."
+          fi
+
       - name: Deploy to Cloudflare Pages
+        if: steps.cf.outputs.configured == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -349,7 +360,21 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Check Cloudflare credentials
+        id: cf
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CF_API_TOKEN" ] && [ -n "$CF_ACCOUNT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Staging deploy skipped::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are not set on this repository. Add both repository secrets to re-enable the deploy."
+          fi
+
       - name: Deploy to Cloudflare Pages (Staging)
+        if: steps.cf.outputs.configured == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

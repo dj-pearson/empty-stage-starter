@@ -9,99 +9,141 @@
 enable_signup = true
 
 # Edge Functions Configuration
+#
+# The repo carries two function trees (see scripts/ci/check-function-trees.sh):
+# supabase/functions/ is what the deployed edge-functions-server serves, and
+# functions/ holds the Agentic OS (serve()-style, Deno CLI shape). The CLI
+# resolves a bare [functions.NAME] to supabase/functions/NAME/index.ts, so every
+# entry that only exists in the second tree needs an explicit `entrypoint` —
+# without it `supabase start` aborts with "failed to read file: open
+# supabase/functions/<name>/index.ts", which is what kept the Migration Test and
+# Types Drift jobs red.
+#
+# Keep `verify_jwt` on the line directly after the [functions.NAME] header: the
+# US-533 guard (functions/_shared/verify-jwt-guard_test.ts) parses that pair.
 [functions.health-check]
 verify_jwt = false
+entrypoint = "../functions/health-check/index.ts"
 # Agentic OS dispatcher: no JWT (called by pg_cron); guarded by an internal
 # shared secret (AGENT_DISPATCH_SECRET) checked inside the function.
 [functions.agent-dispatcher]
 verify_jwt = false
+entrypoint = "../functions/agent-dispatcher/index.ts"
 # Agentic OS knowledge-base ingest: JWT-authenticated, admin-gated inside the fn.
 [functions.agent-knowledge-ingest]
 verify_jwt = true
+entrypoint = "../functions/agent-knowledge-ingest/index.ts"
 # Agentic OS approval executor: no JWT gate at the edge; the function itself
 # accepts the internal dispatch secret (sweep) OR an admin JWT (execute).
 [functions.approval-executor]
 verify_jwt = false
+entrypoint = "../functions/approval-executor/index.ts"
 # Agentic OS digest: no JWT; called only by pg_cron / DB trigger with the
 # internal dispatch secret checked inside the function.
 [functions.agent-digest]
 verify_jwt = false
+entrypoint = "../functions/agent-digest/index.ts"
 # Support intake: public contact form (anonymous allowed); optional JWT links
 # the ticket to the user; rate-limited per email inside the function.
 [functions.support-intake]
 verify_jwt = false
+entrypoint = "../functions/support-intake/index.ts"
 # Support triage agent: invoked by the dispatcher with the internal secret.
 [functions.agent-support-triage]
 verify_jwt = false
+entrypoint = "../functions/agent-support-triage/index.ts"
 # RAG support answer agent: invoked by the dispatcher with the internal secret.
 [functions.agent-support-answer]
 verify_jwt = false
+entrypoint = "../functions/agent-support-answer/index.ts"
 # Bug-reporter agent: invoked by the dispatcher with the internal secret.
 [functions.agent-bug-reporter]
 verify_jwt = false
+entrypoint = "../functions/agent-bug-reporter/index.ts"
 # Support reply intake: inbound (internal secret) or admin reply/resolve (admin JWT).
 [functions.support-reply-webhook]
 verify_jwt = false
+entrypoint = "../functions/support-reply-webhook/index.ts"
 # CSAT follow-up agent: invoked by the dispatcher with the internal secret.
 [functions.agent-csat]
 verify_jwt = false
+entrypoint = "../functions/agent-csat/index.ts"
 # Public CSAT rating endpoint: the signed token is the authorization.
 [functions.csat-rate]
 verify_jwt = false
+entrypoint = "../functions/csat-rate/index.ts"
 # Lifecycle event detector: invoked by the dispatcher with the internal secret.
 [functions.agent-event-detector]
 verify_jwt = false
+entrypoint = "../functions/agent-event-detector/index.ts"
 # Churn-risk scoring agent: invoked by the dispatcher with the internal secret.
 [functions.agent-churn-score]
 verify_jwt = false
+entrypoint = "../functions/agent-churn-score/index.ts"
 # Nurture sequence engine: invoked by the dispatcher with the internal secret.
 [functions.agent-nurture-engine]
 verify_jwt = false
+entrypoint = "../functions/agent-nurture-engine/index.ts"
 # Public unsubscribe endpoint: the signed token is the authorization.
 [functions.nurture-unsubscribe]
 verify_jwt = false
+entrypoint = "../functions/nurture-unsubscribe/index.ts"
 # Weekly household digest agent: invoked by the dispatcher with the internal secret.
 [functions.agent-weekly-digest]
 verify_jwt = false
+entrypoint = "../functions/agent-weekly-digest/index.ts"
 # Content calendar agent: invoked by the dispatcher with the internal secret.
 [functions.agent-content-calendar]
 verify_jwt = false
+entrypoint = "../functions/agent-content-calendar/index.ts"
 # Blog writer agent: invoked by the dispatcher with the internal secret.
 [functions.agent-blog-writer]
 verify_jwt = false
+entrypoint = "../functions/agent-blog-writer/index.ts"
 # Social post agent: invoked by the dispatcher with the internal secret.
 [functions.agent-social-writer]
 verify_jwt = false
+entrypoint = "../functions/agent-social-writer/index.ts"
 # SEO audit agent: invoked by the dispatcher with the internal secret.
 [functions.agent-seo-audit]
 verify_jwt = false
+entrypoint = "../functions/agent-seo-audit/index.ts"
 # Sentry triage agent: event-driven webhook, shared-secret validated inside.
 [functions.agent-sentry-triage]
 verify_jwt = false
+entrypoint = "../functions/agent-sentry-triage/index.ts"
 # Dependency audit agent: invoked by the dispatcher with the internal secret.
 [functions.agent-dependency-audit]
 verify_jwt = false
+entrypoint = "../functions/agent-dependency-audit/index.ts"
 # CI failure triage agent: event-driven webhook, shared-secret validated inside.
 [functions.agent-ci-triage]
 verify_jwt = false
+entrypoint = "../functions/agent-ci-triage/index.ts"
 # Migration safety checker: event-driven PR webhook, shared-secret validated inside.
 [functions.agent-migration-check]
 verify_jwt = false
+entrypoint = "../functions/agent-migration-check/index.ts"
 # Auth anomaly detector: invoked by the dispatcher with the internal secret.
 [functions.agent-auth-anomaly]
 verify_jwt = false
+entrypoint = "../functions/agent-auth-anomaly/index.ts"
 # RLS/permission audit agent: invoked by the dispatcher with the internal secret.
 [functions.agent-rls-audit]
 verify_jwt = false
+entrypoint = "../functions/agent-rls-audit/index.ts"
 # System health & cost anomaly agent: invoked by the dispatcher with the internal secret.
 [functions.agent-health-watch]
 verify_jwt = false
+entrypoint = "../functions/agent-health-watch/index.ts"
 # Weekly business KPI report agent: invoked by the dispatcher with the internal secret.
 [functions.agent-kpi-report]
 verify_jwt = false
+entrypoint = "../functions/agent-kpi-report/index.ts"
 # Agent self-evaluation report: invoked by the dispatcher with the internal secret.
 [functions.agent-self-eval]
 verify_jwt = false
+entrypoint = "../functions/agent-self-eval/index.ts"
 [functions.calculate-food-similarity]
 verify_jwt = true
 
@@ -150,3 +192,4 @@ verify_jwt = false
 # Cron/service-role only; enforces its own exact service-role/cron-secret check.
 [functions.weekly-nutrition-email]
 verify_jwt = false
+entrypoint = "../functions/weekly-nutrition-email/index.ts"
