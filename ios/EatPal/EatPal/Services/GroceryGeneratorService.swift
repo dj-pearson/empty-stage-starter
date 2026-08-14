@@ -313,6 +313,11 @@ enum GroceryGeneratorService {
         let recipesById: [String: Recipe]
         let foodsById: [String: Food]
 
+        // @MainActor on the enclosing enum does NOT propagate to a nested type,
+        // so without this the init is nonisolated and reading AppState's
+        // main-actor properties is a Swift 6 error. Both call sites
+        // (generateFromMealPlan / generateFromRecipes) are already @MainActor.
+        @MainActor
         init(appState: AppState) {
             // `uniquingKeysWith` rather than `uniqueKeysWithValues`: the latter
             // traps on duplicate keys, and this is not the place to discover a

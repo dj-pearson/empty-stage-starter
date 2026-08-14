@@ -13,6 +13,10 @@ on:
   # Callable by the prd-verify workflow so PRD story verification reuses this
   # real build+test gate instead of duplicating the Gradle pipeline.
   workflow_call:
+  # The path filters above mean this never runs on a branch that only touches
+  # web/CI files, so there is no way to confirm the Gradle gate still builds
+  # without pushing a no-op Android change. Dispatch covers that.
+  workflow_dispatch:
 
 jobs:
   build:
