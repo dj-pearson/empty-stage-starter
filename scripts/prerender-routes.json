@@ -39,11 +39,16 @@
         "limit": 500
       },
       {
-        "$comment": "pseo_pages.slug already contains its own multi-segment path prefix, so the pattern only adds the /guides mount point.",
+        "$comment": [
+          "pseo_pages.slug already contains its own multi-segment path prefix, so the pattern only adds the /guides mount point.",
+          "tier=lte.1 matches MAX_INDEXABLE_TIER in src/lib/pseo/indexability.ts, which explains why the cluster is gated.",
+          "Guides below that tier carry noindex, so prerendering them would spend build time producing static HTML for pages we are asking Google to ignore. They still render client-side for users.",
+          "Raise this alongside MAX_INDEXABLE_TIER and the copy in supabase/functions/generate-sitemap/index.ts."
+        ],
         "name": "pSEO guides",
         "table": "pseo_pages",
         "select": "slug",
-        "filter": "generation_status=eq.published",
+        "filters": ["generation_status=eq.published", "tier=lte.1"],
         "pattern": "/guides/:slug",
         "limit": 2000
       }
