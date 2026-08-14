@@ -52,7 +52,7 @@ This document outlines the comprehensive overhaul of the subscription system to 
    - Onboarding dialog for different subscription types
    - Step-by-step guidance for new users
 
-3. **`supabase/migrations/20251107000000_fix_complementary_subscriptions.sql`**
+3. **`supabase/migrations/20251107000001_fix_complementary_subscriptions.sql`**
    - Updated `get_usage_stats()` to check complementary subscriptions
    - New `has_active_complementary_subscription()` function
    - New `get_complementary_subscription()` function

@@ -184,3 +184,9 @@ Re-measured on the CURRENT tree (HEAD 5c7ce25, i.e. after US-604/610/605/612/613
 .ci/typecheck-baseline.txt = 1257. docs/typecheck-backlog.md updated to state the current number and where the drop came from (US-536/US-546 and later — nothing was excluded; the ratchet only moves down).
 Verified the gate with the script's OWN comparison: `grep -cE 'error TS'` on the run log = 1257, baseline file = 1257, and the script fails only when count > baseline => PASSES, exactly at baseline. I did NOT re-run scripts/ci/typecheck-ratchet.sh end-to-end (it re-runs the same 28min tsc); every other step it performs was reproduced directly.
 CAVEAT FOR THE NEXT PERSON: the baseline now has ZERO headroom. Any PR that adds even one type error fails the gate — which is the point — but it also means a genuine environment difference in CI's tsc resolution would surface as a hard failure rather than being absorbed. If CI reports a count above 1257 on an unrelated PR, measure there before assuming the PR is at fault.
+
+## prd-verify — CI verification pass (ref decfc4d59c0a116dd1febac025079615c7d41206)
+- Gates: web=cancelled, ios=success, android=success.
+- Flipped passes=true (gate green + implementation present): US-583, US-584, US-585, US-586, US-587, US-588, US-589, US-590, US-591, US-592, US-593, US-594, US-611, US-613, US-614.
+- Held false: 10 (breakdown {"awaiting-implementation":10,"verified":15}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---

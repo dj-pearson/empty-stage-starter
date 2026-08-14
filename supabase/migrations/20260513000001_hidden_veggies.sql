@@ -47,15 +47,18 @@ CREATE INDEX IF NOT EXISTS idx_hidden_veggie_techniques_keywords
 
 ALTER TABLE hidden_veggie_techniques ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authenticated users read active techniques" ON hidden_veggie_techniques;
 CREATE POLICY "Authenticated users read active techniques"
   ON hidden_veggie_techniques FOR SELECT
   TO authenticated
   USING (is_active = true);
 
+DROP POLICY IF EXISTS "Admins manage techniques" ON hidden_veggie_techniques;
 CREATE POLICY "Admins manage techniques"
   ON hidden_veggie_techniques FOR ALL
   USING (public.has_role(auth.uid(), 'admin'));
 
+DROP TRIGGER IF EXISTS update_hidden_veggie_techniques_updated_at ON hidden_veggie_techniques;
 CREATE TRIGGER update_hidden_veggie_techniques_updated_at
   BEFORE UPDATE ON hidden_veggie_techniques
   FOR EACH ROW
@@ -76,6 +79,14 @@ CREATE INDEX IF NOT EXISTS idx_recipes_parent_recipe ON recipes(parent_recipe_id
   WHERE parent_recipe_id IS NOT NULL;
 
 -- 3) Seed catalog (~20 vetted techniques)
+-- Re-runnable seed. There is no natural unique key here (cauliflower/puree,
+-- spinach/puree and four other pairs each appear twice with different
+-- instructions), so ON CONFLICT has no target to use. Gate on the table being
+-- empty instead: a replay of this migration is then a no-op rather than 20
+-- duplicate catalog rows. Dollar-quoting means the body needs no re-escaping.
+DO $seed$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM hidden_veggie_techniques) THEN
 INSERT INTO hidden_veggie_techniques (
   veggie_name, recipe_keywords, recipe_categories,
   technique, prep_method, max_ratio, suggested_amount,
@@ -272,6 +283,9 @@ INSERT INTO hidden_veggie_techniques (
    'Cook lentils until soft, drain, mix into the cooked meat with the sauce.',
    'Lentils mimic ground meat texture. Add sparingly the first time.',
    78);
+END IF;
+END
+$seed$;
 
 COMMENT ON TABLE hidden_veggie_techniques IS 'US-297: vetted catalog of hidden-veggie techniques';
 COMMENT ON COLUMN hidden_veggie_techniques.recipe_keywords IS

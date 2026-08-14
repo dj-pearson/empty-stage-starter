@@ -34,7 +34,12 @@ AS $$
   SELECT
     NULLIF(e.payload->>'actor_id', '')::uuid                       AS user_id,
     e.payload->>'actor_username'                                   AS email,
-    NULLIF(host(e.ip_address), '')                                 AS ip,
+    -- GoTrue declares audit_log_entries.ip_address as varchar(64), not inet, so
+    -- host() has no matching signature and a clean replay dies with
+    -- "function host(character varying) does not exist". Casting to text is
+    -- equivalent either way: these rows carry a bare address with no netmask
+    -- for host() to strip.
+    NULLIF(e.ip_address::text, '')                                 AS ip,
     NULLIF(e.payload->>'country', '')                              AS country,
     CASE
       WHEN e.payload->>'action' ILIKE '%signup%'          THEN 'signup'
