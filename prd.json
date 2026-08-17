@@ -2246,6 +2246,140 @@
       ],
       "passes": false,
       "notes": "Found 2026-08-08 while scoping US-622. create-checkout is the SECOND function showing the US-616 pattern: the top-level (non-deployed) copy is NEWER than the deployed one — 2026-07-11 vs 2026-06-13 — so work done in July may never have shipped. The two are not variants of one implementation but completely separate rewrites: the top-level uses serve() + getCorsHeaders/handleCorsPreFlight + resolvePriceId() from _shared/stripe-prices.ts and rejects non-POST with 405; the deployed uses export default + a module-level Stripe client + common/headers.ts and has no resolvePriceId import. Because it is the payments entry point, this was NOT reconciled blind as part of US-622 — it needs a deliberate behavioural diff and a decision per difference. The other 13 collisions are either identical, same-date, or newer in the deployed tree (several of those dates are US-618 edits from today), so create-checkout is the only outstanding drift with a plausible unshipped fix."
+    },
+    {
+      "id": "US-627",
+      "title": "Stop anonymous enumeration of the profile-pictures bucket",
+      "description": "As a parent, I want my child's photo to be reachable only by me, so that an anonymous client cannot list the bucket and pull down every child's face stored in EatPal.",
+      "acceptanceCriteria": [
+        "New migration replaces the SELECT policy \"Users can view all profile pictures\" on storage.objects (created in 20251008025307_8faf3224-9a40-415e-9176-ccaa98641861.sql:6-8) with one scoped to the owning user - (storage.foldername(name))[1] = auth.uid()::text - plus the existing admin role check",
+        "Before writing the migration, confirm no shipped iOS build calls list() or select on storage.objects for this bucket: grep ios/EatPal for storage list/download calls. Reads of an existing public URL bypass RLS, so they are unaffected; a client that LISTS would break",
+        "Bucket stays public = true in this story so URLs already stored in kids.profile_picture_url keep rendering on shipped iOS builds. Full private + signed URLs is US-634 and is gated on a force-update mechanism that does not exist yet",
+        "New uploads use an unguessable object name: replace `${user.id}/${Date.now()}.${ext}` with `${user.id}/${crypto.randomUUID()}.${ext}` in ManageKidsDialog.tsx:186 and OnboardingDialog.tsx:135, and in the iOS uploader if it builds its own path",
+        "supabase/functions/update-blog-image/index.ts:60,73 stops writing blog images into profile-pictures; point it at the generated-images bucket instead",
+        "Test proves an anon-key client cannot list objects in profile-pictures and an authenticated client can only list its own folder",
+        "Migration is additive/policy-only (no DROP COLUMN, DROP TABLE, or RENAME); npm run typecheck and npm run test:run pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Found 2026-08-17 in the legal-liability review. The bucket was created with public = true AND a SELECT policy carrying no role restriction, so the public role - which includes anon - can list every object. Paths are {userId}/{ms-timestamp}.ext, so once a path is listed the file is fetchable with no auth at all. Contents are photos of children. This is the highest-exposure item found. generated-images (20260630000000) is deliberately public and is fine; only profile-pictures holds personal data."
+    },
+    {
+      "id": "US-628",
+      "title": "Delete stored images when a kid profile or account is deleted",
+      "description": "As a parent who deletes my account, I want the photos I uploaded to actually be gone, so that the deletion promised in the Privacy Policy is the deletion that happens.",
+      "acceptanceCriteria": [
+        "supabase/functions/delete-account/index.ts lists everything under `${userId}/` in profile-pictures and removes it before calling auth.admin.deleteUser (currently lines 90-113 delete DB rows only and never touch storage)",
+        "Storage removal failures land in the same `failures` map as table failures so a partial delete is visible rather than silent",
+        "Deleting a kid removes that kid's photo object: derive the storage path from kids.profile_picture_url in the deleteKid path used by ManageKidsDialog.tsx:231",
+        "Replacing a kid's photo removes the previous object instead of orphaning it (both upload sites: ManageKidsDialog.tsx:189, OnboardingDialog.tsx:139)",
+        "Deletion is best-effort and never blocks the account delete from completing",
+        "Tests cover: account delete removes the user's storage folder; kid delete removes only that kid's object; photo replace removes the old object",
+        "npm run typecheck and npm run test:run pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found 2026-08-17. Privacy Policy section 7 says account deletion removes 'your account and app data (including child profiles)' and section 4 tells guardians they can 'delete all child data by deleting the profile or the account'. Neither is true for uploaded images. Combined with US-627 the residue is a child's photo on a permanently reachable URL after the parent was told it was deleted. Ship US-627 and US-628 together."
+    },
+    {
+      "id": "US-629",
+      "title": "Crisis and scope guardrails in the AI coach",
+      "description": "As a parent describing a frightening feeding situation, I want the AI coach to point me at real help instead of coaching me through it, so that a nutrition chatbot is not the thing standing between a child and care.",
+      "acceptanceCriteria": [
+        "The system prompt in supabase/functions/ai-coach-chat/index.ts:64-73 gains an explicit safety block covering: self-harm or suicidal statements (parent or child), disordered eating signals (severe restriction, ARFID-pattern refusal, purging, weight loss, food fear), and medical symptoms (choking, aspiration, failure to thrive, allergic reaction)",
+        "On those topics the coach acknowledges briefly, names a concrete resource, and stops advising: 988 Suicide and Crisis Lifeline (call or text 988, US), ANAD helpline 1-888-375-7767, and 'contact your pediatrician' for medical symptoms. It must not attempt to counsel, diagnose, or talk the user through the situation",
+        "Standing scope limit added: no diagnosis, no medical or medication advice, no calorie targets or weight-management plans for a child; redirect to a pediatrician or registered dietitian",
+        "Resource numbers live in one exported constant so the prompt and any UI copy cannot drift apart",
+        "Visible disclaimer rendered on the coach surface (src/pages/AICoach.tsx, src/components/AIMealCoach.tsx): responses are AI-generated general feeding guidance, not medical advice",
+        "Test asserts the built system prompt contains the safety block and both helpline numbers, so the guardrail cannot be silently dropped in a later edit",
+        "Audit the other free-text AI surfaces (tonight-mode, suggest-foods, ai-meal-plan) and note which need the same block; implement where the user can type prose",
+        "npm run typecheck and npm run test:run pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-08-17. The current prompt is six bullets telling the model to be 'judgment-free', 'empathetic', and to 'suggest age-appropriate feeding strategies' - there is no crisis instruction, no refusal boundary, and no disclaimer anywhere in the UI. On a picky-eating product the inbound will include ARFID, food refusal with weight loss, and distressed parents. Copy must be reviewed by counsel before ship like the other legal-facing text, but the guardrail itself is an engineering fix."
+    },
+    {
+      "id": "US-630",
+      "title": "Make the advertised free trial real, or stop advertising it",
+      "description": "As someone clicking 'Start Free Trial', I want either a trial or honest pricing copy, so that I am not charged immediately by a button that promised otherwise.",
+      "acceptanceCriteria": [
+        "First establish ground truth: check whether trial_period_days is configured on the Stripe Prices themselves, since supabase/functions/create-checkout/index.ts:132-155 sets neither trial_period_days nor subscription_data.trial_settings",
+        "If no trial exists and the product should have one: add trial_period_days to the checkout session, sourced from a new nullable column on subscription_plans (additive migration), not hardcoded",
+        "If no trial exists and the product should not have one: remove the claim from Landing.tsx:954, :978, :1030 and Pricing.tsx:506",
+        "If a trial ships, the CTA carries the ROSCA disclosure adjacent to the button: what is charged, when the first charge lands, and how to cancel",
+        "stripe-webhook already persists trial_end (index.ts:298) - confirm it populates for trialing subscriptions end to end",
+        "Reconcile every other surface that mentions a trial so one answer is true everywhere",
+        "npm run typecheck and npm run test:run pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Found 2026-08-17. Three CTAs say 'Start Free Trial' and Pricing says 'Free trial available', but the checkout session is a plain mode:'subscription' with no trial configuration. If the Stripe Prices do not carry a trial either, every one of those buttons charges the card on click. This is the decision story; US-631 (reminder) only makes sense if the answer here is 'trial exists'."
+    },
+    {
+      "id": "US-631",
+      "title": "Trial-ending reminder job, or remove the dead trial automation",
+      "description": "As a trial user, I want warning before my card is charged, so that the conversion is something I chose rather than something that happened to me.",
+      "acceptanceCriteria": [
+        "Blocked on US-630: if that story concludes there is no trial, this story is closed by deleting src/lib/trial-automation.ts and the trial_ending options in WorkflowBuilder.tsx:107 and EmailSequenceBuilder.tsx:100 rather than by building a job",
+        "If a trial exists: a scheduled edge function (pg_cron, matching the existing scheduled-function pattern) selects user_subscriptions where status = 'trialing' and trial_end falls in the 3-day and 1-day windows",
+        "Sends through the existing send-emails function using the trial_ending_3d and trial_ending_1d template keys that src/lib/trial-automation.ts:229,243 already names",
+        "Idempotent: a row in subscription_notifications with notification_type = 'trial_ending' (type already exists per 20251030000001_subscription_enhancements.sql:11) prevents a second send for the same window",
+        "The reminder states the charge amount, the charge date, and a one-click path to cancel",
+        "src/lib/trial-automation.ts is either wired into the live path or deleted - it is currently imported by nothing and reads as working code",
+        "npm run typecheck and npm run test:run pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Found 2026-08-17. The reminder machinery exists three times over as admin UI options and an unreferenced library, and zero times as something that sends. Nothing in src/ or supabase/functions/ emits a trial_ending event. Under the FTC negative-option rule a trial that converts silently is the enforcement pattern, so this pairs with US-630."
+    },
+    {
+      "id": "US-632",
+      "title": "Disclose photo collection and label AI in-product",
+      "description": "As a user pointing my camera at my fridge, I want to know the photo leaves EatPal for a third-party AI, so that I can decide before the shutter rather than after.",
+      "acceptanceCriteria": [
+        "Privacy Policy section 2 lists the images actually collected: child profile photos, food photos, receipt photos, fridge photos",
+        "Privacy Policy section 6 states that photos submitted to AI features are transmitted to the LLM provider, are not stored by us server-side, and are not used to train models",
+        "One-line notice in the capture UI before submission - ImageFoodCapture.tsx, the receipt scanner, and the fridge scanner - saying the photo is sent to a third-party AI provider to identify items",
+        "AI coach responses carry an AI-generated label (pairs with the disclaimer in US-629)",
+        "Verify and keep the current server behaviour: identify-food-image, parse-receipt-image, and recognize-fridge-contents pass base64 straight through without persisting it - add a test if none pins this",
+        "New legal copy carries the same DRAFT / counsel-review marker as the rest of PrivacyPolicy.tsx",
+        "npm run typecheck and npm run test:run pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Found 2026-08-17. Policy section 5 and 6 already disclose the LLM subprocessors and the child data sent to them, which was the July audit fix, but images are absent from the collection list entirely and the capture dialogs say only 'Analyzing image...'. The pass-through design is correct and worth pinning with a test so a later 'let's cache uploads' change has to argue with a failing test."
+    },
+    {
+      "id": "US-633",
+      "title": "Open Food Facts attribution where its data is displayed",
+      "description": "As the operator, I want to meet the ODbL attribution term, so that the product data we resell access to is licensed rather than borrowed.",
+      "acceptanceCriteria": [
+        "Visible attribution wherever Open Food Facts sourced fields are rendered - barcode scan results and HarmonizedFoodDisplay.tsx - reading 'Data from Open Food Facts' and linking to openfoodfacts.org",
+        "Use src/lib/database-prioritization.ts to identify which displayed fields actually came from OFF rather than blanket-labelling every food",
+        "Attribution also appears in the Privacy Policy or a data-sources note alongside the USDA reference",
+        "Soften 'Official USDA data' on BudgetCalculator.tsx:299,517 to 'Based on USDA Food Plans data' so it reads as a source rather than an endorsement",
+        "npm run typecheck and npm run test:run pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Found 2026-08-17. src/lib/open-food-facts.ts pulls product data that is licensed under ODbL, which requires attribution wherever the data is presented. Nothing in the food UI credits it. USDA is public domain so that half is a wording fix, not a licensing one. Lowest exposure of the set but the cheapest to close."
+    },
+    {
+      "id": "US-634",
+      "title": "Move profile-pictures to a private bucket with signed URLs",
+      "description": "As a parent, I want my child's photo behind an expiring signed URL, so that a leaked or shared link stops working instead of lasting forever.",
+      "acceptanceCriteria": [
+        "Blocked: shipped iOS builds render kids.profile_picture_url as a plain public URL (Kid.swift:11, KidProfileEditorView.swift:70), and no MIN_SUPPORTED_IOS_BUILD force-update gate exists in the app, so flipping the bucket to private breaks every phone in the field",
+        "Prerequisite: ship the force-update / min-build gate first, then bump past the release that starts writing signed URLs",
+        "Release N: clients request a signed URL through a helper instead of getPublicUrl; keep writing the public URL to kids.profile_picture_url so old clients keep working",
+        "Release N+1: once the min build is past N, migration sets profile-pictures public = false",
+        "Storage-object deletion from US-628 keeps working against the private bucket",
+        "Document the sequencing in the migration comment per the CLAUDE.md deprecation flow"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Found 2026-08-17. This is the correct end state for US-627, deliberately split out because it cannot ship backward-compatibly today. US-627 closes the enumeration hole and makes new paths unguessable while keeping shipped clients working; this story finishes the job once there is a version gate to hide behind. Do not start this before the force-update mechanism exists."
     }
   ]
 }
