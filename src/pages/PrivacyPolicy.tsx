@@ -54,7 +54,7 @@ const PrivacyPolicy = () => {
       {/* Content */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
         <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">{t('privacyPolicy.title')}</h1>
-        <p className="text-sm text-muted-foreground mb-8">Last Updated: July 23, 2026</p>
+        <p className="text-sm text-muted-foreground mb-8">Last Updated: August 18, 2026</p>
 
         <div className="prose prose-lg max-w-none space-y-8">
           <section>
@@ -78,6 +78,10 @@ const PrivacyPolicy = () => {
               <li>Food preferences and meal planning data</li>
               <li>Grocery lists and pantry information</li>
               <li>Payment and billing information (processed securely through Stripe)</li>
+              <li>
+                Photos you choose to upload or capture: child profile photos, and photos of food,
+                grocery receipts, or your fridge submitted to our photo-recognition features
+              </li>
             </ul>
 
             <h3 className="text-xl font-semibold mb-3 mt-6 text-foreground">Automatically Collected Information</h3>
@@ -173,6 +177,20 @@ const PrivacyPolicy = () => {
               <li>We do not use these features to make legal or similarly significant automated decisions about you.</li>
               <li>You can avoid this processing by not using the AI features; core meal-planning features remain available.</li>
             </ul>
+            <h3 className="text-xl font-semibold mb-3 mt-6 text-foreground">Photos submitted to AI features</h3>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              When you use a photo feature — identifying a food from a picture, scanning a grocery
+              receipt, or recognizing what is in your fridge — the image is transmitted to the AI
+              provider that fulfills the request so it can read the contents. We do not store these
+              images on our servers: the photo is passed through, used to generate the result, and
+              not retained by us afterward. We access these providers through their business APIs,
+              whose standard terms do not use submitted content to train their models.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              Child profile photos are different: those are stored, because they are part of the
+              profile you created. They are deleted when you delete the child profile or your
+              account, and they are not sent to AI providers.
+            </p>
           </section>
 
           <section>

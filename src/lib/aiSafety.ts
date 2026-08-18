@@ -38,3 +38,15 @@ export const AI_COACH_DISCLAIMER =
 /** Shown alongside the disclaimer so the numbers are on screen, not only in the model. */
 export const CRISIS_HELP_LINE =
   'In a crisis, call or text 988 (US). For disordered eating, ANAD is at 1-888-375-7767.';
+
+/**
+ * US-632: shown before a photo is submitted to an AI feature.
+ *
+ * The capture dialogs said only "Analyzing image..." while the photo was being
+ * sent to a third-party LLM. The decision to send a picture of your kitchen,
+ * your receipt or your child's plate belongs to the person holding the camera,
+ * which means before the shutter, not after.
+ */
+export const PHOTO_AI_NOTICE =
+  'Your photo is sent to a third-party AI provider to identify items. ' +
+  "We don't store it, and their business API terms don't use it for training.";

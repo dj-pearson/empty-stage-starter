@@ -17,6 +17,7 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { logger } from "@/lib/logger";
+import { PHOTO_AI_NOTICE } from "@/lib/aiSafety";
 
 export interface FoodIdentification {
   name: string;
@@ -251,6 +252,8 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
           <DialogDescription>
             Take a photo or upload an image to automatically identify and add food items
           </DialogDescription>
+          {/* US-632: say where the photo goes before it is taken, not after. */}
+          <p className="text-xs text-muted-foreground">{PHOTO_AI_NOTICE}</p>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto space-y-4 py-2">
