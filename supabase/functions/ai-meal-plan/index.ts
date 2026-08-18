@@ -1,6 +1,7 @@
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
 import { requireUser } from '../_shared/require-admin.ts';
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
+import { withStandingLimits } from "../_shared/safety.ts";
 
 export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -104,7 +105,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
     const response = await aiService.generateContent(
       {
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: withStandingLimits(systemPrompt) },
           { role: 'user', content: userPrompt },
         ],
         maxTokens: 4000,

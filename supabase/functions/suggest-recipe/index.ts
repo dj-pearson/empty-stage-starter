@@ -1,3 +1,5 @@
+import { withStandingLimits } from "../_shared/safety.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,7 +84,7 @@ Format your response as JSON with these exact fields:
     // Prepare the request body
     const requestBody: any = {
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: withStandingLimits(systemPrompt) },
         { role: 'user', content: userPrompt }
       ]
     };

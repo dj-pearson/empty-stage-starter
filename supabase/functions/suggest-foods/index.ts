@@ -1,5 +1,6 @@
 
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { withStandingLimits } from '../_shared/safety.ts';
 
 import { requireUser } from '../_shared/require-admin.ts';
 const corsHeaders = {
@@ -93,7 +94,7 @@ Respond in JSON format with an array called "suggestions".`;
     
     const systemPrompt = 'You are a helpful assistant that suggests new foods for picky eaters. Always respond with valid JSON.';
     const content = await aiService.generateContent(prompt, {
-      systemPrompt,
+      systemPrompt: withStandingLimits(systemPrompt),
       taskType: 'lightweight', // Fast response for food suggestions
     });
     
