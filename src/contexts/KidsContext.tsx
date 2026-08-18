@@ -9,6 +9,7 @@ import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { parseKidRow, parseKidRows, upsertById } from "@/lib/normalizeEntities";
+import { deleteStorageObject } from '@/lib/storageCleanup';
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -147,6 +148,12 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
       );
     };
 
+    // US-628: capture the photo URL before the row goes, so the uploaded object
+    // can be removed too. The Privacy Policy tells guardians that deleting a
+    // child profile deletes that child's data; leaving the photo behind in a
+    // URL-readable bucket makes that untrue.
+    const photoUrl = kids.find(k => k.id === id)?.profile_picture_url ?? null;
+
     if (userId) {
       // US-320: optimistic delete; roll back (re-add) on server rejection.
       void runOptimisticMutation<Kid>(
@@ -156,7 +163,14 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
           fixActiveKid(remaining);
           return remaining;
         },
-        () => supabase.from('kids').delete().eq('id', id),
+        async () => {
+          const result = await supabase.from('kids').delete().eq('id', id);
+          // Best-effort and deliberately after the row delete: an orphaned
+          // object is recoverable, a deleted photo on a kid that came back is
+          // not. Never let a storage failure fail the delete.
+          if (!result.error) await deleteStorageObject(photoUrl);
+          return result;
+        },
         { logLabel: 'Supabase deleteKid error:', toastMessage: "Couldn't delete that child — restored. Please try again." }
       );
     } else {
@@ -166,7 +180,7 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
         return remaining;
       });
     }
-  }, [userId]);
+  }, [userId, kids]);
 
   const setActiveKid = useCallback((id: string | null) => {
     setActiveKidId(id);

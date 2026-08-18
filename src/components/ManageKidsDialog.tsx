@@ -35,6 +35,7 @@ import { format, differenceInYears } from "date-fns";
 import { cn, generateId } from "@/lib/utils";
 import { useRef } from "react";
 import { logger } from "@/lib/logger";
+import { deleteReplacedStorageObject } from "@/lib/storageCleanup";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -197,6 +198,10 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
       const { data: { publicUrl } } = supabase.storage
         .from('profile-pictures')
         .getPublicUrl(fileName);
+
+      // US-628: the photo being replaced would otherwise stay in the bucket
+      // forever, reachable by its URL, with nothing left pointing at it.
+      void deleteReplacedStorageObject(formData.profile_picture_url, publicUrl);
 
       setFormData({ ...formData, profile_picture_url: publicUrl });
       toast.success("Image uploaded successfully!");
