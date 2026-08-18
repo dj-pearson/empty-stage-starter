@@ -553,7 +553,7 @@ export async function generateBudgetPDFReport(
   doc.setFontSize(8);
   doc.setTextColor(107, 114, 128);
   doc.text(
-    'This budget is based on official USDA Food Plans data (2024) and adjusted for your location and dietary needs.',
+    'This budget is based on USDA Food Plans data (2024) and adjusted for your location and dietary needs.',
     pageWidth / 2,
     yPos,
     { align: 'center' }

@@ -49,6 +49,42 @@ const USER_SCOPED_TABLES = [
 // deletion, leaving erasure incomplete (GDPR Art. 17 — compliance audit 2026-07).
 const EMAIL_SCOPED_TABLES = ["email_subscribers"] as const;
 
+// US-628: uploaded photos live in Storage, which has no FK to auth.users and
+// so is untouched by both the table scrub and the auth-user cascade. Without
+// this the Privacy Policy's promise that account deletion removes "your
+// account and app data (including child profiles)" is false for every photo
+// the user ever uploaded, and the object stays fetchable by URL.
+//
+// Two buckets are in play: profile-pictures, written by the web app at
+// {userId}/{id}.ext, and images, written by iOS at kids/{kidId}-{unix}.jpg
+// with no user prefix (US-635). The iOS layout cannot be enumerated per-user,
+// so photos are found by reading kids.profile_picture_url BEFORE the rows are
+// deleted; the folder sweep below then catches orphans the web app left behind.
+const USER_FOLDER_BUCKET = "profile-pictures";
+
+const PUBLIC_MARKER = "/storage/v1/object/public/";
+const SIGNED_MARKER = "/storage/v1/object/sign/";
+
+/** Mirrors src/lib/storagePaths.ts; the Deno and web trees cannot share code. */
+function parseStorageObjectUrl(url: unknown): { bucket: string; path: string } | null {
+  if (!url || typeof url !== "string") return null;
+  const marker = url.includes(PUBLIC_MARKER)
+    ? PUBLIC_MARKER
+    : url.includes(SIGNED_MARKER)
+      ? SIGNED_MARKER
+      : null;
+  if (!marker) return null;
+
+  const withoutQuery = url.slice(url.indexOf(marker) + marker.length).split("?")[0];
+  const separator = withoutQuery.indexOf("/");
+  if (separator <= 0) return null;
+
+  const bucket = withoutQuery.slice(0, separator);
+  const path = withoutQuery.slice(separator + 1);
+  if (!bucket || !path || path.includes("..")) return null;
+  return { bucket, path: decodeURIComponent(path) };
+}
+
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -88,6 +124,25 @@ export default async (req: Request) => {
 
   const failures: Record<string, string> = {};
 
+  // Read photo URLs while the rows still exist. Any failure here is recorded
+  // but never blocks the account delete - a user asking to be deleted must not
+  // be held up by Storage.
+  const photoRefs: { bucket: string; path: string }[] = [];
+  {
+    const { data, error } = await admin
+      .from("kids")
+      .select("profile_picture_url")
+      .eq("user_id", userId);
+    if (error) {
+      failures["storage:kids_photo_lookup"] = error.message;
+    } else {
+      for (const row of data ?? []) {
+        const ref = parseStorageObjectUrl((row as { profile_picture_url?: unknown }).profile_picture_url);
+        if (ref) photoRefs.push(ref);
+      }
+    }
+  }
+
   for (const table of USER_SCOPED_TABLES) {
     const { error } = await admin.from(table).delete().eq("user_id", userId);
     if (error) {
@@ -105,6 +160,38 @@ export default async (req: Request) => {
       if (error) {
         failures[table] = error.message;
       }
+    }
+  }
+
+  // 2c. Remove the uploaded photos: the ones referenced by the kid rows we just
+  //     read, plus everything under {userId}/ in the web bucket so orphans left
+  //     by an interrupted replace go too.
+  {
+    const byBucket = new Map<string, string[]>();
+    for (const ref of photoRefs) {
+      const paths = byBucket.get(ref.bucket) ?? [];
+      paths.push(ref.path);
+      byBucket.set(ref.bucket, paths);
+    }
+
+    const { data: listed, error: listError } = await admin.storage
+      .from(USER_FOLDER_BUCKET)
+      .list(userId);
+    if (listError) {
+      failures[`storage:${USER_FOLDER_BUCKET}:list`] = listError.message;
+    } else {
+      const paths = byBucket.get(USER_FOLDER_BUCKET) ?? [];
+      for (const object of listed ?? []) {
+        const full = `${userId}/${object.name}`;
+        if (!paths.includes(full)) paths.push(full);
+      }
+      byBucket.set(USER_FOLDER_BUCKET, paths);
+    }
+
+    for (const [bucket, paths] of byBucket) {
+      if (paths.length === 0) continue;
+      const { error } = await admin.storage.from(bucket).remove(paths);
+      if (error) failures[`storage:${bucket}`] = error.message;
     }
   }
 

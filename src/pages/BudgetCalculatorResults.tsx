@@ -352,7 +352,7 @@ export default function BudgetCalculatorResults() {
             <CardHeader>
               <CardTitle>USDA Food Plan Options</CardTitle>
               <CardDescription>
-                Compare different budget levels based on official USDA data
+                Compare different budget levels based on USDA Food Plans data
               </CardDescription>
             </CardHeader>
             <CardContent>

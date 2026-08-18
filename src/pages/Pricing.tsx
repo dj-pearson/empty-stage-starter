@@ -33,6 +33,7 @@ import type { User } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
+import { formatTrialDisclosure } from "@/lib/trialDisclosure";
 import { Footer } from "@/components/Footer";
 import { BreadcrumbNavigation } from "@/components/BreadcrumbNavigation";
 
@@ -46,6 +47,8 @@ interface SubscriptionPlan {
   name: string;
   price_monthly: number;
   price_yearly: number;
+  /** US-630: NULL or 0 means this plan has no free trial. */
+  trial_period_days?: number | null;
   features: string[];
   max_children: number | null;
   max_pantry_foods: number | null;
@@ -295,6 +298,25 @@ export default function Pricing() {
     return `$${price}`;
   };
 
+  // US-630: the material terms of a negative-option offer belong next to the
+  // button that accepts it, not in Terms. Built from the same plan row that
+  // checkout reads, so the page cannot promise something Stripe will not do.
+  const renderTrialDisclosure = (plan: SubscriptionPlan) => {
+    const price = billingCycle === "monthly" ? plan.price_monthly : plan.price_yearly;
+    const copy = formatTrialDisclosure({
+      trialPeriodDays: plan.trial_period_days,
+      price,
+      billingCycle,
+    });
+    if (!copy) return null;
+
+    return (
+      <div className="px-6 pb-6 -mt-2">
+        <p className="text-xs text-muted-foreground leading-relaxed">{copy}</p>
+      </div>
+    );
+  };
+
   const getPlanBadge = (planName: string) => {
     switch (planName) {
       case "Pro":
@@ -503,7 +525,7 @@ export default function Pricing() {
             <p className="text-muted-foreground leading-relaxed">
               <strong>For Families:</strong> Free Plan (1 child) or Pro Plan ($9.99/mo) with AI food chaining, unlimited children, and progress tracking.
               <strong> For Therapists & Clinics:</strong> Family Plus ($19.99/mo) with multi-household support or Professional Plan with full therapist portal, multi-client management, and insurance-compatible documentation.
-              All plans include safe food tracking, try bites, and grocery lists. Free trial available. Cancel anytime.
+              All plans include safe food tracking, try bites, and grocery lists. Paid plans start with a free trial; cancel any time from Account Settings.
             </p>
           </div>
 
@@ -781,6 +803,7 @@ export default function Pricing() {
                     {checkoutPlanId === plan.id ? "Redirecting…" : getButtonText(plan)}
                   </Button>
                 </CardFooter>
+                {renderTrialDisclosure(plan)}
               </Card>
             );
           })}
@@ -994,6 +1017,7 @@ export default function Pricing() {
                     {checkoutPlanId === plan.id ? "Redirecting…" : getButtonText(plan)}
                   </Button>
                 </CardFooter>
+                {renderTrialDisclosure(plan)}
               </Card>
             );
           })}

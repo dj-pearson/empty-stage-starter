@@ -33,6 +33,7 @@ import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { format } from "date-fns";
 import { cn, calculateAge } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { AI_COACH_DISCLAIMER, CRISIS_HELP_LINE } from "@/lib/aiSafety";
 
 interface Message {
   id: string;
@@ -589,6 +590,13 @@ export function AIMealCoach() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
                   Press Enter to send, Shift+Enter for new line
+                </p>
+                {/* US-629: the coach answers questions about feeding a child.
+                    Say what it is, and put the crisis numbers on screen rather
+                    than relying on the model to produce them. */}
+                <p className="text-xs text-muted-foreground mt-2 border-t pt-2">
+                  {AI_COACH_DISCLAIMER}{" "}
+                  <span className="text-foreground/80">{CRISIS_HELP_LINE}</span>
                 </p>
               </div>
             </>

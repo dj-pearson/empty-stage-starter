@@ -32,9 +32,10 @@ import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart, Pe
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, generateId } from "@/lib/utils";
 import { useRef } from "react";
 import { logger } from "@/lib/logger";
+import { deleteReplacedStorageObject } from "@/lib/storageCleanup";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -183,7 +184,10 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
       if (!user.data.user) throw new Error("Not authenticated");
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.data.user.id}/${Date.now()}.${fileExt}`;
+      // US-627: a random object name instead of a timestamp. The bucket is still
+      // public-read by URL for shipped iOS builds, so the path itself has to be
+      // unguessable now that it can no longer be enumerated.
+      const fileName = `${user.data.user.id}/${generateId()}.${fileExt}`;
 
       const { error: uploadError, data } = await supabase.storage
         .from('profile-pictures')
@@ -194,6 +198,10 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
       const { data: { publicUrl } } = supabase.storage
         .from('profile-pictures')
         .getPublicUrl(fileName);
+
+      // US-628: the photo being replaced would otherwise stay in the bucket
+      // forever, reachable by its URL, with nothing left pointing at it.
+      void deleteReplacedStorageObject(formData.profile_picture_url, publicUrl);
 
       setFormData({ ...formData, profile_picture_url: publicUrl });
       toast.success("Image uploaded successfully!");

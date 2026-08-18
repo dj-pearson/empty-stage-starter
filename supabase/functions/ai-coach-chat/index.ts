@@ -1,6 +1,7 @@
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
 import { requireUser } from '../_shared/require-admin.ts';
 import { AIServiceV2, AIMessage } from "../_shared/ai-service-v2.ts";
+import { withSafetyRules } from "../_shared/safety.ts";
 
 /**
  * AI Coach Chat Edge Function
@@ -84,8 +85,10 @@ Your role is to:
     // bounds input cost without changing behaviour for a normal chat.
     const recentMessages = messages.slice(-MAX_MESSAGES);
 
+    // US-629: the safety block goes on last so it is the final instruction the
+    // model reads, and so it cannot be skipped by an early return above.
     const aiMessages: AIMessage[] = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: withSafetyRules(systemPrompt) },
       ...recentMessages.map((msg: any) => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content

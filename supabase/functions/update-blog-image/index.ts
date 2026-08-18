@@ -49,7 +49,12 @@ export default async (req: Request) => {
     const imageBlob = await imageResponse.blob();
     const imageBuffer = await imageBlob.arrayBuffer();
 
-    // Generate unique filename
+    // Generate unique filename. US-627: blog artwork lives in the
+    // generated-images bucket, which is deliberately world-readable. It used to
+    // be written into profile-pictures alongside photographs of children, which
+    // is the wrong blast radius for a public asset. Existing blog rows still
+    // point at the old profile-pictures URLs and keep resolving; only new
+    // uploads land here.
     const timestamp = Date.now();
     const extension = imageUrl.split('.').pop()?.split('?')[0] || 'png';
     const filename = `blog/${blogId}-${imageType}-${timestamp}.${extension}`;
@@ -57,7 +62,7 @@ export default async (req: Request) => {
     // Upload to Supabase Storage
     console.log('Uploading image to storage:', filename);
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('profile-pictures')
+      .from('generated-images')
       .upload(filename, imageBuffer, {
         contentType: imageBlob.type || 'image/png',
         upsert: true
@@ -70,7 +75,7 @@ export default async (req: Request) => {
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from('profile-pictures')
+      .from('generated-images')
       .getPublicUrl(filename);
 
     // Update blog post with image URL

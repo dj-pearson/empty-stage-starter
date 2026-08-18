@@ -52,9 +52,10 @@ import { toast } from "sonner";
 import { useKids, useFoods } from "@/contexts/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { analytics } from "@/lib/analytics";
+import { deleteReplacedStorageObject } from "@/lib/storageCleanup";
 
 const PREDEFINED_ALLERGENS = [
   "peanuts",
@@ -133,7 +134,8 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
       if (!user.data.user) throw new Error("Not authenticated");
 
       const fileExt = file.name.split(".").pop();
-      const fileName = `${user.data.user.id}/${Date.now()}.${fileExt}`;
+      // US-627: random object name, see ManageKidsDialog.
+      const fileName = `${user.data.user.id}/${generateId()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("profile-pictures")
@@ -144,6 +146,9 @@ export function OnboardingDialog({ open, onComplete, onOpenChange }: OnboardingD
       const {
         data: { publicUrl },
       } = supabase.storage.from("profile-pictures").getPublicUrl(fileName);
+
+      // US-628: drop the object this one replaces, see ManageKidsDialog.
+      void deleteReplacedStorageObject(childData.profile_picture_url, publicUrl);
 
       setChildData({ ...childData, profile_picture_url: publicUrl });
       toast.success("Image uploaded successfully!");

@@ -25,6 +25,7 @@ import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { analytics } from "@/lib/analytics";
 import { useFeatureLimit } from "@/hooks/useFeatureLimit";
 import { logger } from "@/lib/logger";
+import { PHOTO_AI_NOTICE } from "@/lib/aiSafety";
 import type { Food } from "@/types";
 import {
   acceptedRowsToFoods,
@@ -228,6 +229,8 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
           <DialogDescription>
             Snap a photo of your grocery receipt and we'll add the items to your pantry.
           </DialogDescription>
+          {/* US-632: see ImageFoodCapture. */}
+          <p className="text-xs text-muted-foreground">{PHOTO_AI_NOTICE}</p>
         </DialogHeader>
 
         {stage === "upload" && (
