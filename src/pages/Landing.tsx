@@ -47,6 +47,7 @@ const ExitIntentPopup = lazy(() => import("@/components/ExitIntentPopup").then(m
 
 // Import branded skeleton for hero loading state
 import { HeroSkeleton } from "@/components/HeroSkeleton";
+import { formatTrialDisclosure, MARKETING_TRIAL_DAYS } from "@/lib/trialDisclosure";
 
 // Dynamically import GSAP only when needed (deferred loading)
 let gsapModule: typeof import("gsap") | null = null;
@@ -955,6 +956,16 @@ const Landing = () => {
                       Start Free Trial
                     </Button>
                   </Link>
+                  {/* US-630: the trial converts to a paid subscription, so the
+                      terms belong on the offer. Full disclosure is on /pricing,
+                      which is where a card is actually committed. */}
+                  <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                    {formatTrialDisclosure({
+                      trialPeriodDays: MARKETING_TRIAL_DAYS,
+                      price: 9.99,
+                      billingCycle: "monthly",
+                    })}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -979,6 +990,13 @@ const Landing = () => {
                       Start Free Trial
                     </Button>
                   </Link>
+                  <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                    {formatTrialDisclosure({
+                      trialPeriodDays: MARKETING_TRIAL_DAYS,
+                      price: 19.99,
+                      billingCycle: "monthly",
+                    })}
+                  </p>
                 </CardContent>
               </Card>
             </div>

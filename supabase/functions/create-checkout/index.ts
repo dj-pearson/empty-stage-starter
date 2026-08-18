@@ -128,6 +128,12 @@ export default async (req: Request) => {
       );
     }
 
+    // US-630: the trial the pricing page has been advertising. Length comes
+    // from subscription_plans.trial_period_days so it is a data change, not a
+    // deploy. NULL or 0 means no trial, and the session is built without one.
+    const trialPeriodDays = Number(plan.trial_period_days);
+    const hasTrial = Number.isFinite(trialPeriodDays) && trialPeriodDays > 0;
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -150,6 +156,18 @@ export default async (req: Request) => {
           user_id: user.id,
           plan_id: planId,
         },
+        ...(hasTrial
+          ? {
+              trial_period_days: Math.floor(trialPeriodDays),
+              // Checkout always collects a card in subscription mode, so a
+              // trial that ends with no payment method means the card was
+              // removed or declined. Cancel rather than silently leaving the
+              // subscription in an unpaid state the user still sees as active.
+              trial_settings: {
+                end_behavior: { missing_payment_method: "cancel" },
+              },
+            }
+          : {}),
       },
     });
 
