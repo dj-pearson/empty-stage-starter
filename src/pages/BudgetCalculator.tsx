@@ -296,7 +296,7 @@ export default function BudgetCalculator() {
             <Card>
               <CardContent className="pt-6 text-center">
                 <DollarSign className="w-8 h-8 text-primary mx-auto mb-2" />
-                <h3 className="font-semibold mb-1">USDA-Based Data</h3>
+                <h3 className="font-semibold mb-1">Based on USDA Food Plans</h3>
                 <p className="text-sm text-muted-foreground">Official 2024 food cost data</p>
               </CardContent>
             </Card>
@@ -514,7 +514,7 @@ export default function BudgetCalculator() {
           {/* Trust Indicators */}
           <div className="mt-8 text-center text-sm text-muted-foreground">
             <p>
-              Based on official USDA Food Plans data (2024) · Regional cost adjustments included
+              Based on USDA Food Plans data (2024) · Regional cost adjustments included
             </p>
           </div>
         </motion.div>

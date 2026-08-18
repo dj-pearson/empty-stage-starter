@@ -28,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Scan, AlertCircle, CheckCircle2, Loader2, Minus, Plus, Package2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { DataSourceCredit } from "@/components/DataSourceCredit";
 import { logger } from "@/lib/logger";
 
 type ScannedFood = {
@@ -471,6 +472,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                   <AlertDescription>
                     Product found in <strong>{scannedFood.source}</strong>
+                    {/* US-633: ODbL requires the credit wherever the data is
+                        shown, so it sits with the record, not in a footer. */}
+                    <DataSourceCredit source={scannedFood.source} className="text-xs mt-1" />
                   </AlertDescription>
                 </Alert>
 

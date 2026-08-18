@@ -194,6 +194,38 @@ const PrivacyPolicy = () => {
           </section>
 
           <section>
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">6a. Where Our Food Data Comes From</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              Nutrition and product information in EatPal is drawn from public food databases. These
+              are sources we read from, not partners, and none of them endorse EatPal:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+              <li>
+                <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer" className="underline">
+                  Open Food Facts
+                </a>{" "}
+                — barcode and packaged-product data, licensed under{" "}
+                <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer" className="underline">
+                  ODbL
+                </a>.
+              </li>
+              <li>
+                <a href="https://fdc.nal.usda.gov" target="_blank" rel="noopener noreferrer" className="underline">
+                  USDA FoodData Central
+                </a>{" "}
+                and the USDA Food Plans — nutrient data and the grocery-budget estimates. US
+                government work, in the public domain.
+              </li>
+              <li>
+                <a href="https://www.foodrepo.org" target="_blank" rel="noopener noreferrer" className="underline">
+                  FoodRepo
+                </a>{" "}
+                — additional barcode data, licensed under ODbL.
+              </li>
+            </ul>
+          </section>
+
+          <section>
             <h2 className="text-2xl font-heading font-bold mb-4 text-primary">7. Data Retention</h2>
             <p className="text-muted-foreground leading-relaxed">
               We retain your personal information for as long as your account is active or as needed to provide the
