@@ -32,7 +32,7 @@ import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart, Pe
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInYears } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, generateId } from "@/lib/utils";
 import { useRef } from "react";
 import { logger } from "@/lib/logger";
 import {
@@ -183,7 +183,10 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
       if (!user.data.user) throw new Error("Not authenticated");
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.data.user.id}/${Date.now()}.${fileExt}`;
+      // US-627: a random object name instead of a timestamp. The bucket is still
+      // public-read by URL for shipped iOS builds, so the path itself has to be
+      // unguessable now that it can no longer be enumerated.
+      const fileName = `${user.data.user.id}/${generateId()}.${fileExt}`;
 
       const { error: uploadError, data } = await supabase.storage
         .from('profile-pictures')

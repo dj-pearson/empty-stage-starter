@@ -2261,8 +2261,8 @@
         "Migration is additive/policy-only (no DROP COLUMN, DROP TABLE, or RENAME); npm run typecheck and npm run test:run pass"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Found 2026-08-17 in the legal-liability review. The bucket was created with public = true AND a SELECT policy carrying no role restriction, so the public role - which includes anon - can list every object. Paths are {userId}/{ms-timestamp}.ext, so once a path is listed the file is fetchable with no auth at all. Contents are photos of children. This is the highest-exposure item found. generated-images (20260630000000) is deliberately public and is fine; only profile-pictures holds personal data."
+      "passes": true,
+      "notes": "Shipped 2026-08-17. Migration 20260817000000_scope_profile_picture_reads.sql drops the unrestricted \"Users can view all profile pictures\" SELECT policy (which applied to the public role, so anon could list the whole bucket) and replaces it with an authenticated, owner-scoped policy matching on (storage.foldername(name))[1] = auth.uid()::text OR owner = auth.uid(), plus an admin policy via the user_roles pattern so StorageManagement.tsx keeps working. Bucket deliberately STAYS public = true: shipped iOS renders kids.profile_picture_url as a plain public URL (Kid.swift:11) and there is no force-update gate, so a private flip would break every phone in the field. Public URL reads bypass RLS and are unaffected; only enumeration is closed. US-634 finishes the job. Upload paths now use generateId() from src/lib/utils instead of Date.now() (ManageKidsDialog.tsx:189, OnboardingDialog.tsx:137) so a path is unguessable while the bucket is still URL-readable. update-blog-image now writes to generated-images instead of storing blog artwork beside photographs of children; existing blog URLs still resolve because the old bucket stays public. New guard src/lib/storageBucketPolicies.test.ts scans every migration for a net-live unrestricted SELECT on storage.objects (tracking DROP POLICY so history does not false-positive, allowlisting generated-images as intentionally world-readable) and asserts both upload sites avoid timestamp paths; mutation-checked by removing the DROP and confirming it fails. Verified before writing: no shipped iOS build lists this bucket - ImageUploadService targets a DIFFERENT bucket and only calls upload/getPublicURL/remove.\nOPEN: (1) the live-database assertion (anon list returns nothing, authenticated list returns only own folder) is not covered - the repo has no RLS integration harness, so the guard is static-only. (2) iOS uploads kid photos to an undeclared 'images' bucket that is not in any migration and could carry the same hole - filed as US-635, and this story does NOT close that exposure. (3) npm run lint is red repo-wide on clean HEAD (1507 problems, 1239 errors); verified identical before and after these changes, so no regression, but the gate is unusable as a signal."
     },
     {
       "id": "US-628",
@@ -2380,6 +2380,23 @@
       "priority": 8,
       "passes": false,
       "notes": "Found 2026-08-17. This is the correct end state for US-627, deliberately split out because it cannot ship backward-compatibly today. US-627 closes the enumeration hole and makes new paths unguessable while keeping shipped clients working; this story finishes the job once there is a version gate to hide behind. Do not start this before the force-update mechanism exists."
+    },
+    {
+      "id": "US-635",
+      "title": "Audit the undeclared images bucket that iOS uploads kid photos to",
+      "description": "As a parent using the iOS app, I want the bucket my child's photo actually lands in to be as locked down as the web one, so that closing the web hole is not mistaken for closing the hole.",
+      "acceptanceCriteria": [
+        "ios/EatPal/EatPal/Services/ImageUploadService.swift:8 uploads to a bucket named 'images', not profile-pictures. No migration in supabase/migrations creates it - it was made out-of-band in the Supabase dashboard, so its public flag and its RLS policies cannot be read from the repo",
+        "Check the dashboard: is storage.buckets.public true for 'images', and what SELECT policies exist on storage.objects for it",
+        "If an unrestricted SELECT policy exists, replace it the way US-627 did for profile-pictures. Scope on storage.objects.owner rather than the path: objects are stored at kids/{kidId}-{unixSeconds}.jpg (ImageUploadService.swift:40) with no user-id folder, so folder-based scoping is not possible",
+        "Declare the bucket in a migration with ON CONFLICT DO NOTHING so its configuration stops living only in the dashboard",
+        "kids/{kidId}-{unixSeconds}.jpg is guessable given a kid id: change the iOS path to use UUID().uuidString, matching the US-627 web fix",
+        "Confirm no shipped iOS build calls list() on this bucket before tightening SELECT - ImageUploadService only calls upload/getPublicURL/remove, so verify nothing else does",
+        "Extend src/lib/storageBucketPolicies.test.ts to cover the images bucket once it is declared in a migration"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found 2026-08-17 while implementing US-627. iOS is the live product, so this is where kid photos actually come from in production - which makes it at least as exposed as the web bucket US-627 closed, possibly more. Cannot be fully fixed from the repo: the bucket does not exist in any migration, so its current policy set is unknown and a migration written blind could either no-op (if the real policy has a different name than the one dropped) or fail to override an unknown permissive policy, since RLS policies are OR'd and a new one cannot restrict an existing one. Needs a dashboard check first, then a migration. Filed rather than folded into US-627 because it needs out-of-band information."
     }
   ]
 }
