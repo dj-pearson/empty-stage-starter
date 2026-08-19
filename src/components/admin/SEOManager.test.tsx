@@ -315,6 +315,23 @@ describe('SEOManager mount-time loads (US-553 hook-extraction net)', () => {
     });
   });
 
+  it('does query them once that tab is opened', async () => {
+    const user = userEvent.setup();
+    const { container } = await renderManager();
+    await waitFor(async () => expect((await tablesQueried()).length).toBe(3));
+
+    const monitoring = [...container.querySelectorAll('[role="tab"]')].find(
+      (el) => (el.getAttribute('id') ?? '').endsWith('-trigger-monitoring'),
+    );
+    await user.click(monitoring as Element);
+
+    // The lazy load is an effect keyed on the tab being open (US-553); before
+    // that it was an IIFE running during render.
+    await waitFor(async () => {
+      expect(await tablesQueried()).toContain('seo_alerts');
+    });
+  }, 30_000);
+
   it('does not query the monitoring tables until that tab is opened', async () => {
     await renderManager();
     await waitFor(async () => expect((await tablesQueried()).length).toBe(3));

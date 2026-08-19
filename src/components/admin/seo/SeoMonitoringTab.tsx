@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,14 +61,27 @@ export function SeoMonitoringTab({
   toggleSchedule,
   saveNotificationPreferences,
 }: SeoMonitoringTabProps) {
+  // US-553: this used to be an IIFE in the JSX -- `{(() => { loadMonitoringData();
+  // return null; })()}` -- which calls a loader, and through it setState, during
+  // render. React warns about it ("Cannot update a component while rendering a
+  // different component") and it re-fires on every render that meets the
+  // condition. An effect is where a load belongs; the condition is unchanged, so
+  // the tab still fetches only when it is the open one and has nothing yet.
+  const shouldLoad =
+    activeTab === 'monitoring' &&
+    !isLoadingMonitoring &&
+    alerts.length === 0 &&
+    alertRules.length === 0;
+
+  useEffect(() => {
+    if (shouldLoad) void loadMonitoringData();
+    // loadMonitoringData is redefined on every SEOManager render, so depending
+    // on it here would refetch continuously. Track the condition instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldLoad]);
+
   return (
 <TabsContent value="monitoring" className="space-y-4">
-  {/* Load data when tab is opened */}
-  {activeTab === "monitoring" && !isLoadingMonitoring && alerts.length === 0 && alertRules.length === 0 && (
-    <>
-      {(() => { loadMonitoringData(); return null; })()}
-    </>
-  )}
 
   {/* Active Alerts Section */}
   <Card>

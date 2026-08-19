@@ -75,6 +75,7 @@ import { SeoContentTab } from "@/components/admin/seo/SeoContentTab";
 import { SeoMonitoringTab } from "@/components/admin/seo/SeoMonitoringTab";
 import { SeoAuditTab } from "@/components/admin/seo/SeoAuditTab";
 import { SeoKeywordsTab } from "@/components/admin/seo/SeoKeywordsTab";
+import { useGscConnection } from "@/components/admin/seo/useGscConnection";
 import {
   SeoRedirectsTab,
   SeoDuplicateContentTab,
@@ -156,12 +157,6 @@ export function SEOManager() {
   const [isApplyingFixes, setIsApplyingFixes] = useState(false);
 
   // Google Search Console state
-  const [gscConnected, setGscConnected] = useState(false);
-  const [gscProperties, setGscProperties] = useState<Record<string, unknown>[]>([]);
-  const [selectedProperty, setSelectedProperty] = useState<string>("");
-  const [isSyncingGSC, setIsSyncingGSC] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [isConnectingGSC, setIsConnectingGSC] = useState(false);
 
   // Monitoring & Alerts state
   const [alerts, setAlerts] = useState<Record<string, unknown>[]>([]);
@@ -188,7 +183,6 @@ export function SEOManager() {
   const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<Record<string, unknown> | null>(null);
   const [coreWebVitalsResults, setCoreWebVitalsResults] = useState<Record<string, unknown> | null>(null);
   const [backlinksResults, setBacklinksResults] = useState<Record<string, unknown>[]>([]);
-  const [gscSyncResults, setGscSyncResults] = useState<Record<string, unknown> | null>(null);
   const [autoHealingResults, setAutoHealingResults] = useState<Record<string, unknown> | null>(null);
   const [fixesAppliedResults, setFixesAppliedResults] = useState<Record<string, unknown> | null>(null);
 
@@ -202,29 +196,27 @@ export function SEOManager() {
 
   const isMobile = useIsMobile();
 
+  const {
+    gscConnected,
+    gscProperties,
+    selectedProperty,
+    setSelectedProperty,
+    isSyncingGSC,
+    lastSyncedAt,
+    isConnectingGSC,
+    gscSyncResults,
+    connectToGSC,
+    syncGSCData,
+    disconnectGSC,
+  } = useGscConnection({ onKeywordsSynced: () => loadTrackedKeywords() });
+
   useEffect(() => {
     loadSEOSettings();
     loadTrackedKeywords();
     loadCompetitorAnalysis();
     loadPageAnalysis();
-    checkGSCConnection();
-    
-    // Check if we're returning from OAuth
-    const wasConnecting = sessionStorage.getItem('gsc_connecting');
-    if (wasConnecting === 'true') {
-      sessionStorage.removeItem('gsc_connecting');
-      setIsConnectingGSC(true);
-      
-      // Check connection status after a brief delay
-      setTimeout(async () => {
-        await checkGSCConnection();
-        if (gscConnected) {
-          toast.success("Successfully connected to Google Search Console!");
-          await fetchGSCPropertiesList();
-        }
-        setIsConnectingGSC(false);
-      }, 1000);
-    }
+    // The GSC connection check and the OAuth-return handshake moved into
+    // useGscConnection with the state they touch (US-553).
   }, []);
 
   const loadTrackedKeywords = async () => {
@@ -346,159 +338,6 @@ export function SEOManager() {
   // GOOGLE SEARCH CONSOLE FUNCTIONS
   // =====================================================
 
-  const checkGSCConnection = async () => {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      const { data, error } = await invokeEdgeFunction("gsc-oauth", {
-        body: { action: "status", userId: user.id },
-      });
-
-      if (error) throw error;
-
-      // invokeEdgeFunction leaves `data` null for an empty or non-JSON
-      // response, and the catch below would then log a TypeError and leave the
-      // panel looking disconnected for the wrong reason. Treat a missing body
-      // as "not connected" explicitly.
-      setGscConnected(data?.connected === true);
-
-      if (data?.connected) {
-        // Load properties
-        await fetchGSCPropertiesList();
-      }
-    } catch (error: unknown) {
-      logger.error("Error checking GSC connection:", error);
-    }
-  };
-
-  const connectToGSC = async () => {
-    setIsConnectingGSC(true);
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) {
-        toast.error("Please log in first");
-        return;
-      }
-
-      // Get OAuth URL
-      const { data, error } = await invokeEdgeFunction("gsc-oauth", {
-        body: { action: "initiate", userId: user.id },
-      });
-
-      if (error) throw error;
-
-      if (data.authUrl) {
-        // Store the connection state before redirecting
-        sessionStorage.setItem('gsc_connecting', 'true');
-        sessionStorage.setItem('gsc_user_id', user.id);
-        
-        // Use full page redirect instead of popup to avoid COOP issues
-        window.location.href = data.authUrl;
-      }
-    } catch (error: unknown) {
-      logger.error("Error connecting to GSC:", error);
-      toast.error(`Failed to connect: ${error.message}`);
-      setIsConnectingGSC(false);
-    }
-  };
-
-  const fetchGSCPropertiesList = async () => {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      const { data, error } = await invokeEdgeFunction("gsc-fetch-properties", {
-        body: { userId: user.id },
-      });
-
-      if (error) {
-        logger.warn("Could not fetch GSC properties (may require OAuth setup):", error);
-        return;
-      }
-
-      if (data.properties && data.properties.length > 0) {
-        setGscProperties(data.properties);
-
-        // Auto-select primary property
-        const primary = data.properties.find((p) => p.is_primary);
-        if (primary) {
-          setSelectedProperty(primary.property_url);
-        }
-      }
-    } catch (error: unknown) {
-      logger.error("Error fetching GSC properties:", error);
-    }
-  };
-
-  const syncGSCData = async () => {
-    if (!selectedProperty) {
-      setGscSyncResults({
-        success: false,
-        error: "Please select a property first"
-      });
-      return;
-    }
-
-    setIsSyncingGSC(true);
-    setGscSyncResults(null);
-
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error("Not logged in");
-
-      const { data, error } = await invokeEdgeFunction("gsc-sync-data", {
-        body: {
-          userId: user.id,
-          propertyUrl: selectedProperty,
-          syncType: "all",
-        },
-      });
-
-      if (error) throw error;
-
-      setGscSyncResults({
-        success: true,
-        recordsSynced: data.recordsSynced || 0,
-        message: `Synced ${data.recordsSynced} records from Google Search Console!`
-      });
-      setLastSyncedAt(new Date().toISOString());
-
-      // Reload keywords to show updated GSC data
-      await loadTrackedKeywords();
-    } catch (error: unknown) {
-      logger.error("Error syncing GSC data:", error);
-      setGscSyncResults({
-        success: false,
-        error: error.message || "Failed to sync"
-      });
-    } finally {
-      setIsSyncingGSC(false);
-    }
-  };
-
-  const disconnectGSC = async () => {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      const { data: _data, error } = await invokeEdgeFunction("gsc-oauth", {
-        body: { action: "disconnect", userId: user.id },
-      });
-
-      if (error) throw error;
-
-      setGscConnected(false);
-      setGscProperties([]);
-      setSelectedProperty("");
-      setLastSyncedAt(null);
-
-      toast.success("Disconnected from Google Search Console");
-    } catch (error: unknown) {
-      logger.error("Error disconnecting from GSC:", error);
-      toast.error(`Failed to disconnect: ${error.message}`);
-    }
-  };
 
   // =====================================================
   // END GOOGLE SEARCH CONSOLE FUNCTIONS
