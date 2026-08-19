@@ -592,6 +592,13 @@ export default function Grocery() {
   const groceryVirtualizer = useVirtualizer({
     count: useVirtualGrocery ? flattenedRows.length : 0,
     getScrollElement: () => groceryListParentRef.current,
+    // US-636: first-paint guess only. Rows report their real height back via
+    // measureElement, because no constant covers all of them. Measured in
+    // Chromium: an item row is 53px bare, 65px with a w-10 photo, and 69px on
+    // a coarse pointer, where src/index.css:215 forces every button to a 44px
+    // minimum. Against this 56px guess that used to place each row closer than
+    // it rendered, and the error compounded down the list: 11 overlapping row
+    // pairs with a mouse, and all 22 on touch, the worst by 13px.
     estimateSize: (index) => {
       if (!useVirtualGrocery) return 0;
       const row = flattenedRows[index];
@@ -818,12 +825,13 @@ export default function Grocery() {
                       return (
                         <div
                           key={`header-${row.group}`}
+                          data-index={virtualRow.index}
+                          ref={groceryVirtualizer.measureElement}
                           style={{
                             position: "absolute",
                             top: 0,
                             left: 0,
                             width: "100%",
-                            height: `${virtualRow.size}px`,
                             transform: `translateY(${virtualRow.start}px)`,
                           }}
                           className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between"
@@ -841,6 +849,8 @@ export default function Grocery() {
                     return (
                       <div
                         key={item.id}
+                        data-index={virtualRow.index}
+                        ref={groceryVirtualizer.measureElement}
                         style={{
                           position: "absolute",
                           top: 0,

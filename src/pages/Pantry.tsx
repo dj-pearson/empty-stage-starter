@@ -237,6 +237,10 @@ export default function Pantry() {
   const virtualizer = useVirtualizer({
     count: useVirtual ? displayedFoods.length : 0,
     getScrollElement: () => listParentRef.current,
+    // US-636: first-paint guess only; measureElement reports the real height.
+    // A PantryListItem carries buttons, and src/index.css:215 gives every
+    // button a 44px minimum on touch, so the row outgrows any fixed estimate
+    // there and rows would creep into each other down the list.
     estimateSize: () => 64,
     overscan: 10,
   });
@@ -983,6 +987,8 @@ export default function Pantry() {
                         return (
                           <div
                             key={food.id}
+                            data-index={virtualRow.index}
+                            ref={virtualizer.measureElement}
                             style={{
                               position: "absolute",
                               top: 0,

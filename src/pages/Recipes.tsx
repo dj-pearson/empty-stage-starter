@@ -155,6 +155,10 @@ export default function Recipes() {
   const listVirtualizer = useVirtualizer({
     count: useVirtualList ? filteredRecipes.length : 0,
     getScrollElement: () => listParentRef.current,
+    // US-636: first-paint guess only; measureElement reports the real height.
+    // A RecipeListItem carries buttons, and src/index.css:215 gives every
+    // button a 44px minimum on touch, so the row outgrows any fixed estimate
+    // there and rows would creep into each other down the list.
     estimateSize: () => 72,
     overscan: 10,
   });
@@ -665,6 +669,8 @@ export default function Recipes() {
                     return (
                       <div
                         key={recipe.id}
+                        data-index={virtualRow.index}
+                        ref={listVirtualizer.measureElement}
                         style={{
                           position: "absolute",
                           top: 0,
