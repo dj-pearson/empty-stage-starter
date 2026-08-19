@@ -1,12 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import type {
-  RedirectAnalysisResults,
-  DuplicateAnalysisResults,
-  SecurityAnalysisResults,
-  LinkStructureResults as LinkStructureResultsType,
-  MobileAnalysisResults,
-  PerformanceBudgetResults,
-} from "@/types/seo-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -135,26 +127,16 @@ export function SEOManager() {
   // Monitoring & Alerts state
 
   // New SEO features state
-  const [redirectResults, setRedirectResults] = useState<RedirectAnalysisResults | null>(null);
-  const [duplicateResults, setDuplicateResults] = useState<DuplicateAnalysisResults | null>(null);
-  const [securityResults, setSecurityResults] = useState<SecurityAnalysisResults | null>(null);
-  const [linkStructureResults, setLinkStructureResults] = useState<LinkStructureResultsType | null>(null);
-  const [mobileResults, setMobileResults] = useState<MobileAnalysisResults | null>(null);
-  const [budgetResults, setBudgetResults] = useState<PerformanceBudgetResults | null>(null);
 
   // Additional operation results state
-  const [brokenLinksResults, setBrokenLinksResults] = useState<Record<string, unknown> | null>(null);
   const [blogPostsAnalysisResults, setBlogPostsAnalysisResults] = useState<Record<string, unknown> | null>(null);
   const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<Record<string, unknown> | null>(null);
-  const [backlinksResults, setBacklinksResults] = useState<Record<string, unknown>[]>([]);
   const [autoHealingResults, setAutoHealingResults] = useState<Record<string, unknown> | null>(null);
   const [fixesAppliedResults, setFixesAppliedResults] = useState<Record<string, unknown> | null>(null);
 
   // Loading states for operations
-  const [isScanningBrokenLinks, setIsScanningBrokenLinks] = useState(false);
   const [isAnalyzingBlogPosts, setIsAnalyzingBlogPosts] = useState(false);
   const [isValidatingStructuredData, setIsValidatingStructuredData] = useState(false);
-  const [isAddingBacklink, setIsAddingBacklink] = useState(false);
 
   const isMobile = useIsMobile();
 
@@ -1255,20 +1237,10 @@ RESTful API available for integrations. Contact for API access.
         <SeoPerformanceTab />
 
         {/* backlinks tracking tab (US-553 AC1) */}
-        <SeoBacklinksTab
-          backlinksResults={backlinksResults}
-          setBacklinksResults={setBacklinksResults}
-          isAddingBacklink={isAddingBacklink}
-          setIsAddingBacklink={setIsAddingBacklink}
-        />
+        <SeoBacklinksTab />
 
         {/* broken-link checker tab (US-553 AC1) */}
-        <SeoBrokenLinksTab
-          brokenLinksResults={brokenLinksResults}
-          setBrokenLinksResults={setBrokenLinksResults}
-          isScanningBrokenLinks={isScanningBrokenLinks}
-          setIsScanningBrokenLinks={setIsScanningBrokenLinks}
-        />
+        <SeoBrokenLinksTab />
 
         {/* Content Analysis Tab */}
         <SeoContentTab />
@@ -1286,27 +1258,27 @@ RESTful API available for integrations. Contact for API access.
 
         {/* Redirects Tab */}
         {/* redirects analysis tab (US-553 AC1) */}
-        <SeoRedirectsTab results={redirectResults} setResults={setRedirectResults} />
+        <SeoRedirectsTab />
 
         {/* Duplicate Content Tab */}
         {/* duplicate-content analysis tab (US-553 AC1) */}
-        <SeoDuplicateContentTab results={duplicateResults} setResults={setDuplicateResults} />
+        <SeoDuplicateContentTab />
 
         {/* Security Tab */}
         {/* security analysis tab (US-553 AC1) */}
-        <SeoSecurityTab results={securityResults} setResults={setSecurityResults} />
+        <SeoSecurityTab />
 
         {/* Link Structure Tab */}
         {/* link-structure analysis tab (US-553 AC1) */}
-        <SeoLinkStructureTab results={linkStructureResults} setResults={setLinkStructureResults} />
+        <SeoLinkStructureTab />
 
         {/* Mobile Check Tab */}
         {/* mobile-check analysis tab (US-553 AC1) */}
-        <SeoMobileCheckTab results={mobileResults} setResults={setMobileResults} />
+        <SeoMobileCheckTab />
 
         {/* Performance Budget Tab */}
         {/* budget analysis tab (US-553 AC1) */}
-        <SeoBudgetTab results={budgetResults} setResults={setBudgetResults} />
+        <SeoBudgetTab />
           </div>
         </div>
       </Tabs>

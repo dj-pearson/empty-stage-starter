@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { useState } from 'react';
 import {
   Link2,
   Link as LinkIcon,
@@ -8,38 +8,26 @@ import {
   XCircle,
   Search,
   Info,
-  Image,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TabsContent } from '@/components/ui/tabs';
-import { ImageResults } from '@/components/admin/SEOResultsDisplay';
-import type { ImageResultsSummary } from '@/types/seo-types';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 /**
- * Backlink tracking, broken-link checking and image SEO tabs extracted from the
+ * Backlink tracking and broken-link checking tabs extracted from the
  * monolithic SEOManager (US-553 AC1). Each is a trigger + inline edge-function
  * handler + its results display; state lives in the parent and is passed down as
  * props, so behavior is unchanged (behavior-preserving verbatim move).
  */
 
-export interface SeoBacklinksTabProps {
-  backlinksResults: Record<string, unknown>[];
-  setBacklinksResults: Dispatch<SetStateAction<Record<string, unknown>[]>>;
-  isAddingBacklink: boolean;
-  setIsAddingBacklink: Dispatch<SetStateAction<boolean>>;
-}
 
-export function SeoBacklinksTab({
-  backlinksResults,
-  setBacklinksResults,
-  isAddingBacklink,
-  setIsAddingBacklink,
-}: SeoBacklinksTabProps) {
+export function SeoBacklinksTab() {
+  const [backlinksResults, setBacklinksResults] = useState<Record<string, unknown>[]>([]);
+  const [isAddingBacklink, setIsAddingBacklink] = useState(false);
+
   return (
     <TabsContent value="backlinks" className="space-y-4">
       <Card>
@@ -197,19 +185,11 @@ export function SeoBacklinksTab({
   );
 }
 
-export interface SeoBrokenLinksTabProps {
-  brokenLinksResults: Record<string, unknown> | null;
-  setBrokenLinksResults: Dispatch<SetStateAction<Record<string, unknown> | null>>;
-  isScanningBrokenLinks: boolean;
-  setIsScanningBrokenLinks: Dispatch<SetStateAction<boolean>>;
-}
 
-export function SeoBrokenLinksTab({
-  brokenLinksResults,
-  setBrokenLinksResults,
-  isScanningBrokenLinks,
-  setIsScanningBrokenLinks,
-}: SeoBrokenLinksTabProps) {
+export function SeoBrokenLinksTab() {
+  const [brokenLinksResults, setBrokenLinksResults] = useState<Record<string, unknown> | null>(null);
+  const [isScanningBrokenLinks, setIsScanningBrokenLinks] = useState(false);
+
   return (
     <TabsContent value="broken-links" className="space-y-4">
       <Card>
@@ -362,102 +342,6 @@ export function SeoBrokenLinksTab({
               <li>✅ Scripts (JavaScript files)</li>
             </ul>
           </div>
-        </CardContent>
-      </Card>
-    </TabsContent>
-  );
-}
-
-export interface SeoImageAnalysisTabProps {
-  imageResults: ImageResultsSummary | null;
-  setImageResults: Dispatch<SetStateAction<ImageResultsSummary | null>>;
-}
-
-export function SeoImageAnalysisTab({ imageResults, setImageResults }: SeoImageAnalysisTabProps) {
-  return (
-    <TabsContent value="image-analysis" className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Image className="h-5 w-5" />
-            Image SEO Analyzer
-          </CardTitle>
-          <CardDescription>
-            Scan all images for SEO issues and optimization opportunities
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="image-url">Page URL to Analyze</Label>
-            <Input
-              id="image-url"
-              type="url"
-              placeholder={`${window.location.origin}/`}
-              defaultValue={`${window.location.origin}/`}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="max-file-size">Max File Size (KB)</Label>
-            <Input
-              id="max-file-size"
-              type="number"
-              defaultValue="200"
-              min="50"
-              max="2000"
-            />
-          </div>
-
-          <Button
-            className="w-full"
-            onClick={async () => {
-              const urlInput = document.getElementById('image-url') as HTMLInputElement;
-              const maxSizeInput = document.getElementById('max-file-size') as HTMLInputElement;
-
-              const url = urlInput?.value || `${window.location.origin}/`;
-              const maxFileSize = parseInt(maxSizeInput?.value || '200') * 1024;
-
-              try {
-                const { data } = await invokeEdgeFunction('analyze-images', {
-                  body: { url, maxFileSize }
-                });
-
-                if (data?.success) {
-                  setImageResults(data.data);
-                } else {
-                  throw new Error(data?.error || 'Failed to analyze images');
-                }
-              } catch (error: unknown) {
-                setImageResults({
-                  error: error.message || 'Failed to analyze images',
-                  summary: { totalImages: 0, issues: [] }
-                });
-              }
-            }}
-          >
-            <Image className="h-4 w-4 mr-2" />
-            Analyze Images
-          </Button>
-
-          <div className="rounded-lg border p-4 bg-muted/50">
-            <p className="text-sm text-muted-foreground">
-              <Info className="h-4 w-4 inline mr-2" />
-              Scans all images on the page and checks for alt text, file sizes, formats, and dimensions.
-            </p>
-          </div>
-
-          <div className="text-sm text-muted-foreground">
-            <h4 className="font-semibold mb-2">Checks:</h4>
-            <ul className="space-y-1 ml-4">
-              <li>✅ Missing or empty alt text</li>
-              <li>✅ Missing width/height attributes</li>
-              <li>✅ Oversized images</li>
-              <li>✅ Unoptimized formats (recommends WebP)</li>
-              <li>✅ Lazy loading implementation</li>
-            </ul>
-          </div>
-
-          <ImageResults results={imageResults} />
         </CardContent>
       </Card>
     </TabsContent>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   ArrowRightCircle,
   Copy,
@@ -32,6 +33,12 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { logger } from '@/lib/logger';
 
 /**
+ * US-553: each tab owns its own results. SEOManager used to declare them and
+ * hand them straight back down; nothing else ever read them. Radix keeps every
+ * TabsContent mounted, so state living here does not reset on tab change.
+ */
+
+/**
  * The six "leaf" SEO analysis tabs (redirect chains, duplicate content,
  * security headers, link structure, mobile-first, performance budget) extracted
  * from the 5.6k-line SEOManager (US-553 AC1). Each is a trigger + inline
@@ -39,12 +46,9 @@ import { logger } from '@/lib/logger';
  * and is passed down as props, so behavior is unchanged.
  */
 
-export interface SeoRedirectsTabProps {
-  results: RedirectAnalysisResults | null;
-  setResults: (value: RedirectAnalysisResults | null) => void;
-}
+export function SeoRedirectsTab() {
+  const [results, setResults] = useState<RedirectAnalysisResults | null>(null);
 
-export function SeoRedirectsTab({ results, setResults }: SeoRedirectsTabProps) {
   return (
     <TabsContent value="redirects" className="space-y-4">
       <Card>
@@ -142,12 +146,9 @@ export function SeoRedirectsTab({ results, setResults }: SeoRedirectsTabProps) {
   );
 }
 
-export interface SeoDuplicateContentTabProps {
-  results: DuplicateAnalysisResults | null;
-  setResults: (value: DuplicateAnalysisResults | null) => void;
-}
+export function SeoDuplicateContentTab() {
+  const [results, setResults] = useState<DuplicateAnalysisResults | null>(null);
 
-export function SeoDuplicateContentTab({ results, setResults }: SeoDuplicateContentTabProps) {
   return (
     <TabsContent value="duplicate-content" className="space-y-4">
       <Card>
@@ -257,12 +258,9 @@ export function SeoDuplicateContentTab({ results, setResults }: SeoDuplicateCont
   );
 }
 
-export interface SeoSecurityTabProps {
-  results: SecurityAnalysisResults | null;
-  setResults: (value: SecurityAnalysisResults | null) => void;
-}
+export function SeoSecurityTab() {
+  const [results, setResults] = useState<SecurityAnalysisResults | null>(null);
 
-export function SeoSecurityTab({ results, setResults }: SeoSecurityTabProps) {
   return (
     <TabsContent value="security" className="space-y-4">
       <Card>
@@ -350,12 +348,9 @@ export function SeoSecurityTab({ results, setResults }: SeoSecurityTabProps) {
   );
 }
 
-export interface SeoLinkStructureTabProps {
-  results: LinkStructureResultsType | null;
-  setResults: (value: LinkStructureResultsType | null) => void;
-}
+export function SeoLinkStructureTab() {
+  const [results, setResults] = useState<LinkStructureResultsType | null>(null);
 
-export function SeoLinkStructureTab({ results, setResults }: SeoLinkStructureTabProps) {
   return (
     <TabsContent value="link-structure" className="space-y-4">
       <Card>
@@ -453,12 +448,9 @@ export function SeoLinkStructureTab({ results, setResults }: SeoLinkStructureTab
   );
 }
 
-export interface SeoMobileCheckTabProps {
-  results: MobileAnalysisResults | null;
-  setResults: (value: MobileAnalysisResults | null) => void;
-}
+export function SeoMobileCheckTab() {
+  const [results, setResults] = useState<MobileAnalysisResults | null>(null);
 
-export function SeoMobileCheckTab({ results, setResults }: SeoMobileCheckTabProps) {
   return (
     <TabsContent value="mobile-check" className="space-y-4">
       <Card>
@@ -544,12 +536,9 @@ export function SeoMobileCheckTab({ results, setResults }: SeoMobileCheckTabProp
   );
 }
 
-export interface SeoBudgetTabProps {
-  results: PerformanceBudgetResults | null;
-  setResults: (value: PerformanceBudgetResults | null) => void;
-}
+export function SeoBudgetTab() {
+  const [results, setResults] = useState<PerformanceBudgetResults | null>(null);
 
-export function SeoBudgetTab({ results, setResults }: SeoBudgetTabProps) {
   return (
     <TabsContent value="budget" className="space-y-4">
       <Card>
