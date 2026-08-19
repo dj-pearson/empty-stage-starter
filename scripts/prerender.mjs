@@ -214,6 +214,27 @@ async function prerenderRoute(page, origin, route) {
   if (!canonical) throw new Error('rendered page has no canonical link');
   if (textLength < 200) throw new Error(`rendered body text is only ${textLength} chars`);
 
+  // ...and a snapshot carrying the WRONG head is worse than one missing it. The
+  // four checks above are all satisfied by a page that failed to load its own
+  // content: an "Article Not Found" render inherits index.html's title,
+  // description and canonical, and the cookie banner alone clears 200 chars. A
+  // dynamic route whose data fetch fails at prerender time would be frozen as a
+  // not-found page canonicalised to the homepage, and shipped to crawlers as a
+  // 200. Anchor the check to the route actually being rendered.
+  const normalise = (p) => (p.replace(/\/+$/, '') || '/');
+  let canonicalPath;
+  try {
+    canonicalPath = normalise(new URL(canonical, 'https://tryeatpal.com').pathname);
+  } catch {
+    throw new Error(`rendered page has an unparseable canonical: ${canonical}`);
+  }
+  if (canonicalPath !== normalise(route)) {
+    throw new Error(
+      `canonical points at ${canonicalPath} but this is ${normalise(route)} — ` +
+        'the page most likely rendered an error state and inherited the shell head'
+    );
+  }
+
   const outPath = outputPathFor(route);
   await mkdir(path.dirname(outPath), { recursive: true });
   await writeFile(outPath, html, 'utf8');
