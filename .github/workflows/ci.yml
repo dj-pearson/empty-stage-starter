@@ -45,6 +45,17 @@ jobs:
       - name: Check edge-function trees
         run: bash scripts/ci/check-function-trees.sh
 
+      # US-638: a component rendered but never imported is a ReferenceError on
+      # whatever path renders it, and it has shipped four times -- <Input>
+      # breaking six admin SEO tabs, and <AlertDialogTrigger> crashing the kid
+      # editor for two months. HARD gate: nothing pre-existing to burn down
+      # (the check is clean across all 383 components as of this commit), and
+      # nothing else catches it. ESLint's no-undef is off for TS, and tsc does
+      # report it but the typecheck step is a count-based ratchet, so one more
+      # TS2304 hides inside a backlog of 1257.
+      - name: Check components are imported
+        run: node scripts/ci/check-jsx-imports.mjs
+
       # ESLint. The repo carries a large PRE-EXISTING lint backlog (mostly
       # @typescript-eslint/no-explicit-any and unused caught-errors — see
       # US-342). The no-console rule (US-343) is fully satisfied. This used to be
