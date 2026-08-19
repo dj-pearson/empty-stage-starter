@@ -119,4 +119,25 @@ describe('profile photo object paths', () => {
     expect(uploadPath).not.toContain('Date.now()');
     expect(uploadPath).toContain('generateId()');
   });
+
+  /**
+   * US-635: iOS uploads kid photos to a DIFFERENT bucket ('images', declared
+   * only in the Supabase dashboard, not in any migration here), and it had the
+   * same guessable-path problem the web fix cured: kids/{kidId}-{unixSeconds}.
+   * Given a kid id that is ~86400 guesses for a given day, against a bucket
+   * that is public-read by URL for shipped builds.
+   *
+   * Checked as source text because there is no Swift toolchain in CI.
+   */
+  it('the iOS uploader builds an unguessable object name too', () => {
+    const source = readFileSync(
+      path.resolve(__dirname, '../../ios/EatPal/EatPal/Services/ImageUploadService.swift'),
+      'utf-8',
+    );
+    const uploadPath = source.match(/let path = "([^"]+)"/)?.[1];
+
+    expect(uploadPath).toBeDefined();
+    expect(uploadPath).toContain('UUID().uuidString');
+    expect(uploadPath).not.toContain('timeIntervalSince1970');
+  });
 });
