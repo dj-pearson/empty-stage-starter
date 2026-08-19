@@ -98,6 +98,36 @@ FROM public.kids
 GROUP BY 1
 ORDER BY 2 DESC;
 
+-- 5. US-634 pre-condition: which profile-pictures objects would become
+--    unreadable once signed URLs are the only read path?
+--
+--    US-627 scoped SELECT on that bucket to
+--      (storage.foldername(name))[1] = auth.uid()::text  OR  owner = auth.uid()
+--    and createSignedUrl requires SELECT. Verified against a stand-in with that
+--    exact policy applied: an object whose first path segment is not the owner's
+--    uuid AND whose owner column is NULL is visible to admins only -- not even
+--    to the parent whose child it is a photograph of. Today that is invisible,
+--    because the bucket is public and the app falls back to the stored public
+--    URL. At Release N+1, when public=false, every such avatar breaks.
+--
+--    unsignable > 0 means US-634 needs an owner backfill BEFORE the bucket is
+--    closed, not after.
+SELECT
+  count(*) AS objects,
+  count(*) FILTER (WHERE owner IS NOT NULL) AS signable_via_owner,
+  count(*) FILTER (
+    WHERE owner IS NULL
+      AND (storage.foldername(name))[1] ~*
+          '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  ) AS signable_via_folder,
+  count(*) FILTER (
+    WHERE owner IS NULL
+      AND coalesce((storage.foldername(name))[1], '') !~*
+          '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  ) AS unsignable
+FROM storage.objects
+WHERE bucket_id = 'profile-pictures';
+
 -- What the answers decide:
 --
 --   public = true, and a policy with roles {public} on SELECT
