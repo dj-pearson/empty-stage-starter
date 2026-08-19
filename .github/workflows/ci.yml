@@ -56,6 +56,18 @@ jobs:
       - name: Check components are imported
         run: node scripts/ci/check-jsx-imports.mjs
 
+      # A bucket created by clicking in the dashboard exists only in
+      # production: its public flag and RLS policies cannot be read from the
+      # repo, a follow-up migration has to be written blind, and a fresh
+      # environment comes up without it. That is how `images` -- every kid
+      # photo the iOS app uploads -- went unnoticed until someone read the
+      # Swift client. This gate found a second one the first time it ran
+      # (`Assets`, serving the lead-magnet PDF). Both are tracked in the
+      # script's PENDING list against the story that will declare them; that
+      # list should only ever shrink.
+      - name: Check storage buckets are declared
+        run: node scripts/ci/check-storage-buckets.mjs
+
       # CLAUDE.md records that backup-databases.ps1 and ssl-check.ps1 sat
       # unparseable for months. Nothing in this repo ever runs a .ps1 -- CI is
       # Node, deploys are Cloudflare and EAS -- so a syntax error surfaces when
