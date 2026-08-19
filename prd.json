@@ -2482,6 +2482,22 @@
       "priority": 4,
       "passes": true,
       "notes": "Written 2026-08-19 after US-639, which found the pantry's stock-status rule quietly diverging between its web and mobile implementations on negative quantities. The ladder is the same shape of risk but a much worse blast radius: it decides which food a child is offered next and how fast they climb, so a one-sided edit means a child progresses differently depending on which device the parent used. Checked it expecting to find something and found nothing - the two implementations genuinely agree, including the easy-to-get-wrong parts (bottom-rung clamping, and UTC-anchored date math on both sides rather than a local-timezone formatter). Reporting the negative result rather than manufacturing a finding, and leaving behind the guard that was missing. VERIFIED IN BOTH DIRECTIONS: changing the Swift advanceThreshold to 3 fails the constant test, and renaming the tiny_taste rung's rawValue fails the rung test; restoring either goes green. The rung test compares the WIRE values (Swift's rawValue, e.g. `case tinyTaste = \"tiny_taste\"`) because that is what reaches food_attempts.stage, not the Swift identifier. Full suite 1574 passed / 3 skipped, all 7 gates pass."
+    },
+    {
+      "id": "US-641",
+      "title": "Enforce the migration backward-compatibility rules in CI",
+      "description": "As a release owner, I want a migration that would break shipped iOS builds to fail CI, rather than relying on everyone remembering a document.",
+      "acceptanceCriteria": [
+        "IMPLEMENTED 2026-08-19. scripts/ci/check-migration-safety.sh flags DROP COLUMN, DROP TABLE, RENAME, SET NOT NULL, DROP POLICY and in-place ALTER COLUMN TYPE in migrations ADDED on the branch",
+        "Diff-scoped against the base ref, like no-new-any.sh, so the existing tree is untouched. That matters: 20260513000000_drop_user_profiles_scaffold.sql legitimately drops eleven leftover template tables (projects, teams, materials, financial_*) and carries its own refuse-if-data-present guard, and a whole-tree gate would fail on it forever and get switched off",
+        "Escape hatch with a REQUIRED reason: `-- migration-safety: allow drop-column (US-123, release N+1 of a completed deprecation)`. The point is not to forbid these forever - the CLAUDE.md flow ends with retiring the old shape - but to make it a deliberate reviewable line rather than something noticed after it ships",
+        "Comment lines are excluded from matching, so a migration that merely mentions DROP COLUMN in its header (as 20260817000000_scope_profile_picture_reads.sql does) is not flagged",
+        "Skips with a notice when the base ref is unavailable, so a shallow clone degrades rather than failing",
+        "Wired into ci.yml and `npm run check:migration-safety`"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Written 2026-08-19 after noticing that CLAUDE.md's Migration Rules section - the one that exists because the DB is shared with every shipped iOS build still on a phone - had NO enforcement anywhere. The rules were a document, and the consequence of breaking them is a migration you cannot roll back out of the App Store. Checked the current tree first: only two migrations match the patterns at all, and neither is a violation. 20260513000000 drops eleven tables, but they are leftovers from a different app template (projects, teams, materials, financial_records) and it refuses to run if they contain data; 20260817000000 only MENTIONS the forbidden statements in a comment, which is why the checker excludes comment lines. VERIFIED END TO END: committed a migration doing `ALTER TABLE public.kids DROP COLUMN nickname` and the gate failed naming the file, the line, why it breaks an old client, and the exact escape-hatch comment to add; removing the commit returned it to green. Also confirmed the escape hatch is recognised and that the three patterns (drop-column, set-not-null, rename) each fire independently. An earlier attempt to test it by STAGING the file rather than committing showed 'no new migrations' - the gate diffs commits, not the index - which was my test being wrong rather than the gate. Eight gates now pass; full suite 1574 passed / 3 skipped."
     }
   ]
 }
