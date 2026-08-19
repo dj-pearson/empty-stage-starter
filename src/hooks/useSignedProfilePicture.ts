@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import {
   refreshAtFrom,
+  retryDelayFor,
   storageRefFromPublicUrl,
   SIGNED_URL_TTL_SECONDS,
 } from '@/lib/profilePictureUrl';
@@ -36,6 +37,7 @@ export function useSignedProfilePicture(storedUrl?: string | null): string | und
     if (!bucket || !objectPath) return;
 
     let cancelled = false;
+    let failures = 0;
 
     const mint = async () => {
       const { data, error } = await supabase.storage
@@ -45,12 +47,23 @@ export function useSignedProfilePicture(storedUrl?: string | null): string | und
       if (cancelled) return;
 
       if (error || !data?.signedUrl) {
-        // Fall back to the stored public URL rather than blanking an avatar.
-        logger.warn('Could not sign profile picture, using the public URL:', error);
+        // Fall back to the stored public URL rather than blanking an avatar,
+        // and try again. Giving up after one failure is fine only while the
+        // bucket is public: once a signed URL is the only read path, one blip
+        // at refresh time would leave a broken avatar until the page reloads.
+        failures += 1;
+        const retryIn = retryDelayFor(failures);
+        logger.warn(
+          `Could not sign profile picture (attempt ${failures}), using the public URL` +
+            `${retryIn === null ? '; giving up' : `; retrying in ${retryIn}ms`}:`,
+          error,
+        );
         setSignedUrl(undefined);
+        if (retryIn !== null) timer.current = setTimeout(() => void mint(), retryIn);
         return;
       }
 
+      failures = 0;
       setSignedUrl(data.signedUrl);
 
       const now = Date.now();

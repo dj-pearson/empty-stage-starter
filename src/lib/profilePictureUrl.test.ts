@@ -6,6 +6,7 @@ import {
   SIGNED_URL_TTL_SECONDS,
   SIGNED_URL_REFRESH_MARGIN_SECONDS,
   storageRefFromPublicUrl,
+  retryDelayFor,
 } from './profilePictureUrl';
 
 const PUBLIC =
@@ -130,5 +131,23 @@ describe('storageRefFromPublicUrl', () => {
         'https://abc.supabase.co/storage/v1/object/public/images/kids/2f8c.jpg?t=1',
       )?.path,
     ).toBe('kids/2f8c.jpg');
+  });
+});
+
+describe('retryDelayFor', () => {
+  it('walks the backoff and then stops', () => {
+    expect(retryDelayFor(1)).toBe(5_000);
+    expect(retryDelayFor(2)).toBe(15_000);
+    expect(retryDelayFor(3)).toBe(45_000);
+    expect(retryDelayFor(4)).toBe(120_000);
+    // null, not a number: the caller has to decide to stop rather than
+    // defaulting to some delay and retrying forever.
+    expect(retryDelayFor(5)).toBeNull();
+    expect(retryDelayFor(99)).toBeNull();
+  });
+
+  it('treats a nonsense attempt number as the first retry', () => {
+    expect(retryDelayFor(0)).toBe(5_000);
+    expect(retryDelayFor(-3)).toBe(5_000);
   });
 });

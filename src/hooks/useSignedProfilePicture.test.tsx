@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 const createSignedUrl = vi.fn();
 const storageFrom = vi.fn((_bucket: string) => ({ createSignedUrl }));
@@ -99,5 +99,99 @@ describe('useSignedProfilePicture (US-634)', () => {
 
     expect(createSignedUrl).not.toHaveBeenCalled();
     expect(result.current).toBe(other);
+  });
+
+  /**
+   * The refresh cycle is the reason this hook exists rather than a single
+   * createSignedUrl call at render, and until these were written nothing
+   * exercised it. Both failure modes below are invisible while the bucket is
+   * still public -- the hook falls back to the stored public URL and the avatar
+   * looks fine -- and both become a broken image the moment Release N+1 makes a
+   * signed URL the only way to read the object.
+   */
+  describe('refresh cycle', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('re-mints before the URL expires', async () => {
+      createSignedUrl
+        .mockResolvedValueOnce({ data: { signedUrl: 'https://signed/first' }, error: null })
+        .mockResolvedValueOnce({ data: { signedUrl: 'https://signed/second' }, error: null });
+
+      const { result } = renderHook(() => useSignedProfilePicture(PUBLIC));
+      await waitFor(() => expect(result.current).toBe('https://signed/first'));
+
+      // TTL is 600s with a 60s margin, so the replacement is due at 540s.
+      await act(async () => {
+        vi.advanceTimersByTime(541_000);
+      });
+
+      await waitFor(() => expect(result.current).toBe('https://signed/second'));
+      expect(createSignedUrl).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries after a failed re-mint instead of giving up', async () => {
+      createSignedUrl
+        .mockResolvedValueOnce({ data: { signedUrl: 'https://signed/first' }, error: null })
+        .mockResolvedValueOnce({ data: null, error: { message: 'network' } })
+        .mockResolvedValueOnce({ data: { signedUrl: 'https://signed/recovered' }, error: null });
+
+      const { result } = renderHook(() => useSignedProfilePicture(PUBLIC));
+      await waitFor(() => expect(result.current).toBe('https://signed/first'));
+
+      await act(async () => {
+        vi.advanceTimersByTime(541_000);
+      });
+      // The failed refresh drops back to the public URL rather than blanking.
+      await waitFor(() => expect(result.current).toBe(PUBLIC));
+
+      // First retry is 5s out. Before this fix the hook stopped here for good.
+      await act(async () => {
+        vi.advanceTimersByTime(5_100);
+      });
+      await waitFor(() => expect(result.current).toBe('https://signed/recovered'));
+      expect(createSignedUrl).toHaveBeenCalledTimes(3);
+    });
+
+    it('stops retrying once the backoff is exhausted', async () => {
+      createSignedUrl.mockResolvedValue({ data: null, error: { message: 'down' } });
+
+      renderHook(() => useSignedProfilePicture(PUBLIC));
+      await waitFor(() => expect(createSignedUrl).toHaveBeenCalledTimes(1));
+
+      // 5s + 15s + 45s + 120s, then nothing. Bounded on purpose: the point is
+      // to survive a blip, not to hammer storage from every mounted avatar.
+      for (const delay of [5_000, 15_000, 45_000, 120_000]) {
+        await act(async () => {
+          vi.advanceTimersByTime(delay + 100);
+        });
+      }
+      await waitFor(() => expect(createSignedUrl).toHaveBeenCalledTimes(5));
+
+      await act(async () => {
+        vi.advanceTimersByTime(600_000);
+      });
+      expect(createSignedUrl).toHaveBeenCalledTimes(5);
+    });
+
+    it('clears its timer on unmount', async () => {
+      createSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://signed/x' }, error: null });
+
+      const { result, unmount } = renderHook(() => useSignedProfilePicture(PUBLIC));
+      await waitFor(() => expect(result.current).toBe('https://signed/x'));
+      unmount();
+
+      await act(async () => {
+        vi.advanceTimersByTime(600_000);
+      });
+      // A timer surviving unmount would re-mint for every avatar the user has
+      // ever scrolled past.
+      expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    });
   });
 });

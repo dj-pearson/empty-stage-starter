@@ -98,6 +98,27 @@ export function objectPathFromPublicUrl(
   return storageRefFromPublicUrl(url, [bucket])?.path ?? null;
 }
 
+/**
+ * How long to wait before trying again after a signing attempt fails, by
+ * attempt number. Capped rather than unbounded: the point is to survive a
+ * transient error, not to hammer storage.
+ *
+ * Giving up after one failure is the behaviour this replaces, and it is only
+ * invisible while the bucket is still public. Once Release N+1 makes a signed
+ * URL the only way to read the object, a single blip at refresh time leaves a
+ * permanently broken avatar until the page is reloaded.
+ */
+export const SIGNING_RETRY_DELAYS_MS = [5_000, 15_000, 45_000, 120_000] as const;
+
+/**
+ * Delay before retry number `attempt` (1-based), or null when the attempts are
+ * exhausted and the stored public URL is all we have.
+ */
+export function retryDelayFor(attempt: number): number | null {
+  if (attempt < 1) return SIGNING_RETRY_DELAYS_MS[0];
+  return SIGNING_RETRY_DELAYS_MS[attempt - 1] ?? null;
+}
+
 /** When a URL minted now should be replaced, as an epoch-ms timestamp. */
 export function refreshAtFrom(
   nowMs: number,
