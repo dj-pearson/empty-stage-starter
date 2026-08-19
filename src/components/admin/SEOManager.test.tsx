@@ -206,7 +206,10 @@ const tabValue = (trigger: Element) =>
 describe('SEOManager renders (US-553 decomposition net)', () => {
   it('mounts without throwing', async () => {
     await renderManager();
-    expect(await screen.findByRole('tab', { name: /audit/i })).toBeInTheDocument();
+    // toBeTruthy rather than toBeInTheDocument: jest-dom's matcher types are
+    // not wired into this project's tsconfig, and findByRole already throws
+    // if the element is absent.
+    expect(await screen.findByRole('tab', { name: /audit/i })).toBeTruthy();
   });
 
   it('still owns exactly the 23 known tabs', async () => {
