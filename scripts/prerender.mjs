@@ -26,6 +26,7 @@ import { readFile, writeFile, mkdir, copyFile, access } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveChromium } from './resolve-chromium.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -249,13 +250,20 @@ async function main() {
   let browser;
 
   try {
+    // US-637: resolve through the same helper ensure-chromium.mjs uses, so a
+    // browser it accepted is the browser launched here. `pinned` means
+    // Playwright can find its own build and needs no override; `override` and
+    // `probed` both have to be passed explicitly, since Playwright would
+    // otherwise look for the exact build number it pins and miss a pre-baked one.
+    const resolved = await resolveChromium();
+    if (resolved && resolved.source !== 'pinned') {
+      console.log(`[prerender] using chromium (${resolved.source}): ${resolved.executablePath}`);
+    }
+
     browser = await chromium.launch({
       args: ['--no-sandbox', '--disable-dev-shm-usage'],
-      // Escape hatch for environments that ship a Chromium whose build number does not
-      // match the installed Playwright (some sandboxes/CI images pre-bake one). Unset in
-      // normal builds, where Playwright resolves its own download.
-      ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE && {
-        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+      ...(resolved && resolved.source !== 'pinned' && {
+        executablePath: resolved.executablePath,
       }),
     });
 
