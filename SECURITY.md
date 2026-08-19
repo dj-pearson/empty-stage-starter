@@ -1,5 +1,5 @@
 # Security Policy - EatPal
-**Last Updated:** November 13, 2025
+**Last Updated:** August 19, 2026
 **Status:** Active
 **Security Level:** Production-Ready
 
@@ -630,13 +630,31 @@ These require action outside the repo and cannot be auto-resolved by a code chan
    secret so a leaked token cannot be used indefinitely.
 3. **Remove local PII/signing artifacts (US-557/US-562).** `user_profiles_rows.csv`,
    `user_subscriptions_rows.csv`, `EatPalDistribution.key`, `distribution.pem`, and the
-   `*.mobileprovision` files are gitignored but still present on disk. Delete them from the
-   working tree and keep signing material in a secrets manager / CI secure store.
+   `*.mobileprovision` files are gitignored but still present on a developer machine.
+   Delete them from the working tree and keep signing material in a secrets manager / CI
+   secure store.
+   - **Never committed.** All 244 commits on every local ref were scanned for `*.key`,
+     `*.pem`, `*.mobileprovision`, `*.base64.txt`, `*.p12`, `*.cer` and `*.keystore`: none
+     has ever been added. So unlike US-556, this needs **no history rewrite** - the
+     exposure is a local working copy only.
+   - **Nothing in the release pipeline reads them.** iOS signing credentials are
+     EAS-managed (`eas.json` sets no `credentialsSource`, and there is no
+     `credentials.json`), and App Store Connect auth comes from GitHub Secrets
+     (`APP_STORE_CONNECT_API_KEY_BASE64`, `..._KEY_ID`, `..._ISSUER_ID`). Deleting the
+     local copies breaks no build.
+   - **Where they belong (by reference, never value).** Any store outside a working tree:
+     a password manager entry, an encrypted volume, or the CI secret store. Point
+     `EATPAL_SIGNING_DIR` at that directory - `encode-app-profile.ps1` and
+     `encode-share-profile.ps1` now read from it and refuse to write the encoded profile
+     back into the repository. The GitHub secrets they feed are
+     `IOS_PROVISIONING_PROFILE_BASE64` and `IOS_SHARE_PROVISIONING_PROFILE_BASE64`.
+   - **Delete the `.base64.txt` output** once the secret is set; it is the profile in
+     another encoding, not a safer artifact.
 
 ---
 
-**Last Updated:** July 26, 2026
-**Next Review:** December 13, 2025
+**Last Updated:** August 19, 2026
+**Next Review:** February 19, 2027
 **Owner:** Engineering Team
 
 ---
