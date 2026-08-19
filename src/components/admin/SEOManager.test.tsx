@@ -349,3 +349,44 @@ describe('SEOManager mount-time loads (US-553 hook-extraction net)', () => {
     expect(queried).not.toContain('seo_notification_preferences');
   });
 });
+
+/**
+ * US-553: the robots/sitemap/llms editors are the one part of the extraction
+ * the tab walk above cannot vouch for. Their content lives in a <Textarea
+ * value=...>, and React writes that through the value property, not as a text
+ * node -- so a panel whose editor is blank still has non-empty textContent
+ * from its labels and buttons, and the walk passes. If useSeoFiles ever loses
+ * its mount effect (or loadSEOSettings stops calling one of the three
+ * setters), this is what notices.
+ */
+describe('SEOManager file editors populate on mount (US-553)', () => {
+  const editorFor = async (value: string) => {
+    const user = userEvent.setup();
+    const { container } = await renderManager();
+    const trigger = [...container.querySelectorAll('[role="tab"]')].find(
+      (el) => (el.getAttribute('id') ?? '').endsWith(`-trigger-${value}`),
+    );
+    if (!trigger) throw new Error(`no trigger for ${value}`);
+    // Radix keeps the panel element mounted for a11y but only renders its
+    // children while the tab is selected, so the editor does not exist until
+    // the tab is opened.
+    await user.click(trigger);
+    const panelId = trigger.getAttribute('aria-controls');
+    const panel = panelId ? container.querySelector(`[id="${CSS.escape(panelId)}"]`) : null;
+    if (!panel) throw new Error(`no panel for ${value}`);
+    await waitFor(() => {
+      if (!panel.querySelector('textarea')) throw new Error(`no editor in ${value}`);
+    });
+    return panel.querySelector('textarea') as HTMLTextAreaElement | null;
+  };
+
+  it.each([
+    ['robots', /User-agent:/],
+    ['sitemap', /<urlset/],
+    ['llms', /EatPal/],
+  ])('fills the %s editor', async (tab, marker) => {
+    const editor = await editorFor(tab);
+    expect(editor).toBeTruthy();
+    await waitFor(() => expect((editor as HTMLTextAreaElement).value).toMatch(marker));
+  }, 30_000);
+});
