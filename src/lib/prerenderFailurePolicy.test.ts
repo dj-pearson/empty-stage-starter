@@ -67,4 +67,12 @@ describe('classifyPrerenderFailures (US-570)', () => {
       classifyPrerenderFailures({ staticFailed: 0, dynamicTotal: 100, dynamicFailed: 11 }).fatal,
     ).toBe(true);
   });
+
+  it('is not upset by a run where every discovered route was skipped', () => {
+    // The wall-clock budget can skip all of them; nothing was attempted, so
+    // nothing failed. This must not divide by zero or invent a failure.
+    expect(
+      classifyPrerenderFailures({ staticFailed: 0, dynamicTotal: 0, dynamicFailed: 0 }),
+    ).toEqual({ fatal: false, reason: '' });
+  });
 });

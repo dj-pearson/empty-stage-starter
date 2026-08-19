@@ -59,6 +59,23 @@ const CONCURRENCY = Math.max(1, Number(process.env.PRERENDER_CONCURRENCY) || 4);
  * those two.
  */
 const DYNAMIC_FAILURE_TOLERANCE = 0.1;
+/**
+ * Wall-clock ceiling for the whole prerender pass.
+ *
+ * Cloudflare Pages kills a build at 20 minutes, and that budget also has to
+ * cover the install and `vite build`. Measured on a 4-CPU runner at the default
+ * concurrency, a static marketing route costs ~310ms; a blog or guide route
+ * costs more, because it waits on a live Supabase read before its content
+ * exists. Discovery is capped at 500 posts plus 2000 guides, so a fully
+ * populated site can want more time than the whole build has.
+ *
+ * When the budget runs out, the curated static routes have already been
+ * rendered (they are first in the queue) and the remaining discovered routes
+ * are skipped and COUNTED -- they ship as client-rendered shells, which is what
+ * they were before this script existed. A build that overruns and gets killed
+ * ships nothing at all, so a partial prerender is strictly the better failure.
+ */
+const BUDGET_MS = Math.max(1, Number(process.env.PRERENDER_BUDGET_MS) || 720_000);
 /** How long to let lazy chunks/fonts settle after the app first paints content. */
 const SETTLE_MS = 700;
 /**
@@ -192,6 +209,9 @@ export async function discoverDynamicRoutes(config) {
  *
  * Exported so the policy can be tested without launching a browser: it is the
  * one piece of this script that decides whether a deploy goes out.
+ *
+ * `dynamicTotal` is the number of discovered routes ATTEMPTED, not discovered:
+ * routes the wall-clock budget skipped never had a chance to fail.
  *
  * @param {{staticFailed: number, dynamicTotal: number, dynamicFailed: number}} counts
  * @returns {{fatal: boolean, reason: string}}
@@ -394,10 +414,12 @@ async function main() {
 
   const { chromium } = await import('playwright');
   const { server, port } = await startServer(DIST, shellHtml);
+  const startedAtOverall = Date.now();
   const origin = `http://127.0.0.1:${port}`;
 
   const failures = [];
   const results = [];
+  const skipped = [];
   let browser;
 
   try {
@@ -431,6 +453,7 @@ async function main() {
     // only its own worker. Output interleaves; the per-line route name is what
     // identifies it.
     const queue = [...routes];
+    const startedAt = Date.now();
     const worker = async () => {
       const page = await context.newPage();
       page.on('pageerror', (err) => console.warn(`[prerender]   page error: ${err.message}`));
@@ -438,6 +461,14 @@ async function main() {
         const next = queue.shift();
         if (!next) break;
         const { route, kind } = next;
+
+        // Static routes are never skipped: they are 14 curated marketing pages
+        // and they are what the budget exists to protect.
+        if (kind === 'dynamic' && Date.now() - startedAt > BUDGET_MS) {
+          skipped.push(route);
+          continue;
+        }
+
         try {
           const result = await prerenderRoute(page, origin, route);
           results.push({ route, kind, ...result });
@@ -465,13 +496,33 @@ async function main() {
     server.close();
   }
 
-  console.log(`\n[prerender] ${results.length}/${routes.length} route(s) prerendered.`);
+  const elapsedMs = Date.now() - startedAtOverall;
+  console.log(
+    `\n[prerender] ${results.length}/${routes.length} route(s) prerendered in ` +
+      `${(elapsedMs / 1000).toFixed(1)}s (budget ${(BUDGET_MS / 1000).toFixed(0)}s).`
+  );
+
+  if (skipped.length) {
+    // Never a silent truncation: a build log that does not say what was dropped
+    // reads as "everything is prerendered" when it is not.
+    console.warn(
+      `\n[prerender] ${skipped.length} discovered route(s) were NOT prerendered -- the ` +
+        `${(BUDGET_MS / 1000).toFixed(0)}s budget ran out. They ship as client-rendered\n` +
+        `            shells. Raise PRERENDER_BUDGET_MS or PRERENDER_CONCURRENCY, or narrow\n` +
+        `            the discovery limits in scripts/prerender-routes.json. First few:\n` +
+        skipped.slice(0, 5).map((r) => `              ${r}`).join('\n')
+    );
+  }
 
   if (!failures.length) return;
 
   const verdict = classifyPrerenderFailures({
     staticFailed: failures.filter((f) => f.kind === 'static').length,
-    dynamicTotal: routes.filter((r) => r.kind === 'dynamic').length,
+    // Attempted, not discovered. A route the budget skipped was never given a
+    // chance to fail, so counting it here would dilute the failure rate: 2 real
+    // failures out of 10 attempted is a 20% problem, and calling it 2 out of
+    // 2010 would wave it through.
+    dynamicTotal: routes.filter((r) => r.kind === 'dynamic').length - skipped.length,
     dynamicFailed: failures.filter((f) => f.kind === 'dynamic').length,
   });
 
