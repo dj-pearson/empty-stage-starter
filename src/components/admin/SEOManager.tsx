@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,17 +40,14 @@ import {
   DollarSign,
   Image,
 } from "lucide-react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
-import { logger } from "@/lib/logger";
 
 // AuditResult, SEOScore and the pure scoring logic live in src/lib/seoScore.ts
 // (unit-tested) so the scoring math is verifiable outside this large component (US-553 AC1).
 import { getScoreColor } from "@/lib/seoScore";
 import { SeoFilesTabs } from "@/components/admin/seo/SeoFilesTabs";
-import { SeoMetaTab, type MetaTags } from "@/components/admin/seo/SeoMetaTab";
+import { SeoMetaTab } from "@/components/admin/seo/SeoMetaTab";
 import { SeoStructuredDataTab } from "@/components/admin/seo/SeoStructuredDataTab";
 import { SeoCompetitorsTab } from "@/components/admin/seo/SeoCompetitorsTab";
 import { SeoPagesTab } from "@/components/admin/seo/SeoPagesTab";
@@ -66,6 +63,7 @@ import { useSeoCompetitors } from "@/components/admin/seo/useSeoCompetitors";
 import { useSeoAudit } from "@/components/admin/seo/useSeoAudit";
 import { useSeoAutoHealing } from "@/components/admin/seo/useSeoAutoHealing";
 import { useSeoPageAnalysis } from "@/components/admin/seo/useSeoPageAnalysis";
+import { useSeoFiles } from "@/components/admin/seo/useSeoFiles";
 import {
   SeoRedirectsTab,
   SeoDuplicateContentTab,
@@ -84,24 +82,7 @@ import {
 } from "@/components/admin/seo/SeoLinkAuditTabs";
 
 export function SEOManager() {
-  const [robotsTxt, setRobotsTxt] = useState("");
-  const [sitemapXml, setSitemapXml] = useState("");
-  const [llmsTxt, setLlmsTxt] = useState("");
-  const [isRegeneratingSitemap, setIsRegeneratingSitemap] = useState(false);
-  const [metaTags, setMetaTags] = useState<MetaTags>({
-    title: "EatPal - Picky Eater Meal Planning Made Easy",
-    description:
-      "Plan weekly meals for picky eaters with safe foods and daily try bites. Auto-generate grocery lists and track meal results.",
-    keywords: "meal planning, picky eaters, kid meals, grocery list, meal tracker",
-    og_title: "EatPal - Picky Eater Solutions",
-    og_description:
-      "Simple meal planning app for parents of picky eaters with weekly rotation and grocery list generation",
-    og_image: "https://lovable.dev/opengraph-image-p98pqg.png",
-    twitter_card: "summary_large_image",
-    twitter_site: "@lovable_dev",
-  });
 
-  const [structuredData, setStructuredData] = useState<Record<string, unknown>>({});
 
   const [auditUrl, setAuditUrl] = useState(window.location.origin);
   // Read partway through a long audit run, so the hook takes a getter over
@@ -117,10 +98,8 @@ export function SEOManager() {
   // New SEO features state
 
   // Additional operation results state
-  const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<Record<string, unknown> | null>(null);
 
   // Loading states for operations
-  const [isValidatingStructuredData, setIsValidatingStructuredData] = useState(false);
 
   const isMobile = useIsMobile();
 
@@ -138,6 +117,25 @@ export function SEOManager() {
     isAnalyzingBlogPosts,
     analyzeBlogPostsSEO,
   } = useSeoPageAnalysis();
+
+  const {
+    robotsTxt,
+    setRobotsTxt,
+    sitemapXml,
+    setSitemapXml,
+    llmsTxt,
+    setLlmsTxt,
+    isRegeneratingSitemap,
+    metaTags,
+    setMetaTags,
+    structuredData,
+    setStructuredData,
+    regenerateSitemap,
+    loadSEOSettings,
+    handleCopyToClipboard,
+    handleDownloadFile,
+    handleUpdateMetaTags,
+  } = useSeoFiles();
 
   const {
     auditResults,
@@ -214,11 +212,6 @@ export function SEOManager() {
     saveNotificationPreferences,
   } = useSeoMonitoring();
 
-  useEffect(() => {
-    loadSEOSettings();
-    // The GSC connection check and the OAuth-return handshake moved into
-    // useGscConnection with the state they touch (US-553).
-  }, []);
 
 
 
@@ -247,254 +240,8 @@ export function SEOManager() {
 
 
 
-  const regenerateSitemap = async () => {
-    setIsRegeneratingSitemap(true);
-    
-    try {
-      // Fetch all published blog posts
-      const { data: posts, error } = await supabase
-        .from('blog_posts')
-        .select('slug, updated_at, published_at, featured_image_url')
-        .eq('status', 'published')
-        .lte('published_at', new Date().toISOString())
-        .order('published_at', { ascending: false });
 
-      if (error) throw error;
 
-      const baseUrl = window.location.origin;
-      const today = new Date().toISOString().split('T')[0];
-
-      // Static pages
-      const staticPages = [
-        { url: "/", priority: "1.0", changefreq: "daily", lastmod: today },
-        { url: "/auth", priority: "0.8", changefreq: "monthly", lastmod: today },
-        { url: "/pricing", priority: "0.9", changefreq: "weekly", lastmod: today },
-        { url: "/dashboard", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/planner", priority: "0.9", changefreq: "weekly", lastmod: today },
-        { url: "/kids", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/tracker", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/pantry", priority: "0.7", changefreq: "weekly", lastmod: today },
-        { url: "/recipes", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/grocery", priority: "0.7", changefreq: "weekly", lastmod: today },
-        { url: "/blog", priority: "0.8", changefreq: "daily", lastmod: today },
-        { url: "/faq", priority: "0.7", changefreq: "monthly", lastmod: today },
-        { url: "/contact", priority: "0.6", changefreq: "monthly", lastmod: today },
-        { url: "/privacy", priority: "0.3", changefreq: "yearly", lastmod: today },
-        { url: "/terms", priority: "0.3", changefreq: "yearly", lastmod: today },
-      ];
-
-      // Build sitemap
-      let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
-        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
-        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
-
-  <!-- Homepage -->
-  <url>
-    <loc>${baseUrl}/</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-    <image:image>
-      <image:loc>${baseUrl}/Cover.webp</image:loc>
-      <image:title>EatPal - Kids Meal Planning for Picky Eaters</image:title>
-      <image:caption>Meal planning for picky eaters and selective eating</image:caption>
-    </image:image>
-  </url>
-
-`;
-
-      // Add static pages
-      staticPages.slice(1).forEach(page => {
-        sitemap += `  <!-- ${page.url.replace('/', '').replace('-', ' ').toUpperCase() || 'Page'} -->
-  <url>
-    <loc>${baseUrl}${page.url}</loc>
-    <lastmod>${page.lastmod}</lastmod>
-    <changefreq>${page.changefreq}</changefreq>
-    <priority>${page.priority}</priority>
-  </url>
-
-`;
-      });
-
-      // Add blog posts
-      if (posts && posts.length > 0) {
-        sitemap += `  <!-- Blog Posts (${posts.length} posts) -->\n`;
-        posts.forEach(post => {
-          const lastmod = post.updated_at 
-            ? new Date(post.updated_at).toISOString().split('T')[0]
-            : new Date(post.published_at).toISOString().split('T')[0];
-
-          sitemap += `  <url>
-    <loc>${baseUrl}/blog/${post.slug}</loc>
-    <lastmod>${lastmod}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>`;
-
-          // Add featured image if available
-          if (post.featured_image_url) {
-            sitemap += `
-    <image:image>
-      <image:loc>${post.featured_image_url.startsWith('http') ? post.featured_image_url : baseUrl + post.featured_image_url}</image:loc>
-    </image:image>`;
-          }
-
-          sitemap += `
-  </url>
-
-`;
-        });
-      }
-
-      sitemap += `</urlset>`;
-
-      setSitemapXml(sitemap);
-      toast.success(`Sitemap regenerated with ${posts?.length || 0} blog posts!`);
-    } catch (error) {
-      logger.error('Error regenerating sitemap:', error);
-      toast.error('Failed to regenerate sitemap');
-    } finally {
-      setIsRegeneratingSitemap(false);
-    }
-  };
-
-  const loadSEOSettings = () => {
-    // Generate default robots.txt
-    const defaultRobots = `# Robots.txt for EatPal
-User-agent: *
-Allow: /
-Disallow: /admin
-Disallow: /api/
-Disallow: /auth/
-
-# Sitemap location
-Sitemap: ${window.location.origin}/sitemap.xml
-
-# Crawl delay (optional)
-Crawl-delay: 1
-
-# Popular search engines
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Slurp
-Allow: /`;
-
-    setRobotsTxt(defaultRobots);
-
-    // Generate sitemap.xml
-    const pages = [
-      { url: "/", priority: "1.0", changefreq: "daily" },
-      { url: "/dashboard", priority: "0.8", changefreq: "weekly" },
-      { url: "/planner", priority: "0.9", changefreq: "weekly" },
-      { url: "/pantry", priority: "0.7", changefreq: "weekly" },
-      { url: "/recipes", priority: "0.8", changefreq: "weekly" },
-      { url: "/grocery", priority: "0.7", changefreq: "weekly" },
-    ];
-
-    const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${pages
-  .map(
-    (page) => `  <url>
-    <loc>${window.location.origin}${page.url}</loc>
-    <changefreq>${page.changefreq}</changefreq>
-    <priority>${page.priority}</priority>
-    <lastmod>${new Date().toISOString().split("T")[0]}</lastmod>
-  </url>`
-  )
-  .join("\n")}
-</urlset>`;
-
-    setSitemapXml(sitemapContent);
-
-    // Generate llms.txt
-    const defaultLlms = `# EatPal - Meal Planning for Picky Eaters
-
-## About
-EatPal is a meal planning application designed specifically for parents of picky eaters.
-It helps families plan weekly meals using safe foods and introduces new foods gradually
-through daily "try bites."
-
-## Features
-- Child profile management with dietary restrictions and allergens
-- Pantry management with safe foods and try bites
-- Weekly meal planner with drag-and-drop interface
-- Recipe library with kid-friendly meals
-- Automatic grocery list generation
-- Meal result tracking and notes
-
-## Target Audience
-Parents of picky eaters aged 2-12 years old looking for structured meal planning solutions
-
-## Technology
-React, TypeScript, Supabase, Vite, shadcn/ui, Tailwind CSS
-
-## Contact
-For inquiries: support@eatpal.com
-
-## Documentation
-Full documentation available at: ${window.location.origin}/docs
-
-## API
-RESTful API available for integrations. Contact for API access.
-`;
-
-    setLlmsTxt(defaultLlms);
-
-    // Generate structured data (JSON-LD)
-    const structuredDataSchema = {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      name: "EatPal",
-      applicationCategory: "LifestyleApplication",
-      operatingSystem: "Web Browser",
-      description:
-        "Meal planning application for parents of picky eaters with weekly meal rotation and grocery list generation",
-      offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
-      },
-      // No aggregateRating. This generator used to emit 4.8 from 127 ratings, which
-      // nothing backs; a site publishing ratings about its own product is self-serving
-      // markup, ineligible for rich results and a manual-action risk when invented.
-      // Wire it to a real rating store before re-adding.
-      creator: {
-        "@type": "Organization",
-        name: "EatPal",
-        url: window.location.origin,
-      },
-    };
-
-    setStructuredData(structuredDataSchema);
-  };
-
-  const handleCopyToClipboard = (content: string, label: string) => {
-    navigator.clipboard.writeText(content);
-    toast.success(`${label} copied to clipboard`);
-  };
-
-  const handleDownloadFile = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    toast.success(`${filename} downloaded`);
-  };
-
-  const handleUpdateMetaTags = () => {
-    // In a real implementation, this would update the database and index.html
-    toast.success("Meta tags configuration saved. Update index.html manually with these values.");
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -1068,10 +815,6 @@ RESTful API available for integrations. Contact for API access.
         <SeoStructuredDataTab
           structuredData={structuredData}
           setStructuredData={setStructuredData}
-          isValidatingStructuredData={isValidatingStructuredData}
-          setIsValidatingStructuredData={setIsValidatingStructuredData}
-          structuredDataValidationResults={structuredDataValidationResults}
-          setStructuredDataValidationResults={setStructuredDataValidationResults}
           onCopy={handleCopyToClipboard}
           onDownload={handleDownloadFile}
         />
