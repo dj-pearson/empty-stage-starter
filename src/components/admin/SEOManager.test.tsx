@@ -123,12 +123,18 @@ vi.mock('@/integrations/supabase/client', () => {
     });
   };
 
+  // Records every table touched, so a test can assert WHICH queries a mount
+  // fires and HOW MANY times. That is the signal a hook extraction can break
+  // without breaking any prop: a lost load queries nothing, an unstable
+  // dependency queries the same table on every render.
+  const from = vi.fn((table: string) => builderFor(table));
+
   return {
     supabase: {
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null }),
       },
-      from: vi.fn((table: string) => builderFor(table)),
+      from,
       functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
     },
   };
@@ -254,4 +260,72 @@ describe('SEOManager renders (US-553 decomposition net)', () => {
     // 23 activations of a 4000-line component; the default 5s is not enough,
     // and the point of this test is covering every tab, not speed.
   }, 120_000);
+});
+
+/**
+ * US-553: the net for the half of AC1 that is still open.
+ *
+ * Every tab is now presentational, and the next step is pulling SEOManager's
+ * 57 useState and 26 async handlers into hooks. That change cannot break a
+ * prop (typecheck:seo covers those) and need not break a render (the tab walk
+ * covers that) -- it breaks EFFECT TIMING: a load that silently stops running,
+ * or a dependency that goes unstable and refetches on every render.
+ *
+ * So this pins the mount-time query behaviour. It is a characterisation test:
+ * it records what SEOManager does today, not what it ideally should, so that
+ * a refactor which changes it has to do so deliberately.
+ */
+describe('SEOManager mount-time loads (US-553 hook-extraction net)', () => {
+  const tablesQueried = async () => {
+    const { supabase } = await import('@/integrations/supabase/client');
+    const from = supabase.from as unknown as { mock: { calls: unknown[][] } };
+    return from.mock.calls.map((call) => call[0] as string);
+  };
+
+  it('loads exactly the tables its mount effect asks for', async () => {
+    await renderManager();
+    await waitFor(async () => expect((await tablesQueried()).length).toBe(3));
+
+    // Three of the five mount-effect calls hit Postgres. loadSEOSettings is
+    // local only -- it generates default robots.txt/sitemap text and queries
+    // nothing -- and checkGSCConnection goes through an edge function, so
+    // neither shows up here.
+    expect([...new Set(await tablesQueried())].sort()).toEqual([
+      'seo_competitor_analysis',
+      'seo_keywords',
+      'seo_page_scores',
+    ]);
+  });
+
+  it('queries each of them once, not once per render', async () => {
+    await renderManager();
+    await waitFor(async () => expect((await tablesQueried()).length).toBe(3));
+
+    // A hook with an unstable dependency refetches on every render, which is
+    // invisible in the UI and expensive in production. Counts stay at 1.
+    const counts = (await tablesQueried()).reduce<Record<string, number>>((acc, table) => {
+      acc[table] = (acc[table] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    expect(counts).toEqual({
+      seo_keywords: 1,
+      seo_competitor_analysis: 1,
+      seo_page_scores: 1,
+    });
+  });
+
+  it('does not query the monitoring tables until that tab is opened', async () => {
+    await renderManager();
+    await waitFor(async () => expect((await tablesQueried()).length).toBe(3));
+
+    // loadMonitoringData is deliberately lazy - the monitoring tab reads
+    // activeTab so it only loads while open. A hook extraction that hoists it
+    // to mount would quietly add four queries to every admin page view.
+    const queried = await tablesQueried();
+    expect(queried).not.toContain('seo_alerts');
+    expect(queried).not.toContain('seo_alert_rules');
+    expect(queried).not.toContain('seo_monitoring_schedules');
+    expect(queried).not.toContain('seo_notification_preferences');
+  });
 });

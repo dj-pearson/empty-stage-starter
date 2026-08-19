@@ -357,9 +357,13 @@ export function SEOManager() {
 
       if (error) throw error;
 
-      setGscConnected(data.connected || false);
+      // invokeEdgeFunction leaves `data` null for an empty or non-JSON
+      // response, and the catch below would then log a TypeError and leave the
+      // panel looking disconnected for the wrong reason. Treat a missing body
+      // as "not connected" explicitly.
+      setGscConnected(data?.connected === true);
 
-      if (data.connected) {
+      if (data?.connected) {
         // Load properties
         await fetchGSCPropertiesList();
       }
