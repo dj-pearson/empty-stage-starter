@@ -1,0 +1,16 @@
+{
+  "$comment": [
+    "US-553: a SCOPED typecheck of the extracted admin/seo components.",
+    "A full `tsc -b` needs ~4GB and gets OOM-killed in some CI/agent containers,",
+    "which is how SeoAnalysisTabs.tsx shipped using <Input> without importing it:",
+    "the type error existed, nothing ever ran the check that would print it.",
+    "This project covers only the extracted tree, runs in seconds, and is what",
+    "`npm run typecheck:seo` gates on."
+  ],
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/components/admin/seo/**/*.tsx"]
+}
