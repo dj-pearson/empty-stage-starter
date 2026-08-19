@@ -106,7 +106,7 @@ function startServer(distDir, shellHtml) {
  * Returns [] with a warning when credentials are missing so a credential-less build
  * still produces the static routes rather than failing outright.
  */
-async function discoverDynamicRoutes(config) {
+export async function discoverDynamicRoutes(config) {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
@@ -305,7 +305,15 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error('[prerender] fatal:', error);
-  process.exitCode = 1;
-});
+// Only prerender when run as a script. Importing this module (the discovery
+// tests do) must not kick off a build.
+const isEntrypoint =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+
+if (isEntrypoint) {
+  main().catch((error) => {
+    console.error('[prerender] fatal:', error);
+    process.exitCode = 1;
+  });
+}
