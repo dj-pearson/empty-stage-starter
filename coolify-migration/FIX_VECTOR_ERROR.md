@@ -203,12 +203,12 @@ Once Vector starts successfully:
 
 3. **Get connection string**
    ```
-   postgresql://postgres:[PASSWORD]@[YOUR-CONTABO-IP]:5432/postgres
+   postgresql://postgres:$PGPASSWORD@[YOUR-CONTABO-IP]:5432/postgres
    ```
 
 4. **Test connection from your machine**
    ```bash
-   psql "postgresql://postgres:[PASSWORD]@[YOUR-CONTABO-IP]:5432/postgres" -c "SELECT 1;"
+   psql "postgresql://postgres:$PGPASSWORD@[YOUR-CONTABO-IP]:5432/postgres" -c "SELECT 1;"
    ```
 
 ---

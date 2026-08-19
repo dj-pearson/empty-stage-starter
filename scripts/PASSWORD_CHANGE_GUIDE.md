@@ -143,10 +143,10 @@ POSTGRES_PASSWORD=new_password
 DB_PASSWORD=new_password
 
 # Connection strings (password is URL-encoded)
-DATABASE_URL=postgresql://postgres:new_password@db:5432/postgres
-GOTRUE_DATABASE_URL=postgresql://postgres:new_password@db:5432/postgres
-STORAGE_DATABASE_URL=postgresql://postgres:new_password@db:5432/postgres
-META_DATABASE_URL=postgresql://postgres:new_password@db:5432/postgres
+DATABASE_URL=postgresql://postgres:$PGPASSWORD@db:5432/postgres
+GOTRUE_DATABASE_URL=postgresql://postgres:$PGPASSWORD@db:5432/postgres
+STORAGE_DATABASE_URL=postgresql://postgres:$PGPASSWORD@db:5432/postgres
+META_DATABASE_URL=postgresql://postgres:$PGPASSWORD@db:5432/postgres
 ```
 
 ## Service Restart Order
