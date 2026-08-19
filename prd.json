@@ -2466,6 +2466,22 @@
       "priority": 5,
       "passes": true,
       "notes": "Found 2026-08-19 by generalising a different bug class rather than by looking for this. Wrote a detector for symbols exported from more than one module, after the duplicate SeoImageAnalysisTab in US-553. It returned 52 hits, and most were legitimate barrel re-exports - too noisy to ship as a gate, so it was NOT made permanent. One hit was real signal: LOW_STOCK_THRESHOLD defined in two modules. The constant agreed (2 in both), but the functions around it did not. WORTH RECORDING FOR NEXT TIME: my first read was 'foodFilters.ts is dead code, nothing imports it' - wrong, because I had grepped only src/ and the importer is app/(tabs)/pantry.tsx in the Expo tree. The module is not dead, it is the mobile half of a two-platform pair, which is exactly why it drifted. Fixed, pinned, and the drift-detection idea deliberately not turned into a gate because the signal-to-noise did not justify one. Verified: full suite 1566 passed / 3 skipped, all 7 gates pass, eslint clean."
+    },
+    {
+      "id": "US-640",
+      "title": "Guard the exposure ladder against TypeScript/Swift drift",
+      "description": "As a parent, I want my child's ladder to progress the same way whichever device I log an exposure from.",
+      "acceptanceCriteria": [
+        "NO DRIFT FOUND 2026-08-19 - this is a guard, not a fix. src/lib/exposureLadder.ts and ios/EatPal/EatPal/Ladder/ExposureLadderPolicy.swift were compared by hand and agree completely",
+        "Constants match: advanceThreshold 2, repeatDays 2, cooldownDays 4, tantrumCooldownDays 7, autoPauseRefusals 2",
+        "All four outcome branches match, including mastery on a success at the top rung, hold-the-rung on partial, step-down plus auto-pause on the second consecutive refusal, and backed_off with a 7-day rest on tantrum",
+        "Both clamp at the bottom rung rather than underflowing, and both anchor date arithmetic to UTC - TS via Date.UTC, Swift via TimeZone(secondsFromGMT: 0) - so next_due_on cannot differ by a day for a parent west of GMT",
+        "src/lib/exposureLadder.parity.test.ts pins the five constants and the eight rung wire values against the Swift source text, since there is no Swift toolchain in CI",
+        "Known limit: source-text comparison cannot prove behavioural equivalence. It pins the numbers and the vocabulary, which is where a one-sided edit does its damage; the branch logic was verified by hand once and would need re-checking if either side is restructured"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Written 2026-08-19 after US-639, which found the pantry's stock-status rule quietly diverging between its web and mobile implementations on negative quantities. The ladder is the same shape of risk but a much worse blast radius: it decides which food a child is offered next and how fast they climb, so a one-sided edit means a child progresses differently depending on which device the parent used. Checked it expecting to find something and found nothing - the two implementations genuinely agree, including the easy-to-get-wrong parts (bottom-rung clamping, and UTC-anchored date math on both sides rather than a local-timezone formatter). Reporting the negative result rather than manufacturing a finding, and leaving behind the guard that was missing. VERIFIED IN BOTH DIRECTIONS: changing the Swift advanceThreshold to 3 fails the constant test, and renaming the tiny_taste rung's rawValue fails the rung test; restoring either goes green. The rung test compares the WIRE values (Swift's rawValue, e.g. `case tinyTaste = \"tiny_taste\"`) because that is what reaches food_attempts.stage, not the Swift identifier. Full suite 1574 passed / 3 skipped, all 7 gates pass."
     }
   ]
 }
