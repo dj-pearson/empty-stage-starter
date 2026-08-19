@@ -42,8 +42,32 @@ const ROUTES_FILE = path.join(__dirname, 'prerender-routes.json');
 
 /** Wall-clock budget per route before we give up and fail the build. */
 const ROUTE_TIMEOUT_MS = 45_000;
+/**
+ * How many routes render at once. The static list is 14 routes, but the
+ * discovered list is capped at 500 blog posts + 2000 pSEO pages, and Cloudflare
+ * Pages kills a build at 20 minutes -- serial rendering would blow that budget
+ * long before it ran out of routes. Pages are cheap; the browser is not.
+ */
+const CONCURRENCY = Math.max(1, Number(process.env.PRERENDER_CONCURRENCY) || 4);
+/**
+ * Share of DISCOVERED routes allowed to fail before the build fails with them.
+ * A curated static route failing always fails the build -- that list is fixed
+ * and a break there means the marketing site is broken. Discovered routes are
+ * different: one post with a bad fetch should not block a deploy of the other
+ * 499, but an RLS change that takes out every blog read must not pass as 500
+ * individually-tolerable failures. A rate, not a count, is what separates
+ * those two.
+ */
+const DYNAMIC_FAILURE_TOLERANCE = 0.1;
 /** How long to let lazy chunks/fonts settle after the app first paints content. */
 const SETTLE_MS = 700;
+/**
+ * Budget for the <head> to name the route being rendered. Separate from (and
+ * much shorter than) ROUTE_TIMEOUT_MS: navigation can legitimately be slow,
+ * but once the app has painted, Helmet commits in the same tick. A route still
+ * wearing the shell's head after this long is not slow, it is wrong.
+ */
+const HEAD_TIMEOUT_MS = 15_000;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -163,6 +187,51 @@ export async function discoverDynamicRoutes(config) {
   return routes;
 }
 
+/**
+ * Decide whether a set of prerender failures should fail the build.
+ *
+ * Exported so the policy can be tested without launching a browser: it is the
+ * one piece of this script that decides whether a deploy goes out.
+ *
+ * @param {{staticFailed: number, dynamicTotal: number, dynamicFailed: number}} counts
+ * @returns {{fatal: boolean, reason: string}}
+ */
+export function classifyPrerenderFailures({ staticFailed, dynamicTotal, dynamicFailed }) {
+  if (staticFailed > 0) {
+    return {
+      fatal: true,
+      reason:
+        `${staticFailed} curated route(s) failed. These are a fixed list of public marketing ` +
+        'pages; a failure there means the site itself is broken, not that one row was bad.',
+    };
+  }
+
+  if (dynamicFailed === 0) return { fatal: false, reason: '' };
+
+  const rate = dynamicFailed / dynamicTotal;
+  if (rate > DYNAMIC_FAILURE_TOLERANCE) {
+    return {
+      fatal: true,
+      reason:
+        `${dynamicFailed}/${dynamicTotal} discovered route(s) failed (` +
+        `${(rate * 100).toFixed(1)}%, over the ${DYNAMIC_FAILURE_TOLERANCE * 100}% tolerance). ` +
+        'A failure rate this high is a systemic read problem -- an RLS rule, a schema change, ' +
+        'a down database -- not a handful of bad rows.',
+    };
+  }
+
+  return {
+    fatal: false,
+    reason:
+      `${dynamicFailed}/${dynamicTotal} discovered route(s) failed, under the ` +
+      `${DYNAMIC_FAILURE_TOLERANCE * 100}% tolerance. They ship as client-rendered shells, ` +
+      'which is what they were before this script existed. Fix them, but do not block the deploy.',
+  };
+}
+
+/** "/blog/" and "/blog" are the same route; "/" stays "/". */
+const normalisePath = (p) => p.replace(/\/+$/, '') || '/';
+
 /** dist/pricing/index.html for "/pricing"; dist/index.html for "/". */
 function outputPathFor(route) {
   if (route === '/') return path.join(DIST, 'index.html');
@@ -188,6 +257,45 @@ async function prerenderRoute(page, origin, route) {
     },
     { timeout: ROUTE_TIMEOUT_MS }
   );
+
+  // #root having text does not mean react-helmet-async has flushed. Until it
+  // commits, the document still wears index.html's <head> -- so snapshotting
+  // after a fixed sleep is a race. It held at CONCURRENCY=1 and broke on the
+  // first run at 4: /faq, /pricing and /blog were captured still carrying the
+  // shell's homepage canonical, and the route-anchored check below caught all
+  // three. Wait for the head to actually name this route rather than guessing
+  // how long Helmet needs under load.
+  //
+  // "/" is the one route this cannot vouch for: index.html ships a static
+  // <link rel=canonical href=https://tryeatpal.com/> (which is exactly why an
+  // error state on any other route inherits the homepage canonical), so the
+  // condition is already true before React boots. SETTLE_MS still covers it.
+  try {
+    await page.waitForFunction(
+      (expected) => {
+        const href = document.head
+          .querySelector('link[rel="canonical"]')
+          ?.getAttribute('href');
+        if (!href) return false;
+        try {
+          return (
+            (new URL(href, 'https://tryeatpal.com').pathname.replace(/\/+$/, '') || '/') === expected
+          );
+        } catch {
+          return false;
+        }
+      },
+      normalisePath(route),
+      { timeout: HEAD_TIMEOUT_MS }
+    );
+  } catch {
+    // Playwright's own message here is just "Timeout exceeded", which tells a
+    // build log nothing. Say what did not happen.
+    throw new Error(
+      `<head> never claimed ${normalisePath(route)} within ${HEAD_TIMEOUT_MS}ms — ` +
+        'the route most likely rendered an error state and kept the shell head'
+    );
+  }
 
   // Let lazily-imported sections (hero, schema components) mount and Helmet flush.
   await page.waitForTimeout(SETTLE_MS);
@@ -221,16 +329,15 @@ async function prerenderRoute(page, origin, route) {
   // dynamic route whose data fetch fails at prerender time would be frozen as a
   // not-found page canonicalised to the homepage, and shipped to crawlers as a
   // 200. Anchor the check to the route actually being rendered.
-  const normalise = (p) => (p.replace(/\/+$/, '') || '/');
   let canonicalPath;
   try {
-    canonicalPath = normalise(new URL(canonical, 'https://tryeatpal.com').pathname);
+    canonicalPath = normalisePath(new URL(canonical, 'https://tryeatpal.com').pathname);
   } catch {
     throw new Error(`rendered page has an unparseable canonical: ${canonical}`);
   }
-  if (canonicalPath !== normalise(route)) {
+  if (canonicalPath !== normalisePath(route)) {
     throw new Error(
-      `canonical points at ${canonicalPath} but this is ${normalise(route)} — ` +
+      `canonical points at ${canonicalPath} but this is ${normalisePath(route)} — ` +
         'the page most likely rendered an error state and inherited the shell head'
     );
   }
@@ -254,12 +361,35 @@ async function main() {
 
   const config = JSON.parse(await readFile(ROUTES_FILE, 'utf8'));
   const dynamicRoutes = await discoverDynamicRoutes(config.dynamic ?? {});
-  const routes = [...new Set([...config.static, ...dynamicRoutes])];
+
+  // Kind travels with the route because the failure policy below treats the two
+  // lists differently. A route in both lists counts as static, the stricter of
+  // the two.
+  const staticSet = new Set(config.static);
+  const routes = [
+    ...config.static.map((route) => ({ route, kind: 'static' })),
+    ...[...new Set(dynamicRoutes)]
+      .filter((route) => !staticSet.has(route))
+      .map((route) => ({ route, kind: 'dynamic' })),
+  ];
 
   // Snapshot the un-prerendered shell and keep a copy on disk. app-shell.html is the
   // document Cloudflare Pages can be pointed at for routes we do not prerender, and it
   // is what this script's own dev server falls back to.
   const shellHtml = await readFile(path.join(DIST, 'index.html'), 'utf8');
+
+  // Running this twice without an intervening `vite build` would take the
+  // PREVIOUS run's prerendered homepage as the shell, so every other route
+  // would render on top of homepage markup and bake the remnants into its
+  // snapshot. Sizes drift and nothing reports an error. `npm run build` always
+  // rebuilds first; a manual re-run is the case this catches.
+  if (!/<div id="root">\s*<\/div>/.test(shellHtml)) {
+    throw new Error(
+      `${path.join(DIST, 'index.html')} is already prerendered (its #root is not empty). ` +
+        'Run `vite build` again before prerendering, or use `npm run build`.'
+    );
+  }
+
   await copyFile(path.join(DIST, 'index.html'), path.join(DIST, 'app-shell.html'));
 
   const { chromium } = await import('playwright');
@@ -297,22 +427,35 @@ async function main() {
         'Mozilla/5.0 (compatible; EatPalPrerender/1.0; +https://tryeatpal.com) HeadlessChrome',
     });
 
-    const page = await context.newPage();
-    page.on('pageerror', (err) => console.warn(`[prerender]   page error: ${err.message}`));
-
-    for (const route of routes) {
-      try {
-        const result = await prerenderRoute(page, origin, route);
-        results.push({ route, ...result });
-        console.log(
-          `[prerender] ✓ ${route.padEnd(28)} ${String(result.textLength).padStart(6)} chars  ` +
-            `${result.ldJsonCount} ld+json  ${(result.bytes / 1024).toFixed(0)}kb`
-        );
-      } catch (error) {
-        failures.push({ route, message: error.message });
-        console.error(`[prerender] ✗ ${route} — ${error.message}`);
+    // One page per worker, pulled from a shared queue, so a slow route delays
+    // only its own worker. Output interleaves; the per-line route name is what
+    // identifies it.
+    const queue = [...routes];
+    const worker = async () => {
+      const page = await context.newPage();
+      page.on('pageerror', (err) => console.warn(`[prerender]   page error: ${err.message}`));
+      for (;;) {
+        const next = queue.shift();
+        if (!next) break;
+        const { route, kind } = next;
+        try {
+          const result = await prerenderRoute(page, origin, route);
+          results.push({ route, kind, ...result });
+          console.log(
+            `[prerender] ✓ ${route.padEnd(28)} ${String(result.textLength).padStart(6)} chars  ` +
+              `${result.ldJsonCount} ld+json  ${(result.bytes / 1024).toFixed(0)}kb`
+          );
+        } catch (error) {
+          failures.push({ route, kind, message: error.message });
+          console.error(`[prerender] ✗ ${route} — ${error.message}`);
+        }
       }
-    }
+      await page.close();
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, routes.length || 1) }, () => worker())
+    );
 
     await context.close();
   } finally {
@@ -324,13 +467,21 @@ async function main() {
 
   console.log(`\n[prerender] ${results.length}/${routes.length} route(s) prerendered.`);
 
-  if (failures.length) {
-    console.error(
-      `\n[prerender] ${failures.length} route(s) failed. Failing the build rather than shipping\n` +
-        `            a partly-prerendered site, which would leave those URLs as blank shells:\n` +
-        failures.map((f) => `              ${f.route}: ${f.message}`).join('\n')
-    );
+  if (!failures.length) return;
+
+  const verdict = classifyPrerenderFailures({
+    staticFailed: failures.filter((f) => f.kind === 'static').length,
+    dynamicTotal: routes.filter((r) => r.kind === 'dynamic').length,
+    dynamicFailed: failures.filter((f) => f.kind === 'dynamic').length,
+  });
+
+  const detail = failures.map((f) => `              ${f.route}: ${f.message}`).join('\n');
+
+  if (verdict.fatal) {
+    console.error(`\n[prerender] ${verdict.reason}\n${detail}`);
     process.exitCode = 1;
+  } else {
+    console.warn(`\n[prerender] ${verdict.reason}\n${detail}`);
   }
 }
 

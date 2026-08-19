@@ -29,4 +29,10 @@ declare module '*/scripts/prerender.mjs' {
       limit?: number;
     }>;
   }): Promise<string[]>;
+
+  export function classifyPrerenderFailures(counts: {
+    staticFailed: number;
+    dynamicTotal: number;
+    dynamicFailed: number;
+  }): { fatal: boolean; reason: string };
 }
