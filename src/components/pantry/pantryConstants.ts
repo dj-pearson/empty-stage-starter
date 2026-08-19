@@ -127,7 +127,14 @@ export const LOW_STOCK_THRESHOLD = 2;
 
 export function getStockStatus(quantity: number | undefined): "out" | "low" | "ok" {
   const qty = quantity ?? 0;
-  if (qty === 0) return "out";
+  // `<= 0`, not `=== 0`. The mobile pantry has its own copy of this logic in
+  // src/lib/foodFilters.ts (foodStock), which has always used `<= 0`, so a
+  // negative quantity read as "low" here and "out" there. The UI cannot
+  // produce one -- both platforms clamp their decrement at zero -- but nothing
+  // stops the iOS app, a bulk import or a direct edit, and there is no CHECK
+  // constraint on the column. src/lib/foodFilters.test.ts pins the two
+  // implementations to the same answers.
+  if (qty <= 0) return "out";
   if (qty <= LOW_STOCK_THRESHOLD) return "low";
   return "ok";
 }
