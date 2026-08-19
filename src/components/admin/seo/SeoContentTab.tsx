@@ -5,26 +5,24 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { TabsContent } from '@/components/ui/tabs';
 import { AlertCircle, FileText, Info, RefreshCw, Sparkles } from 'lucide-react';
-import type { Dispatch, SetStateAction } from 'react';
+import { useState } from 'react';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 /**
  * US-553: the content tab, lifted verbatim out of SEOManager.
  * Presentational and props-down; all state stays in SEOManager.
  */
-export interface SeoContentTabProps {
-  contentAnalysisResults: Record<string, unknown> | null;
-  setContentAnalysisResults: Dispatch<SetStateAction<Record<string, unknown> | null>>;
-  isAnalyzingContent: boolean;
-  setIsAnalyzingContent: Dispatch<SetStateAction<boolean>>;
-}
+/**
+ * US-553: owns its own results, for the same reason SeoPerformanceTab does --
+ * nothing outside this tab ever read them.
+ */
+export function SeoContentTab() {
+  const [contentAnalysisResults, setContentAnalysisResults] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [isAnalyzingContent, setIsAnalyzingContent] = useState(false);
 
-export function SeoContentTab({
-  contentAnalysisResults,
-  setContentAnalysisResults,
-  isAnalyzingContent,
-  setIsAnalyzingContent,
-}: SeoContentTabProps) {
   return (
 <TabsContent value="content" className="space-y-4">
   <Card>

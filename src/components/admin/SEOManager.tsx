@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import type {
-  CrawlResultsSummary,
-  ImageResultsSummary,
   RedirectAnalysisResults,
   DuplicateAnalysisResults,
   SecurityAnalysisResults,
@@ -137,8 +135,6 @@ export function SEOManager() {
   // Monitoring & Alerts state
 
   // New SEO features state
-  const [crawlResults, setCrawlResults] = useState<CrawlResultsSummary | null>(null);
-  const [imageResults, setImageResults] = useState<ImageResultsSummary | null>(null);
   const [redirectResults, setRedirectResults] = useState<RedirectAnalysisResults | null>(null);
   const [duplicateResults, setDuplicateResults] = useState<DuplicateAnalysisResults | null>(null);
   const [securityResults, setSecurityResults] = useState<SecurityAnalysisResults | null>(null);
@@ -148,20 +144,16 @@ export function SEOManager() {
 
   // Additional operation results state
   const [brokenLinksResults, setBrokenLinksResults] = useState<Record<string, unknown> | null>(null);
-  const [contentAnalysisResults, setContentAnalysisResults] = useState<Record<string, unknown> | null>(null);
   const [blogPostsAnalysisResults, setBlogPostsAnalysisResults] = useState<Record<string, unknown> | null>(null);
   const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<Record<string, unknown> | null>(null);
-  const [coreWebVitalsResults, setCoreWebVitalsResults] = useState<Record<string, unknown> | null>(null);
   const [backlinksResults, setBacklinksResults] = useState<Record<string, unknown>[]>([]);
   const [autoHealingResults, setAutoHealingResults] = useState<Record<string, unknown> | null>(null);
   const [fixesAppliedResults, setFixesAppliedResults] = useState<Record<string, unknown> | null>(null);
 
   // Loading states for operations
   const [isScanningBrokenLinks, setIsScanningBrokenLinks] = useState(false);
-  const [isAnalyzingContent, setIsAnalyzingContent] = useState(false);
   const [isAnalyzingBlogPosts, setIsAnalyzingBlogPosts] = useState(false);
   const [isValidatingStructuredData, setIsValidatingStructuredData] = useState(false);
-  const [isCheckingWebVitals, setIsCheckingWebVitals] = useState(false);
   const [isAddingBacklink, setIsAddingBacklink] = useState(false);
 
   const isMobile = useIsMobile();
@@ -1260,12 +1252,7 @@ RESTful API available for integrations. Contact for API access.
         />
 
         {/* Core Web Vitals / Performance Tab */}
-        <SeoPerformanceTab
-          coreWebVitalsResults={coreWebVitalsResults}
-          setCoreWebVitalsResults={setCoreWebVitalsResults}
-          isCheckingWebVitals={isCheckingWebVitals}
-          setIsCheckingWebVitals={setIsCheckingWebVitals}
-        />
+        <SeoPerformanceTab />
 
         {/* backlinks tracking tab (US-553 AC1) */}
         <SeoBacklinksTab
@@ -1284,12 +1271,7 @@ RESTful API available for integrations. Contact for API access.
         />
 
         {/* Content Analysis Tab */}
-        <SeoContentTab
-          contentAnalysisResults={contentAnalysisResults}
-          setContentAnalysisResults={setContentAnalysisResults}
-          isAnalyzingContent={isAnalyzingContent}
-          setIsAnalyzingContent={setIsAnalyzingContent}
-        />
+        <SeoContentTab />
 
         {/* Content Optimizer Tab */}
         <TabsContent value="content-optimizer" className="space-y-4">
@@ -1297,10 +1279,10 @@ RESTful API available for integrations. Contact for API access.
         </TabsContent>
 
         {/* Site Crawler Tab (US-553 AC1) */}
-        <SeoSiteCrawlerTab results={crawlResults} setResults={setCrawlResults} />
+        <SeoSiteCrawlerTab />
 
         {/* Image Analysis Tab (US-553 AC1) */}
-        <SeoImageAnalysisTab results={imageResults} setResults={setImageResults} />
+        <SeoImageAnalysisTab />
 
         {/* Redirects Tab */}
         {/* redirects analysis tab (US-553 AC1) */}

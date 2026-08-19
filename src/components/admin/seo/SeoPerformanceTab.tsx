@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { TabsContent } from '@/components/ui/tabs';
 import { AlertCircle, CheckCircle, Gauge, Info, RefreshCw, Zap } from 'lucide-react';
-import type { Dispatch, SetStateAction } from 'react';
+import { useState } from 'react';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 /**
@@ -13,19 +13,18 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
  * Presentational and props-down like its siblings; all state stays in
  * SEOManager, so this moves where the JSX lives and nothing else.
  */
-export interface SeoPerformanceTabProps {
-  coreWebVitalsResults: Record<string, unknown> | null;
-  setCoreWebVitalsResults: Dispatch<SetStateAction<Record<string, unknown> | null>>;
-  isCheckingWebVitals: boolean;
-  setIsCheckingWebVitals: Dispatch<SetStateAction<boolean>>;
-}
+/**
+ * US-553: this tab owns its own results. Nothing outside it ever read them --
+ * SEOManager only held the state to hand it straight back down -- and Radix
+ * keeps every TabsContent mounted, so moving it here does not make it reset
+ * when the user switches tabs.
+ */
+export function SeoPerformanceTab() {
+  const [coreWebVitalsResults, setCoreWebVitalsResults] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [isCheckingWebVitals, setIsCheckingWebVitals] = useState(false);
 
-export function SeoPerformanceTab({
-  coreWebVitalsResults,
-  setCoreWebVitalsResults,
-  isCheckingWebVitals,
-  setIsCheckingWebVitals,
-}: SeoPerformanceTabProps) {
   return (
 <TabsContent value="performance" className="space-y-4">
   <Card>

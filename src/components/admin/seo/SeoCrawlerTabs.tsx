@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Globe, Image, Info, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,12 +16,13 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
  * so behavior is unchanged.
  */
 
-export interface SeoSiteCrawlerTabProps {
-  results: CrawlResultsSummary | null;
-  setResults: (value: CrawlResultsSummary | null) => void;
-}
+/**
+ * US-553: owns its own results. SEOManager only held them to pass straight
+ * back down, and Radix keeps every TabsContent mounted, so nothing resets.
+ */
+export function SeoSiteCrawlerTab() {
+  const [results, setResults] = useState<CrawlResultsSummary | null>(null);
 
-export function SeoSiteCrawlerTab({ results, setResults }: SeoSiteCrawlerTabProps) {
   return (
     <TabsContent value="site-crawler" className="space-y-4">
       <Card>
@@ -126,12 +128,10 @@ export function SeoSiteCrawlerTab({ results, setResults }: SeoSiteCrawlerTabProp
   );
 }
 
-export interface SeoImageAnalysisTabProps {
-  results: ImageResultsSummary | null;
-  setResults: (value: ImageResultsSummary | null) => void;
-}
+/** US-553: owns its own results, as SeoSiteCrawlerTab does. */
+export function SeoImageAnalysisTab() {
+  const [results, setResults] = useState<ImageResultsSummary | null>(null);
 
-export function SeoImageAnalysisTab({ results, setResults }: SeoImageAnalysisTabProps) {
   return (
     <TabsContent value="image-analysis" className="space-y-4">
       <Card>
