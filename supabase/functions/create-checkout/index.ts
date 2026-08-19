@@ -2,10 +2,39 @@ import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, securityHeaders } from "../common/headers.ts";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+/**
+ * Create Checkout Edge Function
+ *
+ * POST /create-checkout
+ * Body: { planId, billingCycle: "monthly" | "yearly", successUrl?, cancelUrl? }
+ * Auth: JWT required
+ * Response (200): { url }
+ *
+ * The caller never supplies a Stripe price. It supplies a planId, and the
+ * price is read from the subscription_plans row server-side, so a caller
+ * cannot substitute a cheaper price to provision a paid tier (US-326's
+ * price/tier tampering concern, solved here by the plan lookup rather than by
+ * an env allowlist).
+ *
+ * US-626 reconciled the duplicate implementation that lived under
+ * functions/create-checkout. That copy answered a different contract
+ * ({ price_id } -> { checkout_url }) that no client in this repo ever called;
+ * this tree is what src/pages/Pricing.tsx invokes and what ships. What it did
+ * have over this one -- method checking, a Stripe-not-configured branch, real
+ * status codes, and not forwarding upstream Stripe detail to the browser
+ * (US-532) -- was ported here before it was deleted.
+ */
+
+const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2023-10-16",
   httpClient: Stripe.createFetchHttpClient(),
 });
+
+/** Narrow a caught value to a printable message without reaching for `any`. */
+const errMessage = (e: unknown): string =>
+  e instanceof Error ? e.message : String(e);
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -14,35 +43,78 @@ export default async (req: Request) => {
   // Get secure CORS headers based on request origin
   const corsHeaders = getCorsHeaders(req);
 
+  const jsonHeaders = {
+    ...corsHeaders,
+    ...securityHeaders,
+    "Content-Type": "application/json",
+  };
+
+  /**
+   * Every error the browser sees goes through here. The `error` string is
+   * surfaced verbatim by src/lib/edge-functions.ts and string-matched by
+   * Pricing.tsx, so it stays coarse and free of Stripe internals (price IDs,
+   * customer IDs, upstream messages) while keeping the words that page
+   * classifies on. `code` is the stable handle for new callers; the detail
+   * only ever goes to the function log.
+   */
+  const fail = (status: number, code: string, message: string, detail?: unknown) => {
+    if (detail !== undefined) {
+      console.error(`create-checkout ${code}:`, detail);
+    } else {
+      console.error(`create-checkout ${code}`);
+    }
+    return new Response(JSON.stringify({ error: message, code }), {
+      headers: jsonHeaders,
+      status,
+    });
+  };
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return fail(405, "method_not_allowed", "Method not allowed");
+  }
+
+  if (!stripeSecretKey) {
+    return fail(503, "stripe_not_configured", "Payments are not configured");
+  }
+
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
+
     // Get user from auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("No authorization header");
+      return fail(401, "missing_authorization", "Missing authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    
+
     if (userError || !user) {
-      throw new Error("Unauthorized");
+      return fail(401, "unauthorized", "Invalid or expired token", userError);
     }
 
-    const { planId, billingCycle, successUrl, cancelUrl } = await req.json();
-
-    if (!planId || !billingCycle) {
-      throw new Error("Missing required fields");
+    let body: { planId?: unknown; billingCycle?: unknown; successUrl?: unknown; cancelUrl?: unknown };
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      return fail(400, "invalid_body", "Request body must be JSON", parseError);
     }
 
-    console.log("Fetching plan for:", planId);
+    const { planId, billingCycle, successUrl, cancelUrl } = body;
 
-    // Get plan details - log the full plan object to see what fields exist
+    if (typeof planId !== "string" || !planId) {
+      return fail(400, "missing_plan_id", "Missing required fields");
+    }
+
+    if (billingCycle !== "monthly" && billingCycle !== "yearly") {
+      return fail(400, "invalid_billing_cycle", "Missing required fields");
+    }
+
+    // Get plan details. The price comes from this row, never from the caller.
     const { data: plan, error: planError } = await supabase
       .from("subscription_plans")
       .select("*")
@@ -50,81 +122,99 @@ export default async (req: Request) => {
       .single();
 
     if (planError || !plan) {
-      console.error("Plan fetch error:", planError);
-      throw new Error("Plan not found");
+      return fail(404, "plan_not_found", "Plan not found", planError);
     }
 
-    console.log("Plan object:", JSON.stringify(plan, null, 2));
-
     // Get or create Stripe customer
-    let customerId: string;
+    let customerId: string | null = null;
     let customerWasRecreated = false;
-    
+
     const { data: existingSub } = await supabase
       .from("user_subscriptions")
       .select("stripe_customer_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (existingSub?.stripe_customer_id) {
-      // Verify the customer still exists in Stripe (may have been deleted)
-      try {
-        const existingCustomer = await stripe.customers.retrieve(existingSub.stripe_customer_id);
-        if (existingCustomer.deleted) {
-          throw new Error("Customer was deleted");
-        }
-        customerId = existingSub.stripe_customer_id;
-      } catch (custError: any) {
-        console.warn(`Stale Stripe customer ${existingSub.stripe_customer_id}, creating new one:`, custError.message);
-        const newCustomer = await stripe.customers.create({
-          email: user.email,
-          metadata: { supabase_user_id: user.id },
-        });
-        customerId = newCustomer.id;
-        customerWasRecreated = true;
+    try {
+      if (existingSub?.stripe_customer_id) {
+        // Verify the customer still exists in Stripe (may have been deleted)
+        try {
+          const existingCustomer = await stripe.customers.retrieve(existingSub.stripe_customer_id);
+          if (existingCustomer.deleted) {
+            throw new Error("Customer was deleted");
+          }
+          customerId = existingSub.stripe_customer_id;
+        } catch (custError: unknown) {
+          console.warn(
+            `Stale Stripe customer ${existingSub.stripe_customer_id}, creating new one:`,
+            errMessage(custError),
+          );
+          const newCustomer = await stripe.customers.create({
+            email: user.email,
+            metadata: { supabase_user_id: user.id },
+          });
+          customerId = newCustomer.id;
+          customerWasRecreated = true;
 
-        // Update the DB with the new customer ID immediately
-        await supabase
-          .from("user_subscriptions")
-          .update({ stripe_customer_id: customerId })
-          .eq("user_id", user.id);
+          // Update the DB with the new customer ID immediately
+          await supabase
+            .from("user_subscriptions")
+            .update({ stripe_customer_id: customerId })
+            .eq("user_id", user.id);
+        }
+      } else {
+        // Create new Stripe customer
+        const customer = await stripe.customers.create({
+          email: user.email,
+          metadata: {
+            supabase_user_id: user.id,
+          },
+        });
+        customerId = customer.id;
       }
-    } else {
-      // Create new Stripe customer
-      const customer = await stripe.customers.create({
-        email: user.email,
-        metadata: {
-          supabase_user_id: user.id,
-        },
-      });
-      customerId = customer.id;
+    } catch (customerError) {
+      return fail(
+        502,
+        "customer_setup_failed",
+        "Customer account could not be prepared",
+        customerError,
+      );
+    }
+
+    if (!customerId) {
+      return fail(
+        502,
+        "customer_setup_failed",
+        "Customer account could not be prepared",
+        `no Stripe customer resolved for user ${user.id}`,
+      );
     }
 
     // Resolve Stripe price ID - prioritize billing-cycle-specific fields
-    const priceId = 
+    const priceId =
       (billingCycle === "yearly" ? (plan.stripe_price_id_yearly || plan.stripe_yearly_price_id) : null) ||
       (billingCycle === "monthly" ? (plan.stripe_price_id_monthly || plan.stripe_monthly_price_id) : null) ||
       plan.stripe_price_id ||
       plan.stripePriceId;
 
-    console.log("Resolved price ID:", priceId);
-
     if (!priceId) {
-      console.error("No price ID found. Available plan fields:", Object.keys(plan));
-      throw new Error(
-        `Price ID not configured for this plan. Billing cycle: ${billingCycle}. Please configure Stripe price IDs in Supabase.`
+      return fail(
+        400,
+        "price_not_configured",
+        "Price is not configured for this plan",
+        `plan ${planId} / ${billingCycle} has no price column set; available fields: ${Object.keys(plan).join(", ")}`,
       );
     }
 
     // Verify the price exists in Stripe before creating checkout
     try {
       await stripe.prices.retrieve(priceId);
-    } catch (priceError: any) {
-      console.error(`Stripe price ${priceId} not found:`, priceError.message);
-      throw new Error(
-        `The Stripe price ID '${priceId}' for this plan does not exist. ` +
-        `Please update the subscription_plans table in Supabase with valid Stripe price IDs. ` +
-        `You can create prices in the Stripe Dashboard under Products.`
+    } catch (priceError: unknown) {
+      return fail(
+        400,
+        "price_not_found_in_stripe",
+        "Price is not configured for this plan",
+        `Stripe price ${priceId} (plan ${planId}) does not exist: ${errMessage(priceError)}`,
       );
     }
 
@@ -133,6 +223,8 @@ export default async (req: Request) => {
     // deploy. NULL or 0 means no trial, and the session is built without one.
     const trialPeriodDays = Number(plan.trial_period_days);
     const hasTrial = Number.isFinite(trialPeriodDays) && trialPeriodDays > 0;
+
+    const origin = req.headers.get("origin") || "https://tryeatpal.com";
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
@@ -145,8 +237,15 @@ export default async (req: Request) => {
           quantity: 1,
         },
       ],
-      success_url: successUrl || `${req.headers.get("origin") || "https://tryeatpal.com"}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${req.headers.get("origin") || "https://tryeatpal.com"}/pricing?checkout=cancelled`,
+      success_url: typeof successUrl === "string" && successUrl
+        ? successUrl
+        : `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: typeof cancelUrl === "string" && cancelUrl
+        ? cancelUrl
+        : `${origin}/pricing?checkout=cancelled`,
+      // Ported from the reconciled copy: lets a Stripe-side reconciliation find
+      // the user without parsing metadata.
+      client_reference_id: user.id,
       metadata: {
         user_id: user.id,
         plan_id: planId,
@@ -188,27 +287,11 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({ url: session.url }),
       {
-        headers: {
-          ...corsHeaders,
-          ...securityHeaders,
-          "Content-Type": "application/json"
-        },
+        headers: jsonHeaders,
         status: 200,
       }
     );
-  } catch (error: any) {
-    console.error("Checkout error:", error);
-    const message = error instanceof Error ? error.message : String(error);
-    return new Response(
-      JSON.stringify({ error: message }),
-      {
-        headers: {
-          ...corsHeaders,
-          ...securityHeaders,
-          "Content-Type": "application/json"
-        },
-        status: 400,
-      }
-    );
+  } catch (error: unknown) {
+    return fail(500, "unexpected_error", "Failed to start checkout", error);
   }
 }

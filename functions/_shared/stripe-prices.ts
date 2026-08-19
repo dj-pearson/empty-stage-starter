@@ -1,7 +1,14 @@
 /**
  * Server-side Stripe price allowlist (US-326).
  *
- * `create-checkout` must never pass a client-supplied price_id straight into
+ * NOT WIRED UP. US-626 deleted functions/create-checkout, this module's only
+ * consumer, after establishing that the deployed handler
+ * (supabase/functions/create-checkout) answers a different contract: the
+ * caller sends a planId and the price is read from the subscription_plans
+ * row, so there is no client-supplied price to allowlist. Kept, with its Deno
+ * tests, for a future handler that does take a price from the caller.
+ *
+ * Such a handler must never pass a client-supplied price_id straight into
  * Stripe line items — a caller could substitute an arbitrary or cheaper price
  * and provision a paid tier at the wrong price (price/tier tampering).
  *

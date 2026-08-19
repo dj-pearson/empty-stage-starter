@@ -18,17 +18,17 @@
 #                         tests. CI runs `deno test functions/_shared/...`
 #                         (ci.yml:182,187), so this tree is NOT dead.
 #
-# 15 function names exist in BOTH trees as parallel implementations for the two
+# 14 function names exist in BOTH trees as parallel implementations for the two
 # runtimes. That ambiguity is what let the US-519 Stripe idempotency work be
 # written into the tree the live server cannot even load: it used serve(), so it
 # was never deployed, and the dedup table shipped empty for a month.
 #
 # Two checks below:
 #   1. HARD  — every FUNCTIONS_MAP entry must resolve in the deployed tree.
-#   2. HARD  — no NEW cross-tree name collisions. The 15 existing ones are
+#   2. HARD  — no NEW cross-tree name collisions. The 14 existing ones are
 #              listed explicitly, mirroring how check-migration-prefixes.sh
 #              grandfathers its known duplicates. Resolving them is tracked
-#              work; adding a 16th is not allowed.
+#              work; adding a 15th is not allowed.
 set -uo pipefail
 
 DEPLOYED="supabase/functions"
@@ -36,9 +36,15 @@ LEGACY="functions"
 SERVER="edge-functions-server.ts"
 fail=0
 
-# The 15 names that exist in both trees today. Do NOT add to this list to
+# The 14 names that exist in both trees today. Do NOT add to this list to
 # silence a new collision — put the function in one tree only.
-KNOWN_COLLISIONS="_shared ai-meal-plan calculate-food-similarity create-checkout generate-blog-content generate-sitemap generate-social-content identify-product parse-receipt-image parse-recipe stripe-webhook suggest-foods suggest-recipe tonight-mode update-blog-image"
+#
+# create-checkout came off this list in US-626: the two copies answered
+# different contracts, only supabase/functions/ was ever called, and the
+# non-deployed copy was deleted after its method check, its
+# Stripe-not-configured branch, its status codes and its US-532 error-detail
+# containment were ported into the deployed one.
+KNOWN_COLLISIONS="_shared ai-meal-plan calculate-food-similarity generate-blog-content generate-sitemap generate-social-content identify-product parse-receipt-image parse-recipe stripe-webhook suggest-foods suggest-recipe tonight-mode update-blog-image"
 
 echo "1/2 FUNCTIONS_MAP entries resolve in ${DEPLOYED}/ ..."
 while IFS= read -r name; do
