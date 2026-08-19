@@ -18,10 +18,8 @@ The niche itself is strong:
 ARFID and severe feeding disorders are increasingly recognized; estimates suggest ARFID may affect 0.3–3% of the general population and up to 18% of children/adolescents in some samples.
 
 In pediatric inpatient eating disorder programs, ARFID accounts for 5–14% of cases.
-​
 
 Around 20% of children in the US struggle with severe feeding disorders, per CHOA case study of their intensive feeding program.
-​
 
 Food chaining is accepted as an evidence-based therapeutic strategy and is widely used by pediatric feeding specialists.
 
@@ -121,7 +119,6 @@ Bullets:
 “Parents are told to ‘offer variety’ without a safe plan, which often increases anxiety and refusals.”
 
 “Feeding therapy sessions are powerful, but progress can stall without structured support at home.”
-​
 
 Then flip to solution:
 
@@ -166,7 +163,6 @@ Get a 5-day tailored plan
 AI generates a plan using food chaining – micro-changes from safe foods to similar new foods.
 
 Includes grocery list and backup options for tough days.
-​
 
 Track, adjust, and celebrate
 
@@ -184,7 +180,6 @@ Mini-headline: “The operating system for feeding therapy”
 Copy:
 
 EatPal gives feeding clinics and private practices a shared, data-rich workspace to extend therapy into the home. Replace manual spreadsheets and paper logs with AI-assisted food chains, session notes, and real-world mealtime data.
-​
 
 Bullets:
 
@@ -193,7 +188,6 @@ Bullets:
 “Capture real-time meal logs and photos between sessions.”
 
 “Standardize data collection across therapists and locations.”
-​
 
 CTA: “See therapist plans →” leading to pricing.
 
@@ -326,7 +320,6 @@ ARFID & feeding disorders 101
 “Signs your child’s eating goes beyond typical picky eating”
 
 “What to expect from feeding therapy (and how apps like EatPal support it)”
-​
 
 Food chaining in real life
 
@@ -357,7 +350,6 @@ Therapist / clinic-specific content
 “Standardizing food logs and chains across your feeding team”
 
 “From spreadsheets to structured data: how one clinic scaled feeding therapy with digital tools”
-​
 
 “ARFID care coordination: what therapists wish parents tracked between sessions”
 
@@ -377,7 +369,6 @@ Gate advanced features (printable plan, grocery list, progress tracking) behind 
 Offer additional free resources:
 
 “Safe Food List Template” (PDF) – parents list current safe foods and textures.
-​
 
 “Food Chaining Worksheet” with example micro-steps between foods.
 
@@ -480,7 +471,6 @@ Tightening homepage messaging and brand identity in this way helps in three conc
 Higher conversion on existing traffic
 
 Parents currently landing on your site from web mentions/WebCatalog/etc. may only see generic “AI meal planning” language and bounce.
-​
 
 Clearer niche framing (“extreme picky eating / ARFID / food chaining”) increases perceived relevance and trial signups.
 

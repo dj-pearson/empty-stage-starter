@@ -106,7 +106,7 @@ function lowerSet(values: readonly (string | null | undefined)[] | null | undefi
 function recipeHaystack(recipe: RewriterRecipe): string {
   return [recipe.name, recipe.description ?? '', recipe.instructions ?? '']
     .map((s) => s.toLowerCase())
-    .join(' ​ ');
+    .join(' | ');
 }
 
 function recipeMentionsVeggie(recipe: RewriterRecipe, veggie: string): boolean {

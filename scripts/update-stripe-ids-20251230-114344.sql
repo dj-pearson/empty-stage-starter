@@ -1,4 +1,4 @@
-﻿-- EatPal Stripe IDs Update Script
+-- EatPal Stripe IDs Update Script
 -- Generated: 2025-12-30 11:43:44
 -- Mode: TEST
 

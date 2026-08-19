@@ -56,6 +56,17 @@ jobs:
       - name: Check components are imported
         run: node scripts/ci/check-jsx-imports.mjs
 
+      # CLAUDE.md's "plain characters only" rule, as a check rather than a
+      # document. Invisible and bidi characters are the one class review cannot
+      # catch -- they render as nothing while the parser sees something else.
+      # HARD gate: the tree is clean as of this commit. Two real instances were
+      # removed to get there (a zero-width space joining a search haystack in
+      # hiddenVeggieRewriter, and one holding a JSDoc block open in
+      # agentConfig), plus BOMs on 15 generated files. Emoji ZWJ sequences are
+      # allowed; a deliberate use declares itself with `invisible-chars: allow`.
+      - name: Check for invisible characters
+        run: node scripts/ci/check-invisible-chars.mjs
+
       # US-641: the DB is shared with every shipped iOS build still on a phone,
       # so CLAUDE.md forbids DROP COLUMN / DROP TABLE / RENAME / SET NOT NULL in
       # a single migration. Those rules lived only in a document. DIFF-SCOPED to
