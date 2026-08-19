@@ -76,6 +76,8 @@ import { SeoMonitoringTab } from "@/components/admin/seo/SeoMonitoringTab";
 import { SeoAuditTab } from "@/components/admin/seo/SeoAuditTab";
 import { SeoKeywordsTab } from "@/components/admin/seo/SeoKeywordsTab";
 import { useGscConnection } from "@/components/admin/seo/useGscConnection";
+import { useSeoMonitoring } from "@/components/admin/seo/useSeoMonitoring";
+import { useSeoKeywords } from "@/components/admin/seo/useSeoKeywords";
 import {
   SeoRedirectsTab,
   SeoDuplicateContentTab,
@@ -92,18 +94,6 @@ import {
   SeoBacklinksTab,
   SeoBrokenLinksTab,
 } from "@/components/admin/seo/SeoLinkAuditTabs";
-
-interface KeywordData {
-  keyword: string;
-  position: number;
-  volume: number;
-  difficulty: number;
-  url: string;
-  trend: "up" | "down" | "stable";
-  impressions?: number;  // From GSC
-  clicks?: number;        // From GSC
-  ctr?: number;          // From GSC
-}
 
 interface PageData {
   url: string;
@@ -144,9 +134,7 @@ export function SEOManager() {
   });
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditUrl, setAuditUrl] = useState(window.location.origin);
-  const [trackedKeywords, setTrackedKeywords] = useState<KeywordData[]>([]);
   const [pageAnalysis, setPageAnalysis] = useState<PageData[]>([]);
-  const [newKeyword, setNewKeyword] = useState("");
   const [competitorUrl, setCompetitorUrl] = useState("");
   const [isAutoHealing, setIsAutoHealing] = useState(false);
   const [competitorResults, setCompetitorResults] = useState<Record<string, unknown>[]>([]);
@@ -159,12 +147,6 @@ export function SEOManager() {
   // Google Search Console state
 
   // Monitoring & Alerts state
-  const [alerts, setAlerts] = useState<Record<string, unknown>[]>([]);
-  const [alertRules, setAlertRules] = useState<Record<string, unknown>[]>([]);
-  const [schedules, setSchedules] = useState<Record<string, unknown>[]>([]);
-  const [notificationPrefs, setNotificationPrefs] = useState<Record<string, unknown> | null>(null);
-  const [activeAlertsCount, setActiveAlertsCount] = useState(0);
-  const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
 
   // New SEO features state
   const [crawlResults, setCrawlResults] = useState<CrawlResultsSummary | null>(null);
@@ -197,6 +179,14 @@ export function SEOManager() {
   const isMobile = useIsMobile();
 
   const {
+    trackedKeywords,
+    newKeyword,
+    setNewKeyword,
+    loadTrackedKeywords,
+    addKeywordToTrack,
+  } = useSeoKeywords();
+
+  const {
     gscConnected,
     gscProperties,
     selectedProperty,
@@ -210,47 +200,28 @@ export function SEOManager() {
     disconnectGSC,
   } = useGscConnection({ onKeywordsSynced: () => loadTrackedKeywords() });
 
+  const {
+    alerts,
+    alertRules,
+    schedules,
+    notificationPrefs,
+    activeAlertsCount,
+    isLoadingMonitoring,
+    loadMonitoringData,
+    acknowledgeAlert,
+    dismissAlert,
+    toggleSchedule,
+    saveNotificationPreferences,
+  } = useSeoMonitoring();
+
   useEffect(() => {
     loadSEOSettings();
-    loadTrackedKeywords();
     loadCompetitorAnalysis();
     loadPageAnalysis();
     // The GSC connection check and the OAuth-return handshake moved into
     // useGscConnection with the state they touch (US-553).
   }, []);
 
-  const loadTrackedKeywords = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('seo_keywords')
-        .select('*')
-        .order('priority', { ascending: false });
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const keywords: KeywordData[] = data.map((kw) => ({
-          keyword: kw.keyword,
-          position: kw.current_position || 0,
-          volume: kw.search_volume || 0,
-          difficulty: kw.difficulty || 0,
-          url: kw.target_url,
-          trend: kw.position_trend as "up" | "down" | "stable",
-          impressions: kw.impressions || undefined,
-          clicks: kw.clicks || undefined,
-          ctr: kw.ctr || undefined,
-        }));
-        setTrackedKeywords(keywords);
-      } else {
-        // No keywords tracked yet - show empty state
-        // Users can add keywords via the "Add Keyword" form
-        setTrackedKeywords([]);
-      }
-    } catch (error) {
-      logger.error('Error loading keywords:', error);
-      toast.error('Failed to load keyword data');
-    }
-  };
 
   const loadCompetitorAnalysis = async () => {
     try {
@@ -347,186 +318,6 @@ export function SEOManager() {
   // MONITORING & ALERTS FUNCTIONS
   // =====================================================
 
-  const loadMonitoringData = async () => {
-    try {
-      setIsLoadingMonitoring(true);
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      // Load active alerts
-      const { data: alertsData } = await supabase
-        .from("seo_alerts")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      setAlerts(alertsData || []);
-      setActiveAlertsCount(alertsData?.length || 0);
-
-      // Load alert rules
-      const { data: rulesData } = await supabase
-        .from("seo_alert_rules")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      setAlertRules(rulesData || []);
-
-      // Load schedules
-      const { data: schedulesData } = await supabase
-        .from("seo_monitoring_schedules")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false});
-
-      setSchedules(schedulesData || []);
-
-      // Load notification preferences - create default if doesn't exist
-      const { data: prefsData, error: prefsError } = await supabase
-        .from("seo_notification_preferences")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      if (prefsError && prefsError.code === "PGRST116") {
-        // No preferences found - create default
-        const defaultPrefs = {
-          user_id: user.id,
-          email_enabled: true,
-          email_address: user.email,
-          immediate_alerts: true,
-          daily_digest: true,
-          notify_score_drops: true,
-          notify_keyword_changes: true,
-          notify_gsc_issues: true,
-          notify_performance_issues: true,
-        };
-
-        const { data: newPrefs } = await supabase
-          .from("seo_notification_preferences")
-          .insert(defaultPrefs)
-          .select()
-          .single();
-
-        setNotificationPrefs(newPrefs || defaultPrefs);
-
-        // Also create default alert rule
-        await supabase.from("seo_alert_rules").insert({
-          user_id: user.id,
-          rule_name: "SEO Score Drop Alert",
-          rule_type: "score_drop",
-          condition: { type: "score_drop", threshold: 10, timeframe_hours: 24 },
-          severity: "high",
-        });
-
-        // Create default monitoring schedule
-        await supabase.from("seo_monitoring_schedules").insert({
-          user_id: user.id,
-          schedule_name: "Daily SEO Audit",
-          schedule_type: "audit",
-          cron_expression: "0 3 * * *",
-          config: { audit_type: "full" },
-        });
-
-        // Reload data to show newly created defaults
-        setTimeout(() => loadMonitoringData(), 500);
-      } else {
-        setNotificationPrefs(prefsData || {
-          email_enabled: true,
-          immediate_alerts: true,
-          daily_digest: true,
-          notify_score_drops: true,
-          notify_keyword_changes: true,
-        });
-      }
-    } catch (error: unknown) {
-      logger.error("Error loading monitoring data:", error);
-    } finally {
-      setIsLoadingMonitoring(false);
-    }
-  };
-
-  const acknowledgeAlert = async (alertId: string) => {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("seo_alerts")
-        .update({
-          status: "acknowledged",
-          acknowledged_at: new Date().toISOString(),
-          acknowledged_by: user.id,
-        })
-        .eq("id", alertId);
-
-      if (error) throw error;
-
-      await loadMonitoringData();
-      toast.success("Alert acknowledged");
-    } catch (error: unknown) {
-      logger.error("Error acknowledging alert:", error);
-      toast.error("Failed to acknowledge alert");
-    }
-  };
-
-  const dismissAlert = async (alertId: string) => {
-    try {
-      const { error } = await supabase
-        .from("seo_alerts")
-        .update({ status: "dismissed" })
-        .eq("id", alertId);
-
-      if (error) throw error;
-
-      await loadMonitoringData();
-      toast.success("Alert dismissed");
-    } catch (error: unknown) {
-      logger.error("Error dismissing alert:", error);
-      toast.error("Failed to dismiss alert");
-    }
-  };
-
-  const toggleSchedule = async (scheduleId: string, enabled: boolean) => {
-    try {
-      const { error } = await supabase
-        .from("seo_monitoring_schedules")
-        .update({ is_enabled: enabled })
-        .eq("id", scheduleId);
-
-      if (error) throw error;
-
-      await loadMonitoringData();
-      toast.success(enabled ? "Schedule enabled" : "Schedule disabled");
-    } catch (error: unknown) {
-      logger.error("Error toggling schedule:", error);
-      toast.error("Failed to update schedule");
-    }
-  };
-
-  const saveNotificationPreferences = async (prefs: Record<string, unknown>) => {
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      const { error } = await supabase
-        .from("seo_notification_preferences")
-        .upsert({
-          user_id: user.id,
-          ...prefs,
-        });
-
-      if (error) throw error;
-
-      setNotificationPrefs(prefs);
-      toast.success("Notification preferences saved");
-    } catch (error: unknown) {
-      logger.error("Error saving preferences:", error);
-      toast.error("Failed to save preferences");
-    }
-  };
 
   // =====================================================
   // END MONITORING & ALERTS FUNCTIONS
@@ -1481,26 +1272,6 @@ export function SEOManager() {
     }
   };
 
-  const addKeywordToTrack = () => {
-    if (!newKeyword.trim()) {
-      toast.error("Please enter a keyword");
-      return;
-    }
-
-    // In production, this would save to database
-    const newKeywordData: KeywordData = {
-      keyword: newKeyword,
-      position: 0,
-      volume: 0,
-      difficulty: 0,
-      url: "/",
-      trend: "stable",
-    };
-
-    setTrackedKeywords([...trackedKeywords, newKeywordData]);
-    setNewKeyword("");
-    toast.success(`Added "${newKeyword}" to keyword tracking`);
-  };
 
   const analyzeCompetitor = async () => {
     if (!competitorUrl.trim()) {
