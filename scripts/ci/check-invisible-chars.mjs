@@ -68,23 +68,10 @@ const BINARY = new Set([
   'xcuserstate', 'car', 'pbxproj',
 ]);
 
-/**
- * Generated artifacts that are mangled at the source rather than by hand.
- *
- * coolify-migration/combined_eatpal_migrations*.sql are 20k-line bundles
- * emitted by create-combined-migration.ps1, which read every migration with
- * the system ANSI codepage and wrote the result with a BOM. Both bugs are
- * fixed in that script now, so the correct repair is to regenerate these on a
- * Windows machine -- not to hand-edit a dump nobody can review line by line.
- * Remove this entry once they have been regenerated.
- */
-const SKIP = [/^coolify-migration\/combined_eatpal_migrations.*\.sql$/];
-
 const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
   .split('\0')
   .filter(Boolean)
-  .filter((f) => !BINARY.has(f.split('.').pop()?.toLowerCase() ?? ''))
-  .filter((f) => !SKIP.some((re) => re.test(f)));
+  .filter((f) => !BINARY.has(f.split('.').pop()?.toLowerCase() ?? ''));
 
 const findings = [];
 

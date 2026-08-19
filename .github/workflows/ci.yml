@@ -56,6 +56,15 @@ jobs:
       - name: Check components are imported
         run: node scripts/ci/check-jsx-imports.mjs
 
+      # CLAUDE.md records that backup-databases.ps1 and ssl-check.ps1 sat
+      # unparseable for months. Nothing in this repo ever runs a .ps1 -- CI is
+      # Node, deploys are Cloudflare and EAS -- so a syntax error surfaces when
+      # someone reaches for the script on a Windows box, which is always the
+      # worst moment. pwsh is preinstalled on ubuntu-latest, so the parser is
+      # free. Currently 15 files, all parsing.
+      - name: Check PowerShell scripts parse
+        run: bash scripts/ci/check-powershell-parses.sh
+
       # CLAUDE.md's "plain characters only" rule, as a check rather than a
       # document. Invisible and bidi characters are the one class review cannot
       # catch -- they render as nothing while the parser sees something else.

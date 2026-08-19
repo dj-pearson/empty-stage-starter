@@ -1,7 +1,7 @@
-﻿-- ============================================
+-- ============================================
 -- EatPal Clean Migrations (No Error Wrappers)
--- Generated: 2025-12-08 23:10:55
--- Total Migrations: 88
+-- Generated: 2026-08-19 23:14:24
+-- Total Migrations: 207
 -- ============================================
 
 -- Create migrations tracking table
@@ -16,16 +16,19 @@ CREATE TABLE IF NOT EXISTS _migrations (
 -- Migration 1: 20250109000000_add_featured_image_to_blog.sql
 -- ============================================
 
--- Add featured_image column to blog_posts table
-ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS featured_image TEXT;
-
--- Add comment to document the column
-COMMENT ON COLUMN blog_posts.featured_image IS 'URL or path to the blog post featured image. Used for Open Graph and social media previews. Falls back to Cover.png if not set.';
-
--- Add index for better query performance
-CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_published_at ON blog_posts(published_at);
+-- Add featured_image column to blog_posts table.
+-- CI-fix: this migration's timestamp sorts before create_blog_tables, so guard
+-- the body for a clean replay where blog_posts does not exist yet. Idempotent;
+-- existing environments are unchanged.
+DO $$
+BEGIN
+  IF to_regclass('public.blog_posts') IS NOT NULL THEN
+    ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS featured_image TEXT;
+    CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
+    CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
+    CREATE INDEX IF NOT EXISTS idx_blog_posts_published_at ON blog_posts(published_at);
+  END IF;
+END $$;
 
 
 -- Record migration
@@ -33,7 +36,2164 @@ INSERT INTO _migrations (filename) VALUES ('20250109000000_add_featured_image_to
 
 
 -- ============================================
--- Migration 2: 20250112000000_blog_advanced_features.sql
+-- Migration 2: 20251008012402_c8f3da2d-2ed2-4cce-8478-2fd697a46260.sql
+-- ============================================
+
+-- Create tables for Kid Meal Planner
+
+-- Kids table
+CREATE TABLE IF NOT EXISTS public.kids (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  age INTEGER,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Foods table
+CREATE TABLE IF NOT EXISTS public.foods (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack')),
+  is_safe BOOLEAN NOT NULL DEFAULT false,
+  is_try_bite BOOLEAN NOT NULL DEFAULT false,
+  allergens TEXT[],
+  aisle TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Plan entries table
+CREATE TABLE IF NOT EXISTS public.plan_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  kid_id UUID NOT NULL REFERENCES public.kids(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  meal_slot TEXT NOT NULL CHECK (meal_slot IN ('breakfast', 'lunch', 'dinner', 'snack1', 'snack2', 'try_bite')),
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  result TEXT CHECK (result IN ('ate', 'tasted', 'refused') OR result IS NULL),
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Grocery items table
+CREATE TABLE IF NOT EXISTS public.grocery_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  unit TEXT NOT NULL DEFAULT 'servings',
+  checked BOOLEAN NOT NULL DEFAULT false,
+  category TEXT NOT NULL CHECK (category IN ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack')),
+  source_plan_entry_id UUID REFERENCES public.plan_entries(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Recipes table
+CREATE TABLE IF NOT EXISTS public.recipes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  food_ids UUID[] NOT NULL DEFAULT '{}',
+  category TEXT CHECK (category IN ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Enable Row Level Security on all tables
+ALTER TABLE public.kids ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.foods ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.plan_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.grocery_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recipes ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for kids table
+CREATE POLICY "Users can view their own kids"
+  ON public.kids FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own kids"
+  ON public.kids FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own kids"
+  ON public.kids FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own kids"
+  ON public.kids FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- RLS Policies for foods table
+CREATE POLICY "Users can view their own foods"
+  ON public.foods FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own foods"
+  ON public.foods FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own foods"
+  ON public.foods FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own foods"
+  ON public.foods FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- RLS Policies for plan_entries table
+CREATE POLICY "Users can view their own plan entries"
+  ON public.plan_entries FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own plan entries"
+  ON public.plan_entries FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own plan entries"
+  ON public.plan_entries FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own plan entries"
+  ON public.plan_entries FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- RLS Policies for grocery_items table
+CREATE POLICY "Users can view their own grocery items"
+  ON public.grocery_items FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own grocery items"
+  ON public.grocery_items FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own grocery items"
+  ON public.grocery_items FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own grocery items"
+  ON public.grocery_items FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- RLS Policies for recipes table
+CREATE POLICY "Users can view their own recipes"
+  ON public.recipes FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own recipes"
+  ON public.recipes FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own recipes"
+  ON public.recipes FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own recipes"
+  ON public.recipes FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Create function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create triggers for updated_at
+CREATE TRIGGER update_kids_updated_at
+  BEFORE UPDATE ON public.kids
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_foods_updated_at
+  BEFORE UPDATE ON public.foods
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_plan_entries_updated_at
+  BEFORE UPDATE ON public.plan_entries
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_grocery_items_updated_at
+  BEFORE UPDATE ON public.grocery_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_recipes_updated_at
+  BEFORE UPDATE ON public.recipes
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008012402_c8f3da2d-2ed2-4cce-8478-2fd697a46260.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 3: 20251008013812_d9ef4871-2f4c-4f46-bd5c-eb6502b88b5c.sql
+-- ============================================
+
+-- Create enum for user roles
+CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+
+-- Create user_roles table (separate from profiles for security)
+CREATE TABLE public.user_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role public.app_role NOT NULL DEFAULT 'user',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(user_id, role)
+);
+
+-- Enable RLS on user_roles
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+
+-- Create security definer function to check roles (prevents infinite recursion)
+CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = _user_id
+      AND role = _role
+  )
+$$;
+
+-- RLS policies for user_roles
+CREATE POLICY "Users can view their own roles"
+  ON public.user_roles
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can manage all roles"
+  ON public.user_roles
+  FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Create nutrition table (community food bank)
+CREATE TABLE public.nutrition (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  serving_size TEXT,
+  ingredients TEXT,
+  calories INTEGER,
+  protein_g NUMERIC(5,1),
+  carbs_g NUMERIC(5,1),
+  fat_g NUMERIC(5,1),
+  allergens TEXT[],
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id)
+);
+
+-- Enable RLS on nutrition
+ALTER TABLE public.nutrition ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies for nutrition table
+CREATE POLICY "Everyone can view nutrition data"
+  ON public.nutrition
+  FOR SELECT
+  USING (true);
+
+CREATE POLICY "Admins can insert nutrition data"
+  ON public.nutrition
+  FOR INSERT
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can update nutrition data"
+  ON public.nutrition
+  FOR UPDATE
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can delete nutrition data"
+  ON public.nutrition
+  FOR DELETE
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Add updated_at trigger for nutrition
+CREATE TRIGGER update_nutrition_updated_at
+  BEFORE UPDATE ON public.nutrition
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Add index for faster queries
+CREATE INDEX idx_nutrition_category ON public.nutrition(category);
+CREATE INDEX idx_nutrition_name ON public.nutrition(name);
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008013812_d9ef4871-2f4c-4f46-bd5c-eb6502b88b5c.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 4: 20251008013822_e4b47634-8a88-4308-83e0-40b79e62126a.sql
+-- ============================================
+
+-- Fix the has_role function to have immutable search_path
+CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = _user_id
+      AND role = _role
+  );
+END;
+$$;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008013822_e4b47634-8a88-4308-83e0-40b79e62126a.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 5: 20251008013843_23f5522d-3b4f-4e52-8b61-b356c7bf8bd6.sql
+-- ============================================
+
+-- Fix the has_role function with empty search_path and fully qualified references
+CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = _user_id
+      AND role = _role
+  );
+END;
+$$;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008013843_23f5522d-3b4f-4e52-8b61-b356c7bf8bd6.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 6: 20251008013852_4b7a7057-56d0-4de1-947f-3606ee7e56c2.sql
+-- ============================================
+
+-- Fix the update_updated_at_column function with proper search_path
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008013852_4b7a7057-56d0-4de1-947f-3606ee7e56c2.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 7: 20251008015952_75b210cc-eba3-4a02-97c9-0cad18462aa6.sql
+-- ============================================
+
+-- Add admin role for a specific user.
+-- CI-fix: guard against a clean replay where this hardcoded auth user does
+-- not exist (the bare INSERT violated user_roles -> auth.users FK). Only seed
+-- the role when the user is actually present; idempotent via ON CONFLICT.
+INSERT INTO public.user_roles (user_id, role)
+SELECT 'dc48c711-f059-443a-b4f2-585be6683c63', 'admin'
+WHERE EXISTS (SELECT 1 FROM auth.users WHERE id = 'dc48c711-f059-443a-b4f2-585be6683c63')
+ON CONFLICT (user_id, role) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008015952_75b210cc-eba3-4a02-97c9-0cad18462aa6.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 8: 20251008023303_bbb977b2-65ba-44b0-a13d-396ac2f81c9e.sql
+-- ============================================
+
+-- Add quantity and unit columns to foods table
+ALTER TABLE public.foods 
+ADD COLUMN quantity integer DEFAULT 0,
+ADD COLUMN unit text DEFAULT 'servings';
+
+-- Add helpful comment
+COMMENT ON COLUMN public.foods.quantity IS 'Current inventory quantity in pantry';
+COMMENT ON COLUMN public.foods.unit IS 'Unit of measurement (servings, count, oz, lbs, etc.)';
+
+-- Create function to deduct food quantity
+CREATE OR REPLACE FUNCTION public.deduct_food_quantity(
+  _food_id uuid,
+  _amount integer DEFAULT 1
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $$
+BEGIN
+  UPDATE public.foods
+  SET quantity = GREATEST(0, quantity - _amount)
+  WHERE id = _food_id;
+END;
+$$;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.deduct_food_quantity TO authenticated;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008023303_bbb977b2-65ba-44b0-a13d-396ac2f81c9e.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 9: 20251008023632_948365b0-0399-43db-a3fa-2c715f8321e5.sql
+-- ============================================
+
+-- Add allergens column to kids table
+ALTER TABLE public.kids 
+ADD COLUMN allergens text[] DEFAULT '{}';
+
+-- Add helpful comment
+COMMENT ON COLUMN public.kids.allergens IS 'List of allergens this child needs to avoid (e.g., peanuts, dairy, gluten)';
+
+-- Create a function to check if a food is safe for a kid based on allergens
+CREATE OR REPLACE FUNCTION public.is_food_safe_for_kid(
+  _food_allergens text[],
+  _kid_allergens text[]
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+BEGIN
+  -- If kid has no allergens, all foods are safe
+  IF _kid_allergens IS NULL OR array_length(_kid_allergens, 1) IS NULL THEN
+    RETURN true;
+  END IF;
+  
+  -- If food has no allergens listed, consider it safe
+  IF _food_allergens IS NULL OR array_length(_food_allergens, 1) IS NULL THEN
+    RETURN true;
+  END IF;
+  
+  -- Check if any food allergen matches kid's allergens
+  RETURN NOT (_food_allergens && _kid_allergens);
+END;
+$$;
+
+-- Grant execute permission
+GRANT EXECUTE ON FUNCTION public.is_food_safe_for_kid TO authenticated;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008023632_948365b0-0399-43db-a3fa-2c715f8321e5.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 10: 20251008023643_a4d9b74e-39c5-4bc5-b0e5-81894fe991f8.sql
+-- ============================================
+
+-- Fix the function to set search_path
+CREATE OR REPLACE FUNCTION public.is_food_safe_for_kid(
+  _food_allergens text[],
+  _kid_allergens text[]
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path TO ''
+AS $$
+BEGIN
+  -- If kid has no allergens, all foods are safe
+  IF _kid_allergens IS NULL OR array_length(_kid_allergens, 1) IS NULL THEN
+    RETURN true;
+  END IF;
+  
+  -- If food has no allergens listed, consider it safe
+  IF _food_allergens IS NULL OR array_length(_food_allergens, 1) IS NULL THEN
+    RETURN true;
+  END IF;
+  
+  -- Check if any food allergen matches kid's allergens
+  RETURN NOT (_food_allergens && _kid_allergens);
+END;
+$$;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008023643_a4d9b74e-39c5-4bc5-b0e5-81894fe991f8.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 11: 20251008024530_b810b648-92cd-40a7-aef2-882363055120.sql
+-- ============================================
+
+-- Create AI settings table
+CREATE TABLE public.ai_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text NOT NULL,
+  provider text NOT NULL, -- 'claude', 'openai', 'gemini', etc.
+  model_name text NOT NULL,
+  api_key_env_var text NOT NULL, -- Name of the environment variable containing the API key
+  auth_type text NOT NULL DEFAULT 'bearer', -- 'bearer', 'x-api-key', 'api-key'
+  endpoint_url text NOT NULL,
+  is_active boolean NOT NULL DEFAULT false,
+  temperature numeric,
+  max_tokens integer,
+  additional_params jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.ai_settings ENABLE ROW LEVEL SECURITY;
+
+-- Only admins can manage AI settings
+CREATE POLICY "Admins can view AI settings"
+  ON public.ai_settings FOR SELECT
+  USING (has_role(auth.uid(), 'admin'::app_role));
+
+CREATE POLICY "Admins can insert AI settings"
+  ON public.ai_settings FOR INSERT
+  WITH CHECK (has_role(auth.uid(), 'admin'::app_role));
+
+CREATE POLICY "Admins can update AI settings"
+  ON public.ai_settings FOR UPDATE
+  USING (has_role(auth.uid(), 'admin'::app_role));
+
+CREATE POLICY "Admins can delete AI settings"
+  ON public.ai_settings FOR DELETE
+  USING (has_role(auth.uid(), 'admin'::app_role));
+
+-- Trigger for updated_at
+CREATE TRIGGER update_ai_settings_updated_at
+  BEFORE UPDATE ON public.ai_settings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Insert default Claude Sonnet 4.5 configuration
+INSERT INTO public.ai_settings (
+  name,
+  provider,
+  model_name,
+  api_key_env_var,
+  auth_type,
+  endpoint_url,
+  is_active,
+  temperature,
+  max_tokens
+) VALUES (
+  'Claude Sonnet 4.5',
+  'claude',
+  'claude-sonnet-4-5-20250929',
+  'CLAUDE_API_KEY',
+  'x-api-key',
+  'https://api.anthropic.com/v1/messages',
+  true,
+  0.7,
+  4096
+);
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008024530_b810b648-92cd-40a7-aef2-882363055120.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 12: 20251008025307_8faf3224-9a40-415e-9176-ccaa98641861.sql
+-- ============================================
+
+-- Create storage bucket for profile pictures
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('profile-pictures', 'profile-pictures', true);
+
+-- Create RLS policies for profile pictures
+CREATE POLICY "Users can view all profile pictures"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'profile-pictures');
+
+CREATE POLICY "Users can upload their own profile pictures"
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'profile-pictures' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+CREATE POLICY "Users can update their own profile pictures"
+ON storage.objects FOR UPDATE
+USING (
+  bucket_id = 'profile-pictures' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+CREATE POLICY "Users can delete their own profile pictures"
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'profile-pictures' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Add profile_picture_url column to kids table
+ALTER TABLE public.kids
+ADD COLUMN profile_picture_url text;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008025307_8faf3224-9a40-415e-9176-ccaa98641861.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 13: 20251008025502_a2c7d4dd-23dc-4b3c-ace1-8c1eb4361bdc.sql
+-- ============================================
+
+-- Add date_of_birth and favorite_foods columns to kids table
+ALTER TABLE public.kids
+ADD COLUMN date_of_birth date,
+ADD COLUMN favorite_foods text[] DEFAULT '{}';
+
+-- Create index for date_of_birth for performance
+CREATE INDEX idx_kids_date_of_birth ON public.kids(date_of_birth);
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008025502_a2c7d4dd-23dc-4b3c-ace1-8c1eb4361bdc.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 14: 20251008030206_c9b6c7c6-6d3a-4a04-b000-ad390c8eff9f.sql
+-- ============================================
+
+-- Add servings_per_container to foods table
+ALTER TABLE public.foods
+ADD COLUMN servings_per_container numeric,
+ADD COLUMN package_quantity text;
+
+-- Add serving information to nutrition table
+ALTER TABLE public.nutrition
+ADD COLUMN servings_per_container numeric,
+ADD COLUMN package_quantity text;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008030206_c9b6c7c6-6d3a-4a04-b000-ad390c8eff9f.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 15: 20251008035425_74570939-d012-4a64-b5f0-649f6c8c7b35.sql
+-- ============================================
+
+-- Create profiles table for parents/users
+CREATE TABLE public.profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own profile
+CREATE POLICY "Users can view their own profile"
+  ON public.profiles
+  FOR SELECT
+  USING (auth.uid() = id);
+
+-- Users can update their own profile
+CREATE POLICY "Users can update their own profile"
+  ON public.profiles
+  FOR UPDATE
+  USING (auth.uid() = id);
+
+-- Create trigger to automatically create profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'full_name', 'User')
+  );
+  RETURN new;
+END;
+$$;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
+
+-- Add updated_at trigger for profiles
+CREATE TRIGGER update_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008035425_74570939-d012-4a64-b5f0-649f6c8c7b35.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 16: 20251008035758_e86c8db4-3460-43e4-b9c5-e03b5ca24f29.sql
+-- ============================================
+
+-- Create households table
+CREATE TABLE public.households (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL DEFAULT 'My Family',
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- Create household_members junction table
+CREATE TABLE public.household_members (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id uuid REFERENCES public.households(id) ON DELETE CASCADE NOT NULL,
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role text NOT NULL DEFAULT 'parent' CHECK (role IN ('parent', 'guardian')),
+  invited_by uuid REFERENCES auth.users(id),
+  joined_at timestamp with time zone DEFAULT now(),
+  UNIQUE(household_id, user_id)
+);
+
+-- Create invitations table
+CREATE TABLE public.household_invitations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id uuid REFERENCES public.households(id) ON DELETE CASCADE NOT NULL,
+  email text NOT NULL,
+  invited_by uuid REFERENCES auth.users(id) NOT NULL,
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + interval '7 days'),
+  created_at timestamp with time zone DEFAULT now(),
+  UNIQUE(household_id, email)
+);
+
+-- Enable RLS
+ALTER TABLE public.households ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.household_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.household_invitations ENABLE ROW LEVEL SECURITY;
+
+-- Households policies
+CREATE POLICY "Members can view their households"
+  ON public.households FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members
+      WHERE household_members.household_id = households.id
+      AND household_members.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Members can update their households"
+  ON public.households FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members
+      WHERE household_members.household_id = households.id
+      AND household_members.user_id = auth.uid()
+    )
+  );
+
+-- Household members policies
+CREATE POLICY "Members can view household members"
+  ON public.household_members FOR SELECT
+  USING (
+    household_id IN (
+      SELECT household_id FROM public.household_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Members can insert household members"
+  ON public.household_members FOR INSERT
+  WITH CHECK (
+    household_id IN (
+      SELECT household_id FROM public.household_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Members can delete household members"
+  ON public.household_members FOR DELETE
+  USING (
+    household_id IN (
+      SELECT household_id FROM public.household_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- Invitation policies
+CREATE POLICY "Members can view their household invitations"
+  ON public.household_invitations FOR SELECT
+  USING (
+    household_id IN (
+      SELECT household_id FROM public.household_members
+      WHERE user_id = auth.uid()
+    )
+    OR email = (SELECT email FROM auth.users WHERE id = auth.uid())
+  );
+
+CREATE POLICY "Members can create invitations"
+  ON public.household_invitations FOR INSERT
+  WITH CHECK (
+    household_id IN (
+      SELECT household_id FROM public.household_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Members can delete invitations"
+  ON public.household_invitations FOR DELETE
+  USING (
+    household_id IN (
+      SELECT household_id FROM public.household_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- Add household_id to existing tables
+ALTER TABLE public.kids ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
+ALTER TABLE public.foods ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
+ALTER TABLE public.recipes ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
+ALTER TABLE public.grocery_items ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
+ALTER TABLE public.plan_entries ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
+
+-- Create indexes for performance
+CREATE INDEX idx_household_members_user ON public.household_members(user_id);
+CREATE INDEX idx_household_members_household ON public.household_members(household_id);
+CREATE INDEX idx_kids_household ON public.kids(household_id);
+CREATE INDEX idx_foods_household ON public.foods(household_id);
+
+-- Update trigger for households
+CREATE TRIGGER update_households_updated_at
+  BEFORE UPDATE ON public.households
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Auto-create household when user signs up
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  new_household_id uuid;
+BEGIN
+  -- Create profile
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'full_name', 'User')
+  );
+  
+  -- Create household
+  INSERT INTO public.households (name)
+  VALUES (COALESCE(new.raw_user_meta_data->>'full_name', 'User') || '''s Family')
+  RETURNING id INTO new_household_id;
+  
+  -- Add user as household member
+  INSERT INTO public.household_members (household_id, user_id, role)
+  VALUES (new_household_id, new.id, 'parent');
+  
+  RETURN new;
+END;
+$$;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008035758_e86c8db4-3460-43e4-b9c5-e03b5ca24f29.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 17: 20251008035900_41c8b71a-5c17-4777-8bc1-fc1e0825a7a3.sql
+-- ============================================
+
+-- Create helper function to get user's household
+CREATE OR REPLACE FUNCTION public.get_user_household_id(_user_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT household_id
+  FROM public.household_members
+  WHERE user_id = _user_id
+  LIMIT 1
+$$;
+
+-- Update RLS policies for kids table
+DROP POLICY IF EXISTS "Users can view their own kids" ON public.kids;
+DROP POLICY IF EXISTS "Users can insert their own kids" ON public.kids;
+DROP POLICY IF EXISTS "Users can update their own kids" ON public.kids;
+DROP POLICY IF EXISTS "Users can delete their own kids" ON public.kids;
+
+CREATE POLICY "Household members can view kids"
+  ON public.kids FOR SELECT
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can insert kids"
+  ON public.kids FOR INSERT
+  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can update kids"
+  ON public.kids FOR UPDATE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can delete kids"
+  ON public.kids FOR DELETE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+-- Update RLS policies for foods table
+DROP POLICY IF EXISTS "Users can view their own foods" ON public.foods;
+DROP POLICY IF EXISTS "Users can insert their own foods" ON public.foods;
+DROP POLICY IF EXISTS "Users can update their own foods" ON public.foods;
+DROP POLICY IF EXISTS "Users can delete their own foods" ON public.foods;
+
+CREATE POLICY "Household members can view foods"
+  ON public.foods FOR SELECT
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can insert foods"
+  ON public.foods FOR INSERT
+  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can update foods"
+  ON public.foods FOR UPDATE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can delete foods"
+  ON public.foods FOR DELETE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+-- Update RLS policies for recipes table
+DROP POLICY IF EXISTS "Users can view their own recipes" ON public.recipes;
+DROP POLICY IF EXISTS "Users can insert their own recipes" ON public.recipes;
+DROP POLICY IF EXISTS "Users can update their own recipes" ON public.recipes;
+DROP POLICY IF EXISTS "Users can delete their own recipes" ON public.recipes;
+
+CREATE POLICY "Household members can view recipes"
+  ON public.recipes FOR SELECT
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can insert recipes"
+  ON public.recipes FOR INSERT
+  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can update recipes"
+  ON public.recipes FOR UPDATE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can delete recipes"
+  ON public.recipes FOR DELETE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+-- Update RLS policies for plan_entries table
+DROP POLICY IF EXISTS "Users can view their own plan entries" ON public.plan_entries;
+DROP POLICY IF EXISTS "Users can insert their own plan entries" ON public.plan_entries;
+DROP POLICY IF EXISTS "Users can update their own plan entries" ON public.plan_entries;
+DROP POLICY IF EXISTS "Users can delete their own plan entries" ON public.plan_entries;
+
+CREATE POLICY "Household members can view plan entries"
+  ON public.plan_entries FOR SELECT
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can insert plan entries"
+  ON public.plan_entries FOR INSERT
+  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can update plan entries"
+  ON public.plan_entries FOR UPDATE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can delete plan entries"
+  ON public.plan_entries FOR DELETE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+-- Update RLS policies for grocery_items table
+DROP POLICY IF EXISTS "Users can view their own grocery items" ON public.grocery_items;
+DROP POLICY IF EXISTS "Users can insert their own grocery items" ON public.grocery_items;
+DROP POLICY IF EXISTS "Users can update their own grocery items" ON public.grocery_items;
+DROP POLICY IF EXISTS "Users can delete their own grocery items" ON public.grocery_items;
+
+CREATE POLICY "Household members can view grocery items"
+  ON public.grocery_items FOR SELECT
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can insert grocery items"
+  ON public.grocery_items FOR INSERT
+  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can update grocery items"
+  ON public.grocery_items FOR UPDATE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+CREATE POLICY "Household members can delete grocery items"
+  ON public.grocery_items FOR DELETE
+  USING (household_id = public.get_user_household_id(auth.uid()));
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008035900_41c8b71a-5c17-4777-8bc1-fc1e0825a7a3.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 18: 20251008121540_9fd634cb-b47d-4035-8ac4-4d0c53b62c8d.sql
+-- ============================================
+
+-- Enable automatic household/profile creation on signup and backfill existing users
+
+-- 1) Create trigger to run the existing function on new auth users
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE t.tgname = 'on_auth_user_created'
+      AND n.nspname = 'auth'
+  ) THEN
+    CREATE TRIGGER on_auth_user_created
+      AFTER INSERT ON auth.users
+      FOR EACH ROW
+      EXECUTE PROCEDURE public.handle_new_user();
+  END IF;
+END $$;
+
+-- 2) Backfill: create missing profiles, households, and memberships for existing users
+DO $$
+DECLARE
+  rec RECORD;
+  new_household_id uuid;
+  full_name text;
+BEGIN
+  FOR rec IN (
+    SELECT u.id,
+           COALESCE(u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1)) AS fn
+    FROM auth.users u
+    LEFT JOIN public.household_members hm ON hm.user_id = u.id
+    WHERE hm.user_id IS NULL
+  ) LOOP
+    full_name := COALESCE(rec.fn, 'User');
+
+    -- Create profile if missing
+    INSERT INTO public.profiles (id, full_name)
+    VALUES (rec.id, full_name)
+    ON CONFLICT (id) DO NOTHING;
+
+    -- Create household
+    INSERT INTO public.households (name)
+    VALUES (full_name || '''s Family')
+    RETURNING id INTO new_household_id;
+
+    -- Add user as household member
+    INSERT INTO public.household_members (household_id, user_id, role)
+    VALUES (new_household_id, rec.id, 'parent');
+  END LOOP;
+END $$;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008121540_9fd634cb-b47d-4035-8ac4-4d0c53b62c8d.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 19: 20251008140000_add_onboarding_to_profiles.sql
+-- ============================================
+
+-- Add onboarding_completed column to profiles table
+ALTER TABLE profiles
+ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
+
+-- Add index for faster queries
+CREATE INDEX IF NOT EXISTS idx_profiles_onboarding ON profiles(onboarding_completed);
+
+-- Update existing users to have onboarding completed (they're already using the app)
+UPDATE profiles
+SET onboarding_completed = TRUE
+WHERE onboarding_completed IS NULL OR onboarding_completed = FALSE;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008140000_add_onboarding_to_profiles.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 20: 20251008141000_create_subscriptions_tables.sql
+-- ============================================
+
+-- Create subscription plans table
+CREATE TABLE IF NOT EXISTS subscription_plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  stripe_price_id TEXT UNIQUE,
+  price_monthly DECIMAL(10,2) NOT NULL,
+  price_yearly DECIMAL(10,2),
+  features JSONB DEFAULT '[]'::jsonb,
+  max_children INTEGER DEFAULT 1,
+  max_recipes INTEGER,
+  max_meal_plans INTEGER,
+  is_active BOOLEAN DEFAULT TRUE,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create user subscriptions table
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  plan_id UUID REFERENCES subscription_plans(id),
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'inactive', -- active, canceled, past_due, trialing, incomplete
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN DEFAULT FALSE,
+  trial_end TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+
+-- Create subscription events log table (for audit trail)
+CREATE TABLE IF NOT EXISTS subscription_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  subscription_id UUID REFERENCES user_subscriptions(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL, -- subscribed, canceled, renewed, upgraded, downgraded, payment_failed
+  old_plan_id UUID REFERENCES subscription_plans(id),
+  new_plan_id UUID REFERENCES subscription_plans(id),
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create payment history table
+CREATE TABLE IF NOT EXISTS payment_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  subscription_id UUID REFERENCES user_subscriptions(id) ON DELETE SET NULL,
+  stripe_payment_intent_id TEXT,
+  stripe_invoice_id TEXT,
+  amount DECIMAL(10,2) NOT NULL,
+  currency TEXT DEFAULT 'usd',
+  status TEXT NOT NULL, -- succeeded, pending, failed, refunded
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Add indexes for performance
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user_id ON user_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status ON user_subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_stripe_customer ON user_subscriptions(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_subscription_events_user_id ON subscription_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscription_events_created_at ON subscription_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_history_user_id ON payment_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_history_created_at ON payment_history(created_at DESC);
+
+-- Enable RLS
+ALTER TABLE subscription_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscription_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+
+-- Subscription plans: Everyone can read active plans
+CREATE POLICY "Anyone can view active subscription plans"
+  ON subscription_plans FOR SELECT
+  USING (is_active = true);
+
+-- Admins can manage subscription plans
+CREATE POLICY "Admins can manage subscription plans"
+  ON subscription_plans FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- User subscriptions: Users can view their own
+CREATE POLICY "Users can view their own subscriptions"
+  ON user_subscriptions FOR SELECT
+  USING (user_id = auth.uid());
+
+-- Admins can view all subscriptions
+CREATE POLICY "Admins can view all subscriptions"
+  ON user_subscriptions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Only system can insert/update subscriptions (via webhooks)
+CREATE POLICY "Service role can manage subscriptions"
+  ON user_subscriptions FOR ALL
+  USING (auth.role() = 'service_role');
+
+-- Subscription events: Users can view their own
+CREATE POLICY "Users can view their own subscription events"
+  ON subscription_events FOR SELECT
+  USING (user_id = auth.uid());
+
+-- Admins can view all events
+CREATE POLICY "Admins can view all subscription events"
+  ON subscription_events FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Payment history: Users can view their own
+CREATE POLICY "Users can view their own payment history"
+  ON payment_history FOR SELECT
+  USING (user_id = auth.uid());
+
+-- Admins can view all payments
+CREATE POLICY "Admins can view all payment history"
+  ON payment_history FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Insert default subscription plans
+INSERT INTO subscription_plans (name, price_monthly, price_yearly, features, max_children, max_recipes, max_meal_plans, sort_order)
+VALUES
+  (
+    'Free',
+    0.00,
+    0.00,
+    '["1 child profile", "Up to 20 foods in pantry", "Basic meal planning", "Grocery list generation"]'::jsonb,
+    1,
+    10,
+    4,
+    1
+  ),
+  (
+    'Pro',
+    9.99,
+    99.00,
+    '["Up to 3 children", "Unlimited foods", "AI meal suggestions", "Advanced analytics", "Recipe builder", "Priority support"]'::jsonb,
+    3,
+    NULL,
+    NULL,
+    2
+  ),
+  (
+    'Family',
+    19.99,
+    199.00,
+    '["Unlimited children", "Everything in Pro", "Multiple parent accounts", "Family sharing", "Custom meal templates", "Dedicated support"]'::jsonb,
+    NULL,
+    NULL,
+    NULL,
+    3
+  )
+ON CONFLICT DO NOTHING;
+
+-- Function to get user's current subscription
+CREATE OR REPLACE FUNCTION get_user_subscription(user_uuid UUID)
+RETURNS TABLE (
+  plan_name TEXT,
+  status TEXT,
+  current_period_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    sp.name,
+    us.status,
+    us.current_period_end,
+    us.cancel_at_period_end
+  FROM user_subscriptions us
+  JOIN subscription_plans sp ON us.plan_id = sp.id
+  WHERE us.user_id = user_uuid
+  AND us.status IN ('active', 'trialing');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to check if user can add more children
+CREATE OR REPLACE FUNCTION can_add_child(user_uuid UUID)
+RETURNS BOOLEAN AS $$
+DECLARE
+  current_children_count INTEGER;
+  max_allowed INTEGER;
+BEGIN
+  -- Get current number of children
+  SELECT COUNT(*) INTO current_children_count
+  FROM kids
+  WHERE user_id = user_uuid;
+
+  -- Get max allowed children for user's plan
+  SELECT sp.max_children INTO max_allowed
+  FROM user_subscriptions us
+  JOIN subscription_plans sp ON us.plan_id = sp.id
+  WHERE us.user_id = user_uuid
+  AND us.status IN ('active', 'trialing');
+
+  -- If no subscription found or unlimited (NULL), allow
+  IF max_allowed IS NULL THEN
+    RETURN TRUE;
+  END IF;
+
+  -- Check if under limit
+  RETURN current_children_count < max_allowed;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_subscription_plans_updated_at
+  BEFORE UPDATE ON subscription_plans
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_subscriptions_updated_at
+  BEFORE UPDATE ON user_subscriptions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008141000_create_subscriptions_tables.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 21: 20251008142000_create_leads_tables.sql
+-- ============================================
+
+-- Create lead sources enum
+CREATE TYPE lead_source AS ENUM (
+  'landing_page',
+  'signup_form',
+  'trial_signup',
+  'newsletter',
+  'contact_form',
+  'referral',
+  'social_media',
+  'organic_search',
+  'paid_ad',
+  'other'
+);
+
+-- Create lead status enum
+CREATE TYPE lead_status AS ENUM (
+  'new',
+  'contacted',
+  'qualified',
+  'converted',
+  'unqualified',
+  'lost'
+);
+
+-- Create campaigns table
+CREATE TABLE IF NOT EXISTS campaigns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  source lead_source NOT NULL,
+  utm_campaign TEXT,
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_content TEXT,
+  start_date DATE,
+  end_date DATE,
+  is_active BOOLEAN DEFAULT TRUE,
+  conversion_goal TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create leads table
+CREATE TABLE IF NOT EXISTS leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL,
+  full_name TEXT,
+  phone TEXT,
+  source lead_source NOT NULL DEFAULT 'landing_page',
+  campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
+  status lead_status NOT NULL DEFAULT 'new',
+  score INTEGER DEFAULT 0, -- Lead scoring 0-100
+  metadata JSONB DEFAULT '{}'::jsonb, -- Custom fields, UTM params, etc.
+  notes TEXT,
+  assigned_to UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  converted_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  converted_at TIMESTAMPTZ,
+  last_contacted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create lead interactions table (activity log)
+CREATE TABLE IF NOT EXISTS lead_interactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  interaction_type TEXT NOT NULL, -- email, call, meeting, form_submission, page_view
+  subject TEXT,
+  description TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create campaign analytics table
+CREATE TABLE IF NOT EXISTS campaign_analytics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  impressions INTEGER DEFAULT 0,
+  clicks INTEGER DEFAULT 0,
+  leads_generated INTEGER DEFAULT 0,
+  conversions INTEGER DEFAULT 0,
+  cost DECIMAL(10,2) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(campaign_id, date)
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);
+CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source);
+CREATE INDEX IF NOT EXISTS idx_leads_campaign_id ON leads(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_leads_score ON leads(score DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lead_interactions_lead_id ON lead_interactions(lead_id);
+CREATE INDEX IF NOT EXISTS idx_lead_interactions_created_at ON lead_interactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_campaigns_is_active ON campaigns(is_active);
+CREATE INDEX IF NOT EXISTS idx_campaign_analytics_campaign_date ON campaign_analytics(campaign_id, date DESC);
+
+-- Enable RLS
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lead_interactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_analytics ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+
+-- Campaigns: Only admins can manage
+CREATE POLICY "Admins can manage campaigns"
+  ON campaigns FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Leads: Only admins can manage
+CREATE POLICY "Admins can manage leads"
+  ON leads FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Allow public insert for lead capture forms (service role will be used)
+CREATE POLICY "Public can create leads via service role"
+  ON leads FOR INSERT
+  WITH CHECK (auth.role() = 'service_role' OR auth.role() = 'anon');
+
+-- Lead interactions: Only admins
+CREATE POLICY "Admins can manage lead interactions"
+  ON lead_interactions FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Campaign analytics: Only admins
+CREATE POLICY "Admins can view campaign analytics"
+  ON campaign_analytics FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Function to automatically score leads
+CREATE OR REPLACE FUNCTION calculate_lead_score(lead_id UUID)
+RETURNS INTEGER AS $$
+DECLARE
+  score INTEGER := 0;
+  lead_record RECORD;
+  interaction_count INTEGER;
+BEGIN
+  SELECT * INTO lead_record FROM leads WHERE id = lead_id;
+
+  -- Base score for having required fields
+  IF lead_record.email IS NOT NULL THEN score := score + 10; END IF;
+  IF lead_record.full_name IS NOT NULL THEN score := score + 10; END IF;
+  IF lead_record.phone IS NOT NULL THEN score := score + 15; END IF;
+
+  -- Score based on source quality
+  CASE lead_record.source
+    WHEN 'referral' THEN score := score + 20;
+    WHEN 'trial_signup' THEN score := score + 25;
+    WHEN 'paid_ad' THEN score := score + 10;
+    WHEN 'organic_search' THEN score := score + 15;
+    ELSE score := score + 5;
+  END CASE;
+
+  -- Score based on interactions
+  SELECT COUNT(*) INTO interaction_count
+  FROM lead_interactions
+  WHERE lead_interactions.lead_id = lead_id;
+
+  score := score + LEAST(interaction_count * 5, 30);
+
+  -- Recency bonus (contacted in last 7 days)
+  IF lead_record.last_contacted_at > NOW() - INTERVAL '7 days' THEN
+    score := score + 10;
+  END IF;
+
+  RETURN LEAST(score, 100); -- Cap at 100
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to update lead score on changes
+CREATE OR REPLACE FUNCTION update_lead_score()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.score := calculate_lead_score(NEW.id);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_lead_score
+  BEFORE UPDATE ON leads
+  FOR EACH ROW
+  EXECUTE FUNCTION update_lead_score();
+
+-- Function to update updated_at timestamp
+CREATE TRIGGER update_campaigns_updated_at
+  BEFORE UPDATE ON campaigns
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_leads_updated_at
+  BEFORE UPDATE ON leads
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to get campaign conversion rate
+CREATE OR REPLACE FUNCTION get_campaign_stats(campaign_uuid UUID)
+RETURNS TABLE (
+  total_leads INTEGER,
+  converted_leads INTEGER,
+  conversion_rate DECIMAL,
+  avg_score DECIMAL
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(*)::INTEGER as total_leads,
+    COUNT(*) FILTER (WHERE status = 'converted')::INTEGER as converted_leads,
+    CASE
+      WHEN COUNT(*) > 0 THEN
+        ROUND((COUNT(*) FILTER (WHERE status = 'converted')::DECIMAL / COUNT(*)) * 100, 2)
+      ELSE 0
+    END as conversion_rate,
+    ROUND(AVG(score), 2) as avg_score
+  FROM leads
+  WHERE campaign_id = campaign_uuid;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Insert default campaign
+INSERT INTO campaigns (name, description, source, is_active)
+VALUES
+  ('General Lead Capture', 'Default campaign for leads without specific attribution', 'landing_page', true),
+  ('Free Trial Signups', 'Track users who start free trials', 'trial_signup', true),
+  ('Newsletter Subscribers', 'Email newsletter signups', 'newsletter', true)
+ON CONFLICT DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008142000_create_leads_tables.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 22: 20251008143000_create_social_posts_tables.sql
+-- ============================================
+
+-- Create social platforms enum
+CREATE TYPE social_platform AS ENUM (
+  'facebook',
+  'instagram',
+  'twitter',
+  'linkedin',
+  'tiktok',
+  'pinterest'
+);
+
+-- Create post status enum
+CREATE TYPE post_status AS ENUM (
+  'draft',
+  'scheduled',
+  'published',
+  'failed',
+  'deleted'
+);
+
+-- Create social accounts table
+CREATE TABLE IF NOT EXISTS social_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform social_platform NOT NULL,
+  account_name TEXT NOT NULL,
+  account_id TEXT, -- Platform-specific account ID
+  webhook_url TEXT, -- Webhook for posting (Zapier, Make, etc.)
+  access_token TEXT, -- Encrypted access token if using direct API
+  is_active BOOLEAN DEFAULT TRUE,
+  last_posted_at TIMESTAMPTZ,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(platform, account_name)
+);
+
+-- Create social posts table
+CREATE TABLE IF NOT EXISTS social_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT,
+  content TEXT NOT NULL,
+  platforms social_platform[] NOT NULL, -- Can post to multiple platforms
+  status post_status NOT NULL DEFAULT 'draft',
+  scheduled_for TIMESTAMPTZ,
+  published_at TIMESTAMPTZ,
+  image_urls TEXT[],
+  video_url TEXT,
+  link_url TEXT,
+  hashtags TEXT[],
+  metadata JSONB DEFAULT '{}'::jsonb, -- Platform-specific data
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create post analytics table
+CREATE TABLE IF NOT EXISTS post_analytics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+  platform social_platform NOT NULL,
+  platform_post_id TEXT, -- ID from the social platform
+  impressions INTEGER DEFAULT 0,
+  reach INTEGER DEFAULT 0,
+  likes INTEGER DEFAULT 0,
+  comments INTEGER DEFAULT 0,
+  shares INTEGER DEFAULT 0,
+  clicks INTEGER DEFAULT 0,
+  engagement_rate DECIMAL(5,2) DEFAULT 0,
+  last_synced_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(post_id, platform)
+);
+
+-- Create post queue table (for scheduled posts)
+CREATE TABLE IF NOT EXISTS post_queue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+  platform social_platform NOT NULL,
+  scheduled_for TIMESTAMPTZ NOT NULL,
+  status TEXT DEFAULT 'pending', -- pending, processing, completed, failed
+  error_message TEXT,
+  attempts INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create webhook logs table
+CREATE TABLE IF NOT EXISTS webhook_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID REFERENCES social_posts(id) ON DELETE SET NULL,
+  platform social_platform NOT NULL,
+  webhook_url TEXT NOT NULL,
+  request_payload JSONB,
+  response_status INTEGER,
+  response_body TEXT,
+  success BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_social_posts_status ON social_posts(status);
+CREATE INDEX IF NOT EXISTS idx_social_posts_scheduled ON social_posts(scheduled_for) WHERE status = 'scheduled';
+CREATE INDEX IF NOT EXISTS idx_social_posts_created_at ON social_posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_post_analytics_post_id ON post_analytics(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_queue_scheduled ON post_queue(scheduled_for) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_created_at ON webhook_logs(created_at DESC);
+
+-- Enable RLS
+ALTER TABLE social_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE social_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_analytics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE post_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_logs ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+
+-- Social accounts: Only admins can manage
+CREATE POLICY "Admins can manage social accounts"
+  ON social_accounts FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Social posts: Only admins can manage
+CREATE POLICY "Admins can manage social posts"
+  ON social_posts FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Post analytics: Admins only
+CREATE POLICY "Admins can view post analytics"
+  ON post_analytics FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Post queue: Admins only
+CREATE POLICY "Admins can manage post queue"
+  ON post_queue FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Webhook logs: Admins only
+CREATE POLICY "Admins can view webhook logs"
+  ON webhook_logs FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Function to update updated_at timestamp
+CREATE TRIGGER update_social_accounts_updated_at
+  BEFORE UPDATE ON social_accounts
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_social_posts_updated_at
+  BEFORE UPDATE ON social_posts
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_post_queue_updated_at
+  BEFORE UPDATE ON post_queue
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to get post engagement stats
+CREATE OR REPLACE FUNCTION get_post_engagement_summary()
+RETURNS TABLE (
+  total_posts INTEGER,
+  scheduled_posts INTEGER,
+  published_posts INTEGER,
+  total_impressions BIGINT,
+  total_engagement BIGINT,
+  avg_engagement_rate DECIMAL
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(DISTINCT sp.id)::INTEGER as total_posts,
+    COUNT(DISTINCT sp.id) FILTER (WHERE sp.status = 'scheduled')::INTEGER as scheduled_posts,
+    COUNT(DISTINCT sp.id) FILTER (WHERE sp.status = 'published')::INTEGER as published_posts,
+    COALESCE(SUM(pa.impressions), 0)::BIGINT as total_impressions,
+    COALESCE(SUM(pa.likes + pa.comments + pa.shares), 0)::BIGINT as total_engagement,
+    COALESCE(AVG(pa.engagement_rate), 0)::DECIMAL as avg_engagement_rate
+  FROM social_posts sp
+  LEFT JOIN post_analytics pa ON sp.id = pa.post_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to schedule post to queue
+CREATE OR REPLACE FUNCTION schedule_post_to_queue(
+  _post_id UUID,
+  _platforms social_platform[]
+)
+RETURNS VOID AS $$
+DECLARE
+  _platform social_platform;
+  _scheduled_time TIMESTAMPTZ;
+BEGIN
+  -- Get scheduled time from post
+  SELECT scheduled_for INTO _scheduled_time
+  FROM social_posts
+  WHERE id = _post_id;
+
+  -- Create queue entries for each platform
+  FOREACH _platform IN ARRAY _platforms
+  LOOP
+    INSERT INTO post_queue (post_id, platform, scheduled_for, status)
+    VALUES (_post_id, _platform, _scheduled_time, 'pending')
+    ON CONFLICT DO NOTHING;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Insert default social accounts (examples)
+INSERT INTO social_accounts (platform, account_name, is_active)
+VALUES
+  ('facebook', 'EatPal Official', false),
+  ('instagram', '@eatpal', false),
+  ('twitter', '@eatpal_app', false),
+  ('linkedin', 'EatPal Company Page', false)
+ON CONFLICT DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008143000_create_social_posts_tables.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 23: 20251008144000_create_blog_tables.sql
+-- ============================================
+
+-- Create blog categories table
+CREATE TABLE IF NOT EXISTS blog_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  description TEXT,
+  post_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create blog tags table
+CREATE TABLE IF NOT EXISTS blog_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create blog posts table
+CREATE TABLE IF NOT EXISTS blog_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  excerpt TEXT,
+  content TEXT NOT NULL,
+  featured_image_url TEXT,
+  category_id UUID REFERENCES blog_categories(id) ON DELETE SET NULL,
+  author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  status TEXT DEFAULT 'draft', -- draft, published, scheduled
+  published_at TIMESTAMPTZ,
+  scheduled_for TIMESTAMPTZ,
+  meta_title TEXT,
+  meta_description TEXT,
+  og_image_url TEXT,
+  views INTEGER DEFAULT 0,
+  reading_time_minutes INTEGER,
+  ai_generated BOOLEAN DEFAULT FALSE,
+  ai_prompt TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create post tags junction table
+CREATE TABLE IF NOT EXISTS blog_post_tags (
+  post_id UUID REFERENCES blog_posts(id) ON DELETE CASCADE,
+  tag_id UUID REFERENCES blog_tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (post_id, tag_id)
+);
+
+-- Create blog comments table
+CREATE TABLE IF NOT EXISTS blog_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID REFERENCES blog_posts(id) ON DELETE CASCADE,
+  author_name TEXT NOT NULL,
+  author_email TEXT NOT NULL,
+  content TEXT NOT NULL,
+  status TEXT DEFAULT 'pending', -- pending, approved, spam
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_blog_posts_category ON blog_posts(category_id);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_author ON blog_posts(author_id);
+CREATE INDEX IF NOT EXISTS idx_blog_categories_slug ON blog_categories(slug);
+CREATE INDEX IF NOT EXISTS idx_blog_tags_slug ON blog_tags(slug);
+CREATE INDEX IF NOT EXISTS idx_blog_comments_post ON blog_comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_blog_comments_status ON blog_comments(status);
+
+-- Enable RLS
+ALTER TABLE blog_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blog_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blog_post_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blog_comments ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+
+-- Categories: Admin manage, anyone can view
+CREATE POLICY "Admins can manage blog categories"
+  ON blog_categories FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Anyone can view categories"
+  ON blog_categories FOR SELECT
+  USING (true);
+
+-- Tags: Admin manage, anyone can view
+CREATE POLICY "Admins can manage blog tags"
+  ON blog_tags FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Anyone can view tags"
+  ON blog_tags FOR SELECT
+  USING (true);
+
+-- Posts: Admin manage, anyone can view published
+CREATE POLICY "Admins can manage blog posts"
+  ON blog_posts FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Anyone can view published posts"
+  ON blog_posts FOR SELECT
+  USING (status = 'published' AND published_at <= NOW());
+
+-- Post tags: Follow post permissions
+CREATE POLICY "Admins can manage post tags"
+  ON blog_post_tags FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Anyone can view post tags"
+  ON blog_post_tags FOR SELECT
+  USING (true);
+
+-- Comments: Admin manage, anyone can submit (pending approval)
+CREATE POLICY "Admins can manage comments"
+  ON blog_comments FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Anyone can view approved comments"
+  ON blog_comments FOR SELECT
+  USING (status = 'approved');
+
+CREATE POLICY "Anyone can submit comments"
+  ON blog_comments FOR INSERT
+  WITH CHECK (true);
+
+-- Triggers for updated_at
+CREATE TRIGGER update_blog_categories_updated_at
+  BEFORE UPDATE ON blog_categories
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_blog_posts_updated_at
+  BEFORE UPDATE ON blog_posts
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to update category post count
+CREATE OR REPLACE FUNCTION update_category_post_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' AND NEW.category_id IS NOT NULL THEN
+    UPDATE blog_categories SET post_count = post_count + 1 WHERE id = NEW.category_id;
+  ELSIF TG_OP = 'DELETE' AND OLD.category_id IS NOT NULL THEN
+    UPDATE blog_categories SET post_count = post_count - 1 WHERE id = OLD.category_id;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.category_id IS NOT NULL AND OLD.category_id != NEW.category_id THEN
+      UPDATE blog_categories SET post_count = post_count - 1 WHERE id = OLD.category_id;
+    END IF;
+    IF NEW.category_id IS NOT NULL AND OLD.category_id != NEW.category_id THEN
+      UPDATE blog_categories SET post_count = post_count + 1 WHERE id = NEW.category_id;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER blog_posts_category_count
+  AFTER INSERT OR UPDATE OR DELETE ON blog_posts
+  FOR EACH ROW
+  EXECUTE FUNCTION update_category_post_count();
+
+-- Function to calculate reading time (roughly 200 words per minute)
+CREATE OR REPLACE FUNCTION calculate_reading_time()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.reading_time_minutes := GREATEST(1, (LENGTH(NEW.content) / 1000)::INTEGER);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER blog_posts_reading_time
+  BEFORE INSERT OR UPDATE OF content ON blog_posts
+  FOR EACH ROW
+  EXECUTE FUNCTION calculate_reading_time();
+
+-- Function to auto-generate slug from title
+CREATE OR REPLACE FUNCTION generate_slug_from_title()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.slug IS NULL OR NEW.slug = '' THEN
+    NEW.slug := lower(regexp_replace(regexp_replace(NEW.title, '[^a-zA-Z0-9\s-]', '', 'g'), '\s+', '-', 'g'));
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER blog_posts_generate_slug
+  BEFORE INSERT OR UPDATE OF title ON blog_posts
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_slug_from_title();
+
+-- Function to get blog stats
+CREATE OR REPLACE FUNCTION get_blog_stats()
+RETURNS TABLE (
+  total_posts INTEGER,
+  published_posts INTEGER,
+  draft_posts INTEGER,
+  scheduled_posts INTEGER,
+  total_views BIGINT,
+  total_comments BIGINT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(*)::INTEGER as total_posts,
+    COUNT(*) FILTER (WHERE status = 'published')::INTEGER as published_posts,
+    COUNT(*) FILTER (WHERE status = 'draft')::INTEGER as draft_posts,
+    COUNT(*) FILTER (WHERE status = 'scheduled')::INTEGER as scheduled_posts,
+    COALESCE(SUM(views), 0)::BIGINT as total_views,
+    (SELECT COUNT(*) FROM blog_comments)::BIGINT as total_comments
+  FROM blog_posts;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Insert default categories
+INSERT INTO blog_categories (name, slug, description)
+VALUES
+  ('Picky Eaters', 'picky-eaters', 'Tips and strategies for dealing with picky eaters'),
+  ('Meal Planning', 'meal-planning', 'Meal planning advice and recipes'),
+  ('Nutrition', 'nutrition', 'Nutritional information and healthy eating tips'),
+  ('Parenting', 'parenting', 'General parenting advice related to food and meals'),
+  ('Recipes', 'recipes', 'Kid-friendly recipes and meal ideas')
+ON CONFLICT DO NOTHING;
+
+-- Insert default tags
+INSERT INTO blog_tags (name, slug)
+VALUES
+  ('Tips', 'tips'),
+  ('Recipes', 'recipes'),
+  ('Nutrition', 'nutrition'),
+  ('Meal Prep', 'meal-prep'),
+  ('Quick Meals', 'quick-meals'),
+  ('Healthy Eating', 'healthy-eating'),
+  ('Food Safety', 'food-safety'),
+  ('Allergies', 'allergies')
+ON CONFLICT DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251008144000_create_blog_tables.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 24: 20251008144100_blog_advanced_features.sql
 -- ============================================
 
 -- =====================================================
@@ -1129,2159 +3289,7 @@ COMMENT ON FUNCTION refresh_blog_materialized_views IS 'Refresh all blog-related
 
 
 -- Record migration
-INSERT INTO _migrations (filename) VALUES ('20250112000000_blog_advanced_features.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 3: 20251008012402_c8f3da2d-2ed2-4cce-8478-2fd697a46260.sql
--- ============================================
-
--- Create tables for Kid Meal Planner
-
--- Kids table
-CREATE TABLE IF NOT EXISTS public.kids (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  name TEXT NOT NULL,
-  age INTEGER,
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Foods table
-CREATE TABLE IF NOT EXISTS public.foods (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  name TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack')),
-  is_safe BOOLEAN NOT NULL DEFAULT false,
-  is_try_bite BOOLEAN NOT NULL DEFAULT false,
-  allergens TEXT[],
-  aisle TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Plan entries table
-CREATE TABLE IF NOT EXISTS public.plan_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  kid_id UUID NOT NULL REFERENCES public.kids(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  meal_slot TEXT NOT NULL CHECK (meal_slot IN ('breakfast', 'lunch', 'dinner', 'snack1', 'snack2', 'try_bite')),
-  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
-  result TEXT CHECK (result IN ('ate', 'tasted', 'refused') OR result IS NULL),
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Grocery items table
-CREATE TABLE IF NOT EXISTS public.grocery_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  name TEXT NOT NULL,
-  quantity INTEGER NOT NULL DEFAULT 1,
-  unit TEXT NOT NULL DEFAULT 'servings',
-  checked BOOLEAN NOT NULL DEFAULT false,
-  category TEXT NOT NULL CHECK (category IN ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack')),
-  source_plan_entry_id UUID REFERENCES public.plan_entries(id) ON DELETE SET NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Recipes table
-CREATE TABLE IF NOT EXISTS public.recipes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  name TEXT NOT NULL,
-  description TEXT,
-  food_ids UUID[] NOT NULL DEFAULT '{}',
-  category TEXT CHECK (category IN ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack')),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Enable Row Level Security on all tables
-ALTER TABLE public.kids ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.foods ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.plan_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.grocery_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.recipes ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies for kids table
-CREATE POLICY "Users can view their own kids"
-  ON public.kids FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own kids"
-  ON public.kids FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own kids"
-  ON public.kids FOR UPDATE
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own kids"
-  ON public.kids FOR DELETE
-  USING (auth.uid() = user_id);
-
--- RLS Policies for foods table
-CREATE POLICY "Users can view their own foods"
-  ON public.foods FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own foods"
-  ON public.foods FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own foods"
-  ON public.foods FOR UPDATE
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own foods"
-  ON public.foods FOR DELETE
-  USING (auth.uid() = user_id);
-
--- RLS Policies for plan_entries table
-CREATE POLICY "Users can view their own plan entries"
-  ON public.plan_entries FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own plan entries"
-  ON public.plan_entries FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own plan entries"
-  ON public.plan_entries FOR UPDATE
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own plan entries"
-  ON public.plan_entries FOR DELETE
-  USING (auth.uid() = user_id);
-
--- RLS Policies for grocery_items table
-CREATE POLICY "Users can view their own grocery items"
-  ON public.grocery_items FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own grocery items"
-  ON public.grocery_items FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own grocery items"
-  ON public.grocery_items FOR UPDATE
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own grocery items"
-  ON public.grocery_items FOR DELETE
-  USING (auth.uid() = user_id);
-
--- RLS Policies for recipes table
-CREATE POLICY "Users can view their own recipes"
-  ON public.recipes FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert their own recipes"
-  ON public.recipes FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own recipes"
-  ON public.recipes FOR UPDATE
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own recipes"
-  ON public.recipes FOR DELETE
-  USING (auth.uid() = user_id);
-
--- Create function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create triggers for updated_at
-CREATE TRIGGER update_kids_updated_at
-  BEFORE UPDATE ON public.kids
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_foods_updated_at
-  BEFORE UPDATE ON public.foods
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_plan_entries_updated_at
-  BEFORE UPDATE ON public.plan_entries
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_grocery_items_updated_at
-  BEFORE UPDATE ON public.grocery_items
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_recipes_updated_at
-  BEFORE UPDATE ON public.recipes
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008012402_c8f3da2d-2ed2-4cce-8478-2fd697a46260.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 4: 20251008013812_d9ef4871-2f4c-4f46-bd5c-eb6502b88b5c.sql
--- ============================================
-
--- Create enum for user roles
-CREATE TYPE public.app_role AS ENUM ('admin', 'user');
-
--- Create user_roles table (separate from profiles for security)
-CREATE TABLE public.user_roles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  role public.app_role NOT NULL DEFAULT 'user',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  UNIQUE(user_id, role)
-);
-
--- Enable RLS on user_roles
-ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
-
--- Create security definer function to check roles (prevents infinite recursion)
-CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
-RETURNS BOOLEAN
-LANGUAGE SQL
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_roles
-    WHERE user_id = _user_id
-      AND role = _role
-  )
-$$;
-
--- RLS policies for user_roles
-CREATE POLICY "Users can view their own roles"
-  ON public.user_roles
-  FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Admins can manage all roles"
-  ON public.user_roles
-  FOR ALL
-  USING (public.has_role(auth.uid(), 'admin'));
-
--- Create nutrition table (community food bank)
-CREATE TABLE public.nutrition (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  category TEXT NOT NULL,
-  serving_size TEXT,
-  ingredients TEXT,
-  calories INTEGER,
-  protein_g NUMERIC(5,1),
-  carbs_g NUMERIC(5,1),
-  fat_g NUMERIC(5,1),
-  allergens TEXT[],
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  created_by UUID REFERENCES auth.users(id)
-);
-
--- Enable RLS on nutrition
-ALTER TABLE public.nutrition ENABLE ROW LEVEL SECURITY;
-
--- RLS policies for nutrition table
-CREATE POLICY "Everyone can view nutrition data"
-  ON public.nutrition
-  FOR SELECT
-  USING (true);
-
-CREATE POLICY "Admins can insert nutrition data"
-  ON public.nutrition
-  FOR INSERT
-  WITH CHECK (public.has_role(auth.uid(), 'admin'));
-
-CREATE POLICY "Admins can update nutrition data"
-  ON public.nutrition
-  FOR UPDATE
-  USING (public.has_role(auth.uid(), 'admin'));
-
-CREATE POLICY "Admins can delete nutrition data"
-  ON public.nutrition
-  FOR DELETE
-  USING (public.has_role(auth.uid(), 'admin'));
-
--- Add updated_at trigger for nutrition
-CREATE TRIGGER update_nutrition_updated_at
-  BEFORE UPDATE ON public.nutrition
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
--- Add index for faster queries
-CREATE INDEX idx_nutrition_category ON public.nutrition(category);
-CREATE INDEX idx_nutrition_name ON public.nutrition(name);
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008013812_d9ef4871-2f4c-4f46-bd5c-eb6502b88b5c.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 5: 20251008013822_e4b47634-8a88-4308-83e0-40b79e62126a.sql
--- ============================================
-
--- Fix the has_role function to have immutable search_path
-CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
-RETURNS BOOLEAN
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path TO public
-AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1
-    FROM public.user_roles
-    WHERE user_id = _user_id
-      AND role = _role
-  );
-END;
-$$;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008013822_e4b47634-8a88-4308-83e0-40b79e62126a.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 6: 20251008013843_23f5522d-3b4f-4e52-8b61-b356c7bf8bd6.sql
--- ============================================
-
--- Fix the has_role function with empty search_path and fully qualified references
-CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role public.app_role)
-RETURNS BOOLEAN
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1
-    FROM public.user_roles
-    WHERE user_id = _user_id
-      AND role = _role
-  );
-END;
-$$;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008013843_23f5522d-3b4f-4e52-8b61-b356c7bf8bd6.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 7: 20251008013852_4b7a7057-56d0-4de1-947f-3606ee7e56c2.sql
--- ============================================
-
--- Fix the update_updated_at_column function with proper search_path
-CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008013852_4b7a7057-56d0-4de1-947f-3606ee7e56c2.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 8: 20251008015952_75b210cc-eba3-4a02-97c9-0cad18462aa6.sql
--- ============================================
-
--- Add admin role for user
-INSERT INTO public.user_roles (user_id, role)
-VALUES ('dc48c711-f059-443a-b4f2-585be6683c63', 'admin')
-ON CONFLICT (user_id, role) DO NOTHING;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008015952_75b210cc-eba3-4a02-97c9-0cad18462aa6.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 9: 20251008023303_bbb977b2-65ba-44b0-a13d-396ac2f81c9e.sql
--- ============================================
-
--- Add quantity and unit columns to foods table
-ALTER TABLE public.foods 
-ADD COLUMN quantity integer DEFAULT 0,
-ADD COLUMN unit text DEFAULT 'servings';
-
--- Add helpful comment
-COMMENT ON COLUMN public.foods.quantity IS 'Current inventory quantity in pantry';
-COMMENT ON COLUMN public.foods.unit IS 'Unit of measurement (servings, count, oz, lbs, etc.)';
-
--- Create function to deduct food quantity
-CREATE OR REPLACE FUNCTION public.deduct_food_quantity(
-  _food_id uuid,
-  _amount integer DEFAULT 1
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO ''
-AS $$
-BEGIN
-  UPDATE public.foods
-  SET quantity = GREATEST(0, quantity - _amount)
-  WHERE id = _food_id;
-END;
-$$;
-
--- Grant execute permission
-GRANT EXECUTE ON FUNCTION public.deduct_food_quantity TO authenticated;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008023303_bbb977b2-65ba-44b0-a13d-396ac2f81c9e.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 10: 20251008023632_948365b0-0399-43db-a3fa-2c715f8321e5.sql
--- ============================================
-
--- Add allergens column to kids table
-ALTER TABLE public.kids 
-ADD COLUMN allergens text[] DEFAULT '{}';
-
--- Add helpful comment
-COMMENT ON COLUMN public.kids.allergens IS 'List of allergens this child needs to avoid (e.g., peanuts, dairy, gluten)';
-
--- Create a function to check if a food is safe for a kid based on allergens
-CREATE OR REPLACE FUNCTION public.is_food_safe_for_kid(
-  _food_allergens text[],
-  _kid_allergens text[]
-)
-RETURNS boolean
-LANGUAGE plpgsql
-IMMUTABLE
-AS $$
-BEGIN
-  -- If kid has no allergens, all foods are safe
-  IF _kid_allergens IS NULL OR array_length(_kid_allergens, 1) IS NULL THEN
-    RETURN true;
-  END IF;
-  
-  -- If food has no allergens listed, consider it safe
-  IF _food_allergens IS NULL OR array_length(_food_allergens, 1) IS NULL THEN
-    RETURN true;
-  END IF;
-  
-  -- Check if any food allergen matches kid's allergens
-  RETURN NOT (_food_allergens && _kid_allergens);
-END;
-$$;
-
--- Grant execute permission
-GRANT EXECUTE ON FUNCTION public.is_food_safe_for_kid TO authenticated;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008023632_948365b0-0399-43db-a3fa-2c715f8321e5.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 11: 20251008023643_a4d9b74e-39c5-4bc5-b0e5-81894fe991f8.sql
--- ============================================
-
--- Fix the function to set search_path
-CREATE OR REPLACE FUNCTION public.is_food_safe_for_kid(
-  _food_allergens text[],
-  _kid_allergens text[]
-)
-RETURNS boolean
-LANGUAGE plpgsql
-IMMUTABLE
-SET search_path TO ''
-AS $$
-BEGIN
-  -- If kid has no allergens, all foods are safe
-  IF _kid_allergens IS NULL OR array_length(_kid_allergens, 1) IS NULL THEN
-    RETURN true;
-  END IF;
-  
-  -- If food has no allergens listed, consider it safe
-  IF _food_allergens IS NULL OR array_length(_food_allergens, 1) IS NULL THEN
-    RETURN true;
-  END IF;
-  
-  -- Check if any food allergen matches kid's allergens
-  RETURN NOT (_food_allergens && _kid_allergens);
-END;
-$$;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008023643_a4d9b74e-39c5-4bc5-b0e5-81894fe991f8.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 12: 20251008024530_b810b648-92cd-40a7-aef2-882363055120.sql
--- ============================================
-
--- Create AI settings table
-CREATE TABLE public.ai_settings (
-  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  name text NOT NULL,
-  provider text NOT NULL, -- 'claude', 'openai', 'gemini', etc.
-  model_name text NOT NULL,
-  api_key_env_var text NOT NULL, -- Name of the environment variable containing the API key
-  auth_type text NOT NULL DEFAULT 'bearer', -- 'bearer', 'x-api-key', 'api-key'
-  endpoint_url text NOT NULL,
-  is_active boolean NOT NULL DEFAULT false,
-  temperature numeric,
-  max_tokens integer,
-  additional_params jsonb DEFAULT '{}'::jsonb,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-
--- Enable RLS
-ALTER TABLE public.ai_settings ENABLE ROW LEVEL SECURITY;
-
--- Only admins can manage AI settings
-CREATE POLICY "Admins can view AI settings"
-  ON public.ai_settings FOR SELECT
-  USING (has_role(auth.uid(), 'admin'::app_role));
-
-CREATE POLICY "Admins can insert AI settings"
-  ON public.ai_settings FOR INSERT
-  WITH CHECK (has_role(auth.uid(), 'admin'::app_role));
-
-CREATE POLICY "Admins can update AI settings"
-  ON public.ai_settings FOR UPDATE
-  USING (has_role(auth.uid(), 'admin'::app_role));
-
-CREATE POLICY "Admins can delete AI settings"
-  ON public.ai_settings FOR DELETE
-  USING (has_role(auth.uid(), 'admin'::app_role));
-
--- Trigger for updated_at
-CREATE TRIGGER update_ai_settings_updated_at
-  BEFORE UPDATE ON public.ai_settings
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
--- Insert default Claude Sonnet 4.5 configuration
-INSERT INTO public.ai_settings (
-  name,
-  provider,
-  model_name,
-  api_key_env_var,
-  auth_type,
-  endpoint_url,
-  is_active,
-  temperature,
-  max_tokens
-) VALUES (
-  'Claude Sonnet 4.5',
-  'claude',
-  'claude-sonnet-4-5-20250929',
-  'CLAUDE_API_KEY',
-  'x-api-key',
-  'https://api.anthropic.com/v1/messages',
-  true,
-  0.7,
-  4096
-);
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008024530_b810b648-92cd-40a7-aef2-882363055120.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 13: 20251008025307_8faf3224-9a40-415e-9176-ccaa98641861.sql
--- ============================================
-
--- Create storage bucket for profile pictures
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('profile-pictures', 'profile-pictures', true);
-
--- Create RLS policies for profile pictures
-CREATE POLICY "Users can view all profile pictures"
-ON storage.objects FOR SELECT
-USING (bucket_id = 'profile-pictures');
-
-CREATE POLICY "Users can upload their own profile pictures"
-ON storage.objects FOR INSERT
-WITH CHECK (
-  bucket_id = 'profile-pictures' 
-  AND auth.uid()::text = (storage.foldername(name))[1]
-);
-
-CREATE POLICY "Users can update their own profile pictures"
-ON storage.objects FOR UPDATE
-USING (
-  bucket_id = 'profile-pictures' 
-  AND auth.uid()::text = (storage.foldername(name))[1]
-);
-
-CREATE POLICY "Users can delete their own profile pictures"
-ON storage.objects FOR DELETE
-USING (
-  bucket_id = 'profile-pictures' 
-  AND auth.uid()::text = (storage.foldername(name))[1]
-);
-
--- Add profile_picture_url column to kids table
-ALTER TABLE public.kids
-ADD COLUMN profile_picture_url text;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008025307_8faf3224-9a40-415e-9176-ccaa98641861.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 14: 20251008025502_a2c7d4dd-23dc-4b3c-ace1-8c1eb4361bdc.sql
--- ============================================
-
--- Add date_of_birth and favorite_foods columns to kids table
-ALTER TABLE public.kids
-ADD COLUMN date_of_birth date,
-ADD COLUMN favorite_foods text[] DEFAULT '{}';
-
--- Create index for date_of_birth for performance
-CREATE INDEX idx_kids_date_of_birth ON public.kids(date_of_birth);
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008025502_a2c7d4dd-23dc-4b3c-ace1-8c1eb4361bdc.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 15: 20251008030206_c9b6c7c6-6d3a-4a04-b000-ad390c8eff9f.sql
--- ============================================
-
--- Add servings_per_container to foods table
-ALTER TABLE public.foods
-ADD COLUMN servings_per_container numeric,
-ADD COLUMN package_quantity text;
-
--- Add serving information to nutrition table
-ALTER TABLE public.nutrition
-ADD COLUMN servings_per_container numeric,
-ADD COLUMN package_quantity text;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008030206_c9b6c7c6-6d3a-4a04-b000-ad390c8eff9f.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 16: 20251008035425_74570939-d012-4a64-b5f0-649f6c8c7b35.sql
--- ============================================
-
--- Create profiles table for parents/users
-CREATE TABLE public.profiles (
-  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name text NOT NULL,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now()
-);
-
--- Enable RLS
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
--- Users can view their own profile
-CREATE POLICY "Users can view their own profile"
-  ON public.profiles
-  FOR SELECT
-  USING (auth.uid() = id);
-
--- Users can update their own profile
-CREATE POLICY "Users can update their own profile"
-  ON public.profiles
-  FOR UPDATE
-  USING (auth.uid() = id);
-
--- Create trigger to automatically create profile on signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name)
-  VALUES (
-    new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'User')
-  );
-  RETURN new;
-END;
-$$;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW
-  EXECUTE FUNCTION public.handle_new_user();
-
--- Add updated_at trigger for profiles
-CREATE TRIGGER update_profiles_updated_at
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008035425_74570939-d012-4a64-b5f0-649f6c8c7b35.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 17: 20251008035758_e86c8db4-3460-43e4-b9c5-e03b5ca24f29.sql
--- ============================================
-
--- Create households table
-CREATE TABLE public.households (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL DEFAULT 'My Family',
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now()
-);
-
--- Create household_members junction table
-CREATE TABLE public.household_members (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  household_id uuid REFERENCES public.households(id) ON DELETE CASCADE NOT NULL,
-  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  role text NOT NULL DEFAULT 'parent' CHECK (role IN ('parent', 'guardian')),
-  invited_by uuid REFERENCES auth.users(id),
-  joined_at timestamp with time zone DEFAULT now(),
-  UNIQUE(household_id, user_id)
-);
-
--- Create invitations table
-CREATE TABLE public.household_invitations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  household_id uuid REFERENCES public.households(id) ON DELETE CASCADE NOT NULL,
-  email text NOT NULL,
-  invited_by uuid REFERENCES auth.users(id) NOT NULL,
-  expires_at timestamp with time zone NOT NULL DEFAULT (now() + interval '7 days'),
-  created_at timestamp with time zone DEFAULT now(),
-  UNIQUE(household_id, email)
-);
-
--- Enable RLS
-ALTER TABLE public.households ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.household_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.household_invitations ENABLE ROW LEVEL SECURITY;
-
--- Households policies
-CREATE POLICY "Members can view their households"
-  ON public.households FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.household_members
-      WHERE household_members.household_id = households.id
-      AND household_members.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Members can update their households"
-  ON public.households FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.household_members
-      WHERE household_members.household_id = households.id
-      AND household_members.user_id = auth.uid()
-    )
-  );
-
--- Household members policies
-CREATE POLICY "Members can view household members"
-  ON public.household_members FOR SELECT
-  USING (
-    household_id IN (
-      SELECT household_id FROM public.household_members
-      WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Members can insert household members"
-  ON public.household_members FOR INSERT
-  WITH CHECK (
-    household_id IN (
-      SELECT household_id FROM public.household_members
-      WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Members can delete household members"
-  ON public.household_members FOR DELETE
-  USING (
-    household_id IN (
-      SELECT household_id FROM public.household_members
-      WHERE user_id = auth.uid()
-    )
-  );
-
--- Invitation policies
-CREATE POLICY "Members can view their household invitations"
-  ON public.household_invitations FOR SELECT
-  USING (
-    household_id IN (
-      SELECT household_id FROM public.household_members
-      WHERE user_id = auth.uid()
-    )
-    OR email = (SELECT email FROM auth.users WHERE id = auth.uid())
-  );
-
-CREATE POLICY "Members can create invitations"
-  ON public.household_invitations FOR INSERT
-  WITH CHECK (
-    household_id IN (
-      SELECT household_id FROM public.household_members
-      WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Members can delete invitations"
-  ON public.household_invitations FOR DELETE
-  USING (
-    household_id IN (
-      SELECT household_id FROM public.household_members
-      WHERE user_id = auth.uid()
-    )
-  );
-
--- Add household_id to existing tables
-ALTER TABLE public.kids ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
-ALTER TABLE public.foods ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
-ALTER TABLE public.recipes ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
-ALTER TABLE public.grocery_items ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
-ALTER TABLE public.plan_entries ADD COLUMN household_id uuid REFERENCES public.households(id) ON DELETE CASCADE;
-
--- Create indexes for performance
-CREATE INDEX idx_household_members_user ON public.household_members(user_id);
-CREATE INDEX idx_household_members_household ON public.household_members(household_id);
-CREATE INDEX idx_kids_household ON public.kids(household_id);
-CREATE INDEX idx_foods_household ON public.foods(household_id);
-
--- Update trigger for households
-CREATE TRIGGER update_households_updated_at
-  BEFORE UPDATE ON public.households
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_updated_at_column();
-
--- Auto-create household when user signs up
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  new_household_id uuid;
-BEGIN
-  -- Create profile
-  INSERT INTO public.profiles (id, full_name)
-  VALUES (
-    new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'User')
-  );
-  
-  -- Create household
-  INSERT INTO public.households (name)
-  VALUES (COALESCE(new.raw_user_meta_data->>'full_name', 'User') || '''s Family')
-  RETURNING id INTO new_household_id;
-  
-  -- Add user as household member
-  INSERT INTO public.household_members (household_id, user_id, role)
-  VALUES (new_household_id, new.id, 'parent');
-  
-  RETURN new;
-END;
-$$;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008035758_e86c8db4-3460-43e4-b9c5-e03b5ca24f29.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 18: 20251008035900_41c8b71a-5c17-4777-8bc1-fc1e0825a7a3.sql
--- ============================================
-
--- Create helper function to get user's household
-CREATE OR REPLACE FUNCTION public.get_user_household_id(_user_id uuid)
-RETURNS uuid
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT household_id
-  FROM public.household_members
-  WHERE user_id = _user_id
-  LIMIT 1
-$$;
-
--- Update RLS policies for kids table
-DROP POLICY IF EXISTS "Users can view their own kids" ON public.kids;
-DROP POLICY IF EXISTS "Users can insert their own kids" ON public.kids;
-DROP POLICY IF EXISTS "Users can update their own kids" ON public.kids;
-DROP POLICY IF EXISTS "Users can delete their own kids" ON public.kids;
-
-CREATE POLICY "Household members can view kids"
-  ON public.kids FOR SELECT
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can insert kids"
-  ON public.kids FOR INSERT
-  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can update kids"
-  ON public.kids FOR UPDATE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can delete kids"
-  ON public.kids FOR DELETE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
--- Update RLS policies for foods table
-DROP POLICY IF EXISTS "Users can view their own foods" ON public.foods;
-DROP POLICY IF EXISTS "Users can insert their own foods" ON public.foods;
-DROP POLICY IF EXISTS "Users can update their own foods" ON public.foods;
-DROP POLICY IF EXISTS "Users can delete their own foods" ON public.foods;
-
-CREATE POLICY "Household members can view foods"
-  ON public.foods FOR SELECT
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can insert foods"
-  ON public.foods FOR INSERT
-  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can update foods"
-  ON public.foods FOR UPDATE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can delete foods"
-  ON public.foods FOR DELETE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
--- Update RLS policies for recipes table
-DROP POLICY IF EXISTS "Users can view their own recipes" ON public.recipes;
-DROP POLICY IF EXISTS "Users can insert their own recipes" ON public.recipes;
-DROP POLICY IF EXISTS "Users can update their own recipes" ON public.recipes;
-DROP POLICY IF EXISTS "Users can delete their own recipes" ON public.recipes;
-
-CREATE POLICY "Household members can view recipes"
-  ON public.recipes FOR SELECT
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can insert recipes"
-  ON public.recipes FOR INSERT
-  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can update recipes"
-  ON public.recipes FOR UPDATE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can delete recipes"
-  ON public.recipes FOR DELETE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
--- Update RLS policies for plan_entries table
-DROP POLICY IF EXISTS "Users can view their own plan entries" ON public.plan_entries;
-DROP POLICY IF EXISTS "Users can insert their own plan entries" ON public.plan_entries;
-DROP POLICY IF EXISTS "Users can update their own plan entries" ON public.plan_entries;
-DROP POLICY IF EXISTS "Users can delete their own plan entries" ON public.plan_entries;
-
-CREATE POLICY "Household members can view plan entries"
-  ON public.plan_entries FOR SELECT
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can insert plan entries"
-  ON public.plan_entries FOR INSERT
-  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can update plan entries"
-  ON public.plan_entries FOR UPDATE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can delete plan entries"
-  ON public.plan_entries FOR DELETE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
--- Update RLS policies for grocery_items table
-DROP POLICY IF EXISTS "Users can view their own grocery items" ON public.grocery_items;
-DROP POLICY IF EXISTS "Users can insert their own grocery items" ON public.grocery_items;
-DROP POLICY IF EXISTS "Users can update their own grocery items" ON public.grocery_items;
-DROP POLICY IF EXISTS "Users can delete their own grocery items" ON public.grocery_items;
-
-CREATE POLICY "Household members can view grocery items"
-  ON public.grocery_items FOR SELECT
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can insert grocery items"
-  ON public.grocery_items FOR INSERT
-  WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can update grocery items"
-  ON public.grocery_items FOR UPDATE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
-CREATE POLICY "Household members can delete grocery items"
-  ON public.grocery_items FOR DELETE
-  USING (household_id = public.get_user_household_id(auth.uid()));
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008035900_41c8b71a-5c17-4777-8bc1-fc1e0825a7a3.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 19: 20251008121540_9fd634cb-b47d-4035-8ac4-4d0c53b62c8d.sql
--- ============================================
-
--- Enable automatic household/profile creation on signup and backfill existing users
-
--- 1) Create trigger to run the existing function on new auth users
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_trigger t
-    JOIN pg_class c ON c.oid = t.tgrelid
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE t.tgname = 'on_auth_user_created'
-      AND n.nspname = 'auth'
-  ) THEN
-    CREATE TRIGGER on_auth_user_created
-      AFTER INSERT ON auth.users
-      FOR EACH ROW
-      EXECUTE PROCEDURE public.handle_new_user();
-  END IF;
-END $$;
-
--- 2) Backfill: create missing profiles, households, and memberships for existing users
-DO $$
-DECLARE
-  rec RECORD;
-  new_household_id uuid;
-  full_name text;
-BEGIN
-  FOR rec IN (
-    SELECT u.id,
-           COALESCE(u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1)) AS fn
-    FROM auth.users u
-    LEFT JOIN public.household_members hm ON hm.user_id = u.id
-    WHERE hm.user_id IS NULL
-  ) LOOP
-    full_name := COALESCE(rec.fn, 'User');
-
-    -- Create profile if missing
-    INSERT INTO public.profiles (id, full_name)
-    VALUES (rec.id, full_name)
-    ON CONFLICT (id) DO NOTHING;
-
-    -- Create household
-    INSERT INTO public.households (name)
-    VALUES (full_name || '''s Family')
-    RETURNING id INTO new_household_id;
-
-    -- Add user as household member
-    INSERT INTO public.household_members (household_id, user_id, role)
-    VALUES (new_household_id, rec.id, 'parent');
-  END LOOP;
-END $$;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008121540_9fd634cb-b47d-4035-8ac4-4d0c53b62c8d.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 20: 20251008140000_add_onboarding_to_profiles.sql
--- ============================================
-
--- Add onboarding_completed column to profiles table
-ALTER TABLE profiles
-ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
-
--- Add index for faster queries
-CREATE INDEX IF NOT EXISTS idx_profiles_onboarding ON profiles(onboarding_completed);
-
--- Update existing users to have onboarding completed (they're already using the app)
-UPDATE profiles
-SET onboarding_completed = TRUE
-WHERE onboarding_completed IS NULL OR onboarding_completed = FALSE;
-
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008140000_add_onboarding_to_profiles.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 21: 20251008141000_create_subscriptions_tables.sql
--- ============================================
-
--- Create subscription plans table
-CREATE TABLE IF NOT EXISTS subscription_plans (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  stripe_price_id TEXT UNIQUE,
-  price_monthly DECIMAL(10,2) NOT NULL,
-  price_yearly DECIMAL(10,2),
-  features JSONB DEFAULT '[]'::jsonb,
-  max_children INTEGER DEFAULT 1,
-  max_recipes INTEGER,
-  max_meal_plans INTEGER,
-  is_active BOOLEAN DEFAULT TRUE,
-  sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create user subscriptions table
-CREATE TABLE IF NOT EXISTS user_subscriptions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  plan_id UUID REFERENCES subscription_plans(id),
-  stripe_customer_id TEXT,
-  stripe_subscription_id TEXT UNIQUE,
-  status TEXT NOT NULL DEFAULT 'inactive', -- active, canceled, past_due, trialing, incomplete
-  current_period_start TIMESTAMPTZ,
-  current_period_end TIMESTAMPTZ,
-  cancel_at_period_end BOOLEAN DEFAULT FALSE,
-  trial_end TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id)
-);
-
--- Create subscription events log table (for audit trail)
-CREATE TABLE IF NOT EXISTS subscription_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  subscription_id UUID REFERENCES user_subscriptions(id) ON DELETE CASCADE,
-  event_type TEXT NOT NULL, -- subscribed, canceled, renewed, upgraded, downgraded, payment_failed
-  old_plan_id UUID REFERENCES subscription_plans(id),
-  new_plan_id UUID REFERENCES subscription_plans(id),
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create payment history table
-CREATE TABLE IF NOT EXISTS payment_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  subscription_id UUID REFERENCES user_subscriptions(id) ON DELETE SET NULL,
-  stripe_payment_intent_id TEXT,
-  stripe_invoice_id TEXT,
-  amount DECIMAL(10,2) NOT NULL,
-  currency TEXT DEFAULT 'usd',
-  status TEXT NOT NULL, -- succeeded, pending, failed, refunded
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Add indexes for performance
-CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user_id ON user_subscriptions(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status ON user_subscriptions(status);
-CREATE INDEX IF NOT EXISTS idx_user_subscriptions_stripe_customer ON user_subscriptions(stripe_customer_id);
-CREATE INDEX IF NOT EXISTS idx_subscription_events_user_id ON subscription_events(user_id);
-CREATE INDEX IF NOT EXISTS idx_subscription_events_created_at ON subscription_events(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_payment_history_user_id ON payment_history(user_id);
-CREATE INDEX IF NOT EXISTS idx_payment_history_created_at ON payment_history(created_at DESC);
-
--- Enable RLS
-ALTER TABLE subscription_plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_subscriptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE subscription_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payment_history ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
-
--- Subscription plans: Everyone can read active plans
-CREATE POLICY "Anyone can view active subscription plans"
-  ON subscription_plans FOR SELECT
-  USING (is_active = true);
-
--- Admins can manage subscription plans
-CREATE POLICY "Admins can manage subscription plans"
-  ON subscription_plans FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- User subscriptions: Users can view their own
-CREATE POLICY "Users can view their own subscriptions"
-  ON user_subscriptions FOR SELECT
-  USING (user_id = auth.uid());
-
--- Admins can view all subscriptions
-CREATE POLICY "Admins can view all subscriptions"
-  ON user_subscriptions FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Only system can insert/update subscriptions (via webhooks)
-CREATE POLICY "Service role can manage subscriptions"
-  ON user_subscriptions FOR ALL
-  USING (auth.role() = 'service_role');
-
--- Subscription events: Users can view their own
-CREATE POLICY "Users can view their own subscription events"
-  ON subscription_events FOR SELECT
-  USING (user_id = auth.uid());
-
--- Admins can view all events
-CREATE POLICY "Admins can view all subscription events"
-  ON subscription_events FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Payment history: Users can view their own
-CREATE POLICY "Users can view their own payment history"
-  ON payment_history FOR SELECT
-  USING (user_id = auth.uid());
-
--- Admins can view all payments
-CREATE POLICY "Admins can view all payment history"
-  ON payment_history FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Insert default subscription plans
-INSERT INTO subscription_plans (name, price_monthly, price_yearly, features, max_children, max_recipes, max_meal_plans, sort_order)
-VALUES
-  (
-    'Free',
-    0.00,
-    0.00,
-    '["1 child profile", "Up to 20 foods in pantry", "Basic meal planning", "Grocery list generation"]'::jsonb,
-    1,
-    10,
-    4,
-    1
-  ),
-  (
-    'Pro',
-    9.99,
-    99.00,
-    '["Up to 3 children", "Unlimited foods", "AI meal suggestions", "Advanced analytics", "Recipe builder", "Priority support"]'::jsonb,
-    3,
-    NULL,
-    NULL,
-    2
-  ),
-  (
-    'Family',
-    19.99,
-    199.00,
-    '["Unlimited children", "Everything in Pro", "Multiple parent accounts", "Family sharing", "Custom meal templates", "Dedicated support"]'::jsonb,
-    NULL,
-    NULL,
-    NULL,
-    3
-  )
-ON CONFLICT DO NOTHING;
-
--- Function to get user's current subscription
-CREATE OR REPLACE FUNCTION get_user_subscription(user_uuid UUID)
-RETURNS TABLE (
-  plan_name TEXT,
-  status TEXT,
-  current_period_end TIMESTAMPTZ,
-  cancel_at_period_end BOOLEAN
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    sp.name,
-    us.status,
-    us.current_period_end,
-    us.cancel_at_period_end
-  FROM user_subscriptions us
-  JOIN subscription_plans sp ON us.plan_id = sp.id
-  WHERE us.user_id = user_uuid
-  AND us.status IN ('active', 'trialing');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Function to check if user can add more children
-CREATE OR REPLACE FUNCTION can_add_child(user_uuid UUID)
-RETURNS BOOLEAN AS $$
-DECLARE
-  current_children_count INTEGER;
-  max_allowed INTEGER;
-BEGIN
-  -- Get current number of children
-  SELECT COUNT(*) INTO current_children_count
-  FROM kids
-  WHERE user_id = user_uuid;
-
-  -- Get max allowed children for user's plan
-  SELECT sp.max_children INTO max_allowed
-  FROM user_subscriptions us
-  JOIN subscription_plans sp ON us.plan_id = sp.id
-  WHERE us.user_id = user_uuid
-  AND us.status IN ('active', 'trialing');
-
-  -- If no subscription found or unlimited (NULL), allow
-  IF max_allowed IS NULL THEN
-    RETURN TRUE;
-  END IF;
-
-  -- Check if under limit
-  RETURN current_children_count < max_allowed;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER update_subscription_plans_updated_at
-  BEFORE UPDATE ON subscription_plans
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_user_subscriptions_updated_at
-  BEFORE UPDATE ON user_subscriptions
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008141000_create_subscriptions_tables.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 22: 20251008142000_create_leads_tables.sql
--- ============================================
-
--- Create lead sources enum
-CREATE TYPE lead_source AS ENUM (
-  'landing_page',
-  'signup_form',
-  'trial_signup',
-  'newsletter',
-  'contact_form',
-  'referral',
-  'social_media',
-  'organic_search',
-  'paid_ad',
-  'other'
-);
-
--- Create lead status enum
-CREATE TYPE lead_status AS ENUM (
-  'new',
-  'contacted',
-  'qualified',
-  'converted',
-  'unqualified',
-  'lost'
-);
-
--- Create campaigns table
-CREATE TABLE IF NOT EXISTS campaigns (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  description TEXT,
-  source lead_source NOT NULL,
-  utm_campaign TEXT,
-  utm_source TEXT,
-  utm_medium TEXT,
-  utm_content TEXT,
-  start_date DATE,
-  end_date DATE,
-  is_active BOOLEAN DEFAULT TRUE,
-  conversion_goal TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create leads table
-CREATE TABLE IF NOT EXISTS leads (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT NOT NULL,
-  full_name TEXT,
-  phone TEXT,
-  source lead_source NOT NULL DEFAULT 'landing_page',
-  campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
-  status lead_status NOT NULL DEFAULT 'new',
-  score INTEGER DEFAULT 0, -- Lead scoring 0-100
-  metadata JSONB DEFAULT '{}'::jsonb, -- Custom fields, UTM params, etc.
-  notes TEXT,
-  assigned_to UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  converted_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  converted_at TIMESTAMPTZ,
-  last_contacted_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create lead interactions table (activity log)
-CREATE TABLE IF NOT EXISTS lead_interactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-  interaction_type TEXT NOT NULL, -- email, call, meeting, form_submission, page_view
-  subject TEXT,
-  description TEXT,
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create campaign analytics table
-CREATE TABLE IF NOT EXISTS campaign_analytics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  impressions INTEGER DEFAULT 0,
-  clicks INTEGER DEFAULT 0,
-  leads_generated INTEGER DEFAULT 0,
-  conversions INTEGER DEFAULT 0,
-  cost DECIMAL(10,2) DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(campaign_id, date)
-);
-
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email);
-CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
-CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source);
-CREATE INDEX IF NOT EXISTS idx_leads_campaign_id ON leads(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_leads_score ON leads(score DESC);
-CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_lead_interactions_lead_id ON lead_interactions(lead_id);
-CREATE INDEX IF NOT EXISTS idx_lead_interactions_created_at ON lead_interactions(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_campaigns_is_active ON campaigns(is_active);
-CREATE INDEX IF NOT EXISTS idx_campaign_analytics_campaign_date ON campaign_analytics(campaign_id, date DESC);
-
--- Enable RLS
-ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE lead_interactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaign_analytics ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
-
--- Campaigns: Only admins can manage
-CREATE POLICY "Admins can manage campaigns"
-  ON campaigns FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Leads: Only admins can manage
-CREATE POLICY "Admins can manage leads"
-  ON leads FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Allow public insert for lead capture forms (service role will be used)
-CREATE POLICY "Public can create leads via service role"
-  ON leads FOR INSERT
-  WITH CHECK (auth.role() = 'service_role' OR auth.role() = 'anon');
-
--- Lead interactions: Only admins
-CREATE POLICY "Admins can manage lead interactions"
-  ON lead_interactions FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Campaign analytics: Only admins
-CREATE POLICY "Admins can view campaign analytics"
-  ON campaign_analytics FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Function to automatically score leads
-CREATE OR REPLACE FUNCTION calculate_lead_score(lead_id UUID)
-RETURNS INTEGER AS $$
-DECLARE
-  score INTEGER := 0;
-  lead_record RECORD;
-  interaction_count INTEGER;
-BEGIN
-  SELECT * INTO lead_record FROM leads WHERE id = lead_id;
-
-  -- Base score for having required fields
-  IF lead_record.email IS NOT NULL THEN score := score + 10; END IF;
-  IF lead_record.full_name IS NOT NULL THEN score := score + 10; END IF;
-  IF lead_record.phone IS NOT NULL THEN score := score + 15; END IF;
-
-  -- Score based on source quality
-  CASE lead_record.source
-    WHEN 'referral' THEN score := score + 20;
-    WHEN 'trial_signup' THEN score := score + 25;
-    WHEN 'paid_ad' THEN score := score + 10;
-    WHEN 'organic_search' THEN score := score + 15;
-    ELSE score := score + 5;
-  END CASE;
-
-  -- Score based on interactions
-  SELECT COUNT(*) INTO interaction_count
-  FROM lead_interactions
-  WHERE lead_interactions.lead_id = lead_id;
-
-  score := score + LEAST(interaction_count * 5, 30);
-
-  -- Recency bonus (contacted in last 7 days)
-  IF lead_record.last_contacted_at > NOW() - INTERVAL '7 days' THEN
-    score := score + 10;
-  END IF;
-
-  RETURN LEAST(score, 100); -- Cap at 100
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to update lead score on changes
-CREATE OR REPLACE FUNCTION update_lead_score()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.score := calculate_lead_score(NEW.id);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_update_lead_score
-  BEFORE UPDATE ON leads
-  FOR EACH ROW
-  EXECUTE FUNCTION update_lead_score();
-
--- Function to update updated_at timestamp
-CREATE TRIGGER update_campaigns_updated_at
-  BEFORE UPDATE ON campaigns
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_leads_updated_at
-  BEFORE UPDATE ON leads
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
--- Function to get campaign conversion rate
-CREATE OR REPLACE FUNCTION get_campaign_stats(campaign_uuid UUID)
-RETURNS TABLE (
-  total_leads INTEGER,
-  converted_leads INTEGER,
-  conversion_rate DECIMAL,
-  avg_score DECIMAL
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    COUNT(*)::INTEGER as total_leads,
-    COUNT(*) FILTER (WHERE status = 'converted')::INTEGER as converted_leads,
-    CASE
-      WHEN COUNT(*) > 0 THEN
-        ROUND((COUNT(*) FILTER (WHERE status = 'converted')::DECIMAL / COUNT(*)) * 100, 2)
-      ELSE 0
-    END as conversion_rate,
-    ROUND(AVG(score), 2) as avg_score
-  FROM leads
-  WHERE campaign_id = campaign_uuid;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Insert default campaign
-INSERT INTO campaigns (name, description, source, is_active)
-VALUES
-  ('General Lead Capture', 'Default campaign for leads without specific attribution', 'landing_page', true),
-  ('Free Trial Signups', 'Track users who start free trials', 'trial_signup', true),
-  ('Newsletter Subscribers', 'Email newsletter signups', 'newsletter', true)
-ON CONFLICT DO NOTHING;
-
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008142000_create_leads_tables.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 23: 20251008143000_create_social_posts_tables.sql
--- ============================================
-
--- Create social platforms enum
-CREATE TYPE social_platform AS ENUM (
-  'facebook',
-  'instagram',
-  'twitter',
-  'linkedin',
-  'tiktok',
-  'pinterest'
-);
-
--- Create post status enum
-CREATE TYPE post_status AS ENUM (
-  'draft',
-  'scheduled',
-  'published',
-  'failed',
-  'deleted'
-);
-
--- Create social accounts table
-CREATE TABLE IF NOT EXISTS social_accounts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  platform social_platform NOT NULL,
-  account_name TEXT NOT NULL,
-  account_id TEXT, -- Platform-specific account ID
-  webhook_url TEXT, -- Webhook for posting (Zapier, Make, etc.)
-  access_token TEXT, -- Encrypted access token if using direct API
-  is_active BOOLEAN DEFAULT TRUE,
-  last_posted_at TIMESTAMPTZ,
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(platform, account_name)
-);
-
--- Create social posts table
-CREATE TABLE IF NOT EXISTS social_posts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT,
-  content TEXT NOT NULL,
-  platforms social_platform[] NOT NULL, -- Can post to multiple platforms
-  status post_status NOT NULL DEFAULT 'draft',
-  scheduled_for TIMESTAMPTZ,
-  published_at TIMESTAMPTZ,
-  image_urls TEXT[],
-  video_url TEXT,
-  link_url TEXT,
-  hashtags TEXT[],
-  metadata JSONB DEFAULT '{}'::jsonb, -- Platform-specific data
-  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create post analytics table
-CREATE TABLE IF NOT EXISTS post_analytics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
-  platform social_platform NOT NULL,
-  platform_post_id TEXT, -- ID from the social platform
-  impressions INTEGER DEFAULT 0,
-  reach INTEGER DEFAULT 0,
-  likes INTEGER DEFAULT 0,
-  comments INTEGER DEFAULT 0,
-  shares INTEGER DEFAULT 0,
-  clicks INTEGER DEFAULT 0,
-  engagement_rate DECIMAL(5,2) DEFAULT 0,
-  last_synced_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(post_id, platform)
-);
-
--- Create post queue table (for scheduled posts)
-CREATE TABLE IF NOT EXISTS post_queue (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
-  platform social_platform NOT NULL,
-  scheduled_for TIMESTAMPTZ NOT NULL,
-  status TEXT DEFAULT 'pending', -- pending, processing, completed, failed
-  error_message TEXT,
-  attempts INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create webhook logs table
-CREATE TABLE IF NOT EXISTS webhook_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  post_id UUID REFERENCES social_posts(id) ON DELETE SET NULL,
-  platform social_platform NOT NULL,
-  webhook_url TEXT NOT NULL,
-  request_payload JSONB,
-  response_status INTEGER,
-  response_body TEXT,
-  success BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS idx_social_posts_status ON social_posts(status);
-CREATE INDEX IF NOT EXISTS idx_social_posts_scheduled ON social_posts(scheduled_for) WHERE status = 'scheduled';
-CREATE INDEX IF NOT EXISTS idx_social_posts_created_at ON social_posts(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_post_analytics_post_id ON post_analytics(post_id);
-CREATE INDEX IF NOT EXISTS idx_post_queue_scheduled ON post_queue(scheduled_for) WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_webhook_logs_created_at ON webhook_logs(created_at DESC);
-
--- Enable RLS
-ALTER TABLE social_accounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE social_posts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE post_analytics ENABLE ROW LEVEL SECURITY;
-ALTER TABLE post_queue ENABLE ROW LEVEL SECURITY;
-ALTER TABLE webhook_logs ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
-
--- Social accounts: Only admins can manage
-CREATE POLICY "Admins can manage social accounts"
-  ON social_accounts FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Social posts: Only admins can manage
-CREATE POLICY "Admins can manage social posts"
-  ON social_posts FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Post analytics: Admins only
-CREATE POLICY "Admins can view post analytics"
-  ON post_analytics FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Post queue: Admins only
-CREATE POLICY "Admins can manage post queue"
-  ON post_queue FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Webhook logs: Admins only
-CREATE POLICY "Admins can view webhook logs"
-  ON webhook_logs FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
--- Function to update updated_at timestamp
-CREATE TRIGGER update_social_accounts_updated_at
-  BEFORE UPDATE ON social_accounts
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_social_posts_updated_at
-  BEFORE UPDATE ON social_posts
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_post_queue_updated_at
-  BEFORE UPDATE ON post_queue
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
--- Function to get post engagement stats
-CREATE OR REPLACE FUNCTION get_post_engagement_summary()
-RETURNS TABLE (
-  total_posts INTEGER,
-  scheduled_posts INTEGER,
-  published_posts INTEGER,
-  total_impressions BIGINT,
-  total_engagement BIGINT,
-  avg_engagement_rate DECIMAL
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    COUNT(DISTINCT sp.id)::INTEGER as total_posts,
-    COUNT(DISTINCT sp.id) FILTER (WHERE sp.status = 'scheduled')::INTEGER as scheduled_posts,
-    COUNT(DISTINCT sp.id) FILTER (WHERE sp.status = 'published')::INTEGER as published_posts,
-    COALESCE(SUM(pa.impressions), 0)::BIGINT as total_impressions,
-    COALESCE(SUM(pa.likes + pa.comments + pa.shares), 0)::BIGINT as total_engagement,
-    COALESCE(AVG(pa.engagement_rate), 0)::DECIMAL as avg_engagement_rate
-  FROM social_posts sp
-  LEFT JOIN post_analytics pa ON sp.id = pa.post_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Function to schedule post to queue
-CREATE OR REPLACE FUNCTION schedule_post_to_queue(
-  _post_id UUID,
-  _platforms social_platform[]
-)
-RETURNS VOID AS $$
-DECLARE
-  _platform social_platform;
-  _scheduled_time TIMESTAMPTZ;
-BEGIN
-  -- Get scheduled time from post
-  SELECT scheduled_for INTO _scheduled_time
-  FROM social_posts
-  WHERE id = _post_id;
-
-  -- Create queue entries for each platform
-  FOREACH _platform IN ARRAY _platforms
-  LOOP
-    INSERT INTO post_queue (post_id, platform, scheduled_for, status)
-    VALUES (_post_id, _platform, _scheduled_time, 'pending')
-    ON CONFLICT DO NOTHING;
-  END LOOP;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Insert default social accounts (examples)
-INSERT INTO social_accounts (platform, account_name, is_active)
-VALUES
-  ('facebook', 'EatPal Official', false),
-  ('instagram', '@eatpal', false),
-  ('twitter', '@eatpal_app', false),
-  ('linkedin', 'EatPal Company Page', false)
-ON CONFLICT DO NOTHING;
-
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008143000_create_social_posts_tables.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 24: 20251008144000_create_blog_tables.sql
--- ============================================
-
--- Create blog categories table
-CREATE TABLE IF NOT EXISTS blog_categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT UNIQUE NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  description TEXT,
-  post_count INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create blog tags table
-CREATE TABLE IF NOT EXISTS blog_tags (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT UNIQUE NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create blog posts table
-CREATE TABLE IF NOT EXISTS blog_posts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  excerpt TEXT,
-  content TEXT NOT NULL,
-  featured_image_url TEXT,
-  category_id UUID REFERENCES blog_categories(id) ON DELETE SET NULL,
-  author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  status TEXT DEFAULT 'draft', -- draft, published, scheduled
-  published_at TIMESTAMPTZ,
-  scheduled_for TIMESTAMPTZ,
-  meta_title TEXT,
-  meta_description TEXT,
-  og_image_url TEXT,
-  views INTEGER DEFAULT 0,
-  reading_time_minutes INTEGER,
-  ai_generated BOOLEAN DEFAULT FALSE,
-  ai_prompt TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create post tags junction table
-CREATE TABLE IF NOT EXISTS blog_post_tags (
-  post_id UUID REFERENCES blog_posts(id) ON DELETE CASCADE,
-  tag_id UUID REFERENCES blog_tags(id) ON DELETE CASCADE,
-  PRIMARY KEY (post_id, tag_id)
-);
-
--- Create blog comments table
-CREATE TABLE IF NOT EXISTS blog_comments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  post_id UUID REFERENCES blog_posts(id) ON DELETE CASCADE,
-  author_name TEXT NOT NULL,
-  author_email TEXT NOT NULL,
-  content TEXT NOT NULL,
-  status TEXT DEFAULT 'pending', -- pending, approved, spam
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC) WHERE status = 'published';
-CREATE INDEX IF NOT EXISTS idx_blog_posts_category ON blog_posts(category_id);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_author ON blog_posts(author_id);
-CREATE INDEX IF NOT EXISTS idx_blog_categories_slug ON blog_categories(slug);
-CREATE INDEX IF NOT EXISTS idx_blog_tags_slug ON blog_tags(slug);
-CREATE INDEX IF NOT EXISTS idx_blog_comments_post ON blog_comments(post_id);
-CREATE INDEX IF NOT EXISTS idx_blog_comments_status ON blog_comments(status);
-
--- Enable RLS
-ALTER TABLE blog_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blog_tags ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blog_post_tags ENABLE ROW LEVEL SECURITY;
-ALTER TABLE blog_comments ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
-
--- Categories: Admin manage, anyone can view
-CREATE POLICY "Admins can manage blog categories"
-  ON blog_categories FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
-CREATE POLICY "Anyone can view categories"
-  ON blog_categories FOR SELECT
-  USING (true);
-
--- Tags: Admin manage, anyone can view
-CREATE POLICY "Admins can manage blog tags"
-  ON blog_tags FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
-CREATE POLICY "Anyone can view tags"
-  ON blog_tags FOR SELECT
-  USING (true);
-
--- Posts: Admin manage, anyone can view published
-CREATE POLICY "Admins can manage blog posts"
-  ON blog_posts FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
-CREATE POLICY "Anyone can view published posts"
-  ON blog_posts FOR SELECT
-  USING (status = 'published' AND published_at <= NOW());
-
--- Post tags: Follow post permissions
-CREATE POLICY "Admins can manage post tags"
-  ON blog_post_tags FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
-CREATE POLICY "Anyone can view post tags"
-  ON blog_post_tags FOR SELECT
-  USING (true);
-
--- Comments: Admin manage, anyone can submit (pending approval)
-CREATE POLICY "Admins can manage comments"
-  ON blog_comments FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_roles.user_id = auth.uid()
-      AND user_roles.role = 'admin'
-    )
-  );
-
-CREATE POLICY "Anyone can view approved comments"
-  ON blog_comments FOR SELECT
-  USING (status = 'approved');
-
-CREATE POLICY "Anyone can submit comments"
-  ON blog_comments FOR INSERT
-  WITH CHECK (true);
-
--- Triggers for updated_at
-CREATE TRIGGER update_blog_categories_updated_at
-  BEFORE UPDATE ON blog_categories
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_blog_posts_updated_at
-  BEFORE UPDATE ON blog_posts
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
--- Function to update category post count
-CREATE OR REPLACE FUNCTION update_category_post_count()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF TG_OP = 'INSERT' AND NEW.category_id IS NOT NULL THEN
-    UPDATE blog_categories SET post_count = post_count + 1 WHERE id = NEW.category_id;
-  ELSIF TG_OP = 'DELETE' AND OLD.category_id IS NOT NULL THEN
-    UPDATE blog_categories SET post_count = post_count - 1 WHERE id = OLD.category_id;
-  ELSIF TG_OP = 'UPDATE' THEN
-    IF OLD.category_id IS NOT NULL AND OLD.category_id != NEW.category_id THEN
-      UPDATE blog_categories SET post_count = post_count - 1 WHERE id = OLD.category_id;
-    END IF;
-    IF NEW.category_id IS NOT NULL AND OLD.category_id != NEW.category_id THEN
-      UPDATE blog_categories SET post_count = post_count + 1 WHERE id = NEW.category_id;
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER blog_posts_category_count
-  AFTER INSERT OR UPDATE OR DELETE ON blog_posts
-  FOR EACH ROW
-  EXECUTE FUNCTION update_category_post_count();
-
--- Function to calculate reading time (roughly 200 words per minute)
-CREATE OR REPLACE FUNCTION calculate_reading_time()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.reading_time_minutes := GREATEST(1, (LENGTH(NEW.content) / 1000)::INTEGER);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER blog_posts_reading_time
-  BEFORE INSERT OR UPDATE OF content ON blog_posts
-  FOR EACH ROW
-  EXECUTE FUNCTION calculate_reading_time();
-
--- Function to auto-generate slug from title
-CREATE OR REPLACE FUNCTION generate_slug_from_title()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.slug IS NULL OR NEW.slug = '' THEN
-    NEW.slug := lower(regexp_replace(regexp_replace(NEW.title, '[^a-zA-Z0-9\s-]', '', 'g'), '\s+', '-', 'g'));
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER blog_posts_generate_slug
-  BEFORE INSERT OR UPDATE OF title ON blog_posts
-  FOR EACH ROW
-  EXECUTE FUNCTION generate_slug_from_title();
-
--- Function to get blog stats
-CREATE OR REPLACE FUNCTION get_blog_stats()
-RETURNS TABLE (
-  total_posts INTEGER,
-  published_posts INTEGER,
-  draft_posts INTEGER,
-  scheduled_posts INTEGER,
-  total_views BIGINT,
-  total_comments BIGINT
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    COUNT(*)::INTEGER as total_posts,
-    COUNT(*) FILTER (WHERE status = 'published')::INTEGER as published_posts,
-    COUNT(*) FILTER (WHERE status = 'draft')::INTEGER as draft_posts,
-    COUNT(*) FILTER (WHERE status = 'scheduled')::INTEGER as scheduled_posts,
-    COALESCE(SUM(views), 0)::BIGINT as total_views,
-    (SELECT COUNT(*) FROM blog_comments)::BIGINT as total_comments
-  FROM blog_posts;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Insert default categories
-INSERT INTO blog_categories (name, slug, description)
-VALUES
-  ('Picky Eaters', 'picky-eaters', 'Tips and strategies for dealing with picky eaters'),
-  ('Meal Planning', 'meal-planning', 'Meal planning advice and recipes'),
-  ('Nutrition', 'nutrition', 'Nutritional information and healthy eating tips'),
-  ('Parenting', 'parenting', 'General parenting advice related to food and meals'),
-  ('Recipes', 'recipes', 'Kid-friendly recipes and meal ideas')
-ON CONFLICT DO NOTHING;
-
--- Insert default tags
-INSERT INTO blog_tags (name, slug)
-VALUES
-  ('Tips', 'tips'),
-  ('Recipes', 'recipes'),
-  ('Nutrition', 'nutrition'),
-  ('Meal Prep', 'meal-prep'),
-  ('Quick Meals', 'quick-meals'),
-  ('Healthy Eating', 'healthy-eating'),
-  ('Food Safety', 'food-safety'),
-  ('Allergies', 'allergies')
-ON CONFLICT DO NOTHING;
-
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251008144000_create_blog_tables.sql') ON CONFLICT (filename) DO NOTHING;
+INSERT INTO _migrations (filename) VALUES ('20251008144100_blog_advanced_features.sql') ON CONFLICT (filename) DO NOTHING;
 
 
 -- ============================================
@@ -3634,7 +3642,7 @@ VALUES
   (
     'Weekly Newsletter',
     'Weekly tips and recipes',
-    'ðŸ½ï¸ This Week''s Meal Planning Tips',
+    '🍽️ This Week''s Meal Planning Tips',
     '<html><body><h1>This Week at EatPal</h1><p>Hi {{first_name}},</p><p>Here are this week''s top meal planning tips and recipes...</p></body></html>',
     'This Week at EatPal. Hi {{first_name}}, Here are this week''s top meal planning tips...',
     'newsletter',
@@ -4490,10 +4498,13 @@ INSERT INTO _migrations (filename) VALUES ('20251008202537_abaf0cfc-6afd-4141-89
 -- Migration 28: 20251008203700_13e32f11-8e5a-4361-bd61-bfdcb38ad9bd.sql
 -- ============================================
 
+-- CI-fix: this migration duplicates tables already created by
+-- 20251008145000_create_email_marketing_tables.sql. Made idempotent so a
+-- clean replay (where those tables already exist) does not error.
 -- Create email marketing tables
 
 -- Email lists table
-CREATE TABLE public.email_lists (
+CREATE TABLE IF NOT EXISTS public.email_lists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
@@ -4504,7 +4515,7 @@ CREATE TABLE public.email_lists (
 );
 
 -- Email subscribers table
-CREATE TABLE public.email_subscribers (
+CREATE TABLE IF NOT EXISTS public.email_subscribers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL UNIQUE,
   first_name TEXT,
@@ -4520,7 +4531,7 @@ CREATE TABLE public.email_subscribers (
 );
 
 -- Email campaigns table  
-CREATE TABLE public.email_campaigns (
+CREATE TABLE IF NOT EXISTS public.email_campaigns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   subject TEXT NOT NULL,
@@ -4542,7 +4553,7 @@ CREATE TABLE public.email_campaigns (
 );
 
 -- Email templates table
-CREATE TABLE public.email_templates (
+CREATE TABLE IF NOT EXISTS public.email_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
@@ -4561,18 +4572,22 @@ ALTER TABLE public.email_campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_templates ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for admins only
+DROP POLICY IF EXISTS "Admins can manage email lists" ON public.email_lists;
 CREATE POLICY "Admins can manage email lists"
   ON public.email_lists FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage email subscribers" ON public.email_subscribers;
 CREATE POLICY "Admins can manage email subscribers"
   ON public.email_subscribers FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage email campaigns" ON public.email_campaigns;
 CREATE POLICY "Admins can manage email campaigns"
   ON public.email_campaigns FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));
 
+DROP POLICY IF EXISTS "Admins can manage email templates" ON public.email_templates;
 CREATE POLICY "Admins can manage email templates"
   ON public.email_templates FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role));
@@ -6832,7 +6847,7 @@ GROUP BY eq.template_key, et.template_name, et.category;
 INSERT INTO automation_email_templates (template_key, template_name, subject, html_body, text_body, category, variables) VALUES
 
 -- Welcome Email
-('welcome', 'Welcome Email', 'Welcome to EatPal! ðŸŽ‰',
+('welcome', 'Welcome Email', 'Welcome to EatPal! 🎉',
 '<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center;">
   <h1 style="color: white; margin: 0;">Welcome to EatPal!</h1>
@@ -6877,10 +6892,10 @@ The EatPal Team',
 '["user_name", "app_url"]'::jsonb),
 
 -- Milestone Achievement
-('milestone_achieved', 'Milestone Achievement', 'ðŸŽ‰ {{kid_name}} earned a new achievement!',
+('milestone_achieved', 'Milestone Achievement', '🎉 {{kid_name}} earned a new achievement!',
 '<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <div style="background: #10b981; padding: 40px 20px; text-align: center;">
-  <h1 style="color: white; margin: 0;">ðŸŽ‰ New Achievement Unlocked!</h1>
+  <h1 style="color: white; margin: 0;">🎉 New Achievement Unlocked!</h1>
 </div>
 <div style="padding: 40px 20px;">
   <h2 style="color: #10b981;">{{achievement_title}}</h2>
@@ -6896,7 +6911,7 @@ The EatPal Team',
   <p>The EatPal Team</p>
 </div>
 </body></html>',
-'ðŸŽ‰ {{kid_name}} earned a new achievement!
+'🎉 {{kid_name}} earned a new achievement!
 
 {{achievement_title}}
 {{achievement_description}}
@@ -8216,29 +8231,7 @@ INSERT INTO _migrations (filename) VALUES ('20251013042658_25106cb6-71d7-4bfe-ac
 
 
 -- ============================================
--- Migration 46: 20251013045657_076d6c6b-a25a-4267-a04d-fdbccbca1761.sql
--- ============================================
-
--- Add unique constraint required by track_blog_content() trigger
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 
-    FROM pg_constraint 
-    WHERE conname = 'blog_content_tracking_post_id_key'
-      AND conrelid = 'public.blog_content_tracking'::regclass
-  ) THEN
-    ALTER TABLE public.blog_content_tracking
-    ADD CONSTRAINT blog_content_tracking_post_id_key UNIQUE (post_id);
-  END IF;
-END$$;
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251013045657_076d6c6b-a25a-4267-a04d-fdbccbca1761.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 47: 20251013120000_admin_live_activity.sql
+-- Migration 46: 20251013120000_admin_live_activity.sql
 -- ============================================
 
 -- =====================================================
@@ -8696,7 +8689,7 @@ INSERT INTO _migrations (filename) VALUES ('20251013120000_admin_live_activity.s
 
 
 -- ============================================
--- Migration 48: 20251013130000_feature_flags.sql
+-- Migration 47: 20251013130000_feature_flags.sql
 -- ============================================
 
 -- =====================================================
@@ -9086,7 +9079,7 @@ INSERT INTO _migrations (filename) VALUES ('20251013130000_feature_flags.sql') O
 
 
 -- ============================================
--- Migration 49: 20251013140000_support_tickets.sql
+-- Migration 48: 20251013140000_support_tickets.sql
 -- ============================================
 
 -- =====================================================
@@ -9423,7 +9416,7 @@ INSERT INTO _migrations (filename) VALUES ('20251013140000_support_tickets.sql')
 
 
 -- ============================================
--- Migration 50: 20251013150000_blog_uniqueness_tracking.sql
+-- Migration 49: 20251013150000_blog_uniqueness_tracking.sql
 -- ============================================
 
 -- Blog Title Bank and Uniqueness Tracking System
@@ -9786,6 +9779,28 @@ COMMENT ON FUNCTION get_blog_generation_insights IS 'Provides insights on blog g
 
 -- Record migration
 INSERT INTO _migrations (filename) VALUES ('20251013150000_blog_uniqueness_tracking.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 50: 20251013150100_076d6c6b-a25a-4267-a04d-fdbccbca1761.sql
+-- ============================================
+
+-- Add unique constraint required by track_blog_content() trigger
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 
+    FROM pg_constraint 
+    WHERE conname = 'blog_content_tracking_post_id_key'
+      AND conrelid = 'public.blog_content_tracking'::regclass
+  ) THEN
+    ALTER TABLE public.blog_content_tracking
+    ADD CONSTRAINT blog_content_tracking_post_id_key UNIQUE (post_id);
+  END IF;
+END$$;
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251013150100_076d6c6b-a25a-4267-a04d-fdbccbca1761.sql') ON CONFLICT (filename) DO NOTHING;
 
 
 -- ============================================
@@ -11612,6 +11627,11 @@ CREATE TABLE IF NOT EXISTS food_aisle_mappings (
   UNIQUE(food_id, store_aisle_id)
 );
 
+-- CI-fix: reconcile with the earlier phase1 food_aisle_mappings (divergent columns).
+ALTER TABLE food_aisle_mappings ADD COLUMN IF NOT EXISTS food_id UUID REFERENCES foods(id) ON DELETE CASCADE;
+ALTER TABLE food_aisle_mappings ADD COLUMN IF NOT EXISTS store_aisle_id UUID REFERENCES store_aisles(id) ON DELETE CASCADE;
+ALTER TABLE food_aisle_mappings ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
+ALTER TABLE recipe_photos ADD COLUMN IF NOT EXISTS uploaded_by_user_id UUID REFERENCES auth.users(id);
 CREATE INDEX IF NOT EXISTS idx_food_aisle_mappings_food_id ON food_aisle_mappings(food_id);
 CREATE INDEX IF NOT EXISTS idx_food_aisle_mappings_aisle_id ON food_aisle_mappings(store_aisle_id);
 
@@ -11948,6 +11968,7 @@ CREATE TABLE IF NOT EXISTS recipe_photos (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE recipe_photos ADD COLUMN IF NOT EXISTS uploaded_by_user_id UUID REFERENCES auth.users(id);
 CREATE INDEX IF NOT EXISTS idx_recipe_photos_recipe_id ON recipe_photos(recipe_id);
 
 -- Recipe Attempts (tracking when recipes are made and rated)
@@ -13186,10 +13207,8 @@ INSERT INTO _migrations (filename) VALUES ('20251030000001_subscription_enhancem
 -- Stores global SEO configuration (meta tags, robots.txt, etc.)
 -- =====================================================
 
--- Drop existing table if it has conflicts
-DROP TABLE IF EXISTS seo_settings CASCADE;
 
-CREATE TABLE seo_settings (
+CREATE TABLE IF NOT EXISTS seo_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Meta Tags
@@ -13257,9 +13276,8 @@ INSERT INTO seo_settings (
 -- Tracks all SEO audit results over time
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_audit_history CASCADE;
 
-CREATE TABLE seo_audit_history (
+CREATE TABLE IF NOT EXISTS seo_audit_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Audit Details
@@ -13302,9 +13320,8 @@ CREATE INDEX idx_seo_audit_history_url ON seo_audit_history(url);
 -- Tracks SEO fixes that have been applied
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_fixes_applied CASCADE;
 
-CREATE TABLE seo_fixes_applied (
+CREATE TABLE IF NOT EXISTS seo_fixes_applied (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Fix Details
@@ -13352,9 +13369,8 @@ CREATE INDEX idx_seo_fixes_applied_at ON seo_fixes_applied(applied_at DESC);
 -- Tracks keyword rankings and performance
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_keywords CASCADE;
 
-CREATE TABLE seo_keywords (
+CREATE TABLE IF NOT EXISTS seo_keywords (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Keyword Details
@@ -13393,9 +13409,8 @@ CREATE INDEX idx_seo_keywords_priority ON seo_keywords(priority);
 -- Tracks keyword position changes over time
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_keyword_history CASCADE;
 
-CREATE TABLE seo_keyword_history (
+CREATE TABLE IF NOT EXISTS seo_keyword_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   keyword_id UUID NOT NULL REFERENCES seo_keywords(id) ON DELETE CASCADE,
@@ -13418,9 +13433,8 @@ CREATE INDEX idx_seo_keyword_history_keyword ON seo_keyword_history(keyword_id, 
 -- Stores competitor SEO analysis results
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_competitor_analysis CASCADE;
 
-CREATE TABLE seo_competitor_analysis (
+CREATE TABLE IF NOT EXISTS seo_competitor_analysis (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Competitor Details
@@ -13467,9 +13481,8 @@ CREATE INDEX idx_seo_competitor_analyzed ON seo_competitor_analysis(analyzed_at 
 -- Tracks SEO scores for individual pages
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_page_scores CASCADE;
 
-CREATE TABLE seo_page_scores (
+CREATE TABLE IF NOT EXISTS seo_page_scores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Page Details
@@ -13526,9 +13539,8 @@ CREATE INDEX idx_seo_page_scores_analyzed ON seo_page_scores(last_analyzed_at DE
 -- Tracks automated SEO monitoring events
 -- =====================================================
 
-DROP TABLE IF EXISTS seo_monitoring_log CASCADE;
 
-CREATE TABLE seo_monitoring_log (
+CREATE TABLE IF NOT EXISTS seo_monitoring_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Event Details
@@ -13800,9 +13812,8 @@ INSERT INTO _migrations (filename) VALUES ('20251103000000_create_seo_management
 -- =====================================================
 -- Stores OAuth tokens for Google Search Console API access
 
-DROP TABLE IF EXISTS gsc_oauth_credentials CASCADE;
 
-CREATE TABLE gsc_oauth_credentials (
+CREATE TABLE IF NOT EXISTS gsc_oauth_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
 
@@ -13832,9 +13843,8 @@ CREATE INDEX idx_gsc_oauth_expires ON gsc_oauth_credentials(expires_at);
 -- =====================================================
 -- Stores verified Google Search Console properties (websites)
 
-DROP TABLE IF EXISTS gsc_properties CASCADE;
 
-CREATE TABLE gsc_properties (
+CREATE TABLE IF NOT EXISTS gsc_properties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
 
@@ -13880,9 +13890,8 @@ ALTER TABLE seo_keywords ADD COLUMN IF NOT EXISTS gsc_last_updated TIMESTAMPTZ;
 -- =====================================================
 -- Historical performance data from GSC for each keyword
 
-DROP TABLE IF EXISTS gsc_keyword_performance CASCADE;
 
-CREATE TABLE gsc_keyword_performance (
+CREATE TABLE IF NOT EXISTS gsc_keyword_performance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   keyword_id UUID REFERENCES seo_keywords(id) ON DELETE CASCADE,
@@ -13920,9 +13929,8 @@ CREATE UNIQUE INDEX idx_gsc_keyword_perf_unique ON gsc_keyword_performance(keywo
 -- =====================================================
 -- Performance data for individual pages from GSC
 
-DROP TABLE IF EXISTS gsc_page_performance CASCADE;
 
-CREATE TABLE gsc_page_performance (
+CREATE TABLE IF NOT EXISTS gsc_page_performance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   property_id UUID REFERENCES gsc_properties(id) ON DELETE CASCADE,
@@ -13960,9 +13968,8 @@ CREATE UNIQUE INDEX idx_gsc_page_perf_unique ON gsc_page_performance(property_id
 -- =====================================================
 -- Store issues reported by Google Search Console
 
-DROP TABLE IF EXISTS gsc_issues CASCADE;
 
-CREATE TABLE gsc_issues (
+CREATE TABLE IF NOT EXISTS gsc_issues (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   property_id UUID REFERENCES gsc_properties(id) ON DELETE CASCADE,
@@ -14002,9 +14009,8 @@ CREATE INDEX idx_gsc_issues_severity ON gsc_issues(severity);
 -- =====================================================
 -- Track GSC data synchronization events
 
-DROP TABLE IF EXISTS gsc_sync_log CASCADE;
 
-CREATE TABLE gsc_sync_log (
+CREATE TABLE IF NOT EXISTS gsc_sync_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   property_id UUID REFERENCES gsc_properties(id) ON DELETE CASCADE,
@@ -16124,7 +16130,7 @@ INSERT INTO _migrations (filename) VALUES ('20251107000000_enterprise_seo_featur
 
 
 -- ============================================
--- Migration 69: 20251107000000_fix_complementary_subscriptions.sql
+-- Migration 69: 20251107000001_fix_complementary_subscriptions.sql
 -- ============================================
 
 -- Fix subscription system to properly handle complementary subscriptions
@@ -16361,7 +16367,7 @@ COMMENT ON VIEW user_subscription_dashboard IS 'Comprehensive view of user subsc
 
 
 -- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251107000000_fix_complementary_subscriptions.sql') ON CONFLICT (filename) DO NOTHING;
+INSERT INTO _migrations (filename) VALUES ('20251107000001_fix_complementary_subscriptions.sql') ON CONFLICT (filename) DO NOTHING;
 
 
 -- ============================================
@@ -16968,7 +16974,7 @@ CREATE TABLE IF NOT EXISTS traffic_forecasts (
 
   -- Model Info
   model_type TEXT, -- 'arima', 'prophet', 'linear_regression'
-  model_accuracy DECIMAL(5,2), -- RÂ² or similar metric
+  model_accuracy DECIMAL(5,2), -- R² or similar metric
 
   -- Context
   based_on_data_from DATE, -- Start date of historical data used
@@ -20005,237 +20011,7 @@ INSERT INTO _migrations (filename) VALUES ('20251110000001_budget_calculator_mea
 
 
 -- ============================================
--- Migration 78: 20251110000001_meal_plan_templates.sql
--- ============================================
-
--- Meal Plan Templates Feature
--- Allows users to save and reuse successful meal plans
-
--- Main templates table
-CREATE TABLE IF NOT EXISTS meal_plan_templates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  household_id UUID REFERENCES households(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-
-  -- Template metadata
-  name TEXT NOT NULL,
-  description TEXT,
-
-  -- Categorization
-  is_favorite BOOLEAN DEFAULT false,
-  is_admin_template BOOLEAN DEFAULT false, -- Admin-curated starter templates
-  is_starter_template BOOLEAN DEFAULT false, -- Shown to new users
-  season TEXT, -- 'spring', 'summer', 'fall', 'winter', 'year_round'
-  target_age_range TEXT, -- '2-4', '5-8', '9-12', 'all'
-  dietary_restrictions TEXT[], -- Matches kid dietary restrictions
-
-  -- Usage tracking
-  times_used INTEGER DEFAULT 0,
-  success_rate DECIMAL(5,2), -- Average success rate when this template is used
-  created_from_week DATE, -- Original week this template was based on
-
-  -- Timestamps
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-
-  CONSTRAINT name_not_empty CHECK (char_length(name) > 0)
-);
-
--- Template entries (the actual meal plan data)
-CREATE TABLE IF NOT EXISTS meal_plan_template_entries (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  template_id UUID REFERENCES meal_plan_templates(id) ON DELETE CASCADE,
-
-  -- Scheduling
-  day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6), -- 0=Monday, 6=Sunday
-  meal_slot TEXT NOT NULL CHECK (meal_slot IN ('breakfast', 'lunch', 'dinner', 'snack1', 'snack2', 'try_bite')),
-
-  -- Meal content
-  recipe_id UUID REFERENCES recipes(id) ON DELETE SET NULL,
-  food_ids UUID[], -- For simple meals without recipes
-
-  -- Metadata
-  notes TEXT,
-  is_optional BOOLEAN DEFAULT false, -- For flexible templates
-
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_household ON meal_plan_templates(household_id);
-CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_user ON meal_plan_templates(user_id);
-CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_admin ON meal_plan_templates(is_admin_template) WHERE is_admin_template = true;
-CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_starter ON meal_plan_templates(is_starter_template) WHERE is_starter_template = true;
-CREATE INDEX IF NOT EXISTS idx_meal_plan_template_entries_template ON meal_plan_template_entries(template_id);
-CREATE INDEX IF NOT EXISTS idx_meal_plan_template_entries_schedule ON meal_plan_template_entries(template_id, day_of_week, meal_slot);
-
--- Row Level Security Policies
-ALTER TABLE meal_plan_templates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE meal_plan_template_entries ENABLE ROW LEVEL SECURITY;
-
--- Users can view their own templates and admin templates
-CREATE POLICY "Users can view own and admin templates"
-  ON meal_plan_templates
-  FOR SELECT
-  USING (
-    is_admin_template = true
-    OR user_id = auth.uid()
-    OR household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
-    )
-  );
-
--- Users can create templates in their household
-CREATE POLICY "Users can create templates"
-  ON meal_plan_templates
-  FOR INSERT
-  WITH CHECK (
-    user_id = auth.uid()
-    AND household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
-    )
-  );
-
--- Users can update their own templates
-CREATE POLICY "Users can update own templates"
-  ON meal_plan_templates
-  FOR UPDATE
-  USING (
-    user_id = auth.uid()
-    OR household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
-    )
-  );
-
--- Users can delete their own templates
-CREATE POLICY "Users can delete own templates"
-  ON meal_plan_templates
-  FOR DELETE
-  USING (
-    user_id = auth.uid()
-    OR household_id IN (
-      SELECT household_id FROM profiles WHERE user_id = auth.uid()
-    )
-  );
-
--- Template entries inherit permissions from parent template
-CREATE POLICY "Users can view template entries"
-  ON meal_plan_template_entries
-  FOR SELECT
-  USING (
-    template_id IN (
-      SELECT id FROM meal_plan_templates
-      WHERE is_admin_template = true
-        OR user_id = auth.uid()
-        OR household_id IN (
-          SELECT household_id FROM profiles WHERE user_id = auth.uid()
-        )
-    )
-  );
-
-CREATE POLICY "Users can create template entries"
-  ON meal_plan_template_entries
-  FOR INSERT
-  WITH CHECK (
-    template_id IN (
-      SELECT id FROM meal_plan_templates
-      WHERE user_id = auth.uid()
-        OR household_id IN (
-          SELECT household_id FROM profiles WHERE user_id = auth.uid()
-        )
-    )
-  );
-
-CREATE POLICY "Users can update template entries"
-  ON meal_plan_template_entries
-  FOR UPDATE
-  USING (
-    template_id IN (
-      SELECT id FROM meal_plan_templates
-      WHERE user_id = auth.uid()
-        OR household_id IN (
-          SELECT household_id FROM profiles WHERE user_id = auth.uid()
-        )
-    )
-  );
-
-CREATE POLICY "Users can delete template entries"
-  ON meal_plan_template_entries
-  FOR DELETE
-  USING (
-    template_id IN (
-      SELECT id FROM meal_plan_templates
-      WHERE user_id = auth.uid()
-        OR household_id IN (
-          SELECT household_id FROM profiles WHERE user_id = auth.uid()
-        )
-    )
-  );
-
--- Admins have full access to templates
-CREATE POLICY "Admins can manage all templates"
-  ON meal_plan_templates
-  FOR ALL
-  USING (public.has_role(auth.uid(), 'admin'));
-
-CREATE POLICY "Admins can manage all template entries"
-  ON meal_plan_template_entries
-  FOR ALL
-  USING (public.has_role(auth.uid(), 'admin'));
-
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_meal_plan_template_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to automatically update updated_at
-CREATE TRIGGER update_meal_plan_template_updated_at_trigger
-  BEFORE UPDATE ON meal_plan_templates
-  FOR EACH ROW
-  EXECUTE FUNCTION update_meal_plan_template_updated_at();
-
--- Function to calculate template success rate from usage
-CREATE OR REPLACE FUNCTION calculate_template_success_rate(template_id_input UUID)
-RETURNS DECIMAL AS $$
-DECLARE
-  avg_success DECIMAL(5,2);
-BEGIN
-  -- Calculate average success rate from food attempts of meals created from this template
-  -- This is a simplified calculation - can be enhanced based on actual usage patterns
-  SELECT AVG(
-    CASE
-      WHEN result = 'ate' THEN 100.0
-      WHEN result = 'tasted' THEN 50.0
-      WHEN result = 'refused' THEN 0.0
-      ELSE NULL
-    END
-  ) INTO avg_success
-  FROM plan_entries
-  WHERE date >= (
-    SELECT MAX(date) FROM plan_entries
-    WHERE notes LIKE '%template:' || template_id_input || '%'
-  )
-  AND notes LIKE '%template:' || template_id_input || '%';
-
-  RETURN COALESCE(avg_success, 0);
-END;
-$$ LANGUAGE plpgsql;
-
-COMMENT ON TABLE meal_plan_templates IS 'Reusable meal plan templates for quick weekly planning';
-COMMENT ON TABLE meal_plan_template_entries IS 'Individual meal entries within a template';
-COMMENT ON FUNCTION calculate_template_success_rate IS 'Calculates average success rate for meals created from a template';
-
-
--- Record migration
-INSERT INTO _migrations (filename) VALUES ('20251110000001_meal_plan_templates.sql') ON CONFLICT (filename) DO NOTHING;
-
-
--- ============================================
--- Migration 79: 20251110000002_push_notifications.sql
+-- Migration 78: 20251110000002_push_notifications.sql
 -- ============================================
 
 -- Push Notifications System
@@ -20639,7 +20415,7 @@ INSERT INTO _migrations (filename) VALUES ('20251110000002_push_notifications.sq
 
 
 -- ============================================
--- Migration 80: 20251110000003_recipe_scaling.sql
+-- Migration 79: 20251110000003_recipe_scaling.sql
 -- ============================================
 
 -- Recipe Scaling Feature
@@ -20874,7 +20650,7 @@ INSERT INTO _migrations (filename) VALUES ('20251110000003_recipe_scaling.sql') 
 
 
 -- ============================================
--- Migration 81: 20251110000004_meal_voting.sql
+-- Migration 80: 20251110000004_meal_voting.sql
 -- ============================================
 
 -- Kid Meal Voting Feature
@@ -20895,7 +20671,7 @@ CREATE TABLE IF NOT EXISTS meal_votes (
 
   -- Vote value
   vote TEXT NOT NULL CHECK (vote IN ('love_it', 'okay', 'no_way')),
-  vote_emoji TEXT, -- 'ðŸ˜', 'ðŸ™‚', 'ðŸ˜­'
+  vote_emoji TEXT, -- '😍', '🙂', '😭'
 
   -- Optional feedback
   reason TEXT,
@@ -21335,7 +21111,7 @@ INSERT INTO _migrations (filename) VALUES ('20251110000004_meal_voting.sql') ON 
 
 
 -- ============================================
--- Migration 82: 20251110000005_weekly_reports.sql
+-- Migration 81: 20251110000005_weekly_reports.sql
 -- ============================================
 
 -- Automated Weekly Reports Feature
@@ -21712,7 +21488,7 @@ INSERT INTO _migrations (filename) VALUES ('20251110000005_weekly_reports.sql') 
 
 
 -- ============================================
--- Migration 83: 20251110000006_meal_suggestions.sql
+-- Migration 82: 20251110000006_meal_suggestions.sql
 -- ============================================
 
 -- Quick Meal Suggestions Feature
@@ -22156,7 +21932,7 @@ INSERT INTO _migrations (filename) VALUES ('20251110000006_meal_suggestions.sql'
 
 
 -- ============================================
--- Migration 84: 20251110000007_grocery_delivery.sql
+-- Migration 83: 20251110000007_grocery_delivery.sql
 -- ============================================
 
 -- Smart Grocery Delivery Integration
@@ -22684,6 +22460,247 @@ INSERT INTO _migrations (filename) VALUES ('20251110000007_grocery_delivery.sql'
 
 
 -- ============================================
+-- Migration 84: 20251110000008_meal_plan_templates.sql
+-- ============================================
+
+-- Meal Plan Templates Feature
+-- Allows users to save and reuse successful meal plans
+
+-- Main templates table
+CREATE TABLE IF NOT EXISTS meal_plan_templates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+
+  -- Template metadata
+  name TEXT NOT NULL,
+  description TEXT,
+
+  -- Categorization
+  is_favorite BOOLEAN DEFAULT false,
+  is_admin_template BOOLEAN DEFAULT false, -- Admin-curated starter templates
+  is_starter_template BOOLEAN DEFAULT false, -- Shown to new users
+  season TEXT, -- 'spring', 'summer', 'fall', 'winter', 'year_round'
+  target_age_range TEXT, -- '2-4', '5-8', '9-12', 'all'
+  dietary_restrictions TEXT[], -- Matches kid dietary restrictions
+
+  -- Usage tracking
+  times_used INTEGER DEFAULT 0,
+  success_rate DECIMAL(5,2), -- Average success rate when this template is used
+  created_from_week DATE, -- Original week this template was based on
+
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+
+  CONSTRAINT name_not_empty CHECK (char_length(name) > 0)
+);
+
+-- Template entries (the actual meal plan data)
+CREATE TABLE IF NOT EXISTS meal_plan_template_entries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  template_id UUID REFERENCES meal_plan_templates(id) ON DELETE CASCADE,
+
+  -- Scheduling
+  day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6), -- 0=Monday, 6=Sunday
+  meal_slot TEXT NOT NULL CHECK (meal_slot IN ('breakfast', 'lunch', 'dinner', 'snack1', 'snack2', 'try_bite')),
+
+  -- Meal content
+  recipe_id UUID REFERENCES recipes(id) ON DELETE SET NULL,
+  food_ids UUID[], -- For simple meals without recipes
+
+  -- Metadata
+  notes TEXT,
+  is_optional BOOLEAN DEFAULT false, -- For flexible templates
+
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_household ON meal_plan_templates(household_id);
+CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_user ON meal_plan_templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_admin ON meal_plan_templates(is_admin_template) WHERE is_admin_template = true;
+CREATE INDEX IF NOT EXISTS idx_meal_plan_templates_starter ON meal_plan_templates(is_starter_template) WHERE is_starter_template = true;
+CREATE INDEX IF NOT EXISTS idx_meal_plan_template_entries_template ON meal_plan_template_entries(template_id);
+CREATE INDEX IF NOT EXISTS idx_meal_plan_template_entries_schedule ON meal_plan_template_entries(template_id, day_of_week, meal_slot);
+
+-- Row Level Security Policies
+ALTER TABLE meal_plan_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE meal_plan_template_entries ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own templates and admin templates
+DROP POLICY IF EXISTS "Users can view own and admin templates" ON meal_plan_templates;
+CREATE POLICY "Users can view own and admin templates"
+  ON meal_plan_templates
+  FOR SELECT
+  USING (
+    is_admin_template = true
+    OR user_id = auth.uid()
+    OR household_id IN (
+      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+    )
+  );
+
+-- Users can create templates in their household
+DROP POLICY IF EXISTS "Users can create templates" ON meal_plan_templates;
+CREATE POLICY "Users can create templates"
+  ON meal_plan_templates
+  FOR INSERT
+  WITH CHECK (
+    user_id = auth.uid()
+    AND household_id IN (
+      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+    )
+  );
+
+-- Users can update their own templates
+DROP POLICY IF EXISTS "Users can update own templates" ON meal_plan_templates;
+CREATE POLICY "Users can update own templates"
+  ON meal_plan_templates
+  FOR UPDATE
+  USING (
+    user_id = auth.uid()
+    OR household_id IN (
+      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+    )
+  );
+
+-- Users can delete their own templates
+DROP POLICY IF EXISTS "Users can delete own templates" ON meal_plan_templates;
+CREATE POLICY "Users can delete own templates"
+  ON meal_plan_templates
+  FOR DELETE
+  USING (
+    user_id = auth.uid()
+    OR household_id IN (
+      SELECT household_id FROM profiles WHERE user_id = auth.uid()
+    )
+  );
+
+-- Template entries inherit permissions from parent template
+DROP POLICY IF EXISTS "Users can view template entries" ON meal_plan_template_entries;
+CREATE POLICY "Users can view template entries"
+  ON meal_plan_template_entries
+  FOR SELECT
+  USING (
+    template_id IN (
+      SELECT id FROM meal_plan_templates
+      WHERE is_admin_template = true
+        OR user_id = auth.uid()
+        OR household_id IN (
+          SELECT household_id FROM profiles WHERE user_id = auth.uid()
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "Users can create template entries" ON meal_plan_template_entries;
+CREATE POLICY "Users can create template entries"
+  ON meal_plan_template_entries
+  FOR INSERT
+  WITH CHECK (
+    template_id IN (
+      SELECT id FROM meal_plan_templates
+      WHERE user_id = auth.uid()
+        OR household_id IN (
+          SELECT household_id FROM profiles WHERE user_id = auth.uid()
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "Users can update template entries" ON meal_plan_template_entries;
+CREATE POLICY "Users can update template entries"
+  ON meal_plan_template_entries
+  FOR UPDATE
+  USING (
+    template_id IN (
+      SELECT id FROM meal_plan_templates
+      WHERE user_id = auth.uid()
+        OR household_id IN (
+          SELECT household_id FROM profiles WHERE user_id = auth.uid()
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "Users can delete template entries" ON meal_plan_template_entries;
+CREATE POLICY "Users can delete template entries"
+  ON meal_plan_template_entries
+  FOR DELETE
+  USING (
+    template_id IN (
+      SELECT id FROM meal_plan_templates
+      WHERE user_id = auth.uid()
+        OR household_id IN (
+          SELECT household_id FROM profiles WHERE user_id = auth.uid()
+        )
+    )
+  );
+
+-- Admins have full access to templates
+DROP POLICY IF EXISTS "Admins can manage all templates" ON meal_plan_templates;
+CREATE POLICY "Admins can manage all templates"
+  ON meal_plan_templates
+  FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'));
+
+DROP POLICY IF EXISTS "Admins can manage all template entries" ON meal_plan_template_entries;
+CREATE POLICY "Admins can manage all template entries"
+  ON meal_plan_template_entries
+  FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_meal_plan_template_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to automatically update updated_at
+DROP TRIGGER IF EXISTS update_meal_plan_template_updated_at_trigger ON meal_plan_templates;
+CREATE TRIGGER update_meal_plan_template_updated_at_trigger
+  BEFORE UPDATE ON meal_plan_templates
+  FOR EACH ROW
+  EXECUTE FUNCTION update_meal_plan_template_updated_at();
+
+-- Function to calculate template success rate from usage
+CREATE OR REPLACE FUNCTION calculate_template_success_rate(template_id_input UUID)
+RETURNS DECIMAL AS $$
+DECLARE
+  avg_success DECIMAL(5,2);
+BEGIN
+  -- Calculate average success rate from food attempts of meals created from this template
+  -- This is a simplified calculation - can be enhanced based on actual usage patterns
+  SELECT AVG(
+    CASE
+      WHEN result = 'ate' THEN 100.0
+      WHEN result = 'tasted' THEN 50.0
+      WHEN result = 'refused' THEN 0.0
+      ELSE NULL
+    END
+  ) INTO avg_success
+  FROM plan_entries
+  WHERE date >= (
+    SELECT MAX(date) FROM plan_entries
+    WHERE notes LIKE '%template:' || template_id_input || '%'
+  )
+  AND notes LIKE '%template:' || template_id_input || '%';
+
+  RETURN COALESCE(avg_success, 0);
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON TABLE meal_plan_templates IS 'Reusable meal plan templates for quick weekly planning';
+COMMENT ON TABLE meal_plan_template_entries IS 'Individual meal entries within a template';
+COMMENT ON FUNCTION calculate_template_success_rate IS 'Calculates average success rate for meals created from a template';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251110000008_meal_plan_templates.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
 -- Migration 85: 20251111000000_add_custom_domains.sql
 -- ============================================
 
@@ -22896,6 +22913,8 @@ INSERT INTO _migrations (filename) VALUES ('20251111000000_add_custom_domains.sq
 -- Migration 86: 20251113000000_performance_indexes.sql
 -- ============================================
 
+
+DO $$ BEGIN
 -- Performance Optimization Indexes
 -- Created: 2025-11-13
 -- Purpose: Add indexes to optimize common query patterns and improve performance
@@ -22908,18 +22927,21 @@ INSERT INTO _migrations (filename) VALUES ('20251111000000_add_custom_domains.sq
 -- Query: Get all plan entries for a kid within a date range
 CREATE INDEX IF NOT EXISTS idx_plan_entries_kid_date_slot
   ON plan_entries(kid_id, date, meal_slot)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize plan entries by user for dashboard views
 CREATE INDEX IF NOT EXISTS idx_plan_entries_user_date
   ON plan_entries(user_id, date DESC)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize lookup of plan entries by result (for analytics)
 CREATE INDEX IF NOT EXISTS idx_plan_entries_result
   ON plan_entries(kid_id, result, date DESC)
-  WHERE result IS NOT NULL AND deleted_at IS NULL;
-
+  WHERE result IS NOT NULL AND TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- FOOD LIBRARY INDEXES
 -- ============================================================================
@@ -22927,23 +22949,27 @@ CREATE INDEX IF NOT EXISTS idx_plan_entries_result
 -- Optimize safe foods lookup (frequently used for meal planning)
 CREATE INDEX IF NOT EXISTS idx_foods_user_safe
   ON foods(user_id, is_safe)
-  WHERE is_safe = true AND deleted_at IS NULL;
-
+  WHERE is_safe = true AND TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize food search by category
 CREATE INDEX IF NOT EXISTS idx_foods_user_category
   ON foods(user_id, category, name)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize try-bite foods lookup
 CREATE INDEX IF NOT EXISTS idx_foods_user_try_bite
   ON foods(user_id, is_try_bite)
-  WHERE is_try_bite = true AND deleted_at IS NULL;
-
+  WHERE is_try_bite = true AND TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize food search by name (for autocomplete)
 CREATE INDEX IF NOT EXISTS idx_foods_name_trgm
   ON foods USING gin(name gin_trgm_ops)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- KIDS & HOUSEHOLD INDEXES
 -- ============================================================================
@@ -22951,8 +22977,9 @@ CREATE INDEX IF NOT EXISTS idx_foods_name_trgm
 -- Optimize kids lookup by user and household
 CREATE INDEX IF NOT EXISTS idx_kids_user_household
   ON kids(user_id, household_id)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- GROCERY LIST INDEXES
 -- ============================================================================
@@ -22960,18 +22987,21 @@ CREATE INDEX IF NOT EXISTS idx_kids_user_household
 -- Optimize grocery list items by list and status
 CREATE INDEX IF NOT EXISTS idx_grocery_items_list_checked
   ON grocery_items(list_id, is_checked, created_at DESC)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize grocery list lookup by user
 CREATE INDEX IF NOT EXISTS idx_grocery_lists_user_date
   ON grocery_lists(user_id, created_at DESC)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize grocery list by food
 CREATE INDEX IF NOT EXISTS idx_grocery_items_food
   ON grocery_items(food_id)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- RECIPES INDEXES
 -- ============================================================================
@@ -22979,13 +23009,15 @@ CREATE INDEX IF NOT EXISTS idx_grocery_items_food
 -- Optimize recipe search by user
 CREATE INDEX IF NOT EXISTS idx_recipes_user_created
   ON recipes(user_id, created_at DESC)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize recipe search by name (for autocomplete)
 CREATE INDEX IF NOT EXISTS idx_recipes_name_trgm
   ON recipes USING gin(name gin_trgm_ops)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- BLOG SYSTEM INDEXES
 -- ============================================================================
@@ -22994,30 +23026,36 @@ CREATE INDEX IF NOT EXISTS idx_recipes_name_trgm
 CREATE INDEX IF NOT EXISTS idx_blog_posts_published
   ON blog_posts(published_at DESC)
   WHERE status = 'published' AND published_at <= NOW();
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize blog post search by slug
 CREATE INDEX IF NOT EXISTS idx_blog_posts_slug
   ON blog_posts(slug)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize blog post full-text search
 CREATE INDEX IF NOT EXISTS idx_blog_posts_search
   ON blog_posts
   USING gin(to_tsvector('english', title || ' ' || COALESCE(excerpt, '') || ' ' || content))
   WHERE status = 'published';
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize blog posts by category
 CREATE INDEX IF NOT EXISTS idx_blog_posts_category
   ON blog_posts(category, published_at DESC)
   WHERE status = 'published';
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize blog post tags lookup
 CREATE INDEX IF NOT EXISTS idx_blog_post_tags_post
   ON blog_post_tags(post_id);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 CREATE INDEX IF NOT EXISTS idx_blog_post_tags_tag
   ON blog_post_tags(tag_id);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- SUBSCRIPTION & PAYMENT INDEXES
 -- ============================================================================
@@ -23026,16 +23064,19 @@ CREATE INDEX IF NOT EXISTS idx_blog_post_tags_tag
 CREATE INDEX IF NOT EXISTS idx_user_subscriptions_active
   ON user_subscriptions(user_id, status, current_period_end DESC)
   WHERE status IN ('active', 'trialing');
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize subscription by Stripe ID (webhook lookups)
 CREATE INDEX IF NOT EXISTS idx_user_subscriptions_stripe
   ON user_subscriptions(stripe_subscription_id)
   WHERE stripe_subscription_id IS NOT NULL;
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize payment history lookup
 CREATE INDEX IF NOT EXISTS idx_payment_history_user
   ON payment_history(user_id, created_at DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- ANALYTICS & TRACKING INDEXES
 -- ============================================================================
@@ -23043,12 +23084,14 @@ CREATE INDEX IF NOT EXISTS idx_payment_history_user
 -- Optimize food attempts tracking
 CREATE INDEX IF NOT EXISTS idx_food_attempts_kid_date
   ON food_attempts(kid_id, attempted_at DESC)
-  WHERE deleted_at IS NULL;
-
+  WHERE TRUE;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize achievements lookup
 CREATE INDEX IF NOT EXISTS idx_kid_achievements_kid
   ON kid_achievements(kid_id, unlocked_at DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- ADMIN & MONITORING INDEXES
 -- ============================================================================
@@ -23056,16 +23099,19 @@ CREATE INDEX IF NOT EXISTS idx_kid_achievements_kid
 -- Optimize user roles lookup
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_role
   ON user_roles(user_id, role);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize admin activity log
 CREATE INDEX IF NOT EXISTS idx_admin_activity_log_user_action
   ON admin_activity_log(user_id, action, created_at DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize error logs for monitoring
 CREATE INDEX IF NOT EXISTS idx_error_logs_created
   ON error_logs(created_at DESC, severity)
   WHERE created_at > NOW() - INTERVAL '30 days';
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- AI FEATURES INDEXES
 -- ============================================================================
@@ -23073,11 +23119,13 @@ CREATE INDEX IF NOT EXISTS idx_error_logs_created
 -- Optimize AI cost tracking
 CREATE INDEX IF NOT EXISTS idx_ai_cost_tracking_user_date
   ON ai_cost_tracking(user_id, created_at DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize food chain suggestions
 CREATE INDEX IF NOT EXISTS idx_food_chain_suggestions_food
   ON food_chain_suggestions(food_id, confidence DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- SEO & ANALYTICS INDEXES
 -- ============================================================================
@@ -23085,15 +23133,18 @@ CREATE INDEX IF NOT EXISTS idx_food_chain_suggestions_food
 -- Optimize SEO audits
 CREATE INDEX IF NOT EXISTS idx_seo_audits_created
   ON seo_audits(created_at DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize keyword rankings tracking
 CREATE INDEX IF NOT EXISTS idx_keyword_rankings_keyword_date
   ON keyword_rankings(keyword, check_date DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize blog analytics
 CREATE INDEX IF NOT EXISTS idx_blog_analytics_post_date
   ON blog_analytics(post_id, date DESC);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- COMMENTS & ENGAGEMENT INDEXES
 -- ============================================================================
@@ -23102,11 +23153,13 @@ CREATE INDEX IF NOT EXISTS idx_blog_analytics_post_date
 CREATE INDEX IF NOT EXISTS idx_blog_comments_post
   ON blog_comments(post_id, created_at DESC)
   WHERE status = 'approved';
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Optimize comment votes
 CREATE INDEX IF NOT EXISTS idx_blog_comment_votes_comment
   ON blog_comment_votes(comment_id, vote_type);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- ============================================================================
 -- FOREIGN KEY INDEXES (if not already exists)
 -- ============================================================================
@@ -23115,14 +23168,17 @@ CREATE INDEX IF NOT EXISTS idx_blog_comment_votes_comment
 -- Plan entries foreign keys
 CREATE INDEX IF NOT EXISTS idx_plan_entries_food_id
   ON plan_entries(food_id);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Grocery items foreign keys
 CREATE INDEX IF NOT EXISTS idx_grocery_items_list_id
   ON grocery_items(list_id);
-
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
 -- Kids foreign keys
 CREATE INDEX IF NOT EXISTS idx_kids_household_id
   ON kids(household_id);
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 -- ============================================================================
 -- ANALYZE TABLES
@@ -23599,7 +23655,7 @@ WRITING STYLE:
 - Tone: {{tone}}
 - Approach: {{perspective}}
 - Must be completely unique and different from generic parenting advice
-- Avoid clichÃ©s and overused phrases
+- Avoid clichés and overused phrases
 - Bring fresh insights and actionable value
 
 Create comprehensive, SEO-optimized blog content that is engaging, informative, and actionable for parents.',
@@ -23699,9 +23755,13602 @@ INSERT INTO _migrations (filename) VALUES ('20251202000000_blog_publishing_edito
 
 
 -- ============================================
+-- Migration 89: 20251204000000_add_security_audit_oauth.sql
+-- ============================================
+
+-- Migration: Add Security Audit Logging and OAuth Token Tables
+-- Date: 2025-12-04
+-- Description: Creates tables for comprehensive security audit logging and secure OAuth token storage
+
+-- ============================================
+-- Security Audit Logs Table
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.security_audit_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  event_category TEXT NOT NULL CHECK (event_category IN (
+    'authentication',
+    'authorization',
+    'data_access',
+    'data_modification',
+    'admin_action',
+    'security_alert',
+    'oauth',
+    'api_access',
+    'configuration'
+  )),
+  severity TEXT NOT NULL DEFAULT 'low' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  metadata JSONB DEFAULT '{}',
+  ip_address INET,
+  user_agent TEXT,
+  session_id TEXT,
+  device_fingerprint TEXT,
+  success BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for efficient querying
+CREATE INDEX idx_security_audit_logs_user_id ON public.security_audit_logs(user_id);
+CREATE INDEX idx_security_audit_logs_event_type ON public.security_audit_logs(event_type);
+CREATE INDEX idx_security_audit_logs_event_category ON public.security_audit_logs(event_category);
+CREATE INDEX idx_security_audit_logs_severity ON public.security_audit_logs(severity);
+CREATE INDEX idx_security_audit_logs_created_at ON public.security_audit_logs(created_at DESC);
+CREATE INDEX idx_security_audit_logs_session_id ON public.security_audit_logs(session_id);
+
+-- Composite index for common queries
+CREATE INDEX idx_security_audit_logs_user_category_time
+  ON public.security_audit_logs(user_id, event_category, created_at DESC);
+
+-- Enable RLS
+ALTER TABLE public.security_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies: Users can view their own logs, admins can view all
+CREATE POLICY "Users can view own audit logs"
+  ON public.security_audit_logs FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all audit logs"
+  ON public.security_audit_logs FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_id = auth.uid()
+      AND role = 'admin'
+    )
+  );
+
+-- Allow inserts from authenticated users and service role
+CREATE POLICY "Allow audit log inserts"
+  ON public.security_audit_logs FOR INSERT
+  WITH CHECK (true);
+
+-- ============================================
+-- OAuth Tokens Table (for secure token storage)
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.oauth_tokens (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  access_token_encrypted TEXT NOT NULL,
+  refresh_token_encrypted TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  scope TEXT,
+  token_type TEXT DEFAULT 'Bearer',
+  rotation_count INTEGER DEFAULT 0,
+  last_used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, provider)
+);
+
+-- Indexes
+CREATE INDEX idx_oauth_tokens_user_id ON public.oauth_tokens(user_id);
+CREATE INDEX idx_oauth_tokens_provider ON public.oauth_tokens(provider);
+CREATE INDEX idx_oauth_tokens_expires_at ON public.oauth_tokens(expires_at);
+
+-- Enable RLS
+ALTER TABLE public.oauth_tokens ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies: Users can only manage their own tokens
+CREATE POLICY "Users can view own OAuth tokens"
+  ON public.oauth_tokens FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own OAuth tokens"
+  ON public.oauth_tokens FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own OAuth tokens"
+  ON public.oauth_tokens FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own OAuth tokens"
+  ON public.oauth_tokens FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- ============================================
+-- Profile Extensions (for account locking)
+-- ============================================
+-- Add columns to profiles if they don't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name = 'profiles'
+    AND column_name = 'is_locked'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN is_locked BOOLEAN DEFAULT false;
+    ALTER TABLE public.profiles ADD COLUMN locked_at TIMESTAMPTZ;
+    ALTER TABLE public.profiles ADD COLUMN lock_reason TEXT;
+    ALTER TABLE public.profiles ADD COLUMN failed_login_attempts INTEGER DEFAULT 0;
+    ALTER TABLE public.profiles ADD COLUMN last_failed_login_at TIMESTAMPTZ;
+  END IF;
+END $$;
+
+-- ============================================
+-- Cleanup Functions
+-- ============================================
+
+-- Function to clean up old audit logs (retain 90 days by default)
+CREATE OR REPLACE FUNCTION cleanup_old_audit_logs(retention_days INTEGER DEFAULT 90)
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  DELETE FROM public.security_audit_logs
+  WHERE created_at < NOW() - (retention_days || ' days')::INTERVAL
+  AND severity NOT IN ('critical', 'high'); -- Keep high-severity logs longer
+
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to clean up expired OAuth tokens
+CREATE OR REPLACE FUNCTION cleanup_expired_oauth_tokens()
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  -- Delete tokens that:
+  -- 1. Have been expired for more than 30 days
+  -- 2. Have no refresh token (can't be renewed)
+  DELETE FROM public.oauth_tokens
+  WHERE expires_at < NOW() - INTERVAL '30 days'
+  AND refresh_token_encrypted IS NULL;
+
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================
+-- Triggers
+-- ============================================
+
+-- Trigger to update updated_at on oauth_tokens
+CREATE OR REPLACE FUNCTION update_oauth_tokens_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER oauth_tokens_updated_at
+  BEFORE UPDATE ON public.oauth_tokens
+  FOR EACH ROW
+  EXECUTE FUNCTION update_oauth_tokens_updated_at();
+
+-- ============================================
+-- Comments
+-- ============================================
+COMMENT ON TABLE public.security_audit_logs IS 'Comprehensive security audit log for authentication, authorization, and sensitive operations';
+COMMENT ON TABLE public.oauth_tokens IS 'Secure storage for OAuth tokens with encryption and rotation tracking';
+
+COMMENT ON COLUMN public.security_audit_logs.event_type IS 'Type of security event (e.g., LOGIN_SUCCESS, TOKEN_ROTATED)';
+COMMENT ON COLUMN public.security_audit_logs.event_category IS 'Category of event for filtering (authentication, oauth, etc.)';
+COMMENT ON COLUMN public.security_audit_logs.severity IS 'Severity level: low, medium, high, critical';
+COMMENT ON COLUMN public.security_audit_logs.device_fingerprint IS 'Hashed device fingerprint for tracking';
+
+COMMENT ON COLUMN public.oauth_tokens.access_token_encrypted IS 'Encrypted access token (base64 encoded)';
+COMMENT ON COLUMN public.oauth_tokens.refresh_token_encrypted IS 'Encrypted refresh token for token rotation';
+COMMENT ON COLUMN public.oauth_tokens.rotation_count IS 'Number of times the token has been rotated';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251204000000_add_security_audit_oauth.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 90: 20251220000000_admin_tables.sql
+-- ============================================
+
+-- Admin Tables Migration
+-- Creates tables for admin dashboard components that were using @ts-nocheck
+-- These tables enable: alerts, system health monitoring, CRM integration,
+-- workflow automation, and revenue operations.
+
+-- ============================================================================
+-- 1. Admin Alerts Table
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.admin_alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alert_type TEXT NOT NULL, -- e.g., 'payment_failed', 'high_churn_risk', 'api_error', 'security'
+  severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  alert_data JSONB DEFAULT '{}'::jsonb,
+  is_read BOOLEAN DEFAULT FALSE,
+  is_resolved BOOLEAN DEFAULT FALSE,
+  resolved_by UUID REFERENCES auth.users(id),
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for admin_alerts
+CREATE INDEX IF NOT EXISTS idx_admin_alerts_severity ON public.admin_alerts(severity);
+CREATE INDEX IF NOT EXISTS idx_admin_alerts_created_at ON public.admin_alerts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_alerts_unresolved ON public.admin_alerts(is_resolved) WHERE is_resolved = FALSE;
+CREATE INDEX IF NOT EXISTS idx_admin_alerts_unread ON public.admin_alerts(is_read) WHERE is_read = FALSE;
+
+-- RLS for admin_alerts
+ALTER TABLE public.admin_alerts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can view alerts"
+  ON public.admin_alerts FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can manage alerts"
+  ON public.admin_alerts FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Enable realtime for alerts
+ALTER PUBLICATION supabase_realtime ADD TABLE public.admin_alerts;
+
+-- ============================================================================
+-- 2. Admin System Health Table
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.admin_system_health (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  metric_type TEXT NOT NULL, -- e.g., 'api_response_time_p50', 'error_rate', 'ai_cost_daily'
+  metric_value NUMERIC NOT NULL,
+  metric_unit TEXT, -- e.g., 'ms', '%', '$', 'count'
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for system health
+CREATE INDEX IF NOT EXISTS idx_admin_system_health_type ON public.admin_system_health(metric_type);
+CREATE INDEX IF NOT EXISTS idx_admin_system_health_recorded ON public.admin_system_health(recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_system_health_type_time ON public.admin_system_health(metric_type, recorded_at DESC);
+
+-- RLS for system health
+ALTER TABLE public.admin_system_health ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view system health" ON public.admin_system_health;
+CREATE POLICY "Admins can view system health"
+  ON public.admin_system_health FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+DROP POLICY IF EXISTS "System can insert metrics" ON public.admin_system_health;
+CREATE POLICY "System can insert metrics"
+  ON public.admin_system_health FOR INSERT
+  WITH CHECK (TRUE); -- Allow Edge Functions to insert via service role
+
+-- ============================================================================
+-- 3. CRM Integration Tables
+-- ============================================================================
+
+-- CRM Connections
+CREATE TABLE IF NOT EXISTS public.crm_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL CHECK (provider IN ('hubspot', 'salesforce')),
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'disconnected' CHECK (status IN ('connected', 'disconnected', 'error')),
+  api_key_encrypted TEXT, -- Encrypted API key
+  instance_url TEXT,
+  last_sync TIMESTAMPTZ,
+  sync_enabled BOOLEAN DEFAULT FALSE,
+  field_mappings JSONB DEFAULT '[]'::jsonb,
+  sync_settings JSONB DEFAULT '{
+    "sync_frequency": "daily",
+    "sync_on_create": true,
+    "sync_on_update": true,
+    "sync_on_delete": false
+  }'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- CRM Sync Logs
+CREATE TABLE IF NOT EXISTS public.crm_sync_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  connection_id UUID NOT NULL REFERENCES public.crm_connections(id) ON DELETE CASCADE,
+  direction TEXT NOT NULL CHECK (direction IN ('push', 'pull')),
+  status TEXT NOT NULL CHECK (status IN ('success', 'failed', 'partial')),
+  records_processed INTEGER DEFAULT 0,
+  records_failed INTEGER DEFAULT 0,
+  error_message TEXT,
+  details JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for CRM tables
+CREATE INDEX IF NOT EXISTS idx_crm_connections_provider ON public.crm_connections(provider);
+CREATE INDEX IF NOT EXISTS idx_crm_connections_status ON public.crm_connections(status);
+CREATE INDEX IF NOT EXISTS idx_crm_sync_logs_connection ON public.crm_sync_logs(connection_id);
+CREATE INDEX IF NOT EXISTS idx_crm_sync_logs_created ON public.crm_sync_logs(created_at DESC);
+
+-- RLS for CRM tables
+ALTER TABLE public.crm_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.crm_sync_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage CRM connections"
+  ON public.crm_connections FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can view sync logs"
+  ON public.crm_sync_logs FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "System can insert sync logs"
+  ON public.crm_sync_logs FOR INSERT
+  WITH CHECK (TRUE); -- Allow Edge Functions to insert via service role
+
+-- ============================================================================
+-- 4. Automation Workflows Table
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.automation_workflows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  is_active BOOLEAN DEFAULT FALSE,
+  trigger_type TEXT NOT NULL, -- e.g., 'lead_created', 'trial_started', 'subscription_canceled'
+  trigger_config JSONB DEFAULT '{}'::jsonb,
+  nodes JSONB DEFAULT '[]'::jsonb, -- Array of workflow nodes
+  stats JSONB DEFAULT '{"runs": 0, "successful": 0, "failed": 0}'::jsonb,
+  last_run_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Workflow execution logs
+CREATE TABLE IF NOT EXISTS public.workflow_executions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workflow_id UUID NOT NULL REFERENCES public.automation_workflows(id) ON DELETE CASCADE,
+  trigger_data JSONB DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed', 'cancelled')),
+  current_node INTEGER DEFAULT 0,
+  execution_log JSONB DEFAULT '[]'::jsonb,
+  error_message TEXT,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+-- Indexes for workflows
+CREATE INDEX IF NOT EXISTS idx_automation_workflows_active ON public.automation_workflows(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_automation_workflows_trigger ON public.automation_workflows(trigger_type);
+CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow ON public.workflow_executions(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_executions_status ON public.workflow_executions(status);
+CREATE INDEX IF NOT EXISTS idx_workflow_executions_started ON public.workflow_executions(started_at DESC);
+
+-- RLS for workflows
+ALTER TABLE public.automation_workflows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workflow_executions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage workflows"
+  ON public.automation_workflows FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can view executions"
+  ON public.workflow_executions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "System can manage executions"
+  ON public.workflow_executions FOR ALL
+  WITH CHECK (TRUE); -- Allow Edge Functions via service role
+
+-- ============================================================================
+-- 5. Revenue Operations Tables
+-- ============================================================================
+
+-- Daily revenue metrics
+CREATE TABLE IF NOT EXISTS public.revenue_metrics_daily (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  metric_date DATE NOT NULL UNIQUE,
+  active_subscriptions INTEGER DEFAULT 0,
+  mrr NUMERIC(12, 2) DEFAULT 0,
+  arr NUMERIC(12, 2) DEFAULT 0,
+  new_subscriptions_today INTEGER DEFAULT 0,
+  churned_subscriptions_today INTEGER DEFAULT 0,
+  net_new_mrr NUMERIC(12, 2) DEFAULT 0,
+  mrr_growth_pct NUMERIC(5, 2) DEFAULT 0,
+  churn_rate_pct NUMERIC(5, 2) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Churn predictions
+CREATE TABLE IF NOT EXISTS public.revenue_churn_predictions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  churn_probability NUMERIC(5, 4) NOT NULL CHECK (churn_probability >= 0 AND churn_probability <= 1),
+  risk_level TEXT NOT NULL CHECK (risk_level IN ('low', 'medium', 'high', 'critical')),
+  risk_factors JSONB DEFAULT '{}'::jsonb,
+  trend TEXT DEFAULT 'stable' CHECK (trend IN ('improving', 'stable', 'declining')),
+  last_calculated TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+
+-- Revenue interventions (actions taken to prevent churn)
+CREATE TABLE IF NOT EXISTS public.revenue_interventions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  intervention_type TEXT NOT NULL, -- e.g., 'discount_offered', 'personal_outreach', 'feature_unlock'
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'accepted', 'declined', 'expired')),
+  triggered_at TIMESTAMPTZ DEFAULT NOW(),
+  executed_at TIMESTAMPTZ,
+  conversion_achieved BOOLEAN DEFAULT FALSE,
+  revenue_impact NUMERIC(12, 2) DEFAULT 0,
+  details JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Cohort retention analysis
+CREATE TABLE IF NOT EXISTS public.revenue_cohort_retention (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cohort_month DATE NOT NULL UNIQUE,
+  cohort_size INTEGER DEFAULT 0,
+  m0_retention_pct NUMERIC(5, 2) DEFAULT 100,
+  m1_retention_pct NUMERIC(5, 2),
+  m2_retention_pct NUMERIC(5, 2),
+  m3_retention_pct NUMERIC(5, 2),
+  m6_retention_pct NUMERIC(5, 2),
+  m12_retention_pct NUMERIC(5, 2),
+  avg_ltv NUMERIC(12, 2) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for revenue tables
+CREATE INDEX IF NOT EXISTS idx_revenue_metrics_date ON public.revenue_metrics_daily(metric_date DESC);
+CREATE INDEX IF NOT EXISTS idx_revenue_churn_user ON public.revenue_churn_predictions(user_id);
+CREATE INDEX IF NOT EXISTS idx_revenue_churn_risk ON public.revenue_churn_predictions(risk_level);
+CREATE INDEX IF NOT EXISTS idx_revenue_interventions_user ON public.revenue_interventions(user_id);
+CREATE INDEX IF NOT EXISTS idx_revenue_interventions_status ON public.revenue_interventions(status);
+CREATE INDEX IF NOT EXISTS idx_revenue_cohort_month ON public.revenue_cohort_retention(cohort_month DESC);
+
+-- RLS for revenue tables
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN ALTER TABLE public.revenue_metrics_daily ENABLE ROW LEVEL SECURITY; END IF; END $$;
+ALTER TABLE public.revenue_churn_predictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.revenue_interventions ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN ALTER TABLE public.revenue_cohort_retention ENABLE ROW LEVEL SECURITY; END IF; END $$;
+
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "Admins can view revenue metrics"
+  ON public.revenue_metrics_daily FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  ); $pol$;
+END IF; END $$;
+
+CREATE POLICY "Admins can view churn predictions"
+  ON public.revenue_churn_predictions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can manage interventions"
+  ON public.revenue_interventions FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "Admins can view cohort data"
+  ON public.revenue_cohort_retention FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  ); $pol$;
+END IF; END $$;
+
+-- System policies for automated updates
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "System can update revenue metrics"
+  ON public.revenue_metrics_daily FOR ALL
+  WITH CHECK (TRUE); $pol$;
+END IF; END $$;
+
+CREATE POLICY "System can update churn predictions"
+  ON public.revenue_churn_predictions FOR ALL
+  WITH CHECK (TRUE);
+
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN
+EXECUTE $pol$ CREATE POLICY "System can update cohort data"
+  ON public.revenue_cohort_retention FOR ALL
+  WITH CHECK (TRUE); $pol$;
+END IF; END $$;
+
+-- ============================================================================
+-- 6. Quiz Responses Table
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.quiz_responses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+  personality_type TEXT NOT NULL,
+  secondary_type TEXT,
+  scores JSONB DEFAULT '{}'::jsonb,
+  completion_time_seconds INTEGER,
+  email TEXT,
+  child_name TEXT,
+  parent_name TEXT,
+  email_captured BOOLEAN DEFAULT FALSE,
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  ab_test_variant TEXT,
+  device_type TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Quiz leads table (for marketing)
+CREATE TABLE IF NOT EXISTS public.quiz_leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  child_name TEXT,
+  parent_name TEXT,
+  quiz_response_id UUID REFERENCES public.quiz_responses(id),
+  personality_type TEXT,
+  accepts_marketing BOOLEAN DEFAULT FALSE,
+  referral_code TEXT UNIQUE,
+  converted_to_user BOOLEAN DEFAULT FALSE,
+  converted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for quiz tables
+-- CI-fix: quiz_responses is also created by an earlier migration with a
+-- different column set; ensure indexed columns exist before indexing.
+ALTER TABLE public.quiz_responses ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE public.quiz_responses ADD COLUMN IF NOT EXISTS personality_type TEXT;
+CREATE INDEX IF NOT EXISTS idx_quiz_responses_session ON public.quiz_responses(session_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_responses_user ON public.quiz_responses(user_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_responses_type ON public.quiz_responses(personality_type);
+CREATE INDEX IF NOT EXISTS idx_quiz_responses_created ON public.quiz_responses(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quiz_leads_email ON public.quiz_leads(email);
+CREATE INDEX IF NOT EXISTS idx_quiz_leads_referral ON public.quiz_leads(referral_code);
+
+-- RLS for quiz tables
+ALTER TABLE public.quiz_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quiz_leads ENABLE ROW LEVEL SECURITY;
+
+-- Allow anonymous quiz submissions
+CREATE POLICY "Anyone can insert quiz responses"
+  ON public.quiz_responses FOR INSERT
+  WITH CHECK (TRUE);
+
+-- Users can view their own responses
+CREATE POLICY "Users can view own quiz responses"
+  ON public.quiz_responses FOR SELECT
+  USING (
+    user_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Admins can view all quiz data
+CREATE POLICY "Admins can view all quiz data"
+  ON public.quiz_responses FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Anyone can insert quiz leads"
+  ON public.quiz_leads FOR INSERT
+  WITH CHECK (TRUE);
+
+CREATE POLICY "Admins can manage quiz leads"
+  ON public.quiz_leads FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- ============================================================================
+-- 7. Helper Functions
+-- ============================================================================
+
+-- Function to calculate churn probability
+CREATE OR REPLACE FUNCTION calculate_churn_risk(p_user_id UUID)
+RETURNS TABLE (
+  probability NUMERIC,
+  risk_level TEXT,
+  factors JSONB
+) AS $$
+DECLARE
+  v_last_login TIMESTAMPTZ;
+  v_days_since_login INTEGER;
+  v_subscription_age INTEGER;
+  v_support_tickets INTEGER;
+  v_feature_usage_score NUMERIC;
+  v_probability NUMERIC;
+  v_risk_level TEXT;
+  v_factors JSONB;
+BEGIN
+  -- Get user activity metrics
+  SELECT last_sign_in_at INTO v_last_login
+  FROM auth.users WHERE id = p_user_id;
+
+  v_days_since_login := COALESCE(
+    EXTRACT(DAY FROM NOW() - v_last_login)::INTEGER,
+    30
+  );
+
+  -- Calculate probability based on factors
+  v_probability := 0;
+  v_factors := '{}'::jsonb;
+
+  -- Days since login (max 40% contribution)
+  IF v_days_since_login > 14 THEN
+    v_probability := v_probability + LEAST(v_days_since_login::NUMERIC / 75, 0.4);
+    v_factors := v_factors || jsonb_build_object('inactivity', v_days_since_login || ' days since login');
+  END IF;
+
+  -- Cap probability at 0.95
+  v_probability := LEAST(v_probability, 0.95);
+
+  -- Determine risk level
+  v_risk_level := CASE
+    WHEN v_probability >= 0.75 THEN 'critical'
+    WHEN v_probability >= 0.5 THEN 'high'
+    WHEN v_probability >= 0.25 THEN 'medium'
+    ELSE 'low'
+  END;
+
+  RETURN QUERY SELECT v_probability, v_risk_level, v_factors;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to update all churn predictions
+CREATE OR REPLACE FUNCTION update_all_churn_predictions()
+RETURNS INTEGER AS $$
+DECLARE
+  v_count INTEGER := 0;
+  v_user RECORD;
+  v_result RECORD;
+BEGIN
+  FOR v_user IN
+    SELECT DISTINCT us.user_id
+    FROM public.user_subscriptions us
+    WHERE us.status = 'active'
+  LOOP
+    SELECT * INTO v_result FROM calculate_churn_risk(v_user.user_id);
+
+    INSERT INTO public.revenue_churn_predictions
+      (user_id, churn_probability, risk_level, risk_factors, last_calculated)
+    VALUES
+      (v_user.user_id, v_result.probability, v_result.risk_level, v_result.factors, NOW())
+    ON CONFLICT (user_id) DO UPDATE SET
+      churn_probability = EXCLUDED.churn_probability,
+      risk_level = EXCLUDED.risk_level,
+      risk_factors = EXCLUDED.risk_factors,
+      last_calculated = NOW();
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to trigger churn interventions
+CREATE OR REPLACE FUNCTION trigger_churn_interventions()
+RETURNS INTEGER AS $$
+DECLARE
+  v_count INTEGER := 0;
+  v_prediction RECORD;
+BEGIN
+  FOR v_prediction IN
+    SELECT rcp.*
+    FROM public.revenue_churn_predictions rcp
+    WHERE rcp.risk_level IN ('high', 'critical')
+    AND NOT EXISTS (
+      SELECT 1 FROM public.revenue_interventions ri
+      WHERE ri.user_id = rcp.user_id
+      AND ri.status IN ('pending', 'sent')
+      AND ri.created_at > NOW() - INTERVAL '7 days'
+    )
+  LOOP
+    INSERT INTO public.revenue_interventions
+      (user_id, intervention_type, status, triggered_at)
+    VALUES
+      (v_prediction.user_id,
+       CASE WHEN v_prediction.risk_level = 'critical' THEN 'discount_offered' ELSE 'personal_outreach' END,
+       'pending',
+       NOW());
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================================
+-- 8. Comments
+-- ============================================================================
+COMMENT ON TABLE public.admin_alerts IS 'System alerts for admin dashboard';
+COMMENT ON TABLE public.admin_system_health IS 'System health metrics for monitoring';
+COMMENT ON TABLE public.crm_connections IS 'CRM integration connections (HubSpot, Salesforce)';
+COMMENT ON TABLE public.crm_sync_logs IS 'CRM sync operation logs';
+COMMENT ON TABLE public.automation_workflows IS 'Automation workflow definitions';
+COMMENT ON TABLE public.workflow_executions IS 'Workflow execution history';
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_metrics_daily' AND relkind='r') THEN
+EXECUTE $c$ COMMENT ON TABLE public.revenue_metrics_daily IS 'Daily revenue and subscription metrics'; $c$;
+END IF; END $$;
+COMMENT ON TABLE public.revenue_churn_predictions IS 'ML-based churn predictions per user';
+COMMENT ON TABLE public.revenue_interventions IS 'Churn prevention interventions';
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class WHERE relname='revenue_cohort_retention' AND relkind='r') THEN
+EXECUTE $c$ COMMENT ON TABLE public.revenue_cohort_retention IS 'Monthly cohort retention analysis'; $c$;
+END IF; END $$;
+COMMENT ON TABLE public.quiz_responses IS 'Picky eater quiz responses';
+COMMENT ON TABLE public.quiz_leads IS 'Email leads from quiz completions';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20251220000000_admin_tables.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 91: 20260110000000_storage_analytics_features.sql
+-- ============================================
+
+-- Migration: Storage Management, Activity Timeline, Customer Health Scoring, and User Segmentation
+-- Date: 2026-01-10
+-- Description: Adds infrastructure for centralized file management, user activity tracking,
+--              customer health scoring, and advanced user segmentation
+
+-- =====================================================
+-- STORAGE MANAGEMENT TABLES
+-- =====================================================
+
+-- Storage bucket metadata and configuration
+CREATE TABLE IF NOT EXISTS public.storage_buckets_config (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  bucket_name TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  description TEXT,
+  is_public BOOLEAN DEFAULT true,
+  allowed_mime_types TEXT[] DEFAULT ARRAY['image/jpeg', 'image/png', 'image/webp'],
+  max_file_size_bytes BIGINT DEFAULT 5242880, -- 5MB
+  signed_url_expiry_seconds INTEGER DEFAULT 3600,
+  retention_days INTEGER, -- NULL = indefinite
+  auto_delete_enabled BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- File upload tracking for analytics
+CREATE TABLE IF NOT EXISTS public.storage_uploads (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  bucket_name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_size_bytes BIGINT NOT NULL,
+  mime_type TEXT NOT NULL,
+  is_public BOOLEAN DEFAULT true,
+  thumbnail_path TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+
+-- Create indexes for storage uploads
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_user_id ON public.storage_uploads(user_id);
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_bucket ON public.storage_uploads(bucket_name);
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_created_at ON public.storage_uploads(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_deleted ON public.storage_uploads(deleted_at) WHERE deleted_at IS NULL;
+
+-- =====================================================
+-- ACTIVITY TIMELINE / AUDIT TRAIL
+-- =====================================================
+
+-- User activity types enumeration
+DO $$ BEGIN
+  CREATE TYPE activity_type AS ENUM (
+    'login', 'logout', 'signup',
+    'food_created', 'food_updated', 'food_deleted',
+    'recipe_created', 'recipe_updated', 'recipe_deleted',
+    'meal_planned', 'meal_logged', 'meal_result_recorded',
+    'grocery_item_added', 'grocery_item_checked', 'grocery_list_created',
+    'kid_added', 'kid_updated', 'kid_deleted',
+    'subscription_started', 'subscription_cancelled', 'payment_processed',
+    'profile_updated', 'settings_changed', 'export_requested',
+    'ai_coach_used', 'barcode_scanned', 'recipe_imported',
+    'quiz_completed', 'budget_calculated', 'achievement_earned',
+    'file_uploaded', 'file_deleted',
+    'custom'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Activity timeline table
+CREATE TABLE IF NOT EXISTS public.user_activity_timeline (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  activity_type TEXT NOT NULL, -- Using TEXT for flexibility, can store activity_type enum values
+  activity_category TEXT NOT NULL DEFAULT 'general', -- e.g., 'meal_planning', 'shopping', 'account', 'ai'
+  title TEXT NOT NULL,
+  description TEXT,
+  entity_type TEXT, -- e.g., 'food', 'recipe', 'kid', 'plan_entry'
+  entity_id UUID,
+  metadata JSONB DEFAULT '{}',
+  ip_address INET,
+  user_agent TEXT,
+  session_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for activity timeline
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_user_id ON public.user_activity_timeline(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_created_at ON public.user_activity_timeline(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_type ON public.user_activity_timeline(activity_type);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_category ON public.user_activity_timeline(activity_category);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_entity ON public.user_activity_timeline(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_user_recent ON public.user_activity_timeline(user_id, created_at DESC);
+
+-- =====================================================
+-- CUSTOMER HEALTH SCORING
+-- =====================================================
+
+-- Customer health scores with detailed metrics
+CREATE TABLE IF NOT EXISTS public.customer_health_scores (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+
+  -- Overall health score (0-100)
+  health_score INTEGER DEFAULT 0 CHECK (health_score >= 0 AND health_score <= 100),
+  health_tier TEXT DEFAULT 'at_risk' CHECK (health_tier IN ('champion', 'healthy', 'neutral', 'at_risk', 'churning')),
+
+  -- Component scores (0-100 each)
+  engagement_score INTEGER DEFAULT 0,
+  feature_adoption_score INTEGER DEFAULT 0,
+  activity_frequency_score INTEGER DEFAULT 0,
+  recency_score INTEGER DEFAULT 0,
+  breadth_score INTEGER DEFAULT 0, -- How many features used
+  depth_score INTEGER DEFAULT 0, -- How deeply features are used
+
+  -- Engagement metrics
+  days_active_last_30 INTEGER DEFAULT 0,
+  days_active_last_7 INTEGER DEFAULT 0,
+  total_sessions_30d INTEGER DEFAULT 0,
+  avg_session_duration_minutes NUMERIC(10,2) DEFAULT 0,
+
+  -- Feature usage metrics
+  features_used_count INTEGER DEFAULT 0,
+  ai_interactions_30d INTEGER DEFAULT 0,
+  meals_planned_30d INTEGER DEFAULT 0,
+  foods_logged_30d INTEGER DEFAULT 0,
+  recipes_created_30d INTEGER DEFAULT 0,
+
+  -- Trend indicators
+  score_trend TEXT DEFAULT 'stable' CHECK (score_trend IN ('improving', 'stable', 'declining')),
+  score_change_30d INTEGER DEFAULT 0,
+
+  -- Timestamps
+  last_activity_at TIMESTAMPTZ,
+  calculated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for health scores
+CREATE INDEX IF NOT EXISTS idx_health_scores_score ON public.customer_health_scores(health_score DESC);
+CREATE INDEX IF NOT EXISTS idx_health_scores_tier ON public.customer_health_scores(health_tier);
+CREATE INDEX IF NOT EXISTS idx_health_scores_trend ON public.customer_health_scores(score_trend);
+CREATE INDEX IF NOT EXISTS idx_health_scores_last_activity ON public.customer_health_scores(last_activity_at DESC);
+
+-- Health score history for trend analysis
+CREATE TABLE IF NOT EXISTS public.customer_health_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  health_score INTEGER NOT NULL,
+  health_tier TEXT NOT NULL,
+  engagement_score INTEGER,
+  feature_adoption_score INTEGER,
+  activity_frequency_score INTEGER,
+  recency_score INTEGER,
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_health_history_user ON public.customer_health_history(user_id, recorded_at DESC);
+
+-- =====================================================
+-- ADVANCED USER SEGMENTATION
+-- =====================================================
+
+-- User segments definition
+CREATE TABLE IF NOT EXISTS public.user_segments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  description TEXT,
+  segment_type TEXT NOT NULL DEFAULT 'manual' CHECK (segment_type IN ('manual', 'dynamic', 'cohort')),
+
+  -- For dynamic segments: SQL-like filter criteria
+  filter_criteria JSONB DEFAULT '{}',
+
+  -- Cohort settings
+  cohort_type TEXT, -- 'signup_date', 'first_purchase', 'feature_usage', etc.
+  cohort_value TEXT, -- e.g., '2026-01', 'meal_planning', etc.
+
+  -- Segment metadata
+  color TEXT DEFAULT '#6366f1',
+  icon TEXT DEFAULT 'users',
+  is_active BOOLEAN DEFAULT true,
+  is_system BOOLEAN DEFAULT false, -- System-defined segments
+
+  -- Statistics
+  member_count INTEGER DEFAULT 0,
+  last_calculated_at TIMESTAMPTZ,
+
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User segment membership
+CREATE TABLE IF NOT EXISTS public.user_segment_members (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  segment_id UUID REFERENCES public.user_segments(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  added_at TIMESTAMPTZ DEFAULT NOW(),
+  added_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  metadata JSONB DEFAULT '{}',
+  UNIQUE(segment_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_segment_members_segment ON public.user_segment_members(segment_id);
+CREATE INDEX IF NOT EXISTS idx_segment_members_user ON public.user_segment_members(user_id);
+
+-- User attributes for segmentation (denormalized for query performance)
+CREATE TABLE IF NOT EXISTS public.user_attributes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+
+  -- Demographics
+  signup_date DATE,
+  signup_source TEXT,
+  country_code TEXT,
+  timezone TEXT,
+
+  -- Subscription info
+  subscription_tier TEXT,
+  subscription_status TEXT,
+  mrr_cents INTEGER DEFAULT 0,
+  lifetime_value_cents INTEGER DEFAULT 0,
+
+  -- Usage patterns
+  primary_use_case TEXT, -- 'picky_eater', 'meal_planning', 'nutrition_tracking', 'budget_conscious'
+  family_size INTEGER,
+  kids_count INTEGER DEFAULT 0,
+
+  -- Engagement
+  total_sessions INTEGER DEFAULT 0,
+  total_foods_added INTEGER DEFAULT 0,
+  total_meals_planned INTEGER DEFAULT 0,
+  total_recipes_created INTEGER DEFAULT 0,
+  ai_usage_count INTEGER DEFAULT 0,
+
+  -- Computed flags
+  is_power_user BOOLEAN DEFAULT false,
+  is_at_risk BOOLEAN DEFAULT false,
+  has_completed_onboarding BOOLEAN DEFAULT false,
+  has_used_ai_coach BOOLEAN DEFAULT false,
+  has_used_barcode_scanner BOOLEAN DEFAULT false,
+
+  -- Timestamps
+  first_activity_at TIMESTAMPTZ,
+  last_activity_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_attributes_subscription ON public.user_attributes(subscription_tier, subscription_status);
+CREATE INDEX IF NOT EXISTS idx_user_attributes_use_case ON public.user_attributes(primary_use_case);
+CREATE INDEX IF NOT EXISTS idx_user_attributes_flags ON public.user_attributes(is_power_user, is_at_risk);
+
+-- =====================================================
+-- ROW LEVEL SECURITY POLICIES
+-- =====================================================
+
+-- Enable RLS
+ALTER TABLE public.storage_buckets_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.storage_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_activity_timeline ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_health_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_health_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_segments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_segment_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_attributes ENABLE ROW LEVEL SECURITY;
+
+-- Storage buckets config: Admin only
+CREATE POLICY "Admins can manage bucket config"
+  ON public.storage_buckets_config FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Storage uploads: Users can see their own, admins can see all
+CREATE POLICY "Users can view their own uploads"
+  ON public.storage_uploads FOR SELECT
+  USING (user_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+CREATE POLICY "Users can insert their own uploads"
+  ON public.storage_uploads FOR INSERT
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Admins can delete uploads"
+  ON public.storage_uploads FOR DELETE
+  USING (
+    user_id = auth.uid() OR EXISTS (
+      SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Activity timeline: Users can see their own, admins can see all
+CREATE POLICY "Users can view their own activity"
+  ON public.user_activity_timeline FOR SELECT
+  USING (user_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+CREATE POLICY "System can insert activity"
+  ON public.user_activity_timeline FOR INSERT
+  WITH CHECK (user_id = auth.uid());
+
+-- Health scores: Users can see their own, admins can see all
+CREATE POLICY "Users can view their own health score"
+  ON public.customer_health_scores FOR SELECT
+  USING (user_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+CREATE POLICY "System can manage health scores"
+  ON public.customer_health_scores FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+-- Health history: Same as health scores
+CREATE POLICY "Users can view their own health history"
+  ON public.customer_health_history FOR SELECT
+  USING (user_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+-- Segments: Admins only
+CREATE POLICY "Admins can manage segments"
+  ON public.user_segments FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+-- Segment members: Admins only
+CREATE POLICY "Admins can manage segment members"
+  ON public.user_segment_members FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+-- User attributes: Users can see their own, admins can see all
+CREATE POLICY "Users can view their own attributes"
+  ON public.user_attributes FOR SELECT
+  USING (user_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'
+  ));
+
+-- =====================================================
+-- FUNCTIONS
+-- =====================================================
+
+-- Function to log user activity
+CREATE OR REPLACE FUNCTION log_user_activity(
+  p_user_id UUID,
+  p_activity_type TEXT,
+  p_title TEXT,
+  p_description TEXT DEFAULT NULL,
+  p_entity_type TEXT DEFAULT NULL,
+  p_entity_id UUID DEFAULT NULL,
+  p_metadata JSONB DEFAULT '{}'
+) RETURNS UUID AS $$
+DECLARE
+  v_category TEXT;
+  v_activity_id UUID;
+BEGIN
+  -- Determine category from activity type
+  v_category := CASE
+    WHEN p_activity_type IN ('food_created', 'food_updated', 'food_deleted', 'recipe_created', 'recipe_updated', 'recipe_deleted') THEN 'content'
+    WHEN p_activity_type IN ('meal_planned', 'meal_logged', 'meal_result_recorded') THEN 'meal_planning'
+    WHEN p_activity_type IN ('grocery_item_added', 'grocery_item_checked', 'grocery_list_created') THEN 'shopping'
+    WHEN p_activity_type IN ('kid_added', 'kid_updated', 'kid_deleted') THEN 'family'
+    WHEN p_activity_type IN ('subscription_started', 'subscription_cancelled', 'payment_processed') THEN 'billing'
+    WHEN p_activity_type IN ('login', 'logout', 'signup', 'profile_updated', 'settings_changed') THEN 'account'
+    WHEN p_activity_type IN ('ai_coach_used', 'barcode_scanned', 'recipe_imported') THEN 'ai'
+    WHEN p_activity_type IN ('quiz_completed', 'budget_calculated', 'achievement_earned') THEN 'engagement'
+    WHEN p_activity_type IN ('file_uploaded', 'file_deleted') THEN 'storage'
+    ELSE 'general'
+  END;
+
+  INSERT INTO public.user_activity_timeline (
+    user_id, activity_type, activity_category, title, description,
+    entity_type, entity_id, metadata
+  ) VALUES (
+    p_user_id, p_activity_type, v_category, p_title, p_description,
+    p_entity_type, p_entity_id, p_metadata
+  )
+  RETURNING id INTO v_activity_id;
+
+  RETURN v_activity_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to calculate customer health score
+CREATE OR REPLACE FUNCTION calculate_customer_health_score(p_user_id UUID)
+RETURNS INTEGER AS $$
+DECLARE
+  v_engagement_score INTEGER := 0;
+  v_feature_score INTEGER := 0;
+  v_frequency_score INTEGER := 0;
+  v_recency_score INTEGER := 0;
+  v_final_score INTEGER := 0;
+  v_tier TEXT;
+  v_last_activity TIMESTAMPTZ;
+  v_days_since_activity INTEGER;
+  v_days_active_30 INTEGER;
+  v_features_used INTEGER;
+BEGIN
+  -- Calculate recency score (0-100)
+  SELECT MAX(created_at) INTO v_last_activity
+  FROM public.user_activity_timeline
+  WHERE user_id = p_user_id;
+
+  IF v_last_activity IS NOT NULL THEN
+    v_days_since_activity := EXTRACT(DAY FROM NOW() - v_last_activity);
+    v_recency_score := GREATEST(0, 100 - (v_days_since_activity * 5));
+  END IF;
+
+  -- Calculate frequency score (0-100)
+  SELECT COUNT(DISTINCT DATE(created_at)) INTO v_days_active_30
+  FROM public.user_activity_timeline
+  WHERE user_id = p_user_id AND created_at >= NOW() - INTERVAL '30 days';
+
+  v_frequency_score := LEAST(100, v_days_active_30 * 4); -- 25+ days = 100
+
+  -- Calculate feature adoption score (0-100)
+  SELECT COUNT(DISTINCT activity_type) INTO v_features_used
+  FROM public.user_activity_timeline
+  WHERE user_id = p_user_id AND created_at >= NOW() - INTERVAL '30 days';
+
+  v_feature_score := LEAST(100, v_features_used * 8); -- 12+ features = 100
+
+  -- Calculate engagement score (based on key actions)
+  SELECT
+    LEAST(100, (
+      (COALESCE(SUM(CASE WHEN activity_type IN ('meal_planned', 'meal_logged') THEN 1 ELSE 0 END), 0) * 3) +
+      (COALESCE(SUM(CASE WHEN activity_type IN ('ai_coach_used') THEN 1 ELSE 0 END), 0) * 5) +
+      (COALESCE(SUM(CASE WHEN activity_type IN ('recipe_created', 'food_created') THEN 1 ELSE 0 END), 0) * 4)
+    ))
+  INTO v_engagement_score
+  FROM public.user_activity_timeline
+  WHERE user_id = p_user_id AND created_at >= NOW() - INTERVAL '30 days';
+
+  -- Calculate final score (weighted average)
+  v_final_score := (
+    (v_recency_score * 30) +
+    (v_frequency_score * 25) +
+    (v_feature_score * 20) +
+    (v_engagement_score * 25)
+  ) / 100;
+
+  -- Determine tier
+  v_tier := CASE
+    WHEN v_final_score >= 80 THEN 'champion'
+    WHEN v_final_score >= 60 THEN 'healthy'
+    WHEN v_final_score >= 40 THEN 'neutral'
+    WHEN v_final_score >= 20 THEN 'at_risk'
+    ELSE 'churning'
+  END;
+
+  -- Upsert health score
+  INSERT INTO public.customer_health_scores (
+    user_id, health_score, health_tier,
+    engagement_score, feature_adoption_score, activity_frequency_score, recency_score,
+    days_active_last_30, features_used_count, last_activity_at, calculated_at
+  ) VALUES (
+    p_user_id, v_final_score, v_tier,
+    v_engagement_score, v_feature_score, v_frequency_score, v_recency_score,
+    v_days_active_30, v_features_used, v_last_activity, NOW()
+  )
+  ON CONFLICT (user_id) DO UPDATE SET
+    health_score = EXCLUDED.health_score,
+    health_tier = EXCLUDED.health_tier,
+    engagement_score = EXCLUDED.engagement_score,
+    feature_adoption_score = EXCLUDED.feature_adoption_score,
+    activity_frequency_score = EXCLUDED.activity_frequency_score,
+    recency_score = EXCLUDED.recency_score,
+    days_active_last_30 = EXCLUDED.days_active_last_30,
+    features_used_count = EXCLUDED.features_used_count,
+    last_activity_at = EXCLUDED.last_activity_at,
+    calculated_at = NOW(),
+    updated_at = NOW();
+
+  -- Record history
+  INSERT INTO public.customer_health_history (
+    user_id, health_score, health_tier,
+    engagement_score, feature_adoption_score, activity_frequency_score, recency_score
+  ) VALUES (
+    p_user_id, v_final_score, v_tier,
+    v_engagement_score, v_feature_score, v_frequency_score, v_recency_score
+  );
+
+  RETURN v_final_score;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to refresh segment member counts
+CREATE OR REPLACE FUNCTION refresh_segment_counts()
+RETURNS void AS $$
+BEGIN
+  UPDATE public.user_segments s
+  SET
+    member_count = (SELECT COUNT(*) FROM public.user_segment_members WHERE segment_id = s.id),
+    last_calculated_at = NOW();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
+-- VIEWS
+-- =====================================================
+
+-- Storage statistics view
+CREATE OR REPLACE VIEW public.admin_storage_stats AS
+SELECT
+  bucket_name,
+  COUNT(*) as total_files,
+  SUM(file_size_bytes) as total_bytes,
+  pg_size_pretty(SUM(file_size_bytes)::bigint) as total_size,
+  AVG(file_size_bytes)::bigint as avg_file_size,
+  COUNT(DISTINCT user_id) as unique_uploaders,
+  MIN(created_at) as oldest_file,
+  MAX(created_at) as newest_file,
+  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') as uploads_24h,
+  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as uploads_7d
+FROM public.storage_uploads
+WHERE deleted_at IS NULL
+GROUP BY bucket_name;
+
+-- Customer health summary view
+CREATE OR REPLACE VIEW public.admin_customer_health_summary AS
+SELECT
+  health_tier,
+  COUNT(*) as user_count,
+  ROUND(AVG(health_score)::numeric, 1) as avg_score,
+  ROUND(AVG(engagement_score)::numeric, 1) as avg_engagement,
+  ROUND(AVG(feature_adoption_score)::numeric, 1) as avg_feature_adoption,
+  ROUND(AVG(days_active_last_30)::numeric, 1) as avg_days_active
+FROM public.customer_health_scores
+GROUP BY health_tier
+ORDER BY
+  CASE health_tier
+    WHEN 'champion' THEN 1
+    WHEN 'healthy' THEN 2
+    WHEN 'neutral' THEN 3
+    WHEN 'at_risk' THEN 4
+    WHEN 'churning' THEN 5
+  END;
+
+-- User activity summary view
+CREATE OR REPLACE VIEW public.admin_activity_summary AS
+SELECT
+  DATE(created_at) as activity_date,
+  COUNT(*) as total_activities,
+  COUNT(DISTINCT user_id) as active_users,
+  COUNT(*) FILTER (WHERE activity_category = 'meal_planning') as meal_planning_activities,
+  COUNT(*) FILTER (WHERE activity_category = 'shopping') as shopping_activities,
+  COUNT(*) FILTER (WHERE activity_category = 'ai') as ai_activities,
+  COUNT(*) FILTER (WHERE activity_category = 'content') as content_activities
+FROM public.user_activity_timeline
+WHERE created_at >= NOW() - INTERVAL '30 days'
+GROUP BY DATE(created_at)
+ORDER BY activity_date DESC;
+
+-- Segment summary view
+CREATE OR REPLACE VIEW public.admin_segment_summary AS
+SELECT
+  s.id,
+  s.name,
+  s.display_name,
+  s.segment_type,
+  s.color,
+  s.member_count,
+  s.is_active,
+  s.created_at,
+  s.last_calculated_at,
+  COALESCE(
+    (SELECT AVG(chs.health_score)
+     FROM public.user_segment_members usm
+     JOIN public.customer_health_scores chs ON usm.user_id = chs.user_id
+     WHERE usm.segment_id = s.id)::integer,
+    0
+  ) as avg_health_score
+FROM public.user_segments s
+ORDER BY s.member_count DESC;
+
+-- =====================================================
+-- DEFAULT DATA
+-- =====================================================
+
+-- Insert default bucket configurations
+INSERT INTO public.storage_buckets_config (bucket_name, display_name, description, is_public, allowed_mime_types, max_file_size_bytes)
+VALUES
+  ('profile-pictures', 'Profile Pictures', 'User and child profile avatars', true, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'], 5242880),
+  ('blog-images', 'Blog Images', 'Featured images and inline content for blog posts', true, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'], 10485760),
+  ('recipe-images', 'Recipe Images', 'Recipe photos uploaded by users', true, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'], 5242880),
+  ('Assets', 'Public Assets', 'Lead magnets, PDFs, and downloadable resources', true, ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], 10485760),
+  ('private-files', 'Private Files', 'User exports, reports, and private documents', false, ARRAY['image/jpeg', 'image/png', 'application/pdf', 'text/csv', 'application/json'], 52428800)
+ON CONFLICT (bucket_name) DO NOTHING;
+
+-- Insert default segments
+INSERT INTO public.user_segments (name, display_name, description, segment_type, is_system, color, icon)
+VALUES
+  ('power_users', 'Power Users', 'Highly engaged users with health score >= 80', 'dynamic', true, '#8b5cf6', 'zap'),
+  ('new_users', 'New Users', 'Users who signed up in the last 7 days', 'dynamic', true, '#22c55e', 'user-plus'),
+  ('at_risk', 'At Risk', 'Users with declining engagement or health score < 40', 'dynamic', true, '#ef4444', 'alert-triangle'),
+  ('premium_users', 'Premium Users', 'Users with active paid subscription', 'dynamic', true, '#f59e0b', 'crown'),
+  ('picky_eater_parents', 'Picky Eater Parents', 'Users focused on picky eater tools', 'dynamic', true, '#06b6d4', 'baby'),
+  ('meal_planners', 'Active Meal Planners', 'Users who regularly plan meals', 'dynamic', true, '#3b82f6', 'calendar')
+ON CONFLICT (name) DO NOTHING;
+
+-- =====================================================
+-- TRIGGERS
+-- =====================================================
+
+-- Update timestamp trigger for segments
+CREATE OR REPLACE FUNCTION update_segment_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_user_segments_timestamp
+  BEFORE UPDATE ON public.user_segments
+  FOR EACH ROW EXECUTE FUNCTION update_segment_timestamp();
+
+-- Trigger to update segment count on member changes
+CREATE OR REPLACE FUNCTION update_segment_member_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.user_segments SET member_count = member_count + 1 WHERE id = NEW.segment_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.user_segments SET member_count = member_count - 1 WHERE id = OLD.segment_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_segment_count_on_member_change
+  AFTER INSERT OR DELETE ON public.user_segment_members
+  FOR EACH ROW EXECUTE FUNCTION update_segment_member_count();
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260110000000_storage_analytics_features.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 92: 20260110000001_storage_analytics_activity_timeline.sql
+-- ============================================
+
+-- Migration: Storage Management, Activity Timeline, Customer Health Scoring, and User Segmentation
+-- Date: 2026-01-10
+-- Description: Adds infrastructure for centralized file management, user activity tracking,
+--              customer health scoring, and advanced user segmentation
+--
+-- Split from the original 20260110000000_storage_analytics_features.sql into smaller
+-- sequential files after the monolithic file repeatedly failed to apply with
+-- "spawn ENAMETOOLONG" on the deploy runner. Each file below is a straight extraction
+-- of one section from the original — no SQL logic changed. Order preserved via
+-- incrementing timestamps (20260110000000 .. 20260110000008), which still sort before
+-- the next migration (20260112000000_user_accessibility_preferences.sql).
+--
+-- This file: ACTIVITY TIMELINE / AUDIT TRAIL
+-- =====================================================
+
+-- User activity types enumeration
+DO $$ BEGIN
+  CREATE TYPE activity_type AS ENUM (
+    'login', 'logout', 'signup',
+    'food_created', 'food_updated', 'food_deleted',
+    'recipe_created', 'recipe_updated', 'recipe_deleted',
+    'meal_planned', 'meal_logged', 'meal_result_recorded',
+    'grocery_item_added', 'grocery_item_checked', 'grocery_list_created',
+    'kid_added', 'kid_updated', 'kid_deleted',
+    'subscription_started', 'subscription_cancelled', 'payment_processed',
+    'profile_updated', 'settings_changed', 'export_requested',
+    'ai_coach_used', 'barcode_scanned', 'recipe_imported',
+    'quiz_completed', 'budget_calculated', 'achievement_earned',
+    'file_uploaded', 'file_deleted',
+    'custom'
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Activity timeline table
+CREATE TABLE IF NOT EXISTS public.user_activity_timeline (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  activity_type TEXT NOT NULL, -- Using TEXT for flexibility, can store activity_type enum values
+  activity_category TEXT NOT NULL DEFAULT 'general', -- e.g., 'meal_planning', 'shopping', 'account', 'ai'
+  title TEXT NOT NULL,
+  description TEXT,
+  entity_type TEXT, -- e.g., 'food', 'recipe', 'kid', 'plan_entry'
+  entity_id UUID,
+  metadata JSONB DEFAULT '{}',
+  ip_address INET,
+  user_agent TEXT,
+  session_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for activity timeline
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_user_id ON public.user_activity_timeline(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_created_at ON public.user_activity_timeline(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_type ON public.user_activity_timeline(activity_type);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_category ON public.user_activity_timeline(activity_category);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_entity ON public.user_activity_timeline(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_activity_timeline_user_recent ON public.user_activity_timeline(user_id, created_at DESC);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260110000001_storage_analytics_activity_timeline.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 93: 20260112000000_user_accessibility_preferences.sql
+-- ============================================
+
+-- =================================================================
+-- User Accessibility Preferences Table
+-- Stores user-configurable accessibility settings for ADA compliance
+-- =================================================================
+
+-- Create the user accessibility preferences table
+CREATE TABLE IF NOT EXISTS public.user_accessibility_preferences (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  preferences JSONB NOT NULL DEFAULT '{
+    "reducedMotion": false,
+    "highContrast": false,
+    "largeText": false,
+    "fontSize": "default",
+    "screenReaderMode": false,
+    "announcePageChanges": true,
+    "verboseDescriptions": false,
+    "enhancedFocus": false,
+    "keyboardShortcuts": true,
+    "extendedTimeouts": false,
+    "disableAutoplay": true,
+    "simplifiedUI": false,
+    "dyslexiaFont": false
+  }'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT user_accessibility_preferences_user_unique UNIQUE (user_id)
+);
+
+-- Create index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_user_accessibility_preferences_user_id
+  ON public.user_accessibility_preferences(user_id);
+
+-- Enable Row Level Security
+ALTER TABLE public.user_accessibility_preferences ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+
+-- Users can view their own accessibility preferences
+CREATE POLICY "Users can view own accessibility preferences"
+  ON public.user_accessibility_preferences
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Users can insert their own accessibility preferences
+CREATE POLICY "Users can insert own accessibility preferences"
+  ON public.user_accessibility_preferences
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own accessibility preferences
+CREATE POLICY "Users can update own accessibility preferences"
+  ON public.user_accessibility_preferences
+  FOR UPDATE
+  USING (auth.uid() = user_id);
+
+-- Users can delete their own accessibility preferences
+CREATE POLICY "Users can delete own accessibility preferences"
+  ON public.user_accessibility_preferences
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Create trigger to update the updated_at timestamp
+CREATE OR REPLACE FUNCTION update_accessibility_preferences_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_accessibility_preferences_updated_at
+  BEFORE UPDATE ON public.user_accessibility_preferences
+  FOR EACH ROW
+  EXECUTE FUNCTION update_accessibility_preferences_updated_at();
+
+-- =================================================================
+-- Accessibility Feedback Table
+-- For users to report accessibility issues and request accommodations
+-- =================================================================
+
+CREATE TABLE IF NOT EXISTS public.accessibility_feedback (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  email TEXT NOT NULL,
+  feedback_type TEXT NOT NULL CHECK (feedback_type IN ('issue', 'accommodation_request', 'suggestion', 'question')),
+  page_url TEXT,
+  description TEXT NOT NULL,
+  assistive_technology TEXT,
+  browser TEXT,
+  operating_system TEXT,
+  severity TEXT CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  status TEXT DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  resolution_notes TEXT,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for accessibility feedback
+CREATE INDEX IF NOT EXISTS idx_accessibility_feedback_user_id
+  ON public.accessibility_feedback(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_accessibility_feedback_status
+  ON public.accessibility_feedback(status);
+
+CREATE INDEX IF NOT EXISTS idx_accessibility_feedback_type
+  ON public.accessibility_feedback(feedback_type);
+
+CREATE INDEX IF NOT EXISTS idx_accessibility_feedback_created_at
+  ON public.accessibility_feedback(created_at DESC);
+
+-- Enable RLS for accessibility feedback
+ALTER TABLE public.accessibility_feedback ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own feedback submissions
+CREATE POLICY "Users can view own accessibility feedback"
+  ON public.accessibility_feedback
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Anyone can submit accessibility feedback (even anonymous)
+CREATE POLICY "Anyone can submit accessibility feedback"
+  ON public.accessibility_feedback
+  FOR INSERT
+  WITH CHECK (true);
+
+-- Users can update their own feedback if still open
+CREATE POLICY "Users can update own open accessibility feedback"
+  ON public.accessibility_feedback
+  FOR UPDATE
+  USING (auth.uid() = user_id AND status = 'open');
+
+-- Admins can view all accessibility feedback
+CREATE POLICY "Admins can view all accessibility feedback"
+  ON public.accessibility_feedback
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role::text = 'admin'
+    )
+  );
+
+-- Admins can update any accessibility feedback
+CREATE POLICY "Admins can update accessibility feedback"
+  ON public.accessibility_feedback
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role::text = 'admin'
+    )
+  );
+
+-- Create trigger for accessibility_feedback updated_at
+CREATE TRIGGER trigger_update_accessibility_feedback_updated_at
+  BEFORE UPDATE ON public.accessibility_feedback
+  FOR EACH ROW
+  EXECUTE FUNCTION update_accessibility_preferences_updated_at();
+
+-- =================================================================
+-- Accessibility Audit Log
+-- Track accessibility-related changes and compliance efforts
+-- =================================================================
+
+CREATE TABLE IF NOT EXISTS public.accessibility_audit_log (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  action_type TEXT NOT NULL CHECK (action_type IN (
+    'wcag_test_run',
+    'issue_identified',
+    'issue_fixed',
+    'preference_updated',
+    'accommodation_provided',
+    'feedback_received',
+    'training_completed'
+  )),
+  component_name TEXT,
+  wcag_criterion TEXT,
+  details JSONB,
+  performed_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for audit log
+CREATE INDEX IF NOT EXISTS idx_accessibility_audit_log_action_type
+  ON public.accessibility_audit_log(action_type);
+
+CREATE INDEX IF NOT EXISTS idx_accessibility_audit_log_created_at
+  ON public.accessibility_audit_log(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_accessibility_audit_log_wcag_criterion
+  ON public.accessibility_audit_log(wcag_criterion);
+
+-- Enable RLS for audit log
+ALTER TABLE public.accessibility_audit_log ENABLE ROW LEVEL SECURITY;
+
+-- Only admins can view audit log
+CREATE POLICY "Admins can view accessibility audit log"
+  ON public.accessibility_audit_log
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- System can insert audit log entries
+CREATE POLICY "System can insert accessibility audit log"
+  ON public.accessibility_audit_log
+  FOR INSERT
+  WITH CHECK (true);
+
+-- =================================================================
+-- Grant permissions to authenticated users
+-- =================================================================
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_accessibility_preferences TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.accessibility_feedback TO authenticated;
+GRANT SELECT ON public.accessibility_audit_log TO authenticated;
+
+-- =================================================================
+-- Comments for documentation
+-- =================================================================
+
+COMMENT ON TABLE public.user_accessibility_preferences IS
+  'Stores user accessibility preferences for ADA/WCAG compliance. Each user can customize their accessibility settings.';
+
+COMMENT ON TABLE public.accessibility_feedback IS
+  'Stores accessibility issue reports, accommodation requests, and suggestions from users.';
+
+COMMENT ON TABLE public.accessibility_audit_log IS
+  'Audit log for tracking accessibility-related changes and compliance efforts.';
+
+COMMENT ON COLUMN public.user_accessibility_preferences.preferences IS
+  'JSON object containing all accessibility preferences: reducedMotion, highContrast, largeText, fontSize, screenReaderMode, announcePageChanges, verboseDescriptions, enhancedFocus, keyboardShortcuts, extendedTimeouts, disableAutoplay, simplifiedUI, dyslexiaFont';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260112000000_user_accessibility_preferences.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 94: 20260204000000_coolify_ai_shared_variables.sql
+-- ============================================
+
+-- Coolify Centralized AI Configuration Migration
+-- This migration enables centralized AI model management via Coolify Team Shared Variables
+
+-- Create ai_model_configurations table if it doesn't exist
+CREATE TABLE IF NOT EXISTS ai_model_configurations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  model_display_name TEXT NOT NULL,
+  task_type TEXT DEFAULT 'standard' CHECK (task_type IN ('standard', 'lightweight')),
+  env_var_model_override TEXT,
+  usage_category TEXT CHECK (usage_category IN ('general', 'content_generation', 'analysis', 'chat', 'code')),
+  is_active BOOLEAN DEFAULT false,
+  speed_rating INTEGER CHECK (speed_rating >= 1 AND speed_rating <= 10),
+  quality_rating INTEGER CHECK (quality_rating >= 1 AND quality_rating <= 10),
+  cost_rating INTEGER CHECK (cost_rating >= 1 AND cost_rating <= 10),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(provider, model_name)
+);
+
+-- Add columns if table already exists (for existing installations)
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ai_model_configurations') THEN
+    ALTER TABLE ai_model_configurations
+    ADD COLUMN IF NOT EXISTS task_type TEXT DEFAULT 'standard' CHECK (task_type IN ('standard', 'lightweight')),
+    ADD COLUMN IF NOT EXISTS env_var_model_override TEXT,
+    ADD COLUMN IF NOT EXISTS usage_category TEXT CHECK (usage_category IN ('general', 'content_generation', 'analysis', 'chat', 'code'));
+  END IF;
+END $$;
+
+-- Enable RLS on ai_model_configurations
+ALTER TABLE ai_model_configurations ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies for ai_model_configurations (root_admin can manage, authenticated users can read)
+DROP POLICY IF EXISTS "ai_model_configurations_read" ON ai_model_configurations;
+CREATE POLICY "ai_model_configurations_read" ON ai_model_configurations
+  FOR SELECT TO authenticated
+  USING (true);
+
+DROP POLICY IF EXISTS "ai_model_configurations_root_admin_all" ON ai_model_configurations;
+CREATE POLICY "ai_model_configurations_root_admin_all" ON ai_model_configurations
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_id = auth.uid() AND role::text = 'root_admin'
+    )
+  );
+
+-- Create index for performance
+CREATE INDEX IF NOT EXISTS idx_ai_model_task_type ON ai_model_configurations(task_type) WHERE is_active = true;
+
+-- Add comment
+COMMENT ON COLUMN ai_model_configurations.task_type IS 'Model task type: standard for complex tasks, lightweight for simple/fast tasks';
+COMMENT ON COLUMN ai_model_configurations.env_var_model_override IS 'Environment variable name that can override this model selection';
+COMMENT ON COLUMN ai_model_configurations.usage_category IS 'Specialized category for automatic model selection';
+
+-- Insert Claude models (standard and lightweight)
+INSERT INTO ai_model_configurations (
+  provider,
+  model_name,
+  model_display_name,
+  task_type,
+  is_active,
+  speed_rating,
+  quality_rating,
+  cost_rating,
+  usage_category
+) VALUES
+  -- Standard models (complex tasks)
+  ('claude', 'claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5', 'standard', true, 8, 10, 7, 'general'),
+  ('claude', 'claude-3-5-sonnet-20241022', 'Claude 3.5 Sonnet', 'standard', false, 8, 9, 7, 'general'),
+  ('claude', 'claude-3-opus-20240229', 'Claude 3 Opus', 'standard', false, 6, 10, 5, 'general'),
+  -- Lightweight models (simple tasks)
+  ('claude', 'claude-3-5-haiku-20241022', 'Claude 3.5 Haiku', 'lightweight', true, 10, 8, 10, 'general'),
+  ('claude', 'claude-3-haiku-20240307', 'Claude 3 Haiku (Legacy)', 'lightweight', false, 9, 7, 10, 'general'),
+  -- OpenAI models (optional, for multi-provider support)
+  ('openai', 'gpt-4-turbo', 'GPT-4 Turbo', 'standard', false, 8, 9, 6, 'general'),
+  ('openai', 'gpt-4', 'GPT-4', 'standard', false, 6, 9, 5, 'general'),
+  ('openai', 'gpt-3.5-turbo', 'GPT-3.5 Turbo', 'lightweight', false, 10, 7, 9, 'general')
+ON CONFLICT (provider, model_name) DO UPDATE SET
+  task_type = EXCLUDED.task_type,
+  is_active = EXCLUDED.is_active,
+  speed_rating = EXCLUDED.speed_rating,
+  quality_rating = EXCLUDED.quality_rating,
+  cost_rating = EXCLUDED.cost_rating,
+  usage_category = EXCLUDED.usage_category;
+
+-- Update existing models to be 'standard' type if not set
+UPDATE ai_model_configurations
+SET task_type = 'standard'
+WHERE task_type IS NULL;
+
+-- Create table to track Coolify environment variables
+CREATE TABLE IF NOT EXISTS ai_environment_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  config_key TEXT NOT NULL UNIQUE,
+  coolify_variable TEXT NOT NULL,
+  description TEXT,
+  is_required BOOLEAN DEFAULT false,
+  default_value TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Insert environment variable mappings
+INSERT INTO ai_environment_config (config_key, coolify_variable, description, is_required, default_value) VALUES
+  ('AI_DEFAULT_PROVIDER', 'AI_DEFAULT_PROVIDER', 'Primary AI provider (anthropic, openai, gemini)', true, 'anthropic'),
+  ('CLAUDE_API_KEY', 'CLAUDE_API_KEY', 'Anthropic Claude API key', true, NULL),
+  ('OPENAI_GLOBAL_API', 'OPENAI_GLOBAL_API', 'OpenAI API key (optional)', false, NULL),
+  ('DEFAULT_AI_MODEL', 'DEFAULT_AI_MODEL', 'Default model for standard/complex tasks', true, 'claude-sonnet-4-5-20250929'),
+  ('LIGHTWEIGHT_AI_MODEL', 'LIGHTWEIGHT_AI_MODEL', 'Default model for lightweight/fast tasks', true, 'claude-3-5-haiku-20241022'),
+  ('AI_MAX_RETRIES', 'AI_MAX_RETRIES', 'Maximum retry attempts for failed requests', false, '3'),
+  ('AI_TIMEOUT_MS', 'AI_TIMEOUT_MS', 'Request timeout in milliseconds', false, '30000'),
+  ('AI_TEMPERATURE', 'AI_TEMPERATURE', 'AI temperature setting (0-1)', false, '0.7'),
+  ('AI_ENABLE_CACHING', 'AI_ENABLE_CACHING', 'Enable response caching', false, 'true')
+ON CONFLICT (config_key) DO UPDATE SET
+  coolify_variable = EXCLUDED.coolify_variable,
+  description = EXCLUDED.description,
+  is_required = EXCLUDED.is_required,
+  default_value = EXCLUDED.default_value,
+  updated_at = NOW();
+
+-- Enable RLS
+ALTER TABLE ai_environment_config ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies (root_admin only)
+DROP POLICY IF EXISTS "ai_environment_config_root_admin_select" ON ai_environment_config;
+CREATE POLICY "ai_environment_config_root_admin_select" ON ai_environment_config
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_id = auth.uid() AND role::text = 'root_admin'
+    )
+  );
+
+DROP POLICY IF EXISTS "ai_environment_config_root_admin_all" ON ai_environment_config;
+CREATE POLICY "ai_environment_config_root_admin_all" ON ai_environment_config
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_id = auth.uid() AND role::text = 'root_admin'
+    )
+  );
+
+-- Add trigger for updated_at
+CREATE OR REPLACE FUNCTION update_ai_environment_config_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS ai_environment_config_updated_at ON ai_environment_config;
+CREATE TRIGGER ai_environment_config_updated_at
+  BEFORE UPDATE ON ai_environment_config
+  FOR EACH ROW
+  EXECUTE FUNCTION update_ai_environment_config_updated_at();
+
+-- Add comments
+COMMENT ON TABLE ai_environment_config IS 'Tracks Coolify Team Shared Variables for centralized AI configuration';
+COMMENT ON COLUMN ai_environment_config.config_key IS 'Internal configuration key name';
+COMMENT ON COLUMN ai_environment_config.coolify_variable IS 'Coolify Team Shared Variable name';
+COMMENT ON COLUMN ai_environment_config.is_required IS 'Whether this variable must be set for AI features to work';
+COMMENT ON COLUMN ai_environment_config.default_value IS 'Default value if environment variable is not set';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260204000000_coolify_ai_shared_variables.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 95: 20260205000000_conversion_funnel_tracking.sql
+-- ============================================
+
+-- Conversion Funnel Tracking Tables
+-- This migration adds proper tracking for conversion funnel analytics
+
+-- ============================================================================
+-- PAGE VIEWS TABLE
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS page_views (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  page_path TEXT NOT NULL,
+  page_title TEXT,
+  referrer TEXT,
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  utm_content TEXT,
+  utm_term TEXT,
+  device_type TEXT, -- desktop, mobile, tablet
+  browser TEXT,
+  os TEXT,
+  country TEXT,
+  region TEXT,
+  city TEXT,
+  ip_hash TEXT, -- hashed IP for privacy
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- FUNNEL EVENTS TABLE
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS funnel_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL, -- landing_view, quiz_start, quiz_complete, email_capture, signup, trial_start, paid_conversion
+  event_data JSONB DEFAULT '{}'::jsonb,
+  page_path TEXT,
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- SESSION TRACKING TABLE
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT UNIQUE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  first_page TEXT,
+  last_page TEXT,
+  page_count INTEGER DEFAULT 1,
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  referrer TEXT,
+  device_type TEXT,
+  browser TEXT,
+  os TEXT,
+  country TEXT,
+  converted BOOLEAN DEFAULT FALSE,
+  conversion_type TEXT, -- email_capture, signup, trial, paid
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  duration_seconds INTEGER
+);
+
+-- ============================================================================
+-- INDEXES
+-- ============================================================================
+
+CREATE INDEX IF NOT EXISTS idx_page_views_session_id ON page_views(session_id);
+CREATE INDEX IF NOT EXISTS idx_page_views_user_id ON page_views(user_id);
+CREATE INDEX IF NOT EXISTS idx_page_views_page_path ON page_views(page_path);
+CREATE INDEX IF NOT EXISTS idx_page_views_created_at ON page_views(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_page_views_utm_source ON page_views(utm_source);
+
+CREATE INDEX IF NOT EXISTS idx_funnel_events_session_id ON funnel_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_funnel_events_user_id ON funnel_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_funnel_events_event_type ON funnel_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_funnel_events_created_at ON funnel_events(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_sessions_session_id ON user_sessions(session_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_converted ON user_sessions(converted);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_started_at ON user_sessions(started_at DESC);
+
+-- ============================================================================
+-- ROW LEVEL SECURITY
+-- ============================================================================
+
+ALTER TABLE page_views ENABLE ROW LEVEL SECURITY;
+ALTER TABLE funnel_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
+
+-- Allow public inserts via service role or anon for tracking
+CREATE POLICY "Allow anonymous tracking inserts on page_views"
+  ON page_views FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Allow anonymous tracking inserts on funnel_events"
+  ON funnel_events FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Allow anonymous session tracking inserts"
+  ON user_sessions FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Allow session updates via service role"
+  ON user_sessions FOR UPDATE
+  USING (auth.role() = 'service_role' OR auth.role() = 'anon');
+
+-- Admin read access
+CREATE POLICY "Admins can read page_views"
+  ON page_views FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can read funnel_events"
+  ON funnel_events FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can read user_sessions"
+  ON user_sessions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- ============================================================================
+-- TRACKING FUNCTIONS
+-- ============================================================================
+
+-- Function to track a page view
+CREATE OR REPLACE FUNCTION track_page_view(
+  p_session_id TEXT,
+  p_page_path TEXT,
+  p_page_title TEXT DEFAULT NULL,
+  p_referrer TEXT DEFAULT NULL,
+  p_utm_source TEXT DEFAULT NULL,
+  p_utm_medium TEXT DEFAULT NULL,
+  p_utm_campaign TEXT DEFAULT NULL,
+  p_utm_content TEXT DEFAULT NULL,
+  p_utm_term TEXT DEFAULT NULL,
+  p_device_type TEXT DEFAULT NULL,
+  p_browser TEXT DEFAULT NULL,
+  p_os TEXT DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+  v_id UUID;
+BEGIN
+  -- Insert page view
+  INSERT INTO page_views (
+    session_id, user_id, page_path, page_title, referrer,
+    utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+    device_type, browser, os
+  ) VALUES (
+    p_session_id, p_user_id, p_page_path, p_page_title, p_referrer,
+    p_utm_source, p_utm_medium, p_utm_campaign, p_utm_content, p_utm_term,
+    p_device_type, p_browser, p_os
+  )
+  RETURNING id INTO v_id;
+
+  -- Update or create session
+  INSERT INTO user_sessions (
+    session_id, user_id, first_page, last_page, page_count,
+    utm_source, utm_medium, utm_campaign, referrer, device_type, browser, os
+  ) VALUES (
+    p_session_id, p_user_id, p_page_path, p_page_path, 1,
+    p_utm_source, p_utm_medium, p_utm_campaign, p_referrer, p_device_type, p_browser, p_os
+  )
+  ON CONFLICT (session_id) DO UPDATE SET
+    last_page = p_page_path,
+    page_count = user_sessions.page_count + 1,
+    user_id = COALESCE(EXCLUDED.user_id, user_sessions.user_id),
+    ended_at = NOW(),
+    duration_seconds = EXTRACT(EPOCH FROM (NOW() - user_sessions.started_at))::INTEGER;
+
+  RETURN v_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to track a funnel event
+CREATE OR REPLACE FUNCTION track_funnel_event(
+  p_session_id TEXT,
+  p_event_type TEXT,
+  p_event_data JSONB DEFAULT '{}'::jsonb,
+  p_page_path TEXT DEFAULT NULL,
+  p_user_id UUID DEFAULT NULL,
+  p_utm_source TEXT DEFAULT NULL,
+  p_utm_medium TEXT DEFAULT NULL,
+  p_utm_campaign TEXT DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+  v_id UUID;
+BEGIN
+  -- Insert funnel event
+  INSERT INTO funnel_events (
+    session_id, user_id, event_type, event_data, page_path,
+    utm_source, utm_medium, utm_campaign
+  ) VALUES (
+    p_session_id, p_user_id, p_event_type, p_event_data, p_page_path,
+    p_utm_source, p_utm_medium, p_utm_campaign
+  )
+  RETURNING id INTO v_id;
+
+  -- Update session conversion status if applicable
+  IF p_event_type IN ('email_capture', 'signup', 'trial_start', 'paid_conversion') THEN
+    UPDATE user_sessions
+    SET
+      converted = TRUE,
+      conversion_type = p_event_type,
+      user_id = COALESCE(p_user_id, user_sessions.user_id)
+    WHERE session_id = p_session_id;
+  END IF;
+
+  RETURN v_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================================
+-- ANALYTICS VIEWS
+-- ============================================================================
+
+-- Conversion funnel summary view
+CREATE OR REPLACE VIEW conversion_funnel_summary AS
+SELECT
+  date_trunc('day', created_at)::date AS date,
+  COUNT(*) FILTER (WHERE event_type = 'landing_view') AS landing_views,
+  COUNT(*) FILTER (WHERE event_type = 'quiz_start') AS quiz_starts,
+  COUNT(*) FILTER (WHERE event_type = 'quiz_complete') AS quiz_completes,
+  COUNT(*) FILTER (WHERE event_type = 'email_capture') AS email_captures,
+  COUNT(*) FILTER (WHERE event_type = 'signup') AS signups,
+  COUNT(*) FILTER (WHERE event_type = 'trial_start') AS trial_starts,
+  COUNT(*) FILTER (WHERE event_type = 'paid_conversion') AS paid_conversions,
+  -- Conversion rates
+  CASE WHEN COUNT(*) FILTER (WHERE event_type = 'landing_view') > 0
+    THEN ROUND((COUNT(*) FILTER (WHERE event_type = 'quiz_start')::DECIMAL /
+                COUNT(*) FILTER (WHERE event_type = 'landing_view')) * 100, 2)
+    ELSE 0
+  END AS landing_to_quiz_rate,
+  CASE WHEN COUNT(*) FILTER (WHERE event_type = 'quiz_start') > 0
+    THEN ROUND((COUNT(*) FILTER (WHERE event_type = 'quiz_complete')::DECIMAL /
+                COUNT(*) FILTER (WHERE event_type = 'quiz_start')) * 100, 2)
+    ELSE 0
+  END AS quiz_completion_rate,
+  CASE WHEN COUNT(*) FILTER (WHERE event_type = 'quiz_complete') > 0
+    THEN ROUND((COUNT(*) FILTER (WHERE event_type = 'email_capture')::DECIMAL /
+                COUNT(*) FILTER (WHERE event_type = 'quiz_complete')) * 100, 2)
+    ELSE 0
+  END AS email_capture_rate,
+  CASE WHEN COUNT(*) FILTER (WHERE event_type = 'landing_view') > 0
+    THEN ROUND((COUNT(*) FILTER (WHERE event_type = 'paid_conversion')::DECIMAL /
+                COUNT(*) FILTER (WHERE event_type = 'landing_view')) * 100, 2)
+    ELSE 0
+  END AS overall_conversion_rate
+FROM funnel_events
+WHERE created_at >= NOW() - INTERVAL '90 days'
+GROUP BY date_trunc('day', created_at)::date
+ORDER BY date DESC;
+
+-- Daily page views summary
+CREATE OR REPLACE VIEW daily_page_views AS
+SELECT
+  date_trunc('day', created_at)::date AS date,
+  COUNT(*) AS total_views,
+  COUNT(DISTINCT session_id) AS unique_sessions,
+  COUNT(DISTINCT user_id) FILTER (WHERE user_id IS NOT NULL) AS authenticated_users,
+  COUNT(*) FILTER (WHERE page_path = '/' OR page_path = '/landing') AS landing_page_views,
+  COUNT(*) FILTER (WHERE page_path LIKE '/quiz%') AS quiz_page_views,
+  COUNT(*) FILTER (WHERE page_path LIKE '/dashboard%') AS dashboard_views
+FROM page_views
+WHERE created_at >= NOW() - INTERVAL '90 days'
+GROUP BY date_trunc('day', created_at)::date
+ORDER BY date DESC;
+
+-- UTM source performance
+CREATE OR REPLACE VIEW utm_source_performance AS
+SELECT
+  COALESCE(utm_source, 'direct') AS source,
+  COALESCE(utm_medium, 'none') AS medium,
+  COALESCE(utm_campaign, 'none') AS campaign,
+  COUNT(DISTINCT session_id) AS sessions,
+  COUNT(DISTINCT user_id) FILTER (WHERE user_id IS NOT NULL) AS users,
+  SUM(CASE WHEN converted THEN 1 ELSE 0 END) AS conversions,
+  ROUND(
+    SUM(CASE WHEN converted THEN 1 ELSE 0 END)::DECIMAL /
+    NULLIF(COUNT(DISTINCT session_id), 0) * 100, 2
+  ) AS conversion_rate
+FROM user_sessions
+WHERE started_at >= NOW() - INTERVAL '90 days'
+GROUP BY utm_source, utm_medium, utm_campaign
+ORDER BY sessions DESC;
+
+-- Grant access to views for admins
+GRANT SELECT ON conversion_funnel_summary TO authenticated;
+GRANT SELECT ON daily_page_views TO authenticated;
+GRANT SELECT ON utm_source_performance TO authenticated;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260205000000_conversion_funnel_tracking.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 96: 20260205000001_login_history.sql
+-- ============================================
+
+-- Migration: Add Login History Table
+-- Date: 2026-02-05
+-- Description: Creates comprehensive login history tracking for security and analytics
+
+-- ============================================
+-- Login History Table
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.login_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  email TEXT NOT NULL,
+
+  -- Timestamp
+  logged_in_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+
+  -- Network info
+  ip_address INET,
+
+  -- Raw user agent for reference
+  user_agent TEXT,
+
+  -- Parsed device information
+  device_type TEXT CHECK (device_type IN ('desktop', 'mobile', 'tablet', 'unknown')),
+  browser_name TEXT,
+  browser_version TEXT,
+  os_name TEXT,
+  os_version TEXT,
+
+  -- Geolocation (from IP)
+  country TEXT,
+  country_code TEXT,
+  region TEXT,
+  city TEXT,
+  latitude DECIMAL(10, 8),
+  longitude DECIMAL(11, 8),
+  timezone TEXT,
+
+  -- Login details
+  login_method TEXT NOT NULL CHECK (login_method IN ('password', 'google', 'apple', 'magic_link', 'otp', 'unknown')),
+  success BOOLEAN DEFAULT true NOT NULL,
+  failure_reason TEXT,
+
+  -- Session tracking
+  session_id TEXT,
+  device_fingerprint TEXT,
+
+  -- Logout tracking
+  logged_out_at TIMESTAMPTZ,
+  session_duration_seconds INTEGER,
+
+  -- Metadata for additional info
+  metadata JSONB DEFAULT '{}'
+);
+
+-- ============================================
+-- Indexes for efficient querying
+-- ============================================
+
+-- Primary lookup indexes
+CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON public.login_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_login_history_email ON public.login_history(email);
+CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON public.login_history(logged_in_at DESC);
+
+-- Security monitoring indexes
+CREATE INDEX IF NOT EXISTS idx_login_history_ip_address ON public.login_history(ip_address);
+CREATE INDEX IF NOT EXISTS idx_login_history_success ON public.login_history(success);
+CREATE INDEX IF NOT EXISTS idx_login_history_device_fingerprint ON public.login_history(device_fingerprint);
+
+-- Analytics indexes
+CREATE INDEX IF NOT EXISTS idx_login_history_login_method ON public.login_history(login_method);
+CREATE INDEX IF NOT EXISTS idx_login_history_device_type ON public.login_history(device_type);
+CREATE INDEX IF NOT EXISTS idx_login_history_country ON public.login_history(country_code);
+CREATE INDEX IF NOT EXISTS idx_login_history_browser ON public.login_history(browser_name);
+CREATE INDEX IF NOT EXISTS idx_login_history_os ON public.login_history(os_name);
+
+-- Composite indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_login_history_user_time
+  ON public.login_history(user_id, logged_in_at DESC);
+CREATE INDEX IF NOT EXISTS idx_login_history_analytics
+  ON public.login_history(logged_in_at DESC, login_method, device_type, success);
+CREATE INDEX IF NOT EXISTS idx_login_history_geo_time
+  ON public.login_history(country_code, logged_in_at DESC);
+
+-- ============================================
+-- Enable RLS
+-- ============================================
+ALTER TABLE public.login_history ENABLE ROW LEVEL SECURITY;
+
+-- ============================================
+-- RLS Policies
+-- ============================================
+
+-- Users can view their own login history
+DROP POLICY IF EXISTS "Users can view own login history" ON public.login_history;
+CREATE POLICY "Users can view own login history"
+  ON public.login_history FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Admins can view all login history
+DROP POLICY IF EXISTS "Admins can view all login history" ON public.login_history;
+CREATE POLICY "Admins can view all login history"
+  ON public.login_history FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_id = auth.uid()
+      AND role = 'admin'
+    )
+  );
+
+-- Allow inserts from authenticated users and service role
+DROP POLICY IF EXISTS "Allow login history inserts" ON public.login_history;
+CREATE POLICY "Allow login history inserts"
+  ON public.login_history FOR INSERT
+  WITH CHECK (true);
+
+-- Allow updates only by service role (for logout tracking)
+DROP POLICY IF EXISTS "Service role can update login history" ON public.login_history;
+CREATE POLICY "Service role can update login history"
+  ON public.login_history FOR UPDATE
+  USING (true)
+  WITH CHECK (true);
+
+-- ============================================
+-- Helper Views for Analytics
+-- ============================================
+
+-- View: Daily login statistics
+CREATE OR REPLACE VIEW public.login_stats_daily AS
+SELECT
+  DATE(logged_in_at) as login_date,
+  COUNT(*) as total_logins,
+  COUNT(DISTINCT user_id) as unique_users,
+  COUNT(*) FILTER (WHERE success = true) as successful_logins,
+  COUNT(*) FILTER (WHERE success = false) as failed_logins,
+  COUNT(*) FILTER (WHERE login_method = 'password') as password_logins,
+  COUNT(*) FILTER (WHERE login_method = 'google') as google_logins,
+  COUNT(*) FILTER (WHERE login_method = 'apple') as apple_logins,
+  COUNT(*) FILTER (WHERE device_type = 'mobile') as mobile_logins,
+  COUNT(*) FILTER (WHERE device_type = 'desktop') as desktop_logins,
+  COUNT(*) FILTER (WHERE device_type = 'tablet') as tablet_logins,
+  ROUND(AVG(session_duration_seconds)::numeric, 0) as avg_session_seconds
+FROM public.login_history
+GROUP BY DATE(logged_in_at)
+ORDER BY login_date DESC;
+
+-- View: Login by country
+CREATE OR REPLACE VIEW public.login_stats_by_country AS
+SELECT
+  country,
+  country_code,
+  COUNT(*) as total_logins,
+  COUNT(DISTINCT user_id) as unique_users,
+  COUNT(*) FILTER (WHERE success = true) as successful_logins,
+  MIN(logged_in_at) as first_login,
+  MAX(logged_in_at) as last_login
+FROM public.login_history
+WHERE country IS NOT NULL
+GROUP BY country, country_code
+ORDER BY total_logins DESC;
+
+-- View: Login by device/browser
+CREATE OR REPLACE VIEW public.login_stats_by_platform AS
+SELECT
+  device_type,
+  browser_name,
+  os_name,
+  COUNT(*) as total_logins,
+  COUNT(DISTINCT user_id) as unique_users,
+  ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) as percentage
+FROM public.login_history
+GROUP BY device_type, browser_name, os_name
+ORDER BY total_logins DESC;
+
+-- ============================================
+-- Functions
+-- ============================================
+
+-- Function to clean up old login history (retain configurable days)
+CREATE OR REPLACE FUNCTION cleanup_old_login_history(retention_days INTEGER DEFAULT 365)
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  DELETE FROM public.login_history
+  WHERE logged_in_at < NOW() - (retention_days || ' days')::INTERVAL;
+
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to get user login summary
+CREATE OR REPLACE FUNCTION get_user_login_summary(target_user_id UUID)
+RETURNS TABLE (
+  total_logins BIGINT,
+  successful_logins BIGINT,
+  failed_logins BIGINT,
+  unique_devices BIGINT,
+  unique_locations BIGINT,
+  first_login TIMESTAMPTZ,
+  last_login TIMESTAMPTZ,
+  most_used_device TEXT,
+  most_used_browser TEXT,
+  most_used_location TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(*)::BIGINT as total_logins,
+    COUNT(*) FILTER (WHERE lh.success = true)::BIGINT as successful_logins,
+    COUNT(*) FILTER (WHERE lh.success = false)::BIGINT as failed_logins,
+    COUNT(DISTINCT lh.device_fingerprint)::BIGINT as unique_devices,
+    COUNT(DISTINCT lh.country_code)::BIGINT as unique_locations,
+    MIN(lh.logged_in_at) as first_login,
+    MAX(lh.logged_in_at) as last_login,
+    (SELECT device_type FROM public.login_history WHERE user_id = target_user_id GROUP BY device_type ORDER BY COUNT(*) DESC LIMIT 1) as most_used_device,
+    (SELECT browser_name FROM public.login_history WHERE user_id = target_user_id AND browser_name IS NOT NULL GROUP BY browser_name ORDER BY COUNT(*) DESC LIMIT 1) as most_used_browser,
+    (SELECT country FROM public.login_history WHERE user_id = target_user_id AND country IS NOT NULL GROUP BY country ORDER BY COUNT(*) DESC LIMIT 1) as most_used_location
+  FROM public.login_history lh
+  WHERE lh.user_id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to detect suspicious login patterns
+CREATE OR REPLACE FUNCTION check_suspicious_login(
+  p_user_id UUID,
+  p_ip_address INET,
+  p_device_fingerprint TEXT,
+  p_country_code TEXT
+)
+RETURNS TABLE (
+  is_suspicious BOOLEAN,
+  reason TEXT,
+  risk_score INTEGER
+) AS $$
+DECLARE
+  v_risk_score INTEGER := 0;
+  v_reasons TEXT[] := '{}';
+  v_last_login RECORD;
+  v_known_device BOOLEAN;
+  v_known_location BOOLEAN;
+  v_failed_recent INTEGER;
+BEGIN
+  -- Get last successful login
+  SELECT * INTO v_last_login
+  FROM public.login_history
+  WHERE user_id = p_user_id AND success = true
+  ORDER BY logged_in_at DESC
+  LIMIT 1;
+
+  -- Check if device is known
+  SELECT EXISTS (
+    SELECT 1 FROM public.login_history
+    WHERE user_id = p_user_id
+    AND device_fingerprint = p_device_fingerprint
+    AND success = true
+    LIMIT 1
+  ) INTO v_known_device;
+
+  IF NOT v_known_device THEN
+    v_risk_score := v_risk_score + 30;
+    v_reasons := array_append(v_reasons, 'New device detected');
+  END IF;
+
+  -- Check if location is known
+  SELECT EXISTS (
+    SELECT 1 FROM public.login_history
+    WHERE user_id = p_user_id
+    AND country_code = p_country_code
+    AND success = true
+    LIMIT 1
+  ) INTO v_known_location;
+
+  IF NOT v_known_location AND p_country_code IS NOT NULL THEN
+    v_risk_score := v_risk_score + 25;
+    v_reasons := array_append(v_reasons, 'New location detected');
+  END IF;
+
+  -- Check for impossible travel (login from different country within 2 hours)
+  IF v_last_login IS NOT NULL AND p_country_code IS NOT NULL AND
+     v_last_login.country_code IS NOT NULL AND
+     v_last_login.country_code != p_country_code AND
+     v_last_login.logged_in_at > NOW() - INTERVAL '2 hours' THEN
+    v_risk_score := v_risk_score + 50;
+    v_reasons := array_append(v_reasons, 'Impossible travel detected');
+  END IF;
+
+  -- Check recent failed logins
+  SELECT COUNT(*) INTO v_failed_recent
+  FROM public.login_history
+  WHERE user_id = p_user_id
+  AND success = false
+  AND logged_in_at > NOW() - INTERVAL '15 minutes';
+
+  IF v_failed_recent >= 3 THEN
+    v_risk_score := v_risk_score + 20;
+    v_reasons := array_append(v_reasons, 'Multiple recent failed attempts');
+  END IF;
+
+  RETURN QUERY SELECT
+    v_risk_score >= 50 as is_suspicious,
+    array_to_string(v_reasons, '; ') as reason,
+    v_risk_score as risk_score;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================
+-- Comments
+-- ============================================
+COMMENT ON TABLE public.login_history IS 'Comprehensive login history tracking for security monitoring and analytics';
+COMMENT ON COLUMN public.login_history.device_fingerprint IS 'SHA-256 hash of browser/device characteristics for device identification';
+COMMENT ON COLUMN public.login_history.login_method IS 'Authentication method used: password, google, apple, magic_link, otp';
+COMMENT ON COLUMN public.login_history.session_duration_seconds IS 'Duration of session in seconds, calculated on logout';
+COMMENT ON VIEW public.login_stats_daily IS 'Aggregated daily login statistics for analytics dashboards';
+COMMENT ON VIEW public.login_stats_by_country IS 'Login statistics grouped by country for geographic analysis';
+COMMENT ON VIEW public.login_stats_by_platform IS 'Login statistics grouped by device, browser, and OS';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260205000001_login_history.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 97: 20260210000000_add_is_favorite_to_recipes.sql
+-- ============================================
+
+-- Add is_favorite column to recipes table
+ALTER TABLE public.recipes ADD COLUMN IF NOT EXISTS is_favorite boolean DEFAULT false;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260210000000_add_is_favorite_to_recipes.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 98: 20260223000000_rate_limiting.sql
+-- ============================================
+
+-- Server-side rate limiting for AUTH actions (login, password reset, etc.),
+-- keyed by a free-text identifier (email or IP) because the sign-in flow runs
+-- before a user/session exists. src/pages/Auth.tsx calls
+--   check_rate_limit(p_identifier => email, p_action => 'login').
+--
+-- IMPORTANT: this is intentionally a SEPARATE table from the older
+-- AI-endpoint limiter (`rate_limits` + `check_rate_limit_with_tier`, created in
+-- 20251010230000_rate_limiting_system.sql), which is keyed by
+-- (user_id, endpoint). The original version of this migration tried to reuse
+-- the `rate_limits` name and failed on any DB where the older migration had
+-- already created that table ("column \"identifier\" does not exist"), so it
+-- now uses its own `auth_rate_limits` table and cannot collide.
+--
+-- The function keeps the name `check_rate_limit` (the name Auth.tsx calls); it
+-- coexists with the older check_rate_limit(p_user_id, p_endpoint, ...) as a
+-- distinct overload — PostgREST routes by the named arguments in the request.
+
+CREATE TABLE IF NOT EXISTS public.auth_rate_limits (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  identifier TEXT NOT NULL,             -- email address or IP
+  action TEXT NOT NULL DEFAULT 'login', -- action being rate limited
+  attempt_count INTEGER NOT NULL DEFAULT 1,
+  window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Composite index for fast lookups
+CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_lookup
+  ON public.auth_rate_limits (identifier, action, window_start);
+
+-- Enable RLS — no user-facing policies. Only the service role and the
+-- SECURITY DEFINER function below can read/write, so end users cannot
+-- manipulate their own rate limits.
+ALTER TABLE public.auth_rate_limits ENABLE ROW LEVEL SECURITY;
+
+-- Check and record a rate-limited attempt atomically. Returns TRUE when the
+-- attempt is allowed (and records it), FALSE when the limit is exceeded.
+CREATE OR REPLACE FUNCTION public.check_rate_limit(
+  p_identifier TEXT,
+  p_action TEXT DEFAULT 'login',
+  p_max_attempts INTEGER DEFAULT 5,
+  p_window_seconds INTEGER DEFAULT 900  -- 15 minutes
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $check_rate_limit$
+DECLARE
+  v_window_start TIMESTAMPTZ;
+  v_count INTEGER;
+BEGIN
+  v_window_start := NOW() - (p_window_seconds || ' seconds')::INTERVAL;
+
+  -- Count recent attempts within the window
+  SELECT COALESCE(SUM(attempt_count), 0)
+  INTO v_count
+  FROM public.auth_rate_limits
+  WHERE identifier = p_identifier
+    AND action = p_action
+    AND window_start >= v_window_start;
+
+  -- If over the limit, deny
+  IF v_count >= p_max_attempts THEN
+    RETURN FALSE;
+  END IF;
+
+  -- Record this attempt
+  INSERT INTO public.auth_rate_limits (identifier, action, attempt_count, window_start)
+  VALUES (p_identifier, p_action, 1, NOW());
+
+  -- Clean up old entries (older than 1 hour) to prevent table bloat
+  DELETE FROM public.auth_rate_limits
+  WHERE window_start < NOW() - INTERVAL '1 hour';
+
+  RETURN TRUE;
+END;
+$check_rate_limit$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260223000000_rate_limiting.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 99: 20260223000001_performance_indexes.sql
+-- ============================================
+
+-- Performance indexes for frequently queried columns.
+-- Uses CREATE INDEX IF NOT EXISTS for idempotency.
+
+-- Meal plan lookups: queried by kid + date range
+CREATE INDEX IF NOT EXISTS idx_plan_entries_kid_date
+  ON public.plan_entries (kid_id, date);
+
+-- Grocery list filtering: queried by household + checked status
+CREATE INDEX IF NOT EXISTS idx_grocery_items_household_checked
+  ON public.grocery_items (household_id, checked);
+
+-- Food browsing: queried by user + category
+CREATE INDEX IF NOT EXISTS idx_foods_user_category
+  ON public.foods (user_id, category);
+
+-- Recipe listing: queried by user + created_at for sorting
+CREATE INDEX IF NOT EXISTS idx_recipes_user_created
+  ON public.recipes (user_id, created_at);
+
+-- Subscription checks: queried by user + status
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user_status
+  ON public.user_subscriptions (user_id, status);
+
+-- Audit log queries: queried by user + created_at
+CREATE INDEX IF NOT EXISTS idx_login_history_user_created
+  ON public.login_history (user_id, logged_in_at);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260223000001_performance_indexes.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 100: 20260228000000_fix_rls_policies.sql
+-- ============================================
+
+-- US-007: Fix overly permissive RLS INSERT policies on security-critical tables
+-- Replaces WITH CHECK (true) and USING (true) with proper auth checks
+--
+-- NOTE: Each block is guarded with to_regclass(...) IS NOT NULL so this migration
+-- is safe to run regardless of whether a given table has been created yet on this
+-- environment, and safe to re-run (idempotent) once it has.
+
+-- ============================================
+-- 1. login_history: Restrict to own user_id
+-- ============================================
+DO $$
+BEGIN
+  IF to_regclass('public.login_history') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Allow login history inserts" ON public.login_history';
+    EXECUTE 'DROP POLICY IF EXISTS "Users can insert own login history" ON public.login_history';
+    EXECUTE 'CREATE POLICY "Users can insert own login history"
+      ON public.login_history FOR INSERT
+      WITH CHECK (auth.uid() = user_id)';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Service role can update login history" ON public.login_history';
+    EXECUTE 'DROP POLICY IF EXISTS "Users can update own login history" ON public.login_history';
+    EXECUTE 'CREATE POLICY "Users can update own login history"
+      ON public.login_history FOR UPDATE
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id)';
+  END IF;
+END
+$$;
+
+-- ============================================
+-- 2. security_audit_logs: Require authentication
+-- ============================================
+DO $$
+BEGIN
+  IF to_regclass('public.security_audit_logs') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Allow audit log inserts" ON public.security_audit_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "Authenticated users can insert audit logs" ON public.security_audit_logs';
+    EXECUTE 'CREATE POLICY "Authenticated users can insert audit logs"
+      ON public.security_audit_logs FOR INSERT
+      WITH CHECK (auth.uid() IS NOT NULL)';
+  END IF;
+END
+$$;
+
+-- ============================================
+-- 3. rate_limits: Service role only (no user access)
+-- ============================================
+DO $$
+BEGIN
+  IF to_regclass('public.rate_limits') IS NOT NULL THEN
+    -- Drop any existing overly-permissive policies
+    EXECUTE 'DROP POLICY IF EXISTS "rate_limits_all" ON public.rate_limits';
+    EXECUTE 'DROP POLICY IF EXISTS "Service role only" ON public.rate_limits';
+
+    -- rate_limits has RLS enabled but no policies = only service role can access
+    -- This is intentional: no user-facing policies means only service_role key works
+  END IF;
+END
+$$;
+
+-- ============================================
+-- 4. automation_email_queue: Admin role only for writes
+-- ============================================
+DO $$
+BEGIN
+  IF to_regclass('public.automation_email_queue') IS NOT NULL
+     AND to_regclass('public.user_roles') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "System can manage email queue" ON public.automation_email_queue';
+    EXECUTE 'DROP POLICY IF EXISTS "Admins can manage email queue" ON public.automation_email_queue';
+    EXECUTE 'CREATE POLICY "Admins can manage email queue"
+      ON public.automation_email_queue FOR ALL
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.user_roles
+          WHERE user_roles.user_id = auth.uid()
+          AND user_roles.role = ''admin''
+        )
+      )
+      WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM public.user_roles
+          WHERE user_roles.user_id = auth.uid()
+          AND user_roles.role = ''admin''
+        )
+      )';
+  END IF;
+END
+$$;
+
+-- ============================================
+-- 5. backup_logs: Admin role only for writes
+-- ============================================
+DO $$
+BEGIN
+  IF to_regclass('public.backup_logs') IS NOT NULL
+     AND to_regclass('public.user_roles') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "System can manage backup logs" ON public.backup_logs';
+    EXECUTE 'DROP POLICY IF EXISTS "Admins can manage backup logs" ON public.backup_logs';
+    EXECUTE 'CREATE POLICY "Admins can manage backup logs"
+      ON public.backup_logs FOR ALL
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.user_roles
+          WHERE user_roles.user_id = auth.uid()
+          AND user_roles.role = ''admin''
+        )
+      )
+      WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM public.user_roles
+          WHERE user_roles.user_id = auth.uid()
+          AND user_roles.role = ''admin''
+        )
+      )';
+  END IF;
+END
+$$;
+
+-- ============================================
+-- 6. blog_comments: Require authentication for INSERT
+-- ============================================
+DO $$
+BEGIN
+  IF to_regclass('public.blog_comments') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Anyone can submit comments" ON public.blog_comments';
+    EXECUTE 'DROP POLICY IF EXISTS "Authenticated users can submit comments" ON public.blog_comments';
+    EXECUTE 'CREATE POLICY "Authenticated users can submit comments"
+      ON public.blog_comments FOR INSERT
+      WITH CHECK (auth.uid() IS NOT NULL)';
+  END IF;
+END
+$$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260228000000_fix_rls_policies.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 101: 20260313000000_pseo_pages.sql
+-- ============================================
+
+-- =============================================================================
+-- Migration: pSEO Pages System
+-- Description: Creates tables for programmatic SEO page generation, including
+--              page storage, generation queue/batches, taxonomy dimensions,
+--              and internal linking graph.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 1. pseo_pages - Main pages table
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.pseo_pages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+
+  -- Page identity
+  page_type TEXT NOT NULL,                      -- e.g. 'FOOD_CHAINING_GUIDE', 'CHALLENGE_MEAL_OCCASION'
+  slug TEXT NOT NULL UNIQUE,                    -- full URL slug e.g. 'food-chaining/chicken-nuggets'
+  title TEXT NOT NULL,
+  meta_description TEXT,
+
+  -- Dimension values (nullable - only populated for relevant page types)
+  safe_food_slug TEXT,
+  age_group_slug TEXT,
+  challenge_slug TEXT,
+  meal_occasion_slug TEXT,
+  dietary_restriction_slug TEXT,
+
+  -- Content (stores the full generated page schema)
+  content JSONB NOT NULL DEFAULT '{}',
+
+  -- SEO metadata
+  canonical_url TEXT,
+  schema_markup JSONB,                          -- JSON-LD structured data
+  keywords TEXT[],
+
+  -- Generation metadata
+  generation_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (generation_status IN (
+      'pending', 'generating', 'generated',
+      'validated', 'published', 'failed', 'archived'
+    )),
+  generation_prompt_hash TEXT,                  -- hash of prompt used, for cache invalidation
+  generated_at TIMESTAMPTZ,
+  validated_at TIMESTAMPTZ,
+  published_at TIMESTAMPTZ,
+  generation_error TEXT,
+  generation_model TEXT,                        -- which AI model generated this
+  generation_cost_cents INTEGER DEFAULT 0,
+
+  -- Quality metrics
+  quality_score NUMERIC(3,2),                   -- 0.00 to 1.00
+  word_count INTEGER,
+  internal_link_count INTEGER,
+  has_faq BOOLEAN DEFAULT false,
+  has_schema_markup BOOLEAN DEFAULT false,
+
+  -- Freshness tracking
+  freshness_days INTEGER DEFAULT 90,            -- how many days before content is considered stale
+  last_refreshed_at TIMESTAMPTZ,
+  needs_refresh BOOLEAN DEFAULT false,
+
+  -- Priority / ordering
+  tier INTEGER DEFAULT 1 CHECK (tier BETWEEN 1 AND 3),  -- 1 = highest priority
+  priority_score INTEGER DEFAULT 0,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.pseo_pages IS 'Programmatic SEO pages generated from taxonomy dimension combinations';
+COMMENT ON COLUMN public.pseo_pages.page_type IS 'Template type key, e.g. FOOD_CHAINING_GUIDE, CHALLENGE_MEAL_OCCASION';
+COMMENT ON COLUMN public.pseo_pages.slug IS 'Full URL path slug, must be unique across all page types';
+COMMENT ON COLUMN public.pseo_pages.content IS 'Full generated page content stored as JSONB';
+COMMENT ON COLUMN public.pseo_pages.generation_prompt_hash IS 'SHA-256 hash of the generation prompt for cache invalidation';
+COMMENT ON COLUMN public.pseo_pages.quality_score IS 'Automated quality score from 0.00 (worst) to 1.00 (best)';
+COMMENT ON COLUMN public.pseo_pages.tier IS 'Content tier: 1 = high priority/traffic, 2 = medium, 3 = long-tail';
+COMMENT ON COLUMN public.pseo_pages.freshness_days IS 'Number of days before content should be regenerated';
+
+-- ---------------------------------------------------------------------------
+-- 2. pseo_generation_queue - Queue for batch generation
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.pseo_generation_queue (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  page_type TEXT NOT NULL,
+  combination JSONB NOT NULL,                   -- the dimension combination to generate
+  priority INTEGER DEFAULT 0,                   -- higher = processed first
+  status TEXT NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'processing', 'completed', 'failed', 'skipped')),
+  batch_id UUID,                                -- groups pages into batches
+  attempt_count INTEGER DEFAULT 0,
+  max_attempts INTEGER DEFAULT 3,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  processed_at TIMESTAMPTZ,                     -- when processing started
+  completed_at TIMESTAMPTZ                      -- when processing finished
+);
+
+COMMENT ON TABLE public.pseo_generation_queue IS 'Work queue for batch pSEO page generation';
+COMMENT ON COLUMN public.pseo_generation_queue.combination IS 'JSONB object of dimension slug values for this page';
+COMMENT ON COLUMN public.pseo_generation_queue.batch_id IS 'FK to pseo_generation_batches for grouping';
+
+-- ---------------------------------------------------------------------------
+-- 3. pseo_generation_batches - Batch tracking
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.pseo_generation_batches (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  page_type TEXT,                               -- optional: filter batch to a single page type
+  total_pages INTEGER DEFAULT 0,
+  completed_pages INTEGER DEFAULT 0,
+  failed_pages INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'running', 'completed', 'paused', 'failed')),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id)
+);
+
+COMMENT ON TABLE public.pseo_generation_batches IS 'Tracks batches of pSEO page generation runs';
+
+-- Add FK from queue to batches now that both tables exist
+ALTER TABLE public.pseo_generation_queue
+  ADD CONSTRAINT fk_queue_batch
+  FOREIGN KEY (batch_id) REFERENCES public.pseo_generation_batches(id) ON DELETE SET NULL;
+
+-- ---------------------------------------------------------------------------
+-- 4. pseo_taxonomy - Dimension values
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.pseo_taxonomy (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  dimension TEXT NOT NULL,                      -- 'safe_food', 'age_group', 'feeding_challenge', 'meal_occasion', 'dietary_restriction'
+  slug TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  tier INTEGER DEFAULT 1,                       -- mirrors page tier for priority
+  context JSONB DEFAULT '{}',                   -- extra metadata (aliases, synonyms, notes)
+  category TEXT,                                -- optional sub-grouping within a dimension
+  sort_order INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(dimension, slug)
+);
+
+COMMENT ON TABLE public.pseo_taxonomy IS 'Taxonomy dimension values used to generate pSEO page combinations';
+COMMENT ON COLUMN public.pseo_taxonomy.dimension IS 'Dimension key: safe_food, age_group, feeding_challenge, meal_occasion, dietary_restriction';
+COMMENT ON COLUMN public.pseo_taxonomy.context IS 'Arbitrary metadata: aliases, synonyms, nutritional notes, etc.';
+
+-- ---------------------------------------------------------------------------
+-- 5. pseo_internal_links - Internal linking graph
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.pseo_internal_links (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  source_page_id UUID REFERENCES public.pseo_pages(id) ON DELETE CASCADE,
+  target_page_id UUID REFERENCES public.pseo_pages(id) ON DELETE CASCADE,
+  anchor_text TEXT,
+  link_type TEXT DEFAULT 'related'
+    CHECK (link_type IN ('related', 'breadcrumb', 'hub', 'sibling', 'parent', 'child')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(source_page_id, target_page_id)
+);
+
+COMMENT ON TABLE public.pseo_internal_links IS 'Tracks internal links between pSEO pages for link graph management';
+
+-- =============================================================================
+-- INDEXES
+-- =============================================================================
+
+-- pseo_pages: single-column indexes
+CREATE INDEX idx_pseo_pages_page_type ON public.pseo_pages(page_type);
+CREATE INDEX idx_pseo_pages_generation_status ON public.pseo_pages(generation_status);
+CREATE INDEX idx_pseo_pages_tier ON public.pseo_pages(tier);
+CREATE INDEX idx_pseo_pages_priority_score ON public.pseo_pages(priority_score DESC);
+CREATE INDEX idx_pseo_pages_safe_food_slug ON public.pseo_pages(safe_food_slug) WHERE safe_food_slug IS NOT NULL;
+CREATE INDEX idx_pseo_pages_age_group_slug ON public.pseo_pages(age_group_slug) WHERE age_group_slug IS NOT NULL;
+CREATE INDEX idx_pseo_pages_challenge_slug ON public.pseo_pages(challenge_slug) WHERE challenge_slug IS NOT NULL;
+CREATE INDEX idx_pseo_pages_meal_occasion_slug ON public.pseo_pages(meal_occasion_slug) WHERE meal_occasion_slug IS NOT NULL;
+CREATE INDEX idx_pseo_pages_dietary_restriction_slug ON public.pseo_pages(dietary_restriction_slug) WHERE dietary_restriction_slug IS NOT NULL;
+
+-- pseo_pages: composite indexes for common queries
+CREATE INDEX idx_pseo_pages_type_status ON public.pseo_pages(page_type, generation_status);
+CREATE INDEX idx_pseo_pages_status_tier_priority ON public.pseo_pages(generation_status, tier, priority_score DESC);
+CREATE INDEX idx_pseo_pages_needs_refresh ON public.pseo_pages(needs_refresh, last_refreshed_at) WHERE needs_refresh = true;
+CREATE INDEX idx_pseo_pages_published ON public.pseo_pages(published_at DESC) WHERE generation_status = 'published';
+
+-- pseo_pages: GIN index on content JSONB
+CREATE INDEX idx_pseo_pages_content_gin ON public.pseo_pages USING GIN (content);
+
+-- pseo_pages: full-text search on title + meta_description
+CREATE INDEX idx_pseo_pages_fts ON public.pseo_pages
+  USING GIN (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(meta_description, '')));
+
+-- pseo_generation_queue: status + priority for ordered processing
+CREATE INDEX idx_pseo_queue_status_priority ON public.pseo_generation_queue(status, priority DESC)
+  WHERE status = 'queued';
+CREATE INDEX idx_pseo_queue_batch_id ON public.pseo_generation_queue(batch_id);
+CREATE INDEX idx_pseo_queue_page_type ON public.pseo_generation_queue(page_type);
+
+-- pseo_generation_batches
+CREATE INDEX idx_pseo_batches_status ON public.pseo_generation_batches(status);
+CREATE INDEX idx_pseo_batches_created_by ON public.pseo_generation_batches(created_by);
+
+-- pseo_taxonomy
+CREATE INDEX idx_pseo_taxonomy_dimension ON public.pseo_taxonomy(dimension);
+CREATE INDEX idx_pseo_taxonomy_dimension_active ON public.pseo_taxonomy(dimension, sort_order) WHERE is_active = true;
+
+-- pseo_internal_links
+CREATE INDEX idx_pseo_links_source ON public.pseo_internal_links(source_page_id);
+CREATE INDEX idx_pseo_links_target ON public.pseo_internal_links(target_page_id);
+CREATE INDEX idx_pseo_links_type ON public.pseo_internal_links(link_type);
+
+-- =============================================================================
+-- UPDATED_AT TRIGGERS
+-- Reuses existing update_updated_at_column() function from prior migrations
+-- =============================================================================
+
+CREATE TRIGGER set_pseo_pages_updated_at
+  BEFORE UPDATE ON public.pseo_pages
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER set_pseo_taxonomy_updated_at
+  BEFORE UPDATE ON public.pseo_taxonomy
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================================================
+-- ROW LEVEL SECURITY
+-- =============================================================================
+
+ALTER TABLE public.pseo_pages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pseo_generation_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pseo_generation_batches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pseo_taxonomy ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pseo_internal_links ENABLE ROW LEVEL SECURITY;
+
+-- ---- pseo_pages ----
+
+-- Public can read published pages (serves the actual pSEO content)
+CREATE POLICY "Public can read published pseo pages"
+  ON public.pseo_pages FOR SELECT
+  USING (generation_status = 'published');
+
+-- Admins have full access
+CREATE POLICY "Admins have full access to pseo pages"
+  ON public.pseo_pages FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- ---- pseo_generation_queue ----
+
+CREATE POLICY "Admins have full access to pseo generation queue"
+  ON public.pseo_generation_queue FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- ---- pseo_generation_batches ----
+
+CREATE POLICY "Admins have full access to pseo generation batches"
+  ON public.pseo_generation_batches FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- ---- pseo_taxonomy ----
+
+-- Public can read active taxonomy entries (needed for URL resolution / navigation)
+CREATE POLICY "Public can read active pseo taxonomy"
+  ON public.pseo_taxonomy FOR SELECT
+  USING (is_active = true);
+
+-- Admins have full access
+CREATE POLICY "Admins have full access to pseo taxonomy"
+  ON public.pseo_taxonomy FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- ---- pseo_internal_links ----
+
+-- Public can read links for published pages (needed for rendering related content)
+CREATE POLICY "Public can read pseo internal links for published pages"
+  ON public.pseo_internal_links FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.pseo_pages
+      WHERE pseo_pages.id = pseo_internal_links.source_page_id
+      AND pseo_pages.generation_status = 'published'
+    )
+  );
+
+-- Admins have full access
+CREATE POLICY "Admins have full access to pseo internal links"
+  ON public.pseo_internal_links FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260313000000_pseo_pages.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 102: 20260410000000_disposable_email_domains.sql
+-- ============================================
+
+-- Disposable Email Domains Blocklist
+-- Creates a table of email domains known to belong to disposable/temporary
+-- email providers so they can be blocked during signup.
+--
+-- Source inspiration: https://github.com/disposable-email-domains/disposable-email-domains
+-- The initial seed below is a curated subset of the most common providers.
+-- Admins can add, remove and maintain the list via the admin dashboard.
+
+-- ============================================================================
+-- Table
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.disposable_email_domains (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain TEXT NOT NULL,
+  notes TEXT,
+  source TEXT NOT NULL DEFAULT 'seed' CHECK (source IN ('seed', 'admin', 'import')),
+  added_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT disposable_email_domains_domain_lowercase
+    CHECK (domain = lower(domain)),
+  CONSTRAINT disposable_email_domains_domain_format
+    CHECK (domain ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS disposable_email_domains_domain_key
+  ON public.disposable_email_domains (domain);
+
+CREATE INDEX IF NOT EXISTS idx_disposable_email_domains_created_at
+  ON public.disposable_email_domains (created_at DESC);
+
+-- Keep updated_at fresh on updates (reuses existing helper)
+CREATE TRIGGER set_disposable_email_domains_updated_at
+  BEFORE UPDATE ON public.disposable_email_domains
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- Row Level Security
+-- ============================================================================
+ALTER TABLE public.disposable_email_domains ENABLE ROW LEVEL SECURITY;
+
+-- Admins have full access to manage the list
+CREATE POLICY "Admins have full access to disposable email domains"
+  ON public.disposable_email_domains FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Note: non-admins cannot SELECT the raw table. The `is_disposable_email_domain`
+-- SECURITY DEFINER function below exposes only a boolean, keeping the full list
+-- from being enumerated by anonymous users.
+
+-- ============================================================================
+-- Boolean check function (usable by anon role during signup)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.is_disposable_email_domain(p_domain TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.disposable_email_domains
+    WHERE domain = lower(trim(p_domain))
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_disposable_email_domain(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_disposable_email_domain(TEXT) TO anon, authenticated;
+
+COMMENT ON FUNCTION public.is_disposable_email_domain(TEXT) IS
+  'Returns TRUE if the supplied domain is present in the disposable_email_domains blocklist. Safe to call from unauthenticated signup flows.';
+
+-- ============================================================================
+-- Email-level convenience function
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.is_disposable_email(p_email TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.is_disposable_email_domain(
+    split_part(lower(trim(p_email)), '@', 2)
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_disposable_email(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_disposable_email(TEXT) TO anon, authenticated;
+
+COMMENT ON FUNCTION public.is_disposable_email(TEXT) IS
+  'Returns TRUE if the email address uses a domain in the disposable_email_domains blocklist.';
+
+-- ============================================================================
+-- Seed list
+-- A curated baseline taken from the well-known disposable-email-domains
+-- project. Admins may add further entries via the admin dashboard.
+-- ============================================================================
+INSERT INTO public.disposable_email_domains (domain, source, notes) VALUES
+  -- mailinator family
+  ('mailinator.com', 'seed', 'Mailinator'),
+  ('mailinator.net', 'seed', 'Mailinator'),
+  ('mailinator.org', 'seed', 'Mailinator'),
+  ('mailinator2.com', 'seed', 'Mailinator'),
+  ('notmailinator.com', 'seed', 'Mailinator'),
+  ('bobmail.info', 'seed', 'Mailinator alias'),
+  ('chammy.info', 'seed', 'Mailinator alias'),
+  ('devnullmail.com', 'seed', 'Mailinator alias'),
+  ('letthemeatspam.com', 'seed', 'Mailinator alias'),
+  ('reallymymail.com', 'seed', 'Mailinator alias'),
+  ('reconmail.com', 'seed', 'Mailinator alias'),
+  ('safetymail.info', 'seed', 'Mailinator alias'),
+  ('sendspamhere.com', 'seed', 'Mailinator alias'),
+  ('sogetthis.com', 'seed', 'Mailinator alias'),
+  ('spambooger.com', 'seed', 'Mailinator alias'),
+  ('spamherelots.com', 'seed', 'Mailinator alias'),
+  ('spamhereplease.com', 'seed', 'Mailinator alias'),
+  ('spamthisplease.com', 'seed', 'Mailinator alias'),
+  ('streetwisemail.com', 'seed', 'Mailinator alias'),
+  ('suremail.info', 'seed', 'Mailinator alias'),
+  ('thisisnotmyrealemail.com', 'seed', 'Mailinator alias'),
+  ('tradermail.info', 'seed', 'Mailinator alias'),
+  ('veryrealemail.com', 'seed', 'Mailinator alias'),
+  ('zippymail.info', 'seed', 'Mailinator alias'),
+  -- 10-minute mail family
+  ('10minutemail.com', 'seed', '10MinuteMail'),
+  ('10minutemail.net', 'seed', '10MinuteMail'),
+  ('10minutemail.org', 'seed', '10MinuteMail'),
+  ('10minutemail.co.uk', 'seed', '10MinuteMail'),
+  ('10minutemail.de', 'seed', '10MinuteMail'),
+  ('10minutesmail.com', 'seed', '10MinuteMail'),
+  ('10minmail.com', 'seed', '10MinuteMail variant'),
+  ('20minutemail.com', 'seed', '20MinuteMail'),
+  ('my10minutemail.com', 'seed', '10MinuteMail variant'),
+  -- guerrillamail family
+  ('guerrillamail.com', 'seed', 'GuerrillaMail'),
+  ('guerrillamail.net', 'seed', 'GuerrillaMail'),
+  ('guerrillamail.org', 'seed', 'GuerrillaMail'),
+  ('guerrillamail.biz', 'seed', 'GuerrillaMail'),
+  ('guerrillamail.de', 'seed', 'GuerrillaMail'),
+  ('guerrillamailblock.com', 'seed', 'GuerrillaMail'),
+  ('sharklasers.com', 'seed', 'GuerrillaMail alias'),
+  ('grr.la', 'seed', 'GuerrillaMail alias'),
+  ('pokemail.net', 'seed', 'GuerrillaMail alias'),
+  ('spam4.me', 'seed', 'GuerrillaMail alias'),
+  -- temp-mail family
+  ('temp-mail.org', 'seed', 'Temp-Mail'),
+  ('tempmail.com', 'seed', 'TempMail'),
+  ('tempmail.net', 'seed', 'TempMail'),
+  ('temp-mail.io', 'seed', 'Temp-Mail'),
+  ('tempmail.dev', 'seed', 'TempMail'),
+  ('tempmail.email', 'seed', 'TempMail'),
+  ('tempmail.plus', 'seed', 'TempMail Plus'),
+  ('tempmail.us.com', 'seed', 'TempMail'),
+  ('tempmailo.com', 'seed', 'TempMail'),
+  ('tempinbox.com', 'seed', 'TempInbox'),
+  ('tempr.email', 'seed', 'Tempr Email'),
+  ('mytempemail.com', 'seed', 'MyTempEmail'),
+  ('minuteinbox.com', 'seed', 'MinuteInbox'),
+  ('mytemp.email', 'seed', 'MyTemp.email'),
+  ('tmpmail.org', 'seed', 'TmpMail'),
+  ('tmpmail.net', 'seed', 'TmpMail'),
+  ('tmpeml.com', 'seed', 'TmpEml'),
+  ('mail.tm', 'seed', 'Mail.tm'),
+  ('temp-mail.ru', 'seed', 'Temp-Mail Russia'),
+  ('etempmail.com', 'seed', 'ETempMail'),
+  ('smailpro.com', 'seed', 'SmailPro'),
+  -- yopmail family
+  ('yopmail.com', 'seed', 'YopMail'),
+  ('yopmail.fr', 'seed', 'YopMail'),
+  ('yopmail.net', 'seed', 'YopMail'),
+  ('yopmail.org', 'seed', 'YopMail'),
+  ('cool.fr.nf', 'seed', 'YopMail alias'),
+  ('courriel.fr.nf', 'seed', 'YopMail alias'),
+  ('jetable.fr.nf', 'seed', 'YopMail alias'),
+  ('moncourrier.fr.nf', 'seed', 'YopMail alias'),
+  ('monemail.fr.nf', 'seed', 'YopMail alias'),
+  ('monmail.fr.nf', 'seed', 'YopMail alias'),
+  -- maildrop + drop-style
+  ('maildrop.cc', 'seed', 'MailDrop'),
+  ('dropmail.me', 'seed', 'DropMail'),
+  -- throwaway / trash
+  ('throwawaymail.com', 'seed', 'ThrowAwayMail'),
+  ('throwaway.email', 'seed', 'ThrowAway.email'),
+  ('throwawayemailaddress.com', 'seed', 'ThrowAwayEmailAddress'),
+  ('trashmail.com', 'seed', 'TrashMail'),
+  ('trashmail.net', 'seed', 'TrashMail'),
+  ('trashmail.org', 'seed', 'TrashMail'),
+  ('trash-mail.com', 'seed', 'Trash-Mail'),
+  ('trash-mail.de', 'seed', 'Trash-Mail'),
+  ('trashmailer.com', 'seed', 'TrashMailer'),
+  ('mytrashmail.com', 'seed', 'MyTrashMail'),
+  ('trbvm.com', 'seed', 'Trbvm'),
+  ('wegwerfmail.de', 'seed', 'Wegwerfmail'),
+  ('wegwerfmail.net', 'seed', 'Wegwerfmail'),
+  ('wegwerfmail.org', 'seed', 'Wegwerfmail'),
+  ('spamdecoy.net', 'seed', 'SpamDecoy'),
+  -- fake
+  ('fakemail.net', 'seed', 'FakeMail'),
+  ('fakeinbox.com', 'seed', 'FakeInbox'),
+  ('fakeinbox.info', 'seed', 'FakeInbox'),
+  ('fake-mail.net', 'seed', 'Fake-Mail'),
+  ('fake-mail.ml', 'seed', 'Fake-Mail'),
+  ('dispostable.com', 'seed', 'Dispostable'),
+  -- mohmal + arabic
+  ('mohmal.com', 'seed', 'Mohmal'),
+  ('mohmal.in', 'seed', 'Mohmal'),
+  -- burner family
+  ('burnermail.io', 'seed', 'BurnerMail'),
+  ('burner-email.com', 'seed', 'BurnerEmail'),
+  ('burnermailbox.com', 'seed', 'BurnerMailbox'),
+  -- french jetable family
+  ('jetable.net', 'seed', 'Jetable'),
+  ('jetable.org', 'seed', 'Jetable'),
+  ('jetable.com', 'seed', 'Jetable'),
+  ('mail-temporaire.fr', 'seed', 'Mail Temporaire'),
+  -- inboxbear / inboxkitten
+  ('inboxbear.com', 'seed', 'InboxBear'),
+  ('inboxkitten.com', 'seed', 'InboxKitten'),
+  ('kitten.email', 'seed', 'Kitten Email'),
+  -- anonymous
+  ('anonbox.net', 'seed', 'AnonBox'),
+  ('anonymbox.com', 'seed', 'AnonymBox'),
+  ('anonymail.dk', 'seed', 'AnonyMail'),
+  ('incognitomail.org', 'seed', 'IncognitoMail'),
+  -- expire + dead
+  ('mailexpire.com', 'seed', 'MailExpire'),
+  ('deadaddress.com', 'seed', 'DeadAddress'),
+  ('mailnesia.com', 'seed', 'Mailnesia'),
+  -- nada family
+  ('getnada.com', 'seed', 'GetNada'),
+  ('nada.email', 'seed', 'Nada Email'),
+  ('nada.ltd', 'seed', 'Nada'),
+  -- misc throwaway providers
+  ('mintemail.com', 'seed', 'MintEmail'),
+  ('zetmail.com', 'seed', 'ZetMail'),
+  ('mailcatch.com', 'seed', 'MailCatch'),
+  ('filzmail.com', 'seed', 'FilzMail'),
+  ('objectmail.com', 'seed', 'ObjectMail'),
+  ('instant-mail.de', 'seed', 'Instant-Mail'),
+  ('spamgourmet.com', 'seed', 'SpamGourmet'),
+  ('spamgourmet.net', 'seed', 'SpamGourmet'),
+  ('spamgourmet.org', 'seed', 'SpamGourmet'),
+  ('spamavert.com', 'seed', 'SpamAvert'),
+  ('spambox.us', 'seed', 'SpamBox'),
+  ('fudgerub.com', 'seed', 'FudgeRub'),
+  ('unit7lahaina.com', 'seed', 'Unit7Lahaina'),
+  ('uroid.com', 'seed', 'Uroid'),
+  ('gh2go.com', 'seed', 'Gh2go'),
+  ('emltmp.com', 'seed', 'EmlTmp'),
+  ('getairmail.com', 'seed', 'GetAirMail'),
+  ('discard.email', 'seed', 'Discard Email'),
+  ('discardmail.com', 'seed', 'DiscardMail'),
+  ('discardmail.de', 'seed', 'DiscardMail'),
+  ('mvrht.com', 'seed', 'Mvrht'),
+  ('privymail.net', 'seed', 'PrivyMail'),
+  ('emailondeck.com', 'seed', 'EmailOnDeck'),
+  ('emailtemporarya.com', 'seed', 'EmailTemporaryA'),
+  -- fake-identity / test providers
+  ('gustr.com', 'seed', 'Gustr / FakeNameGenerator'),
+  ('einrot.com', 'seed', 'Einrot / FakeNameGenerator'),
+  ('superrito.com', 'seed', 'Superrito / FakeNameGenerator'),
+  ('teleworm.us', 'seed', 'Teleworm / FakeNameGenerator'),
+  ('dayrep.com', 'seed', 'Dayrep / FakeNameGenerator'),
+  ('rhyta.com', 'seed', 'Rhyta / FakeNameGenerator'),
+  ('fleckens.hu', 'seed', 'Fleckens / FakeNameGenerator'),
+  ('cuvox.de', 'seed', 'Cuvox / FakeNameGenerator'),
+  ('armyspy.com', 'seed', 'ArmySpy / FakeNameGenerator'),
+  ('jourrapide.com', 'seed', 'Jourrapide / FakeNameGenerator'),
+  -- chinese / linshi
+  ('linshi-email.com', 'seed', 'Linshi Email'),
+  ('linshiyouxiang.net', 'seed', 'LinshiYouxiang'),
+  -- misc single-entry providers
+  ('safe-mail.net', 'seed', 'Safe-Mail'),
+  ('mailnator.com', 'seed', 'MailNator'),
+  ('duck2.club', 'seed', 'Duck2 Club'),
+  ('gimal.com', 'seed', 'Gimal'),
+  ('chatkeep.com', 'seed', 'ChatKeep')
+ON CONFLICT (domain) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260410000000_disposable_email_domains.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 103: 20260415000000_fix_household_rls.sql
+-- ============================================
+
+-- Fix RLS failures caused by missing household_id on data rows
+-- and missing household_members rows for users.
+
+-- 1) Backfill: ensure every auth user has a household + membership
+DO $$
+DECLARE
+  rec RECORD;
+  new_hh_id uuid;
+  display_name text;
+BEGIN
+  FOR rec IN (
+    SELECT u.id,
+           COALESCE(u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1)) AS fn
+    FROM auth.users u
+    LEFT JOIN public.household_members hm ON hm.user_id = u.id
+    WHERE hm.user_id IS NULL
+  ) LOOP
+    display_name := COALESCE(rec.fn, 'User');
+
+    INSERT INTO public.profiles (id, full_name)
+    VALUES (rec.id, display_name)
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.households (name)
+    VALUES (display_name || '''s Family')
+    RETURNING id INTO new_hh_id;
+
+    INSERT INTO public.household_members (household_id, user_id, role)
+    VALUES (new_hh_id, rec.id, 'parent');
+  END LOOP;
+END $$;
+
+-- 2) Backfill household_id on existing data rows that have user_id but no household_id
+UPDATE public.foods
+SET household_id = public.get_user_household_id(user_id)
+WHERE household_id IS NULL AND user_id IS NOT NULL;
+
+UPDATE public.recipes
+SET household_id = public.get_user_household_id(user_id)
+WHERE household_id IS NULL AND user_id IS NOT NULL;
+
+UPDATE public.plan_entries
+SET household_id = public.get_user_household_id(user_id)
+WHERE household_id IS NULL AND user_id IS NOT NULL;
+
+UPDATE public.grocery_items
+SET household_id = public.get_user_household_id(user_id)
+WHERE household_id IS NULL AND user_id IS NOT NULL;
+
+UPDATE public.kids
+SET household_id = public.get_user_household_id(user_id)
+WHERE household_id IS NULL AND user_id IS NOT NULL;
+
+-- 3) RPC for the client to auto-provision a household when none exists
+CREATE OR REPLACE FUNCTION public.ensure_user_household()
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  existing_hh uuid;
+  new_hh_id uuid;
+  display_name text;
+BEGIN
+  SELECT household_id INTO existing_hh
+  FROM public.household_members
+  WHERE user_id = auth.uid()
+  LIMIT 1;
+
+  IF existing_hh IS NOT NULL THEN
+    RETURN existing_hh;
+  END IF;
+
+  SELECT COALESCE(p.full_name, split_part(u.email, '@', 1), 'User')
+  INTO display_name
+  FROM auth.users u
+  LEFT JOIN public.profiles p ON p.id = u.id
+  WHERE u.id = auth.uid();
+
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (auth.uid(), display_name)
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.households (name)
+  VALUES (display_name || '''s Family')
+  RETURNING id INTO new_hh_id;
+
+  INSERT INTO public.household_members (household_id, user_id, role)
+  VALUES (new_hh_id, auth.uid(), 'parent');
+
+  RETURN new_hh_id;
+END;
+$$;
+
+-- 4) Auto-fill household_id on future inserts when client omits it
+CREATE OR REPLACE FUNCTION public.auto_fill_household_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.household_id IS NULL AND auth.uid() IS NOT NULL THEN
+    NEW.household_id := public.get_user_household_id(auth.uid());
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DO $$
+DECLARE
+  tbl text;
+BEGIN
+  FOR tbl IN SELECT unnest(ARRAY['foods','recipes','plan_entries','grocery_items','kids']) LOOP
+    EXECUTE format(
+      'DROP TRIGGER IF EXISTS auto_fill_household_id ON public.%I; '
+      'CREATE TRIGGER auto_fill_household_id '
+      'BEFORE INSERT ON public.%I '
+      'FOR EACH ROW EXECUTE FUNCTION public.auto_fill_household_id();',
+      tbl, tbl
+    );
+  END LOOP;
+END $$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260415000000_fix_household_rls.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 104: 20260416000000_grocery_priority.sql
+-- ============================================
+
+-- Add priority field to grocery items for user-defined urgency
+ALTER TABLE public.grocery_items
+ADD COLUMN IF NOT EXISTS priority text DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high'));
+
+CREATE INDEX IF NOT EXISTS idx_grocery_items_priority
+ON public.grocery_items (priority);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260416000000_grocery_priority.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 105: 20260417000000_fix_plan_log_rls.sql
+-- ============================================
+
+-- Fix "permission denied for table users" when marking a plan entry
+-- as Ate/Tasted/Refused. The cause is trigger functions running without
+-- SECURITY DEFINER, which makes them fail on RLS checks on cascaded tables.
+
+-- 1) Make the plan-result trigger function SECURITY DEFINER so it can
+-- insert into food_attempts on behalf of the user.
+CREATE OR REPLACE FUNCTION public.create_attempt_from_plan_result()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_attempt_id UUID;
+  v_stage TEXT;
+  v_outcome TEXT;
+  v_amount_consumed TEXT;
+BEGIN
+  IF NEW.result IS NOT NULL AND OLD.result IS NULL AND NEW.food_attempt_id IS NULL THEN
+    CASE NEW.result
+      WHEN 'ate'     THEN v_outcome := 'success'; v_stage := 'full_portion'; v_amount_consumed := 'all';
+      WHEN 'tasted'  THEN v_outcome := 'partial'; v_stage := 'small_bite';   v_amount_consumed := 'quarter';
+      WHEN 'refused' THEN v_outcome := 'refused'; v_stage := 'looking';      v_amount_consumed := 'none';
+      ELSE RETURN NEW;
+    END CASE;
+
+    INSERT INTO public.food_attempts (
+      kid_id, food_id, attempted_at, stage, outcome, bites_taken,
+      amount_consumed, meal_slot, mood_before, parent_notes, plan_entry_id
+    ) VALUES (
+      NEW.kid_id, NEW.food_id, NOW(), v_stage, v_outcome,
+      CASE NEW.result WHEN 'ate' THEN 5 WHEN 'tasted' THEN 1 ELSE 0 END,
+      v_amount_consumed, NEW.meal_slot, 'neutral', NEW.notes, NEW.id
+    )
+    RETURNING id INTO v_attempt_id;
+
+    NEW.food_attempt_id := v_attempt_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- 2) Same fix for the achievement check trigger function.
+CREATE OR REPLACE FUNCTION public.trigger_achievement_check()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM public.check_and_unlock_achievements(NEW.kid_id, NEW.food_id, NEW.outcome);
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.check_and_unlock_achievements(
+  p_kid_id UUID,
+  p_food_id UUID DEFAULT NULL,
+  p_attempt_outcome TEXT DEFAULT NULL
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  total_attempts INTEGER;
+  successful_attempts INTEGER;
+  new_foods_tried INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO total_attempts FROM public.food_attempts WHERE kid_id = p_kid_id;
+  SELECT COUNT(*) INTO successful_attempts FROM public.food_attempts WHERE kid_id = p_kid_id AND outcome IN ('success', 'partial');
+  SELECT COUNT(DISTINCT food_id) INTO new_foods_tried FROM public.food_attempts WHERE kid_id = p_kid_id AND outcome IN ('success', 'partial');
+
+  IF total_attempts = 1 THEN
+    INSERT INTO public.kid_achievements (kid_id, achievement_type, achievement_name, achievement_description, icon_name, points_value)
+    VALUES (p_kid_id, 'first_attempt', 'Brave Beginner', 'Made your first food attempt!', 'star', 10)
+    ON CONFLICT DO NOTHING;
+  END IF;
+
+  IF new_foods_tried = 10 THEN
+    INSERT INTO public.kid_achievements (kid_id, achievement_type, achievement_name, achievement_description, icon_name, points_value)
+    VALUES (p_kid_id, 'foods_milestone', 'Food Explorer', 'Tried 10 different foods!', 'trophy', 50)
+    ON CONFLICT DO NOTHING;
+  END IF;
+
+  IF new_foods_tried = 50 THEN
+    INSERT INTO public.kid_achievements (kid_id, achievement_type, achievement_name, achievement_description, icon_name, points_value)
+    VALUES (p_kid_id, 'foods_milestone', 'Adventurous Eater', 'Tried 50 different foods!', 'medal', 100)
+    ON CONFLICT DO NOTHING;
+  END IF;
+
+  IF total_attempts >= 20 AND successful_attempts::DECIMAL / total_attempts >= 0.75 THEN
+    INSERT INTO public.kid_achievements (kid_id, achievement_type, achievement_name, achievement_description, icon_name, points_value)
+    VALUES (p_kid_id, 'success_rate', 'Super Taster', '75% success rate!', 'crown', 75)
+    ON CONFLICT DO NOTHING;
+  END IF;
+END;
+$$;
+
+-- 3) Align food_attempts and kid_achievements RLS with the household system.
+-- The kids table RLS now uses household_id, so existing policies on these
+-- tables work — but make them more permissive so household members can
+-- see each other's kids' data.
+DROP POLICY IF EXISTS "Users can manage their kids' food attempts" ON public.food_attempts;
+CREATE POLICY "Household members can manage food attempts"
+  ON public.food_attempts FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.kids
+      WHERE kids.id = food_attempts.kid_id
+        AND kids.household_id = public.get_user_household_id(auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.kids
+      WHERE kids.id = food_attempts.kid_id
+        AND kids.household_id = public.get_user_household_id(auth.uid())
+    )
+  );
+
+DROP POLICY IF EXISTS "Users can manage their kids' achievements" ON public.kid_achievements;
+CREATE POLICY "Household members can manage kid achievements"
+  ON public.kid_achievements FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.kids
+      WHERE kids.id = kid_achievements.kid_id
+        AND kids.household_id = public.get_user_household_id(auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.kids
+      WHERE kids.id = kid_achievements.kid_id
+        AND kids.household_id = public.get_user_household_id(auth.uid())
+    )
+  );
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260417000000_fix_plan_log_rls.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 106: 20260417000001_fix_milestone_email_trigger.sql
+-- ============================================
+
+-- Fix trigger_milestone_email bugs:
+--   1) References NEW.title / NEW.description but kid_achievements uses
+--      achievement_name / achievement_description
+--   2) Queries auth.users without SECURITY DEFINER, producing
+--      "permission denied for table users" when the trigger fires as
+--      part of a user-initiated action (e.g., marking a plan entry).
+
+CREATE OR REPLACE FUNCTION public.trigger_milestone_email()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_user_email TEXT;
+  v_kid_name TEXT;
+BEGIN
+  SELECT k.user_id, k.name INTO v_user_id, v_kid_name
+  FROM public.kids k
+  WHERE k.id = NEW.kid_id;
+
+  SELECT u.email INTO v_user_email
+  FROM auth.users u
+  WHERE u.id = v_user_id;
+
+  IF public.check_email_subscription(v_user_id, 'milestone') THEN
+    PERFORM public.queue_email(
+      v_user_id,
+      'milestone_achieved',
+      v_user_email,
+      jsonb_build_object(
+        'kid_name', v_kid_name,
+        'achievement_title', NEW.achievement_name,
+        'achievement_description', NEW.achievement_description,
+        'app_url', 'https://eatpal.com'
+      ),
+      8
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260417000001_fix_milestone_email_trigger.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 107: 20260417000002_fix_plan_attempt_recursion.sql
+-- ============================================
+
+-- Break the recursive loop between plan_entries and food_attempts triggers.
+--
+-- Previous behavior:
+--   1) UPDATE plan_entries.result
+--   2) BEFORE trigger inserts into food_attempts
+--   3) AFTER INSERT OR UPDATE on food_attempts -> syncs plan_entries
+--   4) Step 3 re-fires step 2 -> stack depth exceeded.
+--
+-- Fix: sync trigger runs ONLY on UPDATE of food_attempts (not INSERT),
+-- and only when outcome or parent_notes actually changed. The INSERT
+-- path is already fully handled by create_attempt_from_plan_result.
+
+DROP TRIGGER IF EXISTS attempt_syncs_plan_result ON public.food_attempts;
+
+CREATE OR REPLACE FUNCTION public.sync_plan_result_from_attempt()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_result TEXT;
+BEGIN
+  IF NEW.plan_entry_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+     AND NEW.outcome IS NOT DISTINCT FROM OLD.outcome
+     AND NEW.parent_notes IS NOT DISTINCT FROM OLD.parent_notes THEN
+    RETURN NEW;
+  END IF;
+
+  CASE NEW.outcome
+    WHEN 'success' THEN v_result := 'ate';
+    WHEN 'partial' THEN v_result := 'tasted';
+    WHEN 'refused', 'tantrum' THEN v_result := 'refused';
+    ELSE v_result := NULL;
+  END CASE;
+
+  UPDATE public.plan_entries
+  SET result = v_result,
+      notes = COALESCE(NEW.parent_notes, notes),
+      updated_at = NOW()
+  WHERE id = NEW.plan_entry_id;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER attempt_syncs_plan_result
+  AFTER UPDATE ON public.food_attempts
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_plan_result_from_attempt();
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260417000002_fix_plan_attempt_recursion.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 108: 20260425000000_add_expiry_date_to_foods.sql
+-- ============================================
+
+-- US-230: Optional expiry tracking on pantry foods.
+--
+-- Nullable so existing rows stay untouched and most foods (non-perishables)
+-- never need a value. The DATE type matches yyyy-MM-dd serialization on the
+-- iOS / web clients.
+
+ALTER TABLE public.foods
+    ADD COLUMN IF NOT EXISTS expiry_date DATE;
+
+-- Partial index — most foods will have NULL expiry_date and only the
+-- "expiring soon" dashboard query cares about non-null rows. A predicate
+-- index keeps the index small and the lookup cheap.
+CREATE INDEX IF NOT EXISTS foods_expiry_date_partial_idx
+    ON public.foods (expiry_date)
+    WHERE expiry_date IS NOT NULL;
+
+COMMENT ON COLUMN public.foods.expiry_date IS
+    'Optional yyyy-MM-dd expiry. NULL means no tracking. Powers the iOS Pantry expiring-soon badge + dashboard "Expiring this week" card (US-230).';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260425000000_add_expiry_date_to_foods.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 109: 20260425000001_create_plan_entry_feedback.sql
+-- ============================================
+
+-- US-231: Per-meal feedback rating + optional note.
+--
+-- Captures the "how much did they enjoy it?" follow-up that fires after
+-- the parent has tapped a result button (ate/tasted/refused). Used by the
+-- iOS dashboard's "Most loved meals" card and the AI meal-planner prompt
+-- to prefer historically-loved meals over historically-refused ones.
+
+CREATE TABLE IF NOT EXISTS public.plan_entry_feedback (
+    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    plan_entry_id UUID         NOT NULL REFERENCES public.plan_entries(id) ON DELETE CASCADE,
+    user_id       UUID         NOT NULL REFERENCES auth.users(id)         ON DELETE CASCADE,
+    -- 1-5 emoji scale on the iOS sheet; 0 reserved for "no rating, just a note"
+    rating        SMALLINT     NOT NULL CHECK (rating BETWEEN 0 AND 5),
+    -- Optional free-text from the parent. NULL means rating-only feedback.
+    note          TEXT,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS plan_entry_feedback_user_id_idx
+    ON public.plan_entry_feedback (user_id);
+
+CREATE INDEX IF NOT EXISTS plan_entry_feedback_plan_entry_id_idx
+    ON public.plan_entry_feedback (plan_entry_id);
+
+-- RLS: scope strictly to the row owner. Mirrors the policies used on
+-- plan_entries / foods so the realtime + select queries the iOS client
+-- already issues stay friendly to the same auth.uid() check.
+ALTER TABLE public.plan_entry_feedback ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own feedback"
+    ON public.plan_entry_feedback
+    FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own feedback"
+    ON public.plan_entry_feedback
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own feedback"
+    ON public.plan_entry_feedback
+    FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own feedback"
+    ON public.plan_entry_feedback
+    FOR DELETE
+    USING (auth.uid() = user_id);
+
+COMMENT ON TABLE public.plan_entry_feedback IS
+    'US-231: Optional per-meal 1-5 emoji rating + note captured after the parent logs a result. Powers the iOS Dashboard "Most loved meals" card and AIMealService prompt enrichment.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260425000001_create_plan_entry_feedback.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 110: 20260426000000_add_pricing_to_foods_and_grocery.sql
+-- ============================================
+
+-- US-243: Optional per-unit pricing on foods + grocery items.
+--
+-- Both columns are nullable so existing rows stay untouched. Currency stored
+-- as ISO-4217 (e.g. 'USD', 'GBP') alongside the price so households that
+-- travel or shop in mixed currencies don't see false totals — the iOS layer
+-- treats unknown-currency rows as "skip" rather than auto-converting.
+
+ALTER TABLE public.foods
+    ADD COLUMN IF NOT EXISTS price_per_unit NUMERIC(10, 2),
+    ADD COLUMN IF NOT EXISTS currency       CHAR(3);
+
+ALTER TABLE public.grocery_items
+    ADD COLUMN IF NOT EXISTS price_per_unit NUMERIC(10, 2),
+    ADD COLUMN IF NOT EXISTS currency       CHAR(3);
+
+-- Partial indexes for the dashboard's "what's my total" queries — most
+-- foods + items will have NULL pricing so a full index would be wasteful.
+CREATE INDEX IF NOT EXISTS foods_price_partial_idx
+    ON public.foods (user_id)
+    WHERE price_per_unit IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS grocery_items_price_partial_idx
+    ON public.grocery_items (user_id)
+    WHERE price_per_unit IS NOT NULL;
+
+COMMENT ON COLUMN public.foods.price_per_unit IS
+    'Optional unit price. NULL means no pricing tracked. Powers the iOS Budget tab + AIMealService weekly-budget bias (US-243).';
+COMMENT ON COLUMN public.foods.currency IS
+    'ISO-4217 currency code (USD/GBP/EUR/etc). NULL when price is NULL. App falls back to Locale.current.currency.identifier when missing.';
+COMMENT ON COLUMN public.grocery_items.price_per_unit IS
+    'Per-unit price for grocery list items — multiplied by quantity for the dashboard total. NULL = unknown.';
+COMMENT ON COLUMN public.grocery_items.currency IS
+    'ISO-4217 currency code matching price_per_unit.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260426000000_add_pricing_to_foods_and_grocery.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 111: 20260426000001_household_invite_codes.sql
+-- ============================================
+
+-- US-242: 6-character invite codes for household sharing.
+--
+-- Builds on the existing household_members + households schema (created in
+-- 20251008035758) and the auto-fill household_id triggers (20260415000000).
+-- This migration adds a code-based invite flow alongside the existing
+-- email-based household_invitations: parent A taps "Invite", gets a
+-- 6-char code valid 24h, parent B types it in.
+
+CREATE TABLE IF NOT EXISTS public.household_invite_codes (
+    id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    household_id UUID         NOT NULL REFERENCES public.households(id) ON DELETE CASCADE,
+    code         TEXT         NOT NULL UNIQUE,
+    -- Role to assign when accepted. Free-text rather than enum because the
+    -- household_members.role column is a CHECK CONSTRAINT and we want this
+    -- table to follow whatever roles get added there.
+    role         TEXT         NOT NULL DEFAULT 'parent',
+    created_by   UUID         NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    expires_at   TIMESTAMPTZ  NOT NULL DEFAULT (NOW() + interval '24 hours'),
+    used_by      UUID         REFERENCES auth.users(id) ON DELETE SET NULL,
+    used_at      TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS household_invite_codes_household_idx
+    ON public.household_invite_codes (household_id);
+
+CREATE INDEX IF NOT EXISTS household_invite_codes_code_idx
+    ON public.household_invite_codes (code)
+    WHERE used_at IS NULL;
+
+ALTER TABLE public.household_invite_codes ENABLE ROW LEVEL SECURITY;
+
+-- Anyone in the household can see / generate / revoke its codes.
+CREATE POLICY "Members view household invites"
+    ON public.household_invite_codes FOR SELECT
+    USING (public.user_belongs_to_household(auth.uid(), household_id));
+
+CREATE POLICY "Members create household invites"
+    ON public.household_invite_codes FOR INSERT
+    WITH CHECK (
+        auth.uid() = created_by
+        AND public.user_belongs_to_household(auth.uid(), household_id)
+    );
+
+CREATE POLICY "Members revoke household invites"
+    ON public.household_invite_codes FOR DELETE
+    USING (public.user_belongs_to_household(auth.uid(), household_id));
+
+-- Generate a fresh, unguessable 6-char code. Avoids 0/O/1/I/L to make
+-- it easier to type without confusing characters. Excludes already-used
+-- codes by retrying on uniqueness failure (loop is bounded).
+CREATE OR REPLACE FUNCTION public.generate_invite_code()
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    -- 32 chars, no 0/O/1/I/L for low typing-error rate.
+    alphabet TEXT := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    candidate TEXT;
+    attempt INT := 0;
+BEGIN
+    LOOP
+        attempt := attempt + 1;
+        candidate := '';
+        FOR i IN 1..6 LOOP
+            candidate := candidate || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
+        END LOOP;
+        -- Race-safe via the UNIQUE constraint on code; the loop just
+        -- reduces the cardinality of conflicts ahead of time.
+        PERFORM 1 FROM public.household_invite_codes
+            WHERE code = candidate AND used_at IS NULL;
+        IF NOT FOUND THEN
+            RETURN candidate;
+        END IF;
+        IF attempt > 12 THEN
+            -- Astronomically unlikely; raise rather than infinite-loop.
+            RAISE EXCEPTION 'Could not generate unique invite code';
+        END IF;
+    END LOOP;
+END;
+$$;
+
+-- Caller-friendly RPC: returns the new code so the iOS client can show
+-- it. Resolves the caller's household via the existing helper so it
+-- works without the client passing it explicitly.
+CREATE OR REPLACE FUNCTION public.create_household_invite(p_role TEXT DEFAULT 'parent')
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    hh_id UUID;
+    new_code TEXT;
+BEGIN
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'Sign in required';
+    END IF;
+
+    SELECT public.get_user_household_id(auth.uid()) INTO hh_id;
+    IF hh_id IS NULL THEN
+        -- Auto-provision so a brand-new user can invite without a prior
+        -- household-creation step.
+        SELECT public.ensure_user_household() INTO hh_id;
+    END IF;
+
+    -- Validate role against the same CHECK constraint used by household_members
+    -- so we never issue a code that can't be redeemed.
+    IF p_role NOT IN ('parent', 'guardian') THEN
+        RAISE EXCEPTION 'Invalid role: %', p_role;
+    END IF;
+
+    new_code := public.generate_invite_code();
+
+    INSERT INTO public.household_invite_codes (household_id, code, role, created_by)
+    VALUES (hh_id, new_code, p_role, auth.uid());
+
+    RETURN new_code;
+END;
+$$;
+
+-- Accept-side RPC. Single transaction so the membership row + the
+-- code-marked-used update can't drift.
+CREATE OR REPLACE FUNCTION public.accept_household_invite(p_code TEXT)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    invite RECORD;
+BEGIN
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'Sign in required';
+    END IF;
+
+    SELECT * INTO invite
+    FROM public.household_invite_codes
+    WHERE code = upper(trim(p_code))
+      AND used_at IS NULL
+      AND expires_at > NOW()
+    LIMIT 1;
+
+    IF invite.id IS NULL THEN
+        RAISE EXCEPTION 'Invite code is invalid or expired';
+    END IF;
+
+    -- Idempotent: if the user is already in the household, just mark the
+    -- code used and return — no double-membership rows.
+    IF EXISTS (
+        SELECT 1 FROM public.household_members
+        WHERE household_id = invite.household_id AND user_id = auth.uid()
+    ) THEN
+        UPDATE public.household_invite_codes
+        SET used_by = auth.uid(), used_at = NOW()
+        WHERE id = invite.id;
+        RETURN invite.household_id;
+    END IF;
+
+    INSERT INTO public.household_members (household_id, user_id, role, invited_by)
+    VALUES (invite.household_id, auth.uid(), invite.role, invite.created_by);
+
+    UPDATE public.household_invite_codes
+    SET used_by = auth.uid(), used_at = NOW()
+    WHERE id = invite.id;
+
+    RETURN invite.household_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.create_household_invite(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.accept_household_invite(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.generate_invite_code() TO authenticated;
+
+COMMENT ON TABLE public.household_invite_codes IS
+    'US-242: 6-char single-use invite codes (24h expiry) for adding members to a household. Complements the existing email-based household_invitations.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260426000001_household_invite_codes.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 112: 20260427000000_extend_recipes_source_type.sql
+-- ============================================
+
+-- Extend recipes.source_type CHECK to cover the values both the web and
+-- iOS apps actually emit. The original migration `20251014000000` set it
+-- to ('website', 'photo', 'manual', 'imported'); follow-up migrations
+-- (_fixed/_final/_complete) tried to switch it to
+-- ('manual', 'imported', 'ai_generated', 'url') but were no-ops because
+-- of `ADD COLUMN IF NOT EXISTS`. Result: iOS URL paste sent 'url' and
+-- hit `recipes_source_type_check` violations in production.
+--
+-- Consolidate to the union so every flow (web URL, web photo, manual,
+-- AI-generated, iOS URL paste, iOS share extension) inserts cleanly.
+
+ALTER TABLE recipes DROP CONSTRAINT IF EXISTS recipes_source_type_check;
+ALTER TABLE recipes ADD CONSTRAINT recipes_source_type_check
+  CHECK (source_type IN ('website', 'photo', 'manual', 'imported', 'ai_generated', 'url'));
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260427000000_extend_recipes_source_type.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 113: 20260430000000_add_aisle_section_to_grocery_items.sql
+-- ============================================
+
+-- US-263: Add aisle_section column to grocery_items.
+--
+-- The legacy `category` column held a 6-value FoodCategory (protein, carb,
+-- dairy, fruit, vegetable, snack), which collapsed real-world store
+-- sections like frozen meals, ethnic aisles, household, and condiments
+-- into a tiny set of buckets. `aisle_section` is the new 32-value
+-- store-routing taxonomy. See ios/EatPal/EatPal/Models/GroceryAisle.swift
+-- for the canonical list and store-walk order.
+--
+-- `category` is left in place to preserve the FoodCategory contract used
+-- by nutrition coloring and older queries.
+
+ALTER TABLE public.grocery_items
+  ADD COLUMN IF NOT EXISTS aisle_section TEXT;
+
+-- One-time backfill: map each row's existing FoodCategory to the closest
+-- aisle. Re-runs are safe because we only update NULL aisle_sections.
+UPDATE public.grocery_items
+SET aisle_section = CASE category
+  WHEN 'protein'   THEN 'meat_deli'
+  WHEN 'carb'      THEN 'pasta'
+  WHEN 'dairy'     THEN 'dairy'
+  WHEN 'fruit'     THEN 'produce'
+  WHEN 'vegetable' THEN 'produce'
+  WHEN 'snack'     THEN 'snacks'
+  ELSE 'other'
+END
+WHERE aisle_section IS NULL;
+
+-- Index supports the new By Aisle grouping in GroceryView (filter by
+-- user_id, group by aisle_section) and the per-user shopping-mode walk.
+CREATE INDEX IF NOT EXISTS idx_grocery_items_user_aisle
+  ON public.grocery_items(user_id, aisle_section)
+  WHERE aisle_section IS NOT NULL;
+
+COMMENT ON COLUMN public.grocery_items.aisle_section IS
+  'US-263: Store-section taxonomy (32 values). Canonical list in ios/EatPal/EatPal/Models/GroceryAisle.swift. Independent of `category`, which still drives FoodCategory consumers.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260430000000_add_aisle_section_to_grocery_items.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 114: 20260430000001_create_recipe_ingredients.sql
+-- ============================================
+
+-- US-265: Structured recipe ingredients.
+--
+-- Replaces the current `recipes.additional_ingredients TEXT` (a comma-
+-- separated free-text field) with a real one-to-many table so we can
+-- carry per-ingredient quantity, unit, optional foodId link, and a
+-- group label (e.g. "For the sauce"). Unblocks:
+--   * US-264 — per-recipe grocery view (need stable rows per ingredient)
+--   * US-262 — pantry debit on "Mark meal made" (need quantities)
+--   * RecipeScaling.swift — live serving slider scaling actual quantities
+--
+-- Strategy: keep `recipes.additional_ingredients` in place. New rows get
+-- structured ingredients via this table; legacy rows lazy-migrate the
+-- first time they're opened in EditRecipeView (see Swift side).
+
+CREATE TABLE IF NOT EXISTS public.recipe_ingredients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id UUID NOT NULL REFERENCES public.recipes(id) ON DELETE CASCADE,
+  food_id UUID REFERENCES public.foods(id) ON DELETE SET NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  name TEXT NOT NULL,
+  quantity NUMERIC,
+  unit TEXT,
+  group_label TEXT,
+  optional_notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Sort by (recipe, sort_order) for stable rendering order.
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe_sort_order
+  ON public.recipe_ingredients(recipe_id, sort_order);
+
+-- Reverse lookup so US-270 ("What can I make?") can ask "which recipes
+-- use this food?" without scanning the table.
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_food
+  ON public.recipe_ingredients(food_id)
+  WHERE food_id IS NOT NULL;
+
+ALTER TABLE public.recipe_ingredients ENABLE ROW LEVEL SECURITY;
+
+-- All policies scope through recipe ownership: a row in recipe_ingredients
+-- is visible/mutable iff the user owns the parent recipe. This handles
+-- household sharing automatically since `recipes` already has its own
+-- household-aware policies.
+CREATE POLICY "Recipe ingredients viewable through recipe ownership"
+  ON public.recipe_ingredients
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_ingredients.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Recipe ingredients insert through recipe ownership"
+  ON public.recipe_ingredients
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_ingredients.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Recipe ingredients update through recipe ownership"
+  ON public.recipe_ingredients
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_ingredients.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Recipe ingredients delete through recipe ownership"
+  ON public.recipe_ingredients
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_ingredients.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+COMMENT ON TABLE public.recipe_ingredients IS
+  'US-265: Structured ingredients for a recipe (name, quantity, unit, optional food_id link, group label). Replaces recipes.additional_ingredients string. Lazy-migration on first edit in EditRecipeView.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260430000001_create_recipe_ingredients.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 115: 20260430000002_create_grocery_item_sources.sql
+-- ============================================
+
+-- US-264: grocery_item_sources — preserves the recipe -> grocery item
+-- linkage that the v1 generator threw away during name-dedupe.
+--
+-- One grocery_item can be sourced from many recipes (e.g. chicken
+-- contributes to Mon dinner + Wed lunch). We need this many-to-many
+-- shape to render the new "By Recipe" view: each recipe section lists
+-- the items it pulled from, plus a "Shared" bucket for items linked to
+-- two or more recipes and a "Manual additions" bucket for items with
+-- no source rows.
+
+CREATE TABLE IF NOT EXISTS public.grocery_item_sources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  grocery_item_id UUID NOT NULL REFERENCES public.grocery_items(id) ON DELETE CASCADE,
+  recipe_id UUID REFERENCES public.recipes(id) ON DELETE SET NULL,
+  plan_entry_id UUID REFERENCES public.plan_entries(id) ON DELETE SET NULL,
+  meal_date DATE,
+  meal_slot TEXT,
+  contributed_quantity NUMERIC,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Forward lookup: "what recipes does this grocery item come from?"
+CREATE INDEX IF NOT EXISTS idx_grocery_item_sources_grocery_item
+  ON public.grocery_item_sources(grocery_item_id);
+
+-- Reverse lookup: "what grocery items does this recipe contribute?"
+-- Powers the per-recipe sections in the By Recipe view.
+CREATE INDEX IF NOT EXISTS idx_grocery_item_sources_recipe
+  ON public.grocery_item_sources(recipe_id)
+  WHERE recipe_id IS NOT NULL;
+
+-- US-262 will read this to mark recipe-sourced items checked when the
+-- meal is logged as made.
+CREATE INDEX IF NOT EXISTS idx_grocery_item_sources_plan_entry
+  ON public.grocery_item_sources(plan_entry_id)
+  WHERE plan_entry_id IS NOT NULL;
+
+ALTER TABLE public.grocery_item_sources ENABLE ROW LEVEL SECURITY;
+
+-- All policies scope through grocery_item ownership: a row is visible /
+-- mutable iff the user owns the parent grocery_item. This piggy-backs
+-- on grocery_items' existing household-aware policies.
+CREATE POLICY "Grocery sources viewable through grocery item ownership"
+  ON public.grocery_item_sources
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.grocery_items gi
+      WHERE gi.id = grocery_item_sources.grocery_item_id
+        AND gi.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Grocery sources insert through grocery item ownership"
+  ON public.grocery_item_sources
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.grocery_items gi
+      WHERE gi.id = grocery_item_sources.grocery_item_id
+        AND gi.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Grocery sources update through grocery item ownership"
+  ON public.grocery_item_sources
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.grocery_items gi
+      WHERE gi.id = grocery_item_sources.grocery_item_id
+        AND gi.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Grocery sources delete through grocery item ownership"
+  ON public.grocery_item_sources
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.grocery_items gi
+      WHERE gi.id = grocery_item_sources.grocery_item_id
+        AND gi.user_id = auth.uid()
+    )
+  );
+
+COMMENT ON TABLE public.grocery_item_sources IS
+  'US-264: many-to-many link from grocery items to the recipes/plan entries that contributed to them. Populated by GroceryGeneratorService; powers the "By Recipe" view in the iOS GroceryView.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260430000002_create_grocery_item_sources.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 116: 20260430000003_mark_meal_made.sql
+-- ============================================
+
+-- US-262: "Mark meal made" closes the recipe -> plan -> pantry -> grocery loop.
+--
+-- When a parent confirms a planned recipe was actually eaten:
+--   1. Debit pantry foods linked to the recipe's structured ingredients
+--      (one portion per food per kid served — clamped at 0).
+--   2. Auto-check every grocery_item that has a grocery_item_sources row
+--      pointing at this plan entry, so users don't have to hand-check
+--      items they used to cook the meal.
+--   3. Log the event so a re-tap within 1h returns "already_logged"
+--      instead of double-debiting.
+--
+-- Atomicity: the whole flow runs in a single PL/pgSQL function. Failures
+-- mid-flight roll back. SECURITY INVOKER lets RLS enforce ownership.
+
+CREATE TABLE IF NOT EXISTS public.plan_entry_made_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  plan_entry_id UUID NOT NULL REFERENCES public.plan_entries(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL,
+  made_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  debited_food_count INTEGER NOT NULL DEFAULT 0,
+  checked_grocery_count INTEGER NOT NULL DEFAULT 0,
+  -- Snapshot of what was changed, used by a future undo RPC to reverse
+  -- the debits + grocery checks within a short window.
+  reversal_payload JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_entry_made_log_entry_made_at
+  ON public.plan_entry_made_log(plan_entry_id, made_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_plan_entry_made_log_user
+  ON public.plan_entry_made_log(user_id, made_at DESC);
+
+ALTER TABLE public.plan_entry_made_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see own meal-made log"
+  ON public.plan_entry_made_log
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own meal-made log"
+  ON public.plan_entry_made_log
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own meal-made log"
+  ON public.plan_entry_made_log
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- RPC: rpc_mark_meal_made(plan_entry_id)
+-- ---------------------------------------------------------------------
+-- Returns JSONB shaped as one of:
+--   { "status": "logged", "debited_count": N, "checked_count": M, "made_at": "..." }
+--   { "status": "already_logged", "made_at": "..." }
+--   { "status": "no_recipe", "checked_count": M }
+--
+-- The "no_recipe" path applies when the plan entry has no recipe_id;
+-- nothing to debit but we still check grocery sources tied to the entry
+-- (e.g. user manually linked a recipe-less plan entry to an item).
+
+CREATE OR REPLACE FUNCTION public.rpc_mark_meal_made(p_plan_entry_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_recipe_id UUID;
+  v_existing_made TIMESTAMPTZ;
+  v_debited_count INTEGER := 0;
+  v_checked_count INTEGER := 0;
+  v_reversal JSONB := '{}'::JSONB;
+  v_food_debits JSONB := '[]'::JSONB;
+  v_grocery_checks JSONB := '[]'::JSONB;
+  v_ing RECORD;
+  v_gi RECORD;
+  v_now TIMESTAMPTZ := now();
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Idempotency: if the plan entry was already logged within the last
+  -- hour, return early so a retry doesn't double-debit. Older entries
+  -- can re-fire (user logging the same recipe a second time intentionally).
+  SELECT made_at INTO v_existing_made
+  FROM public.plan_entry_made_log
+  WHERE plan_entry_id = p_plan_entry_id
+    AND user_id = v_user_id
+    AND made_at >= v_now - INTERVAL '1 hour'
+  ORDER BY made_at DESC
+  LIMIT 1;
+
+  IF v_existing_made IS NOT NULL THEN
+    RETURN jsonb_build_object(
+      'status', 'already_logged',
+      'made_at', v_existing_made
+    );
+  END IF;
+
+  -- Look up the recipe linked to this plan entry. RLS on plan_entries
+  -- gates the visibility so unauthorized callers get NULL here.
+  SELECT recipe_id INTO v_recipe_id
+  FROM public.plan_entries
+  WHERE id = p_plan_entry_id;
+
+  -- Debit pantry foods for every structured ingredient with a food_id link.
+  -- v1 math is conservative: debit one portion per linked food. Recipe
+  -- serving math + multi-kid scaling is tracked as a future polish pass.
+  IF v_recipe_id IS NOT NULL THEN
+    FOR v_ing IN
+      SELECT ri.food_id, ri.name, ri.quantity, ri.unit, f.quantity AS pantry_qty
+      FROM public.recipe_ingredients ri
+      JOIN public.foods f ON f.id = ri.food_id
+      WHERE ri.recipe_id = v_recipe_id
+        AND ri.food_id IS NOT NULL
+        AND f.user_id = v_user_id
+    LOOP
+      UPDATE public.foods
+      SET quantity = GREATEST(0, quantity - 1)
+      WHERE id = v_ing.food_id
+        AND user_id = v_user_id;
+
+      v_food_debits := v_food_debits || jsonb_build_object(
+        'food_id', v_ing.food_id,
+        'name', v_ing.name,
+        'previous_qty', v_ing.pantry_qty,
+        'debited', 1
+      );
+      v_debited_count := v_debited_count + 1;
+    END LOOP;
+  END IF;
+
+  -- Auto-check grocery items linked back to this plan entry via
+  -- grocery_item_sources. Even with no recipe, manual links still fire.
+  FOR v_gi IN
+    SELECT DISTINCT gi.id, gi.name, gi.checked
+    FROM public.grocery_item_sources gis
+    JOIN public.grocery_items gi ON gi.id = gis.grocery_item_id
+    WHERE gis.plan_entry_id = p_plan_entry_id
+      AND gi.user_id = v_user_id
+      AND gi.checked = false
+  LOOP
+    UPDATE public.grocery_items
+    SET checked = true
+    WHERE id = v_gi.id
+      AND user_id = v_user_id;
+
+    v_grocery_checks := v_grocery_checks || jsonb_build_object(
+      'grocery_item_id', v_gi.id,
+      'name', v_gi.name,
+      'previous_checked', v_gi.checked
+    );
+    v_checked_count := v_checked_count + 1;
+  END LOOP;
+
+  v_reversal := jsonb_build_object(
+    'food_debits', v_food_debits,
+    'grocery_checks', v_grocery_checks
+  );
+
+  INSERT INTO public.plan_entry_made_log (
+    plan_entry_id,
+    user_id,
+    made_at,
+    debited_food_count,
+    checked_grocery_count,
+    reversal_payload
+  )
+  VALUES (
+    p_plan_entry_id,
+    v_user_id,
+    v_now,
+    v_debited_count,
+    v_checked_count,
+    v_reversal
+  );
+
+  RETURN jsonb_build_object(
+    'status', CASE WHEN v_recipe_id IS NULL THEN 'no_recipe' ELSE 'logged' END,
+    'debited_count', v_debited_count,
+    'checked_count', v_checked_count,
+    'made_at', v_now
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.rpc_mark_meal_made(UUID) IS
+  'US-262: log a planned recipe as eaten. Debits pantry foods (linked via recipe_ingredients.food_id) and checks recipe-sourced grocery items in one transaction. Idempotent within a 1-hour window via plan_entry_made_log.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260430000003_mark_meal_made.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 117: 20260501000000_relax_grocery_items_category_check.sql
+-- ============================================
+
+-- US-263 follow-up: drop the legacy 6-value CHECK on grocery_items.category.
+--
+-- The original 2025-10 schema constrained `category` to the FoodCategory
+-- enum ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'). Since
+-- US-263 introduced `aisle_section` as the authoritative store-section
+-- taxonomy (32 values), iOS now legitimately writes free-form values
+-- like 'other' into `category` for ingredients without a linked pantry
+-- food (see GroceryGeneratorService.addLegacyName + addStructuredIngredient).
+--
+-- Rather than enumerate every legitimate value, we drop the constraint:
+-- `aisle_section` is the typed column that section-grouping reads from,
+-- and `category` is now an unconstrained free-text label kept only for
+-- legacy nutrition-coloring callers.
+
+ALTER TABLE public.grocery_items
+  DROP CONSTRAINT IF EXISTS grocery_items_category_check;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260501000000_relax_grocery_items_category_check.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 118: 20260505000000_smart_product_catalog.sql
+-- ============================================
+
+-- US-272: Smart Product Catalog + per-user preferences for the grocery
+-- quick-add flow.
+--
+-- Two tables back the tiered lookup (user → centralized → create):
+--
+--   1. grocery_product_catalog (centralized): a community catalog of
+--      products keyed by barcode and a normalized name. The first user
+--      to add or scan a product creates the catalog row; subsequent
+--      users get the defaults pre-filled (aisle, category, unit, brand,
+--      package size). Times_added drives suggestion ranking.
+--
+--   2. user_product_preferences (per-user override): the user's own
+--      memory layer. When they change the aisle on chicken breast from
+--      meat_deli to refrigerated, that preference lives here so the
+--      next time they add chicken breast, their override wins over the
+--      catalog default. Looked up first by (user_id, barcode), then by
+--      (user_id, name_normalized).
+--
+-- Both tables are write-light (one row per distinct product per user,
+-- one row per distinct product globally) and read-heavy on add. The
+-- indexes target exact-match lookups at sub-millisecond latency.
+
+-- =====================================================================
+-- 1. grocery_product_catalog
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.grocery_product_catalog (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Display name as the contributor entered it (e.g. "Chicken Breast").
+  name TEXT NOT NULL,
+  -- Lowercased + trimmed + collapsed-whitespace for exact-match lookup.
+  name_normalized TEXT NOT NULL,
+  -- Optional, but the strongest match key when present.
+  barcode TEXT,
+  -- 32-value GroceryAisle.rawValue (see ios/.../GroceryAisle.swift).
+  default_aisle_section TEXT,
+  -- Legacy 6-value FoodCategory.rawValue (protein/carb/dairy/...).
+  default_category TEXT,
+  default_unit TEXT,
+  default_quantity NUMERIC,
+  brand TEXT,
+  package_size NUMERIC,
+  package_unit TEXT,
+  -- Free-form metadata: openfoodfacts tags, allergens, source url, etc.
+  metadata JSONB,
+  -- Provenance + popularity for suggestion ranking.
+  created_by_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  times_added INTEGER NOT NULL DEFAULT 1,
+  last_added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Exact-match lookup keys. Barcode is unique when set (one global row
+-- per scanned product). name_normalized is unique to dedupe text-only
+-- entries; if two contributors land on the same normalized name the
+-- INSERT ... ON CONFLICT (name_normalized) path bumps times_added on
+-- the existing row instead of creating a duplicate.
+CREATE UNIQUE INDEX IF NOT EXISTS grocery_product_catalog_barcode_uq
+  ON public.grocery_product_catalog(barcode)
+  WHERE barcode IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS grocery_product_catalog_name_uq
+  ON public.grocery_product_catalog(name_normalized);
+
+-- Popularity-ordered "find similar" lookups for autocomplete.
+CREATE INDEX IF NOT EXISTS grocery_product_catalog_times_added_idx
+  ON public.grocery_product_catalog(times_added DESC);
+
+ALTER TABLE public.grocery_product_catalog ENABLE ROW LEVEL SECURITY;
+
+-- The catalog is intentionally world-readable for signed-in users so
+-- everyone benefits from prior contributions. Writes are limited to
+-- authenticated users; the upsert path on the client is responsible
+-- for not overwriting other users' values (it bumps times_added and
+-- only fills NULL columns).
+CREATE POLICY "Catalog readable by authenticated users"
+  ON public.grocery_product_catalog
+  FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Catalog insertable by authenticated users"
+  ON public.grocery_product_catalog
+  FOR INSERT
+  WITH CHECK (auth.uid() IS NOT NULL);
+
+-- Updates allowed for any authenticated user so the popularity counter
+-- and missing fields can be filled in incrementally. The client uses
+-- COALESCE-style upserts that never null out a value another user set.
+CREATE POLICY "Catalog updatable by authenticated users"
+  ON public.grocery_product_catalog
+  FOR UPDATE
+  USING (auth.uid() IS NOT NULL);
+
+COMMENT ON TABLE public.grocery_product_catalog IS
+  'US-272: Centralized product catalog. First user to add a product creates the row; subsequent adds bump times_added and fill in any NULL defaults. Looked up by barcode then by name_normalized.';
+
+-- =====================================================================
+-- 2. user_product_preferences
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.user_product_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- Optional FK to the catalog row that seeded this preference. Lets
+  -- the client display "Defaults from community catalog" when the user
+  -- hasn't customized anything yet.
+  catalog_id UUID REFERENCES public.grocery_product_catalog(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  name_normalized TEXT NOT NULL,
+  barcode TEXT,
+  -- The user's preferred aisle for *this* product, even if it disagrees
+  -- with the catalog default. This is the whole point of the table.
+  preferred_aisle_section TEXT,
+  preferred_category TEXT,
+  preferred_unit TEXT,
+  preferred_quantity NUMERIC,
+  preferred_brand TEXT,
+  notes TEXT,
+  times_added INTEGER NOT NULL DEFAULT 1,
+  last_added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One pref row per (user, normalized name) and at most one per (user,
+-- barcode). The lookup path tries barcode first then name; both must
+-- be unique within a user so the INSERT ... ON CONFLICT upsert is well-
+-- defined.
+CREATE UNIQUE INDEX IF NOT EXISTS user_product_preferences_user_name_uq
+  ON public.user_product_preferences(user_id, name_normalized);
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_product_preferences_user_barcode_uq
+  ON public.user_product_preferences(user_id, barcode)
+  WHERE barcode IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS user_product_preferences_user_last_added_idx
+  ON public.user_product_preferences(user_id, last_added_at DESC);
+
+ALTER TABLE public.user_product_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own preferences"
+  ON public.user_product_preferences
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own preferences"
+  ON public.user_product_preferences
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own preferences"
+  ON public.user_product_preferences
+  FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own preferences"
+  ON public.user_product_preferences
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+COMMENT ON TABLE public.user_product_preferences IS
+  'US-272: Per-user product memory. Overrides the centralized catalog defaults so each user’s preferred aisle/brand/unit/quantity sticks across adds.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260505000000_smart_product_catalog.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 119: 20260506000000_household_product_preferences.sql
+-- ============================================
+
+-- US-274: Household-shared product preferences.
+--
+-- Adds an optional `household_id` to `user_product_preferences` so a
+-- household can opt into a single, merged preference layer instead of
+-- per-user islands. When a user's grocery resolver fires, it now walks:
+--
+--   household preference (if shared) → user preference → catalog → ...
+--
+-- The schema invariant: a row has either a user-only key
+-- `(user_id, name_normalized)` OR a household-shared key
+-- `(household_id, name_normalized)`. We enforce both with two partial
+-- unique indexes — never one row trying to be both.
+--
+-- The merge policy lives in iOS (`SmartProductService.recordAdd`):
+-- last-write-wins on aisle/category/unit, audit-log on every change so
+-- partners can see why their default flipped.
+
+ALTER TABLE public.user_product_preferences
+  ADD COLUMN IF NOT EXISTS household_id UUID REFERENCES public.households(id) ON DELETE CASCADE;
+
+-- Replace the existing user-only unique index with a partial one so
+-- household-shared rows live in their own keyspace. The older index is
+-- preserved as a partial WHERE household_id IS NULL.
+DROP INDEX IF EXISTS user_product_preferences_user_name_uq;
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_product_preferences_user_only_name_uq
+  ON public.user_product_preferences(user_id, name_normalized)
+  WHERE household_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_product_preferences_household_name_uq
+  ON public.user_product_preferences(household_id, name_normalized)
+  WHERE household_id IS NOT NULL;
+
+DROP INDEX IF EXISTS user_product_preferences_user_barcode_uq;
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_product_preferences_user_only_barcode_uq
+  ON public.user_product_preferences(user_id, barcode)
+  WHERE household_id IS NULL AND barcode IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_product_preferences_household_barcode_uq
+  ON public.user_product_preferences(household_id, barcode)
+  WHERE household_id IS NOT NULL AND barcode IS NOT NULL;
+
+-- Update the RLS policies so household members can see/edit shared rows.
+-- The user-only path stays exactly as before; we add a parallel rule
+-- that grants access through household_members for shared rows.
+
+DROP POLICY IF EXISTS "Users view own preferences" ON public.user_product_preferences;
+CREATE POLICY "Users view own or household preferences"
+  ON public.user_product_preferences
+  FOR SELECT
+  USING (
+    auth.uid() = user_id
+    OR (
+      household_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM public.household_members hm
+        WHERE hm.household_id = user_product_preferences.household_id
+          AND hm.user_id = auth.uid()
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "Users insert own preferences" ON public.user_product_preferences;
+CREATE POLICY "Users insert own or household preferences"
+  ON public.user_product_preferences
+  FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id
+    AND (
+      household_id IS NULL
+      OR EXISTS (
+        SELECT 1 FROM public.household_members hm
+        WHERE hm.household_id = user_product_preferences.household_id
+          AND hm.user_id = auth.uid()
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "Users update own preferences" ON public.user_product_preferences;
+CREATE POLICY "Users update own or household preferences"
+  ON public.user_product_preferences
+  FOR UPDATE
+  USING (
+    auth.uid() = user_id
+    OR (
+      household_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM public.household_members hm
+        WHERE hm.household_id = user_product_preferences.household_id
+          AND hm.user_id = auth.uid()
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "Users delete own preferences" ON public.user_product_preferences;
+CREATE POLICY "Users delete own or household preferences"
+  ON public.user_product_preferences
+  FOR DELETE
+  USING (
+    auth.uid() = user_id
+    OR (
+      household_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM public.household_members hm
+        WHERE hm.household_id = user_product_preferences.household_id
+          AND hm.user_id = auth.uid()
+      )
+    )
+  );
+
+COMMENT ON COLUMN public.user_product_preferences.household_id IS
+  'US-274: When set, this preference row is shared with all household members; resolver checks household tier before user-only tier. Mutually exclusive with the user-only key (enforced by partial unique indexes).';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260506000000_household_product_preferences.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 120: 20260507000000_store_layouts.sql
+-- ============================================
+
+-- US-275: Store-specific aisle maps.
+--
+-- Two new tables and one new column:
+--
+--   1. `store_layouts` (centralized, world-readable): one row per
+--      common chain. `aisle_overrides` is a JSON map from
+--      GroceryAisle.rawValue → desired walk-order int. Falling back to
+--      GroceryAisle.storeWalkOrder for any aisle not in the map keeps
+--      the seed light — only override what differs from the universal.
+--
+--   2. `user_store_layout_overrides` (per-user): when a user reorders
+--      aisles for their local store, their delta lands here keyed by
+--      (user_id, store_layout_id, aisle). Wins over the chain-wide
+--      override during sort.
+--
+--   3. `grocery_lists.store_layout_id` (FK, nullable): per-list pick.
+--      NULL means "use the universal walk order" (current behavior).
+--
+-- The aisle-walk function is computed entirely on the client — no
+-- server-side ordering — so the store_layouts table is just a typed
+-- defaults document that everyone can read.
+
+-- =====================================================================
+-- 1. store_layouts (chain-wide defaults)
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.store_layouts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Display name (e.g. "Trader Joe's").
+  name TEXT NOT NULL,
+  -- URL-safe slug (e.g. "trader_joes"). Used as the analytics property
+  -- and for stable lookups across migrations.
+  slug TEXT NOT NULL,
+  banner_image_url TEXT,
+  -- JSONB map: { "produce": 50, "meat_deli": 10, ... }. Aisles missing
+  -- from the map use GroceryAisle.storeWalkOrder.
+  aisle_overrides JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- CI-fix: store_layouts is created by an earlier migration (20251013172257)
+-- with a different column set; later migrations reference a superset. Ensure
+-- every referenced column exists before indexing/backfilling.
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS slug TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS banner_image_url TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS aisle_overrides JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS store_name TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS store_chain TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS store_location TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT false;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS household_id UUID;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE public.store_layouts ALTER COLUMN user_id DROP NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS store_layouts_slug_uq
+  ON public.store_layouts(slug);
+
+ALTER TABLE public.store_layouts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Store layouts readable by all authenticated users"
+  ON public.store_layouts
+  FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+
+-- Inserts/updates restricted to the service role; the seed below ships
+-- the initial 5 chains and a future curator job tops up the catalog.
+-- No INSERT/UPDATE policy = effectively service-role-only since RLS is
+-- enabled.
+
+-- Seed the 5 most common US chains. Aisle overrides reflect store-walk
+-- patterns documented in store maps + customer reviews; tweak via a
+-- follow-up migration as we learn more.
+INSERT INTO public.store_layouts (slug, name, aisle_overrides)
+VALUES
+  (
+    'walmart', 'Walmart',
+    '{}'::jsonb
+  ),
+  (
+    'target', 'Target',
+    -- Target puts grocery in the back; non-food up front.
+    '{"household": 5, "paper_goods": 7, "personal_care": 9, "produce": 50, "meat_deli": 60, "dairy": 70, "frozen_meals": 80}'::jsonb
+  ),
+  (
+    'trader_joes', 'Trader Joe''s',
+    -- Produce is at the back wall; bakery and frozen are big at TJ's.
+    '{"frozen_meals": 30, "frozen_veg": 35, "frozen_treats": 40, "produce": 200, "meat_deli": 220}'::jsonb
+  ),
+  (
+    'whole_foods', 'Whole Foods',
+    -- Produce front-and-center, prepared foods early, supplements last.
+    '{"produce": 5, "bakery": 15, "meat_deli": 25, "personal_care": 990}'::jsonb
+  ),
+  (
+    'costco', 'Costco',
+    -- Bulk warehouse layout: appliances first, then food, frozen at end.
+    '{"household": 5, "paper_goods": 8, "produce": 100, "meat_deli": 110, "dairy": 120, "frozen_meals": 800, "frozen_veg": 805}'::jsonb
+  )
+ON CONFLICT (slug) DO NOTHING;
+
+COMMENT ON TABLE public.store_layouts IS
+  'US-275: Per-chain aisle walk-order overrides. JSONB map keyed by GroceryAisle.rawValue → walk-order int. Aisles absent from the map fall back to GroceryAisle.storeWalkOrder.';
+
+-- =====================================================================
+-- 2. user_store_layout_overrides (per-user deltas)
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.user_store_layout_overrides (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  store_layout_id UUID NOT NULL REFERENCES public.store_layouts(id) ON DELETE CASCADE,
+  -- GroceryAisle.rawValue, e.g. "meat_deli".
+  aisle TEXT NOT NULL,
+  walk_order INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_store_layout_overrides_uq
+  ON public.user_store_layout_overrides(user_id, store_layout_id, aisle);
+
+ALTER TABLE public.user_store_layout_overrides ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own store overrides"
+  ON public.user_store_layout_overrides
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own store overrides"
+  ON public.user_store_layout_overrides
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own store overrides"
+  ON public.user_store_layout_overrides
+  FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own store overrides"
+  ON public.user_store_layout_overrides
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+COMMENT ON TABLE public.user_store_layout_overrides IS
+  'US-275: Per-user reorderings inside a chain. (user_id, store_layout_id, aisle) is unique. Wins over store_layouts.aisle_overrides for that aisle.';
+
+-- =====================================================================
+-- 3. grocery_lists.store_layout_id
+-- =====================================================================
+
+ALTER TABLE public.grocery_lists
+  ADD COLUMN IF NOT EXISTS store_layout_id UUID
+    REFERENCES public.store_layouts(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.grocery_lists.store_layout_id IS
+  'US-275: Optional FK. When set, ShoppingModeView and the grocery list view sort by this store''s aisle_overrides instead of GroceryAisle.storeWalkOrder.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260507000000_store_layouts.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 121: 20260508000000_restock_history.sql
+-- ============================================
+
+-- US-276: Recurring-restock predictor.
+--
+-- Tracks the last 12 add timestamps per user-product so the iOS client
+-- can compute interquartile cadence and surface "you usually buy this
+-- every 7 days, last add was 6 days ago — restock?" suggestions.
+--
+-- The history is intentionally a JSONB array on the existing prefs row
+-- (rather than a separate add_log table) for two reasons:
+--
+--   1. The query is always "give me all products + their last 12 adds
+--      for this user" — colocating the history with the row avoids a
+--      join on every dashboard load.
+--
+--   2. Twelve ISO timestamps fit comfortably in a JSONB column
+--      (~360 bytes). Trimming to 12 on insert caps the row size.
+--
+-- Maintenance is owned by the iOS client: `SmartProductService.recordAdd`
+-- appends the current timestamp and trims to the last 12 entries before
+-- upserting. No server-side trigger needed.
+
+ALTER TABLE public.user_product_preferences
+  ADD COLUMN IF NOT EXISTS add_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN public.user_product_preferences.add_history IS
+  'US-276: ordered array of ISO-8601 timestamps for the last <=12 grocery adds of this product. Drives the RestockPredictor cadence computation in iOS.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260508000000_restock_history.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 122: 20260509000000_drop_grocery_items_added_via_check.sql
+-- ============================================
+
+-- Align `grocery_items.added_via` with how the app actually uses it.
+--
+-- Four earlier phase-1 migrations defined the column with conflicting CHECK
+-- constraints. The live deployment ended up with the narrow set
+-- ('manual','recipe','smart_restock','meal_plan'), but both web and iOS
+-- send ~16 distinct provenance tags for analytics — 'quick_add', 'voice',
+-- 'siri', 'photo', 'barcode', 'ar_shelf_finder', 'starter_template',
+-- 'bulk_recipe', 'cookable_match', 'expiring_restock', 'restock_suggestion',
+-- 'drag', 'ai', 'recipe', 'restock', 'import' — none of which fit a fixed
+-- enum. The result is that the plus-button + barcode + Add flow on iOS
+-- (which sends 'quick_add' / 'barcode') fails with
+-- `grocery_items_added_via_check`.
+--
+-- This is a provenance label for analytics, not a domain constraint, so the
+-- right shape is plain TEXT with no CHECK.
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE table_name = 'grocery_items'
+      AND constraint_name = 'grocery_items_added_via_check'
+  ) THEN
+    ALTER TABLE public.grocery_items
+      DROP CONSTRAINT grocery_items_added_via_check;
+  END IF;
+END $$;
+
+COMMENT ON COLUMN public.grocery_items.added_via IS
+  'Free-form provenance tag set by the client (e.g. manual, voice, barcode, '
+  'quick_add, siri, photo, ar_shelf_finder, recipe, restock, '
+  'starter_template, bulk_recipe). Used for analytics, not validation.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260509000000_drop_grocery_items_added_via_check.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 123: 20260510000000_apple_email_binding.sql
+-- ============================================
+
+-- Apple Sign In private-relay binding support.
+--
+-- Apple Sign In users who choose "Hide My Email" land in auth.users with an
+-- @privaterelay.appleid.com address. They have no password (Apple-only auth).
+-- This migration adds:
+--   1. current_user_has_password() — SECURITY DEFINER fn so the client can
+--      detect whether the caller has set a password without exposing
+--      auth.users to RLS.
+--   2. email_bind_requests — short-lived OTP records used by the
+--      bind-email-request / bind-email-verify edge functions to swap the
+--      relay address for a real one and let the user set a password.
+
+-- -------------------------------------------------------------------
+-- 1. Has-password helper
+-- -------------------------------------------------------------------
+create or replace function public.current_user_has_password()
+returns boolean
+language sql
+security definer
+stable
+set search_path = public, auth
+as $$
+  select coalesce(
+    (select length(coalesce(encrypted_password, '')) > 0
+     from auth.users
+     where id = auth.uid()),
+    false
+  )
+$$;
+
+revoke all on function public.current_user_has_password() from public;
+grant execute on function public.current_user_has_password() to authenticated;
+
+-- -------------------------------------------------------------------
+-- 1b. Helper for the bind-email-request edge function to detect
+--     collisions before sending a verification code.
+-- -------------------------------------------------------------------
+create or replace function public.email_taken_by_other(p_email text)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public, auth
+as $$
+  select exists (
+    select 1
+    from auth.users
+    where lower(email) = lower(p_email)
+      and id <> coalesce(auth.uid(), '00000000-0000-0000-0000-000000000000'::uuid)
+  )
+$$;
+
+revoke all on function public.email_taken_by_other(text) from public;
+grant execute on function public.email_taken_by_other(text) to authenticated, service_role;
+
+-- -------------------------------------------------------------------
+-- 2. Email bind requests
+-- -------------------------------------------------------------------
+create table if not exists public.email_bind_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  requested_email text not null,
+  code_hash text not null,
+  expires_at timestamptz not null,
+  attempts integer not null default 0,
+  consumed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists email_bind_requests_user_active_idx
+  on public.email_bind_requests (user_id, created_at desc)
+  where consumed_at is null;
+
+create index if not exists email_bind_requests_target_idx
+  on public.email_bind_requests (lower(requested_email), created_at desc);
+
+alter table public.email_bind_requests enable row level security;
+
+-- No client-facing policies. All reads/writes go through edge functions
+-- using the service role key — clients only ever see the JSON responses.
+-- RLS is enabled (with no policies) so anon/authenticated cannot bypass.
+
+comment on table public.email_bind_requests is
+  'Short-lived 6-digit codes for binding a real email to an Apple-relay account. Service-role only; no client policies by design.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260510000000_apple_email_binding.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 124: 20260510000001_seed_blog_drafts_weeks_1_2.sql
+-- ============================================
+
+-- Seed blog post drafts: Weeks 1-2 of the EatPal SEO content calendar.
+--
+-- Posts are inserted with status='draft' so they do NOT auto-publish.
+-- Edit, attach featured images, and publish from the blog admin UI when ready.
+--
+-- Idempotent: ON CONFLICT (slug) DO NOTHING means re-running this migration
+-- is safe and will not overwrite edits made in the admin.
+--
+-- Week 2 / Post 2 (apps roundup) is intentionally seeded under a *new* draft slug
+-- (meal-planning-apps-for-picky-eaters-2026-update-draft) to avoid colliding with
+-- the existing live post at /blog/meal-planning-apps-for-picky-eaters-what-parents-need.
+-- When ready, copy this draft's content into the existing post (preserving its slug
+-- and backlinks), update meta_title/meta_description, then delete this draft row.
+
+-- ============================================================================
+-- 1. Ensure required categories exist
+-- ============================================================================
+INSERT INTO public.blog_categories (name, slug, description) VALUES
+  ('ARFID & Feeding Challenges', 'arfid-feeding-challenges',
+    'Guides for families navigating ARFID and severe feeding challenges.'),
+  ('Picky Eaters', 'picky-eaters',
+    'Practical content for typical picky-eater families.'),
+  ('Tools & Reviews', 'tools-reviews',
+    'Reviews and comparisons of meal planning and feeding-therapy tools.')
+ON CONFLICT (slug) DO NOTHING;
+
+-- ============================================================================
+-- 2. Insert blog post drafts
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Week 1 / Post 1 — ARFID Meal Plans (pillar)
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'ARFID Meal Plans: How to Build a Week of Safe, Stress-Free Meals',
+  'arfid-meal-plans-build-week-safe-stress-free-meals',
+  $ep_excerpt$Most "weekly meal plans" assume a kid who'll be coaxed into trying new things by Tuesday. ARFID families need a different structure — one built around safe foods first, exposure second, variety last.$ep_excerpt$,
+  $ep_md$If you've ever opened a "family meal plan" PDF and felt your stomach drop because day three is "salmon with roasted asparagus and quinoa," this post is for you.
+
+ARFID — Avoidant/Restrictive Food Intake Disorder — isn't picky eating with extra steps. It's a clinical pattern where eating new or unfamiliar foods can trigger genuine distress, gagging, or shutdown. Standard meal plans assume a child who can be coaxed into trying new things by Tuesday. That assumption is exactly why those plans fail.
+
+This guide walks through a planning framework feeding therapists actually use with families: a structure built around **safe foods first, exposure second, variety last.** You'll get a 3-day sample, a method for stretching it to a full week, and a way to use it without turning every meal into a battle.
+
+> EatPal is not a substitute for feeding therapy. If your child has been diagnosed with ARFID — or you suspect it — the framework below works best alongside a feeding therapist or registered dietitian.
+
+## The three layers of an ARFID-safe plan
+
+Forget the food groups for a minute. Build your week in three layers.
+
+**1. Anchor foods (the load-bearing layer).** Three to five foods your child eats reliably — same brand, same texture, same plate. These appear in every day of the plan. They're not a failure of variety; they're the structural beam holding the plan up.
+
+**2. Bridge foods (one step from safe).** Foods that share a key property with an anchor — same texture, same color, same temperature, same brand. If plain crackers are an anchor, plain crackers with a thin layer of butter is a bridge. Bridge foods earn a slot once or twice per week, not every day.
+
+**3. Stretch foods (low-pressure exposure).** A new or rejected food, served *near* the meal — on the plate, on a separate dish, or just in the room. No pressure to eat it, no praise if they do. Once or twice per week, max. The goal is repeated, low-stakes contact, not consumption.
+
+The ratio for most ARFID weeks lands around **70% anchors, 20% bridges, 10% stretch**. If your kid is in a tighter window — post-illness, after a school transition, during travel — drop to 90/10/0 without guilt. The plan adjusts; the relationship doesn't bend.
+
+## What "predictability" actually looks like
+
+A common piece of advice for ARFID families is "be predictable." That's true and useless without a definition. In practice, predictability means:
+
+- Same plate, same cup, same utensils. If the cup chips, replace it with the same cup — not an upgrade.
+- Same time windows. Breakfast within a 30-minute window. Dinner at the same hour.
+- Same plating. If chicken nuggets always sit at 12 o'clock with ketchup at 3 o'clock, they always do.
+- Same answer to "what's for dinner?" — and the answer arrives *before* dinner, not at dinner.
+
+Predictability is what lets a child save their cognitive energy for *eating*, instead of spending it on figuring out whether the meal in front of them is safe.
+
+## A 3-day sample plan
+
+This sample assumes a school-aged child with five anchor foods: plain pasta, chicken nuggets (one specific brand), white toast with butter, plain Cheerios with milk, and apple slices (peeled). Adjust the anchors to your child's actual list.
+
+### Day 1 — anchor-heavy, no stretch
+
+| Meal | What's on the plate |
+| --- | --- |
+| Breakfast | Cheerios + milk, peeled apple slices |
+| Snack | White toast, butter |
+| Lunch | Plain pasta (no sauce), apple slices, water |
+| Snack | Cheerios (dry) |
+| Dinner | Chicken nuggets, plain pasta, apple slices |
+
+This day exists to build the kid's sense that mealtimes are safe. No bridges, no stretches. Boring is the goal.
+
+### Day 2 — introduce one bridge
+
+| Meal | What's on the plate |
+| --- | --- |
+| Breakfast | Cheerios + milk, peeled apple slices |
+| Snack | White toast, butter |
+| Lunch | Plain pasta, apple slices, **a small puddle of olive oil** *(bridge — same color/texture as butter)* |
+| Snack | Cheerios (dry) |
+| Dinner | Chicken nuggets, plain pasta, apple slices |
+
+The bridge sits *next to* the safe food, not on it. Your child does not have to dip the pasta. They might never dip the pasta. The point is a controlled, repeated visual.
+
+### Day 3 — bridge plus a stretch
+
+| Meal | What's on the plate |
+| --- | --- |
+| Breakfast | Cheerios + milk, peeled apple slices |
+| Snack | White toast, butter |
+| Lunch | Plain pasta, apple slices |
+| Snack | Cheerios (dry), **one slice of unpeeled apple** *(stretch — same food, different state)* |
+| Dinner | Chicken nuggets, plain pasta, apple slices, **one cherry tomato on a separate side plate** *(stretch — new food)* |
+
+A stretch food is *present*. It is not negotiated. No "just try one bite." The child can ignore it, sniff it, push it away, or — sometimes, eventually — touch it. Any of those is a win.
+
+## Stretching from 3 days to 7
+
+Most parents don't fail at making the first three days. They fail at sustaining the next four. The trick: **the back half of the week is a copy of the first half.**
+
+- Day 4 = Day 1
+- Day 5 = Day 2 (same bridge, on a different anchor)
+- Day 6 = anchors only — recovery day
+- Day 7 = Day 3 (same stretch, served at a different meal)
+
+Repeat exposure is the active ingredient. Five exposures to one cherry tomato beats one exposure to five different vegetables, every time.
+
+## When to introduce a "challenge" meal — and when not to
+
+A challenge meal is a planned, calm exposure to a non-safe food in a non-mealtime context — not at dinner, not under time pressure. Snack time on a Saturday is a good slot. The middle of a school morning is not.
+
+Skip challenge slots entirely during:
+
+- The week of a school start, illness, or travel
+- Any week after a regression
+- Periods when bedtime, mood, or sleep are off
+
+You're not behind. ARFID progress isn't linear, and the plan exists to lower the floor — not raise the ceiling every week.
+
+## How EatPal handles this
+
+EatPal's planner lets you tag foods by sensory property — texture, color, brand, temperature — and mark which ones are anchors. When you generate a plan, the AI weights anchors heavily, suggests bridges based on shared properties, and surfaces stretch slots only as often as you allow. You can also share the plan with a feeding therapist as a read-only link, so they can see what's actually happening at home without requiring a parent journal.
+
+If you haven't built your child's safe-food list yet, start with the [picky eater quiz](/picky-eater-quiz) — it asks the questions in feeding-therapy order and produces a starter list. Then drop those foods into the [free meal plan generator](/meal-plan) to get your first three days.
+
+## Common questions
+
+**My child only has 4 safe foods. Is that enough?**
+Yes. A 4-anchor plan is tighter, but it works. Build your week from those four; bridges come later, when the floor feels stable.
+
+**Won't repetition cause nutrient gaps?**
+Possibly. This is exactly why ARFID plans should be reviewed by a registered dietitian — they can spot which gaps are clinically meaningful and which aren't, and recommend supplementation if needed. A plan you'll actually use beats a "complete" plan you abandon by Wednesday.
+
+**What if my child rejects a previously safe food?**
+Treat it as data, not betrayal. Drop it for two weeks; serve it once, plain, in week three. Most "lost" safe foods come back. The ones that don't get replaced — not mourned.
+
+**How do I plan around school lunches?**
+Lunchboxes need their own anchor list, because school is its own sensory environment. We cover this in [Lunchbox Wins: Easy Meals Kids Actually Eat](/blog/lunchbox-wins-10-easy-meals-kids-actually-eat) — a full rotation built for school cafeterias.
+
+**Is this the same as food chaining?**
+Food chaining is a longer-term technique for *expanding* the safe food list one bridge at a time. Meal planning is the daily structure. They work together; food chaining lives inside the bridge layer of your weekly plan. We walk through specific chains in [Food Chaining for Picky Eaters](/blog/food-chaining-for-picky-eaters-step-by-step-examples).
+
+## Get your first plan in under five minutes
+
+If you'd rather not build this from scratch, [generate a free 7-day ARFID-aware plan](/meal-plan) — answer five questions about your child's anchors and we'll output a week structured exactly like the framework above. You can edit, swap, or reset any meal. No card required.
+$ep_md$,
+  'draft',
+  'ARFID Meal Plans: A Parent''s 7-Day Framework | EatPal',
+  'Build a week of ARFID-friendly meals with a 3-layer framework feeding therapists actually use. Free 7-day template + sample plan.',
+  8,
+  (SELECT id FROM public.blog_categories WHERE slug = 'arfid-feeding-challenges'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Week 1 / Post 2 — Picky Eater Meal Plans (pillar)
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Picky Eater Meal Plans: 7-Day Template Parents Can Actually Stick To',
+  'picky-eater-meal-plan-7-day-template',
+  $ep_excerpt$Most picky-eater plans look great Sunday and collapse by Wednesday. Here's a 7-day template built with the three things online plans skip — repetition, anchors, and a graceful exit.$ep_excerpt$,
+  $ep_md$Most picky-eater meal plans look great on Sunday and collapse by Wednesday. The dinner the kid said they liked last week is suddenly inedible. The "creative twist on chicken" got two bites and a meltdown. By Thursday you're back to scrambled eggs and goldfish crackers, blaming yourself.
+
+The plan didn't fail. The *design* of the plan failed.
+
+A meal plan that survives a real week with a picky eater needs three things most online plans skip: built-in repetition, predictable anchors, and a graceful exit when the kid won't eat what's served. Below is a 7-day template that bakes all three in — plus a grocery list and a short FAQ for the moments when the wheels come off.
+
+> Note: this guide is for typical picky eating. If your child only eats 5–10 foods, gags on textures, or melts down at the sight of new food, you'll get more mileage out of [ARFID Meal Plans: How to Build a Week of Safe, Stress-Free Meals](/blog/arfid-meal-plans-build-week-safe-stress-free-meals).
+
+## The 80/20 rule for picky-eater plans
+
+Every meal should be **80% foods your child already eats**, with up to 20% set aside for gentle exposure to something newer. That's not a target for variety — it's a ceiling. Beat your head against the 20% line and the 80% starts to crack too.
+
+Concretely:
+
+- A bowl of plain pasta with butter (80%) plus a small spoon of marinara on the side (20%) ✅
+- A bowl of pasta with marinara mixed in, with a "bite of broccoli" rule (0/100) ❌
+
+The first plate gives your kid a meal they'll eat. The second gives them a fight.
+
+## Three anchors per meal
+
+Skip the food-pyramid framing for a week and try this instead. Every meal has three anchors:
+
+1. **A familiar carb** — pasta, rice, toast, tortilla, crackers
+2. **A familiar protein** — eggs, chicken, beans, cheese, yogurt, deli turkey
+3. **A familiar fruit or veg** — apple slices, baby carrots, cucumber rounds, banana
+
+If all three anchors land, the meal is a success. Anything beyond that is a bonus. Most parents are running plans that need 5–7 things to land per meal — that's a 1-in-50 night, every night.
+
+## Theme nights cut the decision load in half
+
+Decision fatigue is the silent killer of meal plans. The fix is built into how restaurants run their menus: **a theme per night**, locked for at least a month.
+
+A simple rotation:
+
+- **Monday — Pasta Night**
+- **Tuesday — Taco / Wrap Night**
+- **Wednesday — Breakfast for Dinner**
+- **Thursday — Bowl Night** (rice or grain bowl, build-your-own)
+- **Friday — Pizza Night**
+- **Saturday — Leftovers / Pantry Night**
+- **Sunday — Roast or Slow-Cooker Night**
+
+Within each theme, there are 3–4 versions you rotate. Pasta Night might be buttered pasta one week, pasta with meat sauce the next. The kid knows what's coming on Monday. So do you.
+
+## A real 7-day template
+
+This template assumes one picky kid (ages roughly 4–10) and uses common pantry ingredients. Adjust portions and anchors to your child.
+
+### Day 1 — Pasta Monday
+
+- **Breakfast:** scrambled eggs, toast with butter, banana
+- **Lunch:** turkey wrap (tortilla + deli turkey + cheese), apple slices, crackers
+- **Dinner:** plain pasta with butter and parmesan, plain chicken strips, side dish of marinara *(20% slot — optional dip)*
+
+### Day 2 — Taco Tuesday
+
+- **Breakfast:** Greek yogurt with honey, banana
+- **Lunch:** cheese quesadilla, cucumber rounds, apple
+- **Dinner:** soft taco bar — seasoned ground beef or beans, plain shredded cheese, tortillas, plain rice, *side dish of lettuce and salsa for parents*
+
+### Day 3 — Breakfast for Dinner
+
+- **Breakfast:** oatmeal with brown sugar, blueberries
+- **Lunch:** PB&J, baby carrots, pretzels
+- **Dinner:** pancakes, scrambled eggs, sausage links, sliced strawberries
+
+### Day 4 — Bowl Night
+
+- **Breakfast:** bagel with cream cheese, apple
+- **Lunch:** mac and cheese (boxed is fine), peas, applesauce
+- **Dinner:** rice bowl bar — plain rice, plain chicken, shredded cheese, black beans (optional), corn, *parents add salsa, avocado, hot sauce*
+
+### Day 5 — Pizza Friday
+
+- **Breakfast:** cereal with milk, banana
+- **Lunch:** ham and cheese sandwich, pretzels, grapes
+- **Dinner:** homemade or frozen pizza — cheese only for the kid, parents do toppings; baby carrots on the side
+
+### Day 6 — Leftovers / Pantry Saturday
+
+- **Breakfast:** waffles with butter and syrup, sliced strawberries
+- **Lunch:** grilled cheese, apple slices, goldfish crackers
+- **Dinner:** rotation of whatever leftovers exist; if none, scrambled eggs + toast + cut fruit. **No new food on Saturday.**
+
+### Day 7 — Sunday Roast
+
+- **Breakfast:** pancakes (double batch — freeze half for the week)
+- **Lunch:** turkey sandwich, baby carrots, apple
+- **Dinner:** roast chicken (kid eats plain breast meat), buttered rolls, plain mashed potatoes, *side of roasted carrots for parents and 20% slot*
+
+A note on Saturday: every plan needs one meal-light day. Sundays are too high-stakes — parents want a "real" dinner before the week. Saturdays absorb the slack.
+
+## The grocery essentials
+
+If you stocked these every week, you could run the template above with two trips a month and one quick produce run mid-week:
+
+**Carbs:** pasta, rice, bread, tortillas, bagels, oats, pancake mix, pizza crusts
+**Proteins:** eggs, chicken (strips + a roast), ground beef, deli turkey, deli ham, cheese (block + shreds), Greek yogurt, peanut butter, beans
+**Produce (rotating):** bananas, apples, strawberries, grapes, blueberries, baby carrots, cucumbers, lettuce
+**Pantry:** butter, parmesan, marinara, salsa, honey, brown sugar, syrup, jam
+
+A single grocery list, repeated, beats a brilliant 7-day shopping list once. EatPal's planner generates this list for you and remembers brand preferences across weeks — handy when "the wrong yogurt" is a plan-breaker. If your grocery budget is tight, [Balanced Meals for Picky Eaters on a Budget](/blog/balanced-meals-for-picky-eaters-on-a-budget) has a leaner version of this list.
+
+## When the kid won't eat what's served
+
+A graceful exit is part of the plan, not a failure of it. The rule we'd recommend:
+
+> Your child must come to the table. They must stay for the meal. They do not have to eat anything specific.
+
+A backup plate is fine — make it boring. A piece of fruit, a slice of plain bread, a bowl of cereal. Boring backups are the difference between "I'll have a meltdown until you bring me chicken nuggets" and "fine, I'll just have the bread."
+
+You're not raising a child who only eats bread. You're keeping the dinner table from becoming a daily battleground while the rest of the system does its slow, real work.
+
+## How EatPal builds this for you
+
+The 7-day template above is exactly the structure EatPal's [free meal plan generator](/meal-plan) builds for picky eaters. You answer five questions — your child's anchors, your theme rotation, any allergies, how many adults at the table, how often you grocery shop — and it outputs a stickable plan, with a single consolidated grocery list. No paywall on the first plan.
+
+If you're not sure where your child sits on the spectrum, the [picky eater quiz](/picky-eater-quiz) takes about three minutes and lands on a plan profile (typical picky / sensory / ARFID-aware) so the generator starts in the right place.
+
+## FAQ
+
+**My picky eater eats different things at different houses. Whose plan is right?**
+Both. Build the home plan around what they eat at home — the school or grandparent diet is a separate system. Don't try to unify them. Most kids tolerate two or three "food worlds" without confusion.
+
+**Should I hide vegetables in sauces?**
+Sometimes — for nutrition. But it shouldn't be your main strategy. Hidden veg doesn't expand the safe-food list; it just makes the safe list nutritionally denser. Pair hiding with low-pressure visible exposures elsewhere.
+
+**My kid eats fine at lunch and refuses at dinner. Why?**
+Hunger, fatigue, sensory overload, and the social load of family dinner all stack at the end of the day. Try moving "the harder meal" earlier — make lunch the bigger ask, dinner the calmer one. Many kids eat 60–70% of their day's intake before 2 p.m.
+
+**How long until I see progress?**
+Variety expansion typically shows up in 6–8 weeks of consistent low-pressure exposure. Acceptance of the *plan itself* — fewer meltdowns at the table — usually shows up in 2–3 weeks. Track the second metric. It moves first.
+
+**What if I miss a day?**
+Pick up where you are, not where the plan says. The plan is a structure, not a contract.
+
+## Try the template
+
+[Generate a free 7-day picky eater plan](/meal-plan) now — based on your kid's anchors and your theme rotation. Edit any meal, swap any anchor, regenerate the grocery list in one click.
+$ep_md$,
+  'draft',
+  'Picky Eater Meal Plan: A 7-Day Template That Actually Sticks | EatPal',
+  'A 7-day picky eater meal plan with theme nights, three anchors per meal, and a built-in graceful exit. Includes grocery list and free generator.',
+  7,
+  (SELECT id FROM public.blog_categories WHERE slug = 'picky-eaters'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Week 2 / Post 1 — Food Chaining for Picky Eaters
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Food Chaining for Picky Eaters: Step-by-Step Examples (With Printable Chains)',
+  'food-chaining-for-picky-eaters-step-by-step-examples',
+  $ep_excerpt$Food chaining isn't "trying new things." It's a structured technique feeding therapists use to expand a child's safe-food list one bridge at a time. Here are three full chains and the rule for moving through them.$ep_excerpt$,
+  $ep_md$"Food chaining" is one of those phrases that gets thrown around online to mean "tricking your kid into trying broccoli." That's not what it is.
+
+Food chaining is a structured feeding-therapy technique developed by speech-language pathologists Cheri Fraker, Laura Walbert and colleagues. It works by linking a child's existing safe foods to new foods through tiny, deliberate variations — texture by texture, brand by brand, color by color — until a previously rejected food becomes acceptable.
+
+Done right, it's slow, repetitive, and fairly unexciting. Done wrong (or rushed), it just becomes another battle dressed up in nicer language.
+
+This guide walks through how chains actually work, three full chain examples you can use this week, and the rule for moving from one link to the next without breaking the chain.
+
+> Food chaining works best inside an active feeding-therapy plan. If your child has been diagnosed with ARFID — or is showing signs of severe restriction — a feeding therapist or registered dietitian should design and supervise the chains. The examples below are starting points, not prescriptions.
+
+## What food chaining actually is
+
+Picky eaters don't reject "new food" abstractly. They reject specific *properties* — the wet texture of tomato, the green color of spinach, the smell of cooked fish, the way pasta sauce changes the surface of the noodle. Chaining works by changing only one property at a time, while everything else stays familiar.
+
+The structure looks like this:
+
+```
+Anchor → Variation A → Variation B → Bridge → Target food
+```
+
+- **Anchor:** a food your child eats reliably.
+- **Variation A:** a near-identical version with one small change (different brand, slightly different shape, slightly different temperature).
+- **Variation B:** another small step in the same direction.
+- **Bridge:** a food that shares a key property with the variation above and a key property with the target.
+- **Target:** the food you're working toward.
+
+Most successful chains have 4–6 links and take **weeks to months**, not days. If your chain has three links and you're done by Friday, you skipped steps.
+
+## The 6-step rule for moving along a chain
+
+A chain only progresses when the current link has been **accepted at least 5–6 times across at least 2 different meals or days**. "Accepted" doesn't mean "loved." It means: served, present, eaten without distress.
+
+If a link gets rejected, you don't push forward — and you don't go back to the start. You go back **one link** and rebuild from there. Chains are bidirectional.
+
+The hardest part of chaining isn't the technique. It's the patience. Six exposures to one variation is doing the work; one exposure to six variations is shopping.
+
+## Three printable chains
+
+These are starter chains, not finished plans. Use them as a structure and adapt the specific brands/foods to whatever your child actually eats.
+
+### Chain A — Plain pasta to pasta with sauce
+
+A common goal for picky-eater families: getting a kid to accept pasta with marinara, instead of bare buttered noodles forever.
+
+| Link | Food | What changed |
+| --- | --- | --- |
+| 1. Anchor | Plain spaghetti, butter, salt | — |
+| 2. Variation A | Plain spaghetti, butter, **parmesan dust** | One new dry topping |
+| 3. Variation B | Plain spaghetti, **olive oil + parmesan** | New "wet" base, same color family |
+| 4. Variation C | Spaghetti with **a thin tomato-butter sauce (1 tbsp marinara whisked into 1 tbsp butter)** | Color change, very subtle |
+| 5. Bridge | Spaghetti with light marinara, served on the side as a dip | Same final flavor, different format |
+| 6. Target | Spaghetti with marinara mixed in | Sauce is now part of the pasta |
+
+Most parents collapse this chain by jumping from Link 1 to Link 4. The collapse is the lesson.
+
+### Chain B — Chicken nuggets to grilled chicken
+
+A long chain — often 8–12 weeks of consistent work. The key change to manage is *texture*.
+
+| Link | Food | What changed |
+| --- | --- | --- |
+| 1. Anchor | Brand X chicken nuggets | — |
+| 2. Variation A | Brand Y nuggets (similar shape, slightly different breading) | New brand only |
+| 3. Variation B | Chicken patty (same breading, different shape) | Shape only |
+| 4. Variation C | Crispy chicken tender (longer, same breading) | Format change |
+| 5. Variation D | "Naked" chicken tender (no breading, same shape) | Texture change |
+| 6. Bridge | Pan-fried chicken strip, plain, sliced thin | Cooking method change |
+| 7. Target | Grilled chicken breast, plain, sliced | New cooking method, full texture |
+
+Notice how "breading" is the load-bearing property and gets dropped only at Link 5 — after four other variations have built trust.
+
+### Chain C — Apple slices to broader fruit acceptance
+
+Chains don't have to point at one target. Some chains expand a *category*.
+
+| Link | Food | What changed |
+| --- | --- | --- |
+| 1. Anchor | Peeled apple slices | — |
+| 2. Variation A | Unpeeled apple slices, same variety | Texture change (skin) |
+| 3. Variation B | A different apple variety, peeled | Flavor change |
+| 4. Variation C | Peeled pear slices (similar texture to apple) | New fruit, same family |
+| 5. Bridge | Peeled Asian pear (firmer, closer to apple) | Texture stays apple-like |
+| 6. Target | Plum or peach slices, peeled | New fruit, same form |
+
+A category chain often unlocks more than its target — once a child accepts pear, the next fruit usually moves faster.
+
+## Common chain-building mistakes
+
+**Skipping links.** The most common mistake. If Link 4 was rejected, the answer isn't to retry Link 4. The answer is to back up to Link 3 and serve it 3–4 more times before re-attempting.
+
+**Two changes at once.** Switching brand *and* shape *and* sauce is not a chain — it's a new food. One change per link, always.
+
+**Pushing the chain at every meal.** Chains live inside the bridge or stretch layer of the weekly plan, not the anchor layer. If every meal has a chain link, you've turned the dinner table into a therapy session. Three exposures per week is plenty.
+
+**Dropping the chain when the child accepts a link.** Acceptance of one link doesn't end the chain. The next link still has to be built. The work is in the *next* exposure, not in celebrating the last one.
+
+**Using praise as pressure.** "Good job!" right after a bite is pressure dressed as encouragement. Most feeding therapists recommend a flat acknowledgment — "you tried it" — or nothing at all. Your kid's nervous system is paying attention to the reaction; making the reaction big makes the next bite harder.
+
+These mistakes pair naturally with the framework in [ARFID Meal Plans: How to Build a Week of Safe, Stress-Free Meals](/blog/arfid-meal-plans-build-week-safe-stress-free-meals) — chains live inside that framework's "bridge" layer.
+
+## How EatPal builds chains
+
+When you tag a food in EatPal as an anchor and tag the food you're working toward as a target, the planner can suggest 4–6 candidate intermediate variations based on shared sensory properties (texture, color, temperature, brand). You approve the chain, and the planner schedules links into your weekly plan automatically — three exposures per week, one link at a time, with rejection rules baked in.
+
+If you're not sure which target food is the right next move, the [picky eater quiz](/picky-eater-quiz) will surface 2–3 candidate targets based on your child's existing safe-food list.
+
+## Common questions
+
+**How long should one link take?**
+Most links resolve in 2–3 weeks of 3-exposure-per-week pacing. Some take longer. Some take one. The exposure count matters more than the calendar — six accepted exposures, then advance.
+
+**My child accepts the link at home but refuses it at restaurants.**
+Normal. New environments reset the chain. Build a separate, shorter "restaurant chain" for the same target food, starting from a restaurant-context anchor (e.g., the breadbasket).
+
+**Is food chaining the same as exposure therapy?**
+They share DNA. Exposure therapy is broader and more clinical; food chaining is a specific, food-focused application of the same principle. Both rely on graded, repeated, low-stakes contact.
+
+**Can I run two chains at once?**
+Yes — but cap it at two, and make them target different food categories (one carb chain, one protein chain). More than that overloads the bridge layer of your weekly plan.
+
+**My child has ARFID. Do I still chain?**
+Yes, but slower. ARFID chains often have 8–10 links instead of 4–6, and each link gets 8–12 exposures rather than 5–6. Always with feeding-therapy supervision.
+
+## Build your first chain
+
+[Generate a free starter chain](/meal-plan) — pick an anchor and a target, and the planner will propose a 4–6 link path with shared sensory properties. Edit, swap, or restart any link. No card required.
+$ep_md$,
+  'draft',
+  'Food Chaining for Picky Eaters: 3 Real Chain Examples | EatPal',
+  'Food chaining is how feeding therapists slowly expand a child''s safe-food list. Three full printable chains, the 6-step rule, and how to use them at home.',
+  8,
+  (SELECT id FROM public.blog_categories WHERE slug = 'arfid-feeding-challenges'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Week 2 / Post 2 — Best Apps Roundup (EXPANSION DRAFT)
+--
+-- IMPORTANT: This is seeded under a *new* draft slug to avoid colliding with the
+-- existing live post (slug: meal-planning-apps-for-picky-eaters-what-parents-need).
+-- When you're ready to publish: copy this draft's content into the existing post
+-- (preserving the live slug for SEO equity), update its meta_title and
+-- meta_description to the new versions, then DELETE the row inserted below.
+--
+-- VERIFY before publishing: feature/positioning claims for FamEats, Pitaya, and
+-- RISE ARFID need a current spot-check against each app's website. Lines marked
+-- [VERIFY] in the body must be confirmed or revised.
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Best Apps for Picky Eaters & ARFID Families in 2026 (Therapist-Informed Review)',
+  'meal-planning-apps-for-picky-eaters-2026-update-draft',
+  $ep_excerpt$Most parents try 3–4 apps before settling on one. Here's a therapist-informed shortlist for 2026 — by category, with a clear framework for picking the right tool for your kid.$ep_excerpt$,
+  $ep_md$Most parents of picky eaters try three or four apps before settling on one. They start with a generic meal planner, realize it doesn't speak their kid's language, switch to a tracking app, get burned out logging every bite, then bounce to a gamification app and lose interest in two weeks.
+
+The fix is matching the *category* of app to what you're actually trying to do — not picking by App Store ranking.
+
+This is a therapist-informed shortlist of the apps in this space as of 2026, organized by category, with honest pros and cons. EatPal is on the list — listed alphabetically alongside the others, not as the headline answer.
+
+> Note: nothing in this post is medical advice. If your child has been diagnosed with ARFID, app choice matters less than working with a feeding therapist. The right app *supports* therapy; it doesn't replace it.
+
+## The four categories of "picky eater app"
+
+Before comparing specific apps, decide which category you actually need. Most apps live in one or two of these:
+
+1. **Tracking** — log what was eaten, surface intake gaps. Best for families who suspect nutrient gaps and want data.
+2. **Gamification / rewards** — turn eating into a game with stickers, points, or characters. Best for younger kids (4–8) with mild picky eating, not ARFID.
+3. **Meal planning** — produce a weekly plan and grocery list, ideally one that respects safe-food lists. Best for families running the day-to-day.
+4. **Therapy-adjacent** — support an active feeding-therapy plan with structured exposures, chain tracking, or compliance reporting. Best when working with a clinician.
+
+A general rule: **pick one app per category, not three apps in one category.** Two trackers don't track better; they just split your attention.
+
+## The apps (alphabetical)
+
+### EatPal
+
+- **Category:** Meal planning + therapy-adjacent
+- **Best for:** Families running a weekly plan who want sensory-aware planning and the option to share with a feeding therapist.
+- **Strengths:** Sensory-property tagging on every food (texture, color, brand, temperature), 70%/20%/10% anchor/bridge/stretch planning, food-chaining workflow, read-only therapist sharing, integrated grocery list, free first plan with no card.
+- **Weaknesses:** Newer than Plan to Eat; recipe library is smaller than Mealime's. Not gamified — kids don't interact with it directly.
+- **Pricing:** Free first plan; paid plans for ongoing planning and therapist features. See [pricing](/pricing).
+
+### FamEats `[VERIFY]`
+
+- **Category:** Meal planning (family-focused)
+- **Best for:** Families with one picky eater plus other eaters who need a single plan that works for everyone.
+- **Strengths:** Family-meal orientation; planning across multiple eaters at once.
+- **Weaknesses:** Less ARFID-specific than EatPal; lighter on sensory tagging and therapist sharing.
+- **Pricing:** Check current pricing on the FamEats site. `[VERIFY]`
+
+### Mealime / Yummly
+
+- **Category:** Meal planning (generic)
+- **Best for:** Adults and families *without* a picky eater driving the menu. Excellent recipe libraries, slick UX.
+- **Strengths:** Mature recipe libraries, strong grocery integration, well-tested onboarding.
+- **Weaknesses:** Neither was built for picky-eater workflows. No sensory tagging, no anchor concept. You can make them work, but you're working against the app's grain.
+- **Pricing:** Free tiers; paid for premium recipe access.
+
+### Pitaya `[VERIFY]`
+
+- **Category:** Gamification / rewards
+- **Best for:** Younger picky eaters (4–8) with mild restriction. Turns mealtime into a game.
+- **Strengths:** Engages kids directly — most other apps in this space are parent tools.
+- **Weaknesses:** Gamification can backfire with ARFID kids, where reward pressure increases distress. Not a planning tool.
+- **Pricing:** Check current pricing on the Pitaya site. `[VERIFY]`
+
+### Plan to Eat
+
+- **Category:** Meal planning (generic, robust)
+- **Best for:** Families who already cook from a personal recipe stash and want a planner to organize it. Power users.
+- **Strengths:** Probably the most flexible recipe-management planner on the market. Web + mobile, deep customization.
+- **Weaknesses:** Generic — no awareness of picky eating, anchors, or sensory needs. You bring the strategy; the app just stores it.
+- **Pricing:** Subscription. Free trial available.
+
+### RISE ARFID `[VERIFY]`
+
+- **Category:** Therapy-adjacent
+- **Best for:** Families in active ARFID treatment looking for structured exposure homework between sessions.
+- **Strengths:** ARFID-specific by design. Structured around clinical exposure protocols.
+- **Weaknesses:** Not a meal planner — you'll still need a planning tool alongside it. May require a clinician code or pairing. `[VERIFY]`
+- **Pricing:** Check current pricing and availability. `[VERIFY]`
+
+## How to pick the right app for your kid (in five questions)
+
+Skip the App Store reviews. Answer these five questions instead:
+
+**1. What category am I shopping in?**
+Tracking, gamification, planning, or therapy-adjacent. If you can't pick one, start with planning — it produces the most daily-life benefit.
+
+**2. Is my child an ARFID kid or a picky eater?**
+ARFID and gamification mix poorly. Picky-eater kids without sensory issues do fine with reward-based apps. If you're unsure, the [picky eater quiz](/picky-eater-quiz) will land on a profile.
+
+**3. Do I have a feeding therapist in the loop?**
+If yes, the app needs to support sharing — read-only links, exports, or compliance reports. If no, pick the planner that lets you upgrade to therapy-adjacent later without switching tools.
+
+**4. How many meals a week am I actually planning?**
+If the answer is "1–2," you don't need an app — a sticky note works. If it's "all of them," planning is the right category.
+
+**5. Does the kid interact with the app, or just me?**
+This decides parent-tool vs. kid-tool. Most ARFID and most picky-eater workflows are parent-side; gamification apps are the exception.
+
+## Where EatPal fits — and doesn't
+
+EatPal is built for families running structured weekly plans for picky eaters and ARFID kids — usually with a feeding therapist somewhere in the loop. It's the *implementation layer*: the place where your therapist's plan becomes a real Tuesday dinner with a real grocery list.
+
+EatPal is not the right tool if:
+
+- You want the kid to interact with the app (try Pitaya).
+- You're not ready to plan weekly and just want to track intake (try a tracking-only app).
+- You have a deep personal recipe stash and want a generic, flexible planner (Plan to Eat is more mature).
+
+For everything else — sensory-aware planning, food chaining, anchor-bridge-stretch structure, therapist sharing — that's the lane EatPal is built for. The first plan is free; see [How to Build a Week of Safe, Stress-Free Meals](/blog/arfid-meal-plans-build-week-safe-stress-free-meals) for the framework EatPal automates.
+
+## Common questions
+
+**Should I just use Notes or a spreadsheet?**
+For 1–2 weeks, yes. After that, the cost of maintaining the safe-food list, the chain progress, the grocery integration, and the partner/therapist sharing exceeds the cost of an app. Most parents who DIY for a month want a tool by week six.
+
+**Are there free options?**
+Yes — most apps in this space have free tiers, and EatPal's first plan is free with no card. Don't pay for picky-eater software until you've used a free version for at least 2 weeks.
+
+**What about general kids' nutrition apps?**
+Useful for tracking, weak for planning. They tend to assume your kid will eat a balanced plate; if they would, you wouldn't be reading this.
+
+**Does my insurance cover any of these?**
+Sometimes RISE ARFID and other clinical apps are covered when prescribed by a clinician; consumer-side apps usually aren't. Worth asking your feeding therapist.
+
+**Can one app do everything?**
+No. The right setup for most ARFID families is **one planner + one therapy-adjacent tool + your therapist's notes**. Trying to consolidate into a single app usually leaves one of the three jobs done badly.
+
+## Start where you are
+
+Not sure which category you need? The [picky eater quiz](/picky-eater-quiz) takes about three minutes and recommends a starting point — including which apps fit your kid's profile, not just ours.
+$ep_md$,
+  'draft',
+  'Best Picky Eater & ARFID Apps in 2026 — Honest Review | EatPal',
+  'A therapist-informed review of meal planning, tracking, and feeding-therapy apps for picky eater and ARFID families in 2026 — with a framework for picking the right one.',
+  8,
+  (SELECT id FROM public.blog_categories WHERE slug = 'tools-reviews'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260510000001_seed_blog_drafts_weeks_1_2.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 125: 20260511000000_seed_blog_drafts_week_3.sql
+-- ============================================
+
+-- Seed blog post drafts: Week 3 of the EatPal SEO content calendar.
+--
+-- Posts are inserted with status='draft'. Edit, attach featured images,
+-- and publish from the blog admin UI when ready.
+--
+-- Idempotent: ON CONFLICT (slug) DO NOTHING means re-running this migration
+-- is safe and will not overwrite edits made in the admin.
+--
+-- Week 3 / Post 2 (high-protein for kids who hate meat) is intentionally seeded
+-- under a *new* draft slug to avoid colliding with the existing live post at
+-- /blog/10-protein-ideas-for-kids-who-hate-meat. When ready, copy this draft's
+-- content into the existing post (preserving its slug and backlinks), update
+-- meta_title/meta_description, then delete this draft row.
+
+-- ============================================================================
+-- Insert blog post drafts
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Week 3 / Post 1 — Budget-Friendly ARFID Meal Planning
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Budget-Friendly ARFID Meal Planning: Feeding Therapy on a Real-World Grocery Budget',
+  'budget-arfid-meal-planning-real-world-grocery-budget',
+  $ep_excerpt$ARFID grocery bills run higher than average — brand lock-in, single-serve packaging, and rejected stretches all add up. Here's a 3-tier budget framework, seven cost-cutting moves that don't break the safe-food list, and a sample $80/week list.$ep_excerpt$,
+  $ep_md$ARFID grocery bills are higher than average. Not "you're imagining it" higher — measurably higher. Brand lock-in means you can't shop sales. Single-serving packaging costs more per unit. Rejected stretch foods become trash. And every nutrition-blog "cheap kid meal plan" assumes a kid who'll switch from Yoplait to the store brand without comment.
+
+This post is about budgeting groceries for an ARFID family without sacrificing the safe-food rigidity that keeps the plan working. There's a 3-tier framework, seven specific cost-cutting moves that don't break the safe-food list, and a sample $80/week list for one kid and two adults.
+
+> If your child is in active feeding therapy, run any major change to the grocery list past your therapist or registered dietitian first — especially if you're considering brand substitutions or removing a previously safe food.
+
+## Why ARFID groceries cost more (it's not what you think)
+
+It's not organic produce or specialty health food. It's:
+
+1. **Brand lock-in.** "Chicken nuggets" doesn't translate to whatever's on sale. The wrong nugget is a thrown-out plate and a missed meal.
+2. **Single-serving packaging.** Single-serve yogurt cups cost 30–50% more per ounce than the family tub. But the tub texture is wrong, or the kid sees you "ration" and stops trusting the supply.
+3. **Food waste from stretches.** A cherry tomato on the side every Friday for six weeks adds up to a small pint of unused tomatoes. Not catastrophic — but real.
+4. **Backup-food redundancy.** Most ARFID families keep 1.5x the volume of anchor foods on hand at all times, in case of a "this brand isn't right" moment. That extra 50% is insurance, not waste — but it's a line item.
+
+You can't eliminate any of these without breaking the system. You can shrink them.
+
+## The 3-tier ARFID grocery budget
+
+Match your dollars to your week:
+
+**Tier 1 — Anchor budget (60–70% of weekly grocery spend).**
+The non-negotiables. Same brands, same SKUs, every week. Don't try to optimize this tier. Buy the safe food, in the trusted form, at the necessary volume. The spend on this tier is not where you're going to find savings; it's where you're going to find stability.
+
+**Tier 2 — Bridge budget (20–25%).**
+Variations. The "near-twin" foods being layered into chains. This tier is where small-volume buys make sense — you don't know yet which bridges will land, so over-buying any one of them is a bet.
+
+**Tier 3 — Stretch + adult budget (10–15%).**
+Stretch foods (the cherry tomato), plus everything the adults eat that the kid wouldn't touch. Cap waste here aggressively — stretches that don't get accepted in 4–5 exposures get retired or converted to adult meals.
+
+If your weekly grocery total is $200, that's roughly $130 anchors, $45 bridges, $25 stretch + adults. Adjust to your actual numbers.
+
+## 7 cost-cutting moves that don't break the safe-food list
+
+### 1. Buy anchors in bulk — but only the right package size
+
+Costco Goldfish are different from grocery-store Goldfish to many ARFID kids. Same logo, different bag size, sometimes different texture due to packaging settling. Test bulk packaging in a low-stakes meal (snack, not dinner) before committing.
+
+### 2. Brand-substitute via blind A/B at snack time
+
+Once a quarter, run a blind taste test of the anchor brand vs. the next-cheapest equivalent. Same plate, two unmarked piles. If the kid eats both equally, you've earned a backup brand — useful for sale-shopping, supply shortages, and travel. If the kid rejects the substitute, you've spent $4 to confirm what you already knew.
+
+### 3. Freeze fruit at peak season
+
+Apple slices, berries, peeled sliced bananas. Buy at peak season, slice, freeze on a tray, bag. Frozen apple slices are not the same texture as fresh — but they make great smoothies for the parent meals, and free up budget for the kid's fresh produce.
+
+### 4. Repackage from family-size to single-serve yourself
+
+Tub of yogurt + small reusable containers = single-serve yogurt at family-size pricing. Works for crackers, cereal, applesauce, pretzels. Caveat: the kid has to be okay with the parent-plated version — some kids need the original packaging. Test once before committing.
+
+### 5. Time stretches to lower-cost produce weeks
+
+The cherry tomato stretch in February (when tomatoes are $5/pint) is the same exposure as the cherry tomato stretch in July (when they're $2.50). Push exposure-style stretches into peak produce seasons. The rest of the year, stretch with frozen or pantry foods.
+
+### 6. Use leftovers for parents, not the kid
+
+Reheated chicken nuggets are a different food to many ARFID kids. Treat anchors as one-time-use; route leftovers to the adult meal slot. This is counter-intuitive and costs more than zero — but the alternative is throwing away the rejected reheated plate, which is the same money plus a meal disruption.
+
+### 7. Batch-cook anchor proteins from raw
+
+If your kid's anchor is "chicken nuggets, brand X" — fine, buy them. If your kid's anchor is "plain grilled chicken, sliced," batch-cook 2 lbs at a time. Raw bulk chicken is roughly 40% cheaper than pre-cooked tenders, and the batch lasts the week.
+
+## Sample $80/week ARFID grocery list (1 kid + 2 adults)
+
+This assumes the anchor list from earlier posts: plain pasta, chicken nuggets (brand-specific), white toast, Cheerios, peeled apple slices.
+
+**Anchors (~$45):**
+- 2 boxes pasta — $4
+- 1 large bag chicken nuggets (brand-specific) — $13
+- 1 loaf white bread — $4
+- 1 box Cheerios — $5
+- 5 lbs apples — $7
+- 1 gallon milk — $5
+- 1 lb butter — $4
+- 1 small block parmesan — $3
+
+**Bridges (~$15):**
+- 1 small bottle olive oil — $5
+- 1 jar marinara — $4
+- 1 second pasta shape (similar) — $2
+- 1 box second cracker brand for testing — $4
+
+**Stretches + adult food (~$20):**
+- 1 pint cherry tomatoes (rotating stretch) — $3
+- 1 dozen eggs — $4
+- 1 bag rice — $3
+- 2 lbs raw chicken (bulk for adults) — $8
+- 1 head lettuce, 1 cucumber — $2
+
+That's about $80 — covering the kid's full week and two adults' breakfasts and dinners. Lunches and one weekend meal come from existing pantry. Prices will vary by region; the *ratios* are the lesson.
+
+You're not optimizing for a magazine-worthy fridge. You're optimizing for a Tuesday dinner that actually happens.
+
+## When to spend extra (and not feel bad)
+
+Three places where the cheap option costs more than the expensive one:
+
+- **The kid's milk.** A wrong-temperature, wrong-fat-content milk can break a week. Buy the trusted SKU, full price, every week.
+- **The kid's bread.** Same logic. Bread brand consistency is load-bearing.
+- **One feeding-therapist consultation.** A 30-minute session to review your anchor list, bridge plan, and stretch pacing is worth more than three months of grocery optimization.
+
+For a deeper read on what "anchor / bridge / stretch" actually means in practice, see [ARFID Meal Plans: How to Build a Week of Safe, Stress-Free Meals](/blog/arfid-meal-plans-build-week-safe-stress-free-meals). For a balanced-on-a-budget version that's not ARFID-specific, see [Balanced Meals for Picky Eaters on a Budget](/blog/balanced-meals-for-picky-eaters-on-a-budget).
+
+## How EatPal handles your grocery budget
+
+EatPal's planner produces a single consolidated grocery list per week, sorted by store aisle and tagged by tier (anchor / bridge / stretch). When you mark anchors as "exact-brand-only" and bridges as "test-quantity," the planner caps bridge volumes automatically — which means less rejected-stretch waste in week three.
+
+If you've never run the [free meal plan generator](/meal-plan), this is a good place to start: it'll output your first plan and grocery list in under five minutes.
+
+## FAQ
+
+**My kid only eats one brand and it's expensive. What do I do?**
+Buy it. Run an annual blind A/B against one cheaper substitute (move 2 above). If the substitute fails, the brand is your floor — don't keep testing.
+
+**Should I buy organic or higher-quality versions of anchors?**
+Only if the texture/taste is identical. Organic chicken nuggets are often a different recipe; if your kid notices, "organic" is a chain-break, not an upgrade.
+
+**My grocery store keeps changing the packaging on my kid's safe food. Help.**
+Stock up before the new packaging arrives if you can spot it (often the new SKU shows up with a "new look!" sticker). For long-term: build a backup brand via the blind A/B move so packaging changes don't hold the household hostage.
+
+**WIC and SNAP — do those help with ARFID-specific groceries?**
+Sometimes. WIC has a specific approved-foods list that often doesn't include the brand your kid eats. SNAP is more flexible. A registered dietitian who works with ARFID families can sometimes help with appeals or substitutions.
+
+**Is meal-kit delivery (HelloFresh, Blue Apron) ever a fit?**
+Almost never for the kid's plate. Sometimes for the adult plate, which lets you free up cognitive load for the kid's plan.
+
+## Build a budget plan now
+
+[Generate a free 7-day plan with grocery list](/meal-plan) — the list is tier-tagged so you can see exactly where your $80 is going. Edit, swap, or regenerate the list in one click.
+$ep_md$,
+  'draft',
+  'Budget ARFID Meal Planning: A $80/Week Grocery Framework | EatPal',
+  'A 3-tier ARFID grocery budget framework, seven cost-cutting moves that don''t break the safe-food list, and a sample $80/week grocery list for one kid plus two adults.',
+  7,
+  (SELECT id FROM public.blog_categories WHERE slug = 'arfid-feeding-challenges'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Week 3 / Post 2 — High-Protein for Kids Who Hate Meat (EXPANSION DRAFT)
+--
+-- IMPORTANT: This is seeded under a *new* draft slug to avoid colliding with the
+-- existing live post (slug: 10-protein-ideas-for-kids-who-hate-meat).
+-- When you're ready to publish: copy this draft's content into the existing post
+-- (preserving the live slug for SEO equity), update its meta_title and
+-- meta_description to the new versions, then DELETE the row inserted below.
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'High-Protein Meal Ideas for Kids Who Hate Meat (ARFID-Friendly)',
+  '10-protein-ideas-for-kids-who-hate-meat-2026-update-draft',
+  $ep_excerpt$Most "high-protein for kids" articles assume a kid who'll eat eggs, beans, fish, tofu, and Greek yogurt. ARFID and picky eaters often reject all five. Here's the layered, hidden-protein, "sneaky boost" strategy that actually works.$ep_excerpt$,
+  $ep_md$Most "high-protein meal ideas for kids" articles assume your child eats eggs, beans, fish, tofu, and Greek yogurt — five foods that ARFID and picky-eater kids often reject in unison. The advice ends up being for *somebody else's* kid.
+
+This is the post for the parent whose accepted-protein list reads "chicken nuggets and… that's it."
+
+The good news: kids need less protein than the headlines suggest, and there are more sneaky-protein options than the magazine articles let on. Below: a tiered list of protein sources by acceptance probability, five meal templates organized by texture profile, and the boost-without-changing-the-food moves you can do tonight.
+
+> If your child is on a feeding-therapy plan or has a diagnosed nutrient deficiency, run protein-related changes past your registered dietitian. The ranges below are general; specific kids need specific advice.
+
+## Why "kids need 20g of protein" advice fails picky eaters
+
+The headline number (20-something grams of protein per day for school-age kids) assumes:
+
+1. The kid eats meat, dairy, and at least one plant protein each day
+2. The protein is *visible* on the plate
+3. The kid will rotate among 4–6 protein sources
+
+For an ARFID kid eating two protein sources total, none of those assumptions hold. The fix isn't to bully the existing protein list into 20g — it's to layer hidden protein into the foods the kid already eats.
+
+The reframe: **don't ask "how do I get more protein into my kid?" Ask "how do I make every safe food slightly more protein-dense?"**
+
+## 12 protein sources ranked by picky-eater acceptance
+
+Acceptance ≠ nutrition. Tier 1 isn't "best" — it's "most likely to actually get eaten."
+
+### Tier 1: Almost universally accepted
+
+- **Cheese (cheddar, mozzarella, string cheese).** The picky-eater protein workhorse. Roughly 7g per ounce. Pairs with almost any anchor.
+- **Milk.** About 8g per cup. Cold, room-temperature, in cereal — usually a yes.
+- **Whole-milk yogurt drinks (kefir-style).** Often easier than cup yogurt for kids who reject thick textures.
+
+### Tier 2: Often accepted
+
+- **Greek yogurt.** Roughly 2x the protein of regular yogurt. Texture is the gating factor — some kids won't.
+- **Peanut butter / sun butter / almond butter.** About 7g per 2 tbsp. On bread, on bananas, on apple slices, off a spoon.
+- **Hard-boiled eggs (whites, yolks, or both).** Polarizing. Some kids accept whole egg whites and reject yolks.
+- **Cheese sticks.** Same nutrition as block cheese, different format. Many kids accept sticks but not slices.
+
+### Tier 3: Often accepted in disguise
+
+- **Eggs in pancakes / waffles / French toast.** Protein hides easily here.
+- **Lentils in tomato-based sauce.** If marinara is already accepted, blended lentils disappear.
+- **Black beans pureed into refried beans.** Smoother texture, often passes when whole beans don't.
+- **Cottage cheese blended into smoothies or pancakes.** No detectable texture once blended.
+
+### Tier 4: Rare wins (don't count on these)
+
+- **Tofu, plain.** Texture is a common dealbreaker.
+- **Plain grilled fish.** Smell and flake-texture are common rejections.
+- **Whole beans.** The shape and split-skin are rejection triggers for many kids.
+
+If your kid lives in Tier 1 only — that's fine. Three foods from Tier 1 covers a meaningful portion of daily protein needs without expanding the safe-food list.
+
+## 5 high-protein meal templates by texture profile
+
+### Smooth / drinkable
+
+- Banana + peanut butter + milk smoothie (~20g protein in 12 oz)
+- Greek yogurt + honey + frozen berries (blend if texture is the issue)
+- Whole-milk hot cocoa with collagen or a scoop of protein powder
+
+### Crispy
+
+- Cheese quesadilla on a tortilla, lightly toasted
+- Toast with peanut butter + thin banana slices
+- Cheese-and-cracker plate (sticks or cubes work better than slices for some kids)
+
+### Soft / squishy
+
+- Pancakes made with Greek yogurt or cottage cheese in the batter
+- Mac and cheese (boxed is fine — cheese is the protein workhorse)
+- Mashed potatoes with cheese stirred in
+
+### Bite-shaped
+
+- Mini meatballs (raw chicken or beef, breaded if needed)
+- Cheese cubes with a familiar dip (ketchup, mild ranch — yes, really)
+- Hard-boiled egg whites cut in halves or quarters
+
+### Sweet-leaning (yes, breakfast counts)
+
+- Whole-milk yogurt parfait with granola
+- Pancakes with peanut-butter "syrup" (warm peanut butter + maple syrup)
+- French toast made with whole milk and an extra egg
+
+A meal that hits the kid's preferred texture profile and includes one protein source from Tiers 1–3 will out-deliver any meal that hits "five food groups" but doesn't get eaten.
+
+## Sneaky protein boosters that don't change the food
+
+Tonight, with what's in your pantry:
+
+- **Add 1 tbsp powdered milk to pancake batter, mac and cheese sauce, or cocoa.** ~3g extra protein, no texture change.
+- **Stir Greek yogurt into mashed potatoes (1 tbsp per cup).** Adds 1–2g, mostly invisible.
+- **Use whole milk instead of water in oatmeal, cocoa, and pancake mix.** ~4g per cup of milk vs water.
+- **Sprinkle hemp seeds on cereal or yogurt.** Mild flavor; ~3g per tbsp. Test sensorily first — some kids notice.
+- **Cottage cheese blended into smoothies.** ~14g per half-cup, no detectable texture once blended.
+- **Use protein-fortified bread or pasta.** Most major brands now offer a "+protein" version of the same product.
+
+The rule: **change the input, not the output.** If the food on the plate looks identical to last week's plate, the kid's nervous system doesn't have to relitigate it.
+
+This pairs well with the framework in [ARFID Meal Plans: How to Build a Week of Safe, Stress-Free Meals](/blog/arfid-meal-plans-build-week-safe-stress-free-meals) — sneaky boosters live inside the anchor layer, not the bridge or stretch layer.
+
+## When to worry about protein deficits — and when not to
+
+Most ARFID kids eating Tier 1 dairy daily are getting enough protein — which surprises a lot of parents. Real deficits show up most often when:
+
+- The kid rejects all dairy AND all meat (rare combination — but it happens)
+- The kid is in a growth spurt and intake has dropped
+- The kid is recovering from illness with reduced appetite
+
+Signs to flag for your dietitian:
+- Hair thinning or brittleness
+- Slow wound healing
+- Stalled growth on the pediatrician's chart
+- Persistent fatigue not explained by sleep
+
+Signs that *don't* require panic:
+- "Only eats cheese, milk, and bread" — this is often nutritionally adequate
+- One bad week of low intake
+- Skinny build — protein isn't the only factor
+
+When in doubt, don't optimize protein from a blog post. Get a 30-minute consult with a registered dietitian who works with ARFID families.
+
+## How EatPal helps
+
+EatPal's planner tags every food in your kid's safe-food list with macro and protein content. When you generate a weekly plan, the planner shows total protein per day and flags any day that drops below your kid's range — without changing the foods. If a day comes up short, the planner suggests one of the "boosters" above (milk swap, yogurt addition) rather than rebuilding the meal.
+
+If you're not sure what your kid's daily target should be, the [picky eater quiz](/picky-eater-quiz) collects age, weight, and activity level and lands on a sensible range.
+
+## FAQ
+
+**My kid eats only chicken nuggets and dairy. Is that enough protein?**
+Probably yes. A kid eating 5 oz of nuggets + 2 cups milk + 2 oz cheese is hitting 30+ grams of protein, which exceeds most school-age targets. Confirm with your pediatrician at your next visit.
+
+**Are protein powders safe for kids?**
+Some are, some aren't. Whey-based powders without added sweeteners are generally safe in small amounts (1/4–1/2 scoop per smoothie). Avoid anything with creatine, BCAAs, or other supplements without dietitian approval.
+
+**How do I get protein into a kid who refuses dairy?**
+Tier 2's nut butters become the workhorse. Beyond that, the "in disguise" tier — pancakes with eggs, oatmeal with milk-replacement, lentil-thickened sauces. A dietitian consult is much more useful here than online advice.
+
+**My kid's school says he needs more protein. Should I push it?**
+"More protein" without a specific deficiency to point to is usually pop-nutrition advice. Check the actual numbers (intake vs. age range) with a dietitian before changing the plan. Sometimes the issue is calorie intake, not protein.
+
+**Is hidden protein "lying" to my kid?**
+Hidden protein is *cooking*, not lying. Every culture has some version of "blend the thing in." The food chaining work and the visible-protein work happen in parallel — see [Food Chaining for Picky Eaters](/blog/food-chaining-for-picky-eaters-step-by-step-examples) for the visible side.
+
+## Try it tonight
+
+[Generate a free 7-day plan with protein-tagged meals](/meal-plan) — the planner shows daily protein totals and suggests boosters when a day comes up short, without forcing a new food onto the kid's plate.
+$ep_md$,
+  'draft',
+  'High-Protein Foods for Picky Eaters & Kids Who Hate Meat | EatPal',
+  'A tiered, ARFID-aware guide to high-protein foods for picky eaters — by texture profile, with sneaky boosters that don''t change the food.',
+  7,
+  (SELECT id FROM public.blog_categories WHERE slug = 'picky-eaters'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260511000000_seed_blog_drafts_week_3.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 126: 20260511000001_sibling_meal_resolutions.sql
+-- ============================================
+
+-- US-295: Sibling Constraint Solver
+-- Logs sibling meal-finder runs that the user accepted, with per-kid
+-- satisfaction breakdown so fairness ("whose preferences won") and
+-- repeat-success can be queried later.
+
+CREATE TABLE IF NOT EXISTS sibling_meal_resolutions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+
+  kid_ids UUID[] NOT NULL,
+  recipe_id UUID REFERENCES recipes(id) ON DELETE CASCADE,
+
+  -- 'full_match'  = recipe satisfied every kid as written
+  -- 'with_swaps'  = recipe + per-kid food swaps satisfies everyone
+  -- 'split_plate' = base recipe with per-kid plate modifications
+  resolution_type TEXT NOT NULL CHECK (resolution_type IN ('full_match', 'with_swaps', 'split_plate')),
+
+  -- Aggregate satisfaction across kids, 0..100 (higher is better)
+  satisfaction_score NUMERIC(5, 2) NOT NULL,
+
+  -- Per-kid satisfaction snapshot at solve time
+  -- [{ kid_id, score, soft_violations: string[], hard_violations: string[] }]
+  per_kid_satisfaction JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+  -- Swap suggestions surfaced to / accepted by the user
+  -- [{ kid_id, swap_out_food_id?, swap_in_food_id?, swap_out_food_name?, swap_in_food_name?, reason }]
+  swaps JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+  -- Per-kid plate modifications when split-plate is chosen
+  -- [{ kid_id, plate_description, modifications: string[] }]
+  split_plates JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+  -- Optional link to the plan entry the user added
+  plan_entry_id UUID REFERENCES plan_entries(id) ON DELETE SET NULL,
+
+  -- Outcome captured later (post-meal); informs future fairness weighting
+  served_at TIMESTAMPTZ,
+  outcome TEXT CHECK (outcome IN ('worked', 'partial', 'failed')),
+  outcome_notes TEXT,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sibling_meal_resolutions_household
+  ON sibling_meal_resolutions(household_id);
+CREATE INDEX IF NOT EXISTS idx_sibling_meal_resolutions_user
+  ON sibling_meal_resolutions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sibling_meal_resolutions_recipe
+  ON sibling_meal_resolutions(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_sibling_meal_resolutions_created
+  ON sibling_meal_resolutions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sibling_meal_resolutions_kid_ids
+  ON sibling_meal_resolutions USING GIN (kid_ids);
+
+ALTER TABLE sibling_meal_resolutions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users view household sibling resolutions" ON sibling_meal_resolutions;
+CREATE POLICY "Users view household sibling resolutions"
+  ON sibling_meal_resolutions FOR SELECT
+  USING (
+    household_id IN (
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Users insert sibling resolutions for own household" ON sibling_meal_resolutions;
+CREATE POLICY "Users insert sibling resolutions for own household"
+  ON sibling_meal_resolutions FOR INSERT
+  WITH CHECK (
+    user_id = auth.uid()
+    AND household_id IN (
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Users update household sibling resolutions" ON sibling_meal_resolutions;
+CREATE POLICY "Users update household sibling resolutions"
+  ON sibling_meal_resolutions FOR UPDATE
+  USING (
+    household_id IN (
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Users delete household sibling resolutions" ON sibling_meal_resolutions;
+CREATE POLICY "Users delete household sibling resolutions"
+  ON sibling_meal_resolutions FOR DELETE
+  USING (
+    household_id IN (
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins manage all sibling resolutions" ON sibling_meal_resolutions;
+CREATE POLICY "Admins manage all sibling resolutions"
+  ON sibling_meal_resolutions FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'));
+
+DROP TRIGGER IF EXISTS update_sibling_meal_resolutions_updated_at ON sibling_meal_resolutions;
+CREATE TRIGGER update_sibling_meal_resolutions_updated_at
+  BEFORE UPDATE ON sibling_meal_resolutions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+COMMENT ON TABLE sibling_meal_resolutions IS
+  'US-295: solver runs accepted by the user, with per-kid satisfaction for fairness tracking';
+COMMENT ON COLUMN sibling_meal_resolutions.resolution_type IS
+  'full_match | with_swaps | split_plate';
+COMMENT ON COLUMN sibling_meal_resolutions.per_kid_satisfaction IS
+  'JSON array of { kid_id, score, soft_violations[], hard_violations[] }';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260511000001_sibling_meal_resolutions.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 127: 20260512000000_chain_network.sql
+-- ============================================
+
+-- US-296: Picky-Eater Win Network
+-- Anonymized cross-user aggregation of food-chain transitions.
+-- No PII is recorded: contributions are keyed by an opaque UUID (the
+-- food_attempt.id from the contributing user) so the same attempt can't
+-- be counted twice, but the row carries no link back to user/kid/household.
+--
+-- Privacy model:
+--   - chain_network_contributions: one row per attribution event, no FK to
+--     auth.users / kids / households. The contribution_key column reuses
+--     the attempt's UUID purely as an idempotency token; even with that
+--     UUID an attacker has no way to map back to a user (UUIDs are random
+--     and food_attempts is RLS-locked to the owning household).
+--   - chain_network_aggregates: rolled-up counts per (source, target,
+--     pickiness_bucket). Read access is granted to all authenticated users
+--     but a k-anonymity threshold (>= 5 contributions) is enforced at the
+--     query layer (see fetch_chain_network_targets RPC).
+--   - All writes go through the contribute_chain_network() SECURITY DEFINER
+--     RPC; users cannot insert/update directly.
+
+CREATE TABLE IF NOT EXISTS chain_network_contributions (
+  contribution_key UUID PRIMARY KEY,
+  source_food_key TEXT NOT NULL,
+  target_food_key TEXT NOT NULL,
+  pickiness_bucket TEXT NOT NULL CHECK (pickiness_bucket IN ('low', 'medium', 'high', 'unknown')),
+  outcome TEXT NOT NULL CHECK (outcome IN ('success', 'partial', 'refused')),
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chain_network_contrib_target
+  ON chain_network_contributions(target_food_key);
+CREATE INDEX IF NOT EXISTS idx_chain_network_contrib_source
+  ON chain_network_contributions(source_food_key);
+CREATE INDEX IF NOT EXISTS idx_chain_network_contrib_recorded
+  ON chain_network_contributions(recorded_at DESC);
+
+CREATE TABLE IF NOT EXISTS chain_network_aggregates (
+  source_food_key TEXT NOT NULL,
+  target_food_key TEXT NOT NULL,
+  pickiness_bucket TEXT NOT NULL CHECK (pickiness_bucket IN ('low', 'medium', 'high', 'unknown')),
+  success_count INTEGER NOT NULL DEFAULT 0,
+  partial_count INTEGER NOT NULL DEFAULT 0,
+  refused_count INTEGER NOT NULL DEFAULT 0,
+  total_count INTEGER NOT NULL DEFAULT 0,
+  first_observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (source_food_key, target_food_key, pickiness_bucket)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chain_network_aggregates_source
+  ON chain_network_aggregates(source_food_key);
+CREATE INDEX IF NOT EXISTS idx_chain_network_aggregates_total
+  ON chain_network_aggregates(total_count DESC);
+
+ALTER TABLE chain_network_contributions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chain_network_aggregates ENABLE ROW LEVEL SECURITY;
+
+-- Contributions are write-only via the RPC. Authenticated users can read
+-- their own contribution by key (useful for dedupe checks); they cannot
+-- enumerate or update.
+CREATE POLICY "No direct read of contributions"
+  ON chain_network_contributions FOR SELECT
+  USING (false);
+
+CREATE POLICY "Admins can read contributions"
+  ON chain_network_contributions FOR SELECT
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Aggregates are publicly readable to authenticated users; the RPC enforces
+-- the k-anonymity threshold so direct table reads (which expose all rows)
+-- are still safe because no row links to a user.
+CREATE POLICY "Authenticated users read aggregates"
+  ON chain_network_aggregates FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Admins manage aggregates"
+  ON chain_network_aggregates FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Normalization helper: lowercase, trim, collapse whitespace, strip leading
+-- "the ", drop trivial punctuation. Stable so the same food name from
+-- different households aggregates to the same key.
+CREATE OR REPLACE FUNCTION public.normalize_chain_food_name(p_name TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  s TEXT;
+BEGIN
+  IF p_name IS NULL THEN RETURN ''; END IF;
+  s := lower(trim(p_name));
+  s := regexp_replace(s, '^the\s+', '');
+  s := regexp_replace(s, '[''"\.,!?\(\)\[\]]', '', 'g');
+  s := regexp_replace(s, '\s+', ' ', 'g');
+  RETURN s;
+END;
+$$;
+
+-- The contribute RPC is SECURITY DEFINER so it can write to the aggregate
+-- table even though direct INSERT is blocked by RLS. It is idempotent:
+-- re-calling with the same contribution_key is a no-op.
+CREATE OR REPLACE FUNCTION public.contribute_chain_network(
+  p_contribution_key UUID,
+  p_source_food_name TEXT,
+  p_target_food_name TEXT,
+  p_pickiness_bucket TEXT,
+  p_outcome TEXT
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_source TEXT;
+  v_target TEXT;
+  v_bucket TEXT;
+  v_outcome TEXT;
+  v_inserted BOOLEAN;
+BEGIN
+  IF p_contribution_key IS NULL THEN RETURN false; END IF;
+
+  v_source := public.normalize_chain_food_name(p_source_food_name);
+  v_target := public.normalize_chain_food_name(p_target_food_name);
+  IF v_source = '' OR v_target = '' OR v_source = v_target THEN
+    RETURN false;
+  END IF;
+
+  v_bucket := lower(coalesce(nullif(trim(p_pickiness_bucket), ''), 'unknown'));
+  IF v_bucket NOT IN ('low', 'medium', 'high', 'unknown') THEN
+    v_bucket := 'unknown';
+  END IF;
+
+  v_outcome := lower(coalesce(nullif(trim(p_outcome), ''), 'success'));
+  IF v_outcome NOT IN ('success', 'partial', 'refused') THEN
+    RETURN false;
+  END IF;
+
+  -- Idempotent contribution insert. ON CONFLICT DO NOTHING so we can detect
+  -- whether this was a fresh contribution before incrementing aggregates.
+  INSERT INTO chain_network_contributions (
+    contribution_key, source_food_key, target_food_key,
+    pickiness_bucket, outcome
+  ) VALUES (
+    p_contribution_key, v_source, v_target, v_bucket, v_outcome
+  )
+  ON CONFLICT (contribution_key) DO NOTHING
+  RETURNING true INTO v_inserted;
+
+  IF NOT coalesce(v_inserted, false) THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO chain_network_aggregates AS a (
+    source_food_key, target_food_key, pickiness_bucket,
+    success_count, partial_count, refused_count, total_count,
+    first_observed_at, last_observed_at
+  ) VALUES (
+    v_source, v_target, v_bucket,
+    CASE WHEN v_outcome = 'success' THEN 1 ELSE 0 END,
+    CASE WHEN v_outcome = 'partial' THEN 1 ELSE 0 END,
+    CASE WHEN v_outcome = 'refused' THEN 1 ELSE 0 END,
+    1, now(), now()
+  )
+  ON CONFLICT (source_food_key, target_food_key, pickiness_bucket)
+  DO UPDATE SET
+    success_count = a.success_count
+      + CASE WHEN v_outcome = 'success' THEN 1 ELSE 0 END,
+    partial_count = a.partial_count
+      + CASE WHEN v_outcome = 'partial' THEN 1 ELSE 0 END,
+    refused_count = a.refused_count
+      + CASE WHEN v_outcome = 'refused' THEN 1 ELSE 0 END,
+    total_count = a.total_count + 1,
+    last_observed_at = now();
+
+  RETURN true;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.contribute_chain_network(UUID, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.contribute_chain_network(UUID, TEXT, TEXT, TEXT, TEXT) TO authenticated;
+
+-- Read RPC: enforces k-anonymity (>= 5 total contributions) and returns
+-- the top targets for a given source. Optional pickiness_bucket filter.
+CREATE OR REPLACE FUNCTION public.fetch_chain_network_targets(
+  p_source_food_name TEXT,
+  p_pickiness_bucket TEXT DEFAULT NULL,
+  p_limit INTEGER DEFAULT 5
+) RETURNS TABLE (
+  target_food_key TEXT,
+  pickiness_bucket TEXT,
+  success_count INTEGER,
+  partial_count INTEGER,
+  refused_count INTEGER,
+  total_count INTEGER,
+  success_rate NUMERIC,
+  last_observed_at TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+AS $$
+  WITH normalized AS (
+    SELECT public.normalize_chain_food_name(p_source_food_name) AS src,
+           lower(coalesce(nullif(trim(p_pickiness_bucket), ''), '')) AS bucket
+  )
+  SELECT
+    a.target_food_key,
+    a.pickiness_bucket,
+    a.success_count,
+    a.partial_count,
+    a.refused_count,
+    a.total_count,
+    ROUND((a.success_count::NUMERIC / NULLIF(a.total_count, 0)) * 100, 1) AS success_rate,
+    a.last_observed_at
+  FROM chain_network_aggregates a, normalized n
+  WHERE a.source_food_key = n.src
+    AND a.total_count >= 5  -- k-anonymity floor
+    AND (n.bucket = '' OR a.pickiness_bucket = n.bucket OR a.pickiness_bucket = 'unknown')
+  ORDER BY a.success_count DESC, a.total_count DESC
+  LIMIT GREATEST(1, LEAST(p_limit, 25));
+$$;
+
+REVOKE ALL ON FUNCTION public.fetch_chain_network_targets(TEXT, TEXT, INTEGER) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.fetch_chain_network_targets(TEXT, TEXT, INTEGER) TO authenticated;
+
+COMMENT ON TABLE chain_network_contributions IS
+  'US-296: anonymized per-event log; contribution_key is opaque (no PII)';
+COMMENT ON TABLE chain_network_aggregates IS
+  'US-296: rolled-up cross-user chain success counts; k-anonymity enforced via fetch RPC';
+COMMENT ON FUNCTION public.contribute_chain_network IS
+  'Idempotent contribution; uses contribution_key for dedupe';
+COMMENT ON FUNCTION public.fetch_chain_network_targets IS
+  'K-anonymous read (>=5 contributions); filters by source food and optional pickiness';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260512000000_chain_network.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 128: 20260512000001_restore_handle_new_user.sql
+-- ============================================
+
+-- ============================================================================
+-- URGENT: restore handle_new_user() and backfill missing households
+-- ============================================================================
+-- AUDIT FINDINGS (2026-05-07):
+-- The on_auth_user_created trigger calls public.handle_new_user(). Its body
+-- was hijacked at some point — it now writes to a vestigial public.user_profiles
+-- table (a leftover construction-industry SaaS scaffold) instead of creating
+-- the profiles/households/household_members rows the meal-planning app needs.
+--
+-- As a result, every auth user created since approximately 2026-02-10 has NO
+-- row in public.profiles, public.households, or public.household_members.
+-- A catch-all EXCEPTION handler in the hijacked function masked all errors,
+-- which is why this went unnoticed for ~3 months.
+--
+-- This migration:
+--   1. Restores handle_new_user() to the correct meal-planning version.
+--   2. Backfills profiles/households/household_members for every auth.users
+--      row that's currently missing them.
+--   3. Demotes the bogus 'admin' rows in public.user_profiles to the lowest
+--      privilege enum value (defense in depth — admin gating actually lives
+--      in public.user_roles, not user_profiles, but we leave nothing to chance).
+--
+-- This migration intentionally does NOT drop the orphan scaffold (user_profiles,
+-- companies, user_role enum, get_user_role/get_user_company, RLS policies).
+-- That happens in a follow-up cleanup migration once this one is verified.
+-- ============================================================================
+
+-- 1. Restore handle_new_user(). Uses search_path = public to match the
+--    originally-tracked function and to keep column DEFAULTs like
+--    gen_random_uuid() resolvable. Errors are re-raised with full
+--    diagnostics so a future hijack or schema drift surfaces a real
+--    message instead of a generic "db error saving new user".
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+DECLARE
+  new_household_id uuid;
+  full_name text;
+  v_state   text;
+  v_msg     text;
+  v_detail  text;
+  v_hint    text;
+  v_context text;
+BEGIN
+  full_name := COALESCE(NEW.raw_user_meta_data ->> 'full_name', 'User');
+
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (NEW.id, full_name)
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.households (name)
+  VALUES (full_name || '''s Family')
+  RETURNING id INTO new_household_id;
+
+  INSERT INTO public.household_members (household_id, user_id, role)
+  VALUES (new_household_id, NEW.id, 'parent');
+
+  RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS
+      v_state   = RETURNED_SQLSTATE,
+      v_msg     = MESSAGE_TEXT,
+      v_detail  = PG_EXCEPTION_DETAIL,
+      v_hint    = PG_EXCEPTION_HINT,
+      v_context = PG_EXCEPTION_CONTEXT;
+    RAISE EXCEPTION
+      'handle_new_user failed for auth user %: state=% msg=% detail=% hint=% context=%',
+      NEW.id, v_state, v_msg, v_detail, v_hint, v_context;
+END;
+$function$;
+
+-- 2. Backfill: for every auth user without a household_members row, create
+--    a profile (if missing), a household, and the parent membership.
+DO $$
+DECLARE
+  rec RECORD;
+  new_household_id uuid;
+  full_name text;
+BEGIN
+  FOR rec IN (
+    SELECT u.id,
+           COALESCE(u.raw_user_meta_data ->> 'full_name',
+                    split_part(u.email, '@', 1)) AS fn
+    FROM auth.users u
+    LEFT JOIN public.household_members hm ON hm.user_id = u.id
+    WHERE hm.user_id IS NULL
+  ) LOOP
+    full_name := COALESCE(rec.fn, 'User');
+
+    INSERT INTO public.profiles (id, full_name)
+    VALUES (rec.id, full_name)
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.households (name)
+    VALUES (full_name || '''s Family')
+    RETURNING id INTO new_household_id;
+
+    INSERT INTO public.household_members (household_id, user_id, role)
+    VALUES (new_household_id, rec.id, 'parent');
+  END LOOP;
+END $$;
+
+-- 3. Demote every bogus admin row in user_profiles to the lowest privilege.
+--    Real admin gating lives in public.user_roles. This is defense in depth.
+--    NOTE: user_profiles.role is stored as TEXT (it gets cast to public.user_role
+--    only inside get_user_role() and the RLS policies), so compare as text.
+-- CI-fix: user_profiles is a vestigial out-of-band table (no migration creates
+-- it). Guard so a clean replay where it is absent does not error.
+DO $$
+BEGIN
+  IF to_regclass('public.user_profiles') IS NOT NULL THEN
+    UPDATE public.user_profiles
+    SET role = 'office_staff'
+    WHERE role = 'admin'
+      AND id <> 'dc48c711-f059-443a-b4f2-585be6683c63';
+    ALTER TABLE public.user_profiles
+      ALTER COLUMN role SET DEFAULT 'office_staff';
+  END IF;
+END $$;
+
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260512000001_restore_handle_new_user.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 129: 20260512000002_seed_blog_drafts_week_4.sql
+-- ============================================
+
+-- Seed blog post drafts: Week 4 of the EatPal SEO content calendar.
+--
+-- Both posts are EXPANSIONS of existing live posts. They are seeded under
+-- *new* draft slugs to avoid colliding with the existing slugs and to preserve
+-- the live posts' backlinks / SEO equity. Merge plan:
+--
+--   1. Open the existing post in the blog admin (its slug stays the same).
+--   2. Replace its body with the draft body from this migration.
+--   3. Update meta_title and meta_description to the new versions below.
+--   4. Delete the *_2026-update-draft row inserted by this migration.
+--
+-- Idempotent: ON CONFLICT (slug) DO NOTHING means re-running is safe.
+
+-- ============================================================================
+-- Insert blog post drafts
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Week 4 / Post 1 — Why Forcing Kids to Eat Backfires (EXPANSION DRAFT)
+-- Existing live slug: why-forcing-kids-to-eat-doesnt-work-and-what-does
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Why Forcing Kids to Eat Backfires (And 5 Evidence-Based Alternatives)',
+  'why-forcing-kids-to-eat-doesnt-work-2026-update-draft',
+  $ep_excerpt$Pressure feels productive in the moment. Across decades of feeding-therapy research, it isn't. Here's the mechanism behind why pressure backfires, the Division of Responsibility framework, five alternatives, and the exact scripts for the moments parents cave.$ep_excerpt$,
+  $ep_md$In the moment, pressure feels productive. "Just one more bite." "You can have dessert if you finish your peas." "We're not leaving the table until that's gone." It feels like progress, because the food sometimes ends up swallowed.
+
+But the research across feeding therapy, pediatric nutrition, and developmental psychology has been remarkably consistent for decades: pressure to eat doesn't expand a child's safe-food list. It contracts it. The kid you're sitting across from at age six learns that mealtimes are where parental disappointment lives — and that lesson is the one that sticks.
+
+This post explains the mechanism behind why pressure backfires, walks through five alternatives feeding therapists actually use, and gives you specific scripts for the moments where most parents (understandably) cave.
+
+> If you've been using pressure-based strategies for a while, you haven't broken your child. The patterns below take 6–8 weeks to start showing results. The damage of pressure is reversible. Start where you are.
+
+## The mechanism: why pressure backfires
+
+Two things happen at the dinner table that most parents don't realize they're activating:
+
+**1. Associative learning.** Kids' nervous systems are excellent at noticing what predicts stress. If broccoli at dinner predicts tension, raised voices, or a parent's disappointed sigh, "broccoli" gets tagged as a *stress trigger* — not just a food. The next time broccoli appears, the stress response activates before the kid even decides whether to taste it.
+
+**2. The autonomic shutdown.** When a child gets pushed past their tolerance, their nervous system flips into a fight/flight/freeze pattern. Fight = "I'm not eating that and you can't make me." Flight = leaving the table. Freeze = silent staring at the plate. None of these is a kid being defiant; they're physiological responses to a perceived threat.
+
+Both effects compound. A kid who experiences three months of pressure-based meals isn't just rejecting food — their nervous system has *learned* that mealtimes are dangerous, and that learning persists long after the pressure stops.
+
+The good news: it works in the other direction too. Six weeks of consistent low-pressure meals produces measurable expansion of acceptance for most kids. The system is reversible.
+
+## The framework: Division of Responsibility
+
+The most-cited approach in this space is registered dietitian Ellyn Satter's **Division of Responsibility (DoR)** — a four-decade-old framework that's still the load-bearing model in most feeding-therapy training:
+
+> **The parent decides** what is served, when, and where.
+> **The child decides** whether to eat, and how much.
+
+That's it. The whole thing.
+
+If you stop here and only do this one thing — set the meal, serve it, let the kid decide what to eat from what's served, no negotiation — most kids' eating improves. The trouble is that in practice, parents tend to violate the DoR in small ways constantly: a sigh when the plate gets pushed away, a "just one bite" when the kid stands up, a separate plate when the dinner is rejected. Each violation re-trains the kid's nervous system to expect pressure.
+
+DoR is the floor for everything below.
+
+## Five evidence-based alternatives to pressure
+
+### 1. Set the meal, then walk away (literally)
+
+If you're hovering, watching, narrating, you're applying pressure even with kind words. Once the food is on the table, get yourself a plate. Eat. Talk about something other than the kid's plate. Look anywhere except their food.
+
+Most kids eat more when not watched. That sounds suspicious; it's well-documented.
+
+### 2. Family-style serving
+
+Serve from shared bowls and platters in the middle of the table — not pre-plated. The kid puts what they want on their own plate. Even if "what they want" is one piece of bread, the *act* of serving themselves is what matters: it transfers ownership of "what's on my plate" to the child.
+
+This violates many parenting instincts ("but he didn't take any vegetables!"). The instinct is wrong. Trust the framework.
+
+### 3. "You don't have to eat it" — and mean it
+
+Repeated exposure works because the kid stops fighting the food. The sentence that unlocks repeated exposure is "You don't have to eat it. It's just on your plate." Said calmly, without follow-up, with a complete absence of "but maybe you'll like it if you try?"
+
+Then change the subject.
+
+### 4. Pre-meal regulation matters more than the meal
+
+The 30 minutes before dinner determine the lion's share of how dinner goes. A kid who is over-tired, over-hungry, transitioning from screen time, or processing a hard day at school will not be receptive to the most beautifully designed plate. Build a pre-meal ritual:
+
+- 15-minute screen-off period before dinner
+- A glass of water (cuts cranky-hungry intensity meaningfully)
+- A quiet activity (drawing, looking at a book) — not high-stimulation play
+
+If your kid is eating worse over time, look at the *pre-meal* environment first, before you blame the food.
+
+### 5. Use a plan to remove pressure from yourself
+
+This one is for you, not the kid.
+
+When you don't know what's for dinner, you make decisions reactively — and reactive decisions are where pressure leaks in. ("I made this whole thing, can you just *try* it?") A plan that's been written down a week in advance, with food the kid already eats, removes most of the in-the-moment scarcity panic that drives pressure tactics.
+
+A meal plan isn't a productivity tool here. It's an emotion-regulation tool. The framework in [ARFID Meal Plans: How to Build a Week of Safe, Stress-Free Meals](/blog/arfid-meal-plans-build-week-safe-stress-free-meals) and the [picky-eater 7-day template](/blog/picky-eater-meal-plan-7-day-template) are both designed to take the daily decision out of your hands.
+
+## Scripts for the moments parents fail at
+
+These are the dinners where the framework feels impossible. Here's what to say.
+
+### "I'm not eating this!"
+
+> "Okay. You don't have to eat it. It's just on your plate."
+
+Then look away. Talk to your partner. Eat your own food. Do not negotiate the bite count.
+
+### Silent rejection (food sits untouched)
+
+> *(Say nothing about the food.)*
+
+Continue your own meal. The pressure to comment is yours, not the kid's. They know the food is there. They know they can eat it if they want. Your silence preserves their agency.
+
+### Gagging
+
+> "It's okay. You can take it off your plate."
+
+Then physically move it. Gagging is a stress response. The food has crossed the kid's tolerance line, and the goal is to bring tolerance *down*, not push through.
+
+### "Can I have something else?"
+
+> "Dinner is what's on the table. There's [anchor food they like] here. You can have that."
+
+A boring backup is fine — toast with butter, a bowl of cereal. The rule is "no separate special meal cooked on demand," not "no food at all."
+
+### "But you said I had to try it!"
+
+This one is for parents in transition out of pressure-based feeding.
+
+> "I changed my mind. You don't have to try it. It's just here in case you want it."
+
+Apologizing for the pressure is fine. It models repair.
+
+### When you cave
+
+You will cave. Pressure-based instincts are deep, and you've used them because you love your kid and want them to be okay. When you catch yourself mid-pressure, the move is:
+
+> "I'm sorry, I shouldn't have pushed. Let's just enjoy dinner."
+
+And then drop it. The repair is the lesson, not the original mistake.
+
+## What to expect, week by week
+
+- **Weeks 1–2:** Things might get worse. The kid will test whether the new rules are real. Hold the line.
+- **Weeks 3–4:** First signs of new acceptance — usually a stretch food touched or sniffed without being eaten.
+- **Weeks 5–8:** Measurable expansion of safe-food list. Bridge foods start landing. Mealtimes feel less like a battle.
+- **3 months:** A different table.
+
+## How EatPal supports pressure-free feeding
+
+EatPal's planner doesn't put pressure foods on the kid's plate by default. When you mark stretches as "low-pressure exposure," the planner schedules them at lower-stakes meals (snacks, breakfast) rather than dinner — exactly the pacing the alternatives above recommend.
+
+If you've never run the [free meal plan generator](/meal-plan), it's a good place to start: it'll output a week of meals that respects the Division of Responsibility automatically, including the boring-backup options above.
+
+## FAQ
+
+**My pediatrician told me to force the bite count. Now what?**
+Pediatricians vary widely in feeding-specific training. If you can, get a second opinion from a registered dietitian or feeding therapist who specializes in pediatric feeding — they'll usually back the DoR framework over bite-counting.
+
+**My partner won't get on board.**
+This is a real issue. The framework only works if both adults at the table run it. Try a 4-week experiment: ask your partner to commit to the framework for 4 weeks, then evaluate. Most resistance softens when results show up by week 5–6.
+
+**Won't my kid just eat junk if I let them choose?**
+The DoR has a partner principle: parents control *what is served*. If the only options are the foods you put on the table, "letting them choose" doesn't mean Pop-Tarts for dinner. It means choosing among what's there.
+
+**My kid won't eat anything if I don't push.**
+This is the most common fear. In practice, almost no kid voluntarily skips meals for more than a day or two. If yours does — that's a different problem than picky eating, and a feeding-therapist visit is worth scheduling.
+
+**What about kids with sensory issues, autism, or ARFID?**
+The framework applies, but slowly. ARFID kids may need 12+ weeks instead of 8 before changes show up. Stay the course; the principles are sound, the timeline is just longer.
+
+## Stop the dinner-table battle
+
+[Generate a free 7-day plan](/meal-plan) — built to honor Division of Responsibility automatically, with boring backups built into every meal. No card required.
+$ep_md$,
+  'draft',
+  'Why Forcing Kids to Eat Backfires (And What to Do Instead) | EatPal',
+  'Pressure feeding contracts a child''s safe-food list, not expand it. Here''s the mechanism, the Division of Responsibility framework, and 5 evidence-based alternatives with scripts.',
+  8,
+  (SELECT id FROM public.blog_categories WHERE slug = 'picky-eaters'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Week 4 / Post 2 — Lunchbox Wins (EXPANSION DRAFT)
+-- Existing live slug: lunchbox-wins-10-easy-meals-kids-actually-eat
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Lunchbox Wins: ARFID-Friendly School Lunch Ideas That Kids Actually Eat',
+  'lunchbox-wins-school-lunch-ideas-2026-update-draft',
+  $ep_excerpt$A lunch that wins at home doesn't always survive the cafeteria. Here's the 5-constraint filter for school lunches, a printable 5-day rotation, the container strategy that keeps food in the state your kid accepts, and what to do with the "lunch report" at 3pm.$ep_excerpt$,
+  $ep_md$A lunch that wins at home doesn't always survive the cafeteria. Different temperature. Different smells. A peer making a face. The 18-minute eating window. All of it stacks against your kid in ways the dinner-time meal plan never has to deal with.
+
+If you've been packing the same lunch you serve at home and finding it come back uneaten, the problem isn't the food. It's that school is a fundamentally different sensory environment, and it needs its own anchor list.
+
+This post walks through the 5 constraints school lunch has to solve, a 5-day printable rotation that handles those constraints, and the container strategy that keeps the food in the state your kid actually accepts.
+
+> If your child is on a feeding-therapy plan, share this post (or your final lunch list) with their therapist before the school year starts. Therapists often have school-specific guidance — including recommendations for lunchroom seating, eating-room accommodations, and whether to push or pull back during transitions.
+
+## The 5 constraints school lunch has to solve
+
+Before picking foods, understand what school is doing to them:
+
+**1. Sensory environment.** Cafeterias are loud, smelly, fluorescent-lit, and full of competing food smells. A kid who's already at sensory capacity has fewer reserves to deal with new or borderline foods.
+
+**2. Social pressure.** "Eww, what's that?" from a peer is a one-way ticket to that food being declared inedible for the year. Visibility matters.
+
+**3. Time pressure.** Most US elementary schools give 15–20 minutes for lunch — and that includes line time, getting food out, eating, cleaning up. Realistic eating window: 8–12 minutes.
+
+**4. Temperature constraints.** Most schools don't allow microwaves. Hot food is reheated *in the morning* and eaten cold. Cold food is the default.
+
+**5. Identity load.** "Weird lunch" is real. Even a 7-year-old knows when their lunchbox looks different from the table's. Foods that travel well + look "normal" reduce identity friction.
+
+A school lunch that ignores any of these constraints is going to come home half-eaten regardless of how nutritious it is.
+
+## Building a school lunch anchor list (different from dinner)
+
+Most home anchors don't pass all five constraints. Chicken nuggets reheat poorly and smell strongly. Pasta gets gummy. Apple slices oxidize. A kid's home anchor list usually shrinks by 30–50% when filtered through school constraints.
+
+Here's the filter:
+
+- **Travels well** at room temp or with an ice pack
+- **Eats well cold** (or stays hot enough in a thermos)
+- **Doesn't oxidize, get soggy, or smell strongly**
+- **Has a "normal-looking" presentation** the kid won't be embarrassed by
+- **Can be eaten in 12 minutes**
+
+Run your kid's home anchor list through this filter. What survives is your *school* anchor list.
+
+For a typical kid: cheese sticks, plain crackers, deli turkey, plain bread, plain bagel, pretzels, applesauce pouches, peeled fresh fruit (cucumber, grape, blueberry), cold pasta (yes, some kids prefer it cold), goldfish, and one or two thermos-ready hot foods (mac and cheese, plain pasta with butter, or chicken nuggets reheated piping hot at 7am into a pre-warmed thermos).
+
+That's 10–12 foods. That's enough.
+
+## A 5-day printable lunch rotation
+
+This rotation cycles weekly. Send the same Monday lunch every Monday for a month. Predictability is the feature.
+
+### Monday — "Build-your-own" lunchable style
+
+- 4 slices deli turkey (folded)
+- 4 slices cheddar (cubed)
+- 6 plain crackers
+- 1/4 cup grapes
+- 1 chocolate chip cookie
+
+### Tuesday — Bagel + sides
+
+- Plain mini bagel, halved, with cream cheese in a small container
+- Cucumber rounds
+- Pretzel rod
+- Applesauce pouch
+
+### Wednesday — Hot thermos day
+
+- Thermos: mac and cheese (filled at 7 am, will be warm by lunch)
+- Side: cubed melon
+- Side: pretzel sticks
+- Cookie
+
+### Thursday — Wrap day
+
+- Tortilla wrap with butter and turkey (or PB&J if dairy/meat-free)
+- Cheese stick
+- Carrot rounds (peeled, no skin)
+- Goldfish
+
+### Friday — Pizza Friday
+
+- Plain pizza slice (cold or thermos-warm)
+- Cheese stick
+- Apple slice in citric-acid water (won't brown — see container note below)
+- 5 mini Oreos
+
+If your kid rejects one of these days, swap the lunch from a different day of the week. Don't rebuild from scratch.
+
+## The container strategy
+
+Containers matter as much as the food. The wrong container turns a winning lunch into a soggy disaster by 11:30 a.m.
+
+**Bento-style box with separated compartments.** Keeps foods from touching — critical for kids who reject food cross-contamination. Most win.
+
+**Insulated thermos for hot food.** The trick: pre-warm the thermos with boiling water for 5 minutes, dump the water, *then* add the hot food. This adds 2 hours of "still warm enough to eat" time.
+
+**Ice pack — not just one.** A small ice pack on top *and* underneath the food. Single-pack cooling is unreliable past 4 hours.
+
+**Separate sauce containers.** A 1-oz container for ketchup, ranch, butter — anything that can soak into the rest of the lunch.
+
+**Citric-acid water trick for apples.** Apple slices submerged briefly in water with a pinch of citric acid (or a splash of lemon juice) won't brown for 6 hours. This sounds fussy; it's actually 30 seconds of work.
+
+The setup runs around $40 once. Buy the bento box, two ice packs, and a small thermos. They last years.
+
+## Allergen-aware templates
+
+For peanut-free schools (most of the US):
+- Replace PB&J with sunflower butter and jelly (sunbutter)
+- Replace any peanut-based snack with a school-approved alternative
+
+For dairy-free kids:
+- Replace cheese with hummus or a deli-meat protein
+- Replace milk with a soy or oat alternative
+- Replace pizza day with a hummus + pita day
+
+For nut-allergic kids: read every label every time, including the "may contain" line. School nut policies vary; ask the teacher specifically about classroom rules.
+
+## The "lunch report" — what came home
+
+The contents of the lunchbox at 3 p.m. is your only ground truth. The kid's verbal report ("I ate it!") and the cafeteria aide's report ("she's barely eating") are both unreliable.
+
+What to do with the data:
+
+- **All the lunch came home for 3+ days in a row:** the lunch isn't working. Audit the constraints above.
+- **One food repeatedly comes home, others get eaten:** that food's out. Don't keep packing it as a "stretch" — school lunch is the wrong slot for stretches.
+- **The lunch comes home half-eaten, every day:** consider whether the eating window is the issue. Some kids genuinely can't finish in 12 minutes. Pack 70% of what you'd usually pack.
+- **The whole lunch comes back, but the kid says they were starving:** social/sensory load is the issue, not the food. Time to talk to the school about a quieter eating space or peer-seat changes.
+
+For the framework on how lunch fits into a full day's plan, see [ARFID Meal Plans: How to Build a Week of Safe, Stress-Free Meals](/blog/arfid-meal-plans-build-week-safe-stress-free-meals) and [Picky Eater Meal Plans: 7-Day Template](/blog/picky-eater-meal-plan-7-day-template).
+
+## How EatPal handles school lunches
+
+EatPal's planner has a separate "school lunch" anchor list per kid — so the foods that work at school don't have to compete with the foods that work at dinner. The planner outputs a 5-day printable lunch rotation and adds school-lunch ingredients to your weekly grocery list automatically.
+
+If you're starting from scratch, the [picky eater quiz](/picky-eater-quiz) will surface a candidate school-anchor list based on your kid's home anchors plus their sensory profile.
+
+## FAQ
+
+**My kid will only eat one specific lunch, every day, for months. Is that a problem?**
+Probably not, if the lunch hits adequate calories and protein. Repetition is a feature in school lunches, not a bug. Many kids eat the same lunch from kindergarten through 4th grade and it's fine.
+
+**The school says I have to include a vegetable. My kid won't eat one.**
+Pack one anyway. The vegetable's job is to be present, not necessarily eaten. Cucumber rounds, baby carrots, and bell pepper strips are the most lunchbox-friendly low-stakes options.
+
+**Should I be worried if she's only eating snack foods at school?**
+"Snack foods" at lunch is fine if total daily intake hits her range. Most kids backload nutrition into the after-school snack and dinner anyway. Track the day, not the meal.
+
+**What about "no peanuts" classrooms? Can I send a thermos with PB&J?**
+Check the specific policy. "Peanut-free" usually means no peanut products in the classroom. A thermos doesn't bypass that — assume the policy is strict and use sunflower butter as your peanut-butter substitute.
+
+**My kid trades lunches with a friend. Help.**
+Common, especially in 3rd–5th grade. If the trade-target food is something your kid would otherwise reject — that's actually progress (peer-mediated exposure works for some kids). If the trade is consistently nutrition-empty (chips for chips), have a conversation about no-trade rules at home.
+
+## Pack a winning lunch this week
+
+[Generate a free 5-day school lunch rotation](/meal-plan) — built around your kid's school-specific anchors, with a printable list and grocery additions. No card required.
+$ep_md$,
+  'draft',
+  'ARFID & Picky-Eater School Lunch Ideas: 5-Day Rotation | EatPal',
+  'Lunch ideas that survive the cafeteria — a 5-constraint filter for school lunches, a printable 5-day rotation, container strategy, and what to do with the "lunch report" at 3pm.',
+  8,
+  (SELECT id FROM public.blog_categories WHERE slug = 'picky-eaters'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260512000002_seed_blog_drafts_week_4.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 130: 20260513000000_drop_user_profiles_scaffold.sql
+-- ============================================
+
+-- ============================================================================
+-- Drop the construction-industry SaaS scaffold (full scope)
+-- ============================================================================
+-- Apply ONLY after 20260512000000_restore_handle_new_user.sql has been
+-- deployed and verified (fresh signups produce profiles + households +
+-- household_members rows).
+--
+-- AUDITED 2026-05-07: every table below is either empty (0 rows) or, in the
+-- case of user_profiles, holds only the 37 bogus rows the hijacked trigger
+-- created. No meal-planning table has any FK into this scaffold. The
+-- helpers and enum are referenced only by the scaffold's own RLS policies.
+--
+-- Removes:
+--   Tables (with bootstrap_* RLS policies):
+--     public.user_profiles      (37 bogus rows, all dropped)
+--     public.companies          (0 rows)
+--     public.projects           (0 rows)
+--     public.financial_records  (0 rows)
+--     public.financial_snapshots (0 rows)
+--     public.teams              (0 rows)
+--     public.project_team_assignments (0 rows)
+--   Tables reachable only via FK from the scaffold:
+--     public.materials, public.material_usage,
+--     public.project_assignments, public.time_entries
+--   Helpers: public.get_user_role(uuid), public.get_user_company(uuid)
+--   Enum:    public.user_role
+--
+-- Safety: a precondition check aborts the migration if any of the scaffold
+-- tables (other than user_profiles, which we expect populated) has data.
+-- If you ever decide to use any of these tables for the meal app, abort
+-- and rename them out of the scaffold instead of dropping.
+-- ============================================================================
+
+-- 1. Safety check: refuse to drop tables that contain data (other than
+--    user_profiles, which we know holds 37 bogus rows).
+DO $check$
+DECLARE
+  tname text;
+  cnt   integer;
+  errs  text := '';
+BEGIN
+  FOREACH tname IN ARRAY ARRAY[
+    'companies','projects','financial_records','financial_snapshots',
+    'teams','project_team_assignments',
+    'materials','material_usage','project_assignments','time_entries'
+  ] LOOP
+    -- Skip tables that don't exist on this instance (be tolerant).
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relname = tname AND c.relkind = 'r'
+    ) THEN
+      CONTINUE;
+    END IF;
+
+    EXECUTE format('SELECT COUNT(*) FROM public.%I', tname) INTO cnt;
+    IF cnt > 0 THEN
+      errs := errs || ' ' || tname || '=' || cnt;
+    END IF;
+  END LOOP;
+
+  IF length(errs) > 0 THEN
+    RAISE EXCEPTION
+      'Aborting cleanup. Scaffold tables contain data:%s. Investigate before dropping.',
+      errs;
+  END IF;
+END $check$;
+
+-- 2. Drop the helper functions with CASCADE. This automatically removes
+--    every bootstrap_* RLS policy that depends on them (15 policies across
+--    7 tables — see audit results).
+DROP FUNCTION IF EXISTS public.get_user_role(uuid)    CASCADE;
+DROP FUNCTION IF EXISTS public.get_user_company(uuid) CASCADE;
+
+-- 3. Drop the scaffold tables. Order is leaf-to-root, but CASCADE makes
+--    order forgiving. IF EXISTS keeps it idempotent.
+DROP TABLE IF EXISTS public.material_usage           CASCADE;
+DROP TABLE IF EXISTS public.project_assignments      CASCADE;
+DROP TABLE IF EXISTS public.time_entries             CASCADE;
+DROP TABLE IF EXISTS public.project_team_assignments CASCADE;
+DROP TABLE IF EXISTS public.financial_records        CASCADE;
+DROP TABLE IF EXISTS public.financial_snapshots      CASCADE;
+DROP TABLE IF EXISTS public.teams                    CASCADE;
+DROP TABLE IF EXISTS public.materials                CASCADE;
+DROP TABLE IF EXISTS public.projects                 CASCADE;
+DROP TABLE IF EXISTS public.user_profiles            CASCADE;
+DROP TABLE IF EXISTS public.companies                CASCADE;
+
+-- 4. Drop the enum (no more references after the tables and helpers go).
+DROP TYPE IF EXISTS public.user_role;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260513000000_drop_user_profiles_scaffold.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 131: 20260513000001_hidden_veggies.sql
+-- ============================================
+
+-- US-297: Hidden-Veggies auto-rewrite engine
+-- Curated catalog of vetted veggie-hiding techniques + recipe variant linkage.
+
+-- 1) Catalog of techniques (publicly readable, admin-managed)
+CREATE TABLE IF NOT EXISTS hidden_veggie_techniques (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Veggie being hidden
+  veggie_name TEXT NOT NULL,                    -- e.g. 'cauliflower', 'spinach'
+  veggie_allergens TEXT[] NOT NULL DEFAULT '{}',-- pass-through to recipe (rare for veggies)
+
+  -- Where it can be hidden
+  -- recipe_keywords: any of these keywords (case-insensitive substring match
+  -- against recipe.name/description/instructions) makes the recipe a candidate.
+  recipe_keywords TEXT[] NOT NULL,              -- e.g. {'mac and cheese','mac & cheese','cheese sauce'}
+  -- recipe_categories: optional categorical filter against recipe.category.
+  recipe_categories TEXT[] NOT NULL DEFAULT '{}',
+
+  -- How
+  technique TEXT NOT NULL,                      -- 'puree','grate','finely-chop','blend','swap-liquid'
+  prep_method TEXT NOT NULL,                    -- 'steamed_then_pureed','grated_raw','frozen_then_blended'
+  -- Max ratio of the host item to replace/add. e.g. 0.30 = up to 30% of cheese sauce volume.
+  max_ratio NUMERIC(3, 2) NOT NULL CHECK (max_ratio > 0 AND max_ratio <= 1.0),
+  -- Suggested human-friendly amount string (rendered alongside the rewrite).
+  suggested_amount TEXT NOT NULL,               -- e.g. '1/2 cup pureed cauliflower per 2 cups sauce'
+
+  -- Instruction snippet inserted into the rewrite. {{step}} substitutes "Add the
+  -- {{prep}} {{veggie}} to..." sentence.
+  instruction_template TEXT NOT NULL,
+  -- Why this works (shown to parent as a stealth tip)
+  stealth_tip TEXT NOT NULL,
+  -- 0..100 confidence the kid won't detect (calibrated by domain experts)
+  stealth_score INTEGER NOT NULL DEFAULT 70 CHECK (stealth_score BETWEEN 0 AND 100),
+
+  -- Lifecycle
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hidden_veggie_techniques_active
+  ON hidden_veggie_techniques(is_active);
+CREATE INDEX IF NOT EXISTS idx_hidden_veggie_techniques_veggie
+  ON hidden_veggie_techniques(veggie_name);
+CREATE INDEX IF NOT EXISTS idx_hidden_veggie_techniques_keywords
+  ON hidden_veggie_techniques USING GIN (recipe_keywords);
+
+ALTER TABLE hidden_veggie_techniques ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users read active techniques" ON hidden_veggie_techniques;
+CREATE POLICY "Authenticated users read active techniques"
+  ON hidden_veggie_techniques FOR SELECT
+  TO authenticated
+  USING (is_active = true);
+
+DROP POLICY IF EXISTS "Admins manage techniques" ON hidden_veggie_techniques;
+CREATE POLICY "Admins manage techniques"
+  ON hidden_veggie_techniques FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'));
+
+DROP TRIGGER IF EXISTS update_hidden_veggie_techniques_updated_at ON hidden_veggie_techniques;
+CREATE TRIGGER update_hidden_veggie_techniques_updated_at
+  BEFORE UPDATE ON hidden_veggie_techniques
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- 2) Recipe variant linkage. parent_recipe_id points to the original recipe
+--    a hidden-veggies variant was generated from. ON DELETE SET NULL so
+--    deleting the parent doesn't cascade-delete the variant.
+ALTER TABLE recipes
+  ADD COLUMN IF NOT EXISTS parent_recipe_id UUID
+    REFERENCES recipes(id) ON DELETE SET NULL;
+ALTER TABLE recipes
+  ADD COLUMN IF NOT EXISTS variant_kind TEXT;
+-- variant_kind: 'hidden_veggies' is the only value used today; left as TEXT
+-- so future variant types (scaled, simplified, etc.) can reuse the column.
+
+CREATE INDEX IF NOT EXISTS idx_recipes_parent_recipe ON recipes(parent_recipe_id)
+  WHERE parent_recipe_id IS NOT NULL;
+
+-- 3) Seed catalog (~20 vetted techniques)
+-- Re-runnable seed. There is no natural unique key here (cauliflower/puree,
+-- spinach/puree and four other pairs each appear twice with different
+-- instructions), so ON CONFLICT has no target to use. Gate on the table being
+-- empty instead: a replay of this migration is then a no-op rather than 20
+-- duplicate catalog rows. Dollar-quoting means the body needs no re-escaping.
+DO $seed$
+BEGIN
+IF NOT EXISTS (SELECT 1 FROM hidden_veggie_techniques) THEN
+INSERT INTO hidden_veggie_techniques (
+  veggie_name, recipe_keywords, recipe_categories,
+  technique, prep_method, max_ratio, suggested_amount,
+  instruction_template, stealth_tip, stealth_score
+) VALUES
+  -- Cauliflower
+  ('cauliflower',
+   ARRAY['mac and cheese','mac & cheese','macaroni','cheese sauce','alfredo'],
+   ARRAY['carb'],
+   'puree', 'steamed_then_pureed', 0.30,
+   '1/2 cup steamed-and-pureed cauliflower per 2 cups cheese sauce',
+   'Steam the cauliflower until very soft, puree until smooth, then whisk into the cheese sauce before combining with the pasta.',
+   'Cauliflower vanishes into cheese sauce - same color, same creaminess, slightly nuttier flavor that the cheese covers.',
+   85),
+
+  ('cauliflower',
+   ARRAY['mashed potato','mashed potatoes','smashed potato'],
+   ARRAY['carb'],
+   'puree', 'steamed_then_pureed', 0.40,
+   '1 cup steamed cauliflower per 2 cups potato',
+   'Steam cauliflower with the potatoes; mash both together with the same butter and milk.',
+   'Cauliflower is the same color as potato and disappears with butter. Drop the ratio to 25% if your kid notices texture.',
+   88),
+
+  ('cauliflower',
+   ARRAY['pizza dough','pizza crust','crust'],
+   ARRAY[]::TEXT[],
+   'grate', 'grated_then_squeezed_dry', 0.50,
+   '2 cups grated cauliflower per cup of flour, squeezed dry',
+   'Grate cauliflower, microwave 4 minutes, squeeze out moisture in a clean towel, then mix into the dough as 50% flour replacement.',
+   'Cauliflower crust is mainstream now - kids who eat regular pizza rarely flag it.',
+   75),
+
+  -- Spinach
+  ('spinach',
+   ARRAY['brownie','brownies','chocolate cake','chocolate cupcake'],
+   ARRAY[]::TEXT[],
+   'puree', 'steamed_then_pureed', 0.15,
+   '1/4 cup pureed spinach per 8x8 pan of brownies',
+   'Steam spinach until wilted, blend with a splash of water, fold into the wet ingredients before adding flour.',
+   'Cocoa and chocolate completely mask spinach color and taste at low ratios. Stick to 15% or it darkens too much.',
+   90),
+
+  ('spinach',
+   ARRAY['smoothie','green smoothie','fruit smoothie'],
+   ARRAY[]::TEXT[],
+   'blend', 'frozen_raw', 0.25,
+   '1 handful frozen spinach per 16oz smoothie',
+   'Add frozen spinach with the rest of the smoothie ingredients. Berries (especially blueberries) hide the green color completely.',
+   'Frozen spinach blends without leafy bits. Pair with dark berries for color camouflage.',
+   80),
+
+  ('spinach',
+   ARRAY['pesto','pasta sauce','marinara'],
+   ARRAY[]::TEXT[],
+   'puree', 'blanched_then_pureed', 0.30,
+   '1 cup blanched spinach per 2 cups sauce',
+   'Blanch spinach 30 seconds, shock in ice water, blend smooth, then stir into the sauce.',
+   'Spinach matches basil tones in pesto and disappears in red sauce when fully pureed.',
+   78),
+
+  -- Zucchini
+  ('zucchini',
+   ARRAY['muffin','quick bread','banana bread'],
+   ARRAY[]::TEXT[],
+   'grate', 'grated_then_squeezed_dry', 0.30,
+   '1 cup grated zucchini per dozen muffins',
+   'Grate zucchini on the small holes, squeeze in a clean towel, then fold into the batter with the wet ingredients.',
+   'Zucchini melts into baked goods and adds moisture. Stays invisible if you squeeze the water out first.',
+   92),
+
+  ('zucchini',
+   ARRAY['meatball','meatloaf','burger'],
+   ARRAY['protein'],
+   'grate', 'grated_then_squeezed_dry', 0.20,
+   '1/2 cup grated zucchini per pound of ground meat',
+   'Grate finely, squeeze dry, mix into the meat with the breadcrumbs and egg.',
+   'Adds moisture without changing flavor. Keeps the meat tender too.',
+   86),
+
+  -- Carrot
+  ('carrot',
+   ARRAY['tomato sauce','marinara','spaghetti sauce','pasta sauce'],
+   ARRAY[]::TEXT[],
+   'puree', 'roasted_then_pureed', 0.25,
+   '1 medium carrot pureed per 2 cups sauce',
+   'Roast carrots until soft, blend with a bit of the sauce, then stir back in.',
+   'Carrots add natural sweetness that balances acidic tomato - parents have done this for decades.',
+   88),
+
+  ('carrot',
+   ARRAY['mac and cheese','mac & cheese','cheese sauce'],
+   ARRAY[]::TEXT[],
+   'puree', 'steamed_then_pureed', 0.20,
+   '1/2 cup pureed carrot per 2 cups cheese sauce',
+   'Steam carrot until very soft, puree, whisk into the cheese sauce.',
+   'Orange + orange = invisible. Carrot reinforces the cheddar color.',
+   83),
+
+  -- Beet
+  ('beet',
+   ARRAY['chocolate cake','chocolate cupcake','red velvet'],
+   ARRAY[]::TEXT[],
+   'puree', 'roasted_then_pureed', 0.25,
+   '1/2 cup pureed beet per 9 inch cake',
+   'Roast beets until tender, peel, blend smooth, fold into the wet ingredients.',
+   'Beets give chocolate cake a deep color and extra moisture. Pairs with red velvet famously.',
+   82),
+
+  ('beet',
+   ARRAY['hummus','dip'],
+   ARRAY[]::TEXT[],
+   'puree', 'roasted_then_pureed', 0.30,
+   '1/4 cup roasted beet per 1 cup hummus',
+   'Roast and peel beet, blend with the chickpeas and tahini.',
+   'Beet hummus is bright pink - kids think it is "fairy hummus". Win.',
+   70),
+
+  -- Sweet potato
+  ('sweet potato',
+   ARRAY['mac and cheese','mac & cheese','cheese sauce'],
+   ARRAY[]::TEXT[],
+   'puree', 'roasted_then_pureed', 0.30,
+   '1/2 cup pureed sweet potato per 2 cups cheese sauce',
+   'Roast sweet potato, scoop the flesh, blend smooth, then whisk into the cheese sauce.',
+   'Sweet potato matches cheddar color and adds creaminess. Slight sweetness amplifies the cheese flavor.',
+   90),
+
+  ('sweet potato',
+   ARRAY['pancake','waffle'],
+   ARRAY[]::TEXT[],
+   'puree', 'roasted_then_pureed', 0.25,
+   '1/2 cup pureed sweet potato per cup of flour',
+   'Mix the puree into the wet ingredients before adding flour.',
+   'Sweet potato pancakes look slightly orange - call them "sunshine pancakes" and the kid is sold.',
+   88),
+
+  -- Butternut squash
+  ('butternut squash',
+   ARRAY['mac and cheese','mac & cheese','cheese sauce','alfredo'],
+   ARRAY[]::TEXT[],
+   'puree', 'roasted_then_pureed', 0.30,
+   '1/2 cup pureed butternut squash per 2 cups cheese sauce',
+   'Roast cubed butternut, blend with a bit of milk, then whisk into the sauce.',
+   'Butternut and cheddar are basically the same color. Adds silkiness too.',
+   90),
+
+  -- Pumpkin
+  ('pumpkin',
+   ARRAY['muffin','pancake','waffle','quick bread'],
+   ARRAY[]::TEXT[],
+   'puree', 'canned_or_pureed', 0.30,
+   '1/2 cup pumpkin puree per dozen muffins',
+   'Use canned pumpkin puree (or roast and blend your own). Add to the wet ingredients.',
+   'Pumpkin makes baked goods moist and slightly orange. Pair with cinnamon for cover.',
+   89),
+
+  -- Avocado
+  ('avocado',
+   ARRAY['brownie','chocolate frosting','chocolate pudding'],
+   ARRAY[]::TEXT[],
+   'puree', 'mashed_smooth', 0.50,
+   '1 ripe avocado per pan of brownies (replaces half the butter)',
+   'Mash avocado completely smooth, swap in for half the butter or oil.',
+   'Cocoa hides avocado completely. Kids get healthy fats instead of butter.',
+   85),
+
+  -- Black beans
+  ('black beans',
+   ARRAY['brownie'],
+   ARRAY[]::TEXT[],
+   'puree', 'rinsed_then_pureed', 0.40,
+   '1 can black beans (drained, rinsed, pureed) per pan of brownies',
+   'Drain and rinse the beans well, blend until completely smooth, swap for the flour entirely.',
+   'Famous flourless brownie hack. Beans add protein and disappear into the chocolate.',
+   75),
+
+  -- Mushroom
+  ('mushroom',
+   ARRAY['meatball','meatloaf','burger','taco meat'],
+   ARRAY['protein'],
+   'finely-chop', 'finely_diced', 0.25,
+   '1 cup finely-diced mushrooms per pound of ground meat',
+   'Dice mushrooms very small (or pulse in a food processor), saute until dry, mix into the meat.',
+   'Mushrooms taste meaty and disappear into ground beef texture. Saute first to drive off water.',
+   80),
+
+  -- Lentils
+  ('lentils',
+   ARRAY['bolognese','spaghetti sauce','meat sauce','taco meat'],
+   ARRAY['protein'],
+   'finely-chop', 'cooked_then_finely_chopped', 0.30,
+   '1/2 cup cooked lentils per pound of meat',
+   'Cook lentils until soft, drain, mix into the cooked meat with the sauce.',
+   'Lentils mimic ground meat texture. Add sparingly the first time.',
+   78);
+END IF;
+END
+$seed$;
+
+COMMENT ON TABLE hidden_veggie_techniques IS 'US-297: vetted catalog of hidden-veggie techniques';
+COMMENT ON COLUMN hidden_veggie_techniques.recipe_keywords IS
+  'Case-insensitive substring keywords matched against recipe name/description/instructions';
+COMMENT ON COLUMN hidden_veggie_techniques.max_ratio IS
+  'Upper bound on host-item replacement; the rewriter caps suggestions here';
+COMMENT ON COLUMN hidden_veggie_techniques.stealth_score IS
+  '0-100 calibrated likelihood the kid will not detect the swap';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260513000001_hidden_veggies.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 132: 20260513000002_seed_blog_drafts_week_5.sql
+-- ============================================
+
+-- Seed blog post drafts: Week 5 of the EatPal SEO content calendar.
+--
+-- Both posts are NEW (no existing slug to preserve). Inserted with
+-- status='draft' so they do NOT auto-publish. Edit, attach featured images,
+-- and publish from the blog admin UI when ready.
+--
+-- Idempotent: ON CONFLICT (slug) DO NOTHING means re-running is safe.
+
+-- ============================================================================
+-- Insert blog post drafts
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- Week 5 / Post 1 — Sensory-Friendly Meal Planning
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Sensory-Friendly Meal Planning: For Kids with ARFID, Autism, and Extreme Picky Eating',
+  'sensory-friendly-meal-planning-arfid-autism',
+  $ep_excerpt$Sensory-driven food rejection isn't picky — it's neurological. Here's the 5-dimension model, the "sensory budget" concept that explains why Tuesday's win fails Thursday, and three sample plans for the most common sensory profiles.$ep_excerpt$,
+  $ep_md$When a kid rejects a food, most adults reach for the same explanation: "they're being picky." For neurodivergent kids and kids with ARFID, that's almost always wrong. The rejection isn't preference — it's the nervous system doing exactly what it's built to do: registering a sensory input that exceeds its tolerance and triggering a protective response.
+
+Sensory-driven eating isn't fixable through bribery, encouragement, or "just one bite." It's manageable through a meal plan that respects the kid's actual sensory profile — and slowly expands it within the limits of what the system can handle.
+
+This post walks through the five sensory dimensions of food, how to build your kid's sensory profile, the "sensory budget" concept that explains why some meals fail and others succeed, and three sample plans for the most common sensory profiles.
+
+> If your child is autistic, has SPD, or is being evaluated for ARFID, this post is a starting framework — not a substitute for an occupational therapist or feeding therapist trained in sensory work. The plans below work best alongside professional sensory support.
+
+## The 5 sensory dimensions of food
+
+Every bite of food hits the nervous system on five dimensions simultaneously. Most kids tolerate variation across most of them. Sensory-sensitive kids tolerate variation on some and not others.
+
+**1. Taste.** Sweet, salty, sour, bitter, umami. Concentration matters too — strong flavors register differently from mild.
+
+**2. Texture.** Crunchy, soft, chewy, mushy, lumpy, smooth, mixed-texture. *Mixed* is the killer for many kids — the food that's mostly soft but has a crunchy bit (yogurt with granola, ice cream with chunks).
+
+**3. Smell.** Hot food smells more than cold food. Cooked meat smells more than cheese. The smell hits before the kid even sees the food, so a strong-smelling dinner can shut down the meal before the plate arrives.
+
+**4. Temperature.** Hot, warm, room-temp, cool, cold. Some kids are temperature-rigid: every food must be in one of two temperature bands or it's rejected.
+
+**5. Visual.** Color, plating, contact between foods, "what it looks like." Foods that touch on the plate are different foods to many sensory-sensitive kids — even if separated they'd both be acceptable.
+
+A meal that fails one dimension fails the whole meal. You can do everything else right and still lose to a smell.
+
+## Build your kid's sensory profile
+
+Spend a week noticing — not changing — what your kid does and doesn't accept across each dimension. Don't try to fix anything yet. Just observe.
+
+For each dimension, write three lists:
+
+- **Tolerated** — what the kid will eat consistently
+- **Triggers** — what causes immediate rejection or distress
+- **Edge cases** — accepted in some contexts, rejected in others
+
+Example sensory profile for one autistic 7-year-old:
+
+| Dimension | Tolerated | Triggers | Edge cases |
+| --- | --- | --- | --- |
+| Taste | Mild, slightly sweet, salty | Bitter, sour, spicy | Tomato (sweet at home, sour at restaurants) |
+| Texture | Crunchy, smooth | Mixed-texture, lumpy, slimy | Yogurt (smooth = yes, with chunks = no) |
+| Smell | Cheese, bread, peanut butter | Cooked fish, cooked broccoli, eggs cooking | Pasta (plain = yes, with sauce being cooked = no) |
+| Temperature | Cold, room temp | Steaming hot, lukewarm | Pizza (hot = no, cold = yes) |
+| Visual | Foods separated, beige/yellow palette | Mixed plates, green or red foods | Apples (peeled = yes, with skin = no) |
+
+This profile is the actual planning input. Not "safe foods" — *the rules that determine whether any food is safe today.*
+
+## The "sensory budget" concept
+
+Sensory kids have a finite amount of sensory tolerance per meal. Once it's spent, additional input — even input that's normally fine — gets rejected.
+
+Things that *spend* the sensory budget:
+
+- A new food on the plate
+- A loud or busy environment (cafeterias, restaurants)
+- A transition right before the meal (coming in from school, changing activities)
+- An emotional event earlier in the day
+- Being slightly overtired or overhungry
+
+Things that *replenish* the sensory budget:
+
+- A predictable, repeated environment
+- A familiar plate, cup, utensils
+- Adequate rest and regulation pre-meal
+- Foods firmly in the "tolerated" column
+
+If the budget is depleted, even a normally-accepted food can get rejected. The kid isn't being inconsistent — the budget just ran out.
+
+This is why a meal that worked Tuesday can fail Thursday with the exact same food. Don't troubleshoot the food. Troubleshoot the budget.
+
+## Three sample sensory profiles + plans
+
+### Profile A: The texture-avoider
+
+**Triggers:** mixed textures, lumpy textures, anything "wet on top of dry"
+**Tolerated:** uniform crunchy or uniform smooth
+
+Sample anchor list: plain crackers, plain pasta, smooth peanut butter, applesauce pouches, smooth yogurt, plain rice, plain chicken (cut into uniform shapes).
+
+Plan rule: every food on the plate is either fully crunchy or fully smooth. Never both. Sauces are served separately, never on top.
+
+### Profile B: The smell-sensitive kid
+
+**Triggers:** strong-smelling cooking (fish, broccoli, eggs cooking), restaurant smells, hot foods generally
+**Tolerated:** cold or room-temperature foods, mild-smelling cooking
+
+Sample anchor list: cold cuts (deli turkey, ham), cheese, bread, fruit, granola bars, cold pasta, room-temp pizza.
+
+Plan rule: cooking happens *before* the kid is in the kitchen. Strong-smelling foods are cooked when the kid is in another room. Hot meals are served lukewarm — or the kid eats their portion cold.
+
+### Profile C: The temperature-rigid kid
+
+**Triggers:** lukewarm food, food that's "wrong temperature"
+**Tolerated:** crisply cold or piping hot — nothing in between
+
+Sample anchor list: refrigerated items eaten cold, freshly made hot items eaten immediately. Reheated leftovers are usually rejected.
+
+Plan rule: portion food directly from cold/hot to plate. Don't let it sit. For school lunches, use a pre-warmed thermos for hot food and double ice packs for cold.
+
+## Exposure rules for sensory kids
+
+Standard exposure protocols (chaining, "many exposures" rules, repeated low-pressure presentation) work for sensory kids — but slower. Here's what changes:
+
+**1. Stretches go on a separate plate, never on the main plate.**
+A stretch food touching a safe food contaminates the safe food. Use a side dish, not the main plate.
+
+**2. New foods are introduced when the sensory budget is *full*, not when it's depleted.**
+Saturday morning at home is a great stretch slot. Wednesday after school is not.
+
+**3. Smell is part of the exposure — even before taste.**
+Letting your kid smell a food across the room without seeing it is a valid first exposure. Cooking the food in the next room over while they're playing is an exposure. They don't have to see it for the nervous system to register it.
+
+**4. Visual exposure counts.**
+A picture of a food, a plastic version of it, a friend eating it on the playground — all of these are exposures. Sometimes the visual exposures are the only thing happening for weeks before the kid will accept a real one.
+
+**5. Chains are longer, with smaller increments.**
+What's a 4–6 link chain for a typical picky eater is often an 8–10 link chain for a sensory-sensitive kid. See [Food Chaining for Picky Eaters](/blog/food-chaining-for-picky-eaters-step-by-step-examples) for the chain framework — just plan to subdivide each link.
+
+## How EatPal handles sensory profiles
+
+EatPal's planner lets you tag every food in your kid's safe-food list across all five sensory dimensions. When you generate a plan, the AI weights *the dimensions you mark as triggers* most heavily — so a texture-avoider's plan won't propose mixed-texture meals, and a smell-sensitive kid's plan won't combine strong-smelling cooked foods.
+
+You can also share the sensory profile with an OT or feeding therapist as a read-only link. They often have additional dimension-specific guidance once they see the actual profile, rather than guessing from a parent's verbal description.
+
+If you haven't built your sensory profile yet, the [picky eater quiz](/picky-eater-quiz) walks through each dimension in feeding-therapy order and produces a starter profile.
+
+## FAQ
+
+**My kid is autistic but eats a wide variety of foods. Do I still need this?**
+Maybe not. Sensory-driven restriction is common in autism but not universal. If your kid eats 15+ foods comfortably and meals aren't a battle, you don't need a sensory plan — you need a regular meal plan with awareness of which foods are sensory-tolerated.
+
+**Sensory food rejection or ARFID — what's the difference?**
+ARFID is a clinical diagnosis with criteria around weight, nutrition, and impairment. Sensory rejection is a *mechanism* that often shows up in ARFID, but also in autism, SPD, and typically-developing picky eaters. The framework above applies to all of them; a feeding-therapy evaluation tells you whether the clinical label applies.
+
+**My kid only eats beige foods. Should I worry?**
+Probably less than you think. The "beige diet" is common, often nutritionally adequate, and usually expands over time with low-pressure exposure. Run the math on actual intake before panicking about color.
+
+**Can I do sensory meal planning without an OT?**
+Yes — but having one helps a lot. OTs trained in feeding can spot dimensions you'd miss (vestibular, proprioceptive, oral-motor) and design a desensitization plan that goes faster than DIY exposure.
+
+**My kid's sensory profile changed dramatically. Why?**
+Common after illness, transitions (new school, moves), big emotional events, growth spurts, or developmental shifts. The profile isn't fixed — re-audit every few months.
+
+## Build a sensory plan tonight
+
+[Generate a free 7-day sensory-aware plan](/meal-plan) — answer five questions about your kid's sensory profile and the planner will output a week of meals that respects your kid's actual triggers, not generic family-meal advice. No card required.
+$ep_md$,
+  'draft',
+  'Sensory-Friendly Meal Planning for ARFID, Autism & Picky Eating | EatPal',
+  'A 5-dimension sensory model for meal planning, the "sensory budget" concept, and three sample plans for texture-avoiders, smell-sensitive kids, and temperature-rigid kids.',
+  8,
+  (SELECT id FROM public.blog_categories WHERE slug = 'arfid-feeding-challenges'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Week 5 / Post 2 — Safe Food Lists into a Real Meal Plan
+-- ----------------------------------------------------------------------------
+INSERT INTO public.blog_posts (
+  title, slug, excerpt, content, status,
+  meta_title, meta_description, reading_time_minutes,
+  category_id, ai_generated
+) VALUES (
+  'Safe Food Lists: How to Turn Your Child''s 10 Safe Foods into a Real Meal Plan',
+  'safe-food-list-to-meal-plan',
+  $ep_excerpt$Most parents have their kid's safe-food list memorized. Writing it down — and categorizing it — converts a worry-loop into a planning input. Here's the 30-day audit, the three buckets, and the math for turning 10 safe foods into 21 meals a week.$ep_excerpt$,
+  $ep_md$Most parents of picky eaters could rattle off their kid's safe foods from memory: chicken nuggets, plain pasta, apples, cheese sticks, Cheerios. It lives in your head, and it's been the subject of a thousand mental rehearsals. But the moment you write it down — really write it, on paper, with categories — something useful happens. The list stops being a worry-loop and becomes a planning input.
+
+This post is about that conversion. How to build the real list (it's longer than you think). How to categorize it (not all "safe" is equal). How to turn 10 foods into 21 meals a week without anyone losing their mind. And when to schedule the careful, low-stakes "challenge slots" that slowly expand the list over time.
+
+> If your child is in feeding therapy, ask their therapist if they want to see your safe-food list before you start using it for planning. Some therapists have format preferences that integrate cleanly with their session notes.
+
+## What actually counts as a "safe food"
+
+A safe food is one your kid eats reliably, without distress, in the contexts that matter to your week. That's stricter than it sounds.
+
+A food that's eaten "sometimes" is not a safe food. A food that's eaten only at grandma's house is not a safe food (in the home context). A food that's tolerated when nothing else is available is not a safe food.
+
+Use these three filters:
+
+1. **Reliably eaten** — accepted at least 4 of the last 5 times offered
+2. **Without distress** — no negotiation, no pressure, no gagging
+3. **In the relevant context** — at home, at school, at restaurants, on travel, depending on what you're planning for
+
+Most parents over-count the list because they're including "tolerated" foods. Strip those out. The list is shorter, but it's *real*.
+
+## The 30-day audit method
+
+Build the actual list this way:
+
+**For 30 days, write down what your kid actually ate at each meal.** Not what was served — what was eaten. A small notebook on the kitchen counter, a notes app, whatever you'll actually use.
+
+At day 30, sort the entries:
+
+- **Every-week foods (10–25 items typical):** appeared at least 3 times in 30 days. These are your real safe foods.
+- **Occasional foods (5–15 items):** appeared 1–2 times. These are *probably* safe but unverified — flag for testing.
+- **One-time foods:** appeared once. Treat as unknown until repeated.
+- **Refused-when-served:** track separately. These are your *known triggers*, also planning input.
+
+The 30-day audit usually surprises parents in two directions: the list is longer than they thought (kids forget about foods, parents forget when memories of meltdowns dominate), AND the list is more brand-specific than they thought ("yogurt" in their head turns out to be one specific brand and flavor in the audit).
+
+## Categorize the list
+
+Once you have a real list, sort it into three buckets:
+
+### Bucket 1: Anchors
+
+Foods your kid eats anytime, anywhere, without context dependence. These are the load-bearing foods. Most kids have 5–10 anchors.
+
+For a typical school-aged kid: plain pasta, chicken nuggets (specific brand), white toast with butter, apple slices (peeled), cheese sticks, Cheerios with milk, and a few snack foods (goldfish, pretzels).
+
+These appear in every meal of every day if the plan permits.
+
+### Bucket 2: Occasional safes
+
+Foods eaten reliably *in the right context*. Pizza on Friday but not Tuesday. Hot dogs at the ballpark but not at home. Yogurt drink in the morning but not after school.
+
+These are real planning input — you just have to slot them correctly. Don't treat them as anchors (they'll fail when context-shifted), and don't treat them as bridges (they're not new foods).
+
+Most kids have 5–15 of these.
+
+### Bucket 3: Context-dependent extras
+
+Foods eaten only with grandma, only at restaurants, only on travel. These are *not* part of your home plan — they're your travel/social plan.
+
+Don't try to bring these into your weekly home rotation. The context is doing work the kid can't replicate at home; pulling the food out of context usually fails.
+
+## Turn 10 anchors into 21 meals a week
+
+The math: 7 days × 3 meals = 21 meals. If your kid has 10 anchors plus 5 occasional safes, that's *more than enough* to cover the week without repetition fatigue.
+
+The trick is recognizing that meals are *combinations* of anchors, not individual anchors. With 10 anchors, you can build:
+
+- **Breakfast templates (5):** anchor A (carb) + anchor B (protein/dairy) + anchor C (fruit). Cheerios + milk + apple, toast + butter + banana, pancakes + yogurt + berries, etc.
+- **Lunch templates (5):** anchor combos that travel. Cheese stick + crackers + grapes, deli turkey + tortilla + apple, etc.
+- **Dinner templates (5):** anchor + anchor + side. Pasta + plain chicken + apple, nuggets + pasta + carrots, pizza + cheese stick + grapes.
+
+Three templates per meal slot, on a rotation, gives you 21 meals from one solid list.
+
+## A worked example: 10 safe foods → real weekly plan
+
+Here's what 10 safe foods turn into.
+
+**Anchor list (10 foods):** plain pasta, chicken nuggets, white toast with butter, peeled apple slices, Cheerios with milk, cheese sticks, plain rice, deli turkey, plain bagel, scrambled eggs.
+
+**Occasional safes (5):** boxed mac and cheese, yogurt pouches, frozen pancakes, plain pizza, peanut butter on bread.
+
+### Sample 7-day plan
+
+| Day | Breakfast | Lunch | Dinner |
+| --- | --- | --- | --- |
+| Mon | Cheerios + milk, apple | Turkey wrap (turkey + bagel half), apple | Pasta + nuggets + apple |
+| Tue | Toast + butter, banana | Cheese stick + crackers + grapes | Mac and cheese + nuggets + apple |
+| Wed | Scrambled eggs + toast | PB&J on bread, apple | Plain rice + nuggets + apple |
+| Thu | Frozen pancakes + apple | Yogurt pouch + crackers + grapes | Pasta + cheese stick + apple |
+| Fri | Cheerios + milk, banana | Turkey wrap, apple | Plain pizza + cheese stick + grapes |
+| Sat | Toast + butter, apple | Mac and cheese, apple | Nuggets + pasta + apple |
+| Sun | Scrambled eggs + bagel | Cheese stick + crackers + grapes | Plain chicken + rice + apple |
+
+Yes, it's repetitive. That's the point. Every meal hits 3 of the 10 anchors. The kid never sees the same dinner two nights in a row but never sees a meal outside the safe list either. The plan covers the week and the grocery list is short.
+
+## When to schedule challenge slots
+
+A "challenge slot" is a deliberate, low-stakes exposure to a non-safe food. Don't run more than 2 per week. Schedule them when:
+
+- The kid is regulated and rested (Saturday morning, not Wednesday after school)
+- The meal is otherwise low-stakes (snack, not dinner)
+- You can stay calm regardless of the response
+
+The food gets *served*, not negotiated. See [ARFID Meal Plans](/blog/arfid-meal-plans-build-week-safe-stress-free-meals) for the stretch-food framework, and [Food Chaining for Picky Eaters](/blog/food-chaining-for-picky-eaters-step-by-step-examples) for the chain logic.
+
+## Maintaining the list as it evolves
+
+Re-audit every 3–4 months. The list moves in both directions:
+
+- **Foods get added:** when a stretch becomes a chain link becomes a bridge becomes an anchor. Often gradual — the kid eats the food 3 times before you notice it could be promoted.
+- **Foods drop off:** kids fall out of foods, especially around growth spurts, illness, or stress periods. Don't fight a dropped anchor — drop it for two weeks, retry once, accept its retirement if it doesn't return.
+
+Net change for most kids: 1–3 foods added per quarter, 0–2 dropped. Slow, real growth.
+
+## How EatPal handles your safe-food list
+
+EatPal's pantry/foods system lets you mark each food as anchor, occasional, context-dependent, or bridge — and the planner uses those tags directly. When you generate a weekly plan, the AI builds 21 meals from your tagged anchors plus a small percentage of bridges and stretches based on your settings. You can also share the safe-food list with a feeding therapist as a read-only link.
+
+If you don't have your list built yet, the [picky eater quiz](/picky-eater-quiz) is a 3-minute starter that produces a candidate list you can refine over your 30-day audit.
+
+## FAQ
+
+**My kid only has 5 safe foods. Is that enough for a real plan?**
+Yes, but tighter. Five anchors gives you ~15 meal combinations across the week, which is enough if you accept some repetition. Building chains to expand the list (see Food Chaining post) is the path forward.
+
+**Should I include "junk food" anchors?**
+Yes. The list is what the kid eats, not what you wish they ate. Goldfish, fruit snacks, chicken nuggets — they're anchors if they're eaten reliably. Nutritionally optimizing the list is a separate problem; build the list honestly first.
+
+**My kid's safe-food list shrinks every few months. Help.**
+Common, especially during growth spurts and big transitions. Audit pre-meal regulation (sleep, screen time, environment) before troubleshooting the food. Most "shrinking lists" recover within 4–6 weeks once regulation returns. If yours doesn't, talk to a feeding therapist.
+
+**Should the list be "balanced" across food groups?**
+Eventually, yes. Right now? Not necessarily. A list heavy on dairy and carbs is nutritionally adequate for most kids in the short term — confirm with a dietitian rather than assuming a deficit.
+
+**What about kids who eat completely different food at school vs. home?**
+Build *two* lists. School and home are different sensory environments and need their own anchors. See [Lunchbox Wins: ARFID-Friendly School Lunch Ideas](/blog/lunchbox-wins-10-easy-meals-kids-actually-eat) for the school-side framework.
+
+## Turn your list into a plan
+
+[Generate a free 7-day plan from your safe-food list](/meal-plan) — answer five questions about your kid's anchors and the planner will produce 21 meals from those foods, with a single grocery list. No card required.
+$ep_md$,
+  'draft',
+  'Safe Food Lists: 10 Foods Into 21 Meals a Week | EatPal',
+  'How to build your child''s real safe-food list with a 30-day audit, categorize it into anchors / occasional / context-dependent, and turn 10 foods into a full weekly plan.',
+  7,
+  (SELECT id FROM public.blog_categories WHERE slug = 'arfid-feeding-challenges'),
+  false
+)
+ON CONFLICT (slug) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260513000002_seed_blog_drafts_week_5.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 133: 20260514000000_lock_down_system_policies.sql
+-- ============================================
+
+-- ============================================================================
+-- Lock down 8 over-permissive "System can manage X" RLS policies
+-- ============================================================================
+-- AUDITED 2026-05-08: Eight policies on automation/billing/admin tables had
+-- `USING (true)` (or `WITH CHECK (true)`) with `roles = PUBLIC`. The intent
+-- was clearly "service role only" — they just forgot `TO service_role`,
+-- leaving every authenticated request free to read/write the rows.
+--
+-- Highest impact: a regular user could grant themselves referral_rewards,
+-- inflate their referral_codes counts, mark referrals as completed, clear
+-- their own rate_limits, and read/falsify backup_logs.
+--
+-- Each affected table already has a separate user-scoped policy for the
+-- legitimate access pattern (e.g. "Users can view their own rate limits").
+-- This migration only tightens the system-side policies; user-facing access
+-- is unchanged.
+--
+-- Note: Supabase's service_role typically has BYPASSRLS, so the recreated
+-- policies are technically belt-and-suspenders. They make intent explicit
+-- and continue to work even if BYPASSRLS is ever revoked.
+-- ============================================================================
+
+-- 1. automation_email_events  (table is service-role-only; no user policy exists)
+DROP POLICY IF EXISTS "System can manage email events" ON public.automation_email_events;
+CREATE POLICY "service_role manages email events"
+  ON public.automation_email_events
+  FOR ALL
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+-- 2. automation_email_queue  (users keep SELECT-own via existing policy)
+DROP POLICY IF EXISTS "System can manage email queue" ON public.automation_email_queue;
+CREATE POLICY "service_role manages email queue"
+  ON public.automation_email_queue
+  FOR ALL
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+-- 3. backup_logs  (users keep SELECT-own via existing policy)
+DROP POLICY IF EXISTS "System can manage backup logs" ON public.backup_logs;
+CREATE POLICY "service_role manages backup logs"
+  ON public.backup_logs
+  FOR ALL
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+-- 4. login_history  (users + admins keep SELECT via existing policies)
+DROP POLICY IF EXISTS "Service role can update login history" ON public.login_history;
+CREATE POLICY "service_role updates login history"
+  ON public.login_history
+  FOR UPDATE
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+-- 5. rate_limits  (users keep SELECT-own via existing policy)
+DROP POLICY IF EXISTS "System can manage rate limits" ON public.rate_limits;
+CREATE POLICY "service_role manages rate limits"
+  ON public.rate_limits
+  FOR ALL
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+-- 6. referral_codes  (users keep SELECT-own + INSERT-own; admins keep SELECT-all)
+DROP POLICY IF EXISTS "System can update referral code stats" ON public.referral_codes;
+CREATE POLICY "service_role updates referral code stats"
+  ON public.referral_codes
+  FOR UPDATE
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+-- 7. referral_rewards  (users keep SELECT-own; admins keep SELECT-all)
+DROP POLICY IF EXISTS "System can manage rewards" ON public.referral_rewards;
+CREATE POLICY "service_role manages rewards"
+  ON public.referral_rewards
+  FOR ALL
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+-- 8. referrals  (users keep SELECT-own; admins keep ALL via has_role)
+DROP POLICY IF EXISTS "System can update referrals" ON public.referrals;
+CREATE POLICY "service_role updates referrals"
+  ON public.referrals
+  FOR UPDATE
+  TO service_role
+  USING (true) WITH CHECK (true);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260514000000_lock_down_system_policies.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 134: 20260515000000_variety_fatigue.sql
+-- ============================================
+
+-- US-298: Variety Fatigue score & "switch it up" nudges
+-- Per-household daily cached fatigue scores. Primary compute path is
+-- client-side (pure module against plan_entries) so the UI works without
+-- this table; the snapshots are persisted for analytics + audit.
+
+CREATE TABLE IF NOT EXISTS variety_fatigue_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+
+  computed_for DATE NOT NULL,                   -- date the snapshot represents
+  /* Window used to compute the score, e.g. 28d */
+  window_days INTEGER NOT NULL DEFAULT 28,
+
+  /* Top fatigued recipes the day this was computed.
+     [{ recipe_id, recipe_name, repeat_count, fatigue_score, tier }] */
+  top_recipes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  /* Top fatigued ingredients/foods.
+     [{ food_id, food_name, repeat_count, fatigue_score, tier }] */
+  top_ingredients JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+  /* Highest tier across recipes/ingredients: 'none' | 'mild' | 'high' */
+  worst_tier TEXT NOT NULL DEFAULT 'none' CHECK (worst_tier IN ('none','mild','high')),
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  UNIQUE (household_id, computed_for)
+);
+
+CREATE INDEX IF NOT EXISTS idx_variety_fatigue_household
+  ON variety_fatigue_snapshots(household_id);
+CREATE INDEX IF NOT EXISTS idx_variety_fatigue_date
+  ON variety_fatigue_snapshots(computed_for DESC);
+CREATE INDEX IF NOT EXISTS idx_variety_fatigue_tier
+  ON variety_fatigue_snapshots(worst_tier) WHERE worst_tier <> 'none';
+
+ALTER TABLE variety_fatigue_snapshots ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view household fatigue snapshots"
+  ON variety_fatigue_snapshots FOR SELECT
+  USING (
+    household_id IN (
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users insert fatigue snapshots for own household"
+  ON variety_fatigue_snapshots FOR INSERT
+  WITH CHECK (
+    user_id = auth.uid()
+    AND household_id IN (
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users update household fatigue snapshots"
+  ON variety_fatigue_snapshots FOR UPDATE
+  USING (
+    household_id IN (
+      SELECT household_id FROM household_members WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins manage all fatigue snapshots"
+  ON variety_fatigue_snapshots FOR ALL
+  USING (public.has_role(auth.uid(), 'admin'));
+
+COMMENT ON TABLE variety_fatigue_snapshots IS
+  'US-298: per-household daily cache of variety fatigue scoring; primary compute is client-side';
+COMMENT ON COLUMN variety_fatigue_snapshots.worst_tier IS
+  'none | mild (3+/7d OR 5+/28d for one item) | high (both windows triggered)';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260515000000_variety_fatigue.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 135: 20260516000000_user_preferences.sql
+-- ============================================
+
+-- US-298: per-user preferences key/value store.
+--
+-- Additive only (new table + RLS) — safe per CLAUDE.md migration rules.
+-- The "Variety nudges" toggle (nudge_variety) is the first consumer; the
+-- client is currently the source of truth (localStorage) and best-effort
+-- syncs here so the preference can follow the user across devices later.
+-- Generic key/value shape avoids a schema migration per future toggle.
+
+CREATE TABLE IF NOT EXISTS public.user_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  key TEXT NOT NULL,
+  value JSONB NOT NULL DEFAULT 'null'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user
+  ON public.user_preferences(user_id);
+
+ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own preferences"
+  ON public.user_preferences FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own preferences"
+  ON public.user_preferences FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own preferences"
+  ON public.user_preferences FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own preferences"
+  ON public.user_preferences FOR DELETE
+  USING (auth.uid() = user_id);
+
+COMMENT ON TABLE public.user_preferences IS
+  'US-298: generic per-user key/value preference store (e.g. nudge_variety).';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260516000000_user_preferences.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 136: 20260520000000_household_auto_restock_preferences.sql
+-- ============================================
+
+-- US-299: Predictive pantry depletion forecasting — forward-compat
+-- scaffolding for cross-device sync of the auto-restock preferences.
+--
+-- The shipping UI persists these in localStorage today (see
+-- src/hooks/useAutoRestockPref.ts). This migration creates the server
+-- home so a later release can read/write through the typed client
+-- without a schema change.
+--
+-- Per CLAUDE.md backward-compat rules:
+--   * Additive only — no DROP/RENAME on existing tables.
+--   * Defaults make this safe for older clients (they ignore the table).
+--   * RLS is household-scoped to mirror grocery_items / plan_entries.
+--
+-- The companion `auto_restock_blocklist` table mirrors the 7-day per-
+-- product 'Not quite' memory we keep client-side, again as forward-
+-- compat scaffolding.
+
+-- =====================================================================
+-- 1. household_preferences (single row per household)
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.household_preferences (
+  household_id UUID PRIMARY KEY REFERENCES public.households(id) ON DELETE CASCADE,
+  auto_restock_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Lead time (days). When forecast.daysToDepletion <= this value, the
+  -- predictor adds the food to the active grocery list.
+  auto_restock_lead_days SMALLINT NOT NULL DEFAULT 2 CHECK (auto_restock_lead_days BETWEEN 0 AND 7),
+  -- Cap on how many auto-adds we allow per household per day. The
+  -- client also enforces this; the column is the server-side ceiling.
+  auto_restock_max_per_day SMALLINT NOT NULL DEFAULT 20 CHECK (auto_restock_max_per_day BETWEEN 0 AND 100),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.household_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Household members view prefs"
+  ON public.household_preferences
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = household_preferences.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Household members upsert prefs"
+  ON public.household_preferences
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = household_preferences.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Household members update prefs"
+  ON public.household_preferences
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = household_preferences.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+COMMENT ON TABLE public.household_preferences IS
+  'US-299: household-scoped preferences for predictive features. Auto-restock toggle + lead time + daily cap. Single row per household; managed via the upsert path from the client.';
+
+-- =====================================================================
+-- 2. auto_restock_blocklist (per-household "skip for a week" memory)
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.auto_restock_blocklist (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES public.households(id) ON DELETE CASCADE,
+  name_normalized TEXT NOT NULL,
+  blocked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- TTL the client honours; server may also gc on read.
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '7 days'
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS auto_restock_blocklist_unique
+  ON public.auto_restock_blocklist(household_id, name_normalized);
+
+CREATE INDEX IF NOT EXISTS auto_restock_blocklist_expires_idx
+  ON public.auto_restock_blocklist(expires_at);
+
+ALTER TABLE public.auto_restock_blocklist ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Household members view blocklist"
+  ON public.auto_restock_blocklist
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = auto_restock_blocklist.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Household members insert blocklist"
+  ON public.auto_restock_blocklist
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = auto_restock_blocklist.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Household members delete blocklist"
+  ON public.auto_restock_blocklist
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = auto_restock_blocklist.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+COMMENT ON TABLE public.auto_restock_blocklist IS
+  'US-299: per-household "do not auto-add" list for the depletion forecaster. Mirrors the client-side 7-day blocklist driven by the in-row "Not quite" action.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260520000000_household_auto_restock_preferences.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 137: 20260520000001_insights_seasonal_recall.sql
+-- ============================================
+
+-- US-300: Seasonal memory recall — forward-compat scaffolding for the
+-- cross-device / cron home of the candidate cache.
+--
+-- The shipping UI computes candidates client-side from already-loaded
+-- plan_entries + recipes (see src/lib/seasonalRecall.ts). When the typed
+-- client picks up this table the dashboard card swaps the source from
+-- "compute on the fly" to "read from the cron-populated cache" without
+-- a UI change — the RecallCandidate shape lines up 1:1 with this row.
+--
+-- Per CLAUDE.md backward-compat rules:
+--   * Additive only.
+--   * RLS household-scoped to mirror plan_entries.
+--   * No DROP/RENAME on existing tables.
+
+CREATE TABLE IF NOT EXISTS public.insights_seasonal_recall (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES public.households(id) ON DELETE CASCADE,
+  recipe_id UUID NOT NULL REFERENCES public.recipes(id) ON DELETE CASCADE,
+  prior_week_start DATE NOT NULL,
+  prior_rating NUMERIC,
+  life_event_tag TEXT,
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  dismissed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS insights_seasonal_recall_household_idx
+  ON public.insights_seasonal_recall(household_id, generated_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS insights_seasonal_recall_unique
+  ON public.insights_seasonal_recall(household_id, recipe_id, prior_week_start);
+
+ALTER TABLE public.insights_seasonal_recall ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Household members view recalls"
+  ON public.insights_seasonal_recall
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = insights_seasonal_recall.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Household members update recalls"
+  ON public.insights_seasonal_recall
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = insights_seasonal_recall.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+-- Service role inserts via the planned daily cron edge function. No
+-- INSERT policy for `authenticated` — the client doesn't write here.
+
+COMMENT ON TABLE public.insights_seasonal_recall IS
+  'US-300: cached "what worked last year" candidate set. Single source of truth for the dashboard insight card once the daily cron edge function ships. UI computes candidates client-side until then.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260520000001_insights_seasonal_recall.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 138: 20260520000002_kid_growth_events.sql
+-- ============================================
+
+-- US-301: Kid grew-up auto-adapter — forward-compat scaffolding.
+--
+-- Client today persists per-kid birthday-nudge prefs + dismiss state in
+-- localStorage (see src/components/KidBirthdayCard.tsx). This table is
+-- the server home for cross-device sync; the card swaps source to the
+-- typed client once types regen.
+--
+-- A companion `kid_allergen_change_log` table audits any future allergen
+-- mutations — even though the current shipping UI never mutates
+-- kid.allergens automatically. The audit row is required *before* a
+-- mutation by the safety contract documented in kidGrowthRules.ts.
+--
+-- Per CLAUDE.md backward-compat rules:
+--   * Additive only.
+--   * RLS household-scoped through kids.
+--   * No DROP / RENAME on existing tables.
+
+CREATE TABLE IF NOT EXISTS public.kid_growth_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kid_id UUID NOT NULL REFERENCES public.kids(id) ON DELETE CASCADE,
+  occurred_on DATE NOT NULL,
+  age_milestone INT NOT NULL,
+  suggested_changes JSONB NOT NULL,
+  applied_changes JSONB,
+  dismissed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS kid_growth_events_unique
+  ON public.kid_growth_events(kid_id, occurred_on);
+
+CREATE INDEX IF NOT EXISTS kid_growth_events_kid_idx
+  ON public.kid_growth_events(kid_id, occurred_on DESC);
+
+ALTER TABLE public.kid_growth_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Members view kid growth events"
+  ON public.kid_growth_events
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_growth_events.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members upsert kid growth events"
+  ON public.kid_growth_events
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_growth_events.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members update kid growth events"
+  ON public.kid_growth_events
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_growth_events.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+COMMENT ON TABLE public.kid_growth_events IS
+  'US-301: birthday-driven re-evaluation events per kid. suggested_changes encodes the dashboard card payload; applied_changes is the audit trail of what the parent actually accepted. Allergen reintro never auto-removes — that flow writes to kid_allergen_change_log first.';
+
+-- =====================================================================
+-- kid_allergen_change_log (audit log for any allergen mutation)
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.kid_allergen_change_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kid_id UUID NOT NULL REFERENCES public.kids(id) ON DELETE CASCADE,
+  changed_by_user_id UUID REFERENCES auth.users(id),
+  removed_allergens TEXT[] NOT NULL DEFAULT '{}',
+  added_allergens TEXT[] NOT NULL DEFAULT '{}',
+  source TEXT NOT NULL,
+  pediatrician_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS kid_allergen_change_log_kid_idx
+  ON public.kid_allergen_change_log(kid_id, created_at DESC);
+
+ALTER TABLE public.kid_allergen_change_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Members view allergen change log"
+  ON public.kid_allergen_change_log
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_allergen_change_log.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members insert allergen change log"
+  ON public.kid_allergen_change_log
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_allergen_change_log.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+-- Intentionally no UPDATE or DELETE policy — audit log is append-only.
+
+COMMENT ON TABLE public.kid_allergen_change_log IS
+  'US-301: append-only audit log for any allergen list change. Pediatrician confirmation is recorded explicitly. Mutation paths must INSERT here BEFORE updating kids.allergens; assertNoAllergenAutoRemoval() enforces the no-silent-drop rule in src/lib/kidGrowthRules.ts.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260520000002_kid_growth_events.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 139: 20260520000003_picky_win_network_flag.sql
+-- ============================================
+
+-- US-296: Picky-Eater Win Network — feature flag + share-pref scaffolding.
+--
+-- Seeds the `picky_win_network` feature flag at `enabled = false`. This is
+-- the AC's hard requirement: the dedicated "Community Wins" surface must
+-- not light up in production until the privacy/security review the AC
+-- mandates has signed off. The flag turns ON the stricter 20-row k-anon
+-- floor applied by src/lib/pickyWinGuard.ts (vs. the existing inline panel
+-- which uses the server's 5-row floor for back-compat).
+--
+-- Also creates a forward-compat home for the `share_chain_outcomes` per-
+-- user preference. The shipping UI persists this in localStorage today
+-- (src/hooks/usePickyWinSharePref.ts); cross-device sync lands when the
+-- typed client picks up the table.
+--
+-- Per CLAUDE.md backward-compat rules:
+--   * Additive only — INSERT … ON CONFLICT DO NOTHING so re-running is a
+--     no-op and existing rows aren't overwritten.
+--   * No DROP / RENAME on existing tables.
+--   * Default-OFF posture; absolutely no UI activation in this migration.
+
+-- =====================================================================
+-- 1. Seed the feature flag (only if `feature_flags` exists in this env)
+-- =====================================================================
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'feature_flags'
+  ) THEN
+    -- Only seed if the row doesn't already exist. Don't touch an
+    -- explicitly-enabled flag set by an operator out-of-band.
+    INSERT INTO public.feature_flags (key, name, enabled, rollout_percentage, description)
+    VALUES (
+      'picky_win_network',
+      'Picky-Eater Win Network (Community Wins surface)',
+      FALSE,
+      0,
+      'US-296 dedicated "Community Wins" surface with the AC-mandated 20-row k-anonymity floor. Default OFF in production until privacy/security review approves the surface. Existing inline 5-floor WinNetworkPanel is unaffected by this flag.'
+    )
+    ON CONFLICT (key) DO NOTHING;
+  END IF;
+END
+$$;
+
+-- =====================================================================
+-- 2. Forward-compat preference home
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS public.picky_win_preferences (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  share_chain_outcomes BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.picky_win_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own picky_win prefs"
+  ON public.picky_win_preferences
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users upsert own picky_win prefs"
+  ON public.picky_win_preferences
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own picky_win prefs"
+  ON public.picky_win_preferences
+  FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users delete own picky_win prefs"
+  ON public.picky_win_preferences
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+COMMENT ON TABLE public.picky_win_preferences IS
+  'US-296: per-user opt-in to share food-chain outcomes anonymously to the Picky-Eater Win Network aggregate. Default TRUE; respected by recordContributionsFromAttempt() in src/lib/chainNetwork.ts via a localStorage mirror today (server sync deferred until typed client picks up this table).';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260520000003_picky_win_network_flag.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 140: 20260530000000_relax_foods_category_check.sql
+-- ============================================
+
+-- Drop the legacy 6-value CHECK on foods.category.
+--
+-- The original 2025-10 schema constrained foods.category to the FoodCategory
+-- enum ('protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'). But
+-- grocery_items.category was relaxed to free-text in
+-- 20260501000000_relax_grocery_items_category_check.sql (US-263), so a
+-- grocery item can legitimately carry a category like 'other' or an
+-- aisle-derived label.
+--
+-- When the user moves checked grocery items to the pantry
+-- (AppState.moveCheckedToPantry copies `category: item.category` into a new
+-- foods row), any value outside the original six fails
+-- foods_category_check with:
+--   "new row for relation \"foods\" violates check constraint
+--    \"foods_category_check\""
+-- which surfaces in the iOS app as "Couldn't save pantry".
+--
+-- This mirrors the grocery_items decision: drop the constraint rather than
+-- enumerate every legitimate value. The iOS UI already tolerates free-text
+-- categories (FoodCategory(rawValue:) falls back gracefully), and category
+-- is now a free-text label; nutrition coloring degrades to a default for
+-- unknown values.
+--
+-- Backward-compatible: this only LOOSENS the constraint, so every value old
+-- shipped clients write (the original six) still passes. column stays
+-- NOT NULL.
+
+ALTER TABLE public.foods
+  DROP CONSTRAINT IF EXISTS foods_category_check;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260530000000_relax_foods_category_check.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 141: 20260531000000_reconcile_recipe_ingredients_schema.sql
+-- ============================================
+
+-- Reconcile recipe_ingredients across environments.
+--
+-- Some databases created recipe_ingredients via the original Oct phase-1
+-- migrations (20251014*) as a link table — columns like `ingredient_name`,
+-- `ingredient_id` (FK -> ingredients), `section`, `preparation_notes`,
+-- `is_optional`, with `ingredient_name` NOT NULL. On those DBs the later
+-- 20260430000001_create_recipe_ingredients.sql `CREATE TABLE IF NOT EXISTS`
+-- no-op'd (only its policies were applied), so the structured columns the
+-- current app selects (name, quantity, unit, group_label, optional_notes,
+-- sort_order, created_at) were missing — every
+--   recipes?select=*,recipe_ingredients(...,name,...)
+-- query 400'd with "column recipe_ingredients_1.name does not exist", so NO
+-- recipes loaded on web at all (and iOS recipes appeared to "not sync").
+--
+-- This migration makes the table match the canonical structured shape on any
+-- environment, idempotently:
+--   1) add the structured columns if missing,
+--   2) drop NOT NULL from legacy columns so new writes (which only set the
+--      structured fields) don't fail,
+--   3) backfill the structured columns from legacy data so existing rows
+--      still render their ingredient name / group / notes,
+--   4) ensure the recipe_id -> recipes FK exists (PostgREST needs it to embed).
+-- Additive + loosening only; safe to re-run.
+
+-- 1) Structured columns the app selects.
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS recipe_id      UUID;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS food_id        UUID;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS sort_order     INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS name           TEXT;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS quantity       NUMERIC;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS unit           TEXT;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS group_label    TEXT;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS optional_notes TEXT;
+ALTER TABLE public.recipe_ingredients ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- 2) Loosen legacy NOT NULL columns + 3) backfill structured columns from them.
+DO $reconcile$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='recipe_ingredients' AND column_name='ingredient_name') THEN
+    EXECUTE 'ALTER TABLE public.recipe_ingredients ALTER COLUMN ingredient_name DROP NOT NULL';
+    EXECUTE 'UPDATE public.recipe_ingredients SET name = ingredient_name WHERE name IS NULL AND ingredient_name IS NOT NULL';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='recipe_ingredients' AND column_name='ingredient_id') THEN
+    EXECUTE 'ALTER TABLE public.recipe_ingredients ALTER COLUMN ingredient_id DROP NOT NULL';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='recipe_ingredients' AND column_name='section') THEN
+    EXECUTE 'UPDATE public.recipe_ingredients SET group_label = section WHERE group_label IS NULL AND section IS NOT NULL';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='recipe_ingredients' AND column_name='preparation_notes') THEN
+    EXECUTE 'UPDATE public.recipe_ingredients SET optional_notes = preparation_notes WHERE optional_notes IS NULL AND preparation_notes IS NOT NULL';
+  END IF;
+END
+$reconcile$;
+
+-- 4) Ensure the FK PostgREST needs for the embed.
+DO $fk$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.recipe_ingredients'::regclass
+      AND contype = 'f' AND confrelid = 'public.recipes'::regclass
+  ) THEN
+    ALTER TABLE public.recipe_ingredients
+      ADD CONSTRAINT recipe_ingredients_recipe_id_fkey
+      FOREIGN KEY (recipe_id) REFERENCES public.recipes(id) ON DELETE CASCADE;
+  END IF;
+END
+$fk$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260531000000_reconcile_recipe_ingredients_schema.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 142: 20260531000001_grocery_household_rls.sql
+-- ============================================
+
+-- Reconcile household-aware RLS on grocery_items and grocery_lists.
+--
+-- Symptom: grocery items/lists created on one device (iOS) did not appear on
+-- another device in the same household (web), even though the rows existed with
+-- the correct household_id. The REST API returned [] because RLS denied the
+-- read:
+--   * grocery_items: depending on environment the household SELECT policy was
+--     missing/ineffective, leaving only an older `auth.uid() = user_id` policy
+--     that fails when the reading account isn't the row's creator.
+--   * grocery_lists: the only household read policy was malformed —
+--       household_id IN (SELECT grocery_lists.household_id FROM profiles
+--                        WHERE grocery_lists.user_id = uid())
+--     which never matches, so lists always came back empty.
+--
+-- This standardizes both tables on the same household resolution used by
+-- recipes/foods/plan_entries (get_user_household_id(auth.uid())). Idempotent.
+
+-- grocery_items -------------------------------------------------------------
+DROP POLICY IF EXISTS "Household members can view grocery items"   ON public.grocery_items;
+CREATE POLICY "Household members can view grocery items"   ON public.grocery_items
+  FOR SELECT USING (household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Household members can insert grocery items" ON public.grocery_items;
+CREATE POLICY "Household members can insert grocery items" ON public.grocery_items
+  FOR INSERT WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Household members can update grocery items" ON public.grocery_items;
+CREATE POLICY "Household members can update grocery items" ON public.grocery_items
+  FOR UPDATE USING (household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Household members can delete grocery items" ON public.grocery_items;
+CREATE POLICY "Household members can delete grocery items" ON public.grocery_items
+  FOR DELETE USING (household_id = public.get_user_household_id(auth.uid()));
+
+-- grocery_lists -------------------------------------------------------------
+-- Retire the malformed profiles-subquery read policy.
+DROP POLICY IF EXISTS "Household members can view household lists" ON public.grocery_lists;
+
+DROP POLICY IF EXISTS "Household members can view grocery lists"   ON public.grocery_lists;
+CREATE POLICY "Household members can view grocery lists"   ON public.grocery_lists
+  FOR SELECT USING (household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Household members can insert grocery lists" ON public.grocery_lists;
+CREATE POLICY "Household members can insert grocery lists" ON public.grocery_lists
+  FOR INSERT WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Household members can update grocery lists" ON public.grocery_lists;
+CREATE POLICY "Household members can update grocery lists" ON public.grocery_lists
+  FOR UPDATE USING (household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Household members can delete grocery lists" ON public.grocery_lists;
+CREATE POLICY "Household members can delete grocery lists" ON public.grocery_lists
+  FOR DELETE USING (household_id = public.get_user_household_id(auth.uid()));
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260531000001_grocery_household_rls.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 143: 20260601000000_household_rls_reconcile.sql
+-- ============================================
+
+-- Reconcile household-aware RLS across all tables whose policies used the dead
+-- `... IN (SELECT household_id FROM profiles WHERE user_id = auth.uid())` pattern.
+-- The `profiles` table has no `household_id` column, so those subqueries never
+-- matched -> data created on one device was invisible to other members of the
+-- same household (and some INSERT WITH CHECKs were dead, blocking writes too).
+--
+-- Standardizes on the canonical resolution used by recipes/foods/grocery_items:
+--   household_id = public.get_user_household_id(auth.uid())
+-- Drops the exact broken/legacy policy names observed in production. Idempotent.
+-- Backward-compatible: only broadens read/write to the correct household scope.
+
+-- =========================================================================
+-- meal_plan_templates  (all 4 policies were broken; also missing the trigger)
+-- =========================================================================
+DROP POLICY IF EXISTS "Users can view own and admin templates" ON public.meal_plan_templates;
+CREATE POLICY "Users can view own and admin templates" ON public.meal_plan_templates
+  FOR SELECT USING (
+    is_admin_template = true
+    OR user_id = auth.uid()
+    OR household_id = public.get_user_household_id(auth.uid())
+  );
+DROP POLICY IF EXISTS "Users can create templates" ON public.meal_plan_templates;
+CREATE POLICY "Users can create templates" ON public.meal_plan_templates
+  FOR INSERT WITH CHECK (
+    user_id = auth.uid()
+    AND (household_id IS NULL OR household_id = public.get_user_household_id(auth.uid()))
+  );
+DROP POLICY IF EXISTS "Users can update own templates" ON public.meal_plan_templates;
+CREATE POLICY "Users can update own templates" ON public.meal_plan_templates
+  FOR UPDATE USING (user_id = auth.uid() OR household_id = public.get_user_household_id(auth.uid()));
+DROP POLICY IF EXISTS "Users can delete own templates" ON public.meal_plan_templates;
+CREATE POLICY "Users can delete own templates" ON public.meal_plan_templates
+  FOR DELETE USING (user_id = auth.uid() OR household_id = public.get_user_household_id(auth.uid()));
+-- "Admins can manage all templates" (ALL) left as-is.
+
+-- =========================================================================
+-- shopping_sessions  (single ALL policy was broken -> sessions dead for all)
+-- =========================================================================
+DROP POLICY IF EXISTS "Household members can manage shopping sessions" ON public.shopping_sessions;
+CREATE POLICY "Household members can view shopping sessions" ON public.shopping_sessions
+  FOR SELECT USING (household_id = public.get_user_household_id(auth.uid()));
+CREATE POLICY "Household members can insert shopping sessions" ON public.shopping_sessions
+  FOR INSERT WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+CREATE POLICY "Household members can update shopping sessions" ON public.shopping_sessions
+  FOR UPDATE USING (household_id = public.get_user_household_id(auth.uid()));
+CREATE POLICY "Household members can delete shopping sessions" ON public.shopping_sessions
+  FOR DELETE USING (household_id = public.get_user_household_id(auth.uid()));
+
+-- =========================================================================
+-- recipe_collections  (SELECT broken; ALL was user_id-only)
+-- =========================================================================
+DROP POLICY IF EXISTS "Users can view their recipe collections" ON public.recipe_collections;
+CREATE POLICY "Household members can view recipe collections" ON public.recipe_collections
+  FOR SELECT USING (household_id = public.get_user_household_id(auth.uid()) OR user_id = auth.uid());
+DROP POLICY IF EXISTS "Household members can insert recipe collections" ON public.recipe_collections;
+CREATE POLICY "Household members can insert recipe collections" ON public.recipe_collections
+  FOR INSERT WITH CHECK (user_id = auth.uid()
+    AND (household_id IS NULL OR household_id = public.get_user_household_id(auth.uid())));
+DROP POLICY IF EXISTS "Household members can update recipe collections" ON public.recipe_collections;
+CREATE POLICY "Household members can update recipe collections" ON public.recipe_collections
+  FOR UPDATE USING (household_id = public.get_user_household_id(auth.uid()) OR user_id = auth.uid());
+DROP POLICY IF EXISTS "Household members can delete recipe collections" ON public.recipe_collections;
+CREATE POLICY "Household members can delete recipe collections" ON public.recipe_collections
+  FOR DELETE USING (household_id = public.get_user_household_id(auth.uid()) OR user_id = auth.uid());
+-- "Users can manage their recipe collections" (ALL, user_id) left as-is (harmless).
+
+-- =========================================================================
+-- store_layouts  (SELECT broken) -- NOTE: also has an iOS schema mismatch
+-- (prod has store_name, iOS expects name/slug) that this SQL does NOT fix.
+-- =========================================================================
+DROP POLICY IF EXISTS "Household members can view store layouts" ON public.store_layouts;
+CREATE POLICY "Household members can view store layouts" ON public.store_layouts
+  FOR SELECT USING (household_id = public.get_user_household_id(auth.uid()) OR user_id = auth.uid());
+CREATE POLICY "Household members can insert store layouts" ON public.store_layouts
+  FOR INSERT WITH CHECK (user_id = auth.uid()
+    AND (household_id IS NULL OR household_id = public.get_user_household_id(auth.uid())));
+CREATE POLICY "Household members can update store layouts" ON public.store_layouts
+  FOR UPDATE USING (household_id = public.get_user_household_id(auth.uid()) OR user_id = auth.uid());
+CREATE POLICY "Household members can delete store layouts" ON public.store_layouts
+  FOR DELETE USING (household_id = public.get_user_household_id(auth.uid()) OR user_id = auth.uid());
+
+-- =========================================================================
+-- grocery_purchase_history  (ALL + SELECT broken)
+-- =========================================================================
+DROP POLICY IF EXISTS "Household members can manage purchase history" ON public.grocery_purchase_history;
+DROP POLICY IF EXISTS "Household members can view purchase history"   ON public.grocery_purchase_history;
+CREATE POLICY "Household members can view purchase history" ON public.grocery_purchase_history
+  FOR SELECT USING (household_id = public.get_user_household_id(auth.uid()));
+CREATE POLICY "Household members can manage purchase history" ON public.grocery_purchase_history
+  FOR ALL USING (household_id = public.get_user_household_id(auth.uid()))
+          WITH CHECK (household_id = public.get_user_household_id(auth.uid()));
+-- "Users can manage their purchase history" (ALL, user_id) left as-is.
+
+-- =========================================================================
+-- grocery delivery family  (broken SELECT/INSERT/UPDATE)
+-- =========================================================================
+DROP POLICY IF EXISTS "Users can view their accounts" ON public.user_delivery_accounts;
+CREATE POLICY "Users can view their accounts" ON public.user_delivery_accounts
+  FOR SELECT USING (user_id = auth.uid() OR household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Users can view their preferences" ON public.delivery_preferences;
+CREATE POLICY "Users can view their preferences" ON public.delivery_preferences
+  FOR SELECT USING (user_id = auth.uid() OR household_id = public.get_user_household_id(auth.uid()));
+
+DROP POLICY IF EXISTS "Users can view household orders" ON public.grocery_delivery_orders;
+CREATE POLICY "Users can view household orders" ON public.grocery_delivery_orders
+  FOR SELECT USING (household_id = public.get_user_household_id(auth.uid()));
+DROP POLICY IF EXISTS "Users can create orders" ON public.grocery_delivery_orders;
+CREATE POLICY "Users can create orders" ON public.grocery_delivery_orders
+  FOR INSERT WITH CHECK (user_id = auth.uid()
+    AND (household_id IS NULL OR household_id = public.get_user_household_id(auth.uid())));
+DROP POLICY IF EXISTS "Users can update their orders" ON public.grocery_delivery_orders;
+CREATE POLICY "Users can update their orders" ON public.grocery_delivery_orders
+  FOR UPDATE USING (user_id = auth.uid() OR household_id = public.get_user_household_id(auth.uid()));
+
+-- =========================================================================
+-- grocery_lists  (retire the leftover malformed read policy; correct one exists)
+-- =========================================================================
+DROP POLICY IF EXISTS "Household members can view household lists" ON public.grocery_lists;
+
+-- =========================================================================
+-- auto_fill_household_id trigger for household tables the clients INSERT into
+-- but that weren't covered (so iOS/web inserts that omit household_id still get
+-- one). Function defined in 20260415000000_fix_household_rls.sql.
+-- =========================================================================
+DO $do$
+DECLARE tbl text;
+BEGIN
+  FOR tbl IN SELECT unnest(ARRAY[
+      'grocery_lists','recipe_collections','store_layouts',
+      'shopping_sessions','meal_plan_templates','grocery_purchase_history'
+  ]) LOOP
+    EXECUTE format(
+      'DROP TRIGGER IF EXISTS auto_fill_household_id ON public.%I; '
+      'CREATE TRIGGER auto_fill_household_id BEFORE INSERT ON public.%I '
+      'FOR EACH ROW EXECUTE FUNCTION public.auto_fill_household_id();', tbl, tbl);
+  END LOOP;
+END $do$;
+
+-- =========================================================================
+-- Backfill household_id on rows orphaned by the old NULL-household inserts
+-- (e.g. iOS-created meal_plan_templates), so existing data becomes visible.
+-- =========================================================================
+UPDATE public.meal_plan_templates     SET household_id = public.get_user_household_id(user_id) WHERE household_id IS NULL AND user_id IS NOT NULL;
+UPDATE public.recipe_collections       SET household_id = public.get_user_household_id(user_id) WHERE household_id IS NULL AND user_id IS NOT NULL;
+UPDATE public.store_layouts            SET household_id = public.get_user_household_id(user_id) WHERE household_id IS NULL AND user_id IS NOT NULL;
+UPDATE public.grocery_lists            SET household_id = public.get_user_household_id(user_id) WHERE household_id IS NULL AND user_id IS NOT NULL;
+UPDATE public.grocery_purchase_history SET household_id = public.get_user_household_id(user_id) WHERE household_id IS NULL AND user_id IS NOT NULL;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260601000000_household_rls_reconcile.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 144: 20260601000001_store_layouts_ios_reconcile.sql
+-- ============================================
+
+-- Reconcile store_layouts so BOTH clients work on the live (web-schema) table
+-- without an app rebuild.
+--
+-- Conflict: the native iOS app (US-275) expects store_layouts to be a global,
+-- world-readable CHAIN CATALOG with columns name/slug/banner_image_url/
+-- aisle_overrides (JSONB) + a per-user user_store_layout_overrides table. Prod
+-- instead has the older WEB schema: per-household custom stores
+-- (store_name/store_location/user_id/household_id) + a store_aisles child table.
+-- iOS decode failed because name/slug didn't exist.
+--
+-- Strategy (additive, deploy-only):
+--   1. Make store_layouts a SUPERSET (add the iOS columns; keep the web ones).
+--   2. Keep name <-> store_name in sync and auto-generate slug via a trigger,
+--      so rows created by EITHER client are readable by the other.
+--   3. Backfill household_id on existing custom rows (so they stay scoped),
+--      then widen the SELECT policy to also expose the global catalog rows
+--      (household_id IS NULL) — without leaking one household's stores to
+--      another.
+--   4. Seed the 5 chains the iOS catalog expects (global rows, household_id NULL).
+--   5. Ensure the companion user_store_layout_overrides table and the
+--      grocery_lists.store_layout_id column exist.
+--
+-- Known limitation (NOT fixable in SQL): web stores aisle order in the
+-- store_aisles child table; iOS stores it in aisle_overrides JSONB. Each
+-- client's own aisle data works; the two aisle representations are not merged.
+
+-- 1) iOS columns (nullable / defaulted so existing web inserts still succeed) --
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS name             TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS slug             TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS banner_image_url TEXT;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS aisle_overrides  JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- 2) Backfill household_id on custom rows so only intentional catalog rows are
+--    null-household (and thus globally readable per the policy below).
+UPDATE public.store_layouts
+  SET household_id = public.get_user_household_id(user_id)
+  WHERE household_id IS NULL AND user_id IS NOT NULL;
+
+-- 3) Backfill display name both ways + a unique slug for existing rows.
+UPDATE public.store_layouts SET name       = store_name WHERE name IS NULL AND store_name IS NOT NULL;
+UPDATE public.store_layouts SET store_name = name       WHERE store_name IS NULL AND name IS NOT NULL;
+UPDATE public.store_layouts
+  SET slug = regexp_replace(lower(coalesce(name, store_name, 'store')), '[^a-z0-9]+', '_', 'g')
+             || '_' || replace(id::text, '-', '')
+  WHERE slug IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS store_layouts_slug_uq ON public.store_layouts(slug);
+
+-- 4) Keep the two schemas in sync on every write (either client) -------------
+CREATE OR REPLACE FUNCTION public.sync_store_layout_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $sync_store_layout_fields$
+BEGIN
+  IF NEW.name IS NULL AND NEW.store_name IS NOT NULL THEN NEW.name := NEW.store_name; END IF;
+  IF NEW.store_name IS NULL AND NEW.name IS NOT NULL THEN NEW.store_name := NEW.name; END IF;
+  IF NEW.slug IS NULL THEN
+    NEW.slug := regexp_replace(lower(coalesce(NEW.name, NEW.store_name, 'store')), '[^a-z0-9]+', '_', 'g')
+                || '_' || replace(NEW.id::text, '-', '');
+  END IF;
+  IF NEW.aisle_overrides IS NULL THEN NEW.aisle_overrides := '{}'::jsonb; END IF;
+  RETURN NEW;
+END;
+$sync_store_layout_fields$;
+
+DROP TRIGGER IF EXISTS sync_store_layout_fields ON public.store_layouts;
+CREATE TRIGGER sync_store_layout_fields
+  BEFORE INSERT OR UPDATE ON public.store_layouts
+  FOR EACH ROW EXECUTE FUNCTION public.sync_store_layout_fields();
+
+-- 5) Widen SELECT to expose global catalog rows (household_id IS NULL) while
+--    still scoping custom rows to their household. No cross-household leak.
+DROP POLICY IF EXISTS "Household members can view store layouts" ON public.store_layouts;
+DROP POLICY IF EXISTS "Store layouts readable by all authenticated users" ON public.store_layouts;
+DROP POLICY IF EXISTS "Users can view own store layouts" ON public.store_layouts;
+CREATE POLICY "View global catalog and own household store layouts"
+  ON public.store_layouts
+  FOR SELECT
+  USING (
+    household_id IS NULL
+    OR household_id = public.get_user_household_id(auth.uid())
+    OR user_id = auth.uid()
+  );
+
+-- 6) Seed the iOS chain catalog (global rows; trigger fills store_name/slug). --
+INSERT INTO public.store_layouts (slug, name, aisle_overrides)
+VALUES
+  ('walmart',     'Walmart',       '{}'::jsonb),
+  ('target',      'Target',        '{"household": 5, "paper_goods": 7, "personal_care": 9, "produce": 50, "meat_deli": 60, "dairy": 70, "frozen_meals": 80}'::jsonb),
+  ('trader_joes', 'Trader Joe''s', '{"frozen_meals": 30, "frozen_veg": 35, "frozen_treats": 40, "produce": 200, "meat_deli": 220}'::jsonb),
+  ('whole_foods', 'Whole Foods',   '{"produce": 5, "bakery": 15, "meat_deli": 25, "personal_care": 990}'::jsonb),
+  ('costco',      'Costco',        '{"household": 5, "paper_goods": 8, "produce": 100, "meat_deli": 110, "dairy": 120, "frozen_meals": 800, "frozen_veg": 805}'::jsonb)
+ON CONFLICT (slug) DO NOTHING;
+
+-- 7) Companion table for per-user aisle reordering (iOS US-275). -------------
+CREATE TABLE IF NOT EXISTS public.user_store_layout_overrides (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  store_layout_id UUID NOT NULL REFERENCES public.store_layouts(id) ON DELETE CASCADE,
+  aisle TEXT NOT NULL,
+  walk_order INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS user_store_layout_overrides_uq
+  ON public.user_store_layout_overrides(user_id, store_layout_id, aisle);
+ALTER TABLE public.user_store_layout_overrides ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users view own store overrides" ON public.user_store_layout_overrides;
+CREATE POLICY "Users view own store overrides" ON public.user_store_layout_overrides
+  FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users insert own store overrides" ON public.user_store_layout_overrides;
+CREATE POLICY "Users insert own store overrides" ON public.user_store_layout_overrides
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users update own store overrides" ON public.user_store_layout_overrides;
+CREATE POLICY "Users update own store overrides" ON public.user_store_layout_overrides
+  FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users delete own store overrides" ON public.user_store_layout_overrides;
+CREATE POLICY "Users delete own store overrides" ON public.user_store_layout_overrides
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- 8) Optional per-list store pick used by iOS (and harmless for web). --------
+ALTER TABLE public.grocery_lists
+  ADD COLUMN IF NOT EXISTS store_layout_id UUID
+    REFERENCES public.store_layouts(id) ON DELETE SET NULL;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260601000001_store_layouts_ios_reconcile.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 145: 20260601000002_apple_subscriptions.sql
+-- ============================================
+
+-- Server-side record of Apple (StoreKit) subscriptions, keyed by the stable
+-- originalTransactionId so App Store Server Notifications can map a
+-- refund/revocation back to the user.
+--
+-- WHY a dedicated table (not user_subscriptions): user_subscriptions is the
+-- Stripe/web record (UNIQUE(user_id), plan_id, stripe_*). The old iOS sync
+-- tried to upsert StoreKit fields there with no user_id and against columns
+-- that don't exist, so it silently failed and would have clobbered a user's
+-- Stripe row. Apple entitlement lives here instead; iOS gating stays
+-- client-side (StoreKit currentEntitlements), and this table is the durable
+-- record + the lookup the notification handler uses.
+
+CREATE TABLE IF NOT EXISTS public.apple_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  original_transaction_id TEXT NOT NULL,
+  store_transaction_id TEXT,
+  product_id TEXT,
+  -- active | revoked (refund/chargeback) | expired
+  status TEXT NOT NULL DEFAULT 'active',
+  expires_at TIMESTAMPTZ,
+  environment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (original_transaction_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_apple_subscriptions_user
+  ON public.apple_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_apple_subscriptions_orig_txn
+  ON public.apple_subscriptions(original_transaction_id);
+
+ALTER TABLE public.apple_subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- The device (authenticated user) syncs its own row. Refund/revocation writes
+-- come from the App Store Server Notifications handler using the service role,
+-- which bypasses RLS — so no user-facing DELETE/admin policy is needed.
+CREATE POLICY "Users view own apple subscription"
+  ON public.apple_subscriptions FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own apple subscription"
+  ON public.apple_subscriptions FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users update own apple subscription"
+  ON public.apple_subscriptions FOR UPDATE
+  USING (auth.uid() = user_id);
+
+COMMENT ON TABLE public.apple_subscriptions IS
+  'Durable record of StoreKit subscriptions keyed by originalTransactionId. Synced from the device on transaction updates; refunds/revocations applied by the app-store-notifications edge function.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260601000002_apple_subscriptions.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 146: 20260602000000_rls_policy_gaps.sql
+-- ============================================
+
+-- US-318: close missing RLS DELETE/INSERT policy gaps on recent tables.
+--
+-- Several tables added in the 2026-05-20 batch enabled RLS but shipped
+-- without the full SELECT/INSERT/UPDATE/DELETE coverage CLAUDE.md requires.
+-- With RLS on and no matching policy, the operation silently no-ops (zero
+-- rows affected, no error) the moment a client tries it. This migration
+-- adds the missing owner/household-scoped policies.
+--
+-- Per CLAUDE.md backward-compat rules:
+--   * Additive only — no DROP/RENAME of columns or tables.
+--   * New DELETE policies BROADEN access (previously: no one could delete),
+--     so older clients are unaffected — they simply never issued a DELETE.
+--   * The picky_win_preferences UPDATE policy is recreated to add WITH CHECK;
+--     this only blocks reassigning a row to a different user_id, which no
+--     legitimate client does, so in-flight updates from older clients keep
+--     working.
+--   * All statements are idempotent (DROP POLICY IF EXISTS before CREATE) so
+--     re-running the migration is safe.
+
+-- =====================================================================
+-- household_preferences — had SELECT/INSERT/UPDATE, no DELETE.
+-- A household may want to clear its prefs row (reset to defaults).
+-- =====================================================================
+DROP POLICY IF EXISTS "Household members delete prefs" ON public.household_preferences;
+CREATE POLICY "Household members delete prefs"
+  ON public.household_preferences
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = household_preferences.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+-- =====================================================================
+-- insights_seasonal_recall — had SELECT/UPDATE (dismiss), no DELETE.
+-- INSERT stays service-role-only (cron-populated); that is intentional
+-- and already documented on the table. Add a household-scoped DELETE so
+-- members can clear stale recall rows without waiting for the cron.
+-- =====================================================================
+DROP POLICY IF EXISTS "Household members delete recalls" ON public.insights_seasonal_recall;
+CREATE POLICY "Household members delete recalls"
+  ON public.insights_seasonal_recall
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.household_members hm
+      WHERE hm.household_id = insights_seasonal_recall.household_id
+        AND hm.user_id = auth.uid()
+    )
+  );
+
+-- =====================================================================
+-- kid_growth_events — had SELECT/INSERT/UPDATE, no DELETE.
+-- Mirror the existing member-scoped pattern (kid owner OR household
+-- member) so a parent can delete a growth event they own.
+-- (kid_allergen_change_log is intentionally append-only — left as-is.)
+-- =====================================================================
+DROP POLICY IF EXISTS "Members delete kid growth events" ON public.kid_growth_events;
+CREATE POLICY "Members delete kid growth events"
+  ON public.kid_growth_events
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_growth_events.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+-- =====================================================================
+-- picky_win_preferences — UPDATE policy had USING but no WITH CHECK.
+-- Without WITH CHECK, an UPDATE's *new* row values aren't re-validated,
+-- so a user could in principle set user_id to another account. Recreate
+-- the policy with both clauses for parity with user_preferences.
+-- =====================================================================
+DROP POLICY IF EXISTS "Users update own picky_win prefs" ON public.picky_win_preferences;
+CREATE POLICY "Users update own picky_win prefs"
+  ON public.picky_win_preferences
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260602000000_rls_policy_gaps.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 147: 20260602000001_idempotent_handle_new_user.sql
+-- ============================================
+
+-- US-319: make handle_new_user() idempotent on the household/membership
+-- inserts, hardening the signup path against duplicate-household errors on
+-- retried or re-fired signups.
+--
+-- BACKGROUND
+-- 20260512000000_restore_handle_new_user.sql restored the meal-planning
+-- version of handle_new_user() (writes profiles + households +
+-- household_members; re-raises on error so a future hijack surfaces loudly).
+-- 20260513000000_drop_user_profiles_scaffold.sql then dropped the orphan
+-- user_profiles scaffold.
+--
+-- VERIFICATION (AC item 1) — confirmed by inspection of the restored
+-- function body: handle_new_user() references ONLY public.profiles,
+-- public.households, and public.household_members. It does NOT reference
+-- public.user_profiles, so dropping that scaffold cannot break the trigger.
+-- This migration re-asserts that correct body, so the function is
+-- self-consistently free of any user_profiles dependency going forward.
+--
+-- WHAT CHANGES (AC items 2 & 3)
+--   * Idempotency guard: a household + parent membership are created ONLY
+--     when the user doesn't already have a household_members row. This is
+--     the concrete fix for "duplicate-household errors on retried signups" —
+--     the previous body created a brand-new household every time it ran
+--     (households has a uuid PK, so the INSERT never conflicted, and the
+--     household_members UNIQUE(household_id,user_id) never tripped because
+--     each duplicate household had a fresh id). The guard makes a second
+--     run a no-op instead.
+--   * household_members INSERT also carries ON CONFLICT DO NOTHING as a
+--     belt-and-suspenders against the unique constraint.
+--   * profiles INSERT keeps ON CONFLICT (id) DO NOTHING (already idempotent).
+--
+-- WHY WE KEEP THE RE-RAISE (deliberate, AC item 3 considered)
+-- The catch-all EXCEPTION-swallow in the *hijacked* function is exactly what
+-- hid a 3-month outage where no households were being created. Softening to a
+-- swallow here would reintroduce that silent-failure class. With the
+-- idempotency guard above, the realistic failure mode (retried signup ->
+-- duplicate) is gone, so the only thing left for the handler to catch is a
+-- genuinely unexpected error (schema drift, another hijack) — which we WANT
+-- to surface. A user who somehow ends up with a profile but no household is
+-- still recoverable via the backfill block in 20260512000000. Net: keep the
+-- loud re-raise, but make the common path incapable of producing the error.
+--
+-- Per CLAUDE.md backward-compat rules: CREATE OR REPLACE FUNCTION is
+-- additive (no signature/return change), the trigger binding is unchanged,
+-- and the new body is a strict superset (same writes, now guarded), so older
+-- clients and in-flight signups are unaffected.
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $function$
+DECLARE
+  new_household_id uuid;
+  full_name text;
+  v_state   text;
+  v_msg     text;
+  v_detail  text;
+  v_hint    text;
+  v_context text;
+BEGIN
+  full_name := COALESCE(NEW.raw_user_meta_data ->> 'full_name', 'User');
+
+  INSERT INTO public.profiles (id, full_name)
+  VALUES (NEW.id, full_name)
+  ON CONFLICT (id) DO NOTHING;
+
+  -- Idempotency guard: only bootstrap a household + parent membership when
+  -- this user isn't already in one. Makes the trigger safe to run more than
+  -- once for the same auth user (retried signup, manual re-run, overlap with
+  -- the backfill) without creating duplicate households.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.household_members hm WHERE hm.user_id = NEW.id
+  ) THEN
+    INSERT INTO public.households (name)
+    VALUES (full_name || '''s Family')
+    RETURNING id INTO new_household_id;
+
+    INSERT INTO public.household_members (household_id, user_id, role)
+    VALUES (new_household_id, NEW.id, 'parent')
+    ON CONFLICT (household_id, user_id) DO NOTHING;
+  END IF;
+
+  RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Re-raise with full diagnostics (kept intentionally — see header).
+    GET STACKED DIAGNOSTICS
+      v_state   = RETURNED_SQLSTATE,
+      v_msg     = MESSAGE_TEXT,
+      v_detail  = PG_EXCEPTION_DETAIL,
+      v_hint    = PG_EXCEPTION_HINT,
+      v_context = PG_EXCEPTION_CONTEXT;
+    RAISE EXCEPTION
+      'handle_new_user failed for auth user %: state=% msg=% detail=% hint=% context=%',
+      NEW.id, v_state, v_msg, v_detail, v_hint, v_context;
+END;
+$function$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260602000001_idempotent_handle_new_user.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 148: 20260613000000_undo_meal_made.sql
+-- ============================================
+
+-- US-349: undo a "mark meal made" within the logging window.
+--
+-- Reverses the side effects recorded in plan_entry_made_log.reversal_payload
+-- by rpc_mark_meal_made (US-262):
+--   1. Re-credit each debited pantry food. Only the amount actually removed is
+--      restored — LEAST(debited, previous_qty) — so a food that was clamped at
+--      0 during the debit isn't over-credited.
+--   2. Re-open every grocery item that the mark-made auto-checked.
+--   3. Clear plan_entries.result (the client had flipped it to "ate").
+--   4. Delete the log row so the entry can be cleanly re-made later.
+--
+-- Additive and backward-compatible: this only adds a new function. The
+-- plan_entry_made_log shape and rpc_mark_meal_made are unchanged, so older
+-- shipped iOS builds that never call this are unaffected.
+--
+-- SECURITY INVOKER so RLS enforces ownership; an explicit user_id filter keeps
+-- the intent obvious alongside the policies.
+
+CREATE OR REPLACE FUNCTION public.rpc_undo_meal_made(p_plan_entry_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_log RECORD;
+  v_reversal JSONB;
+  v_debit JSONB;
+  v_check JSONB;
+  v_credited JSONB := '[]'::JSONB;
+  v_unchecked JSONB := '[]'::JSONB;
+  v_credited_count INTEGER := 0;
+  v_unchecked_count INTEGER := 0;
+  v_restore NUMERIC;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Most recent log row for this entry, owned by the caller.
+  SELECT * INTO v_log
+  FROM public.plan_entry_made_log
+  WHERE plan_entry_id = p_plan_entry_id
+    AND user_id = v_user_id
+  ORDER BY made_at DESC
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'nothing_to_undo');
+  END IF;
+
+  v_reversal := COALESCE(v_log.reversal_payload, '{}'::JSONB);
+
+  -- Re-credit debited foods.
+  FOR v_debit IN
+    SELECT * FROM jsonb_array_elements(COALESCE(v_reversal->'food_debits', '[]'::JSONB))
+  LOOP
+    v_restore := LEAST(
+      COALESCE((v_debit->>'debited')::NUMERIC, 0),
+      COALESCE((v_debit->>'previous_qty')::NUMERIC, 0)
+    );
+    IF v_restore > 0 THEN
+      UPDATE public.foods
+      SET quantity = COALESCE(quantity, 0) + v_restore
+      WHERE id = (v_debit->>'food_id')::UUID
+        AND user_id = v_user_id;
+    END IF;
+
+    v_credited := v_credited || jsonb_build_object(
+      'food_id', v_debit->>'food_id',
+      'amount', v_restore
+    );
+    v_credited_count := v_credited_count + 1;
+  END LOOP;
+
+  -- Re-open auto-checked grocery items (we only ever recorded items whose
+  -- previous_checked was false, so un-checking is always the right reversal).
+  FOR v_check IN
+    SELECT * FROM jsonb_array_elements(COALESCE(v_reversal->'grocery_checks', '[]'::JSONB))
+  LOOP
+    UPDATE public.grocery_items
+    SET checked = false
+    WHERE id = (v_check->>'grocery_item_id')::UUID
+      AND user_id = v_user_id;
+
+    v_unchecked := v_unchecked || to_jsonb(v_check->>'grocery_item_id');
+    v_unchecked_count := v_unchecked_count + 1;
+  END LOOP;
+
+  -- Clear the "ate" result the client set on mark-made. RLS (SECURITY
+  -- INVOKER) gates ownership, matching how rpc_mark_meal_made reads this table.
+  UPDATE public.plan_entries
+  SET result = NULL
+  WHERE id = p_plan_entry_id;
+
+  -- One-shot: remove the log so a future "made" fires fresh.
+  DELETE FROM public.plan_entry_made_log WHERE id = v_log.id;
+
+  RETURN jsonb_build_object(
+    'status', 'reversed',
+    'credited_count', v_credited_count,
+    'unchecked_count', v_unchecked_count,
+    'credited', v_credited,
+    'unchecked', v_unchecked
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.rpc_undo_meal_made(UUID) IS
+  'US-349: reverse a rpc_mark_meal_made — re-credit pantry foods and re-open grocery items from plan_entry_made_log.reversal_payload, clear plan_entries.result, and delete the log row.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260613000000_undo_meal_made.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 149: 20260613000001_rate_limit_config_ai_endpoints.sql
+-- ============================================
+
+-- US-325: seed rate-limit config for the AI/LLM edge functions that now call
+-- check_rate_limit_with_tier(). Without an explicit row these endpoints fall
+-- back to the hardcoded default (50/hr) inside the RPC; explicit config lets
+-- us tune per-tier limits and document them.
+--
+-- Backward-compatible: additive INSERT ... ON CONFLICT DO NOTHING. Old clients
+-- never read rate_limit_config; new edge functions tolerate a missing row.
+
+INSERT INTO rate_limit_config
+  (endpoint, free_tier_limit, premium_tier_limit, enterprise_tier_limit, window_minutes, description)
+VALUES
+  ('tonight-mode',            20, 200, 2000, 60, 'Tonight Mode dinner suggestions'),
+  ('parse-grocery-image',     10, 100, 1000, 60, 'Vision: grocery-list OCR'),
+  ('parse-receipt-image',     10, 100, 1000, 60, 'Vision: receipt OCR'),
+  ('identify-product',        10, 100, 1000, 60, 'Vision: single-product identification'),
+  ('generate-social-content',  5,  50,  500, 60, 'Admin: social content generation'),
+  ('generate-blog-content',    5,  50,  500, 60, 'Admin: blog content generation')
+ON CONFLICT (endpoint) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260613000001_rate_limit_config_ai_endpoints.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 150: 20260613000002_bump_grocery_item_quantities.sql
+-- ============================================
+
+-- US-334: batch the grocery-merge "bump existing rows" writes into ONE request.
+--
+-- addGroceryItemsMerged previously looped a per-row UPDATE (N round trips + N
+-- re-renders) to bump the quantity of existing unchecked rows. This RPC applies
+-- all of those quantity/unit/name bumps in a single statement.
+--
+-- SECURITY INVOKER (the default) so the caller's RLS UPDATE policy on
+-- grocery_items still applies — a user can only bump rows they're allowed to
+-- update. Only quantity / unit / name are touched; every other column is left
+-- intact (no destructive full-row upsert).
+--
+-- Backward-compatible: new function only; old clients keep using per-row updates.
+
+CREATE OR REPLACE FUNCTION public.bump_grocery_item_quantities(p_updates jsonb)
+RETURNS void
+LANGUAGE sql
+AS $$
+  UPDATE public.grocery_items AS g
+  SET
+    quantity = u.quantity,
+    unit = u.unit,
+    name = u.name
+  FROM jsonb_to_recordset(p_updates) AS u(id uuid, quantity numeric, unit text, name text)
+  WHERE g.id = u.id;
+$$;
+
+COMMENT ON FUNCTION public.bump_grocery_item_quantities(jsonb) IS
+  'US-334: batch-update quantity/unit/name for a set of grocery_items rows in one statement. RLS-scoped (SECURITY INVOKER).';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260613000002_bump_grocery_item_quantities.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 151: 20260613000003_meal_votes_dedupe_key.sql
+-- ============================================
+
+-- US-338: guarantee one effective meal vote per (kid, meal_date, meal_slot).
+--
+-- The web upsert had NO onConflict target, so PostgREST fell back to the PK
+-- (a fresh uuid each call) and every re-vote INSERTED a duplicate row. The
+-- table's existing UNIQUE(kid_id, plan_entry_id) / UNIQUE(kid_id, recipe_id,
+-- meal_date, meal_slot) don't help here because plan_entry_id / recipe_id are
+-- nullable (recipe-only or unplanned votes) and NULLs don't dedupe.
+--
+-- Fix: a stable natural key on the always-present columns (meal_date /
+-- meal_slot are NOT NULL; the app always sends kid_id). The web client upserts
+-- with onConflict='kid_id,meal_date,meal_slot' against this index.
+--
+-- Additive + backward-compatible: new index only. NULL kid_id rows (if any)
+-- stay distinct under the index (Postgres treats NULLs as not-equal), so no
+-- legacy write is rejected by them.
+
+-- 1) Collapse any pre-existing duplicates the old no-onConflict path created,
+--    keeping the most recent vote per key.
+DELETE FROM public.meal_votes mv
+USING (
+  SELECT id,
+         row_number() OVER (
+           PARTITION BY kid_id, meal_date, meal_slot
+           ORDER BY voted_at DESC NULLS LAST, id DESC
+         ) AS rn
+  FROM public.meal_votes
+  WHERE kid_id IS NOT NULL
+) dups
+WHERE mv.id = dups.id
+  AND dups.rn > 1;
+
+-- 2) Stable dedupe key used as the upsert conflict target.
+CREATE UNIQUE INDEX IF NOT EXISTS meal_votes_kid_meal_slot_key
+  ON public.meal_votes (kid_id, meal_date, meal_slot);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260613000003_meal_votes_dedupe_key.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 152: 20260613000004_rls_privilege_gaps.sql
+-- ============================================
+
+-- US-328: close RLS / privilege gaps. Policy-only, additive, RLS stays enabled.
+-- Read paths for shipped clients are unchanged (users still see their own
+-- roles; admins still manage all roles; the legitimate ai_usage_logs writer is
+-- the SECURITY DEFINER log_ai_usage() RPC, which bypasses RLS).
+
+-- 1) user_roles admin policies queried user_roles inside their own USING/CHECK
+--    (self-reference -> infinite-recursion risk). Route the admin check through
+--    the existing SECURITY DEFINER helper has_role(), which bypasses RLS.
+DROP POLICY IF EXISTS "Admins can view all roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins can insert roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins can update roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Admins can delete roles" ON public.user_roles;
+
+CREATE POLICY "Admins can view all roles"
+  ON public.user_roles FOR SELECT
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can insert roles"
+  ON public.user_roles FOR INSERT
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can update roles"
+  ON public.user_roles FOR UPDATE
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can delete roles"
+  ON public.user_roles FOR DELETE
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- 2) ai_usage_logs INSERT was WITH CHECK(true): any authenticated user could
+--    write rows attributed to anyone. The real writer is the SECURITY DEFINER
+--    log_ai_usage() RPC (RLS-exempt) and no client inserts directly, so scope
+--    direct inserts to the caller's own user_id.
+DROP POLICY IF EXISTS "System can insert AI usage logs" ON public.ai_usage_logs;
+
+CREATE POLICY "Users insert their own AI usage logs"
+  ON public.ai_usage_logs FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260613000004_rls_privilege_gaps.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 153: 20260614000000_app_config.sql
+-- ============================================
+
+-- US-380: server-driven app configuration, starting with the minimum
+-- supported iOS build for the force-update gate. Additive + backward
+-- compatible (new table, anon-readable). The gate fails OPEN, so seeding
+-- min_ios_build = 1 means no existing user is blocked until an admin bumps it.
+
+CREATE TABLE IF NOT EXISTS public.app_config (
+  key text PRIMARY KEY,
+  value jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
+
+-- Config is non-sensitive and read by unauthenticated clients on launch
+-- (before sign-in), so SELECT is open to everyone. Writes are admin-only
+-- (service role / dashboard) — no INSERT/UPDATE/DELETE policy is granted to
+-- anon or authenticated.
+DROP POLICY IF EXISTS "Anyone can read app config" ON public.app_config;
+CREATE POLICY "Anyone can read app config"
+  ON public.app_config
+  FOR SELECT
+  USING (true);
+
+INSERT INTO public.app_config (key, value)
+VALUES ('min_ios_build', '1'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260614000000_app_config.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 154: 20260614000001_mark_meal_made_v2.sql
+-- ============================================
+
+-- US-351: serving- and quantity-scaled pantry debits at mark-made.
+--
+-- v1 `rpc_mark_meal_made` debits exactly 1 unit per linked food, walking
+-- recipe_ingredients server-side. v2 instead accepts an explicit list of
+-- per-food debit amounts the client has already scaled by serving count and
+-- unit-converted (the conversion layer lives in the app's UnitConverter, not
+-- SQL). This keeps v1 intact for older shipped iOS clients (additive only —
+-- no change to the v1 function, table, or the undo RPC's reversal shape).
+--
+-- p_debits is a JSONB array: [{ "food_id": "<uuid>", "amount": <numeric> }, ...]
+--
+-- Returns the same shape as v1:
+--   { "status": "logged"|"no_recipe", "debited_count": N, "checked_count": M, "made_at": "..." }
+--   { "status": "already_logged", "made_at": "..." }
+
+CREATE OR REPLACE FUNCTION public.rpc_mark_meal_made_v2(
+  p_plan_entry_id UUID,
+  p_debits JSONB DEFAULT '[]'::JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_recipe_id UUID;
+  v_existing_made TIMESTAMPTZ;
+  v_debited_count INTEGER := 0;
+  v_checked_count INTEGER := 0;
+  v_reversal JSONB := '{}'::JSONB;
+  v_food_debits JSONB := '[]'::JSONB;
+  v_grocery_checks JSONB := '[]'::JSONB;
+  v_debit JSONB;
+  v_food_id UUID;
+  v_amount NUMERIC;
+  v_prev_qty NUMERIC;
+  v_gi RECORD;
+  v_now TIMESTAMPTZ := now();
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Idempotency: identical to v1 (shared plan_entry_made_log, 1-hour window).
+  SELECT made_at INTO v_existing_made
+  FROM public.plan_entry_made_log
+  WHERE plan_entry_id = p_plan_entry_id
+    AND user_id = v_user_id
+    AND made_at >= v_now - INTERVAL '1 hour'
+  ORDER BY made_at DESC
+  LIMIT 1;
+
+  IF v_existing_made IS NOT NULL THEN
+    RETURN jsonb_build_object('status', 'already_logged', 'made_at', v_existing_made);
+  END IF;
+
+  SELECT recipe_id INTO v_recipe_id
+  FROM public.plan_entries
+  WHERE id = p_plan_entry_id;
+
+  -- Apply each client-computed debit. Amounts are already serving-scaled and
+  -- unit-converted to the pantry food's unit; clamp at 0. RLS + the explicit
+  -- user_id filter keep a caller from debiting someone else's pantry.
+  FOR v_debit IN SELECT * FROM jsonb_array_elements(COALESCE(p_debits, '[]'::JSONB))
+  LOOP
+    v_food_id := (v_debit->>'food_id')::UUID;
+    v_amount := COALESCE((v_debit->>'amount')::NUMERIC, 0);
+    IF v_food_id IS NULL OR v_amount <= 0 THEN
+      CONTINUE;
+    END IF;
+
+    SELECT quantity INTO v_prev_qty
+    FROM public.foods
+    WHERE id = v_food_id AND user_id = v_user_id;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+
+    UPDATE public.foods
+    SET quantity = GREATEST(0, COALESCE(quantity, 0) - v_amount)
+    WHERE id = v_food_id AND user_id = v_user_id;
+
+    -- Reversal shape matches v1 so rpc_undo_meal_made re-credits correctly.
+    v_food_debits := v_food_debits || jsonb_build_object(
+      'food_id', v_food_id,
+      'previous_qty', v_prev_qty,
+      'debited', v_amount
+    );
+    v_debited_count := v_debited_count + 1;
+  END LOOP;
+
+  -- Auto-check grocery items linked to this plan entry (identical to v1).
+  FOR v_gi IN
+    SELECT DISTINCT gi.id, gi.name, gi.checked
+    FROM public.grocery_item_sources gis
+    JOIN public.grocery_items gi ON gi.id = gis.grocery_item_id
+    WHERE gis.plan_entry_id = p_plan_entry_id
+      AND gi.user_id = v_user_id
+      AND gi.checked = false
+  LOOP
+    UPDATE public.grocery_items
+    SET checked = true
+    WHERE id = v_gi.id AND user_id = v_user_id;
+
+    v_grocery_checks := v_grocery_checks || jsonb_build_object(
+      'grocery_item_id', v_gi.id,
+      'name', v_gi.name,
+      'previous_checked', v_gi.checked
+    );
+    v_checked_count := v_checked_count + 1;
+  END LOOP;
+
+  v_reversal := jsonb_build_object('food_debits', v_food_debits, 'grocery_checks', v_grocery_checks);
+
+  INSERT INTO public.plan_entry_made_log (
+    plan_entry_id, user_id, made_at, debited_food_count, checked_grocery_count, reversal_payload
+  )
+  VALUES (
+    p_plan_entry_id, v_user_id, v_now, v_debited_count, v_checked_count, v_reversal
+  );
+
+  RETURN jsonb_build_object(
+    'status', CASE WHEN v_recipe_id IS NULL THEN 'no_recipe' ELSE 'logged' END,
+    'debited_count', v_debited_count,
+    'checked_count', v_checked_count,
+    'made_at', v_now
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.rpc_mark_meal_made_v2(UUID, JSONB) IS
+  'US-351: log a planned recipe as eaten, debiting pantry foods by client-computed serving-scaled + unit-converted amounts (p_debits). Additive successor to rpc_mark_meal_made (v1 stays for older clients). Shares plan_entry_made_log + reversal shape with the undo RPC.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260614000001_mark_meal_made_v2.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 155: 20260627000000_recipe_is_favorite.sql
+-- ============================================
+
+-- US-468: explicit recipe favorites.
+--
+-- Additive + backward-compatible (see CLAUDE.md Migration Rules):
+--   * New nullable-with-default column — old iOS builds simply ignore the
+--     unknown column on SELECT, and their INSERTs (which omit it) get the
+--     DEFAULT, so nothing breaks for users on shipped versions.
+--   * No RLS change needed: the existing per-user / per-household recipe
+--     policies already govern this column.
+ALTER TABLE public.recipes
+  ADD COLUMN IF NOT EXISTS is_favorite boolean NOT NULL DEFAULT false;
+
+-- Partial index so "favorites only" filters and any future "most loved"
+-- surfacing stay cheap as libraries grow.
+CREATE INDEX IF NOT EXISTS idx_recipes_is_favorite
+  ON public.recipes (user_id)
+  WHERE is_favorite;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260627000000_recipe_is_favorite.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 156: 20260630000000_generated_images.sql
+-- ============================================
+
+-- AI-generated images for blog & social posts.
+-- Additive only (new public bucket + new tracking table) — safe for shipped iOS clients.
+
+-- ─── Storage bucket (public, read-only to the world, admin-writable) ──────────
+-- NOTE: the declared `blog-images`/`recipe-images` entries in storage_buckets_config
+-- were never created as real storage.buckets. This is the first physically-created
+-- bucket dedicated to generated content.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('generated-images', 'generated-images', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Anyone can read (images are surfaced publicly as og:image / on social).
+CREATE POLICY "Public can view generated images"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'generated-images');
+
+-- Only authenticated users may write/replace/remove (edge function uses the
+-- service role, which bypasses RLS; this covers any client-side admin upload).
+CREATE POLICY "Authenticated can upload generated images"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'generated-images');
+
+CREATE POLICY "Authenticated can update generated images"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'generated-images');
+
+CREATE POLICY "Authenticated can delete generated images"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'generated-images');
+
+-- ─── Tracking table: history / reuse / cost auditing ─────────────────────────
+CREATE TABLE IF NOT EXISTS public.generated_images (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  source      text NOT NULL CHECK (source IN ('blog', 'social', 'manual')),
+  record_id   uuid,                       -- blog_posts.id or social_posts.id (nullable for ad-hoc)
+  image_url   text NOT NULL,
+  storage_path text,
+  prompt      text NOT NULL,
+  provider    text NOT NULL DEFAULT 'openai',
+  model       text,
+  size        text,
+  created_by  uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_generated_images_record
+  ON public.generated_images (source, record_id);
+CREATE INDEX IF NOT EXISTS idx_generated_images_created_at
+  ON public.generated_images (created_at DESC);
+
+ALTER TABLE public.generated_images ENABLE ROW LEVEL SECURITY;
+
+-- Admins manage all rows. Mirrors the admin-gated pattern used by blog_posts:
+-- a row in public.user_roles with role = 'admin' keyed off auth.uid().
+CREATE POLICY "Admins manage generated images"
+ON public.generated_images FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+  )
+);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260630000000_generated_images.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 157: 20260709000000_agent_core_schema.sql
+-- ============================================
+
+-- Agentic OS — US-475: Core agent schema
+-- Registry of agents (agent_definitions) and an execution log (agent_runs) so
+-- that all agent activity is configurable and fully traceable.
+--
+-- Additive only: two brand-new tables, no changes to existing objects.
+-- RLS: admin-only, reusing the user_roles admin-check pattern used by admin_alerts.
+
+-- ============================================================================
+-- 1. agent_definitions — registry of every agent
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.agent_definitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  domain TEXT,
+  description TEXT,
+  system_prompt TEXT,
+  model TEXT NOT NULL DEFAULT 'claude-haiku-4-5-20251001',
+  schedule_cron TEXT,
+  autonomy_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+  daily_cost_cap_usd NUMERIC NOT NULL DEFAULT 5,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_definitions_enabled
+  ON public.agent_definitions(enabled) WHERE enabled = TRUE;
+CREATE INDEX IF NOT EXISTS idx_agent_definitions_domain
+  ON public.agent_definitions(domain);
+
+COMMENT ON TABLE public.agent_definitions IS
+  'Registry of Agentic OS agents: prompt, model, schedule, autonomy policy, and budget cap per agent.';
+
+-- Keep updated_at fresh (reuse the repo-wide trigger helper).
+DROP TRIGGER IF EXISTS trg_agent_definitions_updated_at ON public.agent_definitions;
+CREATE TRIGGER trg_agent_definitions_updated_at
+  BEFORE UPDATE ON public.agent_definitions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- 2. agent_runs — one row per agent execution
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.agent_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES public.agent_definitions(id) ON DELETE CASCADE,
+  trigger TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'skipped')),
+  input JSONB DEFAULT '{}'::jsonb,
+  output JSONB,
+  tokens_in INTEGER DEFAULT 0,
+  tokens_out INTEGER DEFAULT 0,
+  cost_usd NUMERIC DEFAULT 0,
+  error TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_runs_agent ON public.agent_runs(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON public.agent_runs(status);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_started ON public.agent_runs(started_at DESC);
+-- Fast "today's spend for this agent" lookups (budget guardrails, US-480).
+CREATE INDEX IF NOT EXISTS idx_agent_runs_agent_started
+  ON public.agent_runs(agent_id, started_at DESC);
+-- Idempotency guard: quickly find an agent's in-flight run (dispatcher, US-478).
+CREATE INDEX IF NOT EXISTS idx_agent_runs_running
+  ON public.agent_runs(agent_id) WHERE status = 'running';
+
+COMMENT ON TABLE public.agent_runs IS
+  'Execution log for every agent run: status, IO, token/cost accounting, and error trail.';
+
+-- ============================================================================
+-- 3. RLS — admin-only on both tables (same pattern as admin_alerts)
+-- ============================================================================
+ALTER TABLE public.agent_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agent_runs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage agent definitions"
+  ON public.agent_definitions FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can manage agent runs"
+  ON public.agent_runs FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000000_agent_core_schema.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 158: 20260709000001_agent_approval_escalation_audit.sql
+-- ============================================
+
+-- Agentic OS — US-476: Approval, escalation, and audit schema
+-- Draft-first autonomy needs three durable stores:
+--   * agent_approvals   — outward-facing actions an agent drafts, pending human review
+--   * agent_escalations — items a human must look at (tier 2) or act on now (tier 3)
+--   * agent_audit_log   — append-only trail of every agent/human action
+--
+-- Additive only: three brand-new tables, no changes to existing objects.
+-- RLS: admin-only on all three, reusing the user_roles admin-check pattern.
+
+-- ============================================================================
+-- 1. agent_approvals — draft-first queue for outward-facing actions
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.agent_approvals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id UUID REFERENCES public.agent_runs(id) ON DELETE SET NULL,
+  agent_id UUID REFERENCES public.agent_definitions(id) ON DELETE SET NULL,
+  action_type TEXT NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'approved', 'rejected', 'executed', 'expired')),
+  review_note TEXT,
+  reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_status ON public.agent_approvals(status);
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_agent ON public.agent_approvals(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_run ON public.agent_approvals(run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_action_type ON public.agent_approvals(action_type);
+-- Draft queue view (US-484) and the expiry sweep (US-482) both scan open drafts by age.
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_draft_created
+  ON public.agent_approvals(created_at DESC) WHERE status = 'draft';
+CREATE INDEX IF NOT EXISTS idx_agent_approvals_expires
+  ON public.agent_approvals(expires_at) WHERE status = 'draft';
+
+COMMENT ON TABLE public.agent_approvals IS
+  'Draft-first queue: every outward-facing agent action lands here for human review before the executor runs it.';
+
+-- ============================================================================
+-- 2. agent_escalations — tiered human-attention queue
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.agent_escalations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id UUID REFERENCES public.agent_runs(id) ON DELETE SET NULL,
+  agent_id UUID REFERENCES public.agent_definitions(id) ON DELETE SET NULL,
+  tier INTEGER NOT NULL CHECK (tier IN (2, 3)),
+  severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  domain TEXT,
+  title TEXT NOT NULL,
+  context JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'acknowledged', 'resolved')),
+  assigned_to UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  resolution_note TEXT,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_escalations_status ON public.agent_escalations(status);
+CREATE INDEX IF NOT EXISTS idx_agent_escalations_domain ON public.agent_escalations(domain);
+CREATE INDEX IF NOT EXISTS idx_agent_escalations_agent ON public.agent_escalations(agent_id);
+-- Queue ordering (US-485): tier desc, then severity, then recency; open items first.
+CREATE INDEX IF NOT EXISTS idx_agent_escalations_open_tier
+  ON public.agent_escalations(tier DESC, created_at DESC) WHERE status = 'open';
+
+COMMENT ON TABLE public.agent_escalations IS
+  'Tiered human-attention queue: tier 2 = review soon, tier 3 = act now (urgent/sensitive).';
+
+-- ============================================================================
+-- 3. agent_audit_log — append-only trail
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.agent_audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor TEXT NOT NULL,          -- agent name or user id
+  action TEXT NOT NULL,
+  subject_type TEXT,
+  subject_id TEXT,
+  detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_audit_log_created ON public.agent_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_audit_log_actor ON public.agent_audit_log(actor);
+CREATE INDEX IF NOT EXISTS idx_agent_audit_log_action ON public.agent_audit_log(action);
+CREATE INDEX IF NOT EXISTS idx_agent_audit_log_subject ON public.agent_audit_log(subject_type, subject_id);
+
+COMMENT ON TABLE public.agent_audit_log IS
+  'Append-only audit trail of every agent and human action. UPDATE/DELETE revoked from client roles.';
+
+-- Append-only: no client role may mutate history. Inserts still allowed (admins/service role);
+-- the service role bypasses RLS entirely, and admin RLS below governs authenticated inserts.
+REVOKE UPDATE, DELETE ON public.agent_audit_log FROM authenticated;
+REVOKE UPDATE, DELETE ON public.agent_audit_log FROM anon;
+
+-- ============================================================================
+-- 4. RLS — admin-only on all three tables (same pattern as admin_alerts)
+-- ============================================================================
+ALTER TABLE public.agent_approvals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agent_escalations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agent_audit_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage agent approvals"
+  ON public.agent_approvals FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can manage agent escalations"
+  ON public.agent_escalations FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+-- Audit log: admins may SELECT and INSERT, but never UPDATE/DELETE (append-only,
+-- enforced by both the REVOKE above and the absence of UPDATE/DELETE policies).
+CREATE POLICY "Admins can view audit log"
+  ON public.agent_audit_log FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can insert audit log"
+  ON public.agent_audit_log FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000001_agent_approval_escalation_audit.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 159: 20260709000002_agent_dispatcher_cron.sql
+-- ============================================
+
+-- Agentic OS — US-478: schedule the agent dispatcher every 5 minutes.
+--
+-- Uses pg_cron + pg_net to POST to the agent-dispatcher edge function. The
+-- function URL and the internal dispatch secret are sourced from Vault (with a
+-- fallback to database settings / GUCs) so NO secret is hardcoded in this
+-- migration. Everything is guarded so `db push` succeeds even where pg_cron /
+-- pg_net / vault are unavailable (e.g. a bare local Postgres).
+
+-- ----------------------------------------------------------------------------
+-- Invoker function: reads config at call time, POSTs to the dispatcher.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.invoke_agent_dispatcher()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, vault
+AS $$
+DECLARE
+  v_base_url  text;
+  v_secret    text;
+BEGIN
+  -- Prefer Vault-stored secrets; fall back to database settings (GUCs).
+  BEGIN
+    SELECT decrypted_secret INTO v_base_url
+      FROM vault.decrypted_secrets WHERE name = 'agent_functions_base_url' LIMIT 1;
+    SELECT decrypted_secret INTO v_secret
+      FROM vault.decrypted_secrets WHERE name = 'agent_dispatch_secret' LIMIT 1;
+  EXCEPTION WHEN OTHERS THEN
+    -- Vault not present; ignore and try GUCs below.
+    NULL;
+  END;
+
+  v_base_url := COALESCE(v_base_url, current_setting('app.settings.functions_base_url', true));
+  v_secret   := COALESCE(v_secret,   current_setting('app.settings.agent_dispatch_secret', true));
+
+  IF v_base_url IS NULL OR v_secret IS NULL THEN
+    RAISE NOTICE 'invoke_agent_dispatcher: missing base URL or secret; skipping this tick';
+    RETURN;
+  END IF;
+
+  PERFORM net.http_post(
+    url     := v_base_url || '/agent-dispatcher',
+    headers := jsonb_build_object(
+                 'content-type', 'application/json',
+                 'x-agent-dispatch-secret', v_secret
+               ),
+    body    := jsonb_build_object('trigger', 'cron')
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.invoke_agent_dispatcher() IS
+  'Called by pg_cron every 5 minutes to POST the agent-dispatcher edge function. Reads URL/secret from Vault or app.settings GUCs.';
+
+-- ----------------------------------------------------------------------------
+-- Schedule it. Guarded: only when pg_cron is installed. Idempotent re-schedule.
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    -- Remove any prior schedule with this name so re-running is safe.
+    BEGIN
+      PERFORM cron.unschedule('agent-dispatcher-5min');
+    EXCEPTION WHEN OTHERS THEN
+      NULL; -- not previously scheduled
+    END;
+
+    PERFORM cron.schedule(
+      'agent-dispatcher-5min',
+      '*/5 * * * *',
+      $cron$ SELECT public.invoke_agent_dispatcher(); $cron$
+    );
+  ELSE
+    RAISE NOTICE 'pg_cron not installed; agent-dispatcher schedule not created';
+  END IF;
+END $$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000002_agent_dispatcher_cron.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 160: 20260709000003_agent_system_settings.sql
+-- ============================================
+
+-- Agentic OS — US-480: Budget guardrails and global kill switch
+-- A singleton settings row holds the global pause (kill switch) and the list of
+-- digest email recipients. The dispatcher (US-478) already reads global_pause;
+-- this migration creates the table it reads. Per-agent daily spend caps are
+-- enforced in the shared runtime against agent_definitions.daily_cost_cap_usd
+-- and agent_runs.cost_usd (no schema change needed for those).
+--
+-- Additive only: one brand-new table. RLS: admin-only (same user_roles pattern
+-- as admin_alerts / agent_definitions).
+
+-- ============================================================================
+-- agent_system_settings — singleton platform-wide controls
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.agent_system_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  global_pause BOOLEAN NOT NULL DEFAULT FALSE,
+  digest_emails TEXT[] NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enforce a single row: a unique index on a constant expression permits exactly
+-- one row regardless of its id, so the settings are a true singleton.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_system_settings_singleton
+  ON public.agent_system_settings ((TRUE));
+
+COMMENT ON TABLE public.agent_system_settings IS
+  'Singleton platform controls for the Agentic OS: global kill switch (global_pause) and digest email recipients.';
+
+-- Seed the singleton row (idempotent — only inserts when the table is empty).
+INSERT INTO public.agent_system_settings (global_pause, digest_emails)
+SELECT FALSE, '{}'::text[]
+WHERE NOT EXISTS (SELECT 1 FROM public.agent_system_settings);
+
+-- Keep updated_at fresh (reuse the repo-wide trigger helper).
+DROP TRIGGER IF EXISTS trg_agent_system_settings_updated_at ON public.agent_system_settings;
+CREATE TRIGGER trg_agent_system_settings_updated_at
+  BEFORE UPDATE ON public.agent_system_settings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- RLS — admin-only (same pattern as admin_alerts / agent_definitions)
+-- ============================================================================
+ALTER TABLE public.agent_system_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage agent system settings"
+  ON public.agent_system_settings FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000003_agent_system_settings.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 161: 20260709000004_agent_knowledge.sql
+-- ============================================
+
+-- Agentic OS — US-481: Knowledge base with pgvector for RAG
+-- An embedded knowledge base of product docs / FAQs so drafted support answers
+-- (US-491) are grounded in real product truth via semantic retrieval.
+--
+-- Additive only: enables the vector extension (idempotent) and creates one new
+-- table plus one match RPC. RLS: admin-only (same user_roles pattern as
+-- agent_definitions). The match RPC runs SECURITY INVOKER so RLS is respected
+-- for admin callers; the agents query it with the service role (RLS bypassed).
+
+-- ============================================================================
+-- 0. pgvector extension
+-- ============================================================================
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- ============================================================================
+-- 1. agent_knowledge — chunked, embedded knowledge entries
+-- ============================================================================
+-- Embeddings are OpenAI text-embedding-3-small (1536 dims), matching the
+-- embedding model used by the ingest function.
+CREATE TABLE IF NOT EXISTS public.agent_knowledge (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT,
+  title TEXT,
+  content TEXT NOT NULL,
+  embedding vector(1536),
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Approximate-nearest-neighbour index for cosine distance (pgvector HNSW).
+CREATE INDEX IF NOT EXISTS idx_agent_knowledge_embedding
+  ON public.agent_knowledge USING hnsw (embedding vector_cosine_ops);
+-- Re-ingest deletes prior chunks for a (source, title) pair; index that lookup.
+CREATE INDEX IF NOT EXISTS idx_agent_knowledge_source_title
+  ON public.agent_knowledge(source, title);
+
+COMMENT ON TABLE public.agent_knowledge IS
+  'RAG knowledge base: chunked product docs/FAQ entries with OpenAI 1536-dim embeddings for semantic retrieval.';
+
+DROP TRIGGER IF EXISTS trg_agent_knowledge_updated_at ON public.agent_knowledge;
+CREATE TRIGGER trg_agent_knowledge_updated_at
+  BEFORE UPDATE ON public.agent_knowledge
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- 2. match_agent_knowledge — cosine-similarity retrieval RPC
+-- ============================================================================
+-- Returns rows whose cosine similarity (1 - cosine distance) meets the floor,
+-- best matches first, capped at match_count.
+CREATE OR REPLACE FUNCTION public.match_agent_knowledge(
+  query_embedding vector(1536),
+  match_count INT,
+  min_similarity FLOAT
+)
+RETURNS TABLE (id UUID, title TEXT, content TEXT, similarity FLOAT)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    k.id,
+    k.title,
+    k.content,
+    1 - (k.embedding <=> query_embedding) AS similarity
+  FROM public.agent_knowledge k
+  WHERE k.embedding IS NOT NULL
+    AND 1 - (k.embedding <=> query_embedding) >= min_similarity
+  ORDER BY k.embedding <=> query_embedding
+  LIMIT GREATEST(match_count, 0);
+$$;
+
+COMMENT ON FUNCTION public.match_agent_knowledge IS
+  'Semantic search over agent_knowledge: returns id, title, content, cosine similarity for the closest chunks above min_similarity.';
+
+-- ============================================================================
+-- 3. RLS — admin-only (same pattern as agent_definitions / admin_alerts)
+-- ============================================================================
+ALTER TABLE public.agent_knowledge ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage agent knowledge"
+  ON public.agent_knowledge FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+    )
+  );
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000004_agent_knowledge.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 162: 20260709000005_agent_digest.sql
+-- ============================================
+
+-- Agentic OS — US-488: email digests (instant tier-3 + daily tier-2 summary).
+--
+-- Schedules a daily digest via pg_cron and fires an instant digest whenever a
+-- tier-3 escalation is inserted (AFTER INSERT trigger). Both POST the
+-- agent-digest edge function through pg_net; the function URL + internal secret
+-- come from Vault (fallback to app.settings GUCs) so NO secret is hardcoded.
+-- Everything is guarded so `db push` succeeds where pg_cron / pg_net / vault are
+-- unavailable.
+
+-- ----------------------------------------------------------------------------
+-- Invoker: reads config at call time and POSTs the agent-digest function.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.invoke_agent_digest(p_mode text, p_escalation_id uuid DEFAULT NULL)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, vault
+AS $$
+DECLARE
+  v_base_url text;
+  v_secret   text;
+BEGIN
+  BEGIN
+    SELECT decrypted_secret INTO v_base_url
+      FROM vault.decrypted_secrets WHERE name = 'agent_functions_base_url' LIMIT 1;
+    SELECT decrypted_secret INTO v_secret
+      FROM vault.decrypted_secrets WHERE name = 'agent_dispatch_secret' LIMIT 1;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  v_base_url := COALESCE(v_base_url, current_setting('app.settings.functions_base_url', true));
+  v_secret   := COALESCE(v_secret,   current_setting('app.settings.agent_dispatch_secret', true));
+
+  IF v_base_url IS NULL OR v_secret IS NULL THEN
+    RAISE NOTICE 'invoke_agent_digest: missing base URL or secret; skipping';
+    RETURN;
+  END IF;
+
+  PERFORM net.http_post(
+    url     := v_base_url || '/agent-digest',
+    headers := jsonb_build_object(
+                 'content-type', 'application/json',
+                 'x-agent-dispatch-secret', v_secret
+               ),
+    body    := jsonb_strip_nulls(jsonb_build_object('mode', p_mode, 'escalation_id', p_escalation_id))
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.invoke_agent_digest(text, uuid) IS
+  'POSTs the agent-digest edge function (daily cron or instant tier-3). Reads URL/secret from Vault or app.settings GUCs.';
+
+-- ----------------------------------------------------------------------------
+-- Instant tier-3: AFTER INSERT trigger on agent_escalations.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.agent_escalation_tier3_notify()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, vault
+AS $$
+BEGIN
+  -- Only tier-3 rows trigger an instant email; guard pg_net's absence.
+  IF NEW.tier = 3 AND EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_net') THEN
+    BEGIN
+      PERFORM public.invoke_agent_digest('instant', NEW.id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'agent_escalation_tier3_notify: invoke failed (non-fatal)';
+    END;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_agent_escalation_tier3_notify ON public.agent_escalations;
+CREATE TRIGGER trg_agent_escalation_tier3_notify
+  AFTER INSERT ON public.agent_escalations
+  FOR EACH ROW
+  WHEN (NEW.tier = 3)
+  EXECUTE FUNCTION public.agent_escalation_tier3_notify();
+
+-- ----------------------------------------------------------------------------
+-- Daily digest schedule (08:00 UTC). Guarded + idempotent.
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    BEGIN
+      PERFORM cron.unschedule('agent-digest-daily');
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+
+    PERFORM cron.schedule(
+      'agent-digest-daily',
+      '0 8 * * *',
+      $cron$ SELECT public.invoke_agent_digest('daily'); $cron$
+    );
+  ELSE
+    RAISE NOTICE 'pg_cron not installed; agent-digest daily schedule not created';
+  END IF;
+END $$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000005_agent_digest.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 163: 20260709000006_support_tickets.sql
+-- ============================================
+
+-- Agentic OS — US-489: support ticket intake schema.
+--
+-- IMPORTANT: public.support_tickets ALREADY EXISTS (20251013140000_support_tickets.sql)
+-- with a different shape (description NOT NULL; status/category/priority CHECKs;
+-- message thread in ticket_messages). Rather than a conflicting CREATE (which
+-- would silently no-op), this migration RECONCILES the existing table
+-- backward-compatibly and adds the new support_messages thread table used by the
+-- Agentic OS support agents (US-490..US-495).
+--
+-- Backward-compat rules (CLAUDE.md): additive columns only; the status CHECK is
+-- WIDENED to the UNION of old + new values (never narrowed), so existing rows
+-- and older iOS clients keep working while the new workflow statuses are allowed.
+
+-- ============================================================================
+-- 1. Extend support_tickets additively
+-- ============================================================================
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS sentiment TEXT;
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS tier INTEGER;
+
+-- Widen the status CHECK to allow the new workflow statuses without breaking the
+-- old ones. The inline constraint from the original migration is named
+-- support_tickets_status_check; drop-if-exists then re-add the union.
+ALTER TABLE public.support_tickets DROP CONSTRAINT IF EXISTS support_tickets_status_check;
+ALTER TABLE public.support_tickets
+  ADD CONSTRAINT support_tickets_status_check
+  CHECK (status IN (
+    -- original values (kept for backward compatibility with shipped clients)
+    'new', 'in_progress', 'waiting_user', 'resolved', 'closed',
+    -- new Agentic OS workflow values
+    'triaged', 'awaiting_reply', 'awaiting_user'
+  ));
+
+COMMENT ON COLUMN public.support_tickets.email IS
+  'Reply-to email; set by support-intake (US-489). Nullable because pre-existing rows predate it.';
+COMMENT ON COLUMN public.support_tickets.tier IS 'Escalation tier assigned by the triage agent (US-490).';
+
+-- ============================================================================
+-- 2. support_messages — Agentic OS ticket thread (distinct from ticket_messages)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.support_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id UUID NOT NULL REFERENCES public.support_tickets(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('user', 'agent', 'admin')),
+  body TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_messages_ticket
+  ON public.support_messages(ticket_id, created_at);
+
+COMMENT ON TABLE public.support_messages IS
+  'Agentic OS support ticket thread. sender: user | agent (AI) | admin. metadata may flag internal notes.';
+
+-- ============================================================================
+-- 3. RLS on support_messages — users own their tickets'' messages; admins all
+--    (support_tickets already has RLS from the original migration; not touched.)
+-- ============================================================================
+ALTER TABLE public.support_messages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own support messages"
+  ON public.support_messages FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.support_tickets t
+      WHERE t.id = support_messages.ticket_id AND t.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users post to own support tickets"
+  ON public.support_messages FOR INSERT
+  WITH CHECK (
+    sender = 'user'
+    AND EXISTS (
+      SELECT 1 FROM public.support_tickets t
+      WHERE t.id = support_messages.ticket_id AND t.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Admins manage all support messages"
+  ON public.support_messages FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  );
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000006_support_tickets.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 164: 20260709000007_support_triage_agent.sql
+-- ============================================
+
+-- Agentic OS — US-490: support triage agent.
+-- Seeds the 'support-triage' agent definition and widens the support_tickets
+-- category CHECK to allow the triage taxonomy (adds how_to, account_data).
+
+-- ============================================================================
+-- 1. Widen support_tickets.category CHECK (union of old + triage categories).
+--    Backward-compatible: existing values stay valid; new ones become allowed.
+-- ============================================================================
+ALTER TABLE public.support_tickets DROP CONSTRAINT IF EXISTS support_tickets_category_check;
+ALTER TABLE public.support_tickets
+  ADD CONSTRAINT support_tickets_category_check
+  CHECK (category IN (
+    -- original categories
+    'bug', 'feature_request', 'question', 'billing', 'other',
+    -- triage taxonomy additions (US-490)
+    'how_to', 'account_data'
+  ));
+
+-- ============================================================================
+-- 2. Seed the support-triage agent (disabled by default).
+-- ============================================================================
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'support-triage',
+  'customer_service',
+  'Classifies new support tickets (category, sentiment, priority, tier) and escalates sensitive/urgent ones.',
+  'You are the support triage agent for EatPal, a meal-planning app for parents of picky eaters and children with ARFID. Classify each ticket accurately and conservatively. Prefer "account_data" for data-deletion/privacy/account-access requests, "billing" for payment/subscription issues, "how_to" for usage questions, "bug" for defects, "feature_request" for suggestions, else "other". Judge sentiment from the user''s tone. Set priority by urgency and impact. Respond with JSON only.',
+  'claude-haiku-4-5-20251001',
+  '*/5 * * * *',
+  '{}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000007_support_triage_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 165: 20260709000008_support_answer_agent.sql
+-- ============================================
+
+-- Agentic OS — US-491: seed the RAG support answer agent (disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'support-answer',
+  'customer_service',
+  'Drafts grounded reply emails for triaged how_to tickets using the knowledge base; escalates when confidence is low.',
+  'You are the support answer agent for EatPal. Answer strictly from the provided knowledge-base entries. Never invent product behavior. If the entries do not clearly answer the question, set confidence to "low" so a human handles it. Keep replies warm, concise, and specific.',
+  'claude-sonnet-4-5',
+  '*/5 * * * *',
+  '{}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000008_support_answer_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 166: 20260709000009_escalation_rules.sql
+-- ============================================
+
+-- Agentic OS — US-492: declarative escalation rules engine.
+-- Escalation routing as data so policy changes need no code deploy. Additive
+-- only: one new table with admin-only RLS + seed rules.
+
+CREATE TABLE IF NOT EXISTS public.agent_escalation_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain TEXT,
+  condition JSONB NOT NULL DEFAULT '{}'::jsonb,
+  tier INTEGER NOT NULL CHECK (tier IN (2, 3)),
+  severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_escalation_rules_enabled
+  ON public.agent_escalation_rules(enabled) WHERE enabled = TRUE;
+
+COMMENT ON TABLE public.agent_escalation_rules IS
+  'Declarative escalation routing rules (US-492). condition is a small JSON DSL evaluated by functions/_shared/escalation-rules.ts.';
+
+ALTER TABLE public.agent_escalation_rules ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage escalation rules"
+  ON public.agent_escalation_rules FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  );
+
+-- ============================================================================
+-- Seed rules (idempotent by description). condition mirrors escalation-rules.ts.
+-- ============================================================================
+INSERT INTO public.agent_escalation_rules (domain, condition, tier, severity, description)
+SELECT * FROM (VALUES
+  (
+    'customer_service',
+    '{"any":[{"field":"category","in":["billing"]},{"anyKeyword":["refund"]}]}'::jsonb,
+    2, 'medium', 'Billing or refund request'
+  ),
+  (
+    'customer_service',
+    '{"any":[{"field":"category","in":["account_data"]},{"anyKeyword":["legal","data deletion","delete my account","delete my data","gdpr","ccpa","right to be forgotten"]}]}'::jsonb,
+    3, 'high', 'Legal or data-deletion request'
+  ),
+  (
+    'security',
+    '{"anyKeyword":["security breach","data breach","breach","hacked","vulnerability","exposed","data leak"]}'::jsonb,
+    3, 'critical', 'Security concern'
+  ),
+  (
+    'customer_service',
+    '{"field":"sentiment","equals":"angry"}'::jsonb,
+    2, 'medium', 'Angry customer'
+  ),
+  (
+    'customer_service',
+    '{"olderThanHours":24,"statusIn":["new","triaged","awaiting_reply"]}'::jsonb,
+    2, 'medium', 'No reply after 24h (SLA breach)'
+  )
+) AS seed(domain, condition, tier, severity, description)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.agent_escalation_rules r WHERE r.description = seed.description
+);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000009_escalation_rules.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 167: 20260709000010_bug_reporter_agent.sql
+-- ============================================
+
+-- Agentic OS — US-493: seed the bug-reporter agent (disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'bug-reporter',
+  'dev_maintenance',
+  'Turns triaged bug tickets into well-formed GitHub issue drafts, with duplicate suppression by normalized title.',
+  'You convert user bug reports into precise, engineer-ready GitHub issues for EatPal. Extract concrete reproduction steps, the expected vs actual behavior, and any device/platform details. Do not speculate beyond the report. Choose severity conservatively. Respond with JSON only.',
+  'claude-haiku-4-5-20251001',
+  '*/5 * * * *',
+  '{}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000010_bug_reporter_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 168: 20260709000011_csat.sql
+-- ============================================
+
+-- Agentic OS — US-495: CSAT (customer satisfaction) follow-up.
+-- One rating per resolved ticket + the csat agent seed. Additive only.
+
+-- ============================================================================
+-- 1. support_csat — one rating per ticket (unique enforces single-use)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.support_csat (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id UUID NOT NULL UNIQUE REFERENCES public.support_tickets(id) ON DELETE CASCADE,
+  score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 5),
+  comment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_csat_score ON public.support_csat(score);
+
+COMMENT ON TABLE public.support_csat IS
+  'Post-resolution satisfaction ratings (1-5). ticket_id UNIQUE = one rating per ticket (single-use token).';
+
+ALTER TABLE public.support_csat ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage csat"
+  ON public.support_csat FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  );
+
+-- ============================================================================
+-- 2. Seed the csat agent (disabled by default)
+-- ============================================================================
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'csat',
+  'customer_service',
+  'Sends a satisfaction rating email 24h after a ticket is resolved; escalates low scores.',
+  'You draft short, warm CSAT follow-up emails. Templated — no per-ticket generation needed.',
+  'claude-haiku-4-5-20251001',
+  '0 * * * *',
+  '{}'::jsonb,
+  2,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000011_csat.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 169: 20260709000012_agent_events.sql
+-- ============================================
+
+-- Agentic OS — US-496: lifecycle event detection.
+-- agent_events records key user lifecycle moments so nurture automation (US-498+)
+-- has reliable triggers. Additive only.
+
+CREATE TABLE IF NOT EXISTS public.agent_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID,
+  user_id UUID,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_events_household ON public.agent_events(household_id);
+CREATE INDEX IF NOT EXISTS idx_agent_events_type_created ON public.agent_events(event_type, created_at DESC);
+
+-- Partial unique index: once-only events fire at most once per household. The
+-- inactivity events (inactive_7d/14d/30d) are intentionally NOT covered, so they
+-- can re-arm after the user becomes active again.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_events_once
+  ON public.agent_events(household_id, event_type)
+  WHERE event_type IN (
+    'signup', 'first_kid_added', 'first_plan_created', 'first_grocery_list',
+    'subscription_started', 'subscription_canceled'
+  );
+
+COMMENT ON TABLE public.agent_events IS
+  'Lifecycle events feeding nurture automation. Once-only events deduped by idx_agent_events_once; inactivity events re-arm.';
+
+ALTER TABLE public.agent_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage agent events"
+  ON public.agent_events FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  );
+
+-- Seed the event-detector agent (hourly, disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'event-detector',
+  'growth',
+  'Detects lifecycle events (signup, first-kid, first-plan, inactivity, subscription changes) from existing tables.',
+  'Deterministic detector — no LLM generation required.',
+  'claude-haiku-4-5-20251001',
+  '0 * * * *',
+  '{}'::jsonb,
+  1,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000012_agent_events.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 170: 20260709000013_churn_scores.sql
+-- ============================================
+
+-- Agentic OS — US-497: churn-risk scoring.
+CREATE TABLE IF NOT EXISTS public.agent_churn_scores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL,
+  score INTEGER NOT NULL CHECK (score BETWEEN 0 AND 100),
+  risk TEXT NOT NULL CHECK (risk IN ('low', 'medium', 'high')),
+  reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+  scored_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Fast "latest score per household" lookups (previous-week comparison).
+CREATE INDEX IF NOT EXISTS idx_agent_churn_scores_household_scored
+  ON public.agent_churn_scores(household_id, scored_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_churn_scores_risk ON public.agent_churn_scores(risk);
+
+COMMENT ON TABLE public.agent_churn_scores IS
+  'Weekly churn-risk scores per household (0-100 + low/medium/high) with top reasons.';
+
+ALTER TABLE public.agent_churn_scores ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage churn scores"
+  ON public.agent_churn_scores FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  );
+
+-- Seed the churn-score agent (weekly, disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'churn-score',
+  'growth',
+  'Weekly per-household churn-risk score (0-100 + low/medium/high) with top reasons and a suggested action.',
+  'You assess churn risk for EatPal households from activity features. Weigh recency of meal planning and grocery activity, subscription state, and setup completeness. Output a 0-100 score (higher = more likely to churn), a risk band, 2-4 concise reasons, and one suggested retention action. JSON only.',
+  'claude-haiku-4-5-20251001',
+  '0 6 * * 1',
+  '{}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000013_churn_scores.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 171: 20260709000014_nurture_engine.sql
+-- ============================================
+
+-- Agentic OS — US-498: nurture sequence engine schema.
+-- Sequences, enrollments, and an email suppression list. Additive only.
+
+-- ============================================================================
+-- 1. nurture_sequences
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.nurture_sequences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  trigger_event TEXT NOT NULL,
+  steps JSONB NOT NULL DEFAULT '[]'::jsonb, -- [{ delay_hours, template_key, exit_on_events }]
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_nurture_sequences_trigger
+  ON public.nurture_sequences(trigger_event) WHERE enabled = TRUE;
+
+-- ============================================================================
+-- 2. nurture_enrollments
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.nurture_enrollments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sequence_id UUID NOT NULL REFERENCES public.nurture_sequences(id) ON DELETE CASCADE,
+  household_id UUID,
+  user_id UUID,
+  current_step INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'completed', 'exited', 'suppressed')),
+  next_step_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Prevent duplicate active enrollment of a household in a sequence.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nurture_enrollments_active
+  ON public.nurture_enrollments(sequence_id, household_id)
+  WHERE status = 'active';
+-- Due-step scan.
+CREATE INDEX IF NOT EXISTS idx_nurture_enrollments_due
+  ON public.nurture_enrollments(next_step_at) WHERE status = 'active';
+
+-- ============================================================================
+-- 3. email_suppressions
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.email_suppressions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.email_suppressions IS
+  'Unsubscribe / bounce suppression list. Every nurture send checks it first.';
+
+-- ============================================================================
+-- RLS — admin-only management (writes also happen via service role).
+-- ============================================================================
+ALTER TABLE public.nurture_sequences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.nurture_enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.email_suppressions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage nurture sequences" ON public.nurture_sequences FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin'))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin'));
+
+CREATE POLICY "Admins manage nurture enrollments" ON public.nurture_enrollments FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin'))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin'));
+
+CREATE POLICY "Admins manage email suppressions" ON public.email_suppressions FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin'))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin'));
+
+-- ============================================================================
+-- Seed the nurture-engine agent (hourly, disabled by default).
+-- ============================================================================
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'nurture-engine',
+  'growth',
+  'Enrolls households on lifecycle events and advances nurture email sequences (draft-first).',
+  'Deterministic sequence engine — no LLM generation.',
+  'claude-haiku-4-5-20251001',
+  '15 * * * *',
+  '{}'::jsonb,
+  2,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000014_nurture_engine.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 172: 20260709000015_onboarding_sequence.sql
+-- ============================================
+
+-- Agentic OS — US-499: seed the onboarding nurture sequence.
+-- 4 steps: welcome (0h), add-a-kid (24h, exit on first_kid_added),
+-- first-plan (72h, exit on first_plan_created), week-1 recap (168h).
+-- Seeded enabled=TRUE; nothing sends until the nurture-engine agent is enabled.
+INSERT INTO public.nurture_sequences (name, trigger_event, steps, enabled)
+SELECT
+  'onboarding',
+  'signup',
+  '[
+    { "delay_hours": 0,   "template_key": "welcome" },
+    { "delay_hours": 24,  "template_key": "add_kid",    "exit_on_events": ["first_kid_added"] },
+    { "delay_hours": 72,  "template_key": "first_plan",  "exit_on_events": ["first_plan_created"] },
+    { "delay_hours": 168, "template_key": "week1_recap" }
+  ]'::jsonb,
+  TRUE
+WHERE NOT EXISTS (SELECT 1 FROM public.nurture_sequences WHERE name = 'onboarding');
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000015_onboarding_sequence.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 173: 20260709000016_winback_sequence.sql
+-- ============================================
+
+-- Agentic OS — US-500: seed the win-back re-engagement sequence.
+-- Triggered by inactive_14d; a second touch ~16 days later (~inactive_30d).
+-- Both steps exit on the 'reactivated' sentinel (household became active).
+-- Bodies are Claude-generated per household (winback_1/2 are generative) and
+-- reviewed individually (templated:false). A 30-day frequency cap is enforced
+-- at enrollment in the engine.
+INSERT INTO public.nurture_sequences (name, trigger_event, steps, enabled)
+SELECT
+  'winback',
+  'inactive_14d',
+  '[
+    { "delay_hours": 0,   "template_key": "winback_1", "exit_on_events": ["reactivated"] },
+    { "delay_hours": 384, "template_key": "winback_2", "exit_on_events": ["reactivated"] }
+  ]'::jsonb,
+  TRUE
+WHERE NOT EXISTS (SELECT 1 FROM public.nurture_sequences WHERE name = 'winback');
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000016_winback_sequence.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 174: 20260709000017_weekly_digest.sql
+-- ============================================
+
+-- Agentic OS — US-501: weekly household digest opt-in + agent.
+-- Additive: a nullable opt-in flag on households (safe for old clients).
+ALTER TABLE public.households ADD COLUMN IF NOT EXISTS weekly_digest_opt_in BOOLEAN NOT NULL DEFAULT FALSE;
+
+COMMENT ON COLUMN public.households.weekly_digest_opt_in IS
+  'Opt-in for the weekly recap email (US-501). Default off.';
+
+CREATE INDEX IF NOT EXISTS idx_households_weekly_digest
+  ON public.households(weekly_digest_opt_in) WHERE weekly_digest_opt_in = TRUE;
+
+-- Seed the weekly-digest agent (weekly, disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'weekly-digest',
+  'growth',
+  'Weekly recap email for opted-in active households; deterministic stats + a short encouragement line.',
+  'You write a single 1-2 sentence encouragement for a weekly family meal-planning recap. Warm, specific, no greeting or signature.',
+  'claude-haiku-4-5-20251001',
+  '0 15 * * 0',
+  '{}'::jsonb,
+  3,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000017_weekly_digest.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 175: 20260709000018_content_calendar.sql
+-- ============================================
+
+-- Agentic OS — US-502: content calendar.
+CREATE TABLE IF NOT EXISTS public.content_calendar (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('blog', 'social')),
+  keywords TEXT[] NOT NULL DEFAULT '{}',
+  rationale TEXT,
+  status TEXT NOT NULL DEFAULT 'proposed'
+    CHECK (status IN ('proposed', 'approved', 'generated', 'published', 'rejected')),
+  scheduled_for DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_calendar_status ON public.content_calendar(status);
+CREATE INDEX IF NOT EXISTS idx_content_calendar_type ON public.content_calendar(content_type);
+
+COMMENT ON TABLE public.content_calendar IS
+  'Agent-proposed blog/social content topics, approved before any generation spend (US-502).';
+
+ALTER TABLE public.content_calendar ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage content calendar"
+  ON public.content_calendar FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_roles.user_id = auth.uid() AND user_roles.role = 'admin')
+  );
+
+-- Seed the content-calendar agent with a seed keyword list in autonomy_policy.
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'content-calendar',
+  'marketing',
+  'Weekly: proposes 3 blog + 5 social content topics from seed keywords and the published inventory.',
+  'You plan on-brand content for EatPal (evidence-based meal planning for ARFID and extreme picky eating). Propose specific, non-duplicative topics that help parents. Each topic: a concrete title, content_type, 2-5 keywords, and a one-line rationale. JSON only.',
+  'claude-haiku-4-5-20251001',
+  '0 14 * * 1',
+  '{"content_keywords": ["ARFID", "picky eating", "food chaining", "safe foods", "sensory food aversion", "mealtime anxiety", "toddler nutrition", "feeding therapy", "try bites", "meal planning"]}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000018_content_calendar.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 176: 20260709000019_blog_writer_agent.sql
+-- ============================================
+
+-- Agentic OS — US-503: blog writer agent + content-approval rejection trigger.
+
+-- Seed the blog-writer agent (disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'blog-writer',
+  'marketing',
+  'Turns approved blog calendar topics into complete post drafts (body + hero image) for review.',
+  'You are an evidence-based content writer for EatPal (food-chaining science for ARFID and extreme picky eating). Calm, hopeful, non-blaming; concrete examples; HTML body. JSON only.',
+  'claude-sonnet-4-5',
+  '0 16 * * 1',
+  '{}'::jsonb,
+  10,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+-- When a content approval (content_topic / blog_post / social_post) is rejected,
+-- mark its source content_calendar row 'rejected' so the topic is not retried
+-- automatically (US-503 AC4; also covers US-502 content_topic).
+CREATE OR REPLACE FUNCTION public.agent_content_approval_rejected()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_calendar_id uuid;
+BEGIN
+  IF NEW.status = 'rejected'
+     AND OLD.status IS DISTINCT FROM 'rejected'
+     AND NEW.action_type IN ('content_topic', 'blog_post', 'social_post')
+     AND (NEW.payload->>'calendar_id') IS NOT NULL THEN
+    BEGIN
+      v_calendar_id := (NEW.payload->>'calendar_id')::uuid;
+      UPDATE public.content_calendar
+        SET status = 'rejected'
+        WHERE id = v_calendar_id AND status <> 'published';
+    EXCEPTION WHEN OTHERS THEN
+      NULL; -- bad uuid / missing row: ignore, non-fatal
+    END;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_agent_content_approval_rejected ON public.agent_approvals;
+CREATE TRIGGER trg_agent_content_approval_rejected
+  AFTER UPDATE ON public.agent_approvals
+  FOR EACH ROW
+  EXECUTE FUNCTION public.agent_content_approval_rejected();
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000019_blog_writer_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 177: 20260709000020_social_writer_agent.sql
+-- ============================================
+
+-- Agentic OS — US-504: seed the social-writer agent (disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'social-writer',
+  'marketing',
+  'Drafts per-network social posts (Instagram/Pinterest) for approved social topics and fresh blog posts; max 1/network/day.',
+  'You write concise, warm, on-brand social copy for EatPal (evidence-based help for ARFID / picky eating). Platform-appropriate tone; tasteful hashtags. JSON only.',
+  'claude-haiku-4-5-20251001',
+  '0 17 * * *',
+  '{}'::jsonb,
+  3,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000020_social_writer_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 178: 20260709000021_seo_audit_agent.sql
+-- ============================================
+
+-- Agentic OS — US-505: seed the seo-audit agent (disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'seo-audit',
+  'marketing',
+  'Weekly self-audit of production pages (titles/meta/canonical/broken links/JSON-LD); compiles a deduped tier-2 escalation.',
+  'Deterministic SEO audit — no LLM generation required.',
+  'claude-haiku-4-5-20251001',
+  '0 5 * * 1',
+  '{}'::jsonb,
+  1,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000021_seo_audit_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 179: 20260709000022_sentry_triage_agent.sql
+-- ============================================
+
+-- Agentic OS — US-506: seed the sentry-triage agent (event-driven, disabled by default).
+-- crash_spike_threshold in autonomy_policy controls tier-3 escalation.
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'sentry-triage',
+  'dev_maintenance',
+  'Triages production Sentry errors: dedupes by fingerprint, drafts GitHub issues, escalates crash-rate spikes.',
+  'You triage production errors for EatPal. Judge real user impact conservatively from the error context; do not overstate severity for rare or benign errors. JSON only.',
+  'claude-haiku-4-5-20251001',
+  NULL,
+  '{"crash_spike_threshold": 100}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000022_sentry_triage_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 180: 20260709000023_dependency_audit_agent.sql
+-- ============================================
+
+-- Agentic OS — US-507: seed the dependency-audit agent (weekly, disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'dependency-audit',
+  'dev_maintenance',
+  'Weekly dependency health report: OSV vulnerability scan of package.json + safe upgrade groupings; escalates criticals.',
+  'You write terse, actionable dependency reports for engineers. Critical vulnerabilities first with a clear call to action; then high; then safe minor/patch upgrade groupings with one-line risk notes. Do not overstate risk.',
+  'claude-haiku-4-5-20251001',
+  '0 7 * * 1',
+  '{}'::jsonb,
+  3,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000023_dependency_audit_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 181: 20260709000024_ci_triage_agent.sql
+-- ============================================
+
+-- Agentic OS — US-508: seed the ci-triage agent (event-driven, disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'ci-triage',
+  'dev_maintenance',
+  'Triages failed GitHub Actions runs: flake vs real failure, drafts a PR-comment with a suggested fix.',
+  'You triage CI failures for EatPal. Distinguish transient flakes (network/timeout/infra) from real failures. Identify the failing step, likely cause, and a concrete suggested fix. Be precise and terse. JSON only.',
+  'claude-haiku-4-5-20251001',
+  NULL,
+  '{}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000024_ci_triage_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 182: 20260709000025_migration_check_agent.sql
+-- ============================================
+
+-- Agentic OS — US-509: seed the migration-check agent (event-driven, disabled by default).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'migration-check',
+  'dev_maintenance',
+  'Lints PR migrations against backward-compatibility rules; drafts a PR comment + escalates real violations.',
+  'You review Supabase migrations for backward compatibility. The DB is shared by shipped iOS versions, so changes must be additive. A CHECK WIDENING (adding allowed values) is safe; a tightening is not. Drop false positives from the deterministic linter. JSON only.',
+  'claude-haiku-4-5-20251001',
+  NULL,
+  '{}'::jsonb,
+  5,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000025_migration_check_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 183: 20260709000026_auth_anomaly_agent.sql
+-- ============================================
+
+-- Agentic OS — US-510: auth anomaly detection agent.
+--
+-- Two parts:
+--   1. A SECURITY DEFINER RPC that normalizes recent rows from
+--      auth.audit_log_entries into a flat, RLS-safe shape the edge function can
+--      read with the service role. auth.* is not reachable through PostgREST, so
+--      the agent goes through this function instead of selecting the table.
+--   2. The seeded 'auth-anomaly' agent (every 15 min, DISABLED by default).
+--
+-- Detection ONLY — the agent escalates evidence for a human; it never blocks
+-- sign-ins. Additive/backward-compatible: a new function + a new seed row.
+
+-- ---------------------------------------------------------------------------
+-- 1. Normalized recent-auth-events RPC.
+-- ---------------------------------------------------------------------------
+-- GoTrue records auth actions in auth.audit_log_entries(payload jsonb,
+-- created_at, ip_address). We map the raw `action` to the small event
+-- vocabulary the detectors understand and surface the actor's email + ip.
+-- Country is not recorded by GoTrue, so it is best-effort (usually NULL); the
+-- geo-switch detector simply finds nothing when country is absent.
+CREATE OR REPLACE FUNCTION public.agent_recent_auth_events(p_minutes integer DEFAULT 15)
+RETURNS TABLE (
+  user_id    uuid,
+  email      text,
+  ip         text,
+  country    text,
+  event_type text,
+  created_at timestamptz
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+  SELECT
+    NULLIF(e.payload->>'actor_id', '')::uuid                       AS user_id,
+    e.payload->>'actor_username'                                   AS email,
+    -- GoTrue declares audit_log_entries.ip_address as varchar(64), not inet, so
+    -- host() has no matching signature and a clean replay dies with
+    -- "function host(character varying) does not exist". Casting to text is
+    -- equivalent either way: these rows carry a bare address with no netmask
+    -- for host() to strip.
+    NULLIF(e.ip_address::text, '')                                 AS ip,
+    NULLIF(e.payload->>'country', '')                              AS country,
+    CASE
+      WHEN e.payload->>'action' ILIKE '%signup%'          THEN 'signup'
+      WHEN e.payload->>'action' ILIKE '%fail%'
+        OR e.payload->>'action' ILIKE '%invalid%'
+        OR e.payload->>'action' ILIKE '%denied%'          THEN 'login_failure'
+      WHEN e.payload->>'action' = 'login'                 THEN 'login_success'
+      ELSE COALESCE(e.payload->>'action', 'unknown')
+    END                                                            AS event_type,
+    e.created_at
+  FROM auth.audit_log_entries e
+  WHERE e.created_at >= NOW() - make_interval(mins => GREATEST(p_minutes, 1))
+  ORDER BY e.created_at DESC
+  LIMIT 5000;
+$$;
+
+COMMENT ON FUNCTION public.agent_recent_auth_events(integer) IS
+  'US-510: normalized recent auth events for the auth-anomaly agent. SECURITY DEFINER so the service role can read auth.audit_log_entries without exposing the table.';
+
+-- Only the service role (the edge function) may call it — not anon/authenticated.
+REVOKE ALL ON FUNCTION public.agent_recent_auth_events(integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.agent_recent_auth_events(integer) TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 2. Seed the agent (every 15 minutes, disabled until an admin enables it).
+-- ---------------------------------------------------------------------------
+-- Thresholds live in autonomy_policy.anomaly_thresholds so they are tunable
+-- without a code change (resolveThresholds() reads them, falling back to the
+-- built-in defaults for any unset key).
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'auth-anomaly',
+  'dev_maintenance',
+  'Every 15 min: scans recent auth activity for credential stuffing, signup bursts, and rapid geo-switching; escalates evidence (detection only, no blocking).',
+  'You are a security monitoring agent. You review authentication anomaly evidence and never block users — detection only. Thresholds are configured, not guessed.',
+  'claude-haiku-4-5-20251001',
+  '*/15 * * * *',
+  '{"anomaly_thresholds": {"credStuffFailures": 20, "credStuffAccounts": 5, "signupBurst": 25, "geoCountries": 2}}'::jsonb,
+  2,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000026_auth_anomaly_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 184: 20260709000027_rls_audit_agent.sql
+-- ============================================
+
+-- Agentic OS — US-511: RLS / permission audit agent.
+--
+-- Three parts:
+--   1. agent_rls_audit() — SECURITY DEFINER RPC returning per-table RLS status +
+--      policy summaries from the pg catalogs (service-role only). pg_catalog is
+--      not reachable through PostgREST, so the agent goes through this function.
+--   2. agent_rls_snapshots — stores each week's audit so the next run can diff
+--      new/removed tables and policies.
+--   3. The seeded 'rls-audit' agent (weekly, DISABLED by default).
+--
+-- Additive/backward-compatible: new function + new table (RLS on) + new seed.
+
+-- ---------------------------------------------------------------------------
+-- 1. Per-table RLS status + policy summary RPC.
+-- ---------------------------------------------------------------------------
+-- Reports, for every base table in `public`: whether row-level security is on,
+-- whether the table carries owner-scoped data (a user_id/household_id column),
+-- and a JSON summary of its policies (name, command, USING, WITH CHECK, roles).
+CREATE OR REPLACE FUNCTION public.agent_rls_audit()
+RETURNS TABLE (
+  schemaname    text,
+  tablename     text,
+  rls_enabled   boolean,
+  has_user_data boolean,
+  policies      jsonb
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+  SELECT
+    n.nspname::text AS schemaname,
+    c.relname::text AS tablename,
+    c.relrowsecurity AS rls_enabled,
+    EXISTS (
+      SELECT 1
+      FROM pg_attribute a
+      WHERE a.attrelid = c.oid
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+        AND a.attname IN ('user_id', 'household_id')
+    ) AS has_user_data,
+    COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+        'policyname', pol.policyname,
+        'cmd', pol.cmd,
+        'qual', pol.qual,
+        'with_check', pol.with_check,
+        'roles', pol.roles
+      ) ORDER BY pol.policyname)
+      FROM pg_policies pol
+      WHERE pol.schemaname = n.nspname AND pol.tablename = c.relname
+    ), '[]'::jsonb) AS policies
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relkind = 'r'
+    AND n.nspname = 'public'
+  ORDER BY c.relname;
+$$;
+
+COMMENT ON FUNCTION public.agent_rls_audit() IS
+  'US-511: per-table RLS status + policy summary for the rls-audit agent. SECURITY DEFINER so the service role can read pg_catalog without exposing it broadly.';
+
+REVOKE ALL ON FUNCTION public.agent_rls_audit() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.agent_rls_audit() TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 2. Weekly audit snapshots (for week-over-week diffing).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.agent_rls_snapshots (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  snapshot   JSONB NOT NULL DEFAULT '{}'::jsonb,
+  findings   JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_rls_snapshots_created
+  ON public.agent_rls_snapshots(created_at DESC);
+
+ALTER TABLE public.agent_rls_snapshots ENABLE ROW LEVEL SECURITY;
+
+-- Admins may read snapshots; the agent writes with the service role (which
+-- bypasses RLS). No INSERT/UPDATE/DELETE policy for regular users.
+CREATE POLICY "Admins can view rls snapshots"
+  ON public.agent_rls_snapshots FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role = 'admin'
+    )
+  );
+
+COMMENT ON TABLE public.agent_rls_snapshots IS
+  'US-511: weekly RLS-audit snapshots; each run diffs against the previous row to surface new/removed tables and policies.';
+
+-- ---------------------------------------------------------------------------
+-- 3. Seed the agent (weekly Monday 06:00 UTC, disabled by default).
+-- ---------------------------------------------------------------------------
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'rls-audit',
+  'dev_maintenance',
+  'Weekly RLS/permission audit: flags tables with RLS disabled, RLS-on-but-no-policies, and USING(true) leaks on owner-scoped data; diffs against last week.',
+  'You write terse security audit summaries for engineers. Lead with the most dangerous finding (user data exposed). Reference the exact table and policy names. Do not overstate risk on public reference tables.',
+  'claude-haiku-4-5-20251001',
+  '0 6 * * 1',
+  '{}'::jsonb,
+  2,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000027_rls_audit_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 185: 20260709000028_health_watch_agent.sql
+-- ============================================
+
+-- Agentic OS — US-512: seed the system-health & cost anomaly agent.
+--
+-- Reads admin_system_health metrics (error_rate, api_response_time_p95) and
+-- agent_runs cost data, compares the current window against trailing 7-day
+-- baselines, and escalates anomalies (tier-2; a sustained error-rate anomaly
+-- upgrades to tier-3). Thresholds live in autonomy_policy.health_thresholds so
+-- they are tunable without a deploy. Every 15 min, DISABLED by default.
+--
+-- Seed-only: reuses existing tables, no schema change.
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'health-watch',
+  'dev_maintenance',
+  'Every 15 min: compares error rate, p95 latency, and daily agent spend against trailing 7-day baselines; escalates anomalies (tier-3 for a sustained outage).',
+  'You write terse operational alerts for on-call engineers. State the metric, its current value, the baseline it breached, and the likely blast radius. Do not speculate beyond the evidence.',
+  'claude-haiku-4-5-20251001',
+  '*/15 * * * *',
+  '{"health_thresholds": {"errorRateBaselineMult": 3, "errorRateFloor": 2, "latencyP95Ms": 1000, "spendBaselineMult": 2, "spendFloor": 5, "sustainChecks": 3}}'::jsonb,
+  2,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000028_health_watch_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 186: 20260709000029_kpi_report_agent.sql
+-- ============================================
+
+-- Agentic OS — US-513: seed the weekly business KPI report agent.
+--
+-- Mondays: computes signups, activation, retention proxy, MRR & subscription
+-- changes, support volume + CSAT, content published, and total agent spend —
+-- each with week-over-week deltas (all figures from SQL) — then Claude writes a
+-- short narrative and the report is drafted as a templated send_email to the
+-- configured digest recipients. DISABLED by default.
+--
+-- Seed-only: reuses existing tables, no schema change.
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'kpi-report',
+  'growth',
+  'Monday KPI email: signups, activation, MRR/subscriptions, support + CSAT, content, and agent spend with week-over-week deltas plus a short narrative.',
+  'You are a concise business analyst. From the supplied numbers ONLY (never invent figures), write a 4-6 sentence weekly narrative: what improved, what regressed, and ONE suggested focus for the coming week. Plain, direct language for a founder.',
+  'claude-haiku-4-5-20251001',
+  '0 8 * * 1',
+  '{}'::jsonb,
+  3,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000029_kpi_report_agent.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 187: 20260709000030_agent_feedback.sql
+-- ============================================
+
+-- Agentic OS — US-514: approval feedback records + self-eval agent seed.
+--
+-- Every approval decision (approve / edit / reject) writes an agent_feedback row
+-- linked to the originating agent_runs row, so the weekly self-eval agent can
+-- turn real human feedback into per-agent quality metrics. Additive only.
+
+-- ---------------------------------------------------------------------------
+-- 1. agent_feedback — one row per approval decision.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.agent_feedback (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  approval_id      UUID REFERENCES public.agent_approvals(id) ON DELETE SET NULL,
+  run_id           UUID REFERENCES public.agent_runs(id) ON DELETE SET NULL,
+  agent_id         UUID REFERENCES public.agent_definitions(id) ON DELETE SET NULL,
+  action_type      TEXT,
+  decision         TEXT NOT NULL CHECK (decision IN ('approved', 'edited', 'rejected')),
+  -- Levenshtein distance between the draft and the approved payload; NULL unless edited.
+  edit_distance    INTEGER,
+  rejection_reason TEXT,
+  reviewed_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_feedback_agent ON public.agent_feedback(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_feedback_run ON public.agent_feedback(run_id);
+CREATE INDEX IF NOT EXISTS idx_agent_feedback_created ON public.agent_feedback(created_at DESC);
+
+ALTER TABLE public.agent_feedback ENABLE ROW LEVEL SECURITY;
+
+-- Admins (the reviewers) may read and insert feedback; the service role (the
+-- self-eval agent) reads via bypass. No UPDATE/DELETE — feedback is append-only.
+CREATE POLICY "Admins can view agent feedback"
+  ON public.agent_feedback FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can insert agent feedback"
+  ON public.agent_feedback FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role = 'admin'
+    )
+  );
+
+COMMENT ON TABLE public.agent_feedback IS
+  'US-514: one row per approval decision (approve/edit/reject) linked to the originating run; feeds the weekly self-eval quality report.';
+
+-- ---------------------------------------------------------------------------
+-- 2. Seed the self-eval agent (weekly, disabled by default).
+-- ---------------------------------------------------------------------------
+INSERT INTO public.agent_definitions (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy, daily_cost_cap_usd, enabled)
+VALUES (
+  'self-eval',
+  'dev_maintenance',
+  'Weekly per-agent quality report from approval feedback: approval/edit rates, avg edit distance, top rejection reasons, cost per approved action; suggests prompt tweaks.',
+  'You improve AI agent prompts from real reviewer feedback. Given a week of rejections and edits for one agent, propose specific, minimal system_prompt changes that would reduce those rejections/edits. Quote the concrete failure patterns. Do not rewrite the whole prompt.',
+  'claude-haiku-4-5-20251001',
+  '0 9 * * 1',
+  '{}'::jsonb,
+  3,
+  FALSE
+)
+ON CONFLICT (name) DO NOTHING;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000030_agent_feedback.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 188: 20260709000031_agent_prompt_versions.sql
+-- ============================================
+
+-- Agentic OS — US-515: prompt version history for the agent config UI.
+--
+-- Editing an agent's system_prompt in the Command Center writes a new
+-- agent_prompt_versions row and updates agent_definitions.system_prompt;
+-- rollback restores any prior version's text as a new version. Additive only.
+
+CREATE TABLE IF NOT EXISTS public.agent_prompt_versions (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id      UUID NOT NULL REFERENCES public.agent_definitions(id) ON DELETE CASCADE,
+  system_prompt TEXT NOT NULL,
+  version       INTEGER NOT NULL,
+  created_by    UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (agent_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_prompt_versions_agent
+  ON public.agent_prompt_versions(agent_id, version DESC);
+
+ALTER TABLE public.agent_prompt_versions ENABLE ROW LEVEL SECURITY;
+
+-- Admin-only: prompts are operational config, not user data.
+CREATE POLICY "Admins can view prompt versions"
+  ON public.agent_prompt_versions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can insert prompt versions"
+  ON public.agent_prompt_versions FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role = 'admin'
+    )
+  );
+
+COMMENT ON TABLE public.agent_prompt_versions IS
+  'US-515: append-only system_prompt history per agent; rollback restores a prior version as a new version.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260709000031_agent_prompt_versions.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 189: 20260711000001_stripe_webhook_idempotency.sql
+-- ============================================
+
+-- US-519: Stripe webhook idempotency + out-of-order event protection.
+--
+-- Additive & backward-compatible:
+--  * New table stripe_webhook_events records every processed Stripe event.id so
+--    a redelivered event is a no-op (unique primary key -> insert-or-skip).
+--  * New nullable column user_subscriptions.last_stripe_event_created stores the
+--    unix `event.created` of the newest Stripe event applied to the row, so a
+--    late (older) event cannot overwrite a newer state (e.g. a stale
+--    subscription.updated cannot reactivate after subscription.deleted).
+-- Old iOS clients never read either object, so this is safe for shipped builds.
+
+CREATE TABLE IF NOT EXISTS public.stripe_webhook_events (
+  event_id      TEXT PRIMARY KEY,          -- Stripe event.id (evt_...)
+  event_type    TEXT,
+  event_created BIGINT,                     -- Stripe event.created (unix seconds)
+  received_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Service-role only: the webhook runs with the service role (which bypasses
+-- RLS). Enabling RLS with NO policies denies all anon/authenticated access.
+ALTER TABLE public.stripe_webhook_events ENABLE ROW LEVEL SECURITY;
+
+COMMENT ON TABLE public.stripe_webhook_events IS
+  'US-519: processed Stripe event ids for webhook idempotency. Service-role only (RLS on, no policies).';
+
+-- Ordering guard column (additive, nullable so existing INSERTs are unaffected).
+ALTER TABLE public.user_subscriptions
+  ADD COLUMN IF NOT EXISTS last_stripe_event_created BIGINT;
+
+COMMENT ON COLUMN public.user_subscriptions.last_stripe_event_created IS
+  'US-519: unix event.created of the newest Stripe event applied to this row; guards out-of-order updates.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260711000001_stripe_webhook_idempotency.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 190: 20260711000002_harden_security_definer_search_path.sql
+-- ============================================
+
+-- US-523: Harden every SECURITY DEFINER function with a pinned search_path.
+--
+-- A SECURITY DEFINER function that does not pin search_path runs with the
+-- CALLER's search_path. Because Postgres searches pg_temp first, a caller can
+-- create a shadowing object (table/function) in their temp schema and have the
+-- privileged, definer-owned function resolve to it — a classic privilege-
+-- escalation vector. Pinning search_path so pg_temp is searched LAST closes it.
+--
+-- This is done data-driven (ALTER FUNCTION ... SET search_path) rather than by
+-- re-declaring ~50 function bodies, so it is:
+--   * Additive & backward-compatible — no body/signature/behavior change, only
+--     the function's search_path GUC is pinned. Old iOS clients are unaffected.
+--   * Comprehensive — covers every SECURITY DEFINER function in `public`,
+--     including any this repo did not author, without listing signatures.
+--   * Idempotent — skips functions that already pin search_path, so re-running
+--     (or a partial prior fix like has_role) is safe.
+--
+-- search_path = public, extensions, pg_temp keeps unqualified references
+-- resolving to the trusted schemas that hold our objects, while forcing
+-- pg_temp to be consulted LAST (defeating the shadowing attack). Setting an
+-- extensions schema that does not exist locally is harmless.
+
+DO $$
+DECLARE
+  fn record;
+BEGIN
+  FOR fn IN
+    SELECT p.oid::regprocedure AS sig
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.prosecdef                                   -- SECURITY DEFINER only
+      AND NOT EXISTS (
+        SELECT 1
+        FROM unnest(coalesce(p.proconfig, ARRAY[]::text[])) AS cfg
+        WHERE cfg LIKE 'search_path=%'                   -- not already pinned
+      )
+  LOOP
+    EXECUTE format(
+      'ALTER FUNCTION %s SET search_path = public, extensions, pg_temp',
+      fn.sig
+    );
+    RAISE NOTICE 'Pinned search_path on SECURITY DEFINER function %', fn.sig;
+  END LOOP;
+END $$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260711000002_harden_security_definer_search_path.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 191: 20260711000003_covering_indexes_rls_predicates.sql
+-- ============================================
+
+-- US-548: covering indexes on RLS-predicate / FK columns for high-write tables.
+--
+-- The web app loads plan_entries and grocery_items filtered by household_id
+-- (see AppContext load), and RLS policies filter by the same columns, but there
+-- was no index on household_id/user_id for these high-write tables — forcing a
+-- sequential scan per load and per RLS check. These indexes are additive and
+-- backward-compatible (old clients are unaffected by a new index).
+--
+-- NOTE: CREATE INDEX CONCURRENTLY cannot run inside a transaction, and Supabase
+-- migrations execute in one, so we use plain CREATE INDEX IF NOT EXISTS. These
+-- tables are not large enough for the brief write lock to matter; if that ever
+-- changes, build the index CONCURRENTLY out-of-band and mark it IF NOT EXISTS.
+
+-- plan_entries: loaded by household_id + a date window, and RLS-filtered by
+-- household_id. A composite (household_id, date) covers both the equality and
+-- the range in the load query; a plain user_id index covers the FK / owner
+-- predicate.
+CREATE INDEX IF NOT EXISTS idx_plan_entries_household_date
+  ON public.plan_entries (household_id, date);
+CREATE INDEX IF NOT EXISTS idx_plan_entries_user_id
+  ON public.plan_entries (user_id);
+
+-- grocery_items: loaded and RLS-filtered by household_id.
+CREATE INDEX IF NOT EXISTS idx_grocery_items_household_id
+  ON public.grocery_items (household_id);
+
+-- food_attempts is already covered: it has no user_id/household_id column and
+-- its kid_id FK (RLS scopes through kids) is already indexed
+-- (idx_food_attempts_kid). No new index required.
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260711000003_covering_indexes_rls_predicates.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 192: 20260711000004_update_foods_batch.sql
+-- ============================================
+
+-- US-535: transactional batch update for foods (all-or-nothing).
+--
+-- The client's updateFoods() previously fired Promise.all of N independent
+-- UPDATEs, so a partial failure left some rows changed on the server and others
+-- not — client/server divergence. This RPC applies every patch in ONE statement
+-- (a single implicit transaction), so either all rows update or none do,
+-- mirroring bump_grocery_item_quantities (US-334).
+--
+-- SECURITY INVOKER: runs as the caller, so RLS still scopes writes to the
+-- caller's household. Partial patches are supported via coalesce — only keys
+-- present in each row's `patch` change; others keep their current value.
+
+CREATE OR REPLACE FUNCTION public.update_foods_batch(p_updates jsonb)
+RETURNS void
+LANGUAGE sql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+  UPDATE public.foods AS f
+  SET
+    name        = coalesce(u.patch->>'name', f.name),
+    category    = coalesce(u.patch->>'category', f.category),
+    is_safe     = coalesce((u.patch->>'is_safe')::boolean, f.is_safe),
+    is_try_bite = coalesce((u.patch->>'is_try_bite')::boolean, f.is_try_bite),
+    aisle       = coalesce(u.patch->>'aisle', f.aisle),
+    allergens   = CASE
+                    WHEN u.patch ? 'allergens'
+                    THEN ARRAY(SELECT jsonb_array_elements_text(u.patch->'allergens'))
+                    ELSE f.allergens
+                  END,
+    updated_at  = now()
+  FROM jsonb_to_recordset(p_updates) AS u(id uuid, patch jsonb)
+  WHERE f.id = u.id;
+$$;
+
+COMMENT ON FUNCTION public.update_foods_batch(jsonb) IS
+  'US-535: all-or-nothing batch update of foods (partial patches via coalesce). SECURITY INVOKER (RLS-scoped).';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260711000004_update_foods_batch.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 193: 20260723000000_marketing_consent_optin_default.sql
+-- ============================================
+
+-- Marketing consent must be opt-in, not defaulted on
+-- (GDPR Art. 4(11)/7; PECR; CAN-SPAM). Compliance audit 2026-07.
+--
+-- This migration originally read:
+--
+--   ALTER TABLE public.quiz_responses ALTER COLUMN accepts_marketing SET DEFAULT false;
+--
+-- which fails with "column accepts_marketing of relation quiz_responses does
+-- not exist". quiz_responses is created by 20251110000000_picky_eater_quiz and
+-- has no such column; the column lives on the LEAD tables. The definition that
+-- does list accepts_marketing on quiz_responses is in
+-- 20251220000000_admin_tables, but that is a CREATE TABLE IF NOT EXISTS against
+-- a table the earlier migration already created, so it never took effect.
+--
+-- The consequence is worse than a failed migration: the three tables that
+-- actually default marketing consent to TRUE were never touched by the
+-- compliance fix.
+--
+--   quiz_leads       (20251110000000_picky_eater_quiz:87)
+--   budget_leads     (20251110000001_budget_calculator_meal_planner:87)
+--   meal_plan_leads  (20251110000001_budget_calculator_meal_planner:177)
+--
+-- Driven off information_schema rather than a hardcoded list so it is correct
+-- on a clean replay and on any database whose shape drifted from this tree, and
+-- so a fourth lead table added later is covered automatically. Re-running is a
+-- no-op.
+--
+-- Backward-compatible (additive per CLAUDE.md migration rules): only the column
+-- DEFAULT changes. Existing rows are untouched, older iOS clients that omit the
+-- column now get FALSE (safe), and clients sending an explicit value keep
+-- working. No drop/rename/type-change/constraint-tightening.
+DO $marketing_consent$
+DECLARE
+  rec record;
+BEGIN
+  FOR rec IN
+    SELECT table_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND column_name = 'accepts_marketing'
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE public.%I ALTER COLUMN accepts_marketing SET DEFAULT false',
+      rec.table_name
+    );
+    RAISE NOTICE 'marketing consent: default set to false on public.%', rec.table_name;
+  END LOOP;
+END
+$marketing_consent$;
+
+-- NOTE: historical rows created under the old TRUE default are intentionally
+-- left unchanged here. Whether to treat those as valid consent (or backfill them
+-- to FALSE / re-solicit opt-in) is a policy decision for the marketing/legal
+-- owners and should be handled in a follow-up once decided.
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260723000000_marketing_consent_optin_default.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 194: 20260723123300_enforce_plan_row_limits.sql
+-- ============================================
+
+-- Server-side enforcement of pantry-food and child-profile plan limits.
+--
+-- Why: the limits were only enforced client-side via the check_feature_limit
+-- RPC before a plain RLS INSERT. A user could bypass the check entirely from
+-- devtools (supabase.from('foods').insert([...])) — RLS permits it because they
+-- own the row — and gain paid-tier value for free. This adds a BEFORE INSERT
+-- trigger that re-checks the limit in the database, so the client check becomes
+-- UX-only and the server is authoritative.
+--
+-- Backward compatibility (CLAUDE.md migration rules): this is additive — a new
+-- SECURITY DEFINER function plus two triggers. It rejects ONLY inserts that
+-- exceed a finite plan limit. Every shipped client (web + iOS) already runs the
+-- identical check_feature_limit gate before inserting, so legitimate clients
+-- never reach the rejection; only direct/over-limit inserts do. Users already at
+-- or over a limit keep all existing rows — they simply can't add more, which is
+-- the intended behavior and matches the client. Paid tiers store NULL limits
+-- (unlimited) and are never affected.
+
+CREATE OR REPLACE FUNCTION public.enforce_plan_row_limit()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_limit_col TEXT := TG_ARGV[0];   -- 'max_pantry_foods' | 'max_children'
+  v_feature   TEXT := TG_ARGV[1];   -- human label used in the error message
+  v_plan_id   UUID;
+  v_max       INTEGER;
+  v_count     INTEGER;
+BEGIN
+  -- Resolve the inserting user's effective plan: their active/trialing
+  -- subscription if any, otherwise the Free plan. Distinguish "no subscription"
+  -- from "subscription whose limit is NULL (unlimited)" so a paid user is never
+  -- mistakenly capped at Free limits.
+  SELECT us.plan_id INTO v_plan_id
+  FROM user_subscriptions us
+  WHERE us.user_id = NEW.user_id
+    AND us.status IN ('active', 'trialing')
+  ORDER BY us.updated_at DESC NULLS LAST
+  LIMIT 1;
+
+  IF v_plan_id IS NOT NULL THEN
+    SELECT (CASE v_limit_col
+              WHEN 'max_pantry_foods' THEN sp.max_pantry_foods
+              WHEN 'max_children'     THEN sp.max_children
+            END)
+      INTO v_max
+    FROM subscription_plans sp
+    WHERE sp.id = v_plan_id;
+  ELSE
+    SELECT (CASE v_limit_col
+              WHEN 'max_pantry_foods' THEN sp.max_pantry_foods
+              WHEN 'max_children'     THEN sp.max_children
+            END)
+      INTO v_max
+    FROM subscription_plans sp
+    WHERE sp.name = 'Free'
+    LIMIT 1;
+  END IF;
+
+  -- NULL limit = unlimited (paid tiers, or an unconfigured cap) -> allow.
+  IF v_max IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Count the household's existing rows in this table — the same scope the app
+  -- loads and counts foods/kids by. Block when already at/over the limit, which
+  -- mirrors the client's check_feature_limit (current_count >= max).
+  --
+  -- Note: this is a per-row check. A single multi-row INSERT can overshoot by up
+  -- to (batch size - 1) because sibling rows in the same statement aren't yet
+  -- visible to the count; every subsequent insert is then blocked once the
+  -- committed count reaches the limit. That is an accepted, bounded gap — the
+  -- primary bypass (direct single inserts) is fully closed.
+  EXECUTE format(
+    'SELECT count(*) FROM %I.%I WHERE household_id = $1',
+    TG_TABLE_SCHEMA, TG_TABLE_NAME
+  )
+  INTO v_count
+  USING NEW.household_id;
+
+  IF v_count >= v_max THEN
+    RAISE EXCEPTION 'plan_limit_exceeded: % limit reached (% of %). Upgrade to add more.',
+      v_feature, v_count, v_max
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS enforce_pantry_foods_limit ON public.foods;
+CREATE TRIGGER enforce_pantry_foods_limit
+  BEFORE INSERT ON public.foods
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_plan_row_limit('max_pantry_foods', 'Pantry food');
+
+DROP TRIGGER IF EXISTS enforce_children_limit ON public.kids;
+CREATE TRIGGER enforce_children_limit
+  BEFORE INSERT ON public.kids
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_plan_row_limit('max_children', 'Child profile');
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260723123300_enforce_plan_row_limits.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 195: 20260726000000_tighten_permissive_rls_policies.sql
+-- ============================================
+
+-- Tighten over-permissive "System can manage" RLS policies (audit US-559).
+--
+-- These policies were declared FOR ALL USING (true) WITH CHECK (true) with no
+-- role restriction, so they applied to EVERY role (including anon and
+-- authenticated) and overrode the adjacent per-user policy. In effect any
+-- signed-in (or anonymous) client could read, update, or delete every row in
+-- these tables — e.g. reset another user's rate limits or read another user's
+-- backup history.
+--
+-- Removing them is backward-compatible and safe because all *writes* to these
+-- tables happen through paths that bypass RLS entirely:
+--   * rate_limits  — inserted/updated only by the SECURITY DEFINER function
+--                    check_rate_limit(); no client writes exist.
+--   * backup_logs  — written only by service_role edge functions
+--                    (backup-scheduler, backup-user-data, delete-account);
+--                    the web/native clients only SELECT their own rows.
+-- The per-user SELECT policies ("Users can view their own ...") remain intact,
+-- so shipped iOS/web clients keep working unchanged. Additive/tightening only;
+-- no table, column, or type changes, so types.ts is unaffected.
+
+DROP POLICY IF EXISTS "System can manage rate limits" ON public.rate_limits;
+DROP POLICY IF EXISTS "System can manage backup logs" ON public.backup_logs;
+
+-- NOTE (deferred, see US-559 notes): automation_email_queue,
+-- automation_email_events, and ai_usage_logs carry the same USING(true)
+-- pattern, but they are populated by AFTER INSERT triggers (e.g. on profiles
+-- during signup). Removing their permissive policies is only safe once those
+-- trigger functions are confirmed SECURITY DEFINER; otherwise signup inserts
+-- would fail. Left in place pending that verification.
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260726000000_tighten_permissive_rls_policies.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 196: 20260727000000_quiz_insert_rate_limit.sql
+-- ============================================
+
+-- Defense-in-depth rate limiting for anonymous quiz submissions (audit US-561).
+--
+-- The "Anyone can submit quiz responses" policy is FOR INSERT TO anon with
+-- WITH CHECK (true) and no throttling, so the table can be spam-flooded by an
+-- anonymous client. Add a BEFORE INSERT trigger that caps submissions per
+-- session_id per hour.
+--
+-- The cap (30/hour/session) is deliberately generous: a real respondent
+-- submits once or twice, so this never false-positives legitimate use — it
+-- only blocks runaway per-session flooding. Additive and backward-compatible:
+-- old shipped clients submit well under the cap and are unaffected. This is a
+-- DB-level mitigation, not a complete solution — an attacker can rotate
+-- session_id, so an edge-layer IP/captcha check (see US-561 notes) remains the
+-- recommended stronger layer.
+
+CREATE OR REPLACE FUNCTION public.enforce_quiz_insert_rate_limit()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  recent_count integer;
+BEGIN
+  -- No session to key on (some analytics/lead rows) — allow.
+  IF NEW.session_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT count(*) INTO recent_count
+  FROM public.quiz_responses
+  WHERE session_id = NEW.session_id
+    AND created_at > now() - interval '1 hour';
+
+  IF recent_count >= 30 THEN
+    RAISE EXCEPTION 'Rate limit exceeded for quiz submissions'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_quiz_responses_rate_limit ON public.quiz_responses;
+CREATE TRIGGER trg_quiz_responses_rate_limit
+  BEFORE INSERT ON public.quiz_responses
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_quiz_insert_rate_limit();
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260727000000_quiz_insert_rate_limit.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 197: 20260727000001_tighten_email_queue_rls.sql
+-- ============================================
+
+-- Continue US-559: tighten the over-permissive automation_email_queue policy.
+--
+-- "System can manage email queue" was FOR ALL USING (true) WITH CHECK (true)
+-- with no role restriction, so any authenticated (or anon) user could read,
+-- update, or delete every queued email row. The queue is written only by the
+-- SECURITY DEFINER function queue_email() (RLS-exempt), no client code writes
+-- it directly, and users read their own rows via the retained
+-- "Users can view their own email queue" SELECT policy. Dropping the
+-- permissive policy is therefore backward-compatible and safe.
+--
+-- Deliberately NOT changed here (see US-559 notes):
+--   * automation_email_events — inserted (open/click tracking) AND read (admin
+--     analytics dashboard) directly by the client, relying on the permissive
+--     policy. It needs *replacement* admin-SELECT + scoped-INSERT policies
+--     before the permissive one can be dropped; a naive scope-to-service_role
+--     would break the admin analytics dashboard. Left for a dedicated change.
+--   * ai_usage_logs INSERT — already scoped to auth.uid() = user_id by
+--     20260613000004_rls_privilege_gaps.sql (US-328); no further change needed.
+
+DROP POLICY IF EXISTS "System can manage email queue" ON public.automation_email_queue;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260727000001_tighten_email_queue_rls.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 198: 20260801000000_kid_food_ladder.sql
+-- ============================================
+
+-- US-596: kid_food_ladder — per-kid, per-food exposure ladder state.
+--
+-- Today the exposure hierarchy exists only as a dropdown in the "log an
+-- attempt" dialog (src/components/FoodSuccessTracker.tsx). Every attempt is
+-- written to food_attempts.stage and then never read back, so the app knows
+-- what happened but not where a child *is*. This table is that missing state:
+-- one row per (kid, food) holding the current rung, the counters that drive
+-- progression, and when the food is next due.
+--
+-- Per CLAUDE.md backward-compat rules:
+--   * Additive only — new table, new indexes, new policies.
+--   * No ALTER/DROP/RENAME on foods, food_attempts, plan_entries or kids, so
+--     every shipped iOS build keeps working against an unchanged shape.
+--   * RLS household-scoped through kids, matching kid_growth_events
+--     (20260520000002) — USING on every verb, WITH CHECK on INSERT.
+--
+-- current_rung deliberately reuses the eight stage labels already written to
+-- food_attempts.stage. No new taxonomy: the ladder and the log speak the same
+-- vocabulary, which is what makes the US-598 backfill possible at all.
+
+CREATE TABLE IF NOT EXISTS public.kid_food_ladder (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kid_id UUID NOT NULL REFERENCES public.kids(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+
+  -- Where the child currently is. Same vocabulary as food_attempts.stage.
+  current_rung TEXT NOT NULL DEFAULT 'looking'
+    CHECK (current_rung IN (
+      'looking', 'touching', 'smelling', 'licking',
+      'tiny_taste', 'small_bite', 'full_bite', 'full_portion'
+    )),
+
+  -- Progression counters. successes drive advancement; holds are tracked so
+  -- a food that stalls for weeks can be surfaced to the parent rather than
+  -- silently re-presented forever.
+  consecutive_successes INT NOT NULL DEFAULT 0 CHECK (consecutive_successes >= 0),
+  consecutive_holds INT NOT NULL DEFAULT 0 CHECK (consecutive_holds >= 0),
+  consecutive_refusals INT NOT NULL DEFAULT 0 CHECK (consecutive_refusals >= 0),
+
+  last_attempt_at TIMESTAMPTZ,
+  -- NULL means "not scheduled" — mastered and paused rows carry NULL.
+  next_due_on DATE,
+
+  -- The trusted food this exposure is served beside. ON DELETE SET NULL: losing
+  -- the anchor must never cascade-delete a child's ladder progress.
+  paired_safe_food_id UUID REFERENCES public.foods(id) ON DELETE SET NULL,
+  -- Prep/slot that historically worked for this child, learned from
+  -- food_attempts.preparation_method and meal_slot.
+  preferred_prep TEXT,
+  preferred_meal_slot TEXT,
+
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'paused', 'mastered', 'backed_off')),
+  -- Free text so the UI can say *why* something is resting ('two refusals in a
+  -- row', 'paused by parent') instead of showing an unexplained stopped row.
+  paused_reason TEXT,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One ladder row per kid per food. This is also what makes the US-598 backfill
+-- idempotent: re-deriving from history upserts rather than duplicating.
+CREATE UNIQUE INDEX IF NOT EXISTS kid_food_ladder_kid_food_unique
+  ON public.kid_food_ladder(kid_id, food_id);
+
+-- Serves the scheduler's only hot query: "what is due for this kid today".
+CREATE INDEX IF NOT EXISTS kid_food_ladder_due_idx
+  ON public.kid_food_ladder(kid_id, status, next_due_on);
+
+-- Supports the mastery -> chaining handoff (US-603) and anchor lookups.
+CREATE INDEX IF NOT EXISTS kid_food_ladder_food_idx
+  ON public.kid_food_ladder(food_id);
+
+ALTER TABLE public.kid_food_ladder ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Members view kid food ladder"
+  ON public.kid_food_ladder
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members insert kid food ladder"
+  ON public.kid_food_ladder
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members update kid food ladder"
+  ON public.kid_food_ladder
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members delete kid food ladder"
+  ON public.kid_food_ladder
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+-- US-602: the "no more than N active exposures per kid per day" cap is a
+-- safety rule, not a UI preference, so it is enforced here as well as in the
+-- scheduler. A parent can have any number of foods on the ladder; what is
+-- capped is how many are *due at once*, which is what reaches the child's
+-- plate. Counting only same-day active rows keeps the check cheap.
+CREATE OR REPLACE FUNCTION public.enforce_ladder_active_exposure_cap()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  due_count INT;
+  max_due CONSTANT INT := 3;
+BEGIN
+  IF NEW.status <> 'active' OR NEW.next_due_on IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT COUNT(*) INTO due_count
+  FROM public.kid_food_ladder
+  WHERE kid_id = NEW.kid_id
+    AND id <> NEW.id
+    AND status = 'active'
+    AND next_due_on = NEW.next_due_on;
+
+  IF due_count >= max_due THEN
+    RAISE EXCEPTION
+      'ladder_exposure_cap: kid % already has % exposures due on %; max is %',
+      NEW.kid_id, due_count, NEW.next_due_on, max_due
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER kid_food_ladder_exposure_cap
+  BEFORE INSERT OR UPDATE ON public.kid_food_ladder
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_ladder_active_exposure_cap();
+
+CREATE OR REPLACE FUNCTION public.touch_kid_food_ladder_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER kid_food_ladder_touch_updated_at
+  BEFORE UPDATE ON public.kid_food_ladder
+  FOR EACH ROW
+  EXECUTE FUNCTION public.touch_kid_food_ladder_updated_at();
+
+COMMENT ON TABLE public.kid_food_ladder IS
+  'US-596: per-kid, per-food exposure ladder state. current_rung reuses the eight food_attempts.stage labels. Progression is applied by src/lib/exposureLadder.ts (and its Swift mirror); a refusal steps the rung DOWN by design — pressure reduction, not repetition.';
+
+COMMENT ON COLUMN public.kid_food_ladder.next_due_on IS
+  'Date this exposure is next eligible for scheduling. NULL for mastered/paused rows. The scheduler never presents a food before this date, which is how the post-refusal cooldown is enforced.';
+
+COMMENT ON COLUMN public.kid_food_ladder.paired_safe_food_id IS
+  'Trusted anchor food served alongside the exposure. ON DELETE SET NULL so removing the anchor food never destroys ladder progress.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260801000000_kid_food_ladder.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 199: 20260806000000_recipe_components.sql
+-- ============================================
+
+-- US-612: Deconstructed recipes — component model.
+--
+-- A family cooking one meal for a mixed table is already deconstructing it in
+-- their head: the pasta goes on every plate, the sauce goes on two of them,
+-- the peas go in a separate bowl for the child who cannot have food touching.
+-- The app has never had anywhere to put that knowledge, so it cannot help with
+-- the plating (US-613) and the parent re-derives it every single night.
+--
+-- This adds that structure as a GROUPING OVER the ingredients that already
+-- exist. `recipe_ingredients` (US-265) keeps carrying what goes in; a
+-- component says which of those parts can be plated independently, and how
+-- each part behaves on a plate.
+--
+-- Per CLAUDE.md backward-compat rules, this is strictly additive:
+--   * New table `recipe_components`.
+--   * One NULLABLE column on `recipe_ingredients` pointing at it.
+--   * Nothing dropped, nothing renamed, no type changed, no constraint
+--     tightened, no RLS policy narrowed.
+--
+-- A recipe with no component rows is EXACTLY as valid as it is today, and
+-- every shipped iOS build keeps working untouched: it never queries this
+-- table, and the one new column on recipe_ingredients is nullable and
+-- ignored by Swift's Codable decoding of the existing shape. Components are
+-- optional metadata, not a new required layer.
+
+CREATE TABLE IF NOT EXISTS public.recipe_components (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id UUID NOT NULL REFERENCES public.recipes(id) ON DELETE CASCADE,
+
+  -- What the parent calls this part: "pasta", "the sauce", "peas on the side".
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+
+  -- Sensory attributes, read by the plating logic in US-613.
+  --
+  -- can_touch_other_foods: FALSE means this part has to be plated with a gap
+  -- around it (or in its own bowl) for a child who cannot tolerate contact.
+  -- Defaults TRUE so an unfilled component never invents a restriction.
+  can_touch_other_foods BOOLEAN NOT NULL DEFAULT true,
+
+  -- is_mixed_in: a sauce, dressing or anything stirred through. Once it is on,
+  -- it cannot be taken off, so plating has to decide BEFORE it is combined.
+  -- This is the flag that makes "hold the sauce for one plate" possible.
+  is_mixed_in BOOLEAN NOT NULL DEFAULT false,
+
+  -- can_be_held_back: FALSE marks a part that is structurally the dish (the
+  -- pasta in a pasta bake). Holding it back would not be a plating choice, it
+  -- would be serving something else.
+  can_be_held_back BOOLEAN NOT NULL DEFAULT true,
+
+  -- Textures this part presents, using the SAME vocabulary the intake
+  -- questionnaire writes to kids.texture_dislikes ('Soft/mushy', 'Slimy',
+  -- 'Crunchy', 'Chewy', 'Lumpy', 'Wet'). Shared vocabulary is what lets
+  -- plating match a component against a child's dislikes without a
+  -- translation table that would drift.
+  textures TEXT[] NOT NULL DEFAULT '{}',
+
+  -- Optional link to the food this component IS, so a component can be
+  -- recognised as a child's safe food or as a due ladder exposure (US-613).
+  -- ON DELETE SET NULL: deleting a food must never destroy recipe structure.
+  food_id UUID REFERENCES public.foods(id) ON DELETE SET NULL,
+
+  notes TEXT,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Components render in order within a recipe; this serves that read directly.
+CREATE INDEX IF NOT EXISTS idx_recipe_components_recipe_sort
+  ON public.recipe_components(recipe_id, sort_order);
+
+-- "Which recipes have a component that is this food" — the lookup US-613 needs
+-- to spot a due exposure inside tonight's dinner.
+CREATE INDEX IF NOT EXISTS idx_recipe_components_food
+  ON public.recipe_components(food_id)
+  WHERE food_id IS NOT NULL;
+
+-- The grouping itself. NULL means "not assigned to a component", which is the
+-- state every existing row is in and stays in until a parent says otherwise.
+ALTER TABLE public.recipe_ingredients
+  ADD COLUMN IF NOT EXISTS component_id UUID
+  REFERENCES public.recipe_components(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_component
+  ON public.recipe_ingredients(component_id)
+  WHERE component_id IS NOT NULL;
+
+ALTER TABLE public.recipe_components ENABLE ROW LEVEL SECURITY;
+
+-- Policies are dropped-if-exists before creation so the whole migration is
+-- re-runnable (US-547): a half-applied migration re-run must converge, not
+-- abort on "policy already exists".
+--
+-- Scoped through recipe ownership, matching recipe_ingredients (US-265)
+-- exactly. `recipes` already carries the household-aware policies, so this
+-- inherits sharing rather than restating it.
+DROP POLICY IF EXISTS "Recipe components viewable through recipe ownership" ON public.recipe_components;
+CREATE POLICY "Recipe components viewable through recipe ownership"
+  ON public.recipe_components
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_components.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Recipe components insert through recipe ownership" ON public.recipe_components;
+CREATE POLICY "Recipe components insert through recipe ownership"
+  ON public.recipe_components
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_components.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Recipe components update through recipe ownership" ON public.recipe_components;
+CREATE POLICY "Recipe components update through recipe ownership"
+  ON public.recipe_components
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_components.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_components.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Recipe components delete through recipe ownership" ON public.recipe_components;
+CREATE POLICY "Recipe components delete through recipe ownership"
+  ON public.recipe_components
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.id = recipe_components.recipe_id
+        AND r.user_id = auth.uid()
+    )
+  );
+
+CREATE OR REPLACE FUNCTION public.touch_recipe_components_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS recipe_components_touch_updated_at ON public.recipe_components;
+CREATE TRIGGER recipe_components_touch_updated_at
+  BEFORE UPDATE ON public.recipe_components
+  FOR EACH ROW
+  EXECUTE FUNCTION public.touch_recipe_components_updated_at();
+
+COMMENT ON TABLE public.recipe_components IS
+  'US-612: separable parts of a recipe, grouping over recipe_ingredients. Optional metadata — a recipe with no component rows behaves exactly as before on every client. Sensory flags feed the per-kid plating in US-613.';
+
+COMMENT ON COLUMN public.recipe_components.is_mixed_in IS
+  'Stirred through rather than plated beside. Once on, it cannot come off, so plating must decide before combining — this is what makes "hold the sauce for one plate" possible.';
+
+COMMENT ON COLUMN public.recipe_components.textures IS
+  'Same vocabulary as kids.texture_dislikes, so plating can match a component to a child''s dislikes without a translation table.';
+
+COMMENT ON COLUMN public.recipe_ingredients.component_id IS
+  'US-612: optional grouping into a recipe_components row. NULL means ungrouped, which is every pre-existing row.';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260806000000_recipe_components.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 200: 20260808000000_tighten_analytics_rls.sql
+-- ============================================
+
+-- US-620: remove the public-write RLS policies on the revenue/workflow
+-- analytics tables (codebase review, 2026-08-08).
+--
+-- Each of these was declared `FOR ALL ... WITH CHECK (TRUE)` with no `TO`
+-- clause, so it applied to PUBLIC — including `anon`. For INSERT that is
+-- unambiguous: anyone holding the anon key (which ships inside the web bundle)
+-- could POST rows straight to /rest/v1/revenue_metrics_daily and poison the
+-- MRR / ARR / churn figures the admin dashboard reads. revenue_churn_predictions
+-- is keyed to auth.users(id), so per-user risk scores could be written for
+-- arbitrary accounts.
+--
+-- Same class of policy already retired in 20260514000000_lock_down_system_policies
+-- and 20260726000000_tighten_permissive_rls_policies; these four were simply out
+-- of scope then.
+--
+-- WHY THIS IS BACKWARD-COMPATIBLE (verified before writing this migration):
+--   * No edge function writes to any of the four.
+--   * The only client references are SELECTs in
+--     src/components/admin/RevenueOperationsCenter.tsx (lines 113, 127, 168),
+--     and the admin-only SELECT policies are left untouched below.
+--   * The real writers are update_all_churn_predictions() and
+--     trigger_churn_interventions(), both SECURITY DEFINER in
+--     20251220000000_admin_tables.sql, which bypasses RLS entirely.
+--   * workflow_executions has no writer in the repo at all; it is populated by
+--     service-role automation, which also bypasses RLS.
+--
+-- Policy-only and additive: RLS stays enabled, no table/column/type changes, so
+-- src/integrations/supabase/types.ts is unaffected and every shipped iOS build
+-- keeps working.
+
+DROP POLICY IF EXISTS "System can update revenue metrics"    ON public.revenue_metrics_daily;
+DROP POLICY IF EXISTS "System can update churn predictions"  ON public.revenue_churn_predictions;
+DROP POLICY IF EXISTS "System can update cohort data"        ON public.revenue_cohort_retention;
+DROP POLICY IF EXISTS "System can manage executions"         ON public.workflow_executions;
+
+-- Belt and braces: these must never be readable by anon either.
+--
+-- CORRECTION: the line above used to read "RLS is already enabled on all four
+-- (20251220000000_admin_tables.sql)". That is not true, and the unconditional
+-- ALTER ... ENABLE ROW LEVEL SECURITY below aborted a clean replay with
+--
+--   ERROR: ALTER action ENABLE ROW SECURITY cannot be performed on relation
+--          "revenue_metrics_daily" (SQLSTATE 42809)
+--
+-- Two of the four are MATERIALIZED VIEWS, created earlier in
+-- 20251109000002_revenue_operations_command_center (revenue_metrics_daily:340,
+-- revenue_cohort_retention:230). The CREATE TABLE IF NOT EXISTS forms in
+-- admin_tables.sql are no-ops against objects that already existed under a
+-- different relkind, so the "tables" this migration described never existed.
+-- A materialized view cannot carry RLS at all.
+--
+-- So: enable RLS on the two real tables, and harden the two matviews the only
+-- way available to them, by revoking the grant. anon loses SELECT (Supabase's
+-- default privileges hand it out for anything created in public). authenticated
+-- KEEPS SELECT deliberately — RevenueOperationsCenter.tsx:113,168 reads both
+-- through supabase-js with the user's own JWT, so revoking it would black out
+-- the admin dashboard.
+--
+-- RESIDUAL GAP, deliberately not closed here: with RLS unavailable and the
+-- authenticated grant retained, any signed-in user can still SELECT the revenue
+-- rollups. Restricting those to admins needs a SECURITY DEFINER accessor gated
+-- on has_role(auth.uid(), 'admin') and a client change to call it — a product
+-- change, out of scope for a policy migration.
+DO $tighten$
+DECLARE
+  rec record;
+BEGIN
+  FOR rec IN
+    SELECT c.relname, c.relkind
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname IN (
+        'revenue_metrics_daily', 'revenue_churn_predictions',
+        'revenue_cohort_retention', 'workflow_executions'
+      )
+  LOOP
+    IF rec.relkind = 'r' THEN
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', rec.relname);
+    ELSE
+      -- 'm' (materialized view) or 'v' (view): no RLS to enable.
+      EXECUTE format('REVOKE ALL ON public.%I FROM anon', rec.relname);
+      RAISE NOTICE
+        'public.% is relkind %, not a table: revoked anon instead of enabling RLS',
+        rec.relname, rec.relkind;
+    END IF;
+  END LOOP;
+END
+$tighten$;
+
+-- COMMENT ON TABLE is likewise wrong for the two matviews, so the object
+-- keyword is chosen from relkind here too.
+DO $describe$
+DECLARE
+  rec record;
+  kw  text;
+  txt text;
+BEGIN
+  FOR rec IN
+    SELECT c.relname, c.relkind
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname IN (
+        'revenue_metrics_daily', 'revenue_churn_predictions',
+        'revenue_cohort_retention', 'workflow_executions'
+      )
+  LOOP
+    kw := CASE rec.relkind WHEN 'm' THEN 'MATERIALIZED VIEW'
+                           WHEN 'v' THEN 'VIEW'
+                           ELSE 'TABLE' END;
+    txt := CASE rec.relname
+      WHEN 'revenue_metrics_daily' THEN
+        'Daily revenue rollup. Written only by SECURITY DEFINER functions / service role; no anon or authenticated write policy (US-620).'
+      WHEN 'revenue_churn_predictions' THEN
+        'Per-user churn risk. Written only by update_all_churn_predictions() (SECURITY DEFINER); no anon or authenticated write policy (US-620).'
+      WHEN 'revenue_cohort_retention' THEN
+        'Cohort retention rollup. Written only by SECURITY DEFINER functions / service role; no anon or authenticated write policy (US-620).'
+      ELSE
+        'Automation run log. Written only by service-role automation; no anon or authenticated write policy (US-620).'
+    END;
+    EXECUTE format('COMMENT ON %s public.%I IS %L', kw, rec.relname, txt);
+  END LOOP;
+END
+$describe$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260808000000_tighten_analytics_rls.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 201: 20260808000001_harden_auth_rate_limit.sql
+-- ============================================
+
+-- US-617: make the login rate limiter authoritative, and stop it locking out
+-- legitimate users (codebase review, 2026-08-08).
+--
+-- Three defects in 20260223000000_rate_limiting.sql:
+--
+--   1. BYPASSABLE. p_max_attempts and p_window_seconds came from the caller, so
+--      an attacker brute-forcing logins just passed p_max_attempts => 999999
+--      and was never throttled. The "authoritative server-side enforcement" was
+--      configured by the party being enforced against.
+--
+--   2. WEAPONISABLE. The function recorded an attempt on EVERY call and is
+--      executable by anon, so five calls naming a victim's email tripped the
+--      "Account temporarily locked" branch in Auth.tsx for 15 minutes,
+--      repeatable indefinitely — a remote lockout of any account.
+--
+--   3. LOCKED OUT REAL USERS. Because it recorded on every call and ran BEFORE
+--      signInWithPassword, successful logins counted too. Five sign-ins in 15
+--      minutes (phone + tablet + laptop + a couple of session refreshes) locked
+--      the user out. Auth.tsx's clearRateLimit() only cleared the client's
+--      localStorage copy; the server row survived.
+--
+-- Shape of the fix: split the read from the write. Checking is free; only a
+-- genuine failure records. Limits are server constants. The counter is scoped
+-- by client IP as well as identifier, so an attacker can only throttle their
+-- own IP rather than a victim's account.
+--
+-- BACKWARD COMPATIBILITY: the 4-argument signature is preserved so an
+-- already-cached web bundle keeps working — the two limit arguments are now
+-- ignored rather than removed. Such a bundle simply never calls
+-- record_failed_login, degrading to the client-side limiter it already has.
+-- No shipped iOS/Android build calls this RPC (verified: the only caller is
+-- src/pages/Auth.tsx).
+
+-- Scope the window by IP as well as identifier.
+ALTER TABLE public.auth_rate_limits
+  ADD COLUMN IF NOT EXISTS client_ip TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_lookup_ip
+  ON public.auth_rate_limits (identifier, action, client_ip, window_start);
+
+-- Index the cleanup predicate; the original composite index could not serve a
+-- DELETE keyed on window_start alone (wrong leading column).
+CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_window_start
+  ON public.auth_rate_limits (window_start);
+
+-- Server-owned limits. Changing policy means changing these, not a request body.
+CREATE OR REPLACE FUNCTION public.auth_rate_limit_max_attempts()
+RETURNS INTEGER LANGUAGE sql IMMUTABLE AS $$ SELECT 5 $$;
+
+CREATE OR REPLACE FUNCTION public.auth_rate_limit_window_seconds()
+RETURNS INTEGER LANGUAGE sql IMMUTABLE AS $$ SELECT 900 $$;
+
+-- Best-effort client IP from the PostgREST request context. Returns NULL when
+-- unavailable (direct SQL, tests), and NULL groups together — which is no worse
+-- than the previous identifier-only behaviour.
+CREATE OR REPLACE FUNCTION public.auth_rate_limit_client_ip()
+RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  v_headers JSON;
+  v_ip TEXT;
+BEGIN
+  BEGIN
+    v_headers := current_setting('request.headers', true)::JSON;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN NULL;
+  END;
+
+  IF v_headers IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- x-forwarded-for may be a comma-separated chain; the left-most entry is the
+  -- original client as recorded by our edge.
+  v_ip := split_part(COALESCE(v_headers ->> 'x-forwarded-for', ''), ',', 1);
+  v_ip := NULLIF(btrim(v_ip), '');
+
+  RETURN COALESCE(v_ip, NULLIF(btrim(COALESCE(v_headers ->> 'cf-connecting-ip', '')), ''));
+END;
+$$;
+
+-- READ-ONLY check. Returns TRUE when the attempt is allowed. Records nothing,
+-- so calling it can never throttle anyone.
+CREATE OR REPLACE FUNCTION public.check_rate_limit(
+  p_identifier TEXT,
+  p_action TEXT DEFAULT 'login',
+  p_max_attempts INTEGER DEFAULT NULL,   -- IGNORED (kept for signature compat)
+  p_window_seconds INTEGER DEFAULT NULL  -- IGNORED (kept for signature compat)
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $check_rate_limit$
+DECLARE
+  v_window_start TIMESTAMPTZ;
+  v_count INTEGER;
+  v_ip TEXT;
+BEGIN
+  -- The caller's proposed limits are deliberately discarded.
+  v_window_start := NOW() - (public.auth_rate_limit_window_seconds() || ' seconds')::INTERVAL;
+  v_ip := public.auth_rate_limit_client_ip();
+
+  SELECT COALESCE(SUM(attempt_count), 0)
+  INTO v_count
+  FROM public.auth_rate_limits
+  WHERE identifier = p_identifier
+    AND action = p_action
+    AND window_start >= v_window_start
+    AND (v_ip IS NULL OR client_ip IS NULL OR client_ip = v_ip);
+
+  RETURN v_count < public.auth_rate_limit_max_attempts();
+END;
+$check_rate_limit$;
+
+-- Record a FAILED attempt. This is the only thing that consumes budget.
+CREATE OR REPLACE FUNCTION public.record_failed_login(
+  p_identifier TEXT,
+  p_action TEXT DEFAULT 'login'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $record_failed_login$
+BEGIN
+  INSERT INTO public.auth_rate_limits (identifier, action, attempt_count, window_start, client_ip)
+  VALUES (p_identifier, p_action, 1, NOW(), public.auth_rate_limit_client_ip());
+END;
+$record_failed_login$;
+
+-- Clear the window after a successful sign-in, so a legitimate user is never
+-- locked out by their own history. Scoped to the calling IP.
+CREATE OR REPLACE FUNCTION public.clear_login_rate_limit(
+  p_identifier TEXT,
+  p_action TEXT DEFAULT 'login'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $clear_login_rate_limit$
+DECLARE
+  v_ip TEXT;
+BEGIN
+  v_ip := public.auth_rate_limit_client_ip();
+
+  DELETE FROM public.auth_rate_limits
+  WHERE identifier = p_identifier
+    AND action = p_action
+    AND (v_ip IS NULL OR client_ip IS NULL OR client_ip = v_ip);
+END;
+$clear_login_rate_limit$;
+
+-- Cleanup, lifted out of the per-attempt hot path. The original ran a DELETE
+-- over the whole table on EVERY auth attempt.
+CREATE OR REPLACE FUNCTION public.prune_auth_rate_limits()
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $prune_auth_rate_limits$
+DECLARE
+  v_deleted INTEGER;
+BEGIN
+  DELETE FROM public.auth_rate_limits
+  WHERE window_start < NOW() - INTERVAL '1 hour';
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN v_deleted;
+END;
+$prune_auth_rate_limits$;
+
+-- Sign-in happens while the caller is still anon, so anon MUST retain EXECUTE
+-- on the three auth-flow functions — that is inherent to a client-side sign-in
+-- and not something a grant can fix. What changes is that none of them can now
+-- be used to raise a limit or to throttle somebody else's account from a
+-- different IP. Maintenance functions stay service-role only.
+REVOKE ALL ON FUNCTION public.prune_auth_rate_limits() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.auth_rate_limit_client_ip() FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.check_rate_limit(TEXT, TEXT, INTEGER, INTEGER) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_failed_login(TEXT, TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.clear_login_rate_limit(TEXT, TEXT) TO anon, authenticated;
+
+COMMENT ON FUNCTION public.check_rate_limit(TEXT, TEXT, INTEGER, INTEGER) IS
+  'US-617: READ-ONLY login rate-limit check. p_max_attempts/p_window_seconds are ignored and kept only for signature compatibility with cached web bundles; limits come from auth_rate_limit_max_attempts()/auth_rate_limit_window_seconds().';
+COMMENT ON FUNCTION public.record_failed_login(TEXT, TEXT) IS
+  'US-617: records a FAILED auth attempt. The only function that consumes rate-limit budget.';
+
+-- Schedule the prune hourly when pg_cron is present; harmless no-op otherwise.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    PERFORM cron.unschedule('prune-auth-rate-limits')
+      WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'prune-auth-rate-limits');
+    PERFORM cron.schedule('prune-auth-rate-limits', '7 * * * *', 'SELECT public.prune_auth_rate_limits();');
+  END IF;
+END;
+$$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260808000001_harden_auth_rate_limit.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 202: 20260811000000_fix_blog_generation_insights.sql
+-- ============================================
+
+-- get_blog_generation_insights() has never returned a row: the outer SELECT
+-- lists columns from blog_title_bank but carries no FROM clause, so Postgres
+-- rejects it with 42703 (column "times_used" does not exist) and the admin
+-- blog page logs a 400 on every load.
+--
+-- Three further defects fixed while the function is open:
+--   * ORDER BY times_used DESC defaults to NULLS FIRST in Postgres, so a row
+--     with a null times_used would be reported as the most-used title.
+--   * recent_topics applied LIMIT 20 to the aggregate's single output row,
+--     which limits nothing. It now limits the distinct keywords.
+--   * the inner LIMIT 100 had no ORDER BY, so "recent" topics were whichever
+--     100 rows the planner happened to return.
+
+CREATE OR REPLACE FUNCTION public.get_blog_generation_insights()
+RETURNS TABLE(
+  total_titles integer,
+  unused_titles integer,
+  most_used_title text,
+  most_used_count integer,
+  recent_topics text[],
+  recommended_next_topics text[]
+)
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(*)::INTEGER AS total_titles,
+    COUNT(*) FILTER (WHERE btb.times_used = 0)::INTEGER AS unused_titles,
+    (
+      SELECT t.title FROM blog_title_bank t
+      ORDER BY t.times_used DESC NULLS LAST
+      LIMIT 1
+    ) AS most_used_title,
+    (
+      SELECT t.times_used FROM blog_title_bank t
+      ORDER BY t.times_used DESC NULLS LAST
+      LIMIT 1
+    ) AS most_used_count,
+    (
+      SELECT ARRAY_AGG(kw)
+      FROM (
+        SELECT DISTINCT UNNEST(recent.keywords) AS kw
+        FROM (
+          SELECT h.keywords
+          FROM blog_generation_history h
+          WHERE h.generated_at > NOW() - INTERVAL '30 days'
+          ORDER BY h.generated_at DESC
+          LIMIT 100
+        ) recent
+        LIMIT 20
+      ) topics
+    ) AS recent_topics,
+    (
+      SELECT ARRAY_AGG(u.title)
+      FROM (
+        SELECT t.title
+        FROM blog_title_bank t
+        WHERE t.times_used = 0
+        ORDER BY RANDOM()
+        LIMIT 10
+      ) u
+    ) AS recommended_next_topics
+  FROM blog_title_bank btb;
+END;
+$function$;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260811000000_fix_blog_generation_insights.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 203: 20260811000001_storage_analytics_tables.sql
+-- ============================================
+
+-- Migration: Storage Management, Activity Timeline, Customer Health Scoring, and User Segmentation
+-- Date: 2026-01-10
+-- Description: Adds infrastructure for centralized file management, user activity tracking,
+--              customer health scoring, and advanced user segmentation
+--
+-- Split from the original 20260110000000_storage_analytics_features.sql into smaller
+-- sequential files after the monolithic file repeatedly failed to apply with
+-- "spawn ENAMETOOLONG" on the deploy runner. Each file below is a straight extraction
+-- of one section from the original — no SQL logic changed. Order preserved via
+-- incrementing timestamps (20260110000000 .. 20260110000008), which still sort before
+-- the next migration (20260112000000_user_accessibility_preferences.sql).
+--
+-- This file: STORAGE MANAGEMENT TABLES
+-- =====================================================
+
+-- Storage bucket metadata and configuration
+CREATE TABLE IF NOT EXISTS public.storage_buckets_config (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  bucket_name TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  description TEXT,
+  is_public BOOLEAN DEFAULT true,
+  allowed_mime_types TEXT[] DEFAULT ARRAY['image/jpeg', 'image/png', 'image/webp'],
+  max_file_size_bytes BIGINT DEFAULT 5242880, -- 5MB
+  signed_url_expiry_seconds INTEGER DEFAULT 3600,
+  retention_days INTEGER, -- NULL = indefinite
+  auto_delete_enabled BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- File upload tracking for analytics
+CREATE TABLE IF NOT EXISTS public.storage_uploads (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  bucket_name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_size_bytes BIGINT NOT NULL,
+  mime_type TEXT NOT NULL,
+  is_public BOOLEAN DEFAULT true,
+  thumbnail_path TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+
+-- Create indexes for storage uploads
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_user_id ON public.storage_uploads(user_id);
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_bucket ON public.storage_uploads(bucket_name);
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_created_at ON public.storage_uploads(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_storage_uploads_deleted ON public.storage_uploads(deleted_at) WHERE deleted_at IS NULL;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260811000001_storage_analytics_tables.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 204: 20260811000002_add_root_admin_role.sql
+-- ============================================
+
+-- app_role defines only ('admin', 'user'), yet root_admin is assumed to exist in
+-- two places:
+--
+--   * supabase/functions/test-ai-configuration gates on it, and comparing the
+--     enum against an undefined label fails with 22P02 rather than simply not
+--     matching -- so every caller got a 403 that read like a permissions
+--     decision instead of the query error it was.
+--   * the ai_model_configurations and ai_environment_config RLS policies added
+--     in 20260204000000 compare role::text = 'root_admin'. The ::text cast is
+--     what keeps those from erroring, and it is also why they quietly match
+--     nobody.
+--
+-- Adding the label makes the tier real. It grants nothing by itself: no row in
+-- user_roles carries root_admin until one is inserted deliberately.
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'root_admin';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260811000002_add_root_admin_role.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 205: 20260817000000_scope_profile_picture_reads.sql
+-- ============================================
+
+-- US-627: stop anonymous enumeration of the profile-pictures bucket.
+--
+-- The bucket was created in 20251008025307 with `public = true` AND a SELECT
+-- policy on storage.objects carrying no role restriction:
+--
+--   CREATE POLICY "Users can view all profile pictures"
+--   ON storage.objects FOR SELECT USING (bucket_id = 'profile-pictures');
+--
+-- A policy with no TO clause applies to the `public` role, which includes
+-- `anon`. So an unauthenticated client holding only the anon key could call
+-- storage.from('profile-pictures').list() and enumerate every object path in
+-- the bucket, then fetch each one. The bucket holds photographs of children.
+--
+-- This migration scopes that SELECT to the owning user (plus admins).
+--
+-- The bucket deliberately STAYS public in this migration. Shipped iOS builds
+-- render kids.profile_picture_url as a plain public URL (Kid.swift:11,
+-- KidProfileEditorView.swift:70) and the app has no force-update gate, so
+-- flipping `public = false` would break every phone in the field. Public
+-- reads are served by the storage API without consulting RLS, so those keep
+-- working; only the enumeration path is closed here. US-634 tracks the move
+-- to a private bucket with signed URLs once a min-build gate exists.
+--
+-- Additive/policy-only per CLAUDE.md: no DROP COLUMN, DROP TABLE, or RENAME.
+-- Verified before writing: no shipped iOS build lists this bucket. iOS uploads
+-- through ImageUploadService, which targets a different bucket ("images", see
+-- US-635) and only ever calls upload/getPublicURL/remove, never list.
+
+DROP POLICY IF EXISTS "Users can view all profile pictures" ON storage.objects;
+
+CREATE POLICY "Users can view own profile pictures"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'profile-pictures'
+  AND (
+    -- Objects are stored at {user_id}/{name}. Match on the folder, and also on
+    -- storage's own owner column, so an object uploaded before the path
+    -- convention settled is still readable by the person who uploaded it.
+    (storage.foldername(name))[1] = auth.uid()::text
+    OR owner = auth.uid()
+  )
+);
+
+-- Admins keep full read access for the storage management screen
+-- (src/components/admin/StorageManagement.tsx), matching the user_roles
+-- pattern used by generated_images and admin_alerts.
+CREATE POLICY "Admins can view all profile pictures"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'profile-pictures'
+  AND EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_roles.user_id = auth.uid()
+      AND user_roles.role = 'admin'
+  )
+);
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260817000000_scope_profile_picture_reads.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 206: 20260818000000_add_plan_trial_period.sql
+-- ============================================
+
+-- US-630: make the advertised free trial real.
+--
+-- Landing.tsx and Pricing.tsx have said "Start Free Trial" / "Free trial
+-- available" while create-checkout built a plain mode:'subscription' session
+-- with no trial configuration at all. Unless a trial was set on the Stripe
+-- Price out of band, every one of those buttons charged the card on click.
+--
+-- Trial length is data, not code: it lives per plan so it can be changed
+-- without a deploy, and so a plan can opt out by leaving it NULL.
+--
+-- Additive per CLAUDE.md: a new NULLABLE column on an existing table. Shipped
+-- iOS builds select * from subscription_plans and ignore unknown keys, so
+-- nothing in the field breaks.
+
+ALTER TABLE public.subscription_plans
+  ADD COLUMN IF NOT EXISTS trial_period_days INTEGER;
+
+COMMENT ON COLUMN public.subscription_plans.trial_period_days IS
+  'Free-trial length in days applied at checkout. NULL or 0 means no trial. '
+  'Read by supabase/functions/create-checkout; surfaced in pricing copy. '
+  'Changing this changes what customers are promised, so keep the ROSCA '
+  'disclosure on the CTA in step with it.';
+
+-- Paid plans get a trial; the Free plan never reaches checkout.
+UPDATE public.subscription_plans
+   SET trial_period_days = 7
+ WHERE price_monthly > 0
+   AND trial_period_days IS NULL;
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260818000000_add_plan_trial_period.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
+-- Migration 207: 20260818000001_trial_reminder_emails.sql
+-- ============================================
+
+-- US-631: trial-ending reminders.
+--
+-- The machinery for this existed three times over as admin UI options and an
+-- unreferenced library (src/lib/trial-automation.ts), and zero times as
+-- something that sends. Now that US-630 makes the trial real, a trial that
+-- converts with no warning is the FTC negative-option pattern, so the reminder
+-- has to actually exist.
+--
+-- Additive per CLAUDE.md: two new template rows, one partial unique index on a
+-- notification_type no row currently uses. Nothing existing changes shape.
+
+INSERT INTO automation_email_templates
+  (template_key, template_name, subject, html_body, text_body, category, variables)
+VALUES
+(
+  'trial_ending_3d',
+  'Trial Ending in 3 Days',
+  'Your EatPal trial ends in 3 days',
+  '<html><body style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2421;">
+<div style="padding: 32px 24px;">
+  <h1 style="font-size: 22px; margin: 0 0 16px;">Your trial ends in 3 days</h1>
+  <p>Hi {{user_name}},</p>
+  <p>Your EatPal {{plan_name}} trial ends on <strong>{{trial_end_date}}</strong>. After that we will
+     charge <strong>{{amount}}</strong> per {{cadence}} and your plan continues.</p>
+  <p>If EatPal is not for you, cancel before {{trial_end_date}} and you will not be billed.
+     Cancelling takes two clicks in Account Settings.</p>
+  <p><a href="{{manage_url}}" style="display: inline-block; padding: 12px 20px; background: #2f6f4e; color: #ffffff; text-decoration: none; border-radius: 12px;">Manage your subscription</a></p>
+  <p style="font-size: 13px; color: #5b6660;">Questions? Reply to this email or write to Support@TryEatPal.com.</p>
+</div>
+</body></html>',
+  'Hi {{user_name}},
+
+Your EatPal {{plan_name}} trial ends on {{trial_end_date}}. After that we will charge {{amount}} per {{cadence}} and your plan continues.
+
+If EatPal is not for you, cancel before {{trial_end_date}} and you will not be billed. Cancelling takes two clicks in Account Settings.
+
+Manage your subscription: {{manage_url}}
+
+Questions? Reply to this email or write to Support@TryEatPal.com.',
+  'transactional',
+  '["user_name", "plan_name", "trial_end_date", "amount", "cadence", "manage_url"]'::jsonb
+),
+(
+  'trial_ending_1d',
+  'Trial Ending Tomorrow',
+  'Your EatPal trial ends tomorrow',
+  '<html><body style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2421;">
+<div style="padding: 32px 24px;">
+  <h1 style="font-size: 22px; margin: 0 0 16px;">Your trial ends tomorrow</h1>
+  <p>Hi {{user_name}},</p>
+  <p>This is the last reminder: your EatPal {{plan_name}} trial ends on
+     <strong>{{trial_end_date}}</strong>, and we will then charge <strong>{{amount}}</strong> per {{cadence}}.</p>
+  <p>Cancel before then and you will not be billed.</p>
+  <p><a href="{{manage_url}}" style="display: inline-block; padding: 12px 20px; background: #2f6f4e; color: #ffffff; text-decoration: none; border-radius: 12px;">Manage your subscription</a></p>
+  <p style="font-size: 13px; color: #5b6660;">Questions? Reply to this email or write to Support@TryEatPal.com.</p>
+</div>
+</body></html>',
+  'Hi {{user_name}},
+
+This is the last reminder: your EatPal {{plan_name}} trial ends on {{trial_end_date}}, and we will then charge {{amount}} per {{cadence}}.
+
+Cancel before then and you will not be billed.
+
+Manage your subscription: {{manage_url}}
+
+Questions? Reply to this email or write to Support@TryEatPal.com.',
+  'transactional',
+  '["user_name", "plan_name", "trial_end_date", "amount", "cadence", "manage_url"]'::jsonb
+)
+ON CONFLICT (template_key) DO NOTHING;
+
+-- Idempotency for the reminder job. One row per user, per subscription, per
+-- window ('3d' / '1d'), so a re-run or an overlapping cron fire cannot send the
+-- same warning twice. Partial: no row currently uses notification_type
+-- 'trial_ending', so this cannot conflict with existing data.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_notifications_trial_window
+  ON public.subscription_notifications (
+    user_id,
+    (metadata ->> 'stripe_subscription_id'),
+    (metadata ->> 'window')
+  )
+  WHERE notification_type = 'trial_ending';
+
+
+-- Record migration
+INSERT INTO _migrations (filename) VALUES ('20260818000001_trial_reminder_emails.sql') ON CONFLICT (filename) DO NOTHING;
+
+
+-- ============================================
 -- View Migration Results
 -- ============================================
 
 SELECT COUNT(*) as total_applied FROM _migrations;
 SELECT filename, applied_at FROM _migrations ORDER BY applied_at;
-
