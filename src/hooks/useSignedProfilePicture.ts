@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import {
-  objectPathFromPublicUrl,
   refreshAtFrom,
+  storageRefFromPublicUrl,
   SIGNED_URL_TTL_SECONDS,
 } from '@/lib/profilePictureUrl';
 
@@ -22,19 +22,24 @@ import {
  * would leave a broken avatar on any tab nobody reloaded.
  */
 export function useSignedProfilePicture(storedUrl?: string | null): string | undefined {
-  const objectPath = objectPathFromPublicUrl(storedUrl);
+  // Bucket as well as path: the web writes into `profile-pictures` and iOS
+  // writes kid photos into `images`, so which bucket to sign against is a
+  // property of the stored value, not a constant.
+  const ref = storageRefFromPublicUrl(storedUrl);
+  const bucket = ref?.bucket;
+  const objectPath = ref?.path;
   const [signedUrl, setSignedUrl] = useState<string | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setSignedUrl(undefined);
-    if (!objectPath) return;
+    if (!bucket || !objectPath) return;
 
     let cancelled = false;
 
     const mint = async () => {
       const { data, error } = await supabase.storage
-        .from('profile-pictures')
+        .from(bucket)
         .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS);
 
       if (cancelled) return;
@@ -58,7 +63,9 @@ export function useSignedProfilePicture(storedUrl?: string | null): string | und
       cancelled = true;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [objectPath]);
+    // Two primitives rather than the ref object, so this does not re-run on
+    // every render just because the helper returned a fresh object.
+  }, [bucket, objectPath]);
 
   return signedUrl ?? storedUrl ?? undefined;
 }

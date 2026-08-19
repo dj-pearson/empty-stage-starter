@@ -23,41 +23,79 @@ export const SIGNED_URL_TTL_SECONDS = 600;
 export const SIGNED_URL_REFRESH_MARGIN_SECONDS = 60;
 
 /**
- * Recover the storage object path from a stored public URL.
+ * Buckets that `kids.profile_picture_url` can point into, most specific first.
+ *
+ * There are two, which is easy to miss and matters a great deal. The web
+ * uploads to `profile-pictures`; the iOS app uploads kid photos to `images`
+ * under a `kids/` prefix (ios/EatPal/EatPal/Services/ImageUploadService.swift,
+ * bucketName = "images"). So the same column holds URLs from either bucket
+ * depending on which client the parent used. A helper that only knew about
+ * `profile-pictures` would silently decline to sign every iOS-uploaded photo,
+ * and Release N+1 flipping `profile-pictures` private would leave those photos
+ * publicly readable in the other bucket -- which is the outcome this story
+ * exists to prevent. See US-635 for the `images` bucket's own audit.
+ */
+export const PROFILE_PICTURE_BUCKETS = ['profile-pictures', 'images'] as const;
+
+export interface StorageObjectRef {
+  bucket: string;
+  path: string;
+}
+
+/**
+ * Recover the bucket and storage object path from a stored public URL.
  *
  * Supabase public URLs look like
  *   https://<ref>.supabase.co/storage/v1/object/public/profile-pictures/<uid>/<id>.jpg
- * and the part after the bucket name is what createSignedUrl wants.
+ * and the parts after `public/` are the bucket and the path createSignedUrl wants.
  *
- * Returns null for anything that is not a URL into this bucket -- an external
- * avatar, a data: URI, a blob: preview of a file the user just picked, or an
- * empty column. Callers fall back to using the value as-is, so an unrecognised
- * shape degrades to today's behaviour rather than a missing image.
+ * Returns null for anything that is not a public URL into one of `buckets` --
+ * an external avatar, a data: URI, a blob: preview of a file the user just
+ * picked, or an empty column. Callers fall back to using the value as-is, so an
+ * unrecognised shape degrades to today's behaviour rather than a missing image.
+ */
+export function storageRefFromPublicUrl(
+  url: string | null | undefined,
+  buckets: readonly string[] = PROFILE_PICTURE_BUCKETS,
+): StorageObjectRef | null {
+  if (!url || typeof url !== 'string') return null;
+  if (url.startsWith('data:') || url.startsWith('blob:')) return null;
+
+  for (const bucket of buckets) {
+    const marker = `/storage/v1/object/public/${bucket}/`;
+    const at = url.indexOf(marker);
+    if (at === -1) continue;
+
+    const rest = url.slice(at + marker.length);
+    if (!rest) continue;
+
+    // Drop any query string or fragment the stored value picked up.
+    const raw = rest.split(/[?#]/)[0];
+    if (!raw) continue;
+
+    let path: string;
+    try {
+      path = decodeURIComponent(raw);
+    } catch {
+      // A malformed escape sequence is not worth throwing over mid-render.
+      path = raw;
+    }
+    return { bucket, path };
+  }
+
+  return null;
+}
+
+/**
+ * Recover just the object path, for a caller that already knows the bucket.
+ *
+ * Kept because it reads better at a call site that genuinely means one bucket.
  */
 export function objectPathFromPublicUrl(
   url: string | null | undefined,
   bucket = 'profile-pictures',
 ): string | null {
-  if (!url || typeof url !== 'string') return null;
-  if (url.startsWith('data:') || url.startsWith('blob:')) return null;
-
-  const marker = `/storage/v1/object/public/${bucket}/`;
-  const at = url.indexOf(marker);
-  if (at === -1) return null;
-
-  const rest = url.slice(at + marker.length);
-  if (!rest) return null;
-
-  // Drop any query string or fragment the stored value picked up.
-  const objectPath = rest.split(/[?#]/)[0];
-  if (!objectPath) return null;
-
-  try {
-    return decodeURIComponent(objectPath);
-  } catch {
-    // A malformed escape sequence is not worth throwing over mid-render.
-    return objectPath;
-  }
+  return storageRefFromPublicUrl(url, [bucket])?.path ?? null;
 }
 
 /** When a URL minted now should be replaced, as an epoch-ms timestamp. */

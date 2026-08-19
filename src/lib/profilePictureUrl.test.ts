@@ -5,6 +5,7 @@ import {
   isStale,
   SIGNED_URL_TTL_SECONDS,
   SIGNED_URL_REFRESH_MARGIN_SECONDS,
+  storageRefFromPublicUrl,
 } from './profilePictureUrl';
 
 const PUBLIC =
@@ -76,5 +77,58 @@ describe('refresh scheduling (US-634)', () => {
     expect(isStale(minted, minted)).toBe(false);
     expect(isStale(minted, refreshAt - 1)).toBe(false);
     expect(isStale(minted, refreshAt)).toBe(true);
+  });
+});
+
+/**
+ * US-634: `kids.profile_picture_url` is written by two clients into two
+ * different buckets. Recovering the bucket from the URL, rather than assuming
+ * one, is what keeps an iOS-uploaded photo from being quietly exempt from the
+ * whole story.
+ */
+describe('storageRefFromPublicUrl', () => {
+  it('recovers a web upload from profile-pictures', () => {
+    expect(
+      storageRefFromPublicUrl(
+        'https://abc.supabase.co/storage/v1/object/public/profile-pictures/user-1/a.jpg',
+      ),
+    ).toEqual({ bucket: 'profile-pictures', path: 'user-1/a.jpg' });
+  });
+
+  it('recovers an iOS upload from the images bucket', () => {
+    expect(
+      storageRefFromPublicUrl(
+        'https://abc.supabase.co/storage/v1/object/public/images/kids/2f8c.jpg',
+      ),
+    ).toEqual({ bucket: 'images', path: 'kids/2f8c.jpg' });
+  });
+
+  it('declines a bucket it was not asked about', () => {
+    expect(
+      storageRefFromPublicUrl(
+        'https://abc.supabase.co/storage/v1/object/public/blog-media/hero.jpg',
+      ),
+    ).toBeNull();
+  });
+
+  it('declines a just-picked file preview and an empty column', () => {
+    expect(storageRefFromPublicUrl('blob:http://localhost/x')).toBeNull();
+    expect(storageRefFromPublicUrl('data:image/png;base64,AAAA')).toBeNull();
+    expect(storageRefFromPublicUrl('')).toBeNull();
+    expect(storageRefFromPublicUrl(null)).toBeNull();
+  });
+
+  it('honours an explicit bucket list', () => {
+    const iosUrl = 'https://abc.supabase.co/storage/v1/object/public/images/kids/2f8c.jpg';
+    expect(storageRefFromPublicUrl(iosUrl, ['profile-pictures'])).toBeNull();
+    expect(storageRefFromPublicUrl(iosUrl, ['images'])?.bucket).toBe('images');
+  });
+
+  it('strips a query string the stored value picked up', () => {
+    expect(
+      storageRefFromPublicUrl(
+        'https://abc.supabase.co/storage/v1/object/public/images/kids/2f8c.jpg?t=1',
+      )?.path,
+    ).toBe('kids/2f8c.jpg');
   });
 });

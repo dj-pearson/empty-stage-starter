@@ -43,6 +43,26 @@ WHERE bucket_id = 'images'
 GROUP BY 1
 ORDER BY 2 DESC;
 
+-- 4. US-634 crossover: which bucket does each stored kid photo actually live
+--    in? The web writes profile-pictures, iOS writes images/kids/, and both
+--    land in the same kids.profile_picture_url column. US-634's plan is to
+--    flip profile-pictures to public=false -- which does nothing for any row
+--    counted in the `images` column below. This number is the size of that
+--    gap, and it decides whether US-634 can close as scoped or has to cover
+--    both buckets.
+SELECT
+  CASE
+    WHEN profile_picture_url IS NULL OR profile_picture_url = '' THEN 'none'
+    WHEN profile_picture_url LIKE '%/object/public/profile-pictures/%' THEN 'profile-pictures'
+    WHEN profile_picture_url LIKE '%/object/public/images/%'           THEN 'images'
+    WHEN profile_picture_url LIKE 'data:%' OR profile_picture_url LIKE 'blob:%' THEN 'inline (bad row)'
+    ELSE 'other/external'
+  END AS source_bucket,
+  count(*) AS kids
+FROM public.kids
+GROUP BY 1
+ORDER BY 2 DESC;
+
 -- What the answers decide:
 --
 --   public = true, and a policy with roles {public} on SELECT
