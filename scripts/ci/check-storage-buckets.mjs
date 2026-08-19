@@ -65,11 +65,24 @@ for (const file of tracked.filter((f) => f.startsWith('supabase/migrations/') &&
   }
 }
 
-/** Buckets the application actually reads or writes. */
+/**
+ * Buckets with a real call site -- something actually reads or writes them.
+ * These must exist, or the operation fails in production.
+ */
 const referenced = new Map();
 const note = (bucket, file) => {
   if (!referenced.has(bucket)) referenced.set(bucket, file);
 };
+
+/**
+ * Buckets that only appear in storage-manager.ts's STORAGE_BUCKETS record.
+ * A registry entry nobody calls cannot break anything today, so it is reported
+ * rather than failed -- but it is not harmless either: the admin storage screen
+ * renders a tab per registry entry, so it presents buckets that may not exist,
+ * and storageManager.upload() would happily target one the day someone passes
+ * its name.
+ */
+const registryOnly = new Map();
 
 for (const file of tracked) {
   if (file.startsWith('supabase/migrations/')) continue;
@@ -82,6 +95,19 @@ for (const file of tracked) {
     for (const m of src.matchAll(/storage\s*\.\s*from\(\s*['"`]([A-Za-z0-9._-]+)['"`]/g)) {
       note(m[1], file);
     }
+    // The web app mostly does not call storage.from() directly: it goes through
+    // storage-manager.ts, which resolves the bucket from a typed record and
+    // calls .from(config?.name || bucketName). A literal-only scan sees a
+    // dynamic expression there and finds nothing, so read the record itself --
+    // it is the actual list of buckets the app believes in.
+    const registry = src.match(
+      /export\s+const\s+STORAGE_BUCKETS[^=]*=\s*\{([\s\S]*?)\n\};/,
+    );
+    if (registry) {
+      for (const m of registry[1].matchAll(/\bname:\s*['"`]([A-Za-z0-9._-]+)['"`]/g)) {
+        if (!registryOnly.has(m[1])) registryOnly.set(m[1], file);
+      }
+    }
   } else if (file.endsWith('.swift')) {
     const src = read(file);
     // Swift reaches storage through ImageUploadService's bucketName constant
@@ -91,9 +117,27 @@ for (const file of tracked) {
   }
 }
 
+// A registry entry that also has a real call site is a real reference.
+for (const [bucket, file] of registryOnly) {
+  if (referenced.has(bucket)) registryOnly.delete(bucket);
+  else if (declared.has(bucket)) registryOnly.delete(bucket);
+  else registryOnly.set(bucket, file);
+}
+
 console.log(
-  `Storage buckets: ${declared.size} created by migrations, ${referenced.size} referenced by code.`,
+  `Storage buckets: ${declared.size} created by migrations, ${referenced.size} with a call site, ` +
+    `${registryOnly.size} declared in the registry only.`,
 );
+
+if (registryOnly.size) {
+  console.log(
+    `\nNote: ${registryOnly.size} bucket(s) exist only in STORAGE_BUCKETS -- no migration creates` +
+      '\nthem and nothing calls them:' +
+      `\n  ${[...registryOnly.keys()].join(', ')}` +
+      '\n  The admin storage screen renders a tab per registry entry, so it advertises these' +
+      '\n  as real. Either create them or drop them from the record (US-643).',
+  );
+}
 
 const undeclared = [...referenced].filter(([bucket]) => !declared.has(bucket));
 const failures = undeclared.filter(([bucket]) => !PENDING.has(bucket));
