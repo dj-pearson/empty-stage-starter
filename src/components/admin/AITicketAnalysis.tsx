@@ -15,6 +15,8 @@ import {
   Loader2,
   FileText,
   Zap,
+  MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase-platform";
 import { toast } from "sonner";
