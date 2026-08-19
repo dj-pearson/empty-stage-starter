@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { logger } from "@/lib/logger";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   Plus,
   ChefHat,
@@ -75,6 +76,14 @@ interface RecipeSuggestion {
   prepTime: string;
   cookTime: string;
 }
+
+/**
+ * Below this many recipes the plain flow layout is cheaper than virtualizing:
+ * the whole collection fits in a few screens and the absolute positioning,
+ * measurement and re-render churn buy nothing. Shared by both views so they
+ * switch over together.
+ */
+const VIRTUAL_THRESHOLD = 50;
 
 export default function Recipes() {
   const { t } = useTranslation();
@@ -146,12 +155,21 @@ export default function Recipes() {
     hasActiveFilters,
   } = useRecipeFilters({ recipes: collectionFilteredRecipes, foods });
 
-  // List-view virtualization (mirrors the proven Pantry pattern). Only engages
-  // for larger lists so small lists keep the simple flow layout. The grid view
-  // (responsive multi-column, variable-height cards) is intentionally not
-  // virtualized here — that needs column-count + dynamic measurement work.
+  // Virtualization for both views (mirrors the proven Pantry pattern). Only
+  // engages past VIRTUAL_THRESHOLD so small collections keep the simple flow
+  // layout. The list scrolls inside its own box; the grid scrolls with the
+  // page, so it uses the window virtualizer and keeps the page's scrollbar.
   const listParentRef = useRef<HTMLDivElement>(null);
-  const useVirtualList = viewMode === 'list' && filteredRecipes.length >= 50;
+  const gridParentRef = useRef<HTMLDivElement>(null);
+
+  // US-564: the grid is responsive, so the number of cards per row has to be
+  // known in JS before rows can be virtualized. These queries mirror the grid's
+  // own classes (grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3) rather than
+  // measuring, so the two cannot disagree about where a breakpoint is.
+  const isXl = useMediaQuery("(min-width: 1280px)");
+  const is2xl = useMediaQuery("(min-width: 1536px)");
+  const gridColumns = is2xl ? 3 : isXl ? 2 : 1;
+  const useVirtualList = viewMode === 'list' && filteredRecipes.length >= VIRTUAL_THRESHOLD;
   const listVirtualizer = useVirtualizer({
     count: useVirtualList ? filteredRecipes.length : 0,
     getScrollElement: () => listParentRef.current,
@@ -161,6 +179,32 @@ export default function Recipes() {
     // there and rows would creep into each other down the list.
     estimateSize: () => 72,
     overscan: 10,
+  });
+
+  const useVirtualGrid = viewMode === 'grid' && filteredRecipes.length >= VIRTUAL_THRESHOLD;
+
+  // Cards are laid out one row at a time so the virtualizer has a single
+  // vertical axis to work on. Recomputes when a filter, a sort or a breakpoint
+  // changes, which is what keeps filtering working while virtualized.
+  const gridRows = useMemo(() => {
+    if (!useVirtualGrid) return [];
+    const rows: (typeof filteredRecipes)[] = [];
+    for (let i = 0; i < filteredRecipes.length; i += gridColumns) {
+      rows.push(filteredRecipes.slice(i, i + gridColumns));
+    }
+    return rows;
+  }, [useVirtualGrid, filteredRecipes, gridColumns]);
+
+  const gridVirtualizer = useWindowVirtualizer({
+    count: gridRows.length,
+    // Recipe cards vary a lot in height (image or not, badge count, title
+    // wrapping), so this is only the first-paint guess; measureElement reports
+    // what each row actually renders at. See US-636.
+    estimateSize: () => 420,
+    overscan: 3,
+    // The grid starts partway down the page, so window scroll offsets have to
+    // be shifted by how far down it begins or every row lands too high.
+    scrollMargin: gridParentRef.current?.offsetTop ?? 0,
   });
 
   // Fetch user data
@@ -640,22 +684,71 @@ export default function Recipes() {
                 </div>
               </Card>
             ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
-                {filteredRecipes.map((recipe) => (
-                  <EnhancedRecipeCard
-                    key={recipe.id}
-                    recipe={recipe}
-                    foods={foods}
-                    kids={kids}
-                    onView={handleView}
-                    onEdit={handleEdit}
-                    onDelete={setDeleteId}
-                    onAddToGroceryList={handleAddToGrocery}
-                    onAddToCollections={handleAddToCollections}
-                    onOrderIngredients={handleOrderIngredients}
-                  />
-                ))}
-              </div>
+              useVirtualGrid ? (
+                /* Virtualized grid: one absolutely positioned row of cards at a
+                   time, measured rather than estimated. pb-6 stands in for the
+                   gap-6 that a single grid container would have given between
+                   rows -- padding is inside getBoundingClientRect, margin is
+                   not, and the virtualizer positions from measured height. */
+                <div ref={gridParentRef} aria-live="polite">
+                  <div
+                    style={{
+                      height: `${gridVirtualizer.getTotalSize()}px`,
+                      position: "relative",
+                    }}
+                  >
+                    {gridVirtualizer.getVirtualItems().map((virtualRow) => (
+                      <div
+                        key={virtualRow.key}
+                        data-index={virtualRow.index}
+                        ref={gridVirtualizer.measureElement}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          transform: `translateY(${
+                            virtualRow.start - gridVirtualizer.options.scrollMargin
+                          }px)`,
+                        }}
+                        className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 pb-6"
+                      >
+                        {gridRows[virtualRow.index].map((recipe) => (
+                          <EnhancedRecipeCard
+                            key={recipe.id}
+                            recipe={recipe}
+                            foods={foods}
+                            kids={kids}
+                            onView={handleView}
+                            onEdit={handleEdit}
+                            onDelete={setDeleteId}
+                            onAddToGroceryList={handleAddToGrocery}
+                            onAddToCollections={handleAddToCollections}
+                            onOrderIngredients={handleOrderIngredients}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+                  {filteredRecipes.map((recipe) => (
+                    <EnhancedRecipeCard
+                      key={recipe.id}
+                      recipe={recipe}
+                      foods={foods}
+                      kids={kids}
+                      onView={handleView}
+                      onEdit={handleEdit}
+                      onDelete={setDeleteId}
+                      onAddToGroceryList={handleAddToGrocery}
+                      onAddToCollections={handleAddToCollections}
+                      onOrderIngredients={handleOrderIngredients}
+                    />
+                  ))}
+                </div>
+              )
             ) : useVirtualList ? (
               <div
                 ref={listParentRef}
