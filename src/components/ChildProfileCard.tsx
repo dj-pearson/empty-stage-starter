@@ -1,9 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { KidAvatarImage } from '@/components/KidAvatarImage';
 import {
   AlertTriangle, Heart, Target, TrendingUp, ChefHat,
   Sparkles, Edit, CheckCircle2, Calendar, Utensils,
@@ -93,7 +94,7 @@ export function ChildProfileCard({
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 border-2 border-background shadow-md">
-              <AvatarImage src={kid.profile_picture_url} />
+              <KidAvatarImage src={kid.profile_picture_url} />
               <AvatarFallback className="text-xl">{kid.name[0]}</AvatarFallback>
             </Avatar>
             <div>
