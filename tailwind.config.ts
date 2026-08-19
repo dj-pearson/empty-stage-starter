@@ -1,4 +1,6 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
@@ -111,5 +113,16 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    tailwindcssAnimate,
+    // US-576: Tailwind 3 has no built-in pointer variant (it landed in v4).
+    // `pointer-coarse:` targets touch input specifically, which is what
+    // hover-reveal controls need: a hover-only affordance is unreachable
+    // there, and a width breakpoint is the wrong proxy (a touch laptop is
+    // wide, a mouse-driven small window is narrow).
+    plugin(({ addVariant }) => {
+      addVariant("pointer-coarse", "@media (pointer: coarse)");
+      addVariant("pointer-fine", "@media (pointer: fine)");
+    }),
+  ],
 } satisfies Config;

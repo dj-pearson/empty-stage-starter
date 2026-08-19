@@ -1497,8 +1497,8 @@
         "Icon button tap targets meet 44px (min h-11/w-11 on touch)"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "opacity-0 group-hover:opacity-100 with h-7 w-7 (~28px) at Grocery.tsx:886-1027. PARTIAL: added group-focus-within:opacity-100 + focus-visible:opacity-100 to all 8 hover-reveal grocery controls so keyboard users can reveal/reach edit/delete/qty buttons (primary WCAG 2.1.1 gap fixed). DEFERRED: 44px tap-target (h-7 w-7) enlargement risks compact-list layout regression + touch-visible-on-coarse-pointer needs a Tailwind variant — follow-up."
+      "passes": true,
+      "notes": "Completed 2026-08-19. AC1 DONE: added a pointer-coarse variant to tailwind.config.ts (Tailwind 3.4 has no built-in pointer variant; it landed in v4) and applied pointer-coarse:opacity-100 to all 8 hover-reveal grocery controls at Grocery.tsx:888-1029, alongside the group-focus-within/focus-visible classes from the earlier partial pass. Verified by compiling the real config: the output contains @media (pointer: coarse) { .pointer-coarse\\:opacity-100 { opacity: 1 } }, so the class is not a silent no-op. AC2 WAS ALREADY MET, by US-043 rather than by anything in Grocery.tsx: src/index.css:215-226 applies min-height/min-width 44px to button, [role=\"button\"], a, input[type=checkbox|radio], select and [data-radix-collection-item] under @media (pointer: coarse). min-height beats height, so the h-7 w-7 (28px) controls already render at 44px on touch and stay compact on desktop. Confirmed the chain end to end: the controls are plain shadcn Button with no asChild, so they render real <button> (src/components/ui/button.tsx:42); src/index.css is imported at src/main.tsx:33; and the rule survives compilation (out.css:729). The earlier note's fear of a compact-list regression from enlarging h-7 w-7 was moot -- the enlargement was already in effect on touch. NEW TEST src/pages/Grocery.a11y.test.ts (8 tests) pins all four reveal classes across every opacity-0 control, the 44px base rule, and the variant registration; verified it goes red when pointer-coarse:opacity-100 is stripped. This change is layout-neutral (opacity only). Also converted tailwind.config.ts's require(\"tailwindcss-animate\") to an import, clearing a pre-existing no-require-imports error; the compiled CSS is byte-identical (199645 bytes both ways). SPUN OUT: US-636 for the virtualized row-height bug this investigation surfaced."
     },
     {
       "id": "US-577",
@@ -2397,6 +2397,23 @@
       "priority": 2,
       "passes": false,
       "notes": "Found 2026-08-17 while implementing US-627. iOS is the live product, so this is where kid photos actually come from in production - which makes it at least as exposed as the web bucket US-627 closed, possibly more. Cannot be fully fixed from the repo: the bucket does not exist in any migration, so its current policy set is unknown and a migration written blind could either no-op (if the real policy has a different name than the one dropped) or fail to override an unknown permissive policy, since RLS policies are OR'd and a new one cannot restrict an existing one. Needs a dashboard check first, then a migration. Filed rather than folded into US-627 because it needs out-of-band information."
+    },
+    {
+      "id": "US-636",
+      "title": "Grocery virtualized rows overlap: estimateSize underestimates real row height",
+      "description": "As a user with more than 50 grocery items, I want the rows to stop overlapping each other so that I can read and tap the right item.",
+      "acceptanceCriteria": [
+        "src/pages/Grocery.tsx:595-599 estimates 56px for an item row, but the row is `flex items-center gap-3 px-4 py-3` (24px vertical padding) and its tallest child exceeds 32px in two shipped cases, so rows are positioned closer together than they render",
+        "Case 1 (touch, any row): src/index.css:215-226 forces min-height 44px on every button under @media (pointer: coarse), so the qty/edit/delete controls make the row 44+24 = 68px against a 56px estimate",
+        "Case 2 (any pointer, rows with a photo): the thumbnail is w-10 h-10 (40px), so the row is 40+24 = 64px against the same 56px estimate",
+        "Only header rows get an explicit height (Grocery.tsx:826); item rows are positioned by transform: translateY(virtualRow.start) and size themselves, so each underestimate compounds down the list",
+        "Fix by measuring instead of estimating: pass ref={groceryVirtualizer.measureElement} and data-index on the row elements (@tanstack/react-virtual 3.13 supports dynamic measurement), rather than hand-tuning the constant, which cannot cover pointer type, photos and text wrapping at once",
+        "Verify in a browser at a coarse-pointer emulation with >50 items and at least one item having a photo_url; a source-only check cannot catch this",
+        "Confirm the same estimate pattern is not repeated on other virtualized lists in the codebase"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Found 2026-08-19 while finishing US-576. NOT caused by that change, which only flips opacity and is layout-neutral: the 44px controls were already occupying the row on touch, just invisible. Derived from reading the CSS and the JSX rather than measured in a browser, so the exact overlap in pixels should be confirmed before fixing; the mechanism (estimate 56 vs content 64-68) is solid, and the photo case makes it reproducible on desktop too. Only bites lists over 50 items, which is the useVirtualGrocery threshold at Grocery.tsx:590."
     }
   ]
 }
