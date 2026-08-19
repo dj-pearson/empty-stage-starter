@@ -9,21 +9,12 @@ import type {
   MobileAnalysisResults,
   PerformanceBudgetResults,
 } from "@/types/seo-types";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
 } from "@/components/ui/table";
 import {
   Select,
@@ -43,14 +34,9 @@ import {
   Copy,
   RefreshCw,
   Zap,
-  TrendingUp,
   Target,
-  Activity,
   Eye,
-  FileJson,
-  FileSpreadsheet,
   Sparkles,
-  Clock,
   Shield,
   Smartphone,
   Gauge,
@@ -87,6 +73,8 @@ import { SeoPagesTab } from "@/components/admin/seo/SeoPagesTab";
 import { SeoPerformanceTab } from "@/components/admin/seo/SeoPerformanceTab";
 import { SeoContentTab } from "@/components/admin/seo/SeoContentTab";
 import { SeoMonitoringTab } from "@/components/admin/seo/SeoMonitoringTab";
+import { SeoAuditTab } from "@/components/admin/seo/SeoAuditTab";
+import { SeoKeywordsTab } from "@/components/admin/seo/SeoKeywordsTab";
 import {
   SeoRedirectsTab,
   SeoDuplicateContentTab,
@@ -2488,317 +2476,31 @@ RESTful API available for integrations. Contact for API access.
         )}
 
         {/* Audit Results Tab */}
-        <TabsContent value="audit" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Search className="h-5 w-5" />
-                    SEO Audit Results
-                  </CardTitle>
-                  <CardDescription>
-                    Comprehensive analysis of {auditResults.length} SEO factors
-                  </CardDescription>
-                </div>
-                {auditResults.length > 0 && (
-                  <div className="flex gap-2">
-                    <Button onClick={() => exportAuditReport("json")} variant="outline" size="sm">
-                      <FileJson className="h-4 w-4 mr-2" />
-                      Export JSON
-                    </Button>
-                    <Button onClick={() => exportAuditReport("csv")} variant="outline" size="sm">
-                      <FileSpreadsheet className="h-4 w-4 mr-2" />
-                      Export CSV
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {auditResults.length === 0 ? (
-                <div className="text-center py-12">
-                  <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No audit results yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Click "Run Full Audit" to analyze 50+ SEO factors
-                  </p>
-                  <Button onClick={runComprehensiveAudit}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Start SEO Audit
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {["Technical SEO", "On-Page SEO", "Performance", "Mobile & Accessibility", "Security", "Content Quality"].map(
-                    (category) => {
-                      const categoryResults = auditResults.filter((r) => r.category === category);
-                      if (categoryResults.length === 0) return null;
-
-                      const passed = categoryResults.filter((r) => r.status === "passed").length;
-                      const warnings = categoryResults.filter((r) => r.status === "warning").length;
-                      const failed = categoryResults.filter((r) => r.status === "failed").length;
-
-                      return (
-                        <div key={category} className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold text-lg">{category}</h4>
-                            <div className="flex gap-4 text-sm">
-                              <span className="text-green-600">{passed} passed</span>
-                              <span className="text-yellow-600">{warnings} warnings</span>
-                              <span className="text-red-600">{failed} failed</span>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            {categoryResults.map((result, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                              >
-                                <div className="mt-0.5">{getStatusIcon(result.status)}</div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">{result.item}</span>
-                                    <Badge variant={result.impact === "high" ? "destructive" : result.impact === "medium" ? "default" : "secondary"} className="text-xs">
-                                      {result.impact}
-                                    </Badge>
-                                  </div>
-                                  <p className="text-sm text-muted-foreground mt-1">{result.message}</p>
-                                  {result.fix && (
-                                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950 rounded text-sm">
-                                      <strong className="text-blue-700 dark:text-blue-300">How to fix:</strong>{" "}
-                                      <span className="text-blue-600 dark:text-blue-400">{result.fix}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <Separator />
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <SeoAuditTab
+          auditResults={auditResults}
+          runComprehensiveAudit={runComprehensiveAudit}
+          exportAuditReport={exportAuditReport}
+          getStatusIcon={getStatusIcon}
+        />
 
         {/* Keyword Tracking Tab */}
-        <TabsContent value="keywords" className="space-y-4">
-          {/* Google Search Console Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Globe className="h-5 w-5" />
-                    Google Search Console
-                  </CardTitle>
-                  <CardDescription>
-                    {gscConnected
-                      ? "Connected - Real data from Google"
-                      : "Connect to get real keyword data from Google"}
-                  </CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  {gscConnected ? (
-                    <>
-                      <Button
-                        onClick={syncGSCData}
-                        disabled={isSyncingGSC || !selectedProperty}
-                        variant="default"
-                        size="sm"
-                      >
-                        {isSyncingGSC ? (
-                          <>
-                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                            Syncing...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Sync Data
-                          </>
-                        )}
-                      </Button>
-                      <Button onClick={disconnectGSC} variant="outline" size="sm">
-                        Disconnect
-                      </Button>
-                    </>
-                  ) : (
-                    <Button onClick={connectToGSC} disabled={isConnectingGSC}>
-                      {isConnectingGSC ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Connecting...
-                        </>
-                      ) : (
-                        <>
-                          <Globe className="h-4 w-4 mr-2" />
-                          Connect to GSC
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            {gscConnected && gscProperties.length > 0 && (
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <Label className="text-sm font-medium">Property:</Label>
-                  <Select value={selectedProperty} onValueChange={setSelectedProperty}>
-                    <SelectTrigger className="w-[400px]">
-                      <SelectValue placeholder="Select a property" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {gscProperties.map((prop) => (
-                        <SelectItem key={prop.id} value={prop.property_url}>
-                          {prop.display_name || prop.property_url}
-                          {prop.is_primary && (
-                            <Badge variant="default" className="ml-2">
-                              Primary
-                            </Badge>
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {lastSyncedAt && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      Last synced: {new Date(lastSyncedAt).toLocaleString()}
-                    </div>
-                  )}
-                </div>
-
-                {gscSyncResults && (
-                  <div className="mt-4">
-                    {gscSyncResults.success ? (
-                      <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                        <div className="flex items-start gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-green-900 mb-1">Sync Complete</h4>
-                            <p className="text-sm text-green-800">{gscSyncResults.message}</p>
-                            {gscSyncResults.recordsSynced > 0 && (
-                              <div className="mt-2">
-                                <Badge variant="default">{gscSyncResults.recordsSynced} records synced</Badge>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                        <div className="flex items-start gap-3">
-                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-red-900 mb-1">Sync Failed</h4>
-                            <p className="text-sm text-red-800">{gscSyncResults.error}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            )}
-          </Card>
-
-          {/* Keyword Tracking Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Keyword Tracking
-              </CardTitle>
-              <CardDescription>
-                Monitor keyword rankings and performance
-                {gscConnected && <Badge className="ml-2">Real GSC Data</Badge>}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add keyword to track..."
-                  value={newKeyword}
-                  onChange={(e) => setNewKeyword(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && addKeywordToTrack()}
-                />
-                <Button onClick={addKeywordToTrack}>Add</Button>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Keyword</TableHead>
-                    <TableHead>Position</TableHead>
-                    {gscConnected && (
-                      <>
-                        <TableHead>Impressions</TableHead>
-                        <TableHead>Clicks</TableHead>
-                        <TableHead>CTR</TableHead>
-                      </>
-                    )}
-                    <TableHead>Volume</TableHead>
-                    <TableHead>Difficulty</TableHead>
-                    <TableHead>URL</TableHead>
-                    <TableHead>Trend</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {trackedKeywords.map((kw, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{kw.keyword}</TableCell>
-                      <TableCell>
-                        <Badge variant={kw.position <= 3 ? "default" : kw.position <= 10 ? "secondary" : "outline"}>
-                          #{kw.position}
-                        </Badge>
-                      </TableCell>
-                      {gscConnected && (
-                        <>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Eye className="h-3 w-3 text-muted-foreground" />
-                              {kw.impressions?.toLocaleString() || "—"}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Target className="h-3 w-3 text-muted-foreground" />
-                              {kw.clicks?.toLocaleString() || "—"}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {kw.ctr ? `${kw.ctr.toFixed(2)}%` : "—"}
-                            </Badge>
-                          </TableCell>
-                        </>
-                      )}
-                      <TableCell>{kw.volume?.toLocaleString() || "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Progress value={kw.difficulty || 0} className="w-16 h-2" />
-                          <span className="text-xs">{kw.difficulty || "—"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{kw.url}</TableCell>
-                      <TableCell>
-                        {kw.trend === "up" && <TrendingUp className="h-4 w-4 text-green-600" />}
-                        {kw.trend === "down" && <TrendingUp className="h-4 w-4 text-red-600 rotate-180" />}
-                        {kw.trend === "stable" && <Activity className="h-4 w-4 text-muted-foreground" />}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <SeoKeywordsTab
+          trackedKeywords={trackedKeywords}
+          newKeyword={newKeyword}
+          setNewKeyword={setNewKeyword}
+          addKeywordToTrack={addKeywordToTrack}
+          gscConnected={gscConnected}
+          gscProperties={gscProperties}
+          gscSyncResults={gscSyncResults}
+          selectedProperty={selectedProperty}
+          setSelectedProperty={setSelectedProperty}
+          isConnectingGSC={isConnectingGSC}
+          isSyncingGSC={isSyncingGSC}
+          lastSyncedAt={lastSyncedAt}
+          connectToGSC={connectToGSC}
+          disconnectGSC={disconnectGSC}
+          syncGSCData={syncGSCData}
+        />
 
         {/* Competitor Analysis Tab */}
         <SeoCompetitorsTab
