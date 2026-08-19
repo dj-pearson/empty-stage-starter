@@ -10,6 +10,12 @@
 #
 # Nothing enforced any of that. The rules lived in a document.
 #
+# Applying these rules retrospectively to all 207 existing migrations: zero use
+# DROP COLUMN, RENAME, SET NOT NULL or a type change, and the single DROP TABLE
+# is the scaffold cleanup named below. So the repo has in fact followed the rule
+# it never enforced, and this gate is about keeping it that way rather than
+# burning down a backlog.
+#
 # DIFF-SCOPED, like no-new-any.sh: only migrations added on this branch are
 # checked. The existing tree stays as it is -- notably
 # 20260513000000_drop_user_profiles_scaffold.sql, which legitimately drops
@@ -58,6 +64,46 @@ check() {
   fail=1
 }
 
+
+# DROP POLICY on its own is not a signal. The idiomatic way to make a policy
+# migration re-runnable is DROP POLICY IF EXISTS followed by CREATE POLICY with
+# the same name, and across this repo's 207 migrations that accounts for 147 of
+# 206 drops. Flagging all of them would train everyone to add the escape hatch
+# by reflex, which is how a gate stops meaning anything.
+#
+# What matters is a policy dropped and NOT put back under the same name on the
+# same table: either access was deliberately removed, or it was replaced by a
+# differently-named, narrower policy -- which is exactly the US-627 shape, and
+# exactly what wants a second pair of eyes before it reaches a shipped client.
+policy_pairs() {
+  # "<name> on <table>", lowercased, unquoted, one per line. Comments stripped
+  # and newlines flattened first, since CREATE POLICY "x" usually puts ON on the
+  # following line.
+  local file="$1" verb="$2"
+  sed 's/--.*//' "$file" | tr '\n' ' ' |
+    grep -oiE "${verb}[[:space:]]+policy[[:space:]]+(if[[:space:]]+exists[[:space:]]+)?(\"[^\"]+\"|[A-Za-z0-9_]+)[[:space:]]+on[[:space:]]+[A-Za-z0-9_.\"]+" |
+    sed -E "s/^${verb}[[:space:]]+policy[[:space:]]+//I; s/^if[[:space:]]+exists[[:space:]]+//I" |
+    tr -d '"' | tr '[:upper:]' '[:lower:]' | tr -s ' ' | sed 's/[[:space:]]*$//' |
+    sort -u
+}
+
+check_policy_removal() {
+  local file="$1"
+  grep -qiE '^[[:space:]]*--[[:space:]]*migration-safety:[[:space:]]*allow[[:space:]]+drop-policy\b' "$file" && return 0
+
+  local removed
+  removed="$(comm -23 <(policy_pairs "$file" drop) <(policy_pairs "$file" create))"
+  [ -z "$removed" ] && return 0
+
+  echo "::error title=Backward-incompatible migration::${file} removes a policy without replacing it."
+  printf '%s\n' "$removed" | sed 's/^/      /'
+  echo "      A shipped client reading through that policy loses access the moment this lands."
+  echo "      Re-creating it under a DIFFERENT name counts as removal here, because a narrower"
+  echo "      replacement is still a narrowing. Confirm no live build depends on it."
+  echo "      If this is deliberate, add: -- migration-safety: allow drop-policy (<reason>)"
+  fail=1
+}
+
 echo "Checking $(printf '%s\n' "${added_files}" | grep -c .) new migration(s) for backward-incompatible DDL ..."
 
 for file in ${added_files}; do
@@ -70,8 +116,7 @@ for file in ${added_files}; do
         "Old clients query the old name. Add the new shape, dual-write, then retire."
   check "$file" "set-not-null" 'set[[:space:]]+not[[:space:]]+null' \
         "An old client INSERT that omits the column starts failing. Add a default first."
-  check "$file" "drop-policy"  'drop[[:space:]]+policy' \
-        "Dropping a SELECT policy can cut off a shipped client. Confirm no live build reads through it."
+  check_policy_removal "$file"
   check "$file" "type-change"  'alter[[:space:]]+column[^;]*type' \
         "Changing a type in place breaks old readers and writers. Add a new column and migrate."
 done
