@@ -12,5 +12,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src/components/admin/seo/**/*.tsx"]
+  "include": ["src/components/admin/seo/**/*.ts", "src/components/admin/seo/**/*.tsx"]
 }
