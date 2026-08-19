@@ -76,10 +76,38 @@ for file in ${added_files}; do
         "Changing a type in place breaks old readers and writers. Add a new column and migrate."
 done
 
+# A new table without RLS is readable and writable by anyone holding the anon
+# key, which is shipped in the client. CLAUDE.md says "Always enable RLS on new
+# tables"; all 304 existing tables comply, so this is about keeping it that way.
+#
+# Collected ACROSS the branch's new migrations rather than per file, because
+# creating a table in one migration and enabling RLS in the next is legitimate.
+created_tables="$(
+  cat ${added_files} 2>/dev/null \
+    | sed 's/--.*//' \
+    | grep -ioE 'create[[:space:]]+table[[:space:]]+(if[[:space:]]+not[[:space:]]+exists[[:space:]]+)?[a-z_."]+' \
+    | awk '{print tolower($NF)}' | tr -d '"' | sed 's/^public\.//' | sort -u
+)"
+rls_enabled="$(
+  cat ${added_files} 2>/dev/null \
+    | sed 's/--.*//' \
+    | grep -ioE 'alter[[:space:]]+table[[:space:]]+[a-z_."]+[[:space:]]+enable[[:space:]]+row[[:space:]]+level[[:space:]]+security' \
+    | awk '{print tolower($3)}' | tr -d '"' | sed 's/^public\.//' | sort -u
+)"
+
+for table in ${created_tables}; do
+  printf '%s\n' "${rls_enabled}" | grep -qx "${table}" && continue
+  grep -qiE "^[[:space:]]*--[[:space:]]*migration-safety:[[:space:]]*allow[[:space:]]+no-rls\b" ${added_files} && continue
+  echo "::error title=New table without RLS::public.${table} is created but never gets ENABLE ROW LEVEL SECURITY."
+  echo "      Without it the table is readable and writable by anyone holding the anon key."
+  echo "      Add: ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY; plus per-command policies."
+  fail=1
+done
+
 if [ "$fail" -ne 0 ]; then
   echo
   echo "See the Migration Rules section of CLAUDE.md for the deprecation flow."
   exit 1
 fi
 
-echo "New migrations are backward-compatible."
+echo "New migrations are backward-compatible and enable RLS on any new table."
