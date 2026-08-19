@@ -42,7 +42,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ContentOptimizer } from "./ContentOptimizer";
 import { logger } from "@/lib/logger";
@@ -65,6 +64,8 @@ import { useSeoMonitoring } from "@/components/admin/seo/useSeoMonitoring";
 import { useSeoKeywords } from "@/components/admin/seo/useSeoKeywords";
 import { useSeoCompetitors } from "@/components/admin/seo/useSeoCompetitors";
 import { useSeoAudit } from "@/components/admin/seo/useSeoAudit";
+import { useSeoAutoHealing } from "@/components/admin/seo/useSeoAutoHealing";
+import { useSeoPageAnalysis } from "@/components/admin/seo/useSeoPageAnalysis";
 import {
   SeoRedirectsTab,
   SeoDuplicateContentTab,
@@ -81,15 +82,6 @@ import {
   SeoBacklinksTab,
   SeoBrokenLinksTab,
 } from "@/components/admin/seo/SeoLinkAuditTabs";
-
-interface PageData {
-  url: string;
-  title: string;
-  metaDescription: string;
-  wordCount: number;
-  issues: number;
-  score: number;
-}
 
 export function SEOManager() {
   const [robotsTxt, setRobotsTxt] = useState("");
@@ -116,11 +108,7 @@ export function SEOManager() {
   // this ref rather than a value captured when the handler was built.
   const auditUrlRef = useRef(auditUrl);
   auditUrlRef.current = auditUrl;
-  const [pageAnalysis, setPageAnalysis] = useState<PageData[]>([]);
-  const [isAutoHealing, setIsAutoHealing] = useState(false);
   const [activeTab, setActiveTab] = useState("audit");
-  const [fixSuggestions, setFixSuggestions] = useState<Record<string, unknown>[]>([]);
-  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
 
   // Google Search Console state
 
@@ -129,13 +117,9 @@ export function SEOManager() {
   // New SEO features state
 
   // Additional operation results state
-  const [blogPostsAnalysisResults, setBlogPostsAnalysisResults] = useState<Record<string, unknown> | null>(null);
   const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<Record<string, unknown> | null>(null);
-  const [autoHealingResults, setAutoHealingResults] = useState<Record<string, unknown> | null>(null);
-  const [fixesAppliedResults, setFixesAppliedResults] = useState<Record<string, unknown> | null>(null);
 
   // Loading states for operations
-  const [isAnalyzingBlogPosts, setIsAnalyzingBlogPosts] = useState(false);
   const [isValidatingStructuredData, setIsValidatingStructuredData] = useState(false);
 
   const isMobile = useIsMobile();
@@ -147,6 +131,13 @@ export function SEOManager() {
     loadTrackedKeywords,
     addKeywordToTrack,
   } = useSeoKeywords();
+
+  const {
+    pageAnalysis,
+    blogPostsAnalysisResults,
+    isAnalyzingBlogPosts,
+    analyzeBlogPostsSEO,
+  } = useSeoPageAnalysis();
 
   const {
     auditResults,
@@ -165,6 +156,26 @@ export function SEOManager() {
   // handler was built, which could be a whole audit out of date.
   const seoScoreRef = useRef(seoScore);
   seoScoreRef.current = seoScore;
+
+  const auditResultsRef = useRef(auditResults);
+  auditResultsRef.current = auditResults;
+  const currentAuditIdRef = useRef(currentAuditId);
+  currentAuditIdRef.current = currentAuditId;
+
+  const {
+    isAutoHealing,
+    autoHealingResults,
+    fixSuggestions,
+    isApplyingFixes,
+    fixesAppliedResults,
+    runAIAutoHealing,
+    applyFixesBatch,
+  } = useSeoAutoHealing({
+    getAuditResults: () => auditResultsRef.current,
+    getCurrentAuditId: () => currentAuditIdRef.current,
+    runComprehensiveAudit,
+    reloadSeoSettings: () => loadSEOSettings(),
+  });
 
   const {
     competitorUrl,
@@ -205,69 +216,12 @@ export function SEOManager() {
 
   useEffect(() => {
     loadSEOSettings();
-    loadPageAnalysis();
     // The GSC connection check and the OAuth-return handshake moved into
     // useGscConnection with the state they touch (US-553).
   }, []);
 
 
 
-  const loadPageAnalysis = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('seo_page_scores')
-        .select('*')
-        .order('overall_score', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const pages: PageData[] = data.map((page) => ({
-          url: page.page_url,
-          title: page.page_title || '',
-          metaDescription: '',
-          wordCount: page.word_count || 0,
-          issues: page.issues_count || 0,
-          score: page.overall_score,
-        }));
-        setPageAnalysis(pages);
-      }
-    } catch (error) {
-      logger.error('Error loading page analysis:', error);
-    }
-  };
-
-  const analyzeBlogPostsSEO = async () => {
-    setIsAnalyzingBlogPosts(true);
-    setBlogPostsAnalysisResults(null);
-
-    try {
-      const { data, error} = await invokeEdgeFunction("analyze-blog-posts-seo");
-
-      if (error) throw error;
-
-      setBlogPostsAnalysisResults({
-        success: true,
-        analyzed: data.analyzed || 0,
-        message: data.analyzed > 0
-          ? `Analyzed ${data.analyzed} blog posts successfully!`
-          : "No published blog posts to analyze"
-      });
-
-      if (data.analyzed > 0) {
-        await loadPageAnalysis();
-      }
-    } catch (error: unknown) {
-      logger.error("Error analyzing blog posts:", error);
-      setBlogPostsAnalysisResults({
-        success: false,
-        error: error.message || "Failed to analyze blog posts"
-      });
-    } finally {
-      setIsAnalyzingBlogPosts(false);
-    }
-  };
 
   // =====================================================
   // GOOGLE SEARCH CONSOLE FUNCTIONS
@@ -288,101 +242,6 @@ export function SEOManager() {
   // =====================================================
 
 
-  const runAIAutoHealing = async () => {
-    setIsAutoHealing(true);
-    setAutoHealingResults(null);
-
-    try {
-      // Call the apply-seo-fixes edge function
-      const { data, error } = await invokeEdgeFunction("apply-seo-fixes", {
-        body: {
-          auditResults: auditResults,
-          auditId: currentAuditId,
-          autoApply: false, // Set to true to automatically apply fixes
-          userId: (await supabase.auth.getUser()).data.user?.id,
-        },
-      });
-
-      if (error) throw error;
-
-      setFixSuggestions(data.suggestions || []);
-
-      setAutoHealingResults({
-        success: true,
-        appliedFixes: data.appliedFixes || 0,
-        totalSuggestions: data.totalSuggestions || 0,
-        autoApplyEnabled: data.autoApplyEnabled || false,
-        message: data.autoApplyEnabled && data.appliedFixes > 0
-          ? `Applied ${data.appliedFixes} SEO fixes automatically!`
-          : `Generated ${data.totalSuggestions} AI-powered optimization suggestions!`
-      });
-
-      if (data.autoApplyEnabled && data.appliedFixes > 0) {
-        // Re-run audit to see improvements
-        setTimeout(() => {
-          runComprehensiveAudit();
-        }, 1000);
-      }
-
-      logger.debug("AI Healing Results:", data);
-    } catch (error: unknown) {
-      logger.error("AI Auto-Healing error:", error);
-      setAutoHealingResults({
-        success: false,
-        error: error.message || "Failed to generate suggestions"
-      });
-    } finally {
-      setIsAutoHealing(false);
-    }
-  };
-
-  const applyFixesBatch = async () => {
-    setIsApplyingFixes(true);
-    setFixesAppliedResults(null);
-
-    try {
-      const { data, error } = await invokeEdgeFunction("apply-seo-fixes", {
-        body: {
-          auditResults: auditResults,
-          auditId: currentAuditId,
-          autoApply: true, // Actually apply the fixes
-          userId: (await supabase.auth.getUser()).data.user?.id,
-        },
-      });
-
-      if (error) throw error;
-
-      setFixesAppliedResults({
-        success: true,
-        appliedFixes: data.appliedFixes || 0,
-        failedFixes: data.failedFixes || 0,
-        message: data.appliedFixes > 0
-          ? `Successfully applied ${data.appliedFixes} SEO fixes!`
-          : "No fixes were applied",
-        warning: data.failedFixes > 0
-          ? `${data.failedFixes} fixes failed to apply. Check the logs.`
-          : null
-      });
-
-      if (data.appliedFixes > 0) {
-        // Reload SEO settings
-        await loadSEOSettings();
-
-        // Re-run audit to verify improvements
-        setTimeout(() => {
-          runComprehensiveAudit();
-        }, 1000);
-      }
-    } catch (error: unknown) {
-      logger.error("Error applying fixes:", error);
-      setFixesAppliedResults({
-        success: false,
-        error: error.message || "Failed to apply fixes"
-      });
-    } finally {
-      setIsApplyingFixes(false);
-    }
-  };
 
 
 
