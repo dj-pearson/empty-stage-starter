@@ -19,34 +19,76 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 
 vi.mock('@/integrations/supabase/client', () => {
-  const chain: Record<string, unknown> = {};
-  // Every builder method returns the chain, and awaiting it yields an empty
-  // result set. SEOManager reaches for several different shapes
-  // (.select().order(), .insert(), .eq()...), so a self-returning proxy is
-  // sturdier here than enumerating them.
-  const proxy: unknown = new Proxy(chain, {
-    get: (_t, prop) => {
-      if (prop === 'then') return undefined; // not a thenable until awaited below
-      return vi.fn(() => proxy);
-    },
-  });
+  // Seeded so the tab walk exercises the POPULATED branches, not just empty
+  // states. An earlier version returned nothing for everything, and a tab
+  // whose result list was empty rendered a placeholder -- which is how a
+  // missing `seoScore` prop slipped through the walk unnoticed. Rows match
+  // what the loaders in SEOManager read.
+  const seed: Record<string, unknown[]> = {
+    seo_competitor_analysis: [
+      {
+        competitor_url: 'https://rival.example',
+        overall_score: 91,
+        status_code: 'passed',
+        // Each category is a list of checks, not a score: the competitors tab
+        // maps over analysis.technical/onPage/mobile/content.
+        analysis: {
+          technical: [{ item: 'HTTPS', status: 'passed' }],
+          onPage: [{ item: 'Title tag', status: 'warning' }],
+          mobile: [{ item: 'Viewport', status: 'passed' }],
+          content: [{ item: 'Word count', status: 'failed' }],
+        },
+        analyzed_at: '2026-08-19T00:00:00Z',
+      },
+    ],
+    seo_keywords: [
+      {
+        keyword: 'arfid meal planner',
+        current_position: 4,
+        search_volume: 1200,
+        difficulty: 38,
+        target_url: 'https://tryeatpal.com/',
+        position_trend: 'up',
+        impressions: 900,
+        clicks: 120,
+        ctr: 13,
+      },
+    ],
+    seo_page_scores: [
+      {
+        page_url: 'https://tryeatpal.com/pricing',
+        page_title: 'Pricing',
+        word_count: 800,
+        issues_count: 2,
+        overall_score: 78,
+      },
+    ],
+  };
+
+  /**
+   * PostgREST builders chain arbitrarily (.select().eq().order().limit()) and
+   * are awaited at the end, so this is a self-returning thenable rather than a
+   * fixed set of stubbed methods. Anything not seeded resolves to [].
+   */
+  const builderFor = (table: string) => {
+    const rows = seed[table] ?? [];
+    const builder: Record<string | symbol, unknown> = {};
+    return new Proxy(builder, {
+      get(_target, prop) {
+        if (prop === 'then') {
+          return (resolve: (v: unknown) => unknown) => resolve({ data: rows, error: null });
+        }
+        return () => builderFor(table);
+      },
+    });
+  };
 
   return {
     supabase: {
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'admin-1' } }, error: null }),
       },
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          order: vi.fn().mockResolvedValue({ data: [], error: null }),
-          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-          then: undefined,
-        })),
-        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-        update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) })),
-        delete: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) })),
-      })),
+      from: vi.fn((table: string) => builderFor(table)),
       functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
     },
   };
