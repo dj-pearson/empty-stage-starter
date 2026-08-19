@@ -54,6 +54,46 @@ vi.mock('@/integrations/supabase/client', () => {
         ctr: 13,
       },
     ],
+    // US-553: the monitoring tab reads four tables. Seeded so its alert,
+    // rule, schedule and preferences branches render rather than placeholders.
+    seo_alerts: [
+      {
+        id: 'alert-1',
+        alert_type: 'score_drop',
+        severity: 'high',
+        title: 'Score dropped',
+        message: 'Overall score fell 8 points',
+        details: { from: 86, to: 78 },
+        created_at: '2026-08-19T00:00:00Z',
+      },
+    ],
+    seo_alert_rules: [
+      { id: 'rule-1', rule_name: 'Score drop', rule_type: 'score', severity: 'high', is_enabled: true },
+    ],
+    seo_monitoring_schedules: [
+      {
+        id: 'sched-1',
+        schedule_name: 'Nightly audit',
+        schedule_type: 'audit',
+        cron_expression: '0 3 * * *',
+        is_enabled: true,
+        last_run_at: '2026-08-19T03:00:00Z',
+        last_run_status: 'success',
+      },
+    ],
+    seo_notification_preferences: [
+      {
+        email_enabled: true,
+        immediate_alerts: true,
+        daily_digest: false,
+        weekly_digest: true,
+        notify_score_drops: true,
+        notify_keyword_changes: false,
+        notify_competitor_changes: true,
+        notify_gsc_issues: true,
+        notify_performance_issues: false,
+      },
+    ],
     seo_page_scores: [
       {
         page_url: 'https://tryeatpal.com/pricing',
