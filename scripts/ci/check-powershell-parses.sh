@@ -13,8 +13,20 @@
 # path is wrong or an API changed.
 set -uo pipefail
 
+# Skipping when pwsh is absent keeps this runnable on a developer machine that
+# has no PowerShell. On CI it is the inert-gate failure mode: a runner image
+# that quietly stops shipping pwsh would turn this into a step that always
+# passes, and nobody would notice for months -- which is exactly how the two
+# unparseable .ps1 files this gate exists for survived. So on CI, missing pwsh
+# is a failure.
 if ! command -v pwsh >/dev/null 2>&1; then
-  echo "pwsh not found - skipping the PowerShell parse check."
+  if [ -n "${CI:-}" ]; then
+    echo "::error title=PowerShell parse check::pwsh is not available on this runner."
+    echo "      This gate cannot run, and a gate that cannot run must not report success."
+    echo "      Install PowerShell in the workflow, or drop this step deliberately."
+    exit 1
+  fi
+  echo "pwsh not found - skipping the PowerShell parse check (set CI=1 to make this fatal)."
   exit 0
 fi
 

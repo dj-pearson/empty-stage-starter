@@ -56,6 +56,17 @@ jobs:
       - name: Check components are imported
         run: node scripts/ci/check-jsx-imports.mjs
 
+      # US-553 split SEOManager (5593 lines) into 13 tab components and 8
+      # hooks. The whole-file typecheck is a count-based ratchet, so a
+      # TS2304 introduced by that kind of move hides inside a backlog of
+      # 1257; this narrows to src/components/admin/seo/ and fails on
+      # undefined identifiers alone. It has existed since US-553 and was
+      # only ever reachable as `npm run typecheck:seo` -- a gate nobody
+      # runs gates nothing, which is the same failure as the tsconfig
+      # include that left it inert for three commits.
+      - name: Typecheck the extracted SEO components
+        run: bash scripts/ci/check-seo-extraction.sh
+
       # A bucket created by clicking in the dashboard exists only in
       # production: its public flag and RLS policies cannot be read from the
       # repo, a follow-up migration has to be written blind, and a fresh
