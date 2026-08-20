@@ -31,7 +31,27 @@ set -uo pipefail
 
 fail=0
 
-TOKEN_PATTERNS='sk_live_[0-9a-zA-Z]{16,}|rk_live_[0-9a-zA-Z]{16,}|AKIA[0-9A-Z]{16}|eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJ'
+# Widened 2026-08-20 after probing the scanner with nine realistic secret
+# shapes: it caught none of them. The JWT pattern is the one that mattered --
+# it pinned the exact base64 of {"alg":"HS256","typ":"JWT"}, so a token whose
+# header serialises the other way round ({"typ":"JWT","alg":"HS256"}, which is
+# just as common) went straight through. That is the shape of a Supabase
+# service_role key, the single worst thing this repo could commit.
+TOKEN_PATTERNS='sk_live_[0-9a-zA-Z]{16,}|rk_live_[0-9a-zA-Z]{16,}|AKIA[0-9A-Z]{16}'
+# Either header ordering, then a payload. Deliberately not "any three base64
+# segments": that matches too much ordinary text.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|eyJ(hbGciOiJ|0eXAiOiJKV1Qi)[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{8,}"
+# GitHub: personal, OAuth, server, user and refresh tokens, plus fine-grained.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}"
+# Model providers. The repo ships AI features, so these are live risks.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|sk-ant-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}"
+# Google (Analytics, Search Console) and Stripe webhook signing.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|AIza[0-9A-Za-z_-]{35}|whsec_[A-Za-z0-9]{24,}"
+# Resend, named in CLAUDE.md's env list.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|re_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}"
+# An AWS secret access key is 40 base64-ish characters with no distinguishing
+# prefix, so match it only when it is sitting next to its own variable name.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|[Aa][Ww][Ss]_?[Ss][Ee][Cc][Rr][Ee][Tt][_A-Za-z]*[[:space:]]*[=:][[:space:]]*.?[A-Za-z0-9/+=]{40}"
 
 # scheme://user:password@host -- 8+ chars of password so ":pass@" style
 # examples and short placeholders do not trip it. The PLACEHOLDER filter below
