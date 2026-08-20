@@ -190,3 +190,9 @@ CAVEAT FOR THE NEXT PERSON: the baseline now has ZERO headroom. Any PR that adds
 - Flipped passes=true (gate green + implementation present): US-583, US-584, US-585, US-586, US-587, US-588, US-589, US-590, US-591, US-592, US-593, US-594, US-611, US-613, US-614.
 - Held false: 10 (breakdown {"awaiting-implementation":10,"verified":15}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
 ---
+
+## prd-verify — CI verification pass (ref e76f24892c5c0df17a4abbe099d13b4e083a69c8)
+- Gates: web=success, ios=success, android=success.
+- Flipped passes=true (gate green + implementation present): US-556, US-562, US-570, US-609, US-634, US-635.
+- Held false: 1 (breakdown {"verified":6,"awaiting-implementation":1}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
