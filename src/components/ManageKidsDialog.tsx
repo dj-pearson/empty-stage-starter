@@ -27,7 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { KidAvatarImage } from "@/components/KidAvatarImage";
 import { Users, Plus, Trash2, AlertTriangle, UserCircle, CalendarIcon, Heart, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +46,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 // Predefined allergens matching Open Food Facts standards
@@ -285,7 +287,13 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((props, ref) =
                 <Label>Profile Picture</Label>
                 <div className="flex items-center gap-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={formData.profile_picture_url} />
+                    {/* US-634: formData.profile_picture_url is a blob: preview
+                        only AFTER the user picks a new file. When the dialog is
+                        opened to EDIT an existing kid it is seeded from
+                        kid.profile_picture_url, a stored object, which is why
+                        this needs signing. KidAvatarImage passes a blob: through
+                        untouched, so one component covers both. */}
+                    <KidAvatarImage src={formData.profile_picture_url} />
                     <AvatarFallback>
                       <UserCircle className="h-12 w-12 text-muted-foreground" />
                     </AvatarFallback>

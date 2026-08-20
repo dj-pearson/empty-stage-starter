@@ -103,3 +103,24 @@ describe('groupByCategory', () => {
     expect(groups.find((g) => g.category === 'other')?.items[0].name).toBe('Weird');
   });
 });
+
+/**
+ * The web pantry (src/components/pantry/pantryConstants.ts, getStockStatus) and
+ * the mobile pantry (foodStock, above) are separate implementations of the same
+ * rule, rendered by app/(tabs)/pantry.tsx and src/components/FoodCard.tsx
+ * respectively. Two copies of a rule drift; these were already drifting on
+ * negative quantities before this test existed. Pin them together rather than
+ * trusting that whoever edits one remembers the other.
+ */
+describe('web and mobile agree on stock status', () => {
+  it.each([-5, -1, 0, 0.5, 1, 2, 2.5, 3, 99])('agrees for quantity %s', async (qty) => {
+    const { getStockStatus } = await import('@/components/pantry/pantryConstants');
+    expect(getStockStatus(qty)).toBe(foodStock(qty));
+  });
+
+  it('agrees for a missing quantity', async () => {
+    const { getStockStatus } = await import('@/components/pantry/pantryConstants');
+    expect(getStockStatus(undefined)).toBe(foodStock(null));
+    expect(getStockStatus(undefined)).toBe(foodStock(undefined));
+  });
+});

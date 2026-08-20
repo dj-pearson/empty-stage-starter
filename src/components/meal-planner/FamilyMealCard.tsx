@@ -1,7 +1,8 @@
 import { useMemo, memo } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { KidAvatarImage } from '@/components/KidAvatarImage';
 import { Food, Kid, MealSlot, PlanEntry, Recipe } from "@/types";
 import {
   Plus,
@@ -347,7 +348,7 @@ export const FamilyMealCard = memo(function FamilyMealCard({
                   >
                     <Avatar className="h-6 w-6">
                       {kid.profile_picture_url && (
-                        <AvatarImage src={kid.profile_picture_url} alt={kid.name} />
+                        <KidAvatarImage src={kid.profile_picture_url} alt={kid.name} />
                       )}
                       <AvatarFallback className="text-[10px] font-bold bg-primary/20 text-primary">
                         {getInitials(kid.name)}

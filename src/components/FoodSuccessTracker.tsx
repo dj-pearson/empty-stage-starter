@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { KidAvatarImage } from '@/components/KidAvatarImage';
 import {
   Select,
   SelectContent,
@@ -381,7 +382,7 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
                   )}
                 >
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={kid.profile_picture_url} />
+                    <KidAvatarImage src={kid.profile_picture_url} />
                     <AvatarFallback>
                       <UserCircle className="h-6 w-6 text-muted-foreground" />
                     </AvatarFallback>
@@ -408,7 +409,7 @@ export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
       {/* Active Child Banner */}
       <div className="flex items-center gap-3 px-1">
         <Avatar className="h-8 w-8">
-          <AvatarImage src={activeKid?.profile_picture_url} />
+          <KidAvatarImage src={activeKid?.profile_picture_url} />
           <AvatarFallback>
             <UserCircle className="h-5 w-5 text-muted-foreground" />
           </AvatarFallback>

@@ -26,7 +26,7 @@ export const AGENT_MODELS = [
 
 /**
  * Validate a 5-field cron expression (minute hour day-of-month month day-of-week).
- * Accepts `*`, ranges (`1-5`), lists (`1,2,3`), and steps (`*​/5`, `1-30/2`) within
+ * Accepts `*`, ranges (`1-5`), lists (`1,2,3`), and steps (`*\/5`, `1-30/2`) within
  * each field's numeric bounds. Deliberately strict — the dispatcher parses these.
  */
 export function isValidCron(expr: string): boolean {

@@ -10,7 +10,12 @@ function Write-ColorOutput {
     Write-Host $Message -ForegroundColor $Color
 }
 
-$MigrationDir = "..\supabase\migrations"
+# [IO.Path]::Combine, not a literal "..\supabase\migrations": that string is a
+# Windows-only path AND it was resolved against the caller's working directory
+# while $OutputPath below uses $PSScriptRoot, so the script only worked when run
+# from inside this folder on Windows. Combine works on both platforms and both
+# PowerShell 5.1 and 7.
+$MigrationDir = [System.IO.Path]::Combine($PSScriptRoot, "..", "supabase", "migrations")
 $OutputPath = Join-Path $PSScriptRoot $OutputFile
 
 Write-ColorOutput "===================================" "Yellow"
@@ -57,7 +62,7 @@ foreach ($File in $MigrationFiles) {
     $Content += "-- ============================================`n`n"
     
     # Read migration content directly
-    $migrationContent = Get-Content $File.FullName -Raw
+    $migrationContent = Get-Content $File.FullName -Raw -Encoding UTF8
     
     # Add the migration content AS-IS
     $Content += $migrationContent
@@ -75,7 +80,15 @@ $Content += "SELECT COUNT(*) as total_applied FROM _migrations;`n"
 $Content += "SELECT filename, applied_at FROM _migrations ORDER BY applied_at;`n"
 
 # Write to file
-Set-Content -Path $OutputPath -Value $Content -Encoding UTF8
+# NOT Set-Content -Encoding UTF8: in Windows PowerShell 5.1 that writes a BOM,
+# and psql reports `syntax error at or near ""` on the first line of a SQL file
+# that starts with one. UTF8Encoding($false) is UTF-8 without a BOM on both 5.1
+# and 7.
+[System.IO.File]::WriteAllText(
+    $OutputPath,
+    $Content,
+    (New-Object System.Text.UTF8Encoding($false))
+)
 
 Write-Host ""
 Write-ColorOutput "Success! Clean migration file created!" "Green"

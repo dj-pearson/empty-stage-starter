@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Link as LinkIcon,
   Copy,
@@ -28,10 +29,6 @@ import { logger } from '@/lib/logger';
 export interface SeoStructuredDataTabProps {
   structuredData: Record<string, unknown>;
   setStructuredData: (value: Record<string, unknown>) => void;
-  isValidatingStructuredData: boolean;
-  setIsValidatingStructuredData: (value: boolean) => void;
-  structuredDataValidationResults: Record<string, unknown> | null;
-  setStructuredDataValidationResults: (value: Record<string, unknown> | null) => void;
   onCopy: (content: string, label: string) => void;
   onDownload: (content: string, filename: string) => void;
 }
@@ -39,13 +36,17 @@ export interface SeoStructuredDataTabProps {
 export function SeoStructuredDataTab({
   structuredData,
   setStructuredData,
-  isValidatingStructuredData,
-  setIsValidatingStructuredData,
-  structuredDataValidationResults,
-  setStructuredDataValidationResults,
   onCopy,
   onDownload,
 }: SeoStructuredDataTabProps) {
+  // US-553: the validation result is this tab's own -- SEOManager only relayed
+  // it. Radix keeps every TabsContent mounted, so it survives tab switches.
+  const [isValidatingStructuredData, setIsValidatingStructuredData] = useState(false);
+  const [structuredDataValidationResults, setStructuredDataValidationResults] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+
   return (
     <TabsContent value="structured">
       <Card>

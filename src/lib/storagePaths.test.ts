@@ -53,3 +53,28 @@ describe('parseStorageObjectUrl', () => {
     ).toBeNull();
   });
 });
+
+describe('parser hardening found by merging with the US-634 signer', () => {
+  const BASE_URL = 'https://abc.supabase.co/storage/v1/object/public';
+
+  it('drops a fragment, which remove() would otherwise be handed verbatim', () => {
+    // "user-1/photo.jpg#top" matches no object, so the cleanup silently failed
+    // and left the replaced photo behind -- a Privacy Policy problem, since the
+    // promise is that deleting a child profile deletes the data.
+    expect(parseStorageObjectUrl(`${BASE_URL}/profile-pictures/user-1/photo.jpg#top`)).toEqual({
+      bucket: 'profile-pictures',
+      path: 'user-1/photo.jpg',
+    });
+  });
+
+  it('does not throw on a malformed percent escape', () => {
+    // deleteStorageObject calls this BEFORE its try block and its callers use
+    // `void deleteReplacedStorageObject(...)`, so a URIError here surfaced as an
+    // unhandled rejection during the kid save flow rather than a logged failure.
+    expect(() => parseStorageObjectUrl(`${BASE_URL}/images/kids/a%zz.jpg`)).not.toThrow();
+    expect(parseStorageObjectUrl(`${BASE_URL}/images/kids/a%zz.jpg`)).toEqual({
+      bucket: 'images',
+      path: 'kids/a%zz.jpg',
+    });
+  });
+});

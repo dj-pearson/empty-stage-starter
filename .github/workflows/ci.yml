@@ -45,6 +45,69 @@ jobs:
       - name: Check edge-function trees
         run: bash scripts/ci/check-function-trees.sh
 
+      # US-638: a component rendered but never imported is a ReferenceError on
+      # whatever path renders it, and it has shipped four times -- <Input>
+      # breaking six admin SEO tabs, and <AlertDialogTrigger> crashing the kid
+      # editor for two months. HARD gate: nothing pre-existing to burn down
+      # (the check is clean across all 383 components as of this commit), and
+      # nothing else catches it. ESLint's no-undef is off for TS, and tsc does
+      # report it but the typecheck step is a count-based ratchet, so one more
+      # TS2304 hides inside a backlog of 1257.
+      - name: Check components are imported
+        run: node scripts/ci/check-jsx-imports.mjs
+
+      # US-553 split SEOManager (5593 lines) into 13 tab components and 8
+      # hooks. The whole-file typecheck is a count-based ratchet, so a
+      # TS2304 introduced by that kind of move hides inside a backlog of
+      # 1257; this narrows to src/components/admin/seo/ and fails on
+      # undefined identifiers alone. It has existed since US-553 and was
+      # only ever reachable as `npm run typecheck:seo` -- a gate nobody
+      # runs gates nothing, which is the same failure as the tsconfig
+      # include that left it inert for three commits.
+      - name: Typecheck the extracted SEO components
+        run: bash scripts/ci/check-seo-extraction.sh
+
+      # A bucket created by clicking in the dashboard exists only in
+      # production: its public flag and RLS policies cannot be read from the
+      # repo, a follow-up migration has to be written blind, and a fresh
+      # environment comes up without it. That is how `images` -- every kid
+      # photo the iOS app uploads -- went unnoticed until someone read the
+      # Swift client. This gate found a second one the first time it ran
+      # (`Assets`, serving the lead-magnet PDF). Both are tracked in the
+      # script's PENDING list against the story that will declare them; that
+      # list should only ever shrink.
+      - name: Check storage buckets are declared
+        run: node scripts/ci/check-storage-buckets.mjs
+
+      # CLAUDE.md records that backup-databases.ps1 and ssl-check.ps1 sat
+      # unparseable for months. Nothing in this repo ever runs a .ps1 -- CI is
+      # Node, deploys are Cloudflare and EAS -- so a syntax error surfaces when
+      # someone reaches for the script on a Windows box, which is always the
+      # worst moment. pwsh is preinstalled on ubuntu-latest, so the parser is
+      # free. Currently 15 files, all parsing.
+      - name: Check PowerShell scripts parse
+        run: bash scripts/ci/check-powershell-parses.sh
+
+      # CLAUDE.md's "plain characters only" rule, as a check rather than a
+      # document. Invisible and bidi characters are the one class review cannot
+      # catch -- they render as nothing while the parser sees something else.
+      # HARD gate: the tree is clean as of this commit. Two real instances were
+      # removed to get there (a zero-width space joining a search haystack in
+      # hiddenVeggieRewriter, and one holding a JSDoc block open in
+      # agentConfig), plus BOMs on 15 generated files. Emoji ZWJ sequences are
+      # allowed; a deliberate use declares itself with `invisible-chars: allow`.
+      - name: Check for invisible characters
+        run: node scripts/ci/check-invisible-chars.mjs
+
+      # US-641: the DB is shared with every shipped iOS build still on a phone,
+      # so CLAUDE.md forbids DROP COLUMN / DROP TABLE / RENAME / SET NOT NULL in
+      # a single migration. Those rules lived only in a document. DIFF-SCOPED to
+      # migrations added on the branch, so the existing tree (notably the 2026-05
+      # scaffold-table drop) is untouched, and a deliberate case declares itself
+      # with `-- migration-safety: allow <token> (<reason>)`.
+      - name: Check migration safety
+        run: bash scripts/ci/check-migration-safety.sh "origin/${{ github.base_ref || 'main' }}"
+
       # ESLint. The repo carries a large PRE-EXISTING lint backlog (mostly
       # @typescript-eslint/no-explicit-any and unused caught-errors — see
       # US-342). The no-console rule (US-343) is fully satisfied. This used to be

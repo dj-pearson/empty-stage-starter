@@ -1,4 +1,4 @@
-﻿# EatPal Edge Functions Deployment Package
+# EatPal Edge Functions Deployment Package
 
 ## Contents
 

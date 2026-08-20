@@ -45,7 +45,13 @@ export type QueuedOpKind =
   | 'plan.update'
   | 'plan.delete'
   | 'food.update'
-  | 'kid.insert';
+  | 'kid.insert'
+  // US-609: exposure-ladder writes. `ladder.attempt` carries the INTENT of a
+  // quick log (which rung, what outcome), not the resulting row, so the replay
+  // can recompute against whatever the server holds by then. `ladder.patch` is
+  // a direct parent edit (pause, resume, skip) and is an absolute set.
+  | 'ladder.attempt'
+  | 'ladder.patch';
 
 export interface QueuedOp {
   id: string;

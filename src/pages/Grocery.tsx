@@ -592,6 +592,13 @@ export default function Grocery() {
   const groceryVirtualizer = useVirtualizer({
     count: useVirtualGrocery ? flattenedRows.length : 0,
     getScrollElement: () => groceryListParentRef.current,
+    // US-636: first-paint guess only. Rows report their real height back via
+    // measureElement, because no constant covers all of them. Measured in
+    // Chromium: an item row is 53px bare, 65px with a w-10 photo, and 69px on
+    // a coarse pointer, where src/index.css:215 forces every button to a 44px
+    // minimum. Against this 56px guess that used to place each row closer than
+    // it rendered, and the error compounded down the list: 11 overlapping row
+    // pairs with a mouse, and all 22 on touch, the worst by 13px.
     estimateSize: (index) => {
       if (!useVirtualGrocery) return 0;
       const row = flattenedRows[index];
@@ -818,12 +825,13 @@ export default function Grocery() {
                       return (
                         <div
                           key={`header-${row.group}`}
+                          data-index={virtualRow.index}
+                          ref={groceryVirtualizer.measureElement}
                           style={{
                             position: "absolute",
                             top: 0,
                             left: 0,
                             width: "100%",
-                            height: `${virtualRow.size}px`,
                             transform: `translateY(${virtualRow.start}px)`,
                           }}
                           className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between"
@@ -841,6 +849,8 @@ export default function Grocery() {
                     return (
                       <div
                         key={item.id}
+                        data-index={virtualRow.index}
+                        ref={groceryVirtualizer.measureElement}
                         style={{
                           position: "absolute",
                           top: 0,
@@ -885,7 +895,7 @@ export default function Grocery() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, -1)}
                             disabled={item.quantity <= 1}
                             aria-label="Decrease quantity"
@@ -898,7 +908,7 @@ export default function Grocery() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, 1)}
                             aria-label="Increase quantity"
                           >
@@ -908,7 +918,7 @@ export default function Grocery() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                           onClick={() => setEditingItem(item)}
                           aria-label="Edit item"
                         >
@@ -917,7 +927,7 @@ export default function Grocery() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                           onClick={() => handleDeleteItem(item.id)}
                           aria-label="Delete item"
                         >
@@ -991,7 +1001,7 @@ export default function Grocery() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, -1)}
                                 disabled={item.quantity <= 1}
                                 aria-label="Decrease quantity"
@@ -1004,7 +1014,7 @@ export default function Grocery() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, 1)}
                                 aria-label="Increase quantity"
                               >
@@ -1016,7 +1026,7 @@ export default function Grocery() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                               onClick={() => setEditingItem(item)}
                               aria-label="Edit item"
                             >
@@ -1026,7 +1036,7 @@ export default function Grocery() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                               onClick={() => handleDeleteItem(item.id)}
                               aria-label="Delete item"
                             >

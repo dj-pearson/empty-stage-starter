@@ -19,12 +19,47 @@
 #
 #   2. Single-token secrets (Stripe live keys, AWS ids, service-role JWTs) —
 #      matched by shape, with placeholder spellings filtered out.
+#
+#   3. US-556: passwords inline in a connection URI. The leaked Coolify/Postgres
+#      password sat in coolify-migration/DEPLOY_NOW.md as
+#      postgresql://postgres:<pw>@... and in rewrite-history.sh as a literal,
+#      for months after the story recorded the repo side as done. Neither shape
+#      above matches a bare password, so this scanner reported clean the whole
+#      time. A credential between ":" and "@" in a URI is unambiguous, so it is
+#      worth matching by position rather than by entropy.
 set -uo pipefail
 
 fail=0
 
-TOKEN_PATTERNS='sk_live_[0-9a-zA-Z]{16,}|rk_live_[0-9a-zA-Z]{16,}|AKIA[0-9A-Z]{16}|eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJ'
-PLACEHOLDER='example|placeholder|XXXX|REPLACE|your_|dummy|fake|<[a-z_]+>|\$\{|\$\('
+# Widened 2026-08-20 after probing the scanner with nine realistic secret
+# shapes: it caught none of them. The JWT pattern is the one that mattered --
+# it pinned the exact base64 of {"alg":"HS256","typ":"JWT"}, so a token whose
+# header serialises the other way round ({"typ":"JWT","alg":"HS256"}, which is
+# just as common) went straight through. That is the shape of a Supabase
+# service_role key, the single worst thing this repo could commit.
+TOKEN_PATTERNS='sk_live_[0-9a-zA-Z]{16,}|rk_live_[0-9a-zA-Z]{16,}|AKIA[0-9A-Z]{16}'
+# Either header ordering, then a payload. Deliberately not "any three base64
+# segments": that matches too much ordinary text.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|eyJ(hbGciOiJ|0eXAiOiJKV1Qi)[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{8,}"
+# GitHub: personal, OAuth, server, user and refresh tokens, plus fine-grained.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}"
+# Model providers. The repo ships AI features, so these are live risks.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|sk-ant-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}"
+# Google (Analytics, Search Console) and Stripe webhook signing.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|AIza[0-9A-Za-z_-]{35}|whsec_[A-Za-z0-9]{24,}"
+# Resend, named in CLAUDE.md's env list.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|re_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}"
+# An AWS secret access key is 40 base64-ish characters with no distinguishing
+# prefix, so match it only when it is sitting next to its own variable name.
+TOKEN_PATTERNS="${TOKEN_PATTERNS}|[Aa][Ww][Ss]_?[Ss][Ee][Cc][Rr][Ee][Tt][_A-Za-z]*[[:space:]]*[=:][[:space:]]*.?[A-Za-z0-9/+=]{40}"
+
+# scheme://user:password@host -- 8+ chars of password so ":pass@" style
+# examples and short placeholders do not trip it. The PLACEHOLDER filter below
+# still exempts $VAR, ${VAR}, <angle-brackets> and the usual spellings.
+URI_CREDENTIAL_PATTERN='[a-z][a-z0-9+.-]*://[A-Za-z0-9._%-]+:[^:@/[:space:]]{8,}@'
+# \$BARE_VAR added for US-556: the redacted connection strings read
+# postgresql://postgres:\$PGPASSWORD@host, which is a reference, not a value.
+PLACEHOLDER='example|placeholder|XXXX|REPLACE|your_|dummy|fake|<[a-z_]+>|\$\{|\$\(|\$[A-Z][A-Z0-9_]*'
 
 # Only this scanner is exempt — it necessarily contains the patterns it hunts.
 ALLOWLIST='^scripts/ci/check-committed-secrets\.sh$'
@@ -62,7 +97,7 @@ while IFS= read -r file; do
     printf '%s\n' "$pem" | sed 's/^/    /'
   fi
 
-  if matches=$(grep -nEH -e "$TOKEN_PATTERNS" "$file" 2>/dev/null); then
+  if matches=$(grep -nEH -e "$TOKEN_PATTERNS" -e "$URI_CREDENTIAL_PATTERN" "$file" 2>/dev/null); then
     real=$(printf '%s\n' "$matches" | grep -viE "$PLACEHOLDER")
     if [ -n "$real" ]; then
       fail=1

@@ -119,4 +119,100 @@ describe('profile photo object paths', () => {
     expect(uploadPath).not.toContain('Date.now()');
     expect(uploadPath).toContain('generateId()');
   });
+
+  /**
+   * US-635: iOS uploads kid photos to a DIFFERENT bucket ('images', declared
+   * only in the Supabase dashboard, not in any migration here), and it had the
+   * same guessable-path problem the web fix cured: kids/{kidId}-{unixSeconds}.
+   * Given a kid id that is ~86400 guesses for a given day, against a bucket
+   * that is public-read by URL for shipped builds.
+   *
+   * Checked as source text because there is no Swift toolchain in CI.
+   */
+  it('the iOS uploader builds an unguessable object name too', () => {
+    const source = readFileSync(
+      path.resolve(__dirname, '../../ios/EatPal/EatPal/Services/ImageUploadService.swift'),
+      'utf-8',
+    );
+    const uploadPath = source.match(/let path = "([^"]+)"/)?.[1];
+
+    expect(uploadPath).toBeDefined();
+    expect(uploadPath).toContain('UUID().uuidString');
+    expect(uploadPath).not.toContain('timeIntervalSince1970');
+  });
+});
+
+/**
+ * US-634 regression guard: every component that renders a STORED kid photo
+ * goes through KidAvatarImage, which signs it.
+ *
+ * The distinction that matters is stored versus just-picked. A blob: preview of
+ * a file the user selected a moment ago needs no signing, and KidAvatarImage
+ * passes one through untouched. A value read out of kids.profile_picture_url
+ * does need it, and today the difference is invisible -- the bucket is public,
+ * so a plain <AvatarImage> renders fine either way. It stops being invisible at
+ * Release N+1, when the public URL starts returning 403 and the only symptom is
+ * a missing avatar on one screen.
+ *
+ * ManageKidsDialog was excluded from the original wiring on the grounds that it
+ * only ever renders a blob: preview. That was wrong: opening the dialog to EDIT
+ * a kid seeds formData from kid.profile_picture_url, a stored object. Hence
+ * this check rather than a note.
+ */
+describe('US-634: stored kid photos render through KidAvatarImage', () => {
+  const componentsDir = path.join(process.cwd(), 'src', 'components');
+
+  const read = (rel: string) => readFileSync(path.join(componentsDir, rel), 'utf8');
+
+  it('ManageKidsDialog does not render a stored photo through a bare AvatarImage', () => {
+    const src = read('ManageKidsDialog.tsx');
+    expect(src).toContain('KidAvatarImage');
+    // formData.profile_picture_url is seeded from the kid record on edit.
+    expect(src).not.toMatch(/<AvatarImage\s+src=\{formData\.profile_picture_url\}/);
+  });
+
+  /**
+   * The per-file checks below were how this started, and they missed a site:
+   * ApplyTemplateDialog renders kid photos as a plain 24px <img> rather than
+   * through an Avatar, so it was invisible to a search for AvatarImage and to
+   * the enumeration recorded in the story. This sweeps every component instead,
+   * so the next render site added in a shape nobody anticipated is caught by
+   * the same rule.
+   */
+  it('no component renders a kid photo URL through a bare img or AvatarImage', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          // shadcn primitives are off-limits per CLAUDE.md and take a src prop
+          // generically; they are never a kid-photo call site themselves.
+          if (entry.name !== 'ui') walk(full);
+          continue;
+        }
+        if (!entry.name.endsWith('.tsx')) continue;
+        if (entry.name === 'KidAvatarImage.tsx' || entry.name === 'KidPhoto.tsx') continue;
+
+        const src = readFileSync(full, 'utf8');
+        // <img ...> or <AvatarImage ...> whose src is some *.profile_picture_url
+        const bare =
+          /<(?:img|AvatarImage)\b[^>]*\bsrc=\{[^}]*profile_picture_url[^}]*\}/s.exec(src);
+        if (bare) offenders.push(path.relative(componentsDir, full));
+      }
+    };
+    walk(componentsDir);
+
+    // OnboardingDialog is the one legitimate case: its value is only ever the
+    // URL of a file uploaded in that session, never a stored object.
+    expect(offenders).toEqual(['OnboardingDialog.tsx']);
+  });
+
+  it('OnboardingDialog may keep a bare AvatarImage, because its value is only ever a fresh upload', () => {
+    const src = read('OnboardingDialog.tsx');
+    // childData.profile_picture_url starts as "" and is only ever assigned the
+    // URL of a file uploaded in this session, so there is nothing to sign. If
+    // that ever changes -- if the dialog starts loading an existing kid -- this
+    // assertion is the thing that should be revisited, not silently deleted.
+    expect(src).not.toMatch(/profile_picture_url:\s*kid\./);
+  });
 });

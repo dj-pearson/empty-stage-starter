@@ -153,7 +153,7 @@ If you need to keep the existing data:
 
 ```bash
 # On the server
-supabase db pull --db-url "postgresql://postgres:KMAGhTR3gsHnBMWMMkeczGYak8RqHI9V@localhost:5434/postgres"
+supabase db pull --db-url "postgresql://postgres:$PGPASSWORD@localhost:5434/postgres"
 ```
 
 ### Step 2: Merge with Local

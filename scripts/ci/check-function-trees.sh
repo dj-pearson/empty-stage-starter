@@ -18,17 +18,17 @@
 #                         tests. CI runs `deno test functions/_shared/...`
 #                         (ci.yml:182,187), so this tree is NOT dead.
 #
-# 15 function names exist in BOTH trees as parallel implementations for the two
+# 14 function names exist in BOTH trees as parallel implementations for the two
 # runtimes. That ambiguity is what let the US-519 Stripe idempotency work be
 # written into the tree the live server cannot even load: it used serve(), so it
 # was never deployed, and the dedup table shipped empty for a month.
 #
 # Two checks below:
 #   1. HARD  — every FUNCTIONS_MAP entry must resolve in the deployed tree.
-#   2. HARD  — no NEW cross-tree name collisions. The 15 existing ones are
+#   2. HARD  — no NEW cross-tree name collisions. The 14 existing ones are
 #              listed explicitly, mirroring how check-migration-prefixes.sh
 #              grandfathers its known duplicates. Resolving them is tracked
-#              work; adding a 16th is not allowed.
+#              work; adding a 15th is not allowed.
 set -uo pipefail
 
 DEPLOYED="supabase/functions"
@@ -36,11 +36,17 @@ LEGACY="functions"
 SERVER="edge-functions-server.ts"
 fail=0
 
-# The 15 names that exist in both trees today. Do NOT add to this list to
+# The 14 names that exist in both trees today. Do NOT add to this list to
 # silence a new collision — put the function in one tree only.
-KNOWN_COLLISIONS="_shared ai-meal-plan calculate-food-similarity create-checkout generate-blog-content generate-sitemap generate-social-content identify-product parse-receipt-image parse-recipe stripe-webhook suggest-foods suggest-recipe tonight-mode update-blog-image"
+#
+# create-checkout came off this list in US-626: the two copies answered
+# different contracts, only supabase/functions/ was ever called, and the
+# non-deployed copy was deleted after its method check, its
+# Stripe-not-configured branch, its status codes and its US-532 error-detail
+# containment were ported into the deployed one.
+KNOWN_COLLISIONS="_shared ai-meal-plan calculate-food-similarity generate-blog-content generate-sitemap generate-social-content identify-product parse-receipt-image parse-recipe stripe-webhook suggest-foods suggest-recipe tonight-mode update-blog-image"
 
-echo "1/2 FUNCTIONS_MAP entries resolve in ${DEPLOYED}/ ..."
+echo "1/3 FUNCTIONS_MAP entries resolve in ${DEPLOYED}/ ..."
 while IFS= read -r name; do
   [ -n "$name" ] || continue
   if [ ! -d "${DEPLOYED}/${name}" ]; then
@@ -49,7 +55,7 @@ while IFS= read -r name; do
   fi
 done < <(grep -oE '^\s*"[a-z0-9.-]+":' "$SERVER" | tr -d ' ":' )
 
-echo "2/2 no NEW cross-tree name collisions ..."
+echo "2/3 no NEW cross-tree name collisions ..."
 if [ -d "$LEGACY" ]; then
   while IFS= read -r name; do
     [ -n "$name" ] || continue
@@ -64,6 +70,38 @@ if [ -d "$LEGACY" ]; then
     <(find "$LEGACY" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort) \
     <(find "$DEPLOYED" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort))
 fi
+
+# US-616 happened because a NON-DEPLOYED copy got the fix and the deployed one
+# did not: the Stripe idempotency work went into the serve() tree the live
+# server cannot load, so it never shipped and the dedup table stayed empty for a
+# month. US-626 found create-checkout heading the same way, its top-level copy
+# newer than the deployed one by a month.
+#
+# Check 2 above only stops NEW collisions. It cannot see an existing pair
+# drifting, which is the shape the incident actually takes. So: for every known
+# collision, if the top-level copy has a NEWER last-commit date than the
+# deployed one, someone has almost certainly edited the copy that does not ship.
+#
+# Needs history. CI checks out with fetch-depth: 0 (ci.yml:26); if a date comes
+# back empty -- a shallow clone, or a path with no commits -- skip that pair
+# rather than failing on missing information.
+echo "3/3 no known collision has a newer copy in the non-deployed tree ..."
+for name in $KNOWN_COLLISIONS; do
+  [ "$name" = "_shared" ] && continue
+  [ -d "${DEPLOYED}/${name}" ] && [ -d "${LEGACY}/${name}" ] || continue
+
+  deployed_at="$(git log -1 --format=%ct -- "${DEPLOYED}/${name}" 2>/dev/null || true)"
+  legacy_at="$(git log -1 --format=%ct -- "${LEGACY}/${name}" 2>/dev/null || true)"
+  [ -n "$deployed_at" ] && [ -n "$legacy_at" ] || continue
+
+  if [ "$legacy_at" -gt "$deployed_at" ]; then
+    echo "::error title=Non-deployed copy is newer::${LEGACY}/${name} was edited more recently than ${DEPLOYED}/${name}."
+    echo "    The deployed tree is ${DEPLOYED}/. A change made only in ${LEGACY}/ does not ship."
+    echo "    Port it across, or delete the copy that is not deployed."
+    fail=1
+  fi
+done
+
 
 if [ "$fail" -ne 0 ]; then
   echo ""

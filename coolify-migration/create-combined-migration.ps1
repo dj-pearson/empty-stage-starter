@@ -10,7 +10,12 @@ function Write-ColorOutput {
     Write-Host $Message -ForegroundColor $Color
 }
 
-$MigrationDir = "..\supabase\migrations"
+# [IO.Path]::Combine, not a literal "..\supabase\migrations": that string is a
+# Windows-only path AND it was resolved against the caller's working directory
+# while $OutputPath below uses $PSScriptRoot, so the script only worked when run
+# from inside this folder on Windows. Combine works on both platforms and both
+# PowerShell 5.1 and 7.
+$MigrationDir = [System.IO.Path]::Combine($PSScriptRoot, "..", "supabase", "migrations")
 $OutputPath = Join-Path $PSScriptRoot $OutputFile
 
 Write-ColorOutput "===================================" "Yellow"
@@ -58,11 +63,29 @@ foreach ($File in $MigrationFiles) {
     $Content += "-- Migration ${count}: ${Filename}`n"
     $Content += "-- ============================================`n`n"
     
-    # Read migration content
-    $migrationContent = Get-Content $File.FullName -Raw
+    # Read migration content.
+    # -Encoding UTF8 is required: Windows PowerShell 5.1 otherwise decodes with
+    # the system ANSI codepage, which turns every multi-byte character in a
+    # migration into mojibake. That is how the committed dumps ended up with
+    # the emoji comment in meal_voting reading as Latin-1 garbage.
+    $migrationContent = Get-Content $File.FullName -Raw -Encoding UTF8
+
+    # The wrapper below is a dollar-quoted DO block, and dollar quotes do not
+    # nest unless the tags differ. Wrapping in a plain DO $$ ... $$ was the bug
+    # that made every generated bundle invalid SQL: the first migration
+    # containing its own $$ (most of them define a function or a trigger)
+    # closed the wrapper early, and everything after it parsed as top-level
+    # SQL. A clean Postgres 16 reported 1280 syntax errors and an unterminated
+    # dollar-quoted string at the end of the file. $eatpal_migration$ is unique
+    # against every tag the migrations actually use ($$, $function$, $ep_md$,
+    # $pol$ and the rest), and this check keeps it that way.
+    if ($migrationContent -match '\$eatpal_migration\$') {
+        Write-ColorOutput "Error: $Filename contains the wrapper tag \$eatpal_migration\$; pick another tag." "Red"
+        exit 1
+    }
     
     # Wrap in DO block for error handling
-    $Content += "DO `$`$ `n"
+    $Content += "DO `$eatpal_migration`$ `n"
     $Content += "BEGIN`n"
     $Content += "    -- Check if migration already applied`n"
     $Content += "    IF NOT EXISTS (SELECT 1 FROM _migrations WHERE filename = '${Filename}' AND success = true) THEN`n"
@@ -82,14 +105,14 @@ foreach ($File in $MigrationFiles) {
     $Content += "    ELSE`n"
     $Content += "        RAISE NOTICE 'Skipping already applied migration: %', '${Filename}';`n"
     $Content += "    END IF;`n"
-    $Content += "END `$`$;`n`n"
+    $Content += "END `$eatpal_migration`$;`n`n"
 }
 
 # Add final summary
 $Content += "`n-- ============================================`n"
 $Content += "-- Migration Summary`n"
 $Content += "-- ============================================`n`n"
-$Content += "DO `$`$ `n"
+$Content += "DO `$eatpal_migration`$ `n"
 $Content += "DECLARE`n"
 $Content += "    total_count INTEGER;`n"
 $Content += "    success_count INTEGER;`n"
@@ -104,10 +127,18 @@ $Content += "    RAISE NOTICE '  Total:   %', total_count;`n"
 $Content += "    RAISE NOTICE '  Success: %', success_count;`n"
 $Content += "    RAISE NOTICE '  Failed:  %', failed_count;`n"
 $Content += "    RAISE NOTICE '===================================';`n"
-$Content += "END `$`$;`n"
+$Content += "END `$eatpal_migration`$;`n"
 
-# Write to file
-Set-Content -Path $OutputPath -Value $Content -Encoding UTF8
+# Write to file.
+# NOT Set-Content -Encoding UTF8: in Windows PowerShell 5.1 that writes a BOM,
+# and psql reports `syntax error at or near ""` on the first line of a SQL file
+# that starts with one. UTF8Encoding($false) is UTF-8 without a BOM on both
+# PowerShell 5.1 and 7.
+[System.IO.File]::WriteAllText(
+    $OutputPath,
+    $Content,
+    (New-Object System.Text.UTF8Encoding($false))
+)
 
 Write-Host ""
 Write-ColorOutput "Success! Combined migration file created!" "Green"

@@ -37,7 +37,14 @@ enum ImageUploadService {
             throw ImageUploadError.tooLarge
         }
 
-        let path = "\(folder.rawValue)/\(id)-\(Int(Date().timeIntervalSince1970)).jpg"
+        // US-635: a random object name instead of "{id}-{unixSeconds}".
+        // The old shape was brute-forceable: given a kid id, an attacker only
+        // had to try the ~86400 seconds in a day to find the photo, and the
+        // bucket is public-read by URL for shipped builds. `id` is kept in the
+        // signature for the call sites but deliberately no longer appears in
+        // the path. Matches the US-627 web fix, which switched profile-pictures
+        // to a random object name for the same reason.
+        let path = "\(folder.rawValue)/\(UUID().uuidString).jpg"
 
         try await client.storage
             .from(bucketName)

@@ -31,7 +31,7 @@ COOLIFY_API_TOKEN=your-api-token-from-step-1
 COOLIFY_TEAM_ID=your-team-id-optional
 
 # Supabase on Coolify
-COOLIFY_POSTGRES_URL=postgresql://postgres:PASSWORD@CONTABO-IP:5432/postgres
+COOLIFY_POSTGRES_URL=postgresql://postgres:$PGPASSWORD@CONTABO-IP:5432/postgres
 ```
 
 ### 3. Configure MCP in Cursor/Claude
