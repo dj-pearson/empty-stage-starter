@@ -141,3 +141,42 @@ describe('profile photo object paths', () => {
     expect(uploadPath).not.toContain('timeIntervalSince1970');
   });
 });
+
+/**
+ * US-634 regression guard: every component that renders a STORED kid photo
+ * goes through KidAvatarImage, which signs it.
+ *
+ * The distinction that matters is stored versus just-picked. A blob: preview of
+ * a file the user selected a moment ago needs no signing, and KidAvatarImage
+ * passes one through untouched. A value read out of kids.profile_picture_url
+ * does need it, and today the difference is invisible -- the bucket is public,
+ * so a plain <AvatarImage> renders fine either way. It stops being invisible at
+ * Release N+1, when the public URL starts returning 403 and the only symptom is
+ * a missing avatar on one screen.
+ *
+ * ManageKidsDialog was excluded from the original wiring on the grounds that it
+ * only ever renders a blob: preview. That was wrong: opening the dialog to EDIT
+ * a kid seeds formData from kid.profile_picture_url, a stored object. Hence
+ * this check rather than a note.
+ */
+describe('US-634: stored kid photos render through KidAvatarImage', () => {
+  const componentsDir = path.join(process.cwd(), 'src', 'components');
+
+  const read = (rel: string) => readFileSync(path.join(componentsDir, rel), 'utf8');
+
+  it('ManageKidsDialog does not render a stored photo through a bare AvatarImage', () => {
+    const src = read('ManageKidsDialog.tsx');
+    expect(src).toContain('KidAvatarImage');
+    // formData.profile_picture_url is seeded from the kid record on edit.
+    expect(src).not.toMatch(/<AvatarImage\s+src=\{formData\.profile_picture_url\}/);
+  });
+
+  it('OnboardingDialog may keep a bare AvatarImage, because its value is only ever a fresh upload', () => {
+    const src = read('OnboardingDialog.tsx');
+    // childData.profile_picture_url starts as "" and is only ever assigned the
+    // URL of a file uploaded in this session, so there is nothing to sign. If
+    // that ever changes -- if the dialog starts loading an existing kid -- this
+    // assertion is the thing that should be revisited, not silently deleted.
+    expect(src).not.toMatch(/profile_picture_url:\s*kid\./);
+  });
+});
