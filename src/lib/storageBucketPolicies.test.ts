@@ -171,6 +171,42 @@ describe('US-634: stored kid photos render through KidAvatarImage', () => {
     expect(src).not.toMatch(/<AvatarImage\s+src=\{formData\.profile_picture_url\}/);
   });
 
+  /**
+   * The per-file checks below were how this started, and they missed a site:
+   * ApplyTemplateDialog renders kid photos as a plain 24px <img> rather than
+   * through an Avatar, so it was invisible to a search for AvatarImage and to
+   * the enumeration recorded in the story. This sweeps every component instead,
+   * so the next render site added in a shape nobody anticipated is caught by
+   * the same rule.
+   */
+  it('no component renders a kid photo URL through a bare img or AvatarImage', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          // shadcn primitives are off-limits per CLAUDE.md and take a src prop
+          // generically; they are never a kid-photo call site themselves.
+          if (entry.name !== 'ui') walk(full);
+          continue;
+        }
+        if (!entry.name.endsWith('.tsx')) continue;
+        if (entry.name === 'KidAvatarImage.tsx' || entry.name === 'KidPhoto.tsx') continue;
+
+        const src = readFileSync(full, 'utf8');
+        // <img ...> or <AvatarImage ...> whose src is some *.profile_picture_url
+        const bare =
+          /<(?:img|AvatarImage)\b[^>]*\bsrc=\{[^}]*profile_picture_url[^}]*\}/s.exec(src);
+        if (bare) offenders.push(path.relative(componentsDir, full));
+      }
+    };
+    walk(componentsDir);
+
+    // OnboardingDialog is the one legitimate case: its value is only ever the
+    // URL of a file uploaded in that session, never a stored object.
+    expect(offenders).toEqual(['OnboardingDialog.tsx']);
+  });
+
   it('OnboardingDialog may keep a bare AvatarImage, because its value is only ever a fresh upload', () => {
     const src = read('OnboardingDialog.tsx');
     // childData.profile_picture_url starts as "" and is only ever assigned the

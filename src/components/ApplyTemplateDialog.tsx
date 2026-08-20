@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { KidPhoto } from "@/components/KidPhoto";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -229,7 +230,7 @@ export function ApplyTemplateDialog({
                         className="flex-1 cursor-pointer flex items-center gap-2"
                       >
                         {kid.profile_picture_url ? (
-                          <img
+                          <KidPhoto
                             src={kid.profile_picture_url}
                             alt={kid.name}
                             className="w-6 h-6 rounded-full object-cover"
