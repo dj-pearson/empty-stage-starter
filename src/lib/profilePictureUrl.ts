@@ -1,3 +1,5 @@
+import { parseStorageObjectUrl, type StorageObjectRef } from '@/lib/storagePaths';
+
 /**
  * US-634: turn a stored public profile-picture URL into a signed one.
  *
@@ -37,10 +39,7 @@ export const SIGNED_URL_REFRESH_MARGIN_SECONDS = 60;
  */
 export const PROFILE_PICTURE_BUCKETS = ['profile-pictures', 'images'] as const;
 
-export interface StorageObjectRef {
-  bucket: string;
-  path: string;
-}
+export type { StorageObjectRef };
 
 /**
  * Recover the bucket and storage object path from a stored public URL.
@@ -59,31 +58,25 @@ export function storageRefFromPublicUrl(
   buckets: readonly string[] = PROFILE_PICTURE_BUCKETS,
 ): StorageObjectRef | null {
   if (!url || typeof url !== 'string') return null;
+  // A just-picked file, not a stored object. Nothing to sign.
   if (url.startsWith('data:') || url.startsWith('blob:')) return null;
 
-  for (const bucket of buckets) {
-    const marker = `/storage/v1/object/public/${bucket}/`;
-    const at = url.indexOf(marker);
-    if (at === -1) continue;
+  // US-628's parser rather than a second one. Two functions turning the same
+  // stored URL into (bucket, path) had already drifted: this one understood
+  // only /object/public/, while the delete path also handled /object/sign/ and
+  // refused a path containing "..". A read path and a delete path disagreeing
+  // about what a URL means is exactly the kind of difference nobody notices
+  // until an object is signed but never cleaned up.
+  const ref = parseStorageObjectUrl(url);
+  if (!ref) return null;
 
-    const rest = url.slice(at + marker.length);
-    if (!rest) continue;
+  // The one thing this adds: only sign buckets that hold kid photos. The delete
+  // path is deliberately bucket-agnostic -- it removes whatever the record
+  // points at -- but signing an arbitrary bucket because a URL named it is a
+  // different matter.
+  if (!buckets.includes(ref.bucket)) return null;
 
-    // Drop any query string or fragment the stored value picked up.
-    const raw = rest.split(/[?#]/)[0];
-    if (!raw) continue;
-
-    let path: string;
-    try {
-      path = decodeURIComponent(raw);
-    } catch {
-      // A malformed escape sequence is not worth throwing over mid-render.
-      path = raw;
-    }
-    return { bucket, path };
-  }
-
-  return null;
+  return ref;
 }
 
 /**

@@ -47,10 +47,41 @@ describe('objectPathFromPublicUrl (US-634)', () => {
     ['a data: URI', 'data:image/png;base64,iVBORw0KG'],
     ['an external avatar', 'https://lh3.googleusercontent.com/a/default-user'],
     ['a URL into a different bucket', 'https://abc.supabase.co/storage/v1/object/public/images/kids/x.jpg'],
-    ['a signed URL that is already signed', 'https://abc.supabase.co/storage/v1/object/sign/profile-pictures/u/p.jpg?token=x'],
     ['the marker with nothing after it', 'https://abc.supabase.co/storage/v1/object/public/profile-pictures/'],
   ])('returns null for %s', (_label, value) => {
     expect(objectPathFromPublicUrl(value as string | null | undefined)).toBeNull();
+  });
+
+  it('recovers the path from an already-signed URL rather than declining it', () => {
+    // This used to return null, back when this file carried its own parser that
+    // only knew /object/public/. Delegating to US-628's parser changed it, and
+    // the new answer is the better one: a signed URL handed to the hook would
+    // otherwise be rendered as-is and never refreshed, so the avatar would
+    // break the moment that token expired. Re-signing it is self-healing.
+    expect(
+      objectPathFromPublicUrl(
+        'https://abc.supabase.co/storage/v1/object/sign/profile-pictures/u/p.jpg?token=x',
+      ),
+    ).toBe('u/p.jpg');
+  });
+
+  it('refuses a path traversal, which the parser here previously did not check', () => {
+    expect(
+      objectPathFromPublicUrl(
+        'https://abc.supabase.co/storage/v1/object/public/profile-pictures/u/../../etc/x.jpg',
+      ),
+    ).toBeNull();
+  });
+
+  it('does not throw on a malformed escape', () => {
+    // decodeURIComponent raises URIError on "%zz", and parseStorageObjectUrl is
+    // called BEFORE deleteStorageObject's try block -- so this used to escape as
+    // an unhandled rejection out of a void-ed call during the kid save flow.
+    expect(() =>
+      objectPathFromPublicUrl(
+        'https://abc.supabase.co/storage/v1/object/public/profile-pictures/u/a%zz.jpg',
+      ),
+    ).not.toThrow();
   });
 });
 

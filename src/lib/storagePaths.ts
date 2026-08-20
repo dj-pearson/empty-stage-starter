@@ -32,8 +32,12 @@ export function parseStorageObjectUrl(url: string | null | undefined): StorageOb
   if (!marker) return null;
 
   const afterMarker = url.slice(url.indexOf(marker) + marker.length);
-  // Signed URLs carry a ?token=; public ones can still pick up a cache-buster.
-  const withoutQuery = afterMarker.split('?')[0];
+  // Signed URLs carry a ?token=; public ones can still pick up a cache-buster,
+  // and a stored value can carry a #fragment. Neither is part of the object
+  // path -- keeping a fragment meant remove() was called with
+  // "user-1/photo.jpg#top", which matches nothing, so the cleanup quietly
+  // failed and left the object behind.
+  const withoutQuery = afterMarker.split(/[?#]/)[0];
   const separator = withoutQuery.indexOf('/');
   if (separator <= 0) return null;
 
@@ -45,5 +49,21 @@ export function parseStorageObjectUrl(url: string | null | undefined): StorageOb
   // database. Refuse traversal rather than handing it to storage.remove().
   if (path.includes('..')) return null;
 
-  return { bucket, path: decodeURIComponent(path) };
+  return { bucket, path: decodePathSafely(path) };
+}
+
+/**
+ * decodeURIComponent throws a URIError on a malformed escape ("a%zz.jpg"), and
+ * this function is called BEFORE the caller's try block in
+ * deleteStorageObject -- so a single stray % in a stored URL escaped as an
+ * unhandled rejection out of a `void deleteReplacedStorageObject(...)` during
+ * the kid save flow. A path that will not decode is still a path; hand back
+ * what is there and let storage answer for it.
+ */
+function decodePathSafely(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 }
