@@ -158,11 +158,18 @@ function main() {
   fs.writeFileSync(path.join(ROOT, 'prd-verify-report.json'), JSON.stringify(summary, null, 2));
 
   if (APPLY && flippedIds.length) {
-    // Preserve exact formatting (2-space, no trailing newline) for a minimal diff.
-    // Trailing newline: prd.json has one, and every editor and formatter that
-    // touches it restores one. Writing without it means each --apply run
-    // strips a byte off a 560kB file, so the flip commit carries a stray
-    // no-op line and the next hand edit flips it back.
+    // Preserve prd.json's exact formatting for a minimal diff: 2-space indent
+    // AND a trailing newline. The original of this line said "no trailing
+    // newline" and wrote accordingly, which was simply wrong about the file --
+    // prd.json ends 0a on main and has for its whole history, and every editor
+    // and formatter that touches it puts one back. Writing without it made the
+    // flip commit carry a stray no-op line for the next hand edit to flip back.
+    //
+    // Scope, since the first version of this comment overstated it: the write
+    // is guarded by `flippedIds.length` above, so only a run that actually
+    // flips a story writes the file at all. A run that flips nothing never
+    // touched prd.json either way, which is why the workflow's
+    // `git diff --quiet` guard reported clean before this fix as well.
     fs.writeFileSync(PRD, JSON.stringify(prd, null, 2) + '\n');
     const block = [
       '',
