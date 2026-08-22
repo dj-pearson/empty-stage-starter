@@ -65,6 +65,29 @@ check() {
 }
 
 
+# Same as check(), plus an exclusion. Needed because Postgres makes COLUMN
+# optional: `ALTER TABLE t DROP c` drops a column just as `DROP COLUMN c` does,
+# and `ALTER TABLE t ALTER c TYPE x` changes a type just as `ALTER COLUMN` does.
+# Both walked past this gate, which names those exact operations as forbidden.
+# A pattern broad enough to catch the short form also catches the entirely
+# legitimate DROP CONSTRAINT, DROP DEFAULT and DROP NOT NULL, so: match wide,
+# then subtract the safe spellings.
+#
+# Known limit: a single statement containing BOTH a safe drop and a column drop
+# is excluded. Splitting statements properly is a parser's job.
+check_excluding() {
+  local file="$1" token="$2" pattern="$3" safe="$4" why="$5"
+  grep -qiE "^[[:space:]]*--[[:space:]]*migration-safety:[[:space:]]*allow[[:space:]]+${token}\b" "$file" && return 0
+  local hits
+  hits="$(grep -inE "$pattern" "$file" | grep -vE '^[0-9]+:[[:space:]]*--' | grep -viE "$safe" || true)"
+  [ -z "$hits" ] && return 0
+  echo "::error title=Backward-incompatible migration::${file} uses ${token}."
+  printf '%s\n' "$hits" | sed 's/^/      /'
+  echo "      ${why}"
+  echo "      If this is deliberate, add: -- migration-safety: allow ${token} (<reason>)"
+  fail=1
+}
+
 # DROP POLICY on its own is not a signal. The idiomatic way to make a policy
 # migration re-runnable is DROP POLICY IF EXISTS followed by CREATE POLICY with
 # the same name, and across this repo's 207 migrations that accounts for 147 of
@@ -108,7 +131,9 @@ echo "Checking $(printf '%s\n' "${added_files}" | grep -c .) new migration(s) fo
 
 for file in ${added_files}; do
   [ -f "$file" ] || continue
-  check "$file" "drop-column"  'alter[[:space:]]+table[^;]*drop[[:space:]]+column' \
+  check_excluding "$file" "drop-column" \
+        'alter[[:space:]]+table[^;]*drop[[:space:]]+(column[[:space:]]+)?(if[[:space:]]+exists[[:space:]]+)?["a-z_]' \
+        'drop[[:space:]]+(constraint|default|not[[:space:]]+null|identity|expression|generated)' \
         "An old client still SELECTing that column breaks. Deprecate over two releases."
   check "$file" "drop-table"   'drop[[:space:]]+table' \
         "An old client still reading that table breaks. Deprecate over two releases."
@@ -117,7 +142,8 @@ for file in ${added_files}; do
   check "$file" "set-not-null" 'set[[:space:]]+not[[:space:]]+null' \
         "An old client INSERT that omits the column starts failing. Add a default first."
   check_policy_removal "$file"
-  check "$file" "type-change"  'alter[[:space:]]+column[^;]*type' \
+  check "$file" "type-change" \
+        'alter[[:space:]]+column[^;]*type|alter[[:space:]]+table[^;]*[[:space:]]alter[[:space:]]+(column[[:space:]]+)?["a-z_]+[[:space:]]+type[[:space:]]' \
         "Changing a type in place breaks old readers and writers. Add a new column and migrate."
 done
 
