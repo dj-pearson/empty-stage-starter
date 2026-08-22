@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 
+const captured: { message: string; tags: Record<string, string> }[] = [];
+vi.mock('@sentry/react', () => ({
+  captureException: (e: Error, opts: { tags: Record<string, string> }) => {
+    captured.push({ message: e.message, tags: opts.tags });
+  },
+}));
+
 const removeCalls: { bucket: string; paths: string[] }[] = [];
 let removeError: { message: string } | null = null;
 let removeThrows = false;
@@ -41,6 +48,8 @@ beforeEach(() => {
   removeError = null;
   removeThrows = false;
   removeData = [{ name: 'removed' }];
+  captured.length = 0;
+  vi.stubEnv('VITE_SENTRY_ENABLED', 'true');
 });
 
 describe('deleteStorageObject', () => {
@@ -76,6 +85,36 @@ describe('deleteStorageObject', () => {
     expect(removed).toBe(false);
     // The call still went out; the point is what we conclude from the answer.
     expect(removeCalls).toEqual([{ bucket: 'profile-pictures', paths: ['legacy-photo.jpg'] }]);
+  });
+
+  /**
+   * The round-6 fix returned false and logged a warning, and that was called
+   * "loud". It was not: every caller discards the boolean, and logger.warn
+   * reaches console.warn and nothing else. An orphaned child photo is a
+   * Privacy Policy problem, so it has to leave the browser.
+   */
+  it('reports an RLS-denied removal to Sentry, not just the console', async () => {
+    removeData = [];
+
+    await deleteStorageObject(`${BASE}/profile-pictures/legacy-photo.jpg`);
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].message).toContain('RLS denied it');
+    expect(captured[0].tags).toEqual({ type: 'storage_orphan' });
+  });
+
+  it('reports a storage API error the same way', async () => {
+    removeError = { message: 'boom' };
+
+    await deleteStorageObject(`${BASE}/profile-pictures/user-1/photo.jpg`);
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].tags).toEqual({ type: 'storage_orphan' });
+  });
+
+  it('says nothing when the object really was removed', async () => {
+    await deleteStorageObject(`${BASE}/profile-pictures/user-1/photo.jpg`);
+    expect(captured).toEqual([]);
   });
 
   it('leaves a non-storage URL alone', async () => {

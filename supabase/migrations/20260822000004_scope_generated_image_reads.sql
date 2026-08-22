@@ -26,7 +26,18 @@
 -- and INTENTIONALLY_PUBLIC_BUCKETS in src/lib/storageBucketPolicies.test.ts is
 -- empty -- so that guard stops carrying exemptions and becomes absolute.
 --
--- Policy-only and additive in effect. The bucket's public flag is unchanged.
+-- Policy-only. The bucket's public flag is unchanged.
+--
+-- This IS a narrowing, and the gate is right to stop it: the replacement drops
+-- anon's SELECT and carries a different name, so check-migration-safety.sh
+-- counts it as a removal. Acknowledged rather than worked around, with the
+-- check the gate asks for actually done -- "confirm no live build depends on
+-- it". No shipped client reads through this policy: reads of a public bucket
+-- bypass RLS, the only two callers hold the service-role key, and nothing in
+-- src, app, functions, ios or scripts calls list() on this bucket.
+-- migration-safety: allow drop-policy (US-643: closes anon enumeration of
+-- generated-images; public reads bypass RLS so no shipped client loses access,
+-- and the only callers use the service-role key)
 
 DROP POLICY IF EXISTS "Public can view generated images" ON storage.objects;
 -- The new name too, or a replay dies on "policy already exists". The other

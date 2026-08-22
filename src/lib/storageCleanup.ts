@@ -1,6 +1,30 @@
+import * as Sentry from '@sentry/react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { parseStorageObjectUrl } from '@/lib/storagePaths';
+
+/**
+ * An object we meant to delete and did not is a Privacy Policy problem, not a
+ * debug line: the promise is that deleting a child profile deletes the data.
+ * Every caller discards this module's return value (`void
+ * deleteReplacedStorageObject(...)`, and KidsContext ignores it), and
+ * logger.warn reaches console.warn and nothing else -- so without this the
+ * orphan is recorded in a browser console nobody reads.
+ *
+ * Reported here rather than through either logError helper: there are two of
+ * them, in sentry.tsx and api-errors.ts, and both stamp a `source` tag that is
+ * not this one. A compliance signal filed under the wrong source is a signal
+ * nobody finds.
+ */
+function reportOrphanedObject(reason: string, context: Record<string, unknown>): void {
+  logger.warn(`Storage object was not removed: ${reason}`, context);
+  if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
+    Sentry.captureException(new Error(`Storage object not removed: ${reason}`), {
+      tags: { type: 'storage_orphan' },
+      extra: context,
+    });
+  }
+}
 
 /**
  * US-628: removes an uploaded photo given the public URL stored on the record.
@@ -22,7 +46,11 @@ export async function deleteStorageObject(url: string | null | undefined): Promi
   try {
     const { data, error } = await supabase.storage.from(ref.bucket).remove([ref.path]);
     if (error) {
-      logger.error('Failed to delete storage object:', { bucket: ref.bucket, error });
+      reportOrphanedObject('the storage API returned an error', {
+        bucket: ref.bucket,
+        path: ref.path,
+        error,
+      });
       return false;
     }
     // An RLS-blocked removal is NOT an error. storage.remove() returns the list
@@ -34,7 +62,7 @@ export async function deleteStorageObject(url: string | null | undefined): Promi
     // 20260822000003 gives the write policies the same owner branch; this makes
     // the next such gap loud instead of silent.
     if (Array.isArray(data) && data.length === 0) {
-      logger.warn('Storage object was not removed (no matching object, or RLS denied it):', {
+      reportOrphanedObject('no matching object, or RLS denied it', {
         bucket: ref.bucket,
         path: ref.path,
       });
@@ -42,7 +70,7 @@ export async function deleteStorageObject(url: string | null | undefined): Promi
     }
     return true;
   } catch (err) {
-    logger.error('Failed to delete storage object:', err);
+    reportOrphanedObject('the storage call threw', { bucket: ref.bucket, path: ref.path, err });
     return false;
   }
 }
