@@ -36,3 +36,12 @@ declare module '*/scripts/prerender.mjs' {
     dynamicFailed: number;
   }): { fatal: boolean; reason: string };
 }
+
+declare module '*/scripts/dev/serve-dist.mjs' {
+  export function resolveCandidates(distDir: string, pathname: string): string[];
+
+  export function resolveRequest(
+    distDir: string,
+    pathname: string
+  ): { file: string; fallback: boolean } | null;
+}
