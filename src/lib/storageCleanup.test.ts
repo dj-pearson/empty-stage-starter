@@ -5,6 +5,14 @@ import path from 'path';
 const removeCalls: { bucket: string; paths: string[] }[] = [];
 let removeError: { message: string } | null = null;
 let removeThrows = false;
+/**
+ * What storage.remove() hands back on success: the objects it actually removed.
+ * The original stub returned `data: null` here, which no real call ever does,
+ * and that is why the RLS-denied case went unnoticed for so long -- the test
+ * could not tell "removed one object" apart from "removed nothing", because
+ * neither shape reached the assertion.
+ */
+let removeData: Array<{ name: string }> | null = [{ name: 'removed' }];
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
@@ -13,7 +21,7 @@ vi.mock('@/integrations/supabase/client', () => ({
         remove: async (paths: string[]) => {
           if (removeThrows) throw new Error('network down');
           removeCalls.push({ bucket, paths });
-          return { data: null, error: removeError };
+          return { data: removeData, error: removeError };
         },
       }),
     },
@@ -32,6 +40,7 @@ beforeEach(() => {
   removeCalls.length = 0;
   removeError = null;
   removeThrows = false;
+  removeData = [{ name: 'removed' }];
 });
 
 describe('deleteStorageObject', () => {
@@ -53,6 +62,20 @@ describe('deleteStorageObject', () => {
     expect(await deleteStorageObject(null)).toBe(false);
     expect(await deleteStorageObject('')).toBe(false);
     expect(removeCalls).toEqual([]);
+  });
+
+  it('reports failure when RLS hid the row, which Supabase calls success', async () => {
+    // The real shape of an RLS-denied removal: no error, and an empty list.
+    // Before US-634's parity migration this was the live behaviour for a
+    // profile-pictures object owned by the caller but stored outside their
+    // folder -- readable by them, undeletable by them, reported as deleted.
+    removeData = [];
+
+    const removed = await deleteStorageObject(`${BASE}/profile-pictures/legacy-photo.jpg`);
+
+    expect(removed).toBe(false);
+    // The call still went out; the point is what we conclude from the answer.
+    expect(removeCalls).toEqual([{ bucket: 'profile-pictures', paths: ['legacy-photo.jpg'] }]);
   });
 
   it('leaves a non-storage URL alone', async () => {

@@ -298,3 +298,43 @@ describe('US-635: no shipped iOS build lists a storage bucket', () => {
     expect(src).toMatch(/\.remove\(/);
   });
 });
+
+/**
+ * US-634 / US-628: the read and write policies on profile-pictures must agree
+ * about what "yours" means.
+ *
+ * 20251008025307 wrote all four against the path. 20260817000000 scoped SELECT
+ * and added `OR owner = auth.uid()`, because the path is only a proxy for
+ * ownership and misses objects uploaded before the convention settled. DELETE
+ * and UPDATE kept the path-only test, so the owning parent could read a legacy
+ * photo of their child and not delete it -- and storage.remove() reports an
+ * RLS-denied removal as success with an empty list, so nothing said so.
+ *
+ * Measured on PostgreSQL 16.13: before 20260822000003 the owner read 2 objects
+ * and deleted 1; after it, 2 and 2.
+ */
+describe('US-634: profile-pictures write policies match the read policy', () => {
+  const parity = '20260822000003_profile_picture_write_owner_parity.sql';
+  const ownerBranch = /OR\s+owner\s*=\s*auth\.uid\(\)/i;
+
+  const statementFor = (sql: string, cmd: string) => {
+    const start = sql.indexOf(`FOR ${cmd}`);
+    return start === -1 ? '' : sql.slice(start, sql.indexOf(';', start));
+  };
+
+  it('replaces DELETE and UPDATE by name, which only a migration-declared policy allows', () => {
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, parity), 'utf-8');
+    expect(sql).toMatch(/DROP POLICY IF EXISTS "Users can delete their own profile pictures"/i);
+    expect(sql).toMatch(/DROP POLICY IF EXISTS "Users can update their own profile pictures"/i);
+  });
+
+  it.each(['DELETE', 'UPDATE'])('gives %s the same owner branch SELECT has', (cmd) => {
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, parity), 'utf-8');
+    expect(statementFor(sql, cmd)).toMatch(ownerBranch);
+  });
+
+  it('leaves INSERT alone: a new object has no owner yet', () => {
+    const sql = stripComments(readFileSync(path.join(MIGRATIONS_DIR, parity), 'utf-8'));
+    expect(sql).not.toMatch(/FOR\s+INSERT/i);
+  });
+});
