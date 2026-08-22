@@ -20,6 +20,20 @@
 // produces 16/16 routes, and /blog/:slug ships its own title, canonical,
 // description, OG tags and body copy.
 //
+// GUIDES, and what running one taught: pointing this at a pseo_pages row with a
+// multi-segment slug ("food-chaining/chicken-nuggets") showed the nested route
+// works end to end up to the template's own content contract. Discovery found
+// it, the pattern expanded to /guides/food-chaining/chicken-nuggets, App.tsx's
+// splat matched, the slug round-tripped URL-encoded (slug=eq.food-chaining%2F
+// chicken-nuggets), the stub answered 200 and the per-route <title> was set.
+// The page then crashed inside the template on the invented content shape, the
+// ErrorBoundary caught it, and the prerender refused the route.
+//
+// That is worth knowing for a reason beyond the route: the TITLE WAS CORRECT ON
+// A CRASHED PAGE. What caught it was the canonical being unset -- which is
+// exactly why prerender.mjs checks the canonical rather than trusting title,
+// description and a text-length floor, as the comment there says.
+//
 // WHAT IT DOES NOT PROVE: that production returns those rows. That is the drift
 // check named in us-570-content-read-check.sql's header, and it still needs one
 // real build. This stub answers the mechanism, not the data.
@@ -67,6 +81,7 @@ const POSTS = [
   },
 ];
 
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': '*',
@@ -94,7 +109,21 @@ createServer((req, res) => {
     return res.end(JSON.stringify(single ? (rows[0] ?? null) : rows));
   }
 
-  // pseo_pages and anything else: an empty set is a valid answer.
+  if (url.pathname === '/rest/v1/pseo_pages') {
+    const slug = url.searchParams.get('slug');
+    // Deliberately empty. A guide row was tried here and the nested route it
+    // produces works -- see the header -- but the FOOD_CHAINING_GUIDE template
+    // reads a rich content object (headline, validation{}, explainer{},
+    // progression[], sharedProperties{}, techniques[], troubleshooting{}) that
+    // is AI-generated at runtime and defined by no static type. Inventing one
+    // means a fixture that renders a plausible-looking page proving nothing
+    // about the real schema, and a dev tool whose default run fails the build.
+    const single = (req.headers.accept || '').includes('vnd.pgrst.object');
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(single ? 'null' : '[]');
+  }
+
+  // anything else: an empty set is a valid answer.
   res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
   res.end('[]');
 }).listen(PORT, '127.0.0.1', () => {
