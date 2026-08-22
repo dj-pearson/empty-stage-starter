@@ -25,6 +25,8 @@
 --      the object at the bucket root
 --   4  kids split none 1 / images 1 / profile-pictures 1
 --   5  5 objects, 2 signable via owner, 1 via a uuid folder, 2 unsignable
+--   6  images: 2 objects, 1 signable via owner, 1 unsignable, 1 top folder
+--   7  profile-pictures 5 objects / 3 owner-null, images 2 / 1
 --
 -- The 2 unsignable are the US-634 pre-condition: no owner and no uuid folder
 -- means createSignedUrl cannot mint a URL for them at all, so they need an

@@ -3,13 +3,16 @@
 -- READ ONLY. Nothing here changes anything. Run it in the Supabase SQL editor
 -- (or psql against production) and paste the output into the story.
 --
--- Verified 2026-08-22: all FIVE queries run clean (psql exit 0) against a
+-- Verified 2026-08-22: all SEVEN queries run clean (psql exit 0) against a
 -- PostgreSQL 16.13 stand-in shaped like Supabase's storage schema --
 -- storage.buckets with its real columns, storage.objects,
 -- storage.foldername(), public.kids -- carrying objects at a folder and at the
 -- bucket root, an owner-less object, an object whose first path segment is not
 -- a uuid, and both a bucket-scoped and a bucket-agnostic RLS policy. The header
 -- said "all four" until then; query 5 was added later and had never been run.
+-- Queries 6 and 7 were added after noticing query 5 asks its question of
+-- profile-pictures ALONE, leaving the bucket the iOS app actually writes to
+-- unexamined by the very file that exists to examine it.
 --
 -- The harness is checked in as us-635-standin-check.sql, so these claims can be
 -- re-run rather than believed. It matters that it uses Supabase's REAL
@@ -161,3 +164,43 @@ WHERE bucket_id = 'profile-pictures';
 --     -> owner-scoped SELECT would make those rows unreadable to everyone.
 --        They need an owner backfill, or a policy that also matches on a path
 --        the app can derive, BEFORE the policy is tightened.
+
+-- 6. The same question for `images`, which query 5 does not ask and which
+--    matters more there.
+--
+--    profile-pictures has TWO routes to signability: the owner column, or a
+--    first path segment that is the owner's uuid. `images` has ONE. Objects
+--    land at "{foods|recipes|kids}/{uuid}.jpg" (ImageUploadService.swift:47),
+--    so the first segment is a folder TYPE, never a user id -- exactly why this
+--    story's own criteria say to scope on storage.objects.owner rather than the
+--    path. If owner is NULL, nothing can sign that object.
+--
+--    This is the bucket the LIVE iOS app writes every kid, food and recipe
+--    photo into. Query 5 answers "can profile-pictures be closed"; without this
+--    one, nothing answers "can images be closed", and US-634's Release N+1
+--    would take the answer on faith for the bucket that holds most of the
+--    photographs.
+--
+--    unsignable > 0 means an owner backfill has to happen BEFORE public goes
+--    false, and the owner-scoped SELECT policy has to land in the SAME
+--    migration as the flip -- a permissive policy added afterwards cannot help
+--    an object nobody can read in the meantime.
+SELECT
+  count(*) AS objects,
+  count(*) FILTER (WHERE owner IS NOT NULL) AS signable_via_owner,
+  count(*) FILTER (WHERE owner IS NULL)     AS unsignable,
+  count(DISTINCT (storage.foldername(name))[1]) AS distinct_top_folders
+FROM storage.objects
+WHERE bucket_id = 'images';
+
+-- 7. And the same for every OTHER bucket, so the next one created in the
+--    dashboard is not discovered the way `images` was -- by reading a Swift
+--    file. Anything with unsignable > 0 cannot be made private without a
+--    backfill first.
+SELECT
+  bucket_id,
+  count(*) AS objects,
+  count(*) FILTER (WHERE owner IS NULL) AS owner_is_null
+FROM storage.objects
+GROUP BY bucket_id
+ORDER BY owner_is_null DESC, bucket_id;
