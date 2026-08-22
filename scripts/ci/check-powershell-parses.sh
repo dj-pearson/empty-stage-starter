@@ -73,8 +73,11 @@ echo
 echo "Running the signing encoders against synthetic profiles ..."
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
 sign="$tmp/signing"; sibling="$(pwd)-encoder-check"
+# Both in the trap. The sibling has to live OUTSIDE the repo -- that is the
+# whole point of the check -- so a mid-loop death would otherwise strand a
+# directory next to the working tree rather than inside the temp dir.
+trap 'rm -rf "$tmp" "$sibling"' EXIT
 mkdir -p "$sign" "$sibling"
 
 enc_fail=0

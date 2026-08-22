@@ -159,7 +159,11 @@ function main() {
 
   if (APPLY && flippedIds.length) {
     // Preserve exact formatting (2-space, no trailing newline) for a minimal diff.
-    fs.writeFileSync(PRD, JSON.stringify(prd, null, 2));
+    // Trailing newline: prd.json has one, and every editor and formatter that
+    // touches it restores one. Writing without it means each --apply run
+    // strips a byte off a 560kB file, so the flip commit carries a stray
+    // no-op line and the next hand edit flips it back.
+    fs.writeFileSync(PRD, JSON.stringify(prd, null, 2) + '\n');
     const block = [
       '',
       `## prd-verify — CI verification pass (ref ${VERIFY_REF})`,
