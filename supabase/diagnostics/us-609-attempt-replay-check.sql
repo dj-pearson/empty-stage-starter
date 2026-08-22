@@ -24,7 +24,15 @@
 --      not need to remember who was logged in.
 --   4. A replayed duplicate is DETECTABLE rather than silently doubling the
 --      exposure -- the primary key rejects it.
---   5. Inserting does not fire the plan-sync trigger. 20260417000002 narrowed
+--   5. kid_food_ladder, which this file did NOT cover until it was pointed out
+--      that the story names TWO tables and only one was tested. It is not a
+--      copy of food_attempts: kid_id and food_id are NOT NULL, a UNIQUE index
+--      on (kid_id, food_id) makes the ladder one row per kid per food, CHECK
+--      constraints bound current_rung and status, and its RLS derives ownership
+--      through a household_members JOIN rather than get_user_household_id --
+--      so it also grants access to household MEMBERS, not just the kid's owner.
+--      Each of those changes what a replay may safely do.
+--   6. Inserting does not fire the plan-sync trigger. 20260417000002 narrowed
 --      it to UPDATE precisely to break a recursion, and a replay that triggered
 --      plan writes would be a second, unspecified side effect.
 --
@@ -35,6 +43,13 @@
 --   row count after duplicate       1
 --   other household sees it         0
 --   plan trigger fired on insert    f
+--
+--   -- kid_food_ladder, the OTHER table the story names --
+--   ladder row visible to owner     1
+--   duplicate (kid,food) rejected   t   (unique_violation on the unique index)
+--   bad rung rejected               t   (check constraint)
+--   household member can read       1
+--   other household sees ladder     0
 
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -148,3 +163,144 @@ SELECT count(*) AS other_household_sees FROM public.food_attempts;
 \echo '== 5: the plan-sync trigger did NOT fire on insert =='
 RESET ROLE;
 SELECT (count(*) > 0) AS plan_trigger_fired_on_insert FROM public.trigger_log;
+
+
+-- ---------------------------------------------------------------------------
+-- kid_food_ladder. The story's criteria name this table alongside food_attempts
+-- and the first version of this file tested only the latter.
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.household_members (
+  household_id uuid,
+  user_id uuid
+);
+GRANT SELECT ON public.household_members TO authenticated;
+
+CREATE TABLE public.kid_food_ladder (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  kid_id                uuid NOT NULL REFERENCES public.kids(id) ON DELETE CASCADE,
+  food_id               uuid NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  current_rung          text NOT NULL DEFAULT 'looking'
+    CHECK (current_rung IN ('looking','touching','smelling','licking',
+                            'tiny_taste','small_bite','full_bite','full_portion')),
+  consecutive_successes int NOT NULL DEFAULT 0 CHECK (consecutive_successes >= 0),
+  consecutive_holds     int NOT NULL DEFAULT 0 CHECK (consecutive_holds >= 0),
+  consecutive_refusals  int NOT NULL DEFAULT 0 CHECK (consecutive_refusals >= 0),
+  last_attempt_at       timestamptz,
+  next_due_on           date,
+  status                text NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active','paused','mastered','backed_off')),
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  updated_at            timestamptz NOT NULL DEFAULT now()
+);
+
+-- One ladder row per kid per food -- the property a replay's idempotency rests on.
+CREATE UNIQUE INDEX kid_food_ladder_kid_food_unique
+  ON public.kid_food_ladder(kid_id, food_id);
+
+ALTER TABLE public.kid_food_ladder ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.kid_food_ladder TO authenticated;
+
+CREATE POLICY "Members view kid food ladder"
+  ON public.kid_food_ladder
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members insert kid food ladder"
+  ON public.kid_food_ladder
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members update kid food ladder"
+  ON public.kid_food_ladder
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Members delete kid food ladder"
+  ON public.kid_food_ladder
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.kids k
+      LEFT JOIN public.household_members hm ON hm.household_id = k.household_id
+      WHERE k.id = kid_food_ladder.kid_id
+        AND (k.user_id = auth.uid() OR hm.user_id = auth.uid())
+    )
+  );
+
+SET ROLE authenticated;
+SET test.uid = 'aaaaaaaa-0000-0000-0000-00000000000a';
+
+\echo ''
+\echo '== the owner can create and read a ladder row =='
+INSERT INTO public.kid_food_ladder (kid_id, food_id, current_rung)
+VALUES ('aaaaaaaa-0000-0000-0000-000000000001',
+        'ffffffff-0000-0000-0000-00000000000f', 'tiny_taste');
+SELECT count(*) AS ladder_visible_to_owner FROM public.kid_food_ladder;
+
+\echo '== a second row for the same (kid, food) is rejected, not duplicated =='
+DO $$
+BEGIN
+  INSERT INTO public.kid_food_ladder (kid_id, food_id)
+  VALUES ('aaaaaaaa-0000-0000-0000-000000000001',
+          'ffffffff-0000-0000-0000-00000000000f');
+  RAISE NOTICE 'duplicate_ladder_rejected: f  <-- TWO LADDERS FOR ONE FOOD';
+EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE 'duplicate_ladder_rejected: t  (unique_violation)';
+END $$;
+
+\echo '== a rung outside the vocabulary is refused rather than stored =='
+DO $$
+BEGIN
+  UPDATE public.kid_food_ladder SET current_rung = 'devoured';
+  RAISE NOTICE 'bad_rung_rejected: f  <-- CHECK CONSTRAINT NOT ENFORCED';
+EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'bad_rung_rejected: t  (check constraint)';
+END $$;
+RESET ROLE;
+
+\echo ''
+\echo '== a household MEMBER can read it -- a wider grant than food_attempts has =='
+INSERT INTO public.household_members VALUES
+  ('dddddddd-0000-0000-0000-00000000000d', 'cccccccc-0000-0000-0000-00000000000c');
+SET ROLE authenticated;
+SET test.uid = 'cccccccc-0000-0000-0000-00000000000c';
+SELECT count(*) AS household_member_sees FROM public.kid_food_ladder;
+
+\echo '== and another household still sees nothing =='
+SET test.uid = 'bbbbbbbb-0000-0000-0000-00000000000b';
+SELECT count(*) AS other_household_sees_ladder FROM public.kid_food_ladder;
+RESET ROLE;
