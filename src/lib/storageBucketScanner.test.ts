@@ -136,6 +136,70 @@ describe('test fixtures are not call sites', () => {
   });
 });
 
+describe('storage_buckets_config reconciliation (US-643)', () => {
+  /**
+   * The seed scan used to look in one migration BY FILENAME. That made its
+   * "advertises a bucket no migration creates" note correct by coincidence:
+   * three migrations mention storage_buckets_config, and a seed landing in any
+   * other one would have been invisible while the gate reported a clean
+   * inventory. These write the seed to a filename the gate has never heard of.
+   */
+  const seedNamed = (bucket: string) =>
+    `INSERT INTO public.storage_buckets_config (bucket_name, display_name) VALUES\n` +
+    `  ('${bucket}', 'Probe') ON CONFLICT (bucket_name) DO NOTHING;`;
+
+  /** Writes extra migrations alongside the usual probe run. */
+  const withMigrations = (files: Record<string, string>) => {
+    for (const [name, sql] of Object.entries(files)) {
+      writeFileSync(path.join(repo, 'supabase', 'migrations', name), sql);
+    }
+    return run('export const nothing = 1;');
+  };
+
+  it('finds a seed in a migration it does not know the name of', () => {
+    const { ok, out } = withMigrations({
+      '20990101000000_some_other_file.sql': seedNamed('ghost-bucket'),
+    });
+    // Advisory, so the gate still passes -- but it has to SAY it.
+    expect(ok).toBe(true);
+    expect(out).toContain('ghost-bucket');
+    expect(out).toContain('advertises');
+  });
+
+  it('stops reporting a seeded bucket once a migration creates it', () => {
+    const { ok, out } = withMigrations({
+      '20990101000000_seed.sql': seedNamed('probe-bucket'),
+      '20990101000001_create.sql': DECLARES_PROBE,
+    });
+    expect(ok).toBe(true);
+    expect(out).not.toContain('advertises');
+  });
+
+  it('stops reporting one that a later migration deletes', () => {
+    // The US-643 shape: the bucket is never created, the row is retired
+    // instead. Reconciled either way, so the note must clear.
+    const { ok, out } = withMigrations({
+      '20990101000000_seed.sql': seedNamed('retired-bucket'),
+      '20990101000001_reconcile.sql':
+        "DELETE FROM public.storage_buckets_config WHERE bucket_name IN ('retired-bucket');",
+    });
+    expect(ok).toBe(true);
+    expect(out).not.toContain('retired-bucket');
+  });
+
+  it('still reports a sibling row the delete does not name', () => {
+    // A blanket "the note went away" is not the assertion. Deleting one row
+    // must not silence the other.
+    const { out } = withMigrations({
+      '20990101000000_seed.sql': `${seedNamed('retired-bucket')}\n${seedNamed('still-missing')}`,
+      '20990101000001_reconcile.sql':
+        "DELETE FROM public.storage_buckets_config WHERE bucket_name IN ('retired-bucket');",
+    });
+    expect(out).toContain('still-missing');
+    expect(out).not.toContain('retired-bucket');
+  });
+});
+
 describe('the real repo', () => {
   it('has no undeclared bucket outside the tracked known gaps', () => {
     const out = execFileSync('node', ['scripts/ci/check-storage-buckets.mjs'], {

@@ -1,0 +1,32 @@
+-- US-643: drop the two storage_buckets_config rows that describe buckets which
+-- do not exist.
+--
+-- 20260110000000 seeded five rows as a plan for an admin storage screen. Three
+-- of those buckets are now real -- profile-pictures was always there, and
+-- blog-images and Assets were declared in 20260822000000/20260822000001 once
+-- the gate found live call sites for them. The other two were never created:
+--
+--   recipe-images   nothing writes it. Recipe photos go to `images` (iOS,
+--                   ImageUploadService) or profile-pictures, never here.
+--   private-files   nothing writes or reads it at all.
+--
+-- Both were removed from STORAGE_BUCKETS in src/lib/storage-manager.ts for the
+-- same reason, so leaving the rows behind is the inventory disagreeing with
+-- itself in the one place US-643 exists to reconcile.
+--
+-- Why DELETE is safe here, spelled out because the default answer is no:
+-- nothing reads this table. Not src, not app/, not functions/, not
+-- supabase/functions/, not ios/ -- the admin storage screen calls
+-- storageManager.getAllBuckets(), which returns the TypeScript record, and
+-- 20260811000001 only re-declares the table. So these are dead rows rather than
+-- configuration a shipped client depends on, and no iOS version reads a column
+-- or a row that goes away here. Scoped to the two names rather than written as
+-- a "delete anything without a bucket" statement: a future row for a bucket
+-- created out of band should be looked at, not silently swept.
+--
+-- Not dropping the table. Nothing reads it today, but it carries an admin RLS
+-- policy and a clear intent, and retiring a table is a separate decision from
+-- correcting its contents.
+
+DELETE FROM public.storage_buckets_config
+WHERE bucket_name IN ('recipe-images', 'private-files');

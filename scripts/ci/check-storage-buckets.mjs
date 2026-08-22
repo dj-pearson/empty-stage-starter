@@ -175,14 +175,41 @@ for (const [bucket, file] of pending) {
 // phantom row here is dead data rather than a screen listing a bucket that does
 // not exist. Kept because a seed disagreeing with the migrations is still worth
 // seeing, and because the day something does read it the disagreement matters.
-const configSeed = tracked.find((f) => f.endsWith('20260110000000_storage_analytics_features.sql'));
-if (configSeed) {
-  const sql = read(configSeed);
-  const seed = sql.match(
-    /insert\s+into\s+public\.storage_buckets_config[\s\S]*?values([\s\S]*?)on\s+conflict/i
-  );
-  const advertised = seed ? [...seed[1].matchAll(/\(\s*'([^']+)'/g)].map((m) => m[1]) : [];
-  const phantom = advertised.filter((b) => !declared.has(b));
+// Scans every migration rather than the one file that happens to hold the seed
+// today. That filename was hardcoded, which made this note correct by
+// coincidence: three migrations mention storage_buckets_config, and if the
+// second one to seed it had landed anywhere else the gate would have reported a
+// clean inventory while advertising a bucket that does not exist -- the exact
+// failure it is here to catch.
+const advertised = new Map();
+for (const file of tracked.filter(
+  (f) => f.startsWith('supabase/migrations/') && f.endsWith('.sql')
+)) {
+  const sql = read(file);
+  for (const seed of sql.matchAll(
+    /insert\s+into\s+(?:public\.)?storage_buckets_config[\s\S]*?values([\s\S]*?)(?:on\s+conflict|;)/gi
+  )) {
+    for (const row of seed[1].matchAll(/\(\s*'([^']+)'/g)) {
+      if (!advertised.has(row[1])) advertised.set(row[1], file);
+    }
+  }
+}
+
+// A row that a later migration deletes is reconciled, not phantom.
+const retired = new Set();
+for (const file of tracked.filter(
+  (f) => f.startsWith('supabase/migrations/') && f.endsWith('.sql')
+)) {
+  const sql = read(file);
+  for (const del of sql.matchAll(
+    /delete\s+from\s+(?:public\.)?storage_buckets_config([\s\S]*?);/gi
+  )) {
+    for (const name of del[1].matchAll(/'([^']+)'/g)) retired.add(name[1]);
+  }
+}
+
+{
+  const phantom = [...advertised.keys()].filter((b) => !declared.has(b) && !retired.has(b));
   if (phantom.length) {
     console.log(
       `\nNote: storage_buckets_config advertises ${phantom.length} bucket(s) that no migration creates:` +
