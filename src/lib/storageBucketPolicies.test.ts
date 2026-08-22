@@ -28,10 +28,13 @@ const MIGRATIONS_DIR = path.resolve(__dirname, '../../supabase/migrations');
 /**
  * Buckets that are world-readable on purpose. generated-images holds blog and
  * social artwork that is served as og:image, so anonymous read is the feature.
+ * blog-images (US-643) is the same: the edge functions store a getPublicUrl
+ * result on the post, so the hero image of a public blog post has to be
+ * readable by an anonymous browser.
  * Adding a bucket here is a deliberate decision that it contains no personal
  * data; profile-pictures is the counter-example and must never appear.
  */
-const INTENTIONALLY_PUBLIC_BUCKETS = ['generated-images'];
+const INTENTIONALLY_PUBLIC_BUCKETS = ['generated-images', 'blog-images'];
 
 function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS_DIR)
@@ -62,7 +65,9 @@ describe('storage.objects SELECT policies', () => {
       const sql = readFileSync(path.join(MIGRATIONS_DIR, file), 'utf-8');
 
       for (const statement of statements(sql)) {
-        const name = statement.match(/(?:CREATE|DROP)\s+POLICY\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/i)?.[1];
+        const name = statement.match(
+          /(?:CREATE|DROP)\s+POLICY\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/i
+        )?.[1];
         if (!name) continue;
 
         if (/DROP\s+POLICY/i.test(statement)) {
@@ -132,7 +137,7 @@ describe('profile photo object paths', () => {
   it('the iOS uploader builds an unguessable object name too', () => {
     const source = readFileSync(
       path.resolve(__dirname, '../../ios/EatPal/EatPal/Services/ImageUploadService.swift'),
-      'utf-8',
+      'utf-8'
     );
     const uploadPath = source.match(/let path = "([^"]+)"/)?.[1];
 
@@ -195,8 +200,9 @@ describe('US-634: stored kid photos render through KidAvatarImage', () => {
 
         const src = readFileSync(full, 'utf8');
         // <img ...> or <AvatarImage ...> whose src is some *.profile_picture_url
-        const bare =
-          /<(?:img|AvatarImage)\b[^>]*\bsrc=\{[^}]*profile_picture_url[^}]*\}/s.exec(src);
+        const bare = /<(?:img|AvatarImage)\b[^>]*\bsrc=\{[^}]*profile_picture_url[^}]*\}/s.exec(
+          src
+        );
         if (bare) offenders.push(path.relative(componentsDir, full));
       }
     };

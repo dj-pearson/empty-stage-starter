@@ -1,0 +1,144 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
+
+/**
+ * US-643: the storage-bucket gate, exercised against call-site shapes rather
+ * than trusted.
+ *
+ * The gate matched `storage.from('literal')` only. functions/agent-blog-writer
+ * and functions/update-blog-image both hoist the name into a module constant
+ * and call `.from(STORAGE_BUCKET)`, so blog-images -- a bucket two edge
+ * functions upload to on every run, and that no migration created -- was
+ * reported as "declared in the registry only ... nothing calls them". The gate
+ * whose whole job is catching an undeclared bucket had the undeclared bucket in
+ * front of it and filed it as harmless.
+ *
+ * These run the real script in a throwaway git repo, because it reads
+ * `git ls-files`. Testing the regex in isolation would not have caught this:
+ * the regex was correct, its coverage was not.
+ */
+
+let repo: string;
+
+beforeEach(() => {
+  repo = mkdtempSync(path.join(tmpdir(), 'bucket-scan-'));
+  execFileSync('git', ['init', '-q', '.'], { cwd: repo });
+  execFileSync('git', ['config', 'user.email', 't@t'], { cwd: repo });
+  execFileSync('git', ['config', 'user.name', 't'], { cwd: repo });
+  mkdirSync(path.join(repo, 'scripts', 'ci'), { recursive: true });
+  mkdirSync(path.join(repo, 'supabase', 'migrations'), { recursive: true });
+  mkdirSync(path.join(repo, 'functions', 'probe'), { recursive: true });
+  copyFileSync(
+    path.join(process.cwd(), 'scripts', 'ci', 'check-storage-buckets.mjs'),
+    path.join(repo, 'scripts', 'ci', 'check-storage-buckets.mjs')
+  );
+});
+
+afterEach(() => {
+  rmSync(repo, { recursive: true, force: true });
+});
+
+/** Runs the gate over a repo containing `source` as an edge function. */
+const run = (source: string, migration?: string): { ok: boolean; out: string } => {
+  writeFileSync(path.join(repo, 'functions', 'probe', 'index.ts'), source);
+  if (migration) {
+    writeFileSync(path.join(repo, 'supabase', 'migrations', '20260101000000_probe.sql'), migration);
+  }
+  execFileSync('git', ['add', '-A'], { cwd: repo });
+  execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'probe'], { cwd: repo });
+  try {
+    const out = execFileSync('node', ['scripts/ci/check-storage-buckets.mjs'], {
+      cwd: repo,
+      encoding: 'utf8',
+    });
+    return { ok: true, out };
+  } catch (e) {
+    const err = e as { stdout?: string; stderr?: string };
+    return { ok: false, out: `${err.stdout ?? ''}${err.stderr ?? ''}` };
+  }
+};
+
+const DECLARES_PROBE =
+  "INSERT INTO storage.buckets (id, name, public) VALUES ('probe-bucket', 'probe-bucket', true) ON CONFLICT (id) DO NOTHING;";
+
+describe('check-storage-buckets.mjs call-site detection', () => {
+  it('fails on an undeclared bucket named inline', () => {
+    const { ok, out } = run("await db.storage.from('probe-bucket').upload('a', b);");
+    expect(ok).toBe(false);
+    expect(out).toContain('probe-bucket');
+  });
+
+  it('fails on an undeclared bucket reached through a module constant', () => {
+    // The exact shape both blog-image edge functions use, and the one the gate
+    // used to miss entirely.
+    const { ok, out } = run(
+      [
+        "const STORAGE_BUCKET = 'probe-bucket';",
+        "await db.storage.from(STORAGE_BUCKET).upload('a', b);",
+      ].join('\n')
+    );
+    expect(ok).toBe(false);
+    expect(out).toContain('probe-bucket');
+  });
+
+  it('resolves a typed constant too', () => {
+    const { ok } = run(
+      ["const BUCKET: string = 'probe-bucket';", 'await db.storage.from(BUCKET).remove([p]);'].join(
+        '\n'
+      )
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('passes once a migration declares the bucket', () => {
+    const { ok } = run(
+      [
+        "const STORAGE_BUCKET = 'probe-bucket';",
+        'await db.storage.from(STORAGE_BUCKET).upload(a, b);',
+      ].join('\n'),
+      DECLARES_PROBE
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('does not invent a bucket from an identifier it cannot resolve', () => {
+    // A runtime parameter is not a bucket name. Reporting one would be noise,
+    // and noise is how a real finding gets scrolled past.
+    const { ok } = run(
+      'export const up = (bucketName) => db.storage.from(bucketName).upload(a, b);'
+    );
+    expect(ok).toBe(true);
+  });
+});
+
+describe('the real repo', () => {
+  it('has no undeclared bucket outside the tracked known gaps', () => {
+    const out = execFileSync('node', ['scripts/ci/check-storage-buckets.mjs'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    });
+    expect(out).toContain(
+      'Every bucket the application uses is either declared or a known, tracked gap.'
+    );
+  });
+
+  /**
+   * The count, not the registry note. Asserting blog-images is absent from the
+   * note would pass whether or not the gate can see the call site, because a
+   * declared bucket leaves that note either way -- a test that passes for a
+   * reason unrelated to its name is worse than no test.
+   */
+  it('counts blog-images among the buckets with a call site', () => {
+    const out = execFileSync('node', ['scripts/ci/check-storage-buckets.mjs'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    });
+    const withCallSite = Number(out.match(/(\d+) with a call site/)?.[1]);
+    // profile-pictures, generated-images, images, Assets, blog-images. Without
+    // constant resolution this reads 4.
+    expect(withCallSite).toBeGreaterThanOrEqual(5);
+  });
+});

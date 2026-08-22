@@ -56,6 +56,21 @@ export interface BucketConfig {
 /**
  * Predefined bucket configurations
  */
+/**
+ * US-643: this record is what the admin storage screen renders a tab per, and
+ * what storageManager.upload() resolves a bucket name against, so an entry here
+ * is a claim that the bucket exists. It listed six; exactly one was created by
+ * a migration.
+ *
+ * recipe-images, private-files and backups were dropped rather than declared:
+ * nothing anywhere in the repo calls them, so creating three real buckets to
+ * satisfy a registry nobody reads from is the wrong direction. Add the entry
+ * back alongside the migration that creates it on the day something needs one.
+ *
+ * The two that stayed both have real call sites. blog-images is declared by
+ * 20260822000000; Assets is still dashboard-only and is tracked as a known gap
+ * in scripts/ci/check-storage-buckets.mjs.
+ */
 export const STORAGE_BUCKETS: Record<string, BucketConfig> = {
   'profile-pictures': {
     name: 'profile-pictures',
@@ -73,39 +88,13 @@ export const STORAGE_BUCKETS: Record<string, BucketConfig> = {
     allowedMimeTypes: MimeTypeGroups.IMAGES,
     maxFileSize: FileSizeLimits.IMAGE_LARGE, // 10MB
   },
-  'recipe-images': {
-    name: 'recipe-images',
-    displayName: 'Recipe Images',
-    description: 'Recipe photos uploaded by users',
-    isPublic: true,
-    allowedMimeTypes: MimeTypeGroups.IMAGES,
-    maxFileSize: FileSizeLimits.IMAGE_MEDIUM, // 5MB
-  },
-  'assets': {
+  assets: {
     name: 'Assets',
     displayName: 'Public Assets',
     description: 'Lead magnets, PDFs, and downloadable resources',
     isPublic: true,
     allowedMimeTypes: [...MimeTypeGroups.IMAGES, ...MimeTypeGroups.DOCUMENTS],
     maxFileSize: FileSizeLimits.DOCUMENT_MEDIUM, // 10MB
-  },
-  'private-files': {
-    name: 'private-files',
-    displayName: 'Private Files',
-    description: 'User exports, reports, and private documents',
-    isPublic: false,
-    allowedMimeTypes: [...MimeTypeGroups.IMAGES, ...MimeTypeGroups.DOCUMENTS],
-    maxFileSize: FileSizeLimits.DOCUMENT_LARGE, // 50MB
-    signedUrlExpiry: 3600, // 1 hour
-  },
-  'backups': {
-    name: 'backups',
-    displayName: 'System Backups',
-    description: 'Automated system backups (admin only)',
-    isPublic: false,
-    allowedMimeTypes: ['application/json', 'application/gzip', 'application/zip'],
-    maxFileSize: FileSizeLimits.VIDEO_LARGE, // 500MB
-    signedUrlExpiry: 300, // 5 minutes
   },
 };
 
@@ -191,11 +180,7 @@ class StorageManagerService {
   /**
    * Upload file to storage
    */
-  async upload(
-    bucketName: string,
-    file: File,
-    options: UploadOptions = {}
-  ): Promise<UploadResult> {
+  async upload(bucketName: string, file: File, options: UploadOptions = {}): Promise<UploadResult> {
     const config = this.getBucketConfig(bucketName);
 
     // Validate bucket exists
@@ -227,7 +212,9 @@ class StorageManagerService {
 
     try {
       // Get current user for folder organization
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const userId = user?.id || 'anonymous';
 
       // Prepare file for upload
@@ -275,9 +262,7 @@ class StorageManagerService {
       let signedUrl: string | undefined;
 
       if (config.isPublic) {
-        const { data: urlData } = supabase.storage
-          .from(config.name)
-          .getPublicUrl(data.path);
+        const { data: urlData } = supabase.storage.from(config.name).getPublicUrl(data.path);
         publicUrl = urlData.publicUrl;
       } else {
         const { data: signedData, error: signedError } = await supabase.storage
@@ -364,9 +349,7 @@ class StorageManagerService {
       let url: string | undefined;
 
       if (config?.isPublic) {
-        const { data: urlData } = supabase.storage
-          .from(bucketName)
-          .getPublicUrl(data.path);
+        const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(data.path);
         url = urlData.publicUrl;
       }
 
@@ -430,9 +413,7 @@ class StorageManagerService {
    */
   getPublicUrl(bucketName: string, filePath: string): string {
     const config = this.getBucketConfig(bucketName);
-    const { data } = supabase.storage
-      .from(config?.name || bucketName)
-      .getPublicUrl(filePath);
+    const { data } = supabase.storage.from(config?.name || bucketName).getPublicUrl(filePath);
 
     return data.publicUrl;
   }
@@ -444,9 +425,7 @@ class StorageManagerService {
     const config = this.getBucketConfig(bucketName);
 
     try {
-      const { error } = await supabase.storage
-        .from(config?.name || bucketName)
-        .remove([filePath]);
+      const { error } = await supabase.storage.from(config?.name || bucketName).remove([filePath]);
 
       if (error) {
         this.log.error(`Delete failed: ${bucketName}/${filePath}`, error);
@@ -468,9 +447,7 @@ class StorageManagerService {
     const config = this.getBucketConfig(bucketName);
 
     try {
-      const { error } = await supabase.storage
-        .from(config?.name || bucketName)
-        .remove(filePaths);
+      const { error } = await supabase.storage.from(config?.name || bucketName).remove(filePaths);
 
       if (error) {
         this.log.error(`Bulk delete failed for ${bucketName}`, error);
@@ -491,7 +468,11 @@ class StorageManagerService {
   async listFiles(
     bucketName: string,
     folder?: string,
-    options: { limit?: number; offset?: number; sortBy?: { column: string; order: 'asc' | 'desc' } } = {}
+    options: {
+      limit?: number;
+      offset?: number;
+      sortBy?: { column: string; order: 'asc' | 'desc' };
+    } = {}
   ): Promise<StorageFileInfo[]> {
     const config = this.getBucketConfig(bucketName);
 
@@ -517,9 +498,7 @@ class StorageManagerService {
           let publicUrl: string | undefined;
 
           if (config?.isPublic) {
-            const { data: urlData } = supabase.storage
-              .from(config.name)
-              .getPublicUrl(path);
+            const { data: urlData } = supabase.storage.from(config.name).getPublicUrl(path);
             publicUrl = urlData.publicUrl;
           }
 
@@ -565,9 +544,7 @@ class StorageManagerService {
    */
   async getAllBucketStats(): Promise<BucketStats[]> {
     const buckets = this.getAllBuckets();
-    const stats = await Promise.all(
-      buckets.map((b) => this.getBucketStats(b.name))
-    );
+    const stats = await Promise.all(buckets.map((b) => this.getBucketStats(b.name)));
     return stats;
   }
 
@@ -581,12 +558,13 @@ class StorageManagerService {
     destPath: string
   ): Promise<boolean> {
     try {
-      const { data, error } = await supabase.storage
-        .from(sourceBucket)
-        .copy(sourcePath, destPath);
+      const { data, error } = await supabase.storage.from(sourceBucket).copy(sourcePath, destPath);
 
       if (error) {
-        this.log.error(`Copy failed: ${sourceBucket}/${sourcePath} -> ${destBucket}/${destPath}`, error);
+        this.log.error(
+          `Copy failed: ${sourceBucket}/${sourcePath} -> ${destBucket}/${destPath}`,
+          error
+        );
         return false;
       }
 
@@ -607,9 +585,7 @@ class StorageManagerService {
     destPath: string
   ): Promise<boolean> {
     try {
-      const { data, error } = await supabase.storage
-        .from(sourceBucket)
-        .move(sourcePath, destPath);
+      const { data, error } = await supabase.storage.from(sourceBucket).move(sourcePath, destPath);
 
       if (error) {
         this.log.error(`Move failed: ${sourceBucket}/${sourcePath} -> ${destPath}`, error);
