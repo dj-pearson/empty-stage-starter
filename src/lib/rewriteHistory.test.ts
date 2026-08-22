@@ -31,6 +31,19 @@ const PW = 'p@ss|w0rd&with\\back$lash.and*star';
 
 let repo: string;
 let binaryBefore: string;
+/**
+ * The ordered part of the lifecycle is captured once in beforeAll rather than
+ * spread across tests that must run in sequence. The first version of this file
+ * did the latter -- one test asserted the pre-rewrite blob count while a later
+ * one performed the rewrite -- which passes only because vitest runs tests in
+ * declaration order by default. Under `--sequence.shuffle` between two and four
+ * of them failed depending on the draw, because the "before" assertions saw an
+ * already-purged repo. A test that silently requires an order is a trap for
+ * whoever turns on shuffling or concurrency later.
+ */
+let blobsBefore: number;
+let verifyBefore: { code: number; out: string };
+let rewrite: { code: number; out: string };
 
 const git = (args: string[], cwd = repo) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
@@ -75,6 +88,14 @@ beforeAll(() => {
     path.join(process.cwd(), 'rewrite-history.sh'),
     path.join(repo, 'rewrite-history.sh')
   );
+
+  // Everything order-dependent happens here, once: measure the leak, run
+  // --verify against it, then perform the rewrite. Each test below asserts
+  // against a captured result or the settled post-state, never against a step
+  // another test was supposed to have taken.
+  blobsBefore = blobsHoldingSecret();
+  verifyBefore = run(['--verify']);
+  rewrite = run();
 });
 
 afterAll(() => {
@@ -131,16 +152,14 @@ describe('US-556: rewrite-history.sh', () => {
 
   it('--verify finds the leak before the rewrite, reflog-only commit included', () => {
     // 4 = NOTES.md, deploy.ps1, config.toml, and the reset-away EXTRA.md.
-    expect(blobsHoldingSecret()).toBe(4);
-    const { code, out } = run(['--verify']);
-    expect(out).toContain('blobs still containing a leaked value: 4');
-    expect(code).toBe(1);
+    expect(blobsBefore).toBe(4);
+    expect(verifyBefore.out).toContain('blobs still containing a leaked value: 4');
+    expect(verifyBefore.code).toBe(1);
   });
 
   it('removes every occurrence, checked by a sweep the script does not do', () => {
-    const { code, out } = run();
-    expect(out).toContain('History rewrite complete and verified clean');
-    expect(code).toBe(0);
+    expect(rewrite.out).toContain('History rewrite complete and verified clean');
+    expect(rewrite.code).toBe(0);
     expect(blobsHoldingSecret()).toBe(0);
   });
 
