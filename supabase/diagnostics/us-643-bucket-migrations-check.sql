@@ -79,9 +79,16 @@ CREATE TABLE storage.objects (
 -- Mirrors Supabase's helper: path split on '/', filename dropped. Without it
 -- the profile-pictures policies cannot even be created, and a run that skips
 -- them silently proves less than it appears to.
+-- Supabase's actual implementation, copied from us-627-policy-check.sql rather
+-- than approximated. A regexp that strips the filename disagrees at the bucket
+-- root: 'root.jpg' yields {'root.jpg'} instead of an empty array, so a policy
+-- comparing (foldername(name))[1] sees a string where production sees NULL.
 CREATE OR REPLACE FUNCTION storage.foldername(name text) RETURNS text[] AS $$
-  SELECT string_to_array(regexp_replace(name, '/[^/]*$', ''), '/')
-$$ LANGUAGE sql IMMUTABLE;
+DECLARE p text[];
+BEGIN
+  p := string_to_array(name, '/');
+  RETURN p[1 : array_length(p, 1) - 1];
+END $$ LANGUAGE plpgsql IMMUTABLE;
 
 CREATE TABLE public.user_roles (user_id uuid, role text);
 

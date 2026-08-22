@@ -3,12 +3,23 @@
 -- READ ONLY. Nothing here changes anything. Run it in the Supabase SQL editor
 -- (or psql against production) and paste the output into the story.
 --
--- Verified: all four queries run clean (psql exit 0) against a Postgres 16
--- stand-in shaped like Supabase's storage schema -- storage.buckets,
--- storage.objects, storage.foldername(), public.kids -- with objects at a
--- folder and at the bucket root, an owner-less object, and both a
--- bucket-scoped and a bucket-agnostic RLS policy. An empty top_folder row in
--- query 3 is an object sitting at the bucket root, not an error.
+-- Verified 2026-08-22: all FIVE queries run clean (psql exit 0) against a
+-- PostgreSQL 16.13 stand-in shaped like Supabase's storage schema --
+-- storage.buckets with its real columns, storage.objects,
+-- storage.foldername(), public.kids -- carrying objects at a folder and at the
+-- bucket root, an owner-less object, an object whose first path segment is not
+-- a uuid, and both a bucket-scoped and a bucket-agnostic RLS policy. The header
+-- said "all four" until then; query 5 was added later and had never been run.
+--
+-- The harness is checked in as us-635-standin-check.sql, so these claims can be
+-- re-run rather than believed. It matters that it uses Supabase's REAL
+-- storage.foldername -- split on '/' and drop the last element -- and not a
+-- regexp that strips the filename: the two disagree exactly at the bucket root,
+-- which is the row the next line is about.
+--
+-- An empty top_folder row in query 3 is an object sitting at the bucket root,
+-- not an error. Confirmed, not assumed: with the real function that row comes
+-- back blank; with the approximation it comes back as the filename.
 --
 -- Why this file exists: the 'images' bucket is not created by any migration in
 -- this repo -- it was made in the dashboard -- so its public flag and its RLS
