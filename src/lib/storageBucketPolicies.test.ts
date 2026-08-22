@@ -26,19 +26,20 @@ import path from 'path';
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../supabase/migrations');
 
 /**
- * Buckets that are world-readable on purpose. generated-images holds blog and
- * social artwork that is served as og:image, so anonymous read is the feature.
- * Adding a bucket here is a deliberate decision that it contains no personal
- * data; profile-pictures is the counter-example and must never appear.
+ * Buckets whose SELECT policy is deliberately open to the public role. It is
+ * EMPTY, and the emptiness is the point: no bucket needs one.
  *
- * blog-images and Assets (US-643) are deliberately NOT here. Both are public
- * buckets serving anonymous consumers -- a blog hero image, a lead-magnet PDF
- * emailed to a stranger -- and neither needs an open SELECT to do it, because
- * public reads bypass RLS entirely (20260817000000). The only thing an open
- * SELECT would add is anon list(), so both scope SELECT to authenticated and
- * this list stays as short as it was.
+ * The reasoning that emptied it: reads of a public bucket are served by the
+ * storage API without consulting RLS (20260817000000), so an open SELECT is
+ * never what makes an image load. The only capability it adds is list() for
+ * anyone holding the anon key. generated-images was the last holdout and was
+ * scoped in 20260822000004; blog-images and Assets were written scoped.
+ *
+ * Adding a bucket back here means arguing that anonymous ENUMERATION of it is a
+ * feature -- not anonymous reading, which needs nothing from this list.
+ * profile-pictures is the counter-example and must never appear.
  */
-const INTENTIONALLY_PUBLIC_BUCKETS = ['generated-images'];
+const INTENTIONALLY_PUBLIC_BUCKETS: string[] = [];
 
 function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS_DIR)
@@ -56,6 +57,50 @@ function stripComments(sql: string): string {
 
 function statements(sql: string): string[] {
   return stripComments(sql).split(';');
+}
+
+/**
+ * The net policy set on storage.objects after every migration has run, grouped
+ * by bucket. A later DROP removes a policy, so what matters is the end state
+ * rather than whether a shape ever existed in history.
+ */
+interface LivePolicy {
+  name: string;
+  cmd: string;
+  owner: boolean;
+  folder: boolean;
+  to: string;
+}
+
+function livePolicies(): Map<string, LivePolicy[]> {
+  const live = new Map<string, LivePolicy & { bucket: string }>();
+  for (const file of migrationFiles()) {
+    const sql = stripComments(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf-8'));
+    const re = /(CREATE|DROP)\s+POLICY\s+(?:IF\s+EXISTS\s+)?"([^"]+)"([\s\S]*?);/gi;
+    for (const m of sql.matchAll(re)) {
+      const [, kind, name, body] = m;
+      if (/DROP/i.test(kind)) {
+        live.delete(name);
+        continue;
+      }
+      if (!/ON\s+storage\.objects/i.test(body)) continue;
+      live.set(name, {
+        name,
+        bucket: body.match(/bucket_id\s*=\s*'([^']+)'/)?.[1] ?? 'unknown',
+        cmd: (body.match(/FOR\s+(SELECT|INSERT|UPDATE|DELETE|ALL)/i)?.[1] ?? 'ALL').toUpperCase(),
+        owner: /owner\s*=\s*auth\.uid\(\)/i.test(body),
+        folder: /foldername/i.test(body),
+        to: body.match(/\bTO\s+(\w+)/i)?.[1] ?? 'public',
+      });
+    }
+  }
+  const byBucket = new Map<string, LivePolicy[]>();
+  for (const p of live.values()) {
+    const list = byBucket.get(p.bucket) ?? [];
+    list.push(p);
+    byBucket.set(p.bucket, list);
+  }
+  return byBucket;
 }
 
 describe('storage.objects SELECT policies', () => {
@@ -331,6 +376,30 @@ describe('US-634: profile-pictures write policies match the read policy', () => 
   it.each(['DELETE', 'UPDATE'])('gives %s the same owner branch SELECT has', (cmd) => {
     const sql = readFileSync(path.join(MIGRATIONS_DIR, parity), 'utf-8');
     expect(statementFor(sql, cmd)).toMatch(ownerBranch);
+  });
+
+  /**
+   * The sweep, which is what actually guards the class. The two checks above
+   * pin one migration's text; this one computes the LIVE policy set across
+   * every migration and asks the general question, so the next bucket to grow
+   * an owner-scoped read without matching writes fails here rather than in
+   * production. Enumerating by hand is what let this through the first time.
+   *
+   * INSERT is excluded deliberately: a new object has no owner yet, so the
+   * folder check is the only test available and is the one that makes the path
+   * convention true.
+   */
+  it('no bucket has an owner-scoped read with a path-only write', () => {
+    const offenders: string[] = [];
+    for (const [bucket, policies] of livePolicies()) {
+      const scoped = policies.filter((p) => p.folder || p.owner);
+      if (!scoped.some((p) => p.cmd === 'SELECT' && p.owner)) continue;
+      for (const p of scoped) {
+        if (p.cmd === 'INSERT' || p.cmd === 'SELECT') continue;
+        if (!p.owner) offenders.push(`${bucket} ${p.cmd}: "${p.name}"`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('leaves INSERT alone: a new object has no owner yet', () => {

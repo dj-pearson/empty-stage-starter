@@ -28,9 +28,14 @@
 -- it; CI's Migration Test would catch it a push later.
 --
 -- Expected output (verified 2026-08-22 on PostgreSQL 16.13):
---   buckets            Assets t, blog-images t, images t
---   storage policies   8, every one of them {authenticated}
---   replay             all three re-apply cleanly; still 3 buckets, 8 policies
+--   buckets            Assets, blog-images, generated-images, images,
+--                      profile-pictures -- all public
+--   storage policies   11, every one of them {authenticated} -- these five
+--                      migrations introduce no public-role policy. That the
+--                      WHOLE migration set has none is a different claim, and
+--                      belongs to the sweep in storageBucketPolicies.test.ts;
+--                      this database holds only the five applied below.
+--   replay             all five re-apply cleanly; counts unchanged
 --   anon enumerating   0, in every bucket
 --   authenticated      Assets 1, blog-images 2, images 0
 --
@@ -71,6 +76,21 @@ CREATE TABLE storage.objects (
   owner     uuid
 );
 
+-- Mirrors Supabase's helper: path split on '/', filename dropped. Without it
+-- the profile-pictures policies cannot even be created, and a run that skips
+-- them silently proves less than it appears to.
+CREATE OR REPLACE FUNCTION storage.foldername(name text) RETURNS text[] AS $$
+  SELECT string_to_array(regexp_replace(name, '/[^/]*$', ''), '/')
+$$ LANGUAGE sql IMMUTABLE;
+
+CREATE TABLE public.user_roles (user_id uuid, role text);
+
+-- profile-pictures and generated-images predate this series; the migrations
+-- below rewrite their policies, so the buckets have to exist first.
+INSERT INTO storage.buckets (id, name, public) VALUES
+  ('profile-pictures', 'profile-pictures', true),
+  ('generated-images', 'generated-images', true);
+
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -81,6 +101,8 @@ DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object T
 \i ../migrations/20260822000000_declare_blog_images_bucket.sql
 \i ../migrations/20260822000001_declare_assets_bucket.sql
 \i ../migrations/20260822000002_declare_images_bucket.sql
+\i ../migrations/20260822000003_profile_picture_write_owner_parity.sql
+\i ../migrations/20260822000004_scope_generated_image_reads.sql
 
 \echo '== buckets =='
 SELECT id, public FROM storage.buckets ORDER BY id;
@@ -91,9 +113,14 @@ WHERE schemaname = 'storage' ORDER BY policyname;
 
 \echo ''
 \echo '== replay: each migration claims to be a no-op on a second run =='
+-- This is the check that earns its place. 20260822000004 was written dropping
+-- only the OLD policy name and not the new one, so its first run passed and its
+-- second died on "policy already exists". Caught here, before merge.
 \i ../migrations/20260822000000_declare_blog_images_bucket.sql
 \i ../migrations/20260822000001_declare_assets_bucket.sql
 \i ../migrations/20260822000002_declare_images_bucket.sql
+\i ../migrations/20260822000003_profile_picture_write_owner_parity.sql
+\i ../migrations/20260822000004_scope_generated_image_reads.sql
 
 SELECT count(*) AS buckets_after_replay FROM storage.buckets;
 SELECT count(*) AS policies_after_replay FROM pg_policies WHERE schemaname = 'storage';
