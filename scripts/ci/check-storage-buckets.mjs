@@ -24,15 +24,16 @@ import { readFileSync } from 'node:fs';
 
 /**
  * Buckets referenced by code but knowingly not yet declared, each tied to the
- * story that will declare it. This list should only ever shrink.
+ * story that will declare it. This list should only ever shrink, and as of
+ * US-635 it is empty: every bucket the application touches is created by a
+ * migration.
+ *
+ * Empty is not the same as finished. 20260822000002 declares `images` without
+ * policies, because whether an unrestricted SELECT exists on it can only be
+ * read from the dashboard and a new permissive policy could only widen. That
+ * audit is US-635's remaining work; this gate does not track it.
  */
-const PENDING = new Map([
-  [
-    'images',
-    'US-635: created in the dashboard; its policies have to be read out of ' +
-      'production before a migration can declare it without guessing.',
-  ],
-]);
+const PENDING = new Map();
 
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
   .split('\0')

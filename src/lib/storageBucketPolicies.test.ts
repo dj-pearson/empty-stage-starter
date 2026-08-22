@@ -226,3 +226,75 @@ describe('US-634: stored kid photos render through KidAvatarImage', () => {
     expect(src).not.toMatch(/profile_picture_url:\s*kid\./);
   });
 });
+
+/**
+ * US-635: the images bucket, which the live iOS app writes every kid, food and
+ * recipe photo into. 20260822000002 declares it so a fresh environment has it
+ * at all, and deliberately stops there.
+ *
+ * These pin the two halves of that decision: that the declaration exists, and
+ * that it did NOT quietly grow a policy. A permissive policy added here could
+ * only widen access to a bucket of photographs of children -- CREATE POLICY has
+ * no ON CONFLICT and permissive RLS policies are OR'd, so it cannot tighten the
+ * unrestricted SELECT that may already be there. Closing that one needs its
+ * name, which needs the dashboard read US-635 is blocked on.
+ */
+describe('US-635: the images bucket', () => {
+  const declaring = '20260822000002_declare_images_bucket.sql';
+
+  it('is created by a migration, so a fresh environment has it', () => {
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, declaring), 'utf-8');
+    expect(sql).toMatch(/INSERT\s+INTO\s+storage\.buckets/i);
+    expect(sql).toMatch(/'images'/);
+    expect(sql).toMatch(/ON\s+CONFLICT\s*\(\s*id\s*\)\s*DO\s+NOTHING/i);
+  });
+
+  it('is declared without any policy, so nothing here can widen it', () => {
+    const sql = stripComments(readFileSync(path.join(MIGRATIONS_DIR, declaring), 'utf-8'));
+    expect(sql).not.toMatch(/CREATE\s+POLICY/i);
+  });
+
+  it('is not on the intentionally-public list', () => {
+    // profile-pictures' counterpart. Whatever the bucket's flag has to be for
+    // shipped phones, an open SELECT on it is never deliberate.
+    expect(INTENTIONALLY_PUBLIC_BUCKETS).not.toContain('images');
+  });
+});
+
+/**
+ * US-635 AC: confirm no shipped iOS build lists this bucket before its SELECT
+ * is tightened. A tightened SELECT breaks list() but not a public-URL read, so
+ * a lister in the field would be the one thing that turns the fix into an
+ * outage. Checked as source text because there is no Swift toolchain in CI.
+ */
+describe('US-635: no shipped iOS build lists a storage bucket', () => {
+  const IOS_DIR = path.resolve(__dirname, '../../ios');
+
+  const swiftFiles = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...swiftFiles(full));
+      else if (entry.name.endsWith('.swift')) out.push(full);
+    }
+    return out;
+  };
+
+  it('ImageUploadService is the only Swift file that calls Supabase Storage', () => {
+    const callers = swiftFiles(IOS_DIR).filter((f) =>
+      /\bclient\s*\.\s*storage\b|\bstorage\s*\n?\s*\.from\(/.test(readFileSync(f, 'utf8'))
+    );
+    expect(callers.map((f) => path.basename(f))).toEqual(['ImageUploadService.swift']);
+  });
+
+  it('and it never lists -- only upload, getPublicURL and remove', () => {
+    const src = readFileSync(
+      path.join(IOS_DIR, 'EatPal/EatPal/Services/ImageUploadService.swift'),
+      'utf8'
+    );
+    expect(src).not.toMatch(/\.list\s*\(/);
+    expect(src).toMatch(/\.upload\(/);
+    expect(src).toMatch(/getPublicURL/);
+    expect(src).toMatch(/\.remove\(/);
+  });
+});

@@ -1,0 +1,47 @@
+-- US-635: declare the images bucket, and ONLY the bucket.
+--
+-- ios/EatPal/EatPal/Services/ImageUploadService.swift:8 uploads every kid,
+-- food and recipe photo the live iOS app takes into a bucket named 'images'.
+-- No migration ever created it -- it was made in the Supabase dashboard, and
+-- was found only by reading the Swift client. A fresh environment (staging,
+-- disaster recovery, a new self-hosted instance) comes up without it and every
+-- iOS photo upload fails.
+--
+-- WHY public = true, and why that is not a guess. Shipped iOS builds call
+-- getPublicURL (ImageUploadService.swift:57) and store the result on the row;
+-- nothing in the Swift app signs anything. Phones in the field render that
+-- URL directly, so production's bucket is necessarily public today, and a
+-- disaster-recovery instance serving those same phones has to be too. This is
+-- the identical argument 20260817000000 made for keeping profile-pictures
+-- public while scoping its policy.
+--
+-- WHY NO POLICIES. This is the part US-635 is still blocked on, and the reason
+-- this migration stops at the bucket row.
+--
+--   * Whether an unrestricted SELECT policy exists on this bucket cannot be
+--     read from the repo. If one does, it lets anyone holding the anon key
+--     enumerate a bucket of photographs of children -- the hole US-627 closed
+--     on profile-pictures.
+--   * Closing it means DROPping that policy, and DROP POLICY needs its name.
+--     The name lives in the dashboard. That is the outstanding user action:
+--     run supabase/diagnostics/us-635-images-bucket.sql against production.
+--   * Adding a policy here would not help and could hurt. CREATE POLICY has no
+--     ON CONFLICT, permissive RLS policies are OR'd, and a new permissive
+--     policy can only WIDEN access. It cannot tighten an existing open one.
+--
+-- So: creating the bucket is strictly safe (ON CONFLICT DO NOTHING is a no-op
+-- against production, and a fresh environment gets a working upload path),
+-- while creating policies is not. They are separated deliberately.
+--
+-- Object paths are already unguessable (US-635, ImageUploadService.swift:47:
+-- "{folder}/{UUID}.jpg", not the old "{kidId}-{unixSeconds}"), and no shipped
+-- iOS build lists this bucket -- ImageUploadService is the only Swift file that
+-- touches Storage at all, and it calls upload, getPublicURL and remove only.
+-- Both are pinned in src/lib/storageBucketPolicies.test.ts.
+--
+-- US-634 is where this bucket stops being public, behind the min-build gate.
+-- Additive only.
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('images', 'images', true)
+ON CONFLICT (id) DO NOTHING;
