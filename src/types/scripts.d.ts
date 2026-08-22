@@ -30,6 +30,18 @@ declare module '*/scripts/prerender.mjs' {
     }>;
   }): Promise<string[]>;
 
+  export function validateSnapshot(
+    measured: {
+      title: string;
+      description: string;
+      canonical: string;
+      textLength: number;
+      ldJsonCount: number;
+      helmetLdJsonCount: number;
+    },
+    route: string
+  ): void;
+
   export function classifyPrerenderFailures(counts: {
     staticFailed: number;
     dynamicTotal: number;
