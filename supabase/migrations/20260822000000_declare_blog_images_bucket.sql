@@ -1,13 +1,27 @@
 -- US-643: declare the blog-images bucket that two edge functions already use.
 --
--- functions/agent-blog-writer/index.ts and functions/update-blog-image/index.ts
--- both upload a hero image here and then call getPublicUrl on it, storing that
--- URL on the blog post. No migration ever created the bucket, so it exists only
--- because someone clicked in the Supabase dashboard: a fresh environment comes
--- up without it, and the failure is silent. agent-blog-writer:69 catches the
--- upload error and falls back to the provider URL; getPublicUrl never checks
--- that anything exists, it only builds a string. So a rebuilt instance keeps
--- publishing posts whose images point at a bucket that is not there.
+-- functions/agent-blog-writer/index.ts uploads a hero image here and then calls
+-- getPublicUrl on it, storing that URL on the blog post. No migration ever
+-- created the bucket, so it exists only because someone clicked in the Supabase
+-- dashboard: a fresh environment comes up without it, and the failure is
+-- silent. agent-blog-writer:69 catches the upload error and falls back to the
+-- provider URL; getPublicUrl never checks that anything exists, it only builds
+-- a string. So a rebuilt instance keeps publishing posts whose images point at
+-- a bucket that is not there.
+--
+-- CORRECTED: the first version of this comment named a second writer,
+-- functions/update-blog-image/index.ts. That copy is DEAD. update-blog-image is
+-- one of the 14 cross-tree collisions check-function-trees.sh tracks, and
+-- supabase/config.toml:174 registers it WITHOUT an entrypoint -- which
+-- config.toml:16 documents as resolving to supabase/functions/NAME. The
+-- deployed copy is supabase/functions/update-blog-image/index.ts, and it writes
+-- to generated-images, not here. agent-blog-writer is live because
+-- config.toml:100 gives it an explicit `entrypoint = "../functions/..."`.
+--
+-- So this bucket has exactly ONE live writer, and the dead namesake beside it
+-- stores to a different bucket entirely. That is the US-519 shape the function-
+-- tree gate exists to catch: a fix applied to the copy the runtime never loads.
+-- Resolving that collision is the gate's tracked work, not this migration's.
 --
 -- public = true is read off the call sites, not guessed: the stored URL is a
 -- getPublicUrl result rendered in a public blog post, so anonymous read is the

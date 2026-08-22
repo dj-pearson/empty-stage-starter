@@ -10,11 +10,15 @@ import path from 'path';
  *
  * The gate matched `storage.from('literal')` only. functions/agent-blog-writer
  * and functions/update-blog-image both hoist the name into a module constant
- * and call `.from(STORAGE_BUCKET)`, so blog-images -- a bucket two edge
- * functions upload to on every run, and that no migration created -- was
- * reported as "declared in the registry only ... nothing calls them". The gate
- * whose whole job is catching an undeclared bucket had the undeclared bucket in
- * front of it and filed it as harmless.
+ * and call `.from(STORAGE_BUCKET)`, so blog-images -- a bucket that no
+ * migration created -- was reported as "declared in the registry only ...
+ * nothing calls them". The gate whose whole job is catching an undeclared
+ * bucket had the undeclared bucket in front of it and filed it as harmless.
+ *
+ * Of those two call sites only agent-blog-writer is live; see
+ * functionTreeBuckets.test.ts. The gate is right to count both, because a
+ * literal-blind scan is a bug either way -- but the bucket is declared on the
+ * strength of one writer, not two.
  *
  * These run the real script in a throwaway git repo, because it reads
  * `git ls-files`. Testing the regex in isolation would not have caught this:
