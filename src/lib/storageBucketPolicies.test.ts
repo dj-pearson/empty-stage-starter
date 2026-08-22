@@ -28,13 +28,17 @@ const MIGRATIONS_DIR = path.resolve(__dirname, '../../supabase/migrations');
 /**
  * Buckets that are world-readable on purpose. generated-images holds blog and
  * social artwork that is served as og:image, so anonymous read is the feature.
- * blog-images (US-643) is the same: the edge functions store a getPublicUrl
- * result on the post, so the hero image of a public blog post has to be
- * readable by an anonymous browser.
  * Adding a bucket here is a deliberate decision that it contains no personal
  * data; profile-pictures is the counter-example and must never appear.
+ *
+ * blog-images and Assets (US-643) are deliberately NOT here. Both are public
+ * buckets serving anonymous consumers -- a blog hero image, a lead-magnet PDF
+ * emailed to a stranger -- and neither needs an open SELECT to do it, because
+ * public reads bypass RLS entirely (20260817000000). The only thing an open
+ * SELECT would add is anon list(), so both scope SELECT to authenticated and
+ * this list stays as short as it was.
  */
-const INTENTIONALLY_PUBLIC_BUCKETS = ['generated-images', 'blog-images'];
+const INTENTIONALLY_PUBLIC_BUCKETS = ['generated-images'];
 
 function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS_DIR)

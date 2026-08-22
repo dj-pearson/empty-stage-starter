@@ -114,6 +114,24 @@ describe('check-storage-buckets.mjs call-site detection', () => {
   });
 });
 
+describe('test fixtures are not call sites', () => {
+  /**
+   * This file names buckets that deliberately do not exist. The commit that
+   * introduced it left the gate red for exactly that reason -- the gate was run
+   * before the new file was staged, so `git ls-files` could not see it, and the
+   * green result was measured against a tree that did not include the fixtures.
+   */
+  it('ignores a bucket named only inside a .test.ts file', () => {
+    mkdirSync(path.join(repo, 'src', 'lib'), { recursive: true });
+    writeFileSync(
+      path.join(repo, 'src', 'lib', 'probe.test.ts'),
+      "await db.storage.from('fixture-only-bucket').upload('a', b);\n"
+    );
+    const { ok } = run('export const nothing = 1;');
+    expect(ok).toBe(true);
+  });
+});
+
 describe('the real repo', () => {
   it('has no undeclared bucket outside the tracked known gaps', () => {
     const out = execFileSync('node', ['scripts/ci/check-storage-buckets.mjs'], {

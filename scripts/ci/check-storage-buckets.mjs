@@ -32,12 +32,6 @@ const PENDING = new Map([
     'US-635: created in the dashboard; its policies have to be read out of ' +
       'production before a migration can declare it without guessing.',
   ],
-  [
-    'Assets',
-    'US-643: serves the lead-magnet PDF from src/lib/exitIntentGuide.ts. Same ' +
-      'situation as images -- dashboard-only, policies unknown. Found by this ' +
-      'gate the first time it ran.',
-  ],
 ]);
 
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
@@ -92,6 +86,14 @@ for (const file of tracked) {
   if (file.startsWith('coolify-migration/')) continue;
   if (file.startsWith('supabase/diagnostics/')) continue;
   if (file.startsWith('scripts/ci/')) continue;
+  // Test fixtures name buckets that deliberately do not exist -- this file's
+  // own probes among them. A bucket referenced only by a test is not something
+  // production depends on, so scanning them turns the gate's fixtures into
+  // findings. (Learned the hard way: the commit that added
+  // storageBucketScanner.test.ts left this gate red, because the gate was run
+  // before the new file was staged and `git ls-files` could not see it.)
+  if (/\.(test|spec)\.[jt]sx?$/.test(file)) continue;
+  if (/(^|\/)__tests__\//.test(file)) continue;
 
   if (/\.(ts|tsx|js|jsx|mjs)$/.test(file)) {
     const src = read(file);

@@ -16,6 +16,13 @@
 --
 -- Additive only (new bucket + new policies) -- safe for shipped iOS clients,
 -- none of which touch this bucket.
+--
+-- One caveat worth naming, since CREATE POLICY has no ON CONFLICT: if
+-- production already carries its own policies for this bucket, these are added
+-- alongside rather than replacing them, and permissive RLS policies are OR'd.
+-- That can only widen. It is acceptable here and NOT acceptable for the
+-- `images` bucket (US-635), which holds photographs of children -- which is why
+-- that one still waits on a production read and this one does not.
 
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('blog-images', 'blog-images', true)
@@ -23,15 +30,30 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Re-runnable: the bucket may already exist in an environment that recorded an
 -- earlier version, and CREATE POLICY has no IF NOT EXISTS.
-DROP POLICY IF EXISTS "Public can view blog images" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated can view blog images" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated can upload blog images" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated can update blog images" ON storage.objects;
 DROP POLICY IF EXISTS "Authenticated can delete blog images" ON storage.objects;
 
--- Anyone can read: these are hero images on public blog posts. Unlike
--- profile-pictures, nothing here is personal data.
-CREATE POLICY "Public can view blog images"
+-- SELECT is scoped to authenticated, NOT left open to the public role.
+--
+-- An open SELECT would not be what makes the blog images load: 20260817000000
+-- records that public reads are served by the storage API without consulting
+-- RLS, which is why scoping profile-pictures did not stop shipped iOS builds
+-- rendering photos. What an open SELECT adds is list(), so the only thing a
+-- `USING (bucket_id = 'blog-images')` policy with no TO clause would buy is
+-- letting anyone holding the anon key enumerate the bucket -- the precise hole
+-- US-627 spent a migration closing on profile-pictures.
+--
+-- generated-images (20260630000000) has the open form. It was copied here in
+-- the first draft of this migration and is wrong for the same reason; that
+-- bucket is a separate cleanup, not something to spread.
+--
+-- authenticated covers the one caller that genuinely lists: the admin storage
+-- screen, through storageManager.listFiles (src/lib/storage-manager.ts:482).
+CREATE POLICY "Authenticated can view blog images"
 ON storage.objects FOR SELECT
+TO authenticated
 USING (bucket_id = 'blog-images');
 
 -- Writes are for the edge functions, which use the service role and bypass RLS
