@@ -39,7 +39,16 @@ if (-not (Test-Path -LiteralPath $SourcePath)) {
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $outFull  = [IO.Path]::GetFullPath($OutPath)
-if ($outFull.StartsWith($repoRoot, [StringComparison]::OrdinalIgnoreCase)) {
+# Compare on a directory BOUNDARY, not a bare prefix. A plain StartsWith makes
+# any sibling whose name merely extends the repo's a false positive -- with the
+# repo at .../empty-stage-starter, a perfectly good secrets directory at
+# .../empty-stage-starter-secrets was refused. That is the first place someone
+# following this story would put the material. It failed closed, so nothing
+# leaked; it just refused the correct setup with a message accusing you of the
+# opposite of what you did.
+$repoPrefix = $repoRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if ($outFull.Equals($repoRoot, [StringComparison]::OrdinalIgnoreCase) -or
+    $outFull.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     Write-Error "Refusing to write signing material into the repository: $outFull"
     exit 1
 }
