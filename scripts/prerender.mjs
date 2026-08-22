@@ -320,7 +320,8 @@ async function prerenderRoute(page, origin, route) {
   // Let lazily-imported sections (hero, schema components) mount and Helmet flush.
   await page.waitForTimeout(SETTLE_MS);
 
-  const { html, title, description, canonical, ldJsonCount, textLength } = await page.evaluate(() => {
+  const { html, title, description, canonical, ldJsonCount, textLength, markupLength } =
+    await page.evaluate(() => {
     // The GA loader attaches listeners and would re-run on the static copy anyway; it is
     // already deferred, so leave it. Do strip the Vite dev-only artifacts if any slipped in.
     document.querySelectorAll('script[src*="@vite/client"]').forEach((el) => el.remove());
@@ -331,6 +332,22 @@ async function prerenderRoute(page, origin, route) {
       description: head.querySelector('meta[name="description"]')?.getAttribute('content') ?? '',
       canonical: head.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? '',
       ldJsonCount: head.querySelectorAll('script[type="application/ld+json"]').length,
+      // Two different questions, and they answer differently enough to mislead.
+      //
+      // textLength is #root.innerText -- what Chromium considers RENDERED. It is
+      // the right signal for "did the app actually boot", which is what the
+      // floor check below uses it for.
+      //
+      // markupLength is the text a crawler extracts from the saved HTML, which
+      // is what this story is actually about ("content is present in initial
+      // HTML"). It counts DOM text that innerText discounts as not laid out --
+      // below-the-fold sections, collapsed panels, anything an animation has
+      // not revealed yet. On the homepage the two read 1.4k and 10.7k, and a
+      // log showing only the first makes the most important page in the site
+      // look like it prerendered almost nothing.
+      markupLength: (document.getElementById('root')?.textContent ?? '')
+        .replace(/\s+/g, ' ')
+        .trim().length,
       textLength: (document.getElementById('root')?.innerText ?? '').trim().length,
     };
   });
@@ -366,7 +383,15 @@ async function prerenderRoute(page, origin, route) {
   await mkdir(path.dirname(outPath), { recursive: true });
   await writeFile(outPath, html, 'utf8');
 
-  return { outPath, title, canonical, ldJsonCount, textLength, bytes: Buffer.byteLength(html) };
+  return {
+    outPath,
+    title,
+    canonical,
+    ldJsonCount,
+    textLength,
+    markupLength,
+    bytes: Buffer.byteLength(html),
+  };
 }
 
 async function main() {
@@ -473,7 +498,7 @@ async function main() {
           const result = await prerenderRoute(page, origin, route);
           results.push({ route, kind, ...result });
           console.log(
-            `[prerender] ✓ ${route.padEnd(28)} ${String(result.textLength).padStart(6)} chars  ` +
+            `[prerender] ✓ ${route.padEnd(28)} ${String(result.markupLength).padStart(6)} chars  ` +
               `${result.ldJsonCount} ld+json  ${(result.bytes / 1024).toFixed(0)}kb`
           );
         } catch (error) {
