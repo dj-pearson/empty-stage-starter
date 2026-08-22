@@ -75,6 +75,9 @@ const isGreen = (r) => r === 'success' || r === 'pass';
 const MANUAL = new Set([
   'US-323', 'US-313', 'US-314', 'US-261',
   'US-556', 'US-562', 'US-570', 'US-609', 'US-634', 'US-635', 'US-643',
+  // US-644 is a Swift change with no toolchain in CI; like the rest of this
+  // row it can only be closed by a human who built and ran the app.
+  'US-644',
 ]);
 const ANDROID = new Set(['US-213', 'US-214', 'US-222']);
 const WEB = new Set(['US-342', 'US-344']);

@@ -3,7 +3,7 @@
 -- READ ONLY. Nothing here changes anything. Run it in the Supabase SQL editor
 -- (or psql against production) and paste the output into the story.
 --
--- Verified 2026-08-22: all SEVEN queries run clean (psql exit 0) against a
+-- Verified 2026-08-22: all EIGHT queries run clean (psql exit 0) against a
 -- PostgreSQL 16.13 stand-in shaped like Supabase's storage schema --
 -- storage.buckets with its real columns, storage.objects,
 -- storage.foldername(), public.kids -- carrying objects at a folder and at the
@@ -12,7 +12,11 @@
 -- said "all four" until then; query 5 was added later and had never been run.
 -- Queries 6 and 7 were added after noticing query 5 asks its question of
 -- profile-pictures ALONE, leaving the bucket the iOS app actually writes to
--- unexamined by the very file that exists to examine it.
+-- unexamined by the very file that exists to examine it. Query 8 was added
+-- after finding that nothing on iOS ever deletes a replaced or an orphaned
+-- object, so the bucket only grows -- every query before it asks what is in
+-- there and how it is protected, and none asked how much of it should not be
+-- there at all.
 --
 -- The harness is checked in as us-635-standin-check.sql, so these claims can be
 -- re-run rather than believed. It matters that it uses Supabase's REAL
@@ -204,3 +208,51 @@ SELECT
 FROM storage.objects
 GROUP BY bucket_id
 ORDER BY owner_is_null DESC, bucket_id;
+
+-- 8. How much of `images` is garbage? Every object here whose URL no row
+--    references any more.
+--
+--    Why this is a question and not a tidiness metric: iOS never deletes the
+--    object it replaces. ImageUploadService.delete(path:) exists and has ZERO
+--    call sites -- KidProfileEditorView uploads a new photo and overwrites
+--    kids.profile_picture_url, and DataService.deleteKid deletes the row only.
+--    The web app does both properly (deleteReplacedStorageObject on replace,
+--    deleteStorageObject on delete, US-628), so this is an iOS-only leak into
+--    the bucket that holds the actual production photographs of children.
+--
+--    That makes "delete my child's photo" not delete it. The object stays at a
+--    public URL that was handed out while it was current. This query says how
+--    many, which is what decides whether the cleanup is a backfill script or a
+--    one-line fix going forward.
+--
+--    Matching is a substring test on the object name, not a URL parse: names
+--    are uuid.jpg (or the pre-US-635 {kidId}-{unix}.jpg), neither of which
+--    contains a character that URL-encoding would alter, and the stored value
+--    can carry a ?cache-buster or #fragment that a strict equality test would
+--    trip over -- the same trap that made the web cleanup call remove() with
+--    "photo.jpg#top" and silently match nothing.
+--
+--    A high unreferenced count in `recipes` or `kids` is the leak. Anything
+--    under `foods` is unreferenced by construction: ImageUploadService has a
+--    .foods case but no caller passes it, and the foods table has no image
+--    column at all, so a non-zero count there means something writes to this
+--    bucket that nobody has found yet.
+SELECT
+  coalesce((storage.foldername(o.name))[1], '(bucket root)') AS top_folder,
+  count(*) AS objects,
+  count(*) FILTER (
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.kids k
+      WHERE k.profile_picture_url IS NOT NULL
+        AND position(o.name IN k.profile_picture_url) > 0
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.image_url IS NOT NULL
+        AND position(o.name IN r.image_url) > 0
+    )
+  ) AS unreferenced
+FROM storage.objects o
+WHERE o.bucket_id = 'images'
+GROUP BY 1
+ORDER BY unreferenced DESC, top_folder;

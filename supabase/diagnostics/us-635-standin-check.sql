@@ -21,12 +21,14 @@
 --   2  3 policies; "everything with an owner" flagged ALL BUCKETS and listed
 --      first, because a bucket-agnostic permissive policy decides the answer
 --      whatever the images-specific ones say
---   3  images: kids -> 1 object 1 owned; and one BLANK top_folder row, which is
---      the object at the bucket root
+--   3  images: kids -> 3 objects 2 owned; recipes -> 2 objects 1 owned; and one
+--      BLANK top_folder row, which is the object at the bucket root
 --   4  kids split none 1 / images 1 / profile-pictures 1
 --   5  5 objects, 2 signable via owner, 1 via a uuid folder, 2 unsignable
---   6  images: 2 objects, 1 signable via owner, 1 unsignable, 1 top folder
---   7  profile-pictures 5 objects / 3 owner-null, images 2 / 1
+--   6  images: 6 objects, 3 signable via owner, 3 unsignable, 2 top folders
+--   7  profile-pictures 5 objects / 3 owner-null, images 6 / 3
+--   8  images/kids 3 objects 2 unreferenced; images/recipes 2 objects 1
+--      unreferenced; the bucket-root object 1 of 1 unreferenced
 --
 -- The 2 unsignable are the US-634 pre-condition: no owner and no uuid folder
 -- means createSignedUrl cannot mint a URL for them at all, so they need an
@@ -57,6 +59,9 @@ BEGIN
 END $$ LANGUAGE plpgsql IMMUTABLE;
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 CREATE TABLE public.kids (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), profile_picture_url text);
+-- Query 8 needs the OTHER table that stores an images/ URL. recipes.image_url
+-- is written by the iOS recipe editor through the same ImageUploadService.
+CREATE TABLE public.recipes (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), image_url text);
 
 INSERT INTO storage.buckets (id,name,public,file_size_limit,allowed_mime_types) VALUES
   ('images','images',true,5242880,ARRAY['image/jpeg']),
@@ -73,12 +78,24 @@ CREATE POLICY "pp owner scoped" ON storage.objects FOR SELECT TO authenticated
 
 INSERT INTO storage.objects (bucket_id,name,owner) VALUES
   ('images','kids/3f2504e0-4f89-11d3-9a0c-0305e82c3301.jpg','11111111-1111-1111-1111-111111111111'),
+  -- Query 8: a SUPERSEDED kid photo. iOS never deletes the old object when a
+  -- photo is replaced, so this is the shape that accumulates in production.
+  ('images','kids/aaaaaaaa-1111-2222-3333-444444444444.jpg','11111111-1111-1111-1111-111111111111'),
+  -- Query 8: the pre-US-635 guessable filename, also superseded and left behind.
+  ('images','kids/3f2504e0-4f89-11d3-9a0c-0305e82c3301-1723200000.jpg',NULL),
+  -- Query 8: a referenced recipe image, and an orphaned one beside it.
+  ('images','recipes/bbbbbbbb-1111-2222-3333-444444444444.jpg','11111111-1111-1111-1111-111111111111'),
+  ('images','recipes/cccccccc-1111-2222-3333-444444444444.jpg',NULL),
   ('images','rootlevel.jpg',NULL),                                    -- object at bucket root
   ('profile-pictures','22222222-2222-2222-2222-222222222222/a.jpg','22222222-2222-2222-2222-222222222222'),
   ('profile-pictures','legacy.jpg','22222222-2222-2222-2222-222222222222'), -- signable via owner
   ('profile-pictures','orphan.jpg',NULL),                             -- UNSIGNABLE: no owner, no uuid folder
   ('profile-pictures','notauuid/b.jpg',NULL),
   ('profile-pictures','33333333-3333-3333-3333-333333333333/c.jpg',NULL);                         -- UNSIGNABLE: folder is not a uuid
+
+INSERT INTO public.recipes (image_url) VALUES
+  ('https://x.supabase.co/storage/v1/object/public/images/recipes/bbbbbbbb-1111-2222-3333-444444444444.jpg'),
+  (NULL);
 
 INSERT INTO public.kids (profile_picture_url) VALUES
   ('https://x.supabase.co/storage/v1/object/public/images/kids/3f2504e0-4f89-11d3-9a0c-0305e82c3301.jpg'),
