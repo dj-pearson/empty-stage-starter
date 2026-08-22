@@ -37,7 +37,15 @@
 --                      this database holds only the five applied below.
 --   replay             all five re-apply cleanly; counts unchanged
 --   anon enumerating   0, in every bucket
---   authenticated      Assets 1, blog-images 2, images 0
+--   authenticated      Assets 1, blog-images 2, generated-images 0,
+--                      images 0, profile-pictures 0
+--
+--   The two zeros that are NOT the finding: generated-images and
+--   profile-pictures pre-date this series and exist here only so the
+--   migrations below have something to rewrite policies on -- the seed puts no
+--   objects in them, so 0 means "nothing stored", not "nothing readable". This
+--   line listed three buckets until the stand-in grew to five and the header
+--   did not follow.
 --
 -- THE FINDING IS THE LAST LINE. images gets no policies, deliberately -- a
 -- permissive one could only widen a bucket of photographs of children, and
