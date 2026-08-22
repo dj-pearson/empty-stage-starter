@@ -1,0 +1,102 @@
+#!/usr/bin/env node
+//
+// US-570: a PostgREST-shaped stub, so the DYNAMIC half of the prerender can be
+// exercised without production credentials.
+//
+//   node scripts/dev/fake-postgrest.mjs &
+//   VITE_SUPABASE_URL=http://127.0.0.1:54999 \
+//   VITE_SUPABASE_ANON_KEY="$(node -e "...any JWT-shaped string...")" \
+//   NO_PROXY=127.0.0.1,localhost npm run build
+//
+// Why it exists: every other check on this story covered a piece. The RLS
+// policies permit the reads (supabase/diagnostics/us-570-content-read-check.sql),
+// the discovery queries are built correctly (src/lib/prerenderDiscovery.test.ts),
+// and the static routes prerender. What none of them covered is the whole chain
+// -- discover slugs, expand routes, boot the app per route, let it fetch, and
+// write HTML with the right head. Without credentials the build skips discovery
+// entirely, so that path had never run at all.
+//
+// WHAT IT PROVES: with a PostgREST-shaped endpoint returning rows, the pipeline
+// produces 16/16 routes, and /blog/:slug ships its own title, canonical,
+// description, OG tags and body copy.
+//
+// WHAT IT DOES NOT PROVE: that production returns those rows. That is the drift
+// check named in us-570-content-read-check.sql's header, and it still needs one
+// real build. This stub answers the mechanism, not the data.
+//
+// It answers exactly the two request shapes the pipeline makes and nothing else;
+// it is not a Supabase emulator. The anon key must be JWT-shaped ("eyJ...") or
+// src/integrations/supabase/client.ts rejects it as a placeholder and the app
+// renders its not-configured state -- which is itself worth knowing, because the
+// prerender then fails those routes rather than shipping them, exactly as
+// designed.
+import { createServer } from 'node:http';
+
+const PORT = Number(process.env.FAKE_POSTGREST_PORT || 54999);
+
+const POSTS = [
+  {
+    id: '11111111-1111-1111-1111-111111111111',
+    slug: 'food-chaining-basics',
+    title: 'Food Chaining Basics',
+    content: '## Start where they are\n\nFood chaining moves one attribute at a time. '.repeat(8),
+    excerpt: 'How food chaining actually works.',
+    featured_image_url: null,
+    og_image_url: null,
+    published_at: '2026-01-02T00:00:00Z',
+    reading_time_minutes: 6,
+    views: 3,
+    meta_title: 'Food Chaining Basics',
+    meta_description: 'How food chaining actually works.',
+    category: { name: 'Picky Eating', slug: 'picky-eating' },
+  },
+  {
+    id: '22222222-2222-2222-2222-222222222222',
+    slug: 'safe-foods-list',
+    title: 'Building a Safe Foods List',
+    content: '## Safe foods\n\nA safe food is one your child eats reliably. '.repeat(8),
+    excerpt: 'Why the safe list matters.',
+    featured_image_url: null,
+    og_image_url: null,
+    published_at: '2026-01-03T00:00:00Z',
+    reading_time_minutes: 4,
+    views: 1,
+    meta_title: 'Building a Safe Foods List',
+    meta_description: 'Why the safe list matters.',
+    category: { name: 'Picky Eating', slug: 'picky-eating' },
+  },
+];
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Expose-Headers': 'content-range',
+};
+
+createServer((req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS);
+    return res.end();
+  }
+
+  if (url.pathname === '/rest/v1/blog_posts') {
+    const slug = url.searchParams.get('slug');
+    let rows = slug?.startsWith('eq.') ? POSTS.filter((p) => p.slug === slug.slice(3)) : POSTS;
+    if (url.searchParams.get('select') === 'slug') rows = rows.map((p) => ({ slug: p.slug }));
+    // .single() asks for an object rather than an array.
+    const single = (req.headers.accept || '').includes('vnd.pgrst.object');
+    res.writeHead(single && rows.length === 0 ? 406 : 200, {
+      ...CORS,
+      'Content-Type': 'application/json',
+    });
+    return res.end(JSON.stringify(single ? (rows[0] ?? null) : rows));
+  }
+
+  // pseo_pages and anything else: an empty set is a valid answer.
+  res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+  res.end('[]');
+}).listen(PORT, '127.0.0.1', () => {
+  console.log(`[fake-postgrest] listening on http://127.0.0.1:${PORT}`);
+});
