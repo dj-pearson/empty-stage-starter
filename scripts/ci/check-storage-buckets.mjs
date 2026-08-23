@@ -15,7 +15,8 @@
  * gate exists so the next one is caught at the commit that introduces it.
  *
  * It also reports, without failing, buckets that public.storage_buckets_config
- * advertises to the admin storage screen but that no migration ever created.
+ * seeds but that no migration ever created -- dead rows today, since nothing
+ * queries that table, but a disagreement between two inventories all the same.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -23,21 +24,16 @@ import { readFileSync } from 'node:fs';
 
 /**
  * Buckets referenced by code but knowingly not yet declared, each tied to the
- * story that will declare it. This list should only ever shrink.
+ * story that will declare it. This list should only ever shrink, and as of
+ * US-635 it is empty: every bucket the application touches is created by a
+ * migration.
+ *
+ * Empty is not the same as finished. 20260822000002 declares `images` without
+ * policies, because whether an unrestricted SELECT exists on it can only be
+ * read from the dashboard and a new permissive policy could only widen. That
+ * audit is US-635's remaining work; this gate does not track it.
  */
-const PENDING = new Map([
-  [
-    'images',
-    'US-635: created in the dashboard; its policies have to be read out of ' +
-      'production before a migration can declare it without guessing.',
-  ],
-  [
-    'Assets',
-    'US-643: serves the lead-magnet PDF from src/lib/exitIntentGuide.ts. Same ' +
-      'situation as images -- dashboard-only, policies unknown. Found by this ' +
-      'gate the first time it ran.',
-  ],
-]);
+const PENDING = new Map();
 
 const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
   .split('\0')
@@ -53,10 +49,12 @@ const read = (f) => {
 
 /** Buckets an INSERT INTO storage.buckets actually creates. */
 const declared = new Map();
-for (const file of tracked.filter((f) => f.startsWith('supabase/migrations/') && f.endsWith('.sql'))) {
+for (const file of tracked.filter(
+  (f) => f.startsWith('supabase/migrations/') && f.endsWith('.sql')
+)) {
   const sql = read(file);
   const inserts = sql.matchAll(
-    /insert\s+into\s+storage\.buckets\s*\([^)]*\)\s*values\s*([\s\S]*?);/gi,
+    /insert\s+into\s+storage\.buckets\s*\([^)]*\)\s*values\s*([\s\S]*?);/gi
   );
   for (const insert of inserts) {
     for (const row of insert[1].matchAll(/\(\s*'([^']+)'/g)) {
@@ -89,20 +87,42 @@ for (const file of tracked) {
   if (file.startsWith('coolify-migration/')) continue;
   if (file.startsWith('supabase/diagnostics/')) continue;
   if (file.startsWith('scripts/ci/')) continue;
+  // Test fixtures name buckets that deliberately do not exist -- this file's
+  // own probes among them. A bucket referenced only by a test is not something
+  // production depends on, so scanning them turns the gate's fixtures into
+  // findings. (Learned the hard way: the commit that added
+  // storageBucketScanner.test.ts left this gate red, because the gate was run
+  // before the new file was staged and `git ls-files` could not see it.)
+  if (/\.(test|spec)\.[jt]sx?$/.test(file)) continue;
+  if (/(^|\/)__tests__\//.test(file)) continue;
 
   if (/\.(ts|tsx|js|jsx|mjs)$/.test(file)) {
     const src = read(file);
     for (const m of src.matchAll(/storage\s*\.\s*from\(\s*['"`]([A-Za-z0-9._-]+)['"`]/g)) {
       note(m[1], file);
     }
+    // A literal-only scan also misses the shape the edge functions use: hoist
+    // the bucket into a module constant, then call .from(STORAGE_BUCKET). Both
+    // blog-image functions do exactly that, which is why 'blog-images' read as
+    // registry-only -- "no migration creates it and nothing calls it" -- while
+    // agent-blog-writer and update-blog-image were uploading to it on every
+    // run. Resolve single-assignment string constants before matching.
+    const stringConsts = new Map();
+    for (const m of src.matchAll(
+      /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*string\s*)?=\s*['"`]([A-Za-z0-9._-]+)['"`]/g
+    )) {
+      if (!stringConsts.has(m[1])) stringConsts.set(m[1], m[2]);
+    }
+    for (const m of src.matchAll(/storage\s*\.\s*from\(\s*([A-Za-z_$][\w$]*)\s*\)/g)) {
+      const resolved = stringConsts.get(m[1]);
+      if (resolved) note(resolved, file);
+    }
     // The web app mostly does not call storage.from() directly: it goes through
     // storage-manager.ts, which resolves the bucket from a typed record and
     // calls .from(config?.name || bucketName). A literal-only scan sees a
     // dynamic expression there and finds nothing, so read the record itself --
     // it is the actual list of buckets the app believes in.
-    const registry = src.match(
-      /export\s+const\s+STORAGE_BUCKETS[^=]*=\s*\{([\s\S]*?)\n\};/,
-    );
+    const registry = src.match(/export\s+const\s+STORAGE_BUCKETS[^=]*=\s*\{([\s\S]*?)\n\};/);
     if (registry) {
       for (const m of registry[1].matchAll(/\bname:\s*['"`]([A-Za-z0-9._-]+)['"`]/g)) {
         if (!registryOnly.has(m[1])) registryOnly.set(m[1], file);
@@ -113,7 +133,8 @@ for (const file of tracked) {
     // Swift reaches storage through ImageUploadService's bucketName constant
     // rather than inline, so match the constant as well as a direct .from().
     for (const m of src.matchAll(/bucketName\s*=\s*"([A-Za-z0-9._-]+)"/g)) note(m[1], file);
-    for (const m of src.matchAll(/storage\s*\n?\s*\.from\(\s*"([A-Za-z0-9._-]+)"/g)) note(m[1], file);
+    for (const m of src.matchAll(/storage\s*\n?\s*\.from\(\s*"([A-Za-z0-9._-]+)"/g))
+      note(m[1], file);
   }
 }
 
@@ -126,7 +147,7 @@ for (const [bucket, file] of registryOnly) {
 
 console.log(
   `Storage buckets: ${declared.size} created by migrations, ${referenced.size} with a call site, ` +
-    `${registryOnly.size} declared in the registry only.`,
+    `${registryOnly.size} declared in the registry only.`
 );
 
 if (registryOnly.size) {
@@ -135,7 +156,7 @@ if (registryOnly.size) {
       '\nthem and nothing calls them:' +
       `\n  ${[...registryOnly.keys()].join(', ')}` +
       '\n  The admin storage screen renders a tab per registry entry, so it advertises these' +
-      '\n  as real. Either create them or drop them from the record (US-643).',
+      '\n  as real. Either create them or drop them from the record (US-643).'
   );
 }
 
@@ -147,21 +168,53 @@ for (const [bucket, file] of pending) {
   console.log(`\nKnown gap: '${bucket}' (${file})\n  ${PENDING.get(bucket)}`);
 }
 
-// Advisory only: the admin storage screen reads this table, so a row here for a
-// bucket nobody created is a screen listing something that does not exist.
-const configSeed = tracked.find((f) => f.endsWith('20260110000000_storage_analytics_features.sql'));
-if (configSeed) {
-  const sql = read(configSeed);
-  const seed = sql.match(
-    /insert\s+into\s+public\.storage_buckets_config[\s\S]*?values([\s\S]*?)on\s+conflict/i,
-  );
-  const advertised = seed ? [...seed[1].matchAll(/\(\s*'([^']+)'/g)].map((m) => m[1]) : [];
-  const phantom = advertised.filter((b) => !declared.has(b));
+// Advisory only, and weaker than it used to claim. This said the admin storage
+// screen reads the table; it does not. StorageManagement.tsx:98 calls
+// storageManager.getAllBuckets(), which returns the TS record. Nothing in src,
+// app, functions or ios queries public.storage_buckets_config at all, so a
+// phantom row here is dead data rather than a screen listing a bucket that does
+// not exist. Kept because a seed disagreeing with the migrations is still worth
+// seeing, and because the day something does read it the disagreement matters.
+// Scans every migration rather than the one file that happens to hold the seed
+// today. That filename was hardcoded, which made this note correct by
+// coincidence: three migrations mention storage_buckets_config, and if the
+// second one to seed it had landed anywhere else the gate would have reported a
+// clean inventory while advertising a bucket that does not exist -- the exact
+// failure it is here to catch.
+const advertised = new Map();
+for (const file of tracked.filter(
+  (f) => f.startsWith('supabase/migrations/') && f.endsWith('.sql')
+)) {
+  const sql = read(file);
+  for (const seed of sql.matchAll(
+    /insert\s+into\s+(?:public\.)?storage_buckets_config[\s\S]*?values([\s\S]*?)(?:on\s+conflict|;)/gi
+  )) {
+    for (const row of seed[1].matchAll(/\(\s*'([^']+)'/g)) {
+      if (!advertised.has(row[1])) advertised.set(row[1], file);
+    }
+  }
+}
+
+// A row that a later migration deletes is reconciled, not phantom.
+const retired = new Set();
+for (const file of tracked.filter(
+  (f) => f.startsWith('supabase/migrations/') && f.endsWith('.sql')
+)) {
+  const sql = read(file);
+  for (const del of sql.matchAll(
+    /delete\s+from\s+(?:public\.)?storage_buckets_config([\s\S]*?);/gi
+  )) {
+    for (const name of del[1].matchAll(/'([^']+)'/g)) retired.add(name[1]);
+  }
+}
+
+{
+  const phantom = [...advertised.keys()].filter((b) => !declared.has(b) && !retired.has(b));
   if (phantom.length) {
     console.log(
       `\nNote: storage_buckets_config advertises ${phantom.length} bucket(s) that no migration creates:` +
         `\n  ${phantom.join(', ')}` +
-        '\n  The admin storage screen reads that table, so it lists buckets that may not exist.',
+        '\n  Nothing reads this table today, so these are dead rows rather than a broken screen.'
     );
   }
 }
@@ -179,6 +232,6 @@ console.error(
   '\nA dashboard-created bucket exists only in production: its public flag and RLS' +
     '\npolicies cannot be read from the repo, and a fresh environment comes up without' +
     '\nit. Add an INSERT INTO storage.buckets migration (with policies), or add the' +
-    '\nbucket to PENDING in this file with the story that will.',
+    '\nbucket to PENDING in this file with the story that will.'
 );
 process.exit(1);

@@ -10,7 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +30,17 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { RefreshCw, Trash2, Download, Eye, HardDrive, FileImage, FileText, Lock, Unlock } from 'lucide-react';
+import {
+  RefreshCw,
+  Trash2,
+  Download,
+  Eye,
+  HardDrive,
+  FileImage,
+  FileText,
+  Lock,
+  Unlock,
+} from 'lucide-react';
 import { storageManager, BucketStats, StorageFileInfo } from '@/lib/storage-manager';
 import { formatBytes } from '@/lib/file-utils';
 import { cn } from '@/lib/utils';
@@ -110,9 +127,7 @@ export function StorageManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatBytes(totalStorage)}</div>
-            <p className="text-xs text-muted-foreground">
-              Across {buckets.length} buckets
-            </p>
+            <p className="text-xs text-muted-foreground">Across {buckets.length} buckets</p>
           </CardContent>
         </Card>
 
@@ -123,9 +138,7 @@ export function StorageManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalFiles.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              Managed files
-            </p>
+            <p className="text-xs text-muted-foreground">Managed files</p>
           </CardContent>
         </Card>
 
@@ -137,7 +150,8 @@ export function StorageManagement() {
           <CardContent>
             <div className="text-2xl font-bold">{buckets.length}</div>
             <p className="text-xs text-muted-foreground">
-              {buckets.filter(b => b.isPublic).length} public, {buckets.filter(b => !b.isPublic).length} private
+              {buckets.filter((b) => b.isPublic).length} public,{' '}
+              {buckets.filter((b) => !b.isPublic).length} private
             </p>
           </CardContent>
         </Card>
@@ -151,14 +165,26 @@ export function StorageManagement() {
             <CardDescription>Manage files across all storage buckets</CardDescription>
           </div>
           <Button variant="outline" size="sm" onClick={loadBucketStats} disabled={isLoading}>
-            <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
+            <RefreshCw className={cn('h-4 w-4 mr-2', isLoading && 'animate-spin')} />
             Refresh
           </Button>
         </CardHeader>
         <CardContent>
           <Tabs value={selectedBucket} onValueChange={setSelectedBucket}>
-            <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6">
-              {buckets.slice(0, 6).map((bucket) => (
+            {/*
+              Both column counts used to be hardcoded to 6, which was exactly
+              the number of buckets in STORAGE_BUCKETS at the time. US-643
+              dropped three of them -- recipe-images, private-files and backups,
+              none of which any code called -- and the tabs were left crammed
+              into the left half of a six-column grid with three empty cells.
+              auto-fit sizes to whatever the registry holds, so the next change
+              to it cannot desynchronise the layout again.
+            */}
+            <TabsList
+              className="grid w-full gap-1"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(7rem, 1fr))' }}
+            >
+              {buckets.map((bucket) => (
                 <TabsTrigger key={bucket.name} value={bucket.name} className="text-xs">
                   {bucket.isPublic ? (
                     <Unlock className="h-3 w-3 mr-1" />
@@ -171,7 +197,7 @@ export function StorageManagement() {
             </TabsList>
 
             {buckets.map((bucket) => {
-              const stats = bucketStats.find(s => s.bucket === bucket.name);
+              const stats = bucketStats.find((s) => s.bucket === bucket.name);
               return (
                 <TabsContent key={bucket.name} value={bucket.name} className="mt-4">
                   <div className="space-y-4">
@@ -294,13 +320,19 @@ export function StorageManagement() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => handleDownloadFile(bucket.name, file.path, file.name)}
+                                          onClick={() =>
+                                            handleDownloadFile(bucket.name, file.path, file.name)
+                                          }
                                         >
                                           <Download className="h-4 w-4" />
                                         </Button>
                                         <AlertDialog>
                                           <AlertDialogTrigger asChild>
-                                            <Button variant="ghost" size="sm" className="text-destructive">
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="text-destructive"
+                                            >
                                               <Trash2 className="h-4 w-4" />
                                             </Button>
                                           </AlertDialogTrigger>
@@ -308,13 +340,16 @@ export function StorageManagement() {
                                             <AlertDialogHeader>
                                               <AlertDialogTitle>Delete file?</AlertDialogTitle>
                                               <AlertDialogDescription>
-                                                This will permanently delete "{file.name}". This action cannot be undone.
+                                                This will permanently delete "{file.name}". This
+                                                action cannot be undone.
                                               </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
                                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                                               <AlertDialogAction
-                                                onClick={() => handleDeleteFile(bucket.name, file.path)}
+                                                onClick={() =>
+                                                  handleDeleteFile(bucket.name, file.path)
+                                                }
                                                 className="bg-destructive text-destructive-foreground"
                                               >
                                                 Delete

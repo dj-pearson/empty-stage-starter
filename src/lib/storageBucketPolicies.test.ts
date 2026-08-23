@@ -26,12 +26,20 @@ import path from 'path';
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../supabase/migrations');
 
 /**
- * Buckets that are world-readable on purpose. generated-images holds blog and
- * social artwork that is served as og:image, so anonymous read is the feature.
- * Adding a bucket here is a deliberate decision that it contains no personal
- * data; profile-pictures is the counter-example and must never appear.
+ * Buckets whose SELECT policy is deliberately open to the public role. It is
+ * EMPTY, and the emptiness is the point: no bucket needs one.
+ *
+ * The reasoning that emptied it: reads of a public bucket are served by the
+ * storage API without consulting RLS (20260817000000), so an open SELECT is
+ * never what makes an image load. The only capability it adds is list() for
+ * anyone holding the anon key. generated-images was the last holdout and was
+ * scoped in 20260822000004; blog-images and Assets were written scoped.
+ *
+ * Adding a bucket back here means arguing that anonymous ENUMERATION of it is a
+ * feature -- not anonymous reading, which needs nothing from this list.
+ * profile-pictures is the counter-example and must never appear.
  */
-const INTENTIONALLY_PUBLIC_BUCKETS = ['generated-images'];
+const INTENTIONALLY_PUBLIC_BUCKETS: string[] = [];
 
 function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS_DIR)
@@ -51,6 +59,50 @@ function statements(sql: string): string[] {
   return stripComments(sql).split(';');
 }
 
+/**
+ * The net policy set on storage.objects after every migration has run, grouped
+ * by bucket. A later DROP removes a policy, so what matters is the end state
+ * rather than whether a shape ever existed in history.
+ */
+interface LivePolicy {
+  name: string;
+  cmd: string;
+  owner: boolean;
+  folder: boolean;
+  to: string;
+}
+
+function livePolicies(): Map<string, LivePolicy[]> {
+  const live = new Map<string, LivePolicy & { bucket: string }>();
+  for (const file of migrationFiles()) {
+    const sql = stripComments(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf-8'));
+    const re = /(CREATE|DROP)\s+POLICY\s+(?:IF\s+EXISTS\s+)?"([^"]+)"([\s\S]*?);/gi;
+    for (const m of sql.matchAll(re)) {
+      const [, kind, name, body] = m;
+      if (/DROP/i.test(kind)) {
+        live.delete(name);
+        continue;
+      }
+      if (!/ON\s+storage\.objects/i.test(body)) continue;
+      live.set(name, {
+        name,
+        bucket: body.match(/bucket_id\s*=\s*'([^']+)'/)?.[1] ?? 'unknown',
+        cmd: (body.match(/FOR\s+(SELECT|INSERT|UPDATE|DELETE|ALL)/i)?.[1] ?? 'ALL').toUpperCase(),
+        owner: /owner\s*=\s*auth\.uid\(\)/i.test(body),
+        folder: /foldername/i.test(body),
+        to: body.match(/\bTO\s+(\w+)/i)?.[1] ?? 'public',
+      });
+    }
+  }
+  const byBucket = new Map<string, LivePolicy[]>();
+  for (const p of live.values()) {
+    const list = byBucket.get(p.bucket) ?? [];
+    list.push(p);
+    byBucket.set(p.bucket, list);
+  }
+  return byBucket;
+}
+
 describe('storage.objects SELECT policies', () => {
   it('never leaves an unrestricted SELECT on storage.objects in force', () => {
     // Policy name -> where it was created. A later DROP removes it again, so
@@ -62,7 +114,9 @@ describe('storage.objects SELECT policies', () => {
       const sql = readFileSync(path.join(MIGRATIONS_DIR, file), 'utf-8');
 
       for (const statement of statements(sql)) {
-        const name = statement.match(/(?:CREATE|DROP)\s+POLICY\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/i)?.[1];
+        const name = statement.match(
+          /(?:CREATE|DROP)\s+POLICY\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/i
+        )?.[1];
         if (!name) continue;
 
         if (/DROP\s+POLICY/i.test(statement)) {
@@ -132,7 +186,7 @@ describe('profile photo object paths', () => {
   it('the iOS uploader builds an unguessable object name too', () => {
     const source = readFileSync(
       path.resolve(__dirname, '../../ios/EatPal/EatPal/Services/ImageUploadService.swift'),
-      'utf-8',
+      'utf-8'
     );
     const uploadPath = source.match(/let path = "([^"]+)"/)?.[1];
 
@@ -195,8 +249,9 @@ describe('US-634: stored kid photos render through KidAvatarImage', () => {
 
         const src = readFileSync(full, 'utf8');
         // <img ...> or <AvatarImage ...> whose src is some *.profile_picture_url
-        const bare =
-          /<(?:img|AvatarImage)\b[^>]*\bsrc=\{[^}]*profile_picture_url[^}]*\}/s.exec(src);
+        const bare = /<(?:img|AvatarImage)\b[^>]*\bsrc=\{[^}]*profile_picture_url[^}]*\}/s.exec(
+          src
+        );
         if (bare) offenders.push(path.relative(componentsDir, full));
       }
     };
@@ -214,5 +269,141 @@ describe('US-634: stored kid photos render through KidAvatarImage', () => {
     // that ever changes -- if the dialog starts loading an existing kid -- this
     // assertion is the thing that should be revisited, not silently deleted.
     expect(src).not.toMatch(/profile_picture_url:\s*kid\./);
+  });
+});
+
+/**
+ * US-635: the images bucket, which the live iOS app writes every kid, food and
+ * recipe photo into. 20260822000002 declares it so a fresh environment has it
+ * at all, and deliberately stops there.
+ *
+ * These pin the two halves of that decision: that the declaration exists, and
+ * that it did NOT quietly grow a policy. A permissive policy added here could
+ * only widen access to a bucket of photographs of children -- CREATE POLICY has
+ * no ON CONFLICT and permissive RLS policies are OR'd, so it cannot tighten the
+ * unrestricted SELECT that may already be there. Closing that one needs its
+ * name, which needs the dashboard read US-635 is blocked on.
+ */
+describe('US-635: the images bucket', () => {
+  const declaring = '20260822000002_declare_images_bucket.sql';
+
+  it('is created by a migration, so a fresh environment has it', () => {
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, declaring), 'utf-8');
+    expect(sql).toMatch(/INSERT\s+INTO\s+storage\.buckets/i);
+    expect(sql).toMatch(/'images'/);
+    expect(sql).toMatch(/ON\s+CONFLICT\s*\(\s*id\s*\)\s*DO\s+NOTHING/i);
+  });
+
+  it('is declared without any policy, so nothing here can widen it', () => {
+    const sql = stripComments(readFileSync(path.join(MIGRATIONS_DIR, declaring), 'utf-8'));
+    expect(sql).not.toMatch(/CREATE\s+POLICY/i);
+  });
+
+  it('is not on the intentionally-public list', () => {
+    // profile-pictures' counterpart. Whatever the bucket's flag has to be for
+    // shipped phones, an open SELECT on it is never deliberate.
+    expect(INTENTIONALLY_PUBLIC_BUCKETS).not.toContain('images');
+  });
+});
+
+/**
+ * US-635 AC: confirm no shipped iOS build lists this bucket before its SELECT
+ * is tightened. A tightened SELECT breaks list() but not a public-URL read, so
+ * a lister in the field would be the one thing that turns the fix into an
+ * outage. Checked as source text because there is no Swift toolchain in CI.
+ */
+describe('US-635: no shipped iOS build lists a storage bucket', () => {
+  const IOS_DIR = path.resolve(__dirname, '../../ios');
+
+  const swiftFiles = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...swiftFiles(full));
+      else if (entry.name.endsWith('.swift')) out.push(full);
+    }
+    return out;
+  };
+
+  it('ImageUploadService is the only Swift file that calls Supabase Storage', () => {
+    const callers = swiftFiles(IOS_DIR).filter((f) =>
+      /\bclient\s*\.\s*storage\b|\bstorage\s*\n?\s*\.from\(/.test(readFileSync(f, 'utf8'))
+    );
+    expect(callers.map((f) => path.basename(f))).toEqual(['ImageUploadService.swift']);
+  });
+
+  it('and it never lists -- only upload, getPublicURL and remove', () => {
+    const src = readFileSync(
+      path.join(IOS_DIR, 'EatPal/EatPal/Services/ImageUploadService.swift'),
+      'utf8'
+    );
+    expect(src).not.toMatch(/\.list\s*\(/);
+    expect(src).toMatch(/\.upload\(/);
+    expect(src).toMatch(/getPublicURL/);
+    expect(src).toMatch(/\.remove\(/);
+  });
+});
+
+/**
+ * US-634 / US-628: the read and write policies on profile-pictures must agree
+ * about what "yours" means.
+ *
+ * 20251008025307 wrote all four against the path. 20260817000000 scoped SELECT
+ * and added `OR owner = auth.uid()`, because the path is only a proxy for
+ * ownership and misses objects uploaded before the convention settled. DELETE
+ * and UPDATE kept the path-only test, so the owning parent could read a legacy
+ * photo of their child and not delete it -- and storage.remove() reports an
+ * RLS-denied removal as success with an empty list, so nothing said so.
+ *
+ * Measured on PostgreSQL 16.13: before 20260822000003 the owner read 2 objects
+ * and deleted 1; after it, 2 and 2.
+ */
+describe('US-634: profile-pictures write policies match the read policy', () => {
+  const parity = '20260822000003_profile_picture_write_owner_parity.sql';
+  const ownerBranch = /OR\s+owner\s*=\s*auth\.uid\(\)/i;
+
+  const statementFor = (sql: string, cmd: string) => {
+    const start = sql.indexOf(`FOR ${cmd}`);
+    return start === -1 ? '' : sql.slice(start, sql.indexOf(';', start));
+  };
+
+  it('replaces DELETE and UPDATE by name, which only a migration-declared policy allows', () => {
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, parity), 'utf-8');
+    expect(sql).toMatch(/DROP POLICY IF EXISTS "Users can delete their own profile pictures"/i);
+    expect(sql).toMatch(/DROP POLICY IF EXISTS "Users can update their own profile pictures"/i);
+  });
+
+  it.each(['DELETE', 'UPDATE'])('gives %s the same owner branch SELECT has', (cmd) => {
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, parity), 'utf-8');
+    expect(statementFor(sql, cmd)).toMatch(ownerBranch);
+  });
+
+  /**
+   * The sweep, which is what actually guards the class. The two checks above
+   * pin one migration's text; this one computes the LIVE policy set across
+   * every migration and asks the general question, so the next bucket to grow
+   * an owner-scoped read without matching writes fails here rather than in
+   * production. Enumerating by hand is what let this through the first time.
+   *
+   * INSERT is excluded deliberately: a new object has no owner yet, so the
+   * folder check is the only test available and is the one that makes the path
+   * convention true.
+   */
+  it('no bucket has an owner-scoped read with a path-only write', () => {
+    const offenders: string[] = [];
+    for (const [bucket, policies] of livePolicies()) {
+      const scoped = policies.filter((p) => p.folder || p.owner);
+      if (!scoped.some((p) => p.cmd === 'SELECT' && p.owner)) continue;
+      for (const p of scoped) {
+        if (p.cmd === 'INSERT' || p.cmd === 'SELECT') continue;
+        if (!p.owner) offenders.push(`${bucket} ${p.cmd}: "${p.name}"`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('leaves INSERT alone: a new object has no owner yet', () => {
+    const sql = stripComments(readFileSync(path.join(MIGRATIONS_DIR, parity), 'utf-8'));
+    expect(sql).not.toMatch(/FOR\s+INSERT/i);
   });
 });

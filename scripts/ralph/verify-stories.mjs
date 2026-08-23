@@ -47,7 +47,38 @@ const isGreen = (r) => r === 'success' || r === 'pass';
 //  US-313 Xcode build + on-device test after backend contracts land
 //  US-314 owner-gated removal of the deprecated Expo/RN app
 //  US-261 manual Xcode watchOS target setup completion
-const MANUAL = new Set(['US-323', 'US-313', 'US-314', 'US-261']);
+//
+// The seven below were added after this script was caught one green iOS gate
+// away from marking all of them done. Each is blocked on an action only a
+// person can take, which is precisely this list's criterion:
+//  US-556 rotate five leaked credentials in Supabase + Coolify, then purge
+//  US-562 move the Apple signing material off the working tree
+//  US-570 one build with real VITE_SUPABASE_* to check policy drift
+//  US-609 the Swift work itself; needs Xcode, same category as US-313
+//  US-634 needs the production read below, plus a release-sequenced flip
+//  US-635 read the images bucket's policies out of the dashboard
+//  US-643 confirm the Assets bucket's flag against production
+//
+// WHY THEY WERE AT RISK, because the mechanism is subtler than it looks:
+// hasImplementation() greps commit subjects for a literal "(US-XXX)", and the
+// comment there rightly warns that a bare id mention false-positives. But the
+// repo's own Conventional Commits style makes EVERY tagged commit match --
+// `docs(US-562): ...` and `test(US-609): ...` are indistinguishable from
+// `fix(US-562): ...` to a --fixed-strings grep. So a commit that investigates a
+// story and records that it is STILL BLOCKED reads as an implementation. For
+// US-562 and US-609 the only matching commit in all of history was exactly that
+// kind, and US-609 has no Swift written at all.
+//
+// No regex separates "I implemented this" from "I looked and it is still
+// blocked", so the fix is this list rather than a cleverer grep. It only ever
+// HOLDS a story false; it can never mark one passing.
+const MANUAL = new Set([
+  'US-323', 'US-313', 'US-314', 'US-261',
+  'US-556', 'US-562', 'US-570', 'US-609', 'US-634', 'US-635', 'US-643',
+  // US-644 is a Swift change with no toolchain in CI; like the rest of this
+  // row it can only be closed by a human who built and ran the app.
+  'US-644',
+]);
 const ANDROID = new Set(['US-213', 'US-214', 'US-222']);
 const WEB = new Set(['US-342', 'US-344']);
 
@@ -130,8 +161,19 @@ function main() {
   fs.writeFileSync(path.join(ROOT, 'prd-verify-report.json'), JSON.stringify(summary, null, 2));
 
   if (APPLY && flippedIds.length) {
-    // Preserve exact formatting (2-space, no trailing newline) for a minimal diff.
-    fs.writeFileSync(PRD, JSON.stringify(prd, null, 2));
+    // Preserve prd.json's exact formatting for a minimal diff: 2-space indent
+    // AND a trailing newline. The original of this line said "no trailing
+    // newline" and wrote accordingly, which was simply wrong about the file --
+    // prd.json ends 0a on main and has for its whole history, and every editor
+    // and formatter that touches it puts one back. Writing without it made the
+    // flip commit carry a stray no-op line for the next hand edit to flip back.
+    //
+    // Scope, since the first version of this comment overstated it: the write
+    // is guarded by `flippedIds.length` above, so only a run that actually
+    // flips a story writes the file at all. A run that flips nothing never
+    // touched prd.json either way, which is why the workflow's
+    // `git diff --quiet` guard reported clean before this fix as well.
+    fs.writeFileSync(PRD, JSON.stringify(prd, null, 2) + '\n');
     const block = [
       '',
       `## prd-verify — CI verification pass (ref ${VERIFY_REF})`,

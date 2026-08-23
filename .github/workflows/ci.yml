@@ -171,8 +171,26 @@ jobs:
 
       - run: npm ci
 
+      # `npm run build`, not `npx vite build`. They are different builds and the
+      # difference is the whole of US-570.
+      #
+      # `vite build` stops at the SPA shell. `npm run build` is
+      # ensure-chromium && vite build && prerender, and the prerender step is
+      # what writes dist/<route>/index.html -- the files a crawler that does not
+      # run JavaScript actually reads. Cloudflare Pages' own Git build runs the
+      # prerender (see the header of scripts/ensure-chromium.mjs, which exists
+      # because that step once failed there and took the deploy with it), so CI
+      # was building a DIFFERENT artifact from the one the site is built from --
+      # and this job's artifact is what deploy-production/-staging upload.
+      #
+      # It also means every guardrail in scripts/prerender.mjs now runs on every
+      # PR instead of only at deploy: the per-route canonical anchor, the body
+      # floor, and the structured-data check added after a sampled 1-in-6 chance
+      # of publishing the homepage with none of its Helmet-managed schema. A
+      # prerender regression can now fail this job. That is the point, and it is
+      # a real behaviour change: before, nothing here could catch one.
       - name: Build
-        run: npx vite build
+        run: npm run build
         env:
           # Vite INLINES these into the bundle at build time, and the same
           # dist/ artifact is what deploy-production/-staging ship. So the

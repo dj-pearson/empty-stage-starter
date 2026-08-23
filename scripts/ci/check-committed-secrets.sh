@@ -67,17 +67,41 @@ ALLOWLIST='^scripts/ci/check-committed-secrets\.sh$'
 # Emit a line for each complete PEM block with a plausible real body.
 # A block qualifies when its base64 body is >= 100 chars and never elided.
 pem_hits() {
+  # Handles BOTH layouts a private key arrives in:
+  #   * real newlines, the usual .pem / .p8 on disk;
+  #   * ESCAPED newlines on a single line, which is exactly a downloaded Google
+  #     service-account JSON: {"private_key":"-----BEGIN...\nMIIE...\n-----END..."}
+  #
+  # The original scan was line-oriented and missed the second entirely. The
+  # BEGIN rule fired, consumed the line with `next`, and the END on that SAME
+  # line was never seen, so the block never closed and nothing was reported --
+  # a complete private key walking past a check whose whole job is complete
+  # private keys. A gsub does not fix it either: rewriting \n inside $0 leaves
+  # awk with one record, so `next` still swallows the END. Split the record and
+  # run the state machine over the pieces.
   awk '
-    /-----BEGIN ([A-Z]+ )?PRIVATE KEY-----/ { inblock=1; body=""; elided=0; start=NR; next }
-    inblock && /-----END ([A-Z]+ )?PRIVATE KEY-----/ {
-      if (!elided && length(body) >= 100) printf "%s:%d: complete PEM private key block (%d base64 chars)\n", FILENAME, start, length(body)
-      inblock=0; next
-    }
-    inblock {
-      if (index($0, "...") > 0) elided=1
-      line=$0
-      gsub(/[^A-Za-z0-9+\/=]/, "", line)
-      body = body line
+    {
+      # The group is load-bearing. /\\r?\\n/ reads as "backslash, optional
+      # letter r, backslash, n" and so needs TWO backslashes in the text; the
+      # escape being matched has one. Verified by splitting a literal A\nB\nC:
+      # /\\r?\\n/ yields 1 part, /(\\r)?\\n/ yields 3.
+      n = split($0, parts, /(\\r)?\\n/)
+      for (i = 1; i <= n; i++) {
+        line = parts[i]
+        if (line ~ /-----BEGIN ([A-Z]+ )?PRIVATE KEY-----/) {
+          inblock = 1; body = ""; elided = 0; start = NR; continue
+        }
+        if (inblock && line ~ /-----END ([A-Z]+ )?PRIVATE KEY-----/) {
+          if (!elided && length(body) >= 100)
+            printf "%s:%d: complete PEM private key block (%d base64 chars)\n", FILENAME, start, length(body)
+          inblock = 0; continue
+        }
+        if (inblock) {
+          if (index(line, "...") > 0) elided = 1
+          gsub(/[^A-Za-z0-9+\/=]/, "", line)
+          body = body line
+        }
+      }
     }
   ' "$1" 2>/dev/null
 }

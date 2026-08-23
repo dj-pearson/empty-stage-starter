@@ -30,9 +30,30 @@ declare module '*/scripts/prerender.mjs' {
     }>;
   }): Promise<string[]>;
 
+  export function validateSnapshot(
+    measured: {
+      title: string;
+      description: string;
+      canonical: string;
+      textLength: number;
+      ldJsonCount: number;
+      helmetLdJsonCount: number;
+    },
+    route: string
+  ): void;
+
   export function classifyPrerenderFailures(counts: {
     staticFailed: number;
     dynamicTotal: number;
     dynamicFailed: number;
   }): { fatal: boolean; reason: string };
+}
+
+declare module '*/scripts/dev/serve-dist.mjs' {
+  export function resolveCandidates(distDir: string, pathname: string): string[];
+
+  export function resolveRequest(
+    distDir: string,
+    pathname: string
+  ): { file: string; fallback: boolean } | null;
 }

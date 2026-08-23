@@ -76,8 +76,24 @@ const DYNAMIC_FAILURE_TOLERANCE = 0.1;
  * ships nothing at all, so a partial prerender is strictly the better failure.
  */
 const BUDGET_MS = Math.max(1, Number(process.env.PRERENDER_BUDGET_MS) || 720_000);
-/** How long to let lazy chunks/fonts settle after the app first paints content. */
-const SETTLE_MS = 700;
+/**
+ * How long the <head> must stop changing before a snapshot is taken.
+ *
+ * This was a flat 700ms sleep, and that is not enough for the schema
+ * components, which arrive in a lazily-imported chunk AFTER Helmet has already
+ * committed the title, description and canonical. Three builds of the same
+ * commit measured the homepage at 5, 5 and 1 ld+json blocks: one run in three
+ * shipped / with only the static Organization/WebSite graph from index.html and
+ * none of its Helmet-managed WebPage, Organization, SoftwareApplication or
+ * FAQPage markup. Every check passed, because the count was reported and never
+ * asserted on. The homepage is the most linked page on the site and its
+ * structured data was a coin flip.
+ *
+ * Waiting for the head to go quiet handles a slow chunk instead of guessing at
+ * one. It is a floor, not a fixed cost: a head that settles immediately still
+ * waits this long and no longer.
+ */
+const HEAD_QUIET_MS = 700;
 /**
  * Budget for the <head> to name the route being rendered. Separate from (and
  * much shorter than) ROUTE_TIMEOUT_MS: navigation can legitimately be slow,
@@ -252,6 +268,55 @@ export function classifyPrerenderFailures({ staticFailed, dynamicTotal, dynamicF
 /** "/blog/" and "/blog" are the same route; "/" stays "/". */
 const normalisePath = (p) => p.replace(/\/+$/, '') || '/';
 
+/**
+ * Everything that decides whether a snapshot is fit to ship, as one pure
+ * function so it can be tested without a browser. It throws rather than
+ * returning a verdict because the only reasonable response to any of these is
+ * to refuse the route, and the thrown message is what reaches the build log.
+ */
+export function validateSnapshot(
+  { title, description, canonical, textLength, ldJsonCount, helmetLdJsonCount },
+  route
+) {
+  // A snapshot missing any of these is worse than no snapshot: it would freeze a broken
+  // <head> into the file crawlers read. Fail loudly instead of shipping it.
+  if (!title) throw new Error('rendered page has no <title>');
+  if (!description) throw new Error('rendered page has no meta description');
+  if (!canonical) throw new Error('rendered page has no canonical link');
+  if (textLength < 200) throw new Error(`rendered body text is only ${textLength} chars`);
+  // Every one of the 16 routes renders at least one schema component, so zero
+  // Helmet-managed ld+json means the chunk carrying them never mounted -- the
+  // exact shape of the degraded homepage described at HEAD_QUIET_MS. Checked
+  // rather than reported, because a count in a build log is not a guardrail.
+  if (helmetLdJsonCount < 1) {
+    throw new Error(
+      `rendered page has no app-rendered structured data (${ldJsonCount} ld+json block(s), ` +
+        'none of them Helmet-managed) -- the schema components did not mount'
+    );
+  }
+
+  // ...and a snapshot carrying the WRONG head is worse than one missing it. The
+  // four checks above are all satisfied by a page that failed to load its own
+  // content: an "Article Not Found" render inherits index.html's title,
+  // description and canonical, and the cookie banner alone clears 200 chars. A
+  // dynamic route whose data fetch fails at prerender time would be frozen as a
+  // not-found page canonicalised to the homepage, and shipped to crawlers as a
+  // 200. Anchor the check to the route actually being rendered.
+  let canonicalPath;
+  try {
+    canonicalPath = normalisePath(new URL(canonical, 'https://tryeatpal.com').pathname);
+  } catch {
+    throw new Error(`rendered page has an unparseable canonical: ${canonical}`);
+  }
+  if (canonicalPath !== normalisePath(route)) {
+    throw new Error(
+      `canonical points at ${canonicalPath} but this is ${normalisePath(route)} — ` +
+        'the page most likely rendered an error state and inherited the shell head'
+    );
+  }
+
+}
+
 /** dist/pricing/index.html for "/pricing"; dist/index.html for "/". */
 function outputPathFor(route) {
   if (route === '/') return path.join(DIST, 'index.html');
@@ -289,7 +354,8 @@ async function prerenderRoute(page, origin, route) {
   // "/" is the one route this cannot vouch for: index.html ships a static
   // <link rel=canonical href=https://tryeatpal.com/> (which is exactly why an
   // error state on any other route inherits the homepage canonical), so the
-  // condition is already true before React boots. SETTLE_MS still covers it.
+  // condition is already true before React boots, so it does not gate at all
+  // there -- the head-quiet wait below is what actually covers "/".
   try {
     await page.waitForFunction(
       (expected) => {
@@ -317,10 +383,77 @@ async function prerenderRoute(page, origin, route) {
     );
   }
 
-  // Let lazily-imported sections (hero, schema components) mount and Helmet flush.
-  await page.waitForTimeout(SETTLE_MS);
+  // Let lazily-imported sections (hero, schema components) mount and Helmet
+  // flush. The canonical check above cannot stand in for this: it passes as
+  // soon as Helmet commits the canonical, which happens BEFORE the schema chunk
+  // mounts -- the degraded homepage carried 29 data-rh head tags and zero
+  // Helmet ld+json. And on "/" the canonical check does not gate at all, since
+  // index.html already claims that path.
+  //
+  // Signature counts head children and ld+json blocks rather than hashing
+  // innerHTML: attribute churn on an existing tag is not a mount, and something
+  // that rewrites a meta tag on a timer would never let a hash go quiet.
+  // Wait for the schema chunk itself, not merely for the head to go quiet.
+  //
+  // The quiet wait below is NOT sufficient on its own, and that was measured
+  // rather than assumed: the head settles at (children=N, ld+json=1) and stays
+  // there while the lazily-imported schema components are still loading, so a
+  // quiet window elapses and the snapshot is taken early -- exactly what the
+  // flat sleep did. Sampling the same dist repeatedly, the old script shipped a
+  // homepage with no app-rendered structured data in 1 run of 6, and adding
+  // only the quiet wait still failed 1 of 8.
+  //
+  // Every route in prerender-routes.json renders at least one schema component,
+  // so "a Helmet-managed ld+json exists" is a real invariant to wait on. The
+  // guardrail after the snapshot stays as the backstop: if this ever times out
+  // on a route that genuinely has none, the build says so instead of silently
+  // shipping a page without its structured data.
+  try {
+    await page.waitForFunction(
+      () => !!document.head.querySelector('script[type="application/ld+json"][data-rh]'),
+      undefined,
+      { timeout: HEAD_TIMEOUT_MS, polling: 100 }
+    );
+  } catch {
+    // Same reason the canonical wait above catches: playwright's own message is
+    // "Timeout exceeded", which in a build log names neither the route nor what
+    // was being waited for.
+    throw new Error(
+      `no app-rendered structured data appeared within ${HEAD_TIMEOUT_MS}ms — ` +
+        'the schema components never mounted, so this snapshot would ship with ' +
+        "only index.html's static ld+json"
+    );
+  }
 
-  const { html, title, description, canonical, ldJsonCount, textLength } = await page.evaluate(() => {
+  await page.waitForFunction(
+    (quietMs) => {
+      const head = document.head;
+      const signature = `${head.children.length}:${
+        head.querySelectorAll('script[type="application/ld+json"]').length
+      }`;
+      const w = /** @type {Record<string, unknown>} */ (window);
+      if (w.__prerenderHeadSignature !== signature) {
+        w.__prerenderHeadSignature = signature;
+        w.__prerenderHeadSince = performance.now();
+        return false;
+      }
+      return performance.now() - Number(w.__prerenderHeadSince ?? 0) >= quietMs;
+    },
+    HEAD_QUIET_MS,
+    { timeout: HEAD_TIMEOUT_MS, polling: 100 }
+  );
+
+  const {
+    html,
+    title,
+    description,
+    canonical,
+    ldJsonCount,
+    helmetLdJsonCount,
+    textLength,
+    markupLength,
+  } =
+    await page.evaluate(() => {
     // The GA loader attaches listeners and would re-run on the static copy anyway; it is
     // already deferred, so leave it. Do strip the Vite dev-only artifacts if any slipped in.
     document.querySelectorAll('script[src*="@vite/client"]').forEach((el) => el.remove());
@@ -331,42 +464,52 @@ async function prerenderRoute(page, origin, route) {
       description: head.querySelector('meta[name="description"]')?.getAttribute('content') ?? '',
       canonical: head.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? '',
       ldJsonCount: head.querySelectorAll('script[type="application/ld+json"]').length,
+      // Split out because the two numbers fail differently. index.html ships one
+      // static ld+json graph, so a total of 1 looks like "has structured data"
+      // while meaning the app contributed none of its own. Helmet stamps
+      // data-rh on everything it manages, which is what tells them apart.
+      helmetLdJsonCount: head.querySelectorAll(
+        'script[type="application/ld+json"][data-rh]'
+      ).length,
+      // Two different questions, and they answer differently enough to mislead.
+      //
+      // textLength is #root.innerText -- what Chromium considers RENDERED. It is
+      // the right signal for "did the app actually boot", which is what the
+      // floor check below uses it for.
+      //
+      // markupLength is the text a crawler extracts from the saved HTML, which
+      // is what this story is actually about ("content is present in initial
+      // HTML"). It counts DOM text that innerText discounts as not laid out --
+      // below-the-fold sections, collapsed panels, anything an animation has
+      // not revealed yet. On the homepage the two read 1.4k and 10.7k, and a
+      // log showing only the first makes the most important page in the site
+      // look like it prerendered almost nothing.
+      markupLength: (document.getElementById('root')?.textContent ?? '')
+        .replace(/\s+/g, ' ')
+        .trim().length,
       textLength: (document.getElementById('root')?.innerText ?? '').trim().length,
     };
   });
 
-  // A snapshot missing any of these is worse than no snapshot: it would freeze a broken
-  // <head> into the file crawlers read. Fail loudly instead of shipping it.
-  if (!title) throw new Error('rendered page has no <title>');
-  if (!description) throw new Error('rendered page has no meta description');
-  if (!canonical) throw new Error('rendered page has no canonical link');
-  if (textLength < 200) throw new Error(`rendered body text is only ${textLength} chars`);
-
-  // ...and a snapshot carrying the WRONG head is worse than one missing it. The
-  // four checks above are all satisfied by a page that failed to load its own
-  // content: an "Article Not Found" render inherits index.html's title,
-  // description and canonical, and the cookie banner alone clears 200 chars. A
-  // dynamic route whose data fetch fails at prerender time would be frozen as a
-  // not-found page canonicalised to the homepage, and shipped to crawlers as a
-  // 200. Anchor the check to the route actually being rendered.
-  let canonicalPath;
-  try {
-    canonicalPath = normalisePath(new URL(canonical, 'https://tryeatpal.com').pathname);
-  } catch {
-    throw new Error(`rendered page has an unparseable canonical: ${canonical}`);
-  }
-  if (canonicalPath !== normalisePath(route)) {
-    throw new Error(
-      `canonical points at ${canonicalPath} but this is ${normalisePath(route)} — ` +
-        'the page most likely rendered an error state and inherited the shell head'
-    );
-  }
+  validateSnapshot(
+    { title, description, canonical, textLength, ldJsonCount, helmetLdJsonCount },
+    route
+  );
 
   const outPath = outputPathFor(route);
   await mkdir(path.dirname(outPath), { recursive: true });
   await writeFile(outPath, html, 'utf8');
 
-  return { outPath, title, canonical, ldJsonCount, textLength, bytes: Buffer.byteLength(html) };
+  return {
+    outPath,
+    title,
+    canonical,
+    ldJsonCount,
+    helmetLdJsonCount,
+    textLength,
+    markupLength,
+    bytes: Buffer.byteLength(html),
+  };
 }
 
 async function main() {
@@ -473,7 +616,7 @@ async function main() {
           const result = await prerenderRoute(page, origin, route);
           results.push({ route, kind, ...result });
           console.log(
-            `[prerender] ✓ ${route.padEnd(28)} ${String(result.textLength).padStart(6)} chars  ` +
+            `[prerender] ✓ ${route.padEnd(28)} ${String(result.markupLength).padStart(6)} chars  ` +
               `${result.ldJsonCount} ld+json  ${(result.bytes / 1024).toFixed(0)}kb`
           );
         } catch (error) {

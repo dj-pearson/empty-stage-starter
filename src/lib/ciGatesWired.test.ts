@@ -30,3 +30,37 @@ describe('CI gates are wired into a workflow', () => {
     expect(unwired).toEqual([]);
   });
 });
+
+/**
+ * The Build job builds the same thing Cloudflare Pages does.
+ *
+ * `npx vite build` and `npm run build` differ by the prerender step, and that
+ * step is the whole of US-570: it writes the dist/<route>/index.html files a
+ * crawler without JavaScript reads. CI ran the first while Pages runs the
+ * second, so the artifact CI validated -- and that deploy-production uploads --
+ * was not the artifact the site is built from, and no guardrail inside
+ * scripts/prerender.mjs ran on any pull request.
+ *
+ * Pinned rather than trusted because the two commands look interchangeable and
+ * the difference shows up nowhere except in what crawlers receive.
+ */
+describe('the Build job runs the prerendering build', () => {
+  const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  it('builds with npm run build', () => {
+    expect(ci).toContain('run: npm run build');
+  });
+
+  it('does not build with a bare vite build, which skips the prerender', () => {
+    // Matches the run: line only, so the explanatory comment above it -- which
+    // names both commands on purpose -- does not trip this.
+    expect(ci).not.toMatch(/^\s*run:\s*npx vite build\s*$/m);
+  });
+
+  it('keeps the prerender in the npm build script the workflow calls', () => {
+    const pkg = JSON.parse(readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+    // Pointing CI at `npm run build` buys nothing if that script stops
+    // prerendering; build:nossg exists for the deliberately-shell-only case.
+    expect(pkg.scripts.build).toContain('scripts/prerender.mjs');
+  });
+});

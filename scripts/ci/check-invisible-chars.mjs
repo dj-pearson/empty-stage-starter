@@ -19,6 +19,15 @@
  * emoji sequence -- the family and profession emoji in the quiz copy are built
  * from them and are entirely legitimate.
  *
+ * A second, narrower class: characters that DO render, but render as an
+ * ordinary space (U+00A0 and friends) or as a line break the parser disagrees
+ * about (U+2028/U+2029). These are only checked in files a machine parses --
+ * code, config, SQL, shell -- because that is the scope CLAUDE.md gives them,
+ * and because an em space in a Markdown paragraph is typography rather than a
+ * bug. A no-break space breaks shell word-splitting, `grep` and column parsing
+ * while looking exactly like a space; U+2028 is valid JSON and a syntax error
+ * inside a JS string literal. Prose files are left alone.
+ *
  * Escape hatch: put `invisible-chars: allow` in a comment on the same line,
  * for a deliberate use that carries its reason with it.
  */
@@ -59,6 +68,37 @@ const nameOf = (cp) => {
   return 'INVISIBLE';
 };
 
+/**
+ * Characters that render, but not as what they are. Restricted to machine-read
+ * files: CLAUDE.md bans these from "anything a machine parses", not from prose.
+ */
+const SPACE_LOOKALIKES = new Map([
+  [0x00a0, 'NO-BREAK SPACE'],
+  [0x2002, 'EN SPACE'],
+  [0x2003, 'EM SPACE'],
+  [0x2007, 'FIGURE SPACE'],
+  [0x2009, 'THIN SPACE'],
+  [0x202f, 'NARROW NO-BREAK SPACE'],
+  [0x3000, 'IDEOGRAPHIC SPACE'],
+  [0x2028, 'LINE SEPARATOR'],
+  [0x2029, 'PARAGRAPH SEPARATOR'],
+]);
+
+/** Extensions whose contents something other than a human reads. */
+const MACHINE_READ = new Set([
+  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
+  'json', 'jsonc', 'yml', 'yaml', 'toml', 'ini', 'cfg', 'conf', 'properties',
+  'sql', 'sh', 'bash', 'zsh', 'ps1', 'psm1',
+  'css', 'scss', 'swift', 'kt', 'kts', 'gradle', 'plist', 'xml',
+]);
+
+const isMachineRead = (file) => {
+  const base = file.split('/').pop() ?? file;
+  if (base === 'Dockerfile' || base === 'Makefile' || base.startsWith('.env')) return true;
+  if (!base.includes('.')) return false;
+  return MACHINE_READ.has(base.split('.').pop().toLowerCase());
+};
+
 /** Extensions we do not read as text. Everything else is checked. */
 const BINARY = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'icns', 'bmp',
@@ -84,6 +124,7 @@ for (const file of files) {
   }
   if (text.includes('\0')) continue;
 
+  const machineRead = isMachineRead(file);
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -100,6 +141,15 @@ for (const file of files) {
         const after = chars[j + 1]?.codePointAt(0) ?? 0;
         if (before > 0x7f && after > 0x7f) continue;
         findings.push({ file, line: i + 1, name: 'ZERO WIDTH JOINER (not in an emoji sequence)' });
+        continue;
+      }
+
+      if (machineRead && SPACE_LOOKALIKES.has(cp)) {
+        findings.push({
+          file,
+          line: i + 1,
+          name: `${SPACE_LOOKALIKES.get(cp)} (U+${cp.toString(16).toUpperCase().padStart(4, '0')})`,
+        });
         continue;
       }
 
@@ -126,8 +176,8 @@ for (const f of findings) {
   console.error(`  ${f.file}:${f.line}  ${f.name}`);
 }
 console.error(
-  '\nThese render as nothing (or reorder the line) while the parser sees something else.' +
-    '\nRemove them, or mark a deliberate use with an `invisible-chars: allow` comment' +
-    '\non the same line saying why it is load-bearing.'
+  '\nThese render as nothing, as an ordinary space, or reorder the line, while the' +
+    '\nparser sees something else. Remove them, or mark a deliberate use with an' +
+    '\n`invisible-chars: allow` comment on the same line saying why it is load-bearing.'
 );
 process.exit(1);

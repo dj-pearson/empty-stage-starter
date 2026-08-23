@@ -3,12 +3,30 @@
 -- READ ONLY. Nothing here changes anything. Run it in the Supabase SQL editor
 -- (or psql against production) and paste the output into the story.
 --
--- Verified: all four queries run clean (psql exit 0) against a Postgres 16
--- stand-in shaped like Supabase's storage schema -- storage.buckets,
--- storage.objects, storage.foldername(), public.kids -- with objects at a
--- folder and at the bucket root, an owner-less object, and both a
--- bucket-scoped and a bucket-agnostic RLS policy. An empty top_folder row in
--- query 3 is an object sitting at the bucket root, not an error.
+-- Verified 2026-08-22: all EIGHT queries run clean (psql exit 0) against a
+-- PostgreSQL 16.13 stand-in shaped like Supabase's storage schema --
+-- storage.buckets with its real columns, storage.objects,
+-- storage.foldername(), public.kids -- carrying objects at a folder and at the
+-- bucket root, an owner-less object, an object whose first path segment is not
+-- a uuid, and both a bucket-scoped and a bucket-agnostic RLS policy. The header
+-- said "all four" until then; query 5 was added later and had never been run.
+-- Queries 6 and 7 were added after noticing query 5 asks its question of
+-- profile-pictures ALONE, leaving the bucket the iOS app actually writes to
+-- unexamined by the very file that exists to examine it. Query 8 was added
+-- after finding that nothing on iOS ever deletes a replaced or an orphaned
+-- object, so the bucket only grows -- every query before it asks what is in
+-- there and how it is protected, and none asked how much of it should not be
+-- there at all.
+--
+-- The harness is checked in as us-635-standin-check.sql, so these claims can be
+-- re-run rather than believed. It matters that it uses Supabase's REAL
+-- storage.foldername -- split on '/' and drop the last element -- and not a
+-- regexp that strips the filename: the two disagree exactly at the bucket root,
+-- which is the row the next line is about.
+--
+-- An empty top_folder row in query 3 is an object sitting at the bucket root,
+-- not an error. Confirmed, not assumed: with the real function that row comes
+-- back blank; with the approximation it comes back as the filename.
 --
 -- Why this file exists: the 'images' bucket is not created by any migration in
 -- this repo -- it was made in the dashboard -- so its public flag and its RLS
@@ -150,3 +168,91 @@ WHERE bucket_id = 'profile-pictures';
 --     -> owner-scoped SELECT would make those rows unreadable to everyone.
 --        They need an owner backfill, or a policy that also matches on a path
 --        the app can derive, BEFORE the policy is tightened.
+
+-- 6. The same question for `images`, which query 5 does not ask and which
+--    matters more there.
+--
+--    profile-pictures has TWO routes to signability: the owner column, or a
+--    first path segment that is the owner's uuid. `images` has ONE. Objects
+--    land at "{foods|recipes|kids}/{uuid}.jpg" (ImageUploadService.swift:47),
+--    so the first segment is a folder TYPE, never a user id -- exactly why this
+--    story's own criteria say to scope on storage.objects.owner rather than the
+--    path. If owner is NULL, nothing can sign that object.
+--
+--    This is the bucket the LIVE iOS app writes every kid, food and recipe
+--    photo into. Query 5 answers "can profile-pictures be closed"; without this
+--    one, nothing answers "can images be closed", and US-634's Release N+1
+--    would take the answer on faith for the bucket that holds most of the
+--    photographs.
+--
+--    unsignable > 0 means an owner backfill has to happen BEFORE public goes
+--    false, and the owner-scoped SELECT policy has to land in the SAME
+--    migration as the flip -- a permissive policy added afterwards cannot help
+--    an object nobody can read in the meantime.
+SELECT
+  count(*) AS objects,
+  count(*) FILTER (WHERE owner IS NOT NULL) AS signable_via_owner,
+  count(*) FILTER (WHERE owner IS NULL)     AS unsignable,
+  count(DISTINCT (storage.foldername(name))[1]) AS distinct_top_folders
+FROM storage.objects
+WHERE bucket_id = 'images';
+
+-- 7. And the same for every OTHER bucket, so the next one created in the
+--    dashboard is not discovered the way `images` was -- by reading a Swift
+--    file. Anything with unsignable > 0 cannot be made private without a
+--    backfill first.
+SELECT
+  bucket_id,
+  count(*) AS objects,
+  count(*) FILTER (WHERE owner IS NULL) AS owner_is_null
+FROM storage.objects
+GROUP BY bucket_id
+ORDER BY owner_is_null DESC, bucket_id;
+
+-- 8. How much of `images` is garbage? Every object here whose URL no row
+--    references any more.
+--
+--    Why this is a question and not a tidiness metric: iOS never deletes the
+--    object it replaces. ImageUploadService.delete(path:) exists and has ZERO
+--    call sites -- KidProfileEditorView uploads a new photo and overwrites
+--    kids.profile_picture_url, and DataService.deleteKid deletes the row only.
+--    The web app does both properly (deleteReplacedStorageObject on replace,
+--    deleteStorageObject on delete, US-628), so this is an iOS-only leak into
+--    the bucket that holds the actual production photographs of children.
+--
+--    That makes "delete my child's photo" not delete it. The object stays at a
+--    public URL that was handed out while it was current. This query says how
+--    many, which is what decides whether the cleanup is a backfill script or a
+--    one-line fix going forward.
+--
+--    Matching is a substring test on the object name, not a URL parse: names
+--    are uuid.jpg (or the pre-US-635 {kidId}-{unix}.jpg), neither of which
+--    contains a character that URL-encoding would alter, and the stored value
+--    can carry a ?cache-buster or #fragment that a strict equality test would
+--    trip over -- the same trap that made the web cleanup call remove() with
+--    "photo.jpg#top" and silently match nothing.
+--
+--    A high unreferenced count in `recipes` or `kids` is the leak. Anything
+--    under `foods` is unreferenced by construction: ImageUploadService has a
+--    .foods case but no caller passes it, and the foods table has no image
+--    column at all, so a non-zero count there means something writes to this
+--    bucket that nobody has found yet.
+SELECT
+  coalesce((storage.foldername(o.name))[1], '(bucket root)') AS top_folder,
+  count(*) AS objects,
+  count(*) FILTER (
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.kids k
+      WHERE k.profile_picture_url IS NOT NULL
+        AND position(o.name IN k.profile_picture_url) > 0
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.recipes r
+      WHERE r.image_url IS NOT NULL
+        AND position(o.name IN r.image_url) > 0
+    )
+  ) AS unreferenced
+FROM storage.objects o
+WHERE o.bucket_id = 'images'
+GROUP BY 1
+ORDER BY unreferenced DESC, top_folder;
