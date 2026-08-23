@@ -1,3 +1,14 @@
+//
+// CONSUMER-LESS as of the tonight-mode cleanup: functions/tonight-mode/ was its
+// only caller and has been deleted. Kept rather than removed because
+// functions/_shared/helpers_test.ts covers isHouseholdMember and
+// assertHouseholdMember and ci.yml runs those Deno tests -- the same
+// disposition stripe-prices.ts got when US-622 deleted functions/create-checkout/.
+//
+// The DEPLOYED tonight-mode (supabase/functions/tonight-mode) does not use this
+// helper. It enforces the same rule inline, querying household_members before
+// trusting a body-supplied householdId, which is where US-312 put it.
+//
 /**
  * Server-side household membership enforcement (US-324).
  *
