@@ -25,6 +25,14 @@
 - Phone-mockup / device-chrome dark mode: keep the styled chassis colour for both modes via `bg-gray-900 dark:bg-neutral-800`, but always switch the screen surface to semantic tokens (`bg-card text-card-foreground`).
 - Image optimisation: `sharp` is already a transitive dep — no need for cwebp/ImageMagick. `sharp(src).webp({ quality: 90 }).toFile(dest)` typically saves 79–94% on icons.
 - `react-native-gesture-handler` is **not** in the mobile dep tree even though `react-native-reanimated` is. Don't add gesture-based UX without an intentional dep + Expo prebuild bump; prefer non-gesture patterns (banner, long-press) until the dep is added.
+- robots.txt: a crawler obeys the ONE most specific User-agent group matching it and ignores every other group, "*" included (RFC 9309). Rules under "*" do NOT apply to any named group. Repeat the Disallow block in every group. `src/lib/robots-txt.test.ts` resolves rules the way a crawler does and fails if the duplication is tidied away.
+- robots.txt Disallow paths are prefixes: `/admin/` does not match `/admin`. Write them without a trailing slash.
+- Full `tsc -b` / `tsc -p tsconfig.app.json` does not finish in this container (>25 min, ~4GB) and the app tree carries ~1234 pre-existing eslint errors and ~130 type errors. Gate new work with a SCOPED tsconfig + a script under `scripts/ci/` that filters errors to the files you own — see `tsconfig.seo.json` / `check-seo-extraction.sh` and `tsconfig.seo-pages.json` / `check-seo-pages.sh`.
+- Anything added to `scripts/ci/` MUST be referenced by a `.github/workflows/*.yml` file. `src/lib/ciGatesWired.test.ts` fails otherwise, on purpose: a gate nobody runs reads as coverage.
+- `npm run lint` and `npm run format` do NOT pass repo-wide today. Check `git stash`-ed baseline before "fixing" formatting in a file you touched, or you ship a reformat diff nobody asked for. Lint and prettier your own new files only.
+- Static marketing routes live in FOUR places that must agree: `src/App.tsx` (route), `supabase/functions/generate-sitemap/index.ts` (STATIC_ENTRIES), `functions/sitemap.xml.ts` (hardcoded fallback, different runtime, cannot share an import), `scripts/prerender-routes.json` (static list). `src/lib/comparison-discovery.test.ts` pins the last three to each other.
+- Content rule for competitor- and credential-facing copy: no unsourced numbers, no invented credentials, no competitor pricing. The repo has already had to strip a fabricated author bio (`src/pages/Authors.tsx`) and a fabricated aggregateRating. `ComparisonSchema`'s own docstring still demonstrates `rating: 4.8, ratingCount: 2847` — do not copy it.
+- `scripts/ralph/verify-stories.mjs`: `classify()` defaults to the **iOS** gate. A web-only story must be added to the `WEB` set or it waits on a gate that will never verify it.
 
 ---
 
@@ -189,4 +197,65 @@ CAVEAT FOR THE NEXT PERSON: the baseline now has ZERO headroom. Any PR that adds
 - Gates: web=cancelled, ios=success, android=success.
 - Flipped passes=true (gate green + implementation present): US-583, US-584, US-585, US-586, US-587, US-588, US-589, US-590, US-591, US-592, US-593, US-594, US-611, US-613, US-614.
 - Held false: 10 (breakdown {"awaiting-implementation":10,"verified":15}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
+
+## 2026-08-24 - US-645, US-646, US-647 (SEO strategy gaps)
+
+Audited the SEO surface against the strategy taxonomy, wrote the gaps up as
+US-645..US-653 in prd.json, and implemented the first three.
+
+**US-645 - robots.txt named groups never saw the private-path blocks.** Not a
+missing feature, a live defect. All 16 Disallow rules sat under "User-agent: *";
+RFC 9309 says a crawler obeys only its most specific matching group, so the 19
+named groups read "Allow: /" with nothing else. Googlebot, Bingbot, GPTBot,
+ClaudeBot, PerplexityBot and Applebot were each explicitly invited into /admin,
+/dashboard, /seo-dashboard, /search-traffic, /join and the faceted query URLs.
+Two further path bugs fell out of the same read: trailing slashes meant
+"/admin/" never matched the "/admin" route App.tsx declares, and "/_next/" is a
+Next.js path in a Vite app. Also unblocked AhrefsBot and SemrushBot (blocking
+them never hid the backlink profile, it only blinded our own audits) and fixed
+the same group bug in the admin panel's downloadable robots.txt template.
+Files: public/robots.txt, src/lib/robots-txt.test.ts (76 tests; 23 of them fail
+against the old file), src/components/admin/seo/useSeoFiles.ts.
+
+**US-646 - the comparison pages.** comparisonTargets named five slugs and
+ComparisonSchema was built and tested, and neither was reachable because no
+route existed. Added src/lib/comparison-content.ts (throws at module load if a
+target has no content, so the two lists cannot drift), /compare and
+/compare/:slug, and a scoped typecheck gate.
+Files: src/lib/comparison-content.ts + test, src/pages/Compare.tsx,
+src/pages/ComparisonPage.tsx + test, src/App.tsx, tsconfig.seo-pages.json,
+scripts/ci/check-seo-pages.sh, package.json, .github/workflows/ci.yml.
+
+**US-647 - discovery wiring.** Sitemap (both sources), prerender static list,
+and internal links from the footer, /pricing and the guides index. Skipped the
+"Allow: /compare" line the story asked for: after US-645 every group is
+"Allow: /" plus a denylist, /compare is not on it, and the line would be a no-op
+repeated 20 times. The test asserts absence from the denylist instead.
+Files: supabase/functions/generate-sitemap/index.ts, functions/sitemap.xml.ts,
+scripts/prerender-routes.json, src/components/Footer.tsx, src/pages/Pricing.tsx,
+src/pages/pseo/GuidesIndex.tsx, src/lib/comparison-discovery.test.ts.
+
+**Harness fix.** scripts/ralph/verify-stories.mjs classified all nine SEO
+stories as iOS-gated, and hasImplementation() grepped whole commit messages
+while its own comment said subjects, so the commit that ADDED the stories marked
+six unwritten ones as implemented.
+
+- **Learnings for future iterations:**
+  - The gap worth finding was a bug, not a missing page. Reading robots.txt the
+    way a crawler parses it (most-specific group wins, everything else ignored)
+    is not how it reads to a human, and the file looked correct for months.
+  - Almost everything the SEO taxonomy calls for already exists in this repo.
+    What is missing is usually the last wire: comparisonTargets with no route,
+    generateHreflangTags with no caller, ComparisonSchema with no page. Grep for
+    consumers before assuming something needs building.
+  - Do not run `npx prettier --write` on a file you edited without checking the
+    baseline first. Footer.tsx, GuidesIndex.tsx and Pricing.tsx are all
+    unformatted on main; formatting them would have buried a three-line change.
+  - src/test/jest-dom.d.ts already existed and already solved the
+    toBeInTheDocument typing (US-329). It was missing from the scoped tsconfig,
+    not from the repo. Check before writing a file that "should" exist.
+  - The GuidesIndex cross-links sit inside the "no guides loaded" branch, so
+    they vanish once the library populates. Worth checking other pages for
+    crawl paths that only render in an empty state.
 ---
