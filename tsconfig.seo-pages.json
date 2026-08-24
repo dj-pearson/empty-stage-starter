@@ -21,6 +21,11 @@
     "src/lib/comparison-content.test.ts",
     "src/lib/comparison-discovery.test.ts",
     "src/lib/robots-txt.test.ts",
+    "src/lib/contentDecay.test.ts",
+    "src/lib/seo/cannibalization.ts",
+    "src/lib/seo/cannibalization.test.ts",
+    "src/components/admin/seo/SeoCannibalizationTab.tsx",
+    "src/components/admin/seo/useSeoCannibalization.ts",
     "src/pages/Compare.tsx",
     "src/pages/ComparisonPage.tsx",
     "src/pages/ComparisonPage.test.tsx"

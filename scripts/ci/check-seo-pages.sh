@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# US-646/US-647: typecheck the /compare cluster.
+# US-646/US-647/US-650/US-651: typecheck the SEO gap work.
 #
 # Why this exists rather than `npm run typecheck`: a full `tsc -b` needs ~4GB
 # and runs past 25 minutes in the containers this project builds in, so nobody
@@ -19,18 +19,18 @@
 # today and catches the mistake that matters: a page that does not compile.
 set -uo pipefail
 
-OWNED='^(src/lib/comparison-|src/pages/Compare\.tsx|src/pages/ComparisonPage\.|src/lib/robots-txt\.test\.ts)'
+OWNED='^(src/lib/comparison-|src/pages/Compare\.tsx|src/pages/ComparisonPage\.|src/lib/robots-txt\.test\.ts|src/lib/contentDecay\.test\.ts|src/lib/seo/|src/components/admin/seo/SeoCannibalizationTab\.tsx|src/components/admin/seo/useSeoCannibalization\.ts)'
 
-echo "Typechecking the /compare cluster ..."
+echo "Typechecking the SEO gap modules ..."
 
 output=$(npx tsc -p tsconfig.seo-pages.json 2>&1)
 owned_errors=$(printf '%s\n' "$output" | grep -E "$OWNED" | grep -E "error TS" || true)
 
 if [ -n "$owned_errors" ]; then
-  echo "::error title=Type error in the /compare cluster::"
+  echo "::error title=Type error in the SEO gap modules::"
   printf '%s\n' "$owned_errors"
   exit 1
 fi
 
 inherited=$(printf '%s\n' "$output" | grep -cE "error TS" || true)
-echo "No type errors in the /compare cluster (${inherited} inherited from imported files, see the header of this script)."
+echo "No type errors in the SEO gap modules (${inherited} inherited from imported files, see the header of this script)."
