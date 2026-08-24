@@ -108,6 +108,10 @@ entrypoint = "../functions/agent-social-writer/index.ts"
 [functions.agent-seo-audit]
 verify_jwt = false
 entrypoint = "../functions/agent-seo-audit/index.ts"
+# Content decay agent: invoked by the dispatcher with the internal secret.
+[functions.agent-content-decay]
+verify_jwt = false
+entrypoint = "../functions/agent-content-decay/index.ts"
 # Sentry triage agent: event-driven webhook, shared-secret validated inside.
 [functions.agent-sentry-triage]
 verify_jwt = false
