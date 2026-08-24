@@ -2703,7 +2703,7 @@
       ],
       "priority": 17,
       "passes": false,
-      "notes": ""
+      "notes": "Built, with one addition the story did not ask for and could not work without: scripts/prerender.mjs now writes dist/prerender-manifest.json. Before that, what a build actually rendered existed only as a line in the build log, so the wall-clock budget skipping 600 guides was invisible from production and the report could only have reconciled against scripts/prerender-routes.json -- the intent, not the result.\n\nLog-file analysis of Googlebot hits stays out of scope, as the story says. That needs Cloudflare Logpush into a queryable store, which is an infrastructure decision. The tab says so on screen rather than leaving the reader to assume crawl budget is covered."
     }
   ]
 }
