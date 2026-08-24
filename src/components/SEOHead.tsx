@@ -1,4 +1,6 @@
-import { Helmet } from "react-helmet-async";
+import { Helmet } from 'react-helmet-async';
+import { generateHreflangTags } from '@/lib/seo-helpers';
+import { DEFAULT_SEO_LOCALE, SEO_LOCALES } from '@/lib/seo-config';
 
 /**
  * The site-wide default social share image, with its REAL dimensions.
@@ -14,7 +16,7 @@ import { Helmet } from "react-helmet-async";
  * 1200x630 export would render better; declaring the truth is the correctness fix.
  */
 const DEFAULT_OG_IMAGE = {
-  url: "https://tryeatpal.com/Cover.webp",
+  url: 'https://tryeatpal.com/Cover.webp',
   width: 1536,
   height: 1024,
 } as const;
@@ -35,7 +37,7 @@ export interface SEOProps {
    */
   ogImageWidth?: number;
   ogImageHeight?: number;
-  twitterCard?: "summary" | "summary_large_image";
+  twitterCard?: 'summary' | 'summary_large_image';
   aiPurpose?: string;
   aiAudience?: string;
   aiKeyFeatures?: string;
@@ -70,14 +72,14 @@ export function SEOHead({
   description,
   keywords,
   canonicalUrl,
-  ogType = "website",
+  ogType = 'website',
   ogImage = DEFAULT_OG_IMAGE.url,
-  ogImageAlt = "EatPal - AI-Powered Kids Meal Planning for Picky Eaters",
+  ogImageAlt = 'EatPal - AI-Powered Kids Meal Planning for Picky Eaters',
   // Default to the real size of the default image; a caller passing its own ogImage
   // without dimensions gets no width/height tags rather than the wrong ones.
   ogImageWidth = ogImage === DEFAULT_OG_IMAGE.url ? DEFAULT_OG_IMAGE.width : undefined,
   ogImageHeight = ogImage === DEFAULT_OG_IMAGE.url ? DEFAULT_OG_IMAGE.height : undefined,
-  twitterCard = "summary_large_image",
+  twitterCard = 'summary_large_image',
   aiPurpose,
   aiAudience,
   aiKeyFeatures,
@@ -86,13 +88,61 @@ export function SEOHead({
   noindex = false,
   datePublished,
   dateModified,
-  author = "EatPal Team",
+  author = 'EatPal Team',
   section,
 }: SEOProps) {
-  const fullTitle = title.includes("EatPal") ? title : `${title} | EatPal`;
+  const fullTitle = title.includes('EatPal') ? title : `${title} | EatPal`;
   const robots = noindex
-    ? "noindex, nofollow"
-    : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+    ? 'noindex, nofollow'
+    : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+
+  /**
+   * hreflang alternates (US-652).
+   *
+   * generateHreflangTags has existed in src/lib/seo-helpers.ts with passing
+   * tests since the SEO helper work and nothing ever called it. This is the
+   * caller.
+   *
+   * With only `en` in SEO_LOCALES the output is one self-referential en tag
+   * plus x-default, which is correct and does nothing. That is the intended
+   * end state until a second language ships: the wiring is live, so adding a
+   * locale is a one-line change in seo-config rather than an hreflang project.
+   *
+   * Skipped entirely on a noindex page. Declaring alternates for a page we are
+   * asking Google not to index is a contradiction, and a reciprocal-annotation
+   * error in Search Console for a page nobody wanted indexed is pure noise.
+   */
+  const hreflangTags = noindex
+    ? []
+    : (() => {
+        // canonicalUrl is absolute; split it so the helper's baseUrl + path
+        // contract is satisfied and every href matches the canonical exactly.
+        let origin = 'https://tryeatpal.com';
+        let path = canonicalUrl;
+        try {
+          const parsed = new URL(canonicalUrl);
+          origin = parsed.origin;
+          path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        } catch {
+          // A relative canonical should not happen (SEOProps documents it as
+          // absolute) but must not take the page down over a link tag.
+          path = canonicalUrl.startsWith('/') ? canonicalUrl : `/${canonicalUrl}`;
+        }
+
+        const alternates = generateHreflangTags(origin, path, [...SEO_LOCALES]);
+        return [
+          ...alternates,
+          // x-default is what a reader outside every listed locale gets. With
+          // one locale it is the same URL, which is exactly what it should be.
+          {
+            rel: 'alternate',
+            hreflang: 'x-default',
+            href:
+              alternates.find((tag) => tag.hreflang.startsWith(DEFAULT_SEO_LOCALE.lang))?.href ??
+              `${origin}${path}`,
+          },
+        ];
+      })();
 
   return (
     <Helmet>
@@ -103,14 +153,13 @@ export function SEOHead({
       {keywords && <meta name="keywords" content={keywords} />}
       <meta name="robots" content={robots} />
       <link rel="canonical" href={canonicalUrl} />
+      {hreflangTags.map((tag) => (
+        <link key={tag.hreflang} rel="alternate" hrefLang={tag.hreflang} href={tag.href} />
+      ))}
 
       {/* Content Freshness Signals */}
-      {datePublished && (
-        <meta name="article:published_time" content={datePublished} />
-      )}
-      {dateModified && (
-        <meta name="article:modified_time" content={dateModified} />
-      )}
+      {datePublished && <meta name="article:published_time" content={datePublished} />}
+      {dateModified && <meta name="article:modified_time" content={dateModified} />}
       {datePublished && <meta name="date" content={datePublished} />}
       {dateModified && <meta name="last-modified" content={dateModified} />}
 
@@ -143,24 +192,17 @@ export function SEOHead({
       )}
       <meta property="og:image:alt" content={ogImageAlt} />
       <meta property="og:locale" content="en_US" />
-      <meta
-        property="og:site_name"
-        content="EatPal - Kids Meal Planning for Picky Eaters"
-      />
+      <meta property="og:site_name" content="EatPal - Kids Meal Planning for Picky Eaters" />
 
       {/* Article-specific OG tags for blog/content pages */}
-      {ogType === "article" && datePublished && (
+      {ogType === 'article' && datePublished && (
         <meta property="article:published_time" content={datePublished} />
       )}
-      {ogType === "article" && dateModified && (
+      {ogType === 'article' && dateModified && (
         <meta property="article:modified_time" content={dateModified} />
       )}
-      {ogType === "article" && author && (
-        <meta property="article:author" content={author} />
-      )}
-      {ogType === "article" && section && (
-        <meta property="article:section" content={section} />
-      )}
+      {ogType === 'article' && author && <meta property="article:author" content={author} />}
+      {ogType === 'article' && section && <meta property="article:section" content={section} />}
 
       {/* Twitter */}
       <meta name="twitter:card" content={twitterCard} />
@@ -175,9 +217,7 @@ export function SEOHead({
       {/* AI Search Optimization (GEO - Generative Engine Optimization) */}
       {aiPurpose && <meta name="ai:purpose" content={aiPurpose} />}
       {aiAudience && <meta name="ai:primary_audience" content={aiAudience} />}
-      {aiKeyFeatures && (
-        <meta name="ai:key_features" content={aiKeyFeatures} />
-      )}
+      {aiKeyFeatures && <meta name="ai:key_features" content={aiKeyFeatures} />}
       {aiUseCases && <meta name="ai:use_cases" content={aiUseCases} />}
 
       <meta name="author" content={author} />
@@ -205,7 +245,7 @@ export function SEOHead({
         <script type="application/ld+json">
           {JSON.stringify(
             Array.isArray(structuredData)
-              ? { "@context": "https://schema.org", "@graph": structuredData }
+              ? { '@context': 'https://schema.org', '@graph': structuredData }
               : structuredData
           )}
         </script>

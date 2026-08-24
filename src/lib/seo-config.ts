@@ -12,6 +12,35 @@ import type { SEOProps } from "@/components/SEOHead";
 
 const baseUrl = "https://tryeatpal.com";
 
+/**
+ * Every locale the site publishes, and the single place that list lives (US-652).
+ *
+ * src/i18n/index.ts derives SUPPORTED_LANGUAGES from this and SEOHead emits an
+ * hreflang alternate per entry, so a new language cannot be added to the app
+ * without also being declared to search engines. src/lib/seoLocales.test.ts
+ * fails if the i18n resource files and this list drift apart.
+ *
+ * Only `en` exists today, which makes the emitted output a self-referential
+ * en tag plus x-default -- correct, inert, and the point: adding Spanish
+ * becomes a locale file plus one line here rather than an hreflang project.
+ *
+ * `region` is deliberately unset. An `en-US` tag tells Google this page is for
+ * the United States specifically, which would be wrong for the UK, Canadian and
+ * Australian parents already reading it. Set a region only when there is a
+ * separate page for that region to point at.
+ */
+export interface SeoLocale {
+  /** ISO 639-1 language code. */
+  lang: string;
+  /** ISO 3166-1 alpha-2 region. Omit unless a region-specific page exists. */
+  region?: string;
+}
+
+export const SEO_LOCALES: readonly SeoLocale[] = [{ lang: "en" }] as const;
+
+/** The locale x-default points at: what a reader outside every listed locale gets. */
+export const DEFAULT_SEO_LOCALE: SeoLocale = SEO_LOCALES[0];
+
 // Core entities for entity-based SEO (used across site)
 export const coreEntities = {
   product: "EatPal",

@@ -19,7 +19,7 @@
 # today and catches the mistake that matters: a page that does not compile.
 set -uo pipefail
 
-OWNED='^(src/lib/comparison-|src/pages/Compare\.tsx|src/pages/ComparisonPage\.|src/lib/robots-txt\.test\.ts|src/lib/contentDecay\.test\.ts|src/lib/seo/|src/components/admin/seo/SeoCannibalizationTab\.tsx|src/components/admin/seo/useSeoCannibalization\.ts)'
+OWNED='^(src/lib/comparison-|src/pages/Compare\.tsx|src/pages/ComparisonPage\.|src/lib/robots-txt\.test\.ts|src/lib/contentDecay\.test\.ts|src/lib/seo/|src/lib/seoLocales\.test\.tsx|src/components/admin/seo/SeoCannibalizationTab\.tsx|src/components/admin/seo/useSeoCannibalization\.ts)'
 
 echo "Typechecking the SEO gap modules ..."
 
