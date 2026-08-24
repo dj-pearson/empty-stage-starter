@@ -21,7 +21,13 @@
     "/accessibility/vpat",
     "/picky-eater-quiz",
     "/budget-calculator",
-    "/meal-plan"
+    "/meal-plan",
+    "/compare",
+    "/compare/eatpal-vs-mealime",
+    "/compare/eatpal-vs-yummly",
+    "/compare/eatpal-vs-eat-this-much",
+    "/compare/eatpal-vs-paprika",
+    "/compare/eatpal-vs-feeding-therapy-workbooks"
   ],
   "dynamic": {
     "$comment": [

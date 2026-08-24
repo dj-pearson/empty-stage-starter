@@ -19,6 +19,7 @@
     "src/test/jest-dom.d.ts",
     "src/lib/comparison-content.ts",
     "src/lib/comparison-content.test.ts",
+    "src/lib/comparison-discovery.test.ts",
     "src/lib/robots-txt.test.ts",
     "src/pages/Compare.tsx",
     "src/pages/ComparisonPage.tsx",

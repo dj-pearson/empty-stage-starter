@@ -126,6 +126,42 @@ export async function onRequest(context: { env: { VITE_SUPABASE_URL?: string; VI
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
+  <url>
+    <loc>https://tryeatpal.com/compare</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/compare/eatpal-vs-mealime</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/compare/eatpal-vs-yummly</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/compare/eatpal-vs-eat-this-much</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/compare/eatpal-vs-paprika</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/compare/eatpal-vs-feeding-therapy-workbooks</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
 </urlset>`;
     // Deliberately absent from this fallback, all of which used to be listed here:
     //   /auth               - login form, nothing to rank for
