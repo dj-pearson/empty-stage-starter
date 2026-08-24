@@ -65,6 +65,8 @@ const Contact = lazy(() => import('./pages/Contact'));
 const Blog = lazy(() => import('./pages/Blog'));
 const BlogPost = lazy(() => import('./pages/BlogPost'));
 const Authors = lazy(() => import('./pages/Authors'));
+const Compare = lazy(() => import('./pages/Compare'));
+const ComparisonPage = lazy(() => import('./pages/ComparisonPage'));
 const SEODashboard = lazy(() => import('./pages/SEODashboard'));
 const SearchTrafficDashboard = lazy(() => import('./pages/SearchTrafficDashboard'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
@@ -836,6 +838,31 @@ const App = () => (
                       <Route path="/meals/*" element={<LegacyGuideRedirect prefix="meals" />} />
                       <Route path="/dietary/*" element={<LegacyGuideRedirect prefix="dietary" />} />
                       <Route path="/food-challenge/*" element={<LegacyGuideRedirect prefix="food-challenge" />} />
+                      {/* US-646: the /compare cluster. /compare is the index and the
+                          internal-link hub; /compare/:slug renders one comparison from
+                          src/lib/comparison-content.ts and falls through to NotFound for a
+                          slug that has no content, so a guessed URL cannot become a thin
+                          indexable page. */}
+                      <Route
+                        path="/compare"
+                        element={
+                          <RouteErrorBoundary>
+                            <Suspense fallback={<LoadingFallback />}>
+                              <Compare />
+                            </Suspense>
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      <Route
+                        path="/compare/:slug"
+                        element={
+                          <RouteErrorBoundary>
+                            <Suspense fallback={<LoadingFallback />}>
+                              <ComparisonPage />
+                            </Suspense>
+                          </RouteErrorBoundary>
+                        }
+                      />
                       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                       <Route
                         path="*"

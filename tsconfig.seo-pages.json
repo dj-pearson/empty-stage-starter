@@ -1,0 +1,27 @@
+{
+  "$comment": [
+    "US-646/US-647: a SCOPED typecheck of the /compare cluster, following the",
+    "same pattern and for the same reason as tsconfig.seo.json.",
+    "A full `tsc -b` needs ~4GB and either OOMs or runs past 25 minutes in this",
+    "container, so it is not a gate anyone actually runs before committing, and",
+    "the app tree carries pre-existing type errors that would drown a new one.",
+    "This project covers only the files the SEO gap stories add, runs in seconds,",
+    "and is expected to be clean. Add new SEO-page files here as they land."
+  ],
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/vite-env.d.ts",
+    "src/test/setup.ts",
+    "src/test/jest-dom.d.ts",
+    "src/lib/comparison-content.ts",
+    "src/lib/comparison-content.test.ts",
+    "src/lib/robots-txt.test.ts",
+    "src/pages/Compare.tsx",
+    "src/pages/ComparisonPage.tsx",
+    "src/pages/ComparisonPage.test.tsx"
+  ]
+}
