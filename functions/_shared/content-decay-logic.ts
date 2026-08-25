@@ -9,7 +9,7 @@
  * DB-free so the windowing, the thresholds and the dedupe are unit-testable.
  * Tested from src/lib/contentDecay.test.ts rather than a Deno `_test.ts` beside
  * this file: CI runs `npm run test:run` on every push but invokes `deno test` on
- * exactly two of the 60-odd `_test.ts` files in this directory, so a Deno test
+ * exactly two of the 33 `_test.ts` files in this directory, so a Deno test
  * here would not actually run.
  */
 
