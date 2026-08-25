@@ -46,8 +46,14 @@ const MAX_DRAFTS_PER_RUN = 10;
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-// deno-lint-ignore no-explicit-any
-type SupabaseClient = any;
+/**
+ * The sibling agents all write `type SupabaseClient = any` with a
+ * deno-lint-ignore above it. That directive is Deno's, not ESLint's, so each of
+ * those lines is one of the 1234 errors in .ci/lint-baseline.txt, and the
+ * ratchet in scripts/ci/lint-ratchet.sh means a new one cannot be added.
+ * Inferring the type off createClient costs nothing and is more accurate.
+ */
+type SupabaseClient = ReturnType<typeof createClient>;
 
 function productionOrigin(): string {
   return (Deno.env.get('APP_BASE_URL') ?? 'https://tryeatpal.com').replace(/\/$/, '');
