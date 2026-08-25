@@ -1,184 +1,45 @@
 # EatPal - Kids Meal Planning for Picky Eaters
 # Optimized for Traditional & AI Search Engines
-# Last Updated: 2026-08-14
+# Last Updated: 2026-08-24
+#
+# READ BEFORE EDITING (US-645)
+# ----------------------------
+# Under RFC 9309 a crawler obeys the ONE most specific group that matches its
+# user-agent and ignores every other group, including "User-agent: *". So a
+# named group is not an addition to the wildcard group, it REPLACES it.
+#
+# That is why the private-path Disallow block is repeated verbatim in every
+# group below instead of being written once under "*". The repetition is load
+# bearing. Before this file was fixed, all 16 Disallow rules lived only under
+# "*" while 19 named groups said "Allow: /" with no Disallow at all, which
+# invited Googlebot, Bingbot, GPTBot, ClaudeBot, PerplexityBot and Applebot
+# into /admin, /dashboard, /seo-dashboard, /search-traffic, /join and the
+# faceted query URLs. Do not "clean up" the duplication.
+#
+# The paths carry no trailing slash on purpose. A prefix match means
+# "Disallow: /admin/" does NOT cover "/admin", which is the actual route in
+# src/App.tsx; "/admin" covers /admin, /admin/agents and /admin-dashboard.
+#
+# Adding a crawler means copying a whole group, block included. There is a
+# test that fails if a named group is missing a rule: src/lib/robots-txt.test.ts
 
 # ===========================================
-# Traditional Search Engine Crawlers
+# Indexing crawlers - allowed, minus private paths
 # ===========================================
 
-# Google Crawlers
+# Google
 User-agent: Googlebot
-Allow: /
-Crawl-delay: 0
-
 User-agent: Googlebot-Image
-Allow: /
-Disallow: /admin/
-
 User-agent: Googlebot-Mobile
 Allow: /
-
-# Bing & Microsoft Copilot
-User-agent: Bingbot
-Allow: /
 Crawl-delay: 0
-
-User-agent: BingPreview
-Allow: /
-
-# DuckDuckGo
-User-agent: DuckDuckBot
-Allow: /
-
-# Yahoo/Oath
-User-agent: Slurp
-Allow: /
-Crawl-delay: 1
-
-# Yandex (Russia)
-User-agent: YandexBot
-Allow: /
-Crawl-delay: 2
-
-# Baidu (China)
-User-agent: Baiduspider
-Allow: /
-Crawl-delay: 2
-
-# ===========================================
-# AI Search / Citation Crawlers (ALLOW)
-# These crawlers index content for AI-powered
-# search results and citations
-# ===========================================
-
-# Google AI Overview & Gemini
-User-agent: Google-Extended
-Allow: /
-Crawl-delay: 1
-
-# OpenAI - ChatGPT Search
-User-agent: GPTBot
-Allow: /
-Crawl-delay: 1
-
-User-agent: ChatGPT-User
-Allow: /
-
-# OpenAI - Search Bot (dedicated search crawler)
-User-agent: OAI-SearchBot
-Allow: /
-Crawl-delay: 1
-
-# Anthropic Claude
-User-agent: ClaudeBot
-Allow: /
-Crawl-delay: 1
-
-# Perplexity AI
-User-agent: PerplexityBot
-Allow: /
-Crawl-delay: 1
-
-# Apple Intelligence & Siri
-User-agent: Applebot
-Allow: /
-Crawl-delay: 1
-
-User-agent: Applebot-Extended
-Allow: /
-
-# Meta AI
-User-agent: FacebookBot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
-# ===========================================
-# AI Training-Only Bots (BLOCK)
-# Block bots that only scrape for training
-# data, not for search/citation purposes
-# ===========================================
-
-User-agent: CCBot
-Disallow: /
-
-User-agent: anthropic-ai
-Disallow: /
-
-User-agent: cohere-ai
-Disallow: /
-
-User-agent: Bytespider
-Disallow: /
-
-# Amazon Alexa (training scraper)
-User-agent: Amazonbot
-Disallow: /
-
-# SemrushBot (non-essential crawler)
-User-agent: SemrushBot
-Disallow: /
-
-# AhrefsBot (non-essential crawler)
-User-agent: AhrefsBot
-Disallow: /
-
-# MJ12bot / Majestic (non-essential crawler)
-User-agent: MJ12bot
-Disallow: /
-
-# DataForSEO (non-essential scraper)
-User-agent: DataForSeoBot
-Disallow: /
-
-# ===========================================
-# Social Media & Preview Crawlers
-# ===========================================
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: LinkedInBot
-Allow: /
-
-User-agent: Pinterestbot
-Allow: /
-
-User-agent: WhatsApp
-Allow: /
-
-User-agent: TelegramBot
-Allow: /
-
-# ===========================================
-# Archive & Research Crawlers
-# ===========================================
-
-User-agent: ia_archiver
-Allow: /
-
-# ===========================================
-# Default Rule for All Other Bots
-# ===========================================
-
-User-agent: *
-Allow: /
-Crawl-delay: 2
-
-# Block protected, private, and thin content routes from all crawlers
-Disallow: /admin/
-Disallow: /admin-dashboard/
-Disallow: /api/
-Disallow: /dashboard/
-Disallow: /_next/
-Disallow: /auth/
-Disallow: /seo-dashboard/
-Disallow: /search-traffic/
-Disallow: /oauth/
-# The first two previously read /checkout-success and /share-target, neither of which
-# is a route this app serves, so those pages were never actually blocked. /join is the
-# invite-acceptance page: noindex in its own <head>, blocked here too.
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
 Disallow: /checkout/success
 Disallow: /share
 Disallow: /join
@@ -187,18 +48,362 @@ Disallow: /*?sort=
 Disallow: /*?filter=
 Disallow: /*?page=
 
-# Allow public pages explicitly
+# Bing & Microsoft Copilot
+User-agent: Bingbot
+User-agent: BingPreview
 Allow: /
-Allow: /pricing
-Allow: /blog/
-Allow: /guides
-Allow: /authors
-Allow: /faq
-Allow: /contact
-Allow: /picky-eater-quiz
-Allow: /budget-calculator
-Allow: /meal-plan
-Allow: /accessibility
+Crawl-delay: 0
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# DuckDuckGo
+User-agent: DuckDuckBot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Yahoo/Oath
+User-agent: Slurp
+Allow: /
+Crawl-delay: 1
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Yandex (Russia)
+User-agent: YandexBot
+Allow: /
+Crawl-delay: 2
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Baidu (China)
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 2
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Google AI Overview & Gemini
+User-agent: Google-Extended
+Allow: /
+Crawl-delay: 1
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# OpenAI - ChatGPT Search
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+Allow: /
+Crawl-delay: 1
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Anthropic Claude
+User-agent: ClaudeBot
+Allow: /
+Crawl-delay: 1
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+Crawl-delay: 1
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Apple Intelligence & Siri
+User-agent: Applebot
+Allow: /
+Crawl-delay: 1
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Meta AI
+User-agent: FacebookBot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Ahrefs - our own site audits and link reports
+User-agent: AhrefsBot
+Allow: /
+Crawl-delay: 2
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Semrush - our own site audits
+User-agent: SemrushBot
+Allow: /
+Crawl-delay: 2
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# Internet Archive
+User-agent: ia_archiver
+Allow: /
+Crawl-delay: 2
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+
+# ===========================================
+# Link preview / on-demand fetchers - no private-path block
+# ===========================================
+
+# These render a card for a URL a person deliberately shared. They do not
+# crawl and do not index, so blocking /join or /checkout/success here would
+# only break invite and receipt previews in chat apps.
+
+# OpenAI - fetches a URL the user pasted into ChatGPT
+User-agent: ChatGPT-User
+Allow: /
+
+# Apple training opt-out control, not a crawler
+User-agent: Applebot-Extended
+Allow: /
+
+# Facebook/Messenger link preview
+User-agent: facebookexternalhit
+Allow: /
+
+# X/Twitter card
+User-agent: Twitterbot
+Allow: /
+
+# LinkedIn post preview
+User-agent: LinkedInBot
+Allow: /
+
+# Pinterest rich pin
+User-agent: Pinterestbot
+Allow: /
+
+# WhatsApp link preview
+User-agent: WhatsApp
+Allow: /
+
+# Telegram link preview
+User-agent: TelegramBot
+Allow: /
+
+# ===========================================
+# Blocked - scrape for training or resale, no search product
+# ===========================================
+
+# Common Crawl - training corpus, no search product
+User-agent: CCBot
+Disallow: /
+
+# Legacy training-only user agents
+User-agent: anthropic-ai
+User-agent: cohere-ai
+Disallow: /
+
+# ByteDance training scraper
+User-agent: Bytespider
+Disallow: /
+
+# Amazon/Alexa training scraper
+User-agent: Amazonbot
+Disallow: /
+
+# Majestic - no tooling relationship here, pure crawl cost
+User-agent: MJ12bot
+Disallow: /
+
+# DataForSEO - resold crawl data, no relationship
+User-agent: DataForSeoBot
+Disallow: /
+
+# ===========================================
+# Default for every other bot
+# ===========================================
+
+User-agent: *
+Allow: /
+Crawl-delay: 2
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+Disallow: /oauth
+Disallow: /seo-dashboard
+Disallow: /search-traffic
+Disallow: /checkout/success
+Disallow: /share
+Disallow: /join
+Disallow: /search?
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
 
 # Sitemap locations
 Sitemap: https://tryeatpal.com/sitemap.xml

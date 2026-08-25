@@ -80,7 +80,23 @@ const MANUAL = new Set([
   'US-644',
 ]);
 const ANDROID = new Set(['US-213', 'US-214', 'US-222']);
-const WEB = new Set(['US-342', 'US-344']);
+const WEB = new Set([
+  'US-342',
+  'US-344',
+  // US-645..US-653: the SEO gap stories. All of them are robots.txt, marketing
+  // routes, sitemap/prerender wiring and Supabase edge functions -- nothing
+  // touches the native surface, so the iOS gate classify() defaults to would
+  // never be the thing that verifies them.
+  'US-645',
+  'US-646',
+  'US-647',
+  'US-648',
+  'US-649',
+  'US-650',
+  'US-651',
+  'US-652',
+  'US-653',
+]);
 
 function classify(story) {
   if (MANUAL.has(story.id)) return 'manual';
@@ -92,15 +108,23 @@ function classify(story) {
 function hasImplementation(id) {
   try {
     // Require the project's dedicated-commit convention: a focused commit whose
-    // subject tags the story as "(US-XXX)". A bare id mention is NOT enough — it
+    // SUBJECT tags the story as "(US-XXX)". A bare id mention is NOT enough — it
     // false-positives on range/docs/bulk commits (e.g. "add stories US-248..US-261"
     // or "flip 19 prd stories (US-413..US-434)") that reference a story without
-    // implementing it. --fixed-strings makes the parens literal.
-    const out = execSync(`git log --all --oneline --fixed-strings --grep='(${id})'`, {
+    // implementing it.
+    //
+    // --grep matches the whole message, subject and body, which is not what the
+    // rule above says and not what it needs. A commit that ADDS the stories and
+    // explains each one in its body ("hreflang emission (US-652)") marked five
+    // unwritten stories as implemented. Subjects are matched here instead, so
+    // only the line that names the story as its purpose counts.
+    const out = execSync(`git log --all --format=%s --fixed-strings --grep='(${id})'`, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
-    return out.trim().length > 0;
+    return out
+      .split('\n')
+      .some((subject) => subject.includes(`(${id})`));
   } catch {
     return false;
   }

@@ -46,7 +46,7 @@ Unlike general meal planning apps (Mealime, Paprika, Eat This Much), EatPal is p
 ### Grocery Automation
 - Auto-generates shopping lists from meal plans
 - Organizes by store section
-- Integration with delivery services: Instacart, Amazon Fresh, Walmart, Shipt, Target
+- Grocery delivery hand-off to Instacart, Amazon Fresh, Walmart and Shipt is in development and not yet available to users
 - Estimates weekly grocery cost
 - Highlights new items (for try bites) vs. staples
 

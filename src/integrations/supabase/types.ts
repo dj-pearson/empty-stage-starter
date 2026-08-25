@@ -7874,6 +7874,117 @@ export type Database = {
         }
         Relationships: []
       }
+      pseo_pages: {
+        Row: {
+          age_group_slug: string | null
+          canonical_url: string | null
+          challenge_slug: string | null
+          content: Json
+          created_at: string | null
+          dietary_restriction_slug: string | null
+          freshness_days: number | null
+          generated_at: string | null
+          generation_cost_cents: number | null
+          generation_error: string | null
+          generation_model: string | null
+          generation_prompt_hash: string | null
+          generation_status: string
+          has_faq: boolean | null
+          has_schema_markup: boolean | null
+          id: string
+          internal_link_count: number | null
+          keywords: string[] | null
+          last_refreshed_at: string | null
+          meal_occasion_slug: string | null
+          meta_description: string | null
+          needs_refresh: boolean | null
+          page_type: string
+          priority_score: number | null
+          published_at: string | null
+          quality_score: number | null
+          safe_food_slug: string | null
+          schema_markup: Json | null
+          slug: string
+          tier: number | null
+          title: string
+          updated_at: string | null
+          validated_at: string | null
+          word_count: number | null
+        }
+        Insert: {
+          age_group_slug?: string | null
+          canonical_url?: string | null
+          challenge_slug?: string | null
+          content?: Json
+          created_at?: string | null
+          dietary_restriction_slug?: string | null
+          freshness_days?: number | null
+          generated_at?: string | null
+          generation_cost_cents?: number | null
+          generation_error?: string | null
+          generation_model?: string | null
+          generation_prompt_hash?: string | null
+          generation_status?: string
+          has_faq?: boolean | null
+          has_schema_markup?: boolean | null
+          id?: string
+          internal_link_count?: number | null
+          keywords?: string[] | null
+          last_refreshed_at?: string | null
+          meal_occasion_slug?: string | null
+          meta_description?: string | null
+          needs_refresh?: boolean | null
+          page_type: string
+          priority_score?: number | null
+          published_at?: string | null
+          quality_score?: number | null
+          safe_food_slug?: string | null
+          schema_markup?: Json | null
+          slug: string
+          tier?: number | null
+          title: string
+          updated_at?: string | null
+          validated_at?: string | null
+          word_count?: number | null
+        }
+        Update: {
+          age_group_slug?: string | null
+          canonical_url?: string | null
+          challenge_slug?: string | null
+          content?: Json
+          created_at?: string | null
+          dietary_restriction_slug?: string | null
+          freshness_days?: number | null
+          generated_at?: string | null
+          generation_cost_cents?: number | null
+          generation_error?: string | null
+          generation_model?: string | null
+          generation_prompt_hash?: string | null
+          generation_status?: string
+          has_faq?: boolean | null
+          has_schema_markup?: boolean | null
+          id?: string
+          internal_link_count?: number | null
+          keywords?: string[] | null
+          last_refreshed_at?: string | null
+          meal_occasion_slug?: string | null
+          meta_description?: string | null
+          needs_refresh?: boolean | null
+          page_type?: string
+          priority_score?: number | null
+          published_at?: string | null
+          quality_score?: number | null
+          safe_food_slug?: string | null
+          schema_markup?: Json | null
+          slug?: string
+          tier?: number | null
+          title?: string
+          updated_at?: string | null
+          validated_at?: string | null
+          word_count?: number | null
+        }
+        Relationships: []
+      }
       quiz_analytics: {
         Row: {
           ab_test_variant: string | null

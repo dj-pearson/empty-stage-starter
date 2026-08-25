@@ -5,16 +5,16 @@ import { logger } from '@/lib/logger';
 import type { MetaTags } from '@/components/admin/seo/SeoMetaTab';
 
 const EMPTY_META_TAGS: MetaTags = {
-  title: "EatPal - Picky Eater Meal Planning Made Easy",
+  title: 'EatPal - Picky Eater Meal Planning Made Easy',
   description:
-    "Plan weekly meals for picky eaters with safe foods and daily try bites. Auto-generate grocery lists and track meal results.",
-  keywords: "meal planning, picky eaters, kid meals, grocery list, meal tracker",
-  og_title: "EatPal - Picky Eater Solutions",
+    'Plan weekly meals for picky eaters with safe foods and daily try bites. Auto-generate grocery lists and track meal results.',
+  keywords: 'meal planning, picky eaters, kid meals, grocery list, meal tracker',
+  og_title: 'EatPal - Picky Eater Solutions',
   og_description:
-    "Simple meal planning app for parents of picky eaters with weekly rotation and grocery list generation",
-  og_image: "https://lovable.dev/opengraph-image-p98pqg.png",
-  twitter_card: "summary_large_image",
-  twitter_site: "@lovable_dev",
+    'Simple meal planning app for parents of picky eaters with weekly rotation and grocery list generation',
+  og_image: 'https://lovable.dev/opengraph-image-p98pqg.png',
+  twitter_card: 'summary_large_image',
+  twitter_site: '@lovable_dev',
 };
 
 /**
@@ -36,7 +36,7 @@ export function useSeoFiles() {
 
   const regenerateSitemap = async () => {
     setIsRegeneratingSitemap(true);
-    
+
     try {
       // Fetch all published blog posts
       const { data: posts, error } = await supabase
@@ -53,21 +53,21 @@ export function useSeoFiles() {
 
       // Static pages
       const staticPages = [
-        { url: "/", priority: "1.0", changefreq: "daily", lastmod: today },
-        { url: "/auth", priority: "0.8", changefreq: "monthly", lastmod: today },
-        { url: "/pricing", priority: "0.9", changefreq: "weekly", lastmod: today },
-        { url: "/dashboard", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/planner", priority: "0.9", changefreq: "weekly", lastmod: today },
-        { url: "/kids", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/tracker", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/pantry", priority: "0.7", changefreq: "weekly", lastmod: today },
-        { url: "/recipes", priority: "0.8", changefreq: "weekly", lastmod: today },
-        { url: "/grocery", priority: "0.7", changefreq: "weekly", lastmod: today },
-        { url: "/blog", priority: "0.8", changefreq: "daily", lastmod: today },
-        { url: "/faq", priority: "0.7", changefreq: "monthly", lastmod: today },
-        { url: "/contact", priority: "0.6", changefreq: "monthly", lastmod: today },
-        { url: "/privacy", priority: "0.3", changefreq: "yearly", lastmod: today },
-        { url: "/terms", priority: "0.3", changefreq: "yearly", lastmod: today },
+        { url: '/', priority: '1.0', changefreq: 'daily', lastmod: today },
+        { url: '/auth', priority: '0.8', changefreq: 'monthly', lastmod: today },
+        { url: '/pricing', priority: '0.9', changefreq: 'weekly', lastmod: today },
+        { url: '/dashboard', priority: '0.8', changefreq: 'weekly', lastmod: today },
+        { url: '/planner', priority: '0.9', changefreq: 'weekly', lastmod: today },
+        { url: '/kids', priority: '0.8', changefreq: 'weekly', lastmod: today },
+        { url: '/tracker', priority: '0.8', changefreq: 'weekly', lastmod: today },
+        { url: '/pantry', priority: '0.7', changefreq: 'weekly', lastmod: today },
+        { url: '/recipes', priority: '0.8', changefreq: 'weekly', lastmod: today },
+        { url: '/grocery', priority: '0.7', changefreq: 'weekly', lastmod: today },
+        { url: '/blog', priority: '0.8', changefreq: 'daily', lastmod: today },
+        { url: '/faq', priority: '0.7', changefreq: 'monthly', lastmod: today },
+        { url: '/contact', priority: '0.6', changefreq: 'monthly', lastmod: today },
+        { url: '/privacy', priority: '0.3', changefreq: 'yearly', lastmod: today },
+        { url: '/terms', priority: '0.3', changefreq: 'yearly', lastmod: today },
       ];
 
       // Build sitemap
@@ -94,7 +94,7 @@ export function useSeoFiles() {
 `;
 
       // Add static pages
-      staticPages.slice(1).forEach(page => {
+      staticPages.slice(1).forEach((page) => {
         sitemap += `  <!-- ${page.url.replace('/', '').replace('-', ' ').toUpperCase() || 'Page'} -->
   <url>
     <loc>${baseUrl}${page.url}</loc>
@@ -109,8 +109,8 @@ export function useSeoFiles() {
       // Add blog posts
       if (posts && posts.length > 0) {
         sitemap += `  <!-- Blog Posts (${posts.length} posts) -->\n`;
-        posts.forEach(post => {
-          const lastmod = post.updated_at 
+        posts.forEach((post) => {
+          const lastmod = post.updated_at
             ? new Date(post.updated_at).toISOString().split('T')[0]
             : new Date(post.published_at).toISOString().split('T')[0];
 
@@ -148,40 +148,64 @@ export function useSeoFiles() {
   };
 
   const loadSEOSettings = () => {
-    // Generate default robots.txt
+    /**
+     * A starting template, NOT the shipped file. public/robots.txt is the
+     * source of truth and is far more complete; this text exists so the editor
+     * has something to show and something to download.
+     *
+     * It repeats the Disallow block inside every named group on purpose. Under
+     * RFC 9309 a crawler obeys only the most specific group matching its
+     * user-agent and ignores "User-agent: *" entirely, so a named group that
+     * says nothing but "Allow: /" hands that crawler the whole site. The
+     * previous version of this template did exactly that for Googlebot, Bingbot
+     * and Slurp, and it is downloadable as robots.txt (see handleDownloadFile),
+     * so shipping it would have reintroduced the bug US-645 fixed.
+     */
+    const privateBlock = [
+      'Disallow: /admin',
+      'Disallow: /dashboard',
+      'Disallow: /api',
+      'Disallow: /auth',
+      'Disallow: /oauth',
+      'Disallow: /join',
+    ].join('\n');
+
     const defaultRobots = `# Robots.txt for EatPal
-User-agent: *
-Allow: /
-Disallow: /admin
-Disallow: /api/
-Disallow: /auth/
+# Template only -- public/robots.txt is what the site serves.
+# Every named group repeats the Disallow block because a crawler reads its own
+# group and ignores "User-agent: *". Do not factor the duplication out.
 
-# Sitemap location
-Sitemap: ${window.location.origin}/sitemap.xml
-
-# Crawl delay (optional)
-Crawl-delay: 1
-
-# Popular search engines
 User-agent: Googlebot
 Allow: /
+${privateBlock}
 
 User-agent: Bingbot
 Allow: /
+${privateBlock}
 
 User-agent: Slurp
-Allow: /`;
+Allow: /
+Crawl-delay: 1
+${privateBlock}
+
+User-agent: *
+Allow: /
+Crawl-delay: 1
+${privateBlock}
+
+# Sitemap location
+Sitemap: ${window.location.origin}/sitemap.xml`;
 
     setRobotsTxt(defaultRobots);
 
     // Generate sitemap.xml
     const pages = [
-      { url: "/", priority: "1.0", changefreq: "daily" },
-      { url: "/dashboard", priority: "0.8", changefreq: "weekly" },
-      { url: "/planner", priority: "0.9", changefreq: "weekly" },
-      { url: "/pantry", priority: "0.7", changefreq: "weekly" },
-      { url: "/recipes", priority: "0.8", changefreq: "weekly" },
-      { url: "/grocery", priority: "0.7", changefreq: "weekly" },
+      { url: '/', priority: '1.0', changefreq: 'daily' },
+      { url: '/dashboard', priority: '0.8', changefreq: 'weekly' },
+      { url: '/planner', priority: '0.9', changefreq: 'weekly' },
+      { url: '/pantry', priority: '0.7', changefreq: 'weekly' },
+      { url: '/recipes', priority: '0.8', changefreq: 'weekly' },
+      { url: '/grocery', priority: '0.7', changefreq: 'weekly' },
     ];
 
     const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
@@ -192,10 +216,10 @@ ${pages
     <loc>${window.location.origin}${page.url}</loc>
     <changefreq>${page.changefreq}</changefreq>
     <priority>${page.priority}</priority>
-    <lastmod>${new Date().toISOString().split("T")[0]}</lastmod>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
   </url>`
   )
-  .join("\n")}
+  .join('\n')}
 </urlset>`;
 
     setSitemapXml(sitemapContent);
@@ -236,26 +260,26 @@ RESTful API available for integrations. Contact for API access.
 
     // Generate structured data (JSON-LD)
     const structuredDataSchema = {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      name: "EatPal",
-      applicationCategory: "LifestyleApplication",
-      operatingSystem: "Web Browser",
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'EatPal',
+      applicationCategory: 'LifestyleApplication',
+      operatingSystem: 'Web Browser',
       description:
-        "Meal planning application for parents of picky eaters with weekly meal rotation and grocery list generation",
+        'Meal planning application for parents of picky eaters with weekly meal rotation and grocery list generation',
       offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'USD',
+        availability: 'https://schema.org/InStock',
       },
       // No aggregateRating. This generator used to emit 4.8 from 127 ratings, which
       // nothing backs; a site publishing ratings about its own product is self-serving
       // markup, ineligible for rich results and a manual-action risk when invented.
       // Wire it to a real rating store before re-adding.
       creator: {
-        "@type": "Organization",
-        name: "EatPal",
+        '@type': 'Organization',
+        name: 'EatPal',
         url: window.location.origin,
       },
     };
@@ -269,9 +293,9 @@ RESTful API available for integrations. Contact for API access.
   };
 
   const handleDownloadFile = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: "text/plain" });
+    const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
@@ -280,7 +304,7 @@ RESTful API available for integrations. Contact for API access.
 
   const handleUpdateMetaTags = () => {
     // In a real implementation, this would update the database and index.html
-    toast.success("Meta tags configuration saved. Update index.html manually with these values.");
+    toast.success('Meta tags configuration saved. Update index.html manually with these values.');
   };
 
   useEffect(() => {

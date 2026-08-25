@@ -25,6 +25,22 @@
 - Phone-mockup / device-chrome dark mode: keep the styled chassis colour for both modes via `bg-gray-900 dark:bg-neutral-800`, but always switch the screen surface to semantic tokens (`bg-card text-card-foreground`).
 - Image optimisation: `sharp` is already a transitive dep — no need for cwebp/ImageMagick. `sharp(src).webp({ quality: 90 }).toFile(dest)` typically saves 79–94% on icons.
 - `react-native-gesture-handler` is **not** in the mobile dep tree even though `react-native-reanimated` is. Don't add gesture-based UX without an intentional dep + Expo prebuild bump; prefer non-gesture patterns (banner, long-press) until the dep is added.
+- robots.txt: a crawler obeys the ONE most specific User-agent group matching it and ignores every other group, "*" included (RFC 9309). Rules under "*" do NOT apply to any named group. Repeat the Disallow block in every group. `src/lib/robots-txt.test.ts` resolves rules the way a crawler does and fails if the duplication is tidied away.
+- robots.txt Disallow paths are prefixes: `/admin/` does not match `/admin`. Write them without a trailing slash.
+- Full `tsc -b` / `tsc -p tsconfig.app.json` does not finish in this container (>25 min, ~4GB) and the app tree carries ~1234 pre-existing eslint errors and ~130 type errors. Gate new work with a SCOPED tsconfig + a script under `scripts/ci/` that filters errors to the files you own — see `tsconfig.seo.json` / `check-seo-extraction.sh` and `tsconfig.seo-pages.json` / `check-seo-pages.sh`.
+- Anything added to `scripts/ci/` MUST be referenced by a `.github/workflows/*.yml` file. `src/lib/ciGatesWired.test.ts` fails otherwise, on purpose: a gate nobody runs reads as coverage.
+- `npm run lint` and `npm run format` do NOT pass repo-wide today. Check `git stash`-ed baseline before "fixing" formatting in a file you touched, or you ship a reformat diff nobody asked for. Lint and prettier your own new files only.
+- Static marketing routes live in FOUR places that must agree: `src/App.tsx` (route), `supabase/functions/generate-sitemap/index.ts` (STATIC_ENTRIES), `functions/sitemap.xml.ts` (hardcoded fallback, different runtime, cannot share an import), `scripts/prerender-routes.json` (static list). `src/lib/comparison-discovery.test.ts` pins the last three to each other.
+- Content rule for competitor- and credential-facing copy: no unsourced numbers, no invented credentials, no competitor pricing. The repo has already had to strip a fabricated author bio (`src/pages/Authors.tsx`) and a fabricated aggregateRating. `ComparisonSchema`'s own docstring still demonstrates `rating: 4.8, ratingCount: 2847` — do not copy it.
+- `scripts/ralph/verify-stories.mjs`: `classify()` defaults to the **iOS** gate. A web-only story must be added to the `WEB` set or it waits on a gate that will never verify it.
+- `scripts/ralph/verify-stories.mjs`: `hasImplementation()` matches commit SUBJECTS only. A commit that mentions `(US-XXX)` in its BODY without implementing it must not tag the id in its subject -- write `fix: ...` and explain in the body.
+- The Deno and web trees cannot import each other's modules by convention, but a dependency-free `.ts` file can be shared: the edge function imports it with an explicit `.ts` extension (`../../src/lib/seo/cannibalization.ts`) and vitest imports the same file normally. Used for the SEO modules. `src/lib/aiSafety.ts` mirrors instead, with a drift test -- fine for a short list, wrong for an algorithm.
+- `functions/_shared/` has 33 `*_test.ts` Deno tests and CI runs exactly TWO of them (`helpers_test.ts`, `verify-jwt-guard_test.ts`). New pure logic for an edge function belongs in a vitest test under `src/lib/` if you want it actually run.
+- Any `verify_jwt = false` function in `supabase/config.toml` must contain one of the auth patterns in `functions/_shared/verify-jwt-guard_test.ts` (`AGENT_DISPATCH_SECRET`, `CRON_SECRET`, `STRIPE_WEBHOOK_SECRET`, ...) or be allowlisted there.
+- Passing two supabase query builders to `Promise.all` blows TypeScript's instantiation depth (TS2589) and degrades every row to `ResultOne`. Await them one at a time.
+- `src/integrations/supabase/types.ts` is NOT complete. `pseo_pages` was missing entirely until US-651 added it by hand; a `.from('some_table')` that reports TS2769 usually means the table is absent from types.ts, not that the call is wrong. Check before working around it.
+- Adding a tab to SEOManager fails `SEOManager.test.tsx` on purpose -- update the `TABS` list and the counts in its comments.
+- GSC lags two to three days. Anchor any window on the newest `date` present in `gsc_page_performance`, never on today, or the lag reads as a traffic collapse.
 
 ---
 
@@ -189,4 +205,115 @@ CAVEAT FOR THE NEXT PERSON: the baseline now has ZERO headroom. Any PR that adds
 - Gates: web=cancelled, ios=success, android=success.
 - Flipped passes=true (gate green + implementation present): US-583, US-584, US-585, US-586, US-587, US-588, US-589, US-590, US-591, US-592, US-593, US-594, US-611, US-613, US-614.
 - Held false: 10 (breakdown {"awaiting-implementation":10,"verified":15}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
+
+## 2026-08-24 - US-645, US-646, US-647 (SEO strategy gaps)
+
+Audited the SEO surface against the strategy taxonomy, wrote the gaps up as
+US-645..US-653 in prd.json, and implemented the first three.
+
+**US-645 - robots.txt named groups never saw the private-path blocks.** Not a
+missing feature, a live defect. All 16 Disallow rules sat under "User-agent: *";
+RFC 9309 says a crawler obeys only its most specific matching group, so the 19
+named groups read "Allow: /" with nothing else. Googlebot, Bingbot, GPTBot,
+ClaudeBot, PerplexityBot and Applebot were each explicitly invited into /admin,
+/dashboard, /seo-dashboard, /search-traffic, /join and the faceted query URLs.
+Two further path bugs fell out of the same read: trailing slashes meant
+"/admin/" never matched the "/admin" route App.tsx declares, and "/_next/" is a
+Next.js path in a Vite app. Also unblocked AhrefsBot and SemrushBot (blocking
+them never hid the backlink profile, it only blinded our own audits) and fixed
+the same group bug in the admin panel's downloadable robots.txt template.
+Files: public/robots.txt, src/lib/robots-txt.test.ts (76 tests; 23 of them fail
+against the old file), src/components/admin/seo/useSeoFiles.ts.
+
+**US-646 - the comparison pages.** comparisonTargets named five slugs and
+ComparisonSchema was built and tested, and neither was reachable because no
+route existed. Added src/lib/comparison-content.ts (throws at module load if a
+target has no content, so the two lists cannot drift), /compare and
+/compare/:slug, and a scoped typecheck gate.
+Files: src/lib/comparison-content.ts + test, src/pages/Compare.tsx,
+src/pages/ComparisonPage.tsx + test, src/App.tsx, tsconfig.seo-pages.json,
+scripts/ci/check-seo-pages.sh, package.json, .github/workflows/ci.yml.
+
+**US-647 - discovery wiring.** Sitemap (both sources), prerender static list,
+and internal links from the footer, /pricing and the guides index. Skipped the
+"Allow: /compare" line the story asked for: after US-645 every group is
+"Allow: /" plus a denylist, /compare is not on it, and the line would be a no-op
+repeated 20 times. The test asserts absence from the denylist instead.
+Files: supabase/functions/generate-sitemap/index.ts, functions/sitemap.xml.ts,
+scripts/prerender-routes.json, src/components/Footer.tsx, src/pages/Pricing.tsx,
+src/pages/pseo/GuidesIndex.tsx, src/lib/comparison-discovery.test.ts.
+
+**Harness fix.** scripts/ralph/verify-stories.mjs classified all nine SEO
+stories as iOS-gated, and hasImplementation() grepped whole commit messages
+while its own comment said subjects, so the commit that ADDED the stories marked
+six unwritten ones as implemented.
+
+- **Learnings for future iterations:**
+  - The gap worth finding was a bug, not a missing page. Reading robots.txt the
+    way a crawler parses it (most-specific group wins, everything else ignored)
+    is not how it reads to a human, and the file looked correct for months.
+  - Almost everything the SEO taxonomy calls for already exists in this repo.
+    What is missing is usually the last wire: comparisonTargets with no route,
+    generateHreflangTags with no caller, ComparisonSchema with no page. Grep for
+    consumers before assuming something needs building.
+  - Do not run `npx prettier --write` on a file you edited without checking the
+    baseline first. Footer.tsx, GuidesIndex.tsx and Pricing.tsx are all
+    unformatted on main; formatting them would have buried a three-line change.
+  - src/test/jest-dom.d.ts already existed and already solved the
+    toBeInTheDocument typing (US-329). It was missing from the scoped tsconfig,
+    not from the repo. Check before writing a file that "should" exist.
+  - The GuidesIndex cross-links sit inside the "no guides loaded" branch, so
+    they vanish once the library populates. Worth checking other pages for
+    crawl paths that only render in an empty state.
+---
+
+## 2026-08-24 - US-650, US-651, US-652, US-653 (SEO gap stories, second half)
+
+Four stories, all internal tooling over data the project already had.
+US-648 and US-649 stay blocked; their evidence is in their prd.json notes.
+
+**US-650 - content decay detector.** New weekly agent-content-decay compares
+the trailing 28 days of gsc_page_performance against the preceding 28 and
+drafts a content_refresh approval per page that lost 30%+ of its clicks off
+100+ prior impressions. Logic in functions/_shared/content-decay-logic.ts,
+20 tests in src/lib/contentDecay.test.ts. The windows are half-open on the low
+side; the first draft shared a boundary day between them, which counted that
+day's clicks into both sides and shrank every measured drop. Position is
+impression-weighted so one quiet day at position 2 cannot cancel a month at 40.
+
+**US-651 - cannibalization report.** src/lib/seo/cannibalization.ts groups
+top_queries by query across page_url and returns the contested ones ranked by
+impressions split away from the leader. 21 tests. Surfaced on a new SEO admin
+tab and in the weekly agent-seo-audit escalation. Also added pseo_pages to
+src/integrations/supabase/types.ts, which was missing it entirely.
+
+**US-652 - hreflang.** SEOHead now calls generateHreflangTags, which had no
+caller. SEO_LOCALES in seo-config.ts is the single locale list and i18n derives
+SUPPORTED_LANGUAGES from it. Output today is a self-referential en tag plus
+x-default. No second language: that is a content and support decision.
+
+**US-653 - index coverage.** src/lib/seo/indexCoverage.ts reconciles sitemap vs
+prerender manifest vs GSC into four buckets plus a separate budget-skip count.
+scripts/prerender.mjs now writes dist/prerender-manifest.json, without which the
+report could only reconcile against prerender-routes.json (the intent, not the
+result). scripts/prerender.d.mts types the script's exports.
+
+Full suite after all four: 1946 passed, 3 skipped, 146 files.
+
+- **Learnings for future iterations:**
+  - Everything here was a missing wire, not a missing feature. GSC data had been
+    syncing to Postgres for months with nothing reading it; generateHreflangTags
+    had tests and no caller; ComparisonSchema had tests and no page. When a gap
+    looks like new work, grep for the consumer first.
+  - Both new reports are wired into the weekly agent-seo-audit escalation, not
+    only onto an admin tab. A dashboard nobody opens is how comparisonTargets
+    sat unreachable for months.
+  - The three-way split in US-653 only became possible once the build wrote down
+    what it did. A warning in a build log is not an output; if something
+    downstream needs to know, write a file.
+  - `Date.now()` windows, `Promise.all` over supabase builders, and a shared
+    boundary day between two comparison windows each produced a wrong answer
+    that looked right. All three were caught by a test written from the
+    behaviour rather than from the implementation.
 ---

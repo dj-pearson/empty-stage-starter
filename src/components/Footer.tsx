@@ -88,6 +88,13 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
+                {/* US-647: same reasoning as the /guides link below. The comparison
+                    cluster is otherwise reachable only from the sitemap. */}
+                <Link to="/compare" className="hover:text-primary transition-colors">
+                  Compare
+                </Link>
+              </li>
+              <li>
                 <Link to="/blog" className="hover:text-primary transition-colors">
                   Blog
                 </Link>

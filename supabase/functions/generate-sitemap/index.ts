@@ -44,6 +44,14 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/blog', changefreq: 'daily', priority: '0.8' },
   { path: '/guides', changefreq: 'weekly', priority: '0.8' },
   { path: '/budget-calculator', changefreq: 'monthly', priority: '0.7' },
+  // US-647: the /compare cluster. Highest commercial intent on the site, so it is
+  // submitted at the same weight as /faq rather than buried at the bottom.
+  { path: '/compare', changefreq: 'monthly', priority: '0.7' },
+  { path: '/compare/eatpal-vs-mealime', changefreq: 'monthly', priority: '0.7' },
+  { path: '/compare/eatpal-vs-yummly', changefreq: 'monthly', priority: '0.7' },
+  { path: '/compare/eatpal-vs-eat-this-much', changefreq: 'monthly', priority: '0.7' },
+  { path: '/compare/eatpal-vs-paprika', changefreq: 'monthly', priority: '0.7' },
+  { path: '/compare/eatpal-vs-feeding-therapy-workbooks', changefreq: 'monthly', priority: '0.7' },
   { path: '/faq', changefreq: 'monthly', priority: '0.7' },
   // /authors self-noindexes while public.blog_authors is empty (see src/pages/Authors.tsx),
   // so until real author rows exist this URL is submitted and then declined. Populate the

@@ -161,7 +161,7 @@ vi.mock('./ContentOptimizer', () => ({
 }));
 
 /**
- * The 23 tabs SEOManager owns. Keeping the list explicit means an extraction
+ * The 25 tabs SEOManager owns. Keeping the list explicit means an extraction
  * that drops a tab fails loudly rather than shrinking the assertion silently.
  */
 const TABS = [
@@ -178,6 +178,10 @@ const TABS = [
   'duplicate-content',
   'image-analysis',
   'keywords',
+  // US-651
+  'cannibalization',
+  // US-653
+  'index-coverage',
   'competitors',
   'backlinks',
   'link-structure',
@@ -212,7 +216,7 @@ describe('SEOManager renders (US-553 decomposition net)', () => {
     expect(await screen.findByRole('tab', { name: /audit/i })).toBeTruthy();
   });
 
-  it('still owns exactly the 23 known tabs', async () => {
+  it('still owns exactly the 25 known tabs', async () => {
     const { container } = await renderManager();
 
     const values = [...container.querySelectorAll('[role="tab"]')].map(tabValue);
@@ -223,7 +227,7 @@ describe('SEOManager renders (US-553 decomposition net)', () => {
   });
 
   /**
-   * One mount, every tab activated. All 23 panels stay in the DOM, so the
+   * One mount, every tab activated. All 25 panels stay in the DOM, so the
    * panel under test is found through the trigger's aria-controls rather than
    * by taking the first one -- picking the first is why an earlier version of
    * this test reported every tab as broken.
@@ -260,7 +264,7 @@ describe('SEOManager renders (US-553 decomposition net)', () => {
     }
 
     expect(broken).toEqual([]);
-    // 23 activations of a 4000-line component; the default 5s is not enough,
+    // 25 activations of a 4000-line component; the default 5s is not enough,
     // and the point of this test is covering every tab, not speed.
   }, 120_000);
 });

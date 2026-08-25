@@ -19,10 +19,16 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
+import { DEFAULT_SEO_LOCALE, SEO_LOCALES } from '@/lib/seo-config';
 
-export const DEFAULT_LANGUAGE = 'en';
-export const SUPPORTED_LANGUAGES = ['en'] as const;
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+/**
+ * US-652: the language list is SEO_LOCALES in src/lib/seo-config.ts, not a
+ * second list here. Adding a locale file without an hreflang entry was the
+ * failure mode worth designing out, so the two cannot be edited independently.
+ */
+export const DEFAULT_LANGUAGE = DEFAULT_SEO_LOCALE.lang;
+export const SUPPORTED_LANGUAGES = SEO_LOCALES.map((locale) => locale.lang);
+export type SupportedLanguage = string;
 
 export const resources = {
   en: { translation: en },

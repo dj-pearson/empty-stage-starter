@@ -11,7 +11,7 @@ EatPal is a meal planning platform built for families managing picky eating, ARF
 - **Safe Food Library**: Comprehensive tracking of each child's accepted foods with allergen and sensory metadata
 - **AI Meal Planning**: Generates weekly meal plans that balance safe foods with strategic try bites for gradual diet expansion
 - **Multi-Child Support**: Manages different food preferences, allergens, and feeding goals for multiple children in one family
-- **Grocery Automation**: Auto-generates organized grocery lists from meal plans with delivery integration (Instacart, Amazon Fresh, Walmart, Shipt)
+- **Grocery Automation**: Auto-generates organized grocery lists from meal plans, organized by store aisle
 - **Nutrition Monitoring**: Tracks nutritional adequacy for children on limited diets, flagging potential deficiencies
 - **Progress Analytics**: Visualizes food acceptance trends, exposure counts, and diet expansion over time
 - **Professional Tools**: HIPAA-compliant dashboard for feeding therapists with insurance billing and session tracking

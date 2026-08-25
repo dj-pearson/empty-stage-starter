@@ -24,6 +24,8 @@ import {
   Copy,
   RefreshCw,
   Zap,
+  LayoutList,
+  Split,
   Target,
   Eye,
   Sparkles,
@@ -56,6 +58,10 @@ import { SeoContentTab } from "@/components/admin/seo/SeoContentTab";
 import { SeoMonitoringTab } from "@/components/admin/seo/SeoMonitoringTab";
 import { SeoAuditTab } from "@/components/admin/seo/SeoAuditTab";
 import { SeoKeywordsTab } from "@/components/admin/seo/SeoKeywordsTab";
+import { SeoCannibalizationTab } from "@/components/admin/seo/SeoCannibalizationTab";
+import { SeoIndexCoverageTab } from "@/components/admin/seo/SeoIndexCoverageTab";
+import { useSeoIndexCoverage } from "@/components/admin/seo/useSeoIndexCoverage";
+import { useSeoCannibalization } from "@/components/admin/seo/useSeoCannibalization";
 import { useGscConnection } from "@/components/admin/seo/useGscConnection";
 import { useSeoMonitoring } from "@/components/admin/seo/useSeoMonitoring";
 import { useSeoKeywords } from "@/components/admin/seo/useSeoKeywords";
@@ -110,6 +116,30 @@ export function SEOManager() {
     loadTrackedKeywords,
     addKeywordToTrack,
   } = useSeoKeywords();
+
+  // US-651: loads on demand from the tab, not on mount -- see the hook.
+
+  const {
+
+    findings: cannibalizationFindings,
+
+    isLoading: isLoadingCannibalization,
+
+    loaded: cannibalizationLoaded,
+
+    loadCannibalization,
+
+    windowDays: cannibalizationWindowDays,
+
+  } = useSeoCannibalization();
+  // US-653: also on-demand -- it fetches the sitemap and the prerender manifest.
+  const {
+    report: coverageReport,
+    summary: coverageSummary,
+    isLoading: isLoadingCoverage,
+    loadCoverage,
+    windowDays: coverageWindowDays,
+  } = useSeoIndexCoverage();
 
   const {
     pageAnalysis,
@@ -531,6 +561,14 @@ export function SEOManager() {
                     <Target className="h-4 w-4 mr-2" />
                     Keywords
                   </TabsTrigger>
+                  <TabsTrigger value="cannibalization" className="w-full justify-start">
+                    <Split className="h-4 w-4 mr-2" />
+                    Cannibalization
+                  </TabsTrigger>
+                  <TabsTrigger value="index-coverage" className="w-full justify-start">
+                    <LayoutList className="h-4 w-4 mr-2" />
+                    Index Coverage
+                  </TabsTrigger>
                   <TabsTrigger value="competitors" className="w-full justify-start">
                     <Trophy className="h-4 w-4 mr-2" />
                     Competitors
@@ -609,6 +647,18 @@ export function SEOManager() {
                   <div className="flex items-center gap-2">
                     <Target className="h-4 w-4" />
                     <span>Keyword Tracking</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="cannibalization">
+                  <div className="flex items-center gap-2">
+                    <Split className="h-4 w-4" />
+                    <span>Cannibalization</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="index-coverage">
+                  <div className="flex items-center gap-2">
+                    <LayoutList className="h-4 w-4" />
+                    <span>Index Coverage</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="competitors">
@@ -767,6 +817,24 @@ export function SEOManager() {
           connectToGSC={connectToGSC}
           disconnectGSC={disconnectGSC}
           syncGSCData={syncGSCData}
+        />
+
+        {/* Keyword Cannibalization Tab (US-651) */}
+        <SeoCannibalizationTab
+          findings={cannibalizationFindings}
+          isLoading={isLoadingCannibalization}
+          loaded={cannibalizationLoaded}
+          windowDays={cannibalizationWindowDays}
+          onLoad={loadCannibalization}
+        />
+
+        {/* Index Coverage Tab (US-653) */}
+        <SeoIndexCoverageTab
+          report={coverageReport}
+          summary={coverageSummary}
+          isLoading={isLoadingCoverage}
+          windowDays={coverageWindowDays}
+          onLoad={loadCoverage}
         />
 
         {/* Competitor Analysis Tab */}

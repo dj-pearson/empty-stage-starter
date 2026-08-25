@@ -2548,6 +2548,162 @@
       "priority": 5,
       "passes": false,
       "notes": "Found 2026-08-22 (loop) while checking whether the US-635 random-filename change broke anything. It did not - delete(path:) has no callers, so nothing reconstructs a path - but that is the finding: nothing calls it at all. The web got object cleanup in US-628; iOS never did, and iOS is where the production kid photos come from (US-635's own framing). So 'delete my child's photo' does not delete it on the platform that took it. NOT A NEW EXPOSURE - the URL was already public while the photo was current - but it means removal is not removal, and the bucket only grows. Scope confirmed by grep rather than assumed: three upload call sites (KidProfileEditorView:367, RecipesView:1647, EditRecipeView:294), zero delete call sites, nothing calling .list(), and no code anywhere in ios/ reconstructing a storage path from an id. The web side is fine and tested - parseStorageObjectUrl is bucket-agnostic and src/lib/storagePaths.test.ts and storageCleanup.test.ts both cover the images-bucket URL shape - so a web user deleting a kid DOES clean up an iOS-uploaded photo, provided a DELETE policy on `images` allows it, which is a dashboard-only fact query 2 of the diagnostic will answer. NOT IMPLEMENTED HERE deliberately: the fix is a URL parser plus call sites in Swift, there is no Swift toolchain in this container, and iOS is live in the App Store. Writing code that cannot be compiled into a shipping app is the wrong trade."
+    },
+    {
+      "id": "US-645",
+      "title": "robots.txt: named crawler groups never see the private-path Disallow rules",
+      "description": "As the site owner, I want every crawler we explicitly name to obey the same private-path blocks the wildcard group carries, so that Googlebot, Bingbot and the AI crawlers stop being invited into /admin/, /dashboard/ and the faceted query URLs.",
+      "acceptanceCriteria": [
+        "Root cause: public/robots.txt puts all 16 Disallow rules (/admin/, /admin-dashboard/, /api/, /dashboard/, /auth/, /seo-dashboard/, /search-traffic/, /oauth/, /checkout/success, /share, /join, /search?, /*?sort=, /*?filter=, /*?page=) in the 'User-agent: *' group only. Under RFC 9309 a crawler obeys the single most specific matching group and ignores all others, so the 19 named allow-groups (Googlebot, Googlebot-Mobile, Bingbot, BingPreview, DuckDuckBot, Slurp, YandexBot, Baiduspider, Google-Extended, GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, PerplexityBot, Applebot, Applebot-Extended, FacebookBot, facebookexternalhit, plus the social/archive groups) currently read 'Allow: /' with no Disallow at all. Googlebot-Image is the only named group with any Disallow.",
+        "Every named group that is allowed to crawl carries the same private-path Disallow set as the wildcard group. Prefer a single shared block emitted per group over hand-copying, or collapse the redundant allow-only groups into the wildcard group and keep named groups only where they differ (crawl-delay, image rules).",
+        "The Disallow set is asserted, not eyeballed: new test src/lib/robots-txt.test.ts parses public/robots.txt into groups the way a crawler does (most-specific-group-wins, other groups ignored) and asserts that for Googlebot, Bingbot, GPTBot, ClaudeBot, PerplexityBot and Applebot the resolved group blocks /admin/, /dashboard/, /seo-dashboard/, /search-traffic/ and /join, and that the wildcard group still blocks them too.",
+        "Same test asserts the training-only blocks still hold: CCBot, anthropic-ai, cohere-ai, Bytespider, Amazonbot, MJ12bot and DataForSeoBot remain fully disallowed.",
+        "Separate decision recorded in the same change: AhrefsBot and SemrushBot go from 'Disallow: /' to allowed-with-the-standard-private-blocks. Blocking them never hid the backlink profile (that data comes from crawling other sites) but it does keep tryeatpal.com out of their link graphs and leaves our own site audits with no crawl data, while SEO Tools > Ahrefs is on the roadmap. MJ12bot and DataForSeoBot stay blocked (no tooling relationship, pure crawl cost) and the file carries a comment saying why the two decisions differ.",
+        "Header comment 'Last Updated' date bumped.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-646",
+      "title": "Comparison pages: /compare index and the five competitor pages",
+      "description": "As a parent choosing between meal-planning apps, I want an honest EatPal-vs-X page for the app I am considering, so that I can decide without leaving the site. These are the highest-intent queries in the category and the site currently ranks for none of them.",
+      "acceptanceCriteria": [
+        "Context: comparisonTargets in src/lib/geo-monitoring.ts already names five targets with slugs (eatpal-vs-mealime, eatpal-vs-yummly, eatpal-vs-eat-this-much, eatpal-vs-paprika, eatpal-vs-feeding-therapy-workbooks) and src/components/schema/ComparisonSchema.tsx is built and tested. Neither is reachable: grep finds ComparisonSchema referenced only from schema/index.ts and its own test, and src/App.tsx has no comparison route.",
+        "New content module (src/lib/comparison-content.ts) expands each target into page content: positioning summary, feature-by-feature rows, a 'choose <competitor> instead if...' section, and a CTA. Content is keyed off the existing comparisonTargets entries so the two lists cannot drift.",
+        "Every comparison page names at least one thing the competitor genuinely does better. A comparison table where EatPal wins every row is not honest and is not accepted.",
+        "No invented facts about competitors: each claim is either checkable against that product's public pricing or feature page, or is phrased as a category-level statement. This repo already shipped a fix for invented author credentials (see the comment block in src/pages/Authors.tsx); the same standard applies to competitor claims. Do not state a competitor's price unless it is on their public pricing page as of the implementation date, and date the claim if stated.",
+        "New pages src/pages/Compare.tsx (index, route /compare) and src/pages/ComparisonPage.tsx (route /compare/:slug), both added to src/App.tsx as lazy() routes inside <Suspense>, public, no ProtectedRoute.",
+        "An unrecognised slug renders the NotFound page, not an empty template.",
+        "Each page emits SEOHead with a unique title and description, canonicalUrl https://tryeatpal.com/compare/<slug>, plus ComparisonSchema and BreadcrumbSchema.",
+        "The /compare index lists all five with a one-line differentiator each and links to them.",
+        "Unit tests: every slug in comparisonTargets resolves to content, every canonical matches its route, the emitted ComparisonSchema JSON-LD parses as valid JSON, an unknown slug 404s, and no comparison page has an all-EatPal-wins table.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-647",
+      "title": "Make the comparison pages discoverable (sitemap, prerender, robots, internal links)",
+      "description": "As a search crawler, I want the comparison pages in the sitemap and served as prerendered HTML, so that they are indexed with their structured data rather than arriving as an empty SPA shell.",
+      "acceptanceCriteria": [
+        "STATIC_ENTRIES in supabase/functions/generate-sitemap/index.ts gains /compare and each /compare/<slug>.",
+        "The fallback sitemap in functions/sitemap.xml.ts is updated to match, or both read one shared list so they cannot diverge.",
+        "The static route list in scripts/prerender-routes.json gains /compare and each /compare/<slug>, so the pages ship server-rendered with their JSON-LD for AI crawlers that do not execute JavaScript.",
+        "public/robots.txt gains an explicit 'Allow: /compare' alongside the existing public-page allow list.",
+        "At least one in-content internal link to /compare from src/pages/Pricing.tsx and from the guides index (src/pages/pseo/GuidesIndex.tsx), plus a footer link in src/components/Footer.tsx.",
+        "A test asserts every slug in comparisonTargets appears in scripts/prerender-routes.json and in the sitemap static entries, so adding a sixth competitor cannot silently ship unprerendered and unlisted.",
+        "npm run lint && npm run format && npm run test:run pass.",
+        "Note the prerender wall-clock budget in scripts/prerender.mjs: five extra static routes at roughly 310ms each is within budget, but confirm the build still completes rather than assuming."
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-648",
+      "title": "Integration landing pages for the grocery delivery partners",
+      "description": "As a parent who already orders groceries through Instacart or Walmart, I want a page that shows how EatPal hands a meal plan off to that service, so that I can see the integration exists before signing up. The integrations ship today and have no landing pages at all.",
+      "acceptanceCriteria": [
+        "Read src/lib/integrations/ and the grocery_delivery surface first and build a page only for partners that are actually wired. Do not publish a page for a partner the product cannot hand off to.",
+        "New /integrations index and /integrations/:slug pages, lazy routes in src/App.tsx, public.",
+        "Each page describes the real flow (meal plan to grocery list to hand-off), not a generic integration blurb, and states plainly what the integration does and does not do.",
+        "SEOHead per page with unique title/description and canonical https://tryeatpal.com/integrations/<slug>, plus BreadcrumbSchema and either ServiceSchema or SoftwareAppSchema (src/components/schema/).",
+        "Discovery wiring matching US-647: sitemap static entries, prerender static routes, robots Allow, footer link.",
+        "Unknown slug 404s.",
+        "Tests: each supported partner has exactly one page, canonical matches route, unknown slug 404s, every published slug is in the prerender list.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "BLOCKED on a factual basis, not a technical one. The first acceptance criterion says to build a page only for partners that are actually wired and not to publish a page for a partner the product cannot hand off to. Checked, and none of the four is wired.\n\nEvidence: supabase/functions/process-delivery-order/index.ts is an explicit simulation -- its own header says 'Real integrations require API keys and partnerships with providers', every provider API call in it is commented out, and the external order id it returns is fabricated as `${PROVIDER}-${Date.now()}`. src/lib/integrations/instacart.ts is the only partner with client code and getInstacartConfig() returns `enabled: false` unconditionally, reads process.env.INSTACART_API_KEY (which is not how a Vite browser build reads env; that would be import.meta.env), and has the database lookup commented out, so every call bails on the empty-key guard. The provider logos the seed migration references (public/providers/*.png) do not exist. amazon_fresh, walmart and shipt are seed rows in delivery_providers with no code behind them at all.\n\nPublishing four landing pages saying EatPal hands your grocery list to Instacart would put a claim on the marketing site that the product cannot honour, which is the same failure this repo has already had to remediate twice (invented author credentials in src/pages/Authors.tsx, an invented aggregateRating). Doing it on purpose, for SEO, is worse than doing it by accident.\n\nDone instead, because the claim was already live: public/llms.txt advertised 'delivery integration (Instacart, Amazon Fresh, Walmart, Shipt)' and llms-full.txt listed all five including Target, to every AI crawler. Both are corrected -- llms.txt now describes the aisle-organised grocery list, which is real, and llms-full.txt states the hand-off is in development. Separate from this story, GroceryDeliveryPanel presents all four as selectable and produces fabricated order confirmations; that is a product bug worth its own story.\n\nUnblock by shipping one real integration. Instacart is closest (client code exists, needs a key, a real config read and the enabled flag). Then this story becomes a one-partner page, not four."
+    },
+    {
+      "id": "US-649",
+      "title": "Use-case pages, and retire the /solutions/* catch-all redirect",
+      "description": "As a parent searching for help with a specific feeding situation, I want a page for my situation rather than a general guides index, so that the page answers the query I actually typed. /solutions/* currently 301s to /guides because those pages were advertised but never built.",
+      "acceptanceCriteria": [
+        "New /solutions/:slug pages for audiences the product actually serves. Verify each against shipped capability before writing: ARFID, autism and sensory feeding, feeding therapists (there is a professional dashboard), and households with several kids (src/pages/SiblingMealFinder.tsx). Drop any of these that the product does not genuinely support and say so in the story notes rather than writing a page around a feature that does not exist.",
+        "public/_redirects: remove the '/solutions/* /guides 301' catch-all and the '/solutions/arfid-meal-planning /guides 301' line, and add '/solutions/arfid-meal-planning /solutions/arfid 301' so the URL public/llms.txt advertised for months lands on the real page. Leave the /features/* redirects alone; those are a separate decision.",
+        "The ARFID and autism pages are health-adjacent. Each carries MedicalWebPageSchema (src/components/schema/MedicalWebPageSchema.tsx) and either names the clinician who reviewed it or states plainly that it is educational and not medical advice. Do not imply clinical review that did not happen.",
+        "SEOHead per page with unique title/description and canonical https://tryeatpal.com/solutions/<slug>, plus BreadcrumbSchema.",
+        "Discovery wiring matching US-647: sitemap, prerender, robots Allow, internal links.",
+        "Tests: every published slug resolves, canonical matches route, unknown slug 404s, the removed catch-all is gone from _redirects and the arfid-meal-planning 301 points at /solutions/arfid.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "PARTIALLY BLOCKED, and it turned up something bigger than this story.\n\nThe criterion says to verify each audience against shipped capability and drop the ones the product does not genuinely support. Result of that check:\n\nREAL, safe to build: ARFID and autism/sensory (food chaining, safe food library, and per-food sensory metadata all exist -- foods carry texture_primary, texture_secondary and texture_score), and multiple kids (multi-child profiles plus src/pages/SiblingMealFinder.tsx).\n\nNOT REAL: the feeding-therapist page. src/pages/dashboard/ProfessionalSettings.tsx is 774 lines of custom-domain and brand white-labelling. There is no client management, no session tracking, no insurance billing and no superbills anywhere in the repo -- every 'insurance' hit in src/ is SafeFoodInsurance, which is about a child running out of a safe food, not health insurance.\n\nThe bigger finding: those capabilities are already claimed on live surfaces. public/llms.txt line 17 says 'HIPAA-compliant dashboard for feeding therapists with insurance billing and session tracking'. llms-full.txt line 21 calls EatPal 'the only picky eater platform with a HIPAA-compliant professional tier ... including insurance billing, session tracking, and client progress reports', line 102 sells a Professional plan on those features, and line 134 states the tier 'meets HIPAA requirements'. src/lib/seo-config.ts lists 'Insurance Billing & Superbills', 'HIPAA-Compliant Platform', 'Research Data Licensing' and 'Community Marketplace' as key features, and the /privacy page meta asserts HIPAA compliance to search engines.\n\nHIPAA compliance is a regulatory claim, not a feature description, so unlike the grocery delivery copy in the commit before this one it is NOT something to quietly reword -- it needs an owner decision and probably counsel. Left untouched on purpose.\n\nSuggested split: build ARFID, autism-sensory and multiple-kids under this story; move the therapist page to its own story blocked on the professional tier actually existing; and raise the compliance and feature claims as a separate audit of every live marketing surface (llms.txt, llms-full.txt, seo-config.ts, index.html, Landing.tsx). Not started here because building more health-adjacent pages on top of unverified clinical claims is the wrong order."
+    },
+    {
+      "id": "US-650",
+      "title": "Content decay detector: queue refreshes from GSC page performance",
+      "description": "As the SEO owner, I want published pages that are losing search traffic to surface as refresh work automatically, so that the content programme maintains what it has shipped instead of only adding to it. agent-content-calendar proposes new topics and agent-seo-audit checks hygiene; nothing watches for decay.",
+      "acceptanceCriteria": [
+        "New weekly agent at functions/agent-content-decay/index.ts following the agent-content-calendar pattern: runAgent from functions/_shared/agent-runtime.ts, verify_jwt=false with the internal AGENT_DISPATCH_SECRET header, registered with the dispatcher.",
+        "Compares the trailing 28 days against the preceding 28 in public.gsc_page_performance (page_url, date, clicks, impressions, position, top_queries). Flags a URL when clicks fall by at least a configurable threshold (default 30%) AND the prior period cleared a minimum impression floor (default 100), so low-traffic noise cannot fire it.",
+        "Excludes URLs published within the last 60 days (still ramping) and URLs that no longer return 200. Reuse the same-host check and SSRF validator that agent-seo-audit uses (functions/_shared/url-validator.ts) for any outbound fetch.",
+        "Each surviving URL becomes one tier-2 approval of type 'content_refresh' carrying the URL, both periods' clicks/impressions/position, and the page's top_queries, deduped against unresolved refresh approvals for the same URL.",
+        "The comparison logic lives in a pure, exported module with unit tests, not inline in the handler. Tests cover: decay detected, below the impression floor ignored, page newer than 60 days ignored, duplicate against an unresolved approval suppressed, and a page with zero prior impressions not dividing by zero.",
+        "Any schema change is additive only per the migration rules in CLAUDE.md. Reuse the existing approval tables where possible rather than adding a new one.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-651",
+      "title": "Keyword cannibalization report from GSC top_queries",
+      "description": "As the SEO owner, I want to see queries where several of our own URLs compete for the same impressions, so that the programmatic guides, blog and pSEO tiers stop splitting each other's rankings. With thousands of generated pages targeting overlapping picky-eating terms this is the failure mode that quietly caps everything else.",
+      "acceptanceCriteria": [
+        "New pure module src/lib/seo/cannibalization.ts: given gsc_page_performance rows for a window, group by query across page_url and return queries where two or more URLs both drew impressions and no single URL clearly dominates (runner-up holds at least a configurable share, default 20%, of the query's impressions), ranked by impressions split away from the best-performing URL.",
+        "The report is surfaced in the existing SEO admin under src/components/admin/seo/ (new tab or a section on an existing tab), reading from Supabase, following the hook-per-tab pattern already used there (useSeoKeywords, useSeoAudit).",
+        "The weekly agent-seo-audit escalation includes the top N cannibalization pairs so the finding is not dashboard-only.",
+        "Unit tests: clear cannibalization detected, a single-URL query ignored, a dominated query ignored, ordering stable under ties, and empty input returns an empty report rather than throwing.",
+        "The MAX_INDEXABLE_TIER gate in src/lib/pseo/indexability.ts already noindexes low tiers; the report states whether a cannibalizing URL is above or below that gate, since a noindexed competitor is a different problem from an indexed one.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-652",
+      "title": "Emit hreflang from SEOHead",
+      "description": "As a search crawler, I want hreflang annotations on every page, so that when a second language ships the alternates are already declared. generateHreflangTags exists in src/lib/seo-helpers.ts with passing tests and nothing calls it; SEOHead emits canonical and og:alternate only.",
+      "acceptanceCriteria": [
+        "src/components/SEOHead.tsx calls generateHreflangTags (src/lib/seo-helpers.ts:452) and renders <link rel=\"alternate\" hreflang=\"...\"> for every configured locale plus an x-default.",
+        "With only 'en' configured today the output is a self-referential en tag plus x-default pointing at the same URL. That is correct and inert; the point is that adding a locale becomes a one-place data change.",
+        "The locale list lives in one exported constant (src/lib/seo-config.ts) that both the i18n resources in src/i18n/index.ts and SEOHead read, so a new locale file cannot be added without its hreflang entry. A test asserts the two lists match.",
+        "Tests: en and x-default are emitted, every href is absolute and consistent with canonicalUrl, no duplicate hreflang values, and a noindex page does not emit alternates.",
+        "This story does NOT add a second language. Whether to publish Spanish is a business decision that needs translated content and a localized support path, not a code change.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-653",
+      "title": "Index coverage reconciliation: sitemap vs prerender vs what GSC actually sees",
+      "description": "As the SEO owner, I want one report that reconciles the URLs we declare, the URLs we prerender and the URLs Google reports impressions for, so that crawl budget problems on the pSEO cluster are visible. Today robots.txt and the sitemap say what we tell Google; nothing shows what Google did.",
+      "acceptanceCriteria": [
+        "New pure module that takes three inputs and produces one reconciliation: (a) URLs in the generated sitemap, (b) routes the last prerender actually wrote (scripts/prerender.mjs static list plus the dynamic expansion, which is capped by a wall-clock budget and can silently skip routes), (c) distinct page_url values in gsc_page_performance for the window.",
+        "Report buckets: in sitemap but never impressed by Google; prerendered but not in sitemap; in sitemap but not prerendered; impressed by Google but absent from the sitemap. Each bucket carries a count and a sample.",
+        "The prerender budget skip is reported explicitly. scripts/prerender.mjs already distinguishes routes attempted from routes discovered; a run that skipped routes must show up as a skipped count rather than as pages Google ignored.",
+        "Surfaced in the SEO admin alongside the other audit tabs, and included in the weekly agent-seo-audit escalation summary when any bucket exceeds a threshold.",
+        "Unit tests over the pure module: each bucket populated correctly, URL normalisation handles trailing slashes and the tryeatpal.com host prefix consistently, and empty inputs return an empty report.",
+        "Out of scope, and stated as such rather than quietly dropped: true log-file analysis of Googlebot hits needs Cloudflare Logpush into a queryable store. That is an infrastructure decision, not a code change, and it is not attempted here.",
+        "npm run lint && npm run format && npm run test:run pass."
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Built, with one addition the story did not ask for and could not work without: scripts/prerender.mjs now writes dist/prerender-manifest.json. Before that, what a build actually rendered existed only as a line in the build log, so the wall-clock budget skipping 600 guides was invisible from production and the report could only have reconciled against scripts/prerender-routes.json -- the intent, not the result.\n\nLog-file analysis of Googlebot hits stays out of scope, as the story says. That needs Cloudflare Logpush into a queryable store, which is an infrastructure decision. The tab says so on screen rather than leaving the reader to assume crawl budget is covered."
     }
   ]
 }

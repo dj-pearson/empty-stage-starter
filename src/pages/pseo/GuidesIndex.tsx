@@ -157,6 +157,16 @@ export default function GuidesIndex() {
               the feeding therapy method of moving outward from accepted foods in small,
               predictable changes rather than introducing something entirely new.
             </p>
+            {/* US-647: in the header rather than the empty state below, which only
+                renders when the library fails to load. This is the crawl path from the
+                guide cluster into /compare. */}
+            <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
+              Still deciding whether EatPal is the right tool at all? The{' '}
+              <Link to="/compare" className="text-primary hover:underline">
+                comparisons with other meal planning apps
+              </Link>{' '}
+              say where each of them is the better choice.
+            </p>
           </header>
 
           {isLoading && (

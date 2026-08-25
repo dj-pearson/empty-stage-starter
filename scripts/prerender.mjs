@@ -232,6 +232,35 @@ export async function discoverDynamicRoutes(config) {
  * @param {{staticFailed: number, dynamicTotal: number, dynamicFailed: number}} counts
  * @returns {{fatal: boolean, reason: string}}
  */
+/**
+ * US-653: the record of what a build actually rendered.
+ *
+ * scripts/prerender-routes.json is the intent. This is the result, and the two
+ * diverge whenever the wall-clock budget runs out mid-run -- which used to be
+ * visible only as a warning in a build log nothing downstream could read, so a
+ * route shipping as a client-rendered shell was invisible from production.
+ * src/lib/seo/indexCoverage.ts reconciles the sitemap against this.
+ *
+ * Split out and exported for the same reason classifyPrerenderFailures is: it
+ * is decidable without a browser, so it can have tests.
+ *
+ * @param {{results: Array<{route: string}>, skipped: string[],
+ *          failures: Array<{route: string}>, budgetMs: number,
+ *          generatedAt: string}} run
+ */
+export function buildPrerenderManifest({ results, skipped, failures, budgetMs, generatedAt }) {
+  // Sorted and deduped: the manifest is diffed between builds, and route order
+  // depends on scheduling, so an unsorted list churns on every deploy.
+  const uniqueSorted = (values) => [...new Set(values)].sort();
+  return {
+    generatedAt,
+    budgetMs,
+    rendered: uniqueSorted((results ?? []).map((r) => r.route)),
+    skipped: uniqueSorted(skipped ?? []),
+    failed: uniqueSorted((failures ?? []).map((f) => f.route)),
+  };
+}
+
 export function classifyPrerenderFailures({ staticFailed, dynamicTotal, dynamicFailed }) {
   if (staticFailed > 0) {
     return {
@@ -644,6 +673,28 @@ async function main() {
     `\n[prerender] ${results.length}/${routes.length} route(s) prerendered in ` +
       `${(elapsedMs / 1000).toFixed(1)}s (budget ${(BUDGET_MS / 1000).toFixed(0)}s).`
   );
+
+  // US-653: write what this build actually rendered next to the output, so the
+  // index coverage report can reconcile the sitemap against reality instead of
+  // against scripts/prerender-routes.json, which is the intent rather than the
+  // result. A build-log warning tells whoever reads the log; nothing downstream
+  // could read it, which is why a budget skip was invisible from production.
+  await writeFile(
+    path.join(DIST, 'prerender-manifest.json'),
+    JSON.stringify(
+      buildPrerenderManifest({
+        results,
+        skipped,
+        failures,
+        budgetMs: BUDGET_MS,
+        generatedAt: new Date().toISOString(),
+      }),
+      null,
+      2
+    ),
+    'utf8'
+  );
+  console.log(`[prerender] wrote ${path.join(DIST, 'prerender-manifest.json')}.`);
 
   if (skipped.length) {
     // Never a silent truncation: a build log that does not say what was dropped

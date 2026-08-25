@@ -67,6 +67,13 @@ jobs:
       - name: Typecheck the extracted SEO components
         run: bash scripts/ci/check-seo-extraction.sh
 
+      # US-646/US-647: the same shape for the /compare cluster. Scoped to the
+      # files those stories own, and it fails on any type error originating in
+      # them rather than on a clean whole-app compile, which does not finish in
+      # this container.
+      - name: Typecheck the comparison pages
+        run: bash scripts/ci/check-seo-pages.sh
+
       # A bucket created by clicking in the dashboard exists only in
       # production: its public flag and RLS policies cannot be read from the
       # repo, a follow-up migration has to be written blind, and a fresh

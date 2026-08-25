@@ -58,6 +58,7 @@
     "build:nossg": "vite build",
     "prerender": "node scripts/prerender.mjs",
     "typecheck:seo": "bash scripts/ci/check-seo-extraction.sh",
+    "typecheck:seo-pages": "bash scripts/ci/check-seo-pages.sh",
     "check:jsx-imports": "node scripts/ci/check-jsx-imports.mjs",
     "check:migration-safety": "bash scripts/ci/check-migration-safety.sh"
   },

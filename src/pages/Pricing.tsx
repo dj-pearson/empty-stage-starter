@@ -1203,6 +1203,19 @@ export default function Pricing() {
           ))}
         </div>
 
+        {/* US-647: /pricing is where people compare, so this is where the comparison
+            cluster should be reachable from. */}
+        <div className="max-w-2xl mx-auto pt-12 text-center">
+          <p className="text-muted-foreground">
+            Weighing EatPal against another app?{' '}
+            <Link to="/compare" className="text-primary hover:underline">
+              See how it compares
+            </Link>{' '}
+            with Mealime, Yummly, Paprika and the paper food chaining workbooks, including
+            where each of those is the better answer.
+          </p>
+        </div>
+
         {/* Billing FAQ */}
         <div className="max-w-2xl mx-auto py-12">
           <h2 className="text-2xl font-bold text-center mb-6">Pricing FAQ</h2>

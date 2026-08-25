@@ -16,6 +16,22 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
 import { validateExternalUrl, fetchWithTimeout } from '../_shared/url-validator.ts';
+// US-651: the cannibalization algorithm lives in the web tree because the admin
+// tab is its other consumer. It has no imports of its own, so Deno loads it as
+// written; the explicit .ts extension is for Deno's resolver.
+import {
+  findCannibalization,
+  summarizeCannibalization,
+  type PageQueryRow,
+} from '../../src/lib/seo/cannibalization.ts';
+// US-653: same arrangement -- the admin tab is the other consumer, and neither
+// module imports anything, so Deno loads them as written.
+import {
+  parseSitemapLocs,
+  reconcileCoverage,
+  summarizeCoverage,
+  type PrerenderManifest,
+} from '../../src/lib/seo/indexCoverage.ts';
 import {
   parseSitemapUrls,
   extractMeta,
@@ -31,6 +47,10 @@ import {
 const AGENT_NAME = 'seo-audit';
 const MAX_PAGES = 30;
 const MAX_LINK_CHECKS = 40;
+/** Days of gsc_page_performance to read for the cannibalization pass. */
+const CANNIBAL_WINDOW_DAYS = 28;
+/** Lines carried into the escalation body; the full count rides alongside. */
+const MAX_CANNIBAL_LINES = 5;
 
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -137,16 +157,70 @@ serve(async (req) => {
       }
       const newFindings = dedupeAgainstPrior(findings, prior);
 
+      // US-651: queries several of our own URLs are splitting. This audit is
+      // the only weekly thing a human reads, so the finding rides along here
+      // rather than waiting on someone opening the admin tab -- which is how
+      // the /compare pages sat unreachable for months.
+      const { data: perfRows } = await db
+        .from('gsc_page_performance')
+        .select('page_url, date, top_queries')
+        .gte('date', new Date(Date.now() - CANNIBAL_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10));
+      const cannibalization = findCannibalization((perfRows ?? []) as PageQueryRow[]);
+      const cannibalizationTop = summarizeCannibalization(cannibalization, MAX_CANNIBAL_LINES);
+
+      // US-653: what we declared vs what we built vs what Google saw. The
+      // sitemap is already fetched above; the manifest is what scripts/
+      // prerender.mjs writes next to the build output. A missing manifest is
+      // reported as unknown, not as a total prerender failure.
+      const manifestJson = await safeFetchText(`${origin}/prerender-manifest.json`, origin);
+      let manifest: PrerenderManifest | null = null;
+      if (manifestJson) {
+        try {
+          manifest = JSON.parse(manifestJson) as PrerenderManifest;
+        } catch {
+          manifest = null;
+        }
+      }
+      const coverage = reconcileCoverage({
+        sitemapUrls: parseSitemapLocs(sitemapXml),
+        manifest,
+        gscUrls: ((perfRows ?? []) as Array<{ page_url: string }>).map((r) => r.page_url),
+      });
+      const coverageTop = summarizeCoverage(coverage);
+
       const byIssue: Record<string, number> = {};
       for (const f of findings) byIssue[f.issue.split(':')[0]] = (byIssue[f.issue.split(':')[0]] ?? 0) + 1;
-      const summary = { pagesAudited: pages.length, totalFindings: findings.length, newFindings: newFindings.length, byIssue };
+      const summary = {
+        pagesAudited: pages.length,
+        totalFindings: findings.length,
+        newFindings: newFindings.length,
+        byIssue,
+        cannibalizedQueries: cannibalization.length,
+        // Never a silent top-N: the count above is the whole set, these are the
+        // lines that fit.
+        cannibalizationTop,
+        coverage: {
+          totals: coverage.totals,
+          manifestMissing: coverage.manifestMissing,
+          prerenderBudgetSkipped: coverage.prerenderBudgetSkipped.count,
+          declaredNotPrerendered: coverage.declaredNotPrerendered.count,
+          prerenderedNotDeclared: coverage.prerenderedNotDeclared.count,
+          impressedNotDeclared: coverage.impressedNotDeclared.count,
+          declaredNeverImpressed: coverage.declaredNeverImpressed.count,
+        },
+        coverageTop,
+      };
 
-      if (newFindings.length > 0) {
+      if (newFindings.length > 0 || cannibalization.length > 0 || coverageTop.length > 0) {
+        const parts = [];
+        if (newFindings.length > 0) parts.push(`${newFindings.length} new finding(s)`);
+        if (cannibalization.length > 0) parts.push(`${cannibalization.length} cannibalized query(s)`);
+        if (coverageTop.length > 0) parts.push(`${coverageTop.length} coverage issue(s)`);
         await ctx.escalate({
           tier: 2,
           severity: 'medium',
           domain: 'marketing',
-          title: `SEO audit: ${newFindings.length} new finding(s)`,
+          title: `SEO audit: ${parts.join(', ')}`,
           context: { findings: newFindings, summary } as unknown as Json,
         });
       }
