@@ -40,6 +40,9 @@
 - Passing two supabase query builders to `Promise.all` blows TypeScript's instantiation depth (TS2589) and degrades every row to `ResultOne`. Await them one at a time.
 - `src/integrations/supabase/types.ts` is NOT complete. `pseo_pages` was missing entirely until US-651 added it by hand; a `.from('some_table')` that reports TS2769 usually means the table is absent from types.ts, not that the call is wrong. Check before working around it.
 - Adding a tab to SEOManager fails `SEOManager.test.tsx` on purpose -- update the `TABS` list and the counts in its comments.
+- Helmet-emitted JSON-LD is NOT in `document.head` under jsdom without a real commit tick. Mock `react-helmet-async` and capture the `<script>`/`<link>` children instead (`src/components/schema/FAQSchema.test.tsx`, `src/pages/SolutionPage.test.tsx`). `ComparisonSchema` is the exception: it writes to the DOM itself, so its test reads `document.getElementById`.
+- Marketing copy that claims a feature should carry an `evidence` repo path next to the claim, asserted with `existsSync` in a test — see `src/lib/solutions-content.ts`. Prose rules in a docstring decay; this one fails the build when the feature is deleted.
+- `foods` has no `notes` column and there is no barcode UI (`barcode` is a column nothing writes). Texture lives in `food_properties` (seeded in `20251008150000_create_food_tracking_features.sql`), not on `foods`. Check the column before writing copy about it.
 - GSC lags two to three days. Anchor any window on the newest `date` present in `gsc_page_performance`, never on today, or the lag reads as a traffic collapse.
 
 ---
@@ -317,3 +320,49 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     that looked right. All three were caught by a test written from the
     behaviour rather than from the implementation.
 ---
+
+## 2026-08-26 - US-649 (use-case pages, /solutions catch-all retired)
+
+Three pages, not four. `/solutions/arfid`, `/solutions/autism-sensory` and
+`/solutions/multiple-kids` ship with a `/solutions` index as the link hub;
+the feeding-therapist page the story specified does not, and a test now
+asserts its absence so nobody adds it back without the tier behind it.
+`public/_redirects` loses the `/solutions/* -> /guides` catch-all and gains
+`/solutions/arfid-meal-planning -> /solutions/arfid`, the URL llms.txt
+advertised for months. `/features/*` untouched, as the story said.
+
+**The honesty rule is mechanical now.** Every capability in
+`src/lib/solutions-content.ts` carries an `evidence` path and
+`solutions-content.test.ts` asserts the file exists. Writing the copy against
+that rule corrected three claims that read as true and were not: there is no
+barcode UI, `foods` has no notes column, and the texture data lives in
+`food_properties` rather than on the food. Each would have shipped as a
+sentence a reader could have tested and found false.
+
+**Health-adjacent pages carry `MedicalWebPageSchema` with no `reviewedBy`**
+plus a visible disclaimer, both pinned by tests. No clinician has read this
+copy, so naming one would be the invented-author-bio mistake again.
+
+59 new tests. Full suite 2005 passed, 3 skipped, 149 files. Prerender 24/24;
+`/solutions/arfid` emits four ld+json blocks and its own canonical.
+
+Split out rather than done here: **US-654** (the professional tier is sold on
+the pricing page, llms.txt and seo-config.ts and does not exist - build it or
+stop selling it) and **US-655** (audit every live marketing claim; the HIPAA
+assertions on llms-full.txt and the /privacy meta are regulatory, not copy,
+and need an owner and probably counsel). Both were findings of US-649's
+capability check, and leaving them inside a page-building story is how they
+stay unread.
+
+- **Learnings for future iterations:**
+  - The story asked for a judgement call ("verify each audience against
+    shipped capability"). A judgement call recorded in a commit message is
+    gone in a month; the same call expressed as an `existsSync` assertion is
+    still there when the feature is deleted.
+  - When a capability check kills part of a story, the killed part is a story,
+    not a paragraph in the notes. US-649's therapist finding sat in a notes
+    field for a week and nothing happened to it.
+  - `/solutions/*` was a catch-all 301 for months, so every stale link in the
+    wild lands on the new route. That makes the unknown-slug case the normal
+    case, not the edge case, which is why it renders NotFound rather than a
+    shell.

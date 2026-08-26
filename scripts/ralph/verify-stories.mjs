@@ -78,6 +78,10 @@ const MANUAL = new Set([
   // US-644 is a Swift change with no toolchain in CI; like the rest of this
   // row it can only be closed by a human who built and ran the app.
   'US-644',
+  // US-654 asks for a decision (build the professional tier or stop selling it)
+  // before it asks for code. Either branch is the owner's call, and a green gate
+  // on whichever half an agent picked would be the wrong signal entirely.
+  'US-654',
 ]);
 const ANDROID = new Set(['US-213', 'US-214', 'US-222']);
 const WEB = new Set([
@@ -96,6 +100,11 @@ const WEB = new Set([
   'US-651',
   'US-652',
   'US-653',
+  // US-655 audits marketing copy in public/*.txt, seo-config.ts and the landing
+  // page. Web surface, so the iOS gate classify() defaults to would never verify
+  // it. The regulatory half still needs a person; the unsupported-feature half
+  // is ordinary web work.
+  'US-655',
 ]);
 
 function classify(story) {
