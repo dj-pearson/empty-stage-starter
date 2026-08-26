@@ -95,6 +95,14 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
+                {/* US-649: the /solutions hub, for the same reason as /compare above.
+                    The three situation pages link only to each other and to this index,
+                    so without a footer link the whole cluster hangs off the sitemap. */}
+                <Link to="/solutions" className="hover:text-primary transition-colors">
+                  Solutions
+                </Link>
+              </li>
+              <li>
                 <Link to="/blog" className="hover:text-primary transition-colors">
                   Blog
                 </Link>

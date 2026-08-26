@@ -162,6 +162,30 @@ export async function onRequest(context: { env: { VITE_SUPABASE_URL?: string; VI
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
+  <url>
+    <loc>https://tryeatpal.com/solutions</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/solutions/arfid</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/solutions/autism-sensory</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tryeatpal.com/solutions/multiple-kids</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
 </urlset>`;
     // Deliberately absent from this fallback, all of which used to be listed here:
     //   /auth               - login form, nothing to rank for

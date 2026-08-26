@@ -32,9 +32,14 @@
 # to every AI crawler for months. Neither was ever a route, so both served the SPA 404.
 # The llms.txt entries are gone now; these 301s catch anything that cached them.
 /features/kids-meal-planning /guides 301
-/solutions/arfid-meal-planning /guides 301
 /features/* /guides 301
-/solutions/* /guides 301
+
+# US-649: /solutions/* is a real route now, so the catch-all that sent the whole
+# namespace to /guides is gone. Only the one URL llms.txt actually advertised keeps a
+# redirect, and it points at the page that was finally built for it. Anything else under
+# /solutions/ falls through to the SPA, where an unknown slug renders the 404 page --
+# which is the honest answer, unlike a 301 to an index that does not answer the query.
+/solutions/arfid-meal-planning /solutions/arfid 301
 
 # Legacy pSEO URLs -> the /guides/ mount point.
 # pseo_pages.slug already carries its own prefix ('food-chaining/chicken-nuggets') and

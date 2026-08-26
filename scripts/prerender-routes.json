@@ -27,7 +27,11 @@
     "/compare/eatpal-vs-yummly",
     "/compare/eatpal-vs-eat-this-much",
     "/compare/eatpal-vs-paprika",
-    "/compare/eatpal-vs-feeding-therapy-workbooks"
+    "/compare/eatpal-vs-feeding-therapy-workbooks",
+    "/solutions",
+    "/solutions/arfid",
+    "/solutions/autism-sensory",
+    "/solutions/multiple-kids"
   ],
   "dynamic": {
     "$comment": [

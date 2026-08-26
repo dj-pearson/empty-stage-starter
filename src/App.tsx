@@ -66,6 +66,8 @@ const Blog = lazy(() => import('./pages/Blog'));
 const BlogPost = lazy(() => import('./pages/BlogPost'));
 const Authors = lazy(() => import('./pages/Authors'));
 const Compare = lazy(() => import('./pages/Compare'));
+const Solutions = lazy(() => import('./pages/Solutions'));
+const SolutionPage = lazy(() => import('./pages/SolutionPage'));
 const ComparisonPage = lazy(() => import('./pages/ComparisonPage'));
 const SEODashboard = lazy(() => import('./pages/SEODashboard'));
 const SearchTrafficDashboard = lazy(() => import('./pages/SearchTrafficDashboard'));
@@ -859,6 +861,32 @@ const App = () => (
                           <RouteErrorBoundary>
                             <Suspense fallback={<LoadingFallback />}>
                               <ComparisonPage />
+                            </Suspense>
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      {/* US-649: the /solutions cluster. /solutions is the index and the
+                          internal-link hub; /solutions/:slug renders one situation page from
+                          src/lib/solutions-content.ts. These routes replace the
+                          "/solutions/* -> /guides" catch-all in public/_redirects, so every
+                          stale link that redirect used to absorb now lands here -- which is
+                          why an unknown slug has to render NotFound rather than a shell. */}
+                      <Route
+                        path="/solutions"
+                        element={
+                          <RouteErrorBoundary>
+                            <Suspense fallback={<LoadingFallback />}>
+                              <Solutions />
+                            </Suspense>
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      <Route
+                        path="/solutions/:slug"
+                        element={
+                          <RouteErrorBoundary>
+                            <Suspense fallback={<LoadingFallback />}>
+                              <SolutionPage />
                             </Suspense>
                           </RouteErrorBoundary>
                         }

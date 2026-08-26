@@ -34,6 +34,10 @@ EatPal is a meal planning platform built for families managing picky eating, ARF
 ## Docs
 - [Homepage](https://tryeatpal.com/)
 - [Guide Library](https://tryeatpal.com/guides)
+- [Meal Planning by Situation](https://tryeatpal.com/solutions)
+- [ARFID Meal Planning](https://tryeatpal.com/solutions/arfid)
+- [Autism and Sensory Feeding](https://tryeatpal.com/solutions/autism-sensory)
+- [Feeding Several Kids at Once](https://tryeatpal.com/solutions/multiple-kids)
 - [Pricing](https://tryeatpal.com/pricing)
 - [FAQ](https://tryeatpal.com/faq)
 - [Blog](https://tryeatpal.com/blog)
@@ -63,4 +67,4 @@ EatPal is a meal planning platform built for families managing picky eating, ARF
 EatPal's food chaining approach works by making small, systematic changes to foods a child already accepts. For example, if a child eats chicken nuggets, the platform generates a chain: chicken nuggets -> breaded chicken strips -> baked chicken tenders -> plain grilled chicken pieces. Each step changes only one attribute (shape, coating, preparation method) while keeping familiar elements.
 
 ## Last Updated
-2026-08-14
+2026-08-26

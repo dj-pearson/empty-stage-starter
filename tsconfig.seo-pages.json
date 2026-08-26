@@ -34,6 +34,12 @@
     "src/components/admin/seo/useSeoCannibalization.ts",
     "src/pages/Compare.tsx",
     "src/pages/ComparisonPage.tsx",
-    "src/pages/ComparisonPage.test.tsx"
+    "src/pages/ComparisonPage.test.tsx",
+    "src/lib/solutions-content.ts",
+    "src/lib/solutions-content.test.ts",
+    "src/lib/solutions-discovery.test.ts",
+    "src/pages/Solutions.tsx",
+    "src/pages/SolutionPage.tsx",
+    "src/pages/SolutionPage.test.tsx"
   ]
 }

@@ -167,6 +167,15 @@ export default function GuidesIndex() {
               </Link>{' '}
               say where each of them is the better choice.
             </p>
+            {/* US-649: the crawl path from the guide cluster into /solutions, in the
+                header for the same reason the /compare link above is. */}
+            <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
+              If you already know which situation you are in, the{' '}
+              <Link to="/solutions" className="text-primary hover:underline">
+                pages for ARFID, sensory feeding and several kids at once
+              </Link>{' '}
+              say which parts of the app apply, and which do not.
+            </p>
           </header>
 
           {isLoading && (

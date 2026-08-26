@@ -52,6 +52,12 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/compare/eatpal-vs-eat-this-much', changefreq: 'monthly', priority: '0.7' },
   { path: '/compare/eatpal-vs-paprika', changefreq: 'monthly', priority: '0.7' },
   { path: '/compare/eatpal-vs-feeding-therapy-workbooks', changefreq: 'monthly', priority: '0.7' },
+  // US-649: the /solutions cluster. Same weight as /compare -- these are the pages
+  // that answer a named situation, and /solutions/* used to 301 away to /guides.
+  { path: '/solutions', changefreq: 'monthly', priority: '0.7' },
+  { path: '/solutions/arfid', changefreq: 'monthly', priority: '0.7' },
+  { path: '/solutions/autism-sensory', changefreq: 'monthly', priority: '0.7' },
+  { path: '/solutions/multiple-kids', changefreq: 'monthly', priority: '0.7' },
   { path: '/faq', changefreq: 'monthly', priority: '0.7' },
   // /authors self-noindexes while public.blog_authors is empty (see src/pages/Authors.tsx),
   // so until real author rows exist this URL is submitted and then declined. Populate the
