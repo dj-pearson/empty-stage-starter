@@ -46,8 +46,14 @@ const MAX_DRAFTS_PER_RUN = 10;
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
+// Two linters read this file and each needs its own pragma. Only the Deno one
+// was here, so this alias counted against the repo-wide eslint ratchet
+// (scripts/ci/lint-ratchet.sh) and pushed it one over baseline the moment
+// US-650 landed; scripts/ci/no-new-any.sh missed it because that gate only
+// scans src/. The eslint pragma is trailing rather than on its own line
+// because deno-lint-ignore has to sit immediately above the line it covers.
 // deno-lint-ignore no-explicit-any
-type SupabaseClient = any;
+type SupabaseClient = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 function productionOrigin(): string {
   return (Deno.env.get('APP_BASE_URL') ?? 'https://tryeatpal.com').replace(/\/$/, '');
