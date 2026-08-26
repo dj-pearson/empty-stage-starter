@@ -14,7 +14,6 @@ EatPal is a meal planning platform built for families managing picky eating, ARF
 - **Grocery Automation**: Auto-generates organized grocery lists from meal plans, organized by store aisle
 - **Nutrition Monitoring**: Tracks nutritional adequacy for children on limited diets, flagging potential deficiencies
 - **Progress Analytics**: Visualizes food acceptance trends, exposure counts, and diet expansion over time
-- **Professional Tools**: HIPAA-compliant dashboard for feeding therapists with insurance billing and session tracking
 - **Recipe Builder**: Kid-friendly recipe creation with nutrition analysis and food chain scoring
 
 ## Target Audience
@@ -29,7 +28,7 @@ EatPal is a meal planning platform built for families managing picky eating, ARF
 - Free Plan: 1 child, basic meal planning, limited food library
 - Pro Plan ($9.99/month): Unlimited children, AI features, full food chains, grocery lists
 - Family Plus ($19.99/month): Advanced nutrition tracking, progress reports, priority support
-- Professional Plan: For therapists — client management, insurance billing, HIPAA compliance
+- Professional Plan: Announced for feeding therapists. The client management, session tracking and billing it describes are not built yet; see https://tryeatpal.com/pricing
 
 ## Docs
 - [Homepage](https://tryeatpal.com/)

@@ -82,6 +82,12 @@ const MANUAL = new Set([
   // before it asks for code. Either branch is the owner's call, and a green gate
   // on whichever half an agent picked would be the wrong signal entirely.
   'US-654',
+  // US-655 moved here from WEB after the repo-side half landed. Every claim an
+  // agent can act on alone is fixed and gated by src/lib/marketingClaims.test.ts.
+  // What is left is a person's: whether EatPal pursues a compliance posture at
+  // all, and what the purchasable Professional tier is allowed to promise. A
+  // green web gate would say the copy compiles, not that the decision was made.
+  'US-655',
 ]);
 const ANDROID = new Set(['US-213', 'US-214', 'US-222']);
 const WEB = new Set([
@@ -100,11 +106,6 @@ const WEB = new Set([
   'US-651',
   'US-652',
   'US-653',
-  // US-655 audits marketing copy in public/*.txt, seo-config.ts and the landing
-  // page. Web surface, so the iOS gate classify() defaults to would never verify
-  // it. The regulatory half still needs a person; the unsupported-feature half
-  // is ordinary web work.
-  'US-655',
 ]);
 
 function classify(story) {

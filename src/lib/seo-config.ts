@@ -60,13 +60,19 @@ export const coreEntities = {
     "First-Mover Research Advantage",
     "Community Network Effects",
   ],
+  // US-655: four entries were removed from this list - "Insurance Billing &
+  // Superbills", "HIPAA-Compliant Platform", "Research Data Licensing" and
+  // "Community Marketplace". None of the four has code behind it, and the first
+  // two are compliance and billing claims about a tier US-654 established does
+  // not exist. "Professional Therapist Dashboard" stays because
+  // src/pages/dashboard/ProfessionalSettings.tsx ships, but note what it is:
+  // custom domain and brand white-labelling, not client management.
+  //
+  // src/lib/marketingClaims.test.ts asserts every entry here names a file that
+  // exists. Add the feature before you add the line.
   keyFeatures: [
     "AI Predictive Food Acceptance",
     "Professional Therapist Dashboard",
-    "Insurance Billing & Superbills",
-    "HIPAA-Compliant Platform",
-    "Research Data Licensing",
-    "Community Marketplace",
   ],
 };
 
@@ -482,14 +488,14 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
   privacy: {
     title: "Privacy Policy - How EatPal Protects Your Family's Data",
     description:
-      "EatPal's privacy policy explains how we collect, use, and protect your family's data including children's food preferences and health information. COPPA and HIPAA compliant.",
+      "EatPal's privacy policy explains how we collect, use, and protect your family's data, including children's food preferences and the health information you record. Written to COPPA, GDPR and CCPA obligations.",
     keywords:
-      "eatpal privacy policy, children data protection, COPPA compliance, family data privacy, health data security, meal planning privacy, HIPAA compliance",
+      "eatpal privacy policy, children data protection, COPPA compliance, family data privacy, health data security, meal planning privacy, GDPR, CCPA",
     canonicalUrl: `${baseUrl}/privacy`,
     aiPurpose:
-      "This privacy policy details how EatPal handles family data including children's food preferences, allergen information, and nutritional data. EatPal is COPPA compliant for children's data and HIPAA compliant for professional tier therapist-patient data.",
+      "This privacy policy details how EatPal handles family data including children's food preferences, allergen information, and nutritional data. It covers COPPA obligations for children's data and the GDPR and CCPA rights sections the page itself sets out.",
     aiAudience:
-      "Parents concerned about children's data privacy, feeding therapists evaluating HIPAA compliance, privacy-conscious families considering meal planning apps",
+      "Parents concerned about children's data privacy, privacy-conscious families considering meal planning apps",
     structuredData: [
       {
         "@type": "WebPage",

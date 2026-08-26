@@ -43,6 +43,9 @@
 - Helmet-emitted JSON-LD is NOT in `document.head` under jsdom without a real commit tick. Mock `react-helmet-async` and capture the `<script>`/`<link>` children instead (`src/components/schema/FAQSchema.test.tsx`, `src/pages/SolutionPage.test.tsx`). `ComparisonSchema` is the exception: it writes to the DOM itself, so its test reads `document.getElementById`.
 - Marketing copy that claims a feature should carry an `evidence` repo path next to the claim, asserted with `existsSync` in a test — see `src/lib/solutions-content.ts`. Prose rules in a docstring decay; this one fails the build when the feature is deleted.
 - `foods` has no `notes` column and there is no barcode UI (`barcode` is a column nothing writes). Texture lives in `food_properties` (seeded in `20251008150000_create_food_tracking_features.sql`), not on `foods`. Check the column before writing copy about it.
+- Marketing claims are gated by `src/lib/marketingClaims.test.ts`: certification words (HIPAA, SOC 2, ISO 27001, "<statute> compliant") are a denylist across the five live surfaces, unsourced scale/superlative patterns are gated in the two `.txt` copy files, and every `coreEntities.keyFeatures` entry needs an evidence path. Comments are stripped before scanning, so a comment may name a removed claim.
+- `npx prettier --write src/lib/seo-config.ts` reformats the entire file (it is double-quoted, 120-col legacy style). Same trap as the repo-wide lint note above: edit it by hand, never with the formatter.
+- Nothing renders `coreEntities.keyFeatures`, `strategicPillars` or `competitiveMoats`. They read like live marketing copy and are not; the files every crawler actually reads are `public/llms.txt` and `public/llms-full.txt`.
 - GSC lags two to three days. Anchor any window on the newest `date` present in `gsc_page_performance`, never on today, or the lag reads as a traffic collapse.
 
 ---
@@ -366,3 +369,44 @@ stay unread.
     wild lands on the new route. That makes the unknown-slug case the normal
     case, not the edge case, which is why it renders NotFound rather than a
     shell.
+
+## 2026-08-26 - US-655 repo-side (marketing claim audit + gate)
+
+Inventoried the five live surfaces and removed every claim an agent can
+retire alone. All of it was compliance language: HIPAA in six places across
+llms.txt, llms-full.txt and the /privacy meta in seo-config.ts; a SOC 2
+infrastructure claim; and "WCAG 2.1 AA compliant", which the repo's own VPAT
+contradicts on five criteria and which now points at the VPAT instead.
+seo-config.ts keyFeatures lost four of its six entries.
+
+The sharpest finding is the /privacy one: the meta description told search
+engines the page was "COPPA and HIPAA compliant" while the page body never
+mentions HIPAA at all. Metadata that contradicts the page it describes is
+not a business decision to preserve, which is what made that one easy.
+
+**What was deliberately not touched.** The Professional tier is purchasable -
+a live PlanTier in subscription-helpers.ts - and Pricing.tsx and the Landing
+page sell it on multi-client management, session notes and insurance-compatible
+documentation. None of that exists, but rewriting what a paid tier promises is
+a product decision, so it stays with US-654, now escalated with the full
+surface list in `marketingClaims.ts` AWAITING_PRODUCT_DECISION.
+
+**The gate.** `src/lib/marketingClaims.ts` is the register,
+`marketingClaims.test.ts` enforces it: 55 assertions. Mutation-checked rather
+than assumed - appending "HIPAA compliant, SOC 2 certified, trusted by 5,000+
+families, the only platform of its kind" to llms.txt fails exactly four of
+them. Full suite 2060 passed, 3 skipped.
+
+US-655 moved from the WEB set to MANUAL in verify-stories.mjs. The half that
+is left is a person's, and a green web gate would only say the copy compiles.
+
+- **Learnings for future iterations:**
+  - "Needs an owner decision" was doing too much work in the round-1 notes. It
+    covers *whether to pursue compliance*; it does not cover *asserting you
+    already have it*. Splitting those two let most of the story ship.
+  - Purchasable is the line. A claim on a marketing page is copy; the same
+    claim attached to a tier with a Stripe price is a product promise, and an
+    agent editing the second one is redefining what someone bought.
+  - A denylist gate is worth nothing untested. Four minutes reintroducing the
+    exact claims that were removed proved the patterns fire; without that the
+    suite would have been 55 green assertions that never matched anything.

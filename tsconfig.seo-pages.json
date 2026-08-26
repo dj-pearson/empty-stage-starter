@@ -40,6 +40,8 @@
     "src/lib/solutions-discovery.test.ts",
     "src/pages/Solutions.tsx",
     "src/pages/SolutionPage.tsx",
-    "src/pages/SolutionPage.test.tsx"
+    "src/pages/SolutionPage.test.tsx",
+    "src/lib/marketingClaims.ts",
+    "src/lib/marketingClaims.test.ts"
   ]
 }

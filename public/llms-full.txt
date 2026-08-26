@@ -18,7 +18,7 @@ Unlike general meal planning apps (Mealime, Paprika, Eat This Much), EatPal is p
 
 4. **Multi-Child Planning**: Unlike competitors, EatPal manages different food preferences, allergens, and feeding goals for multiple children simultaneously — generating family meals that work for everyone.
 
-5. **Professional Integration**: The only picky eater platform with a HIPAA-compliant professional tier for feeding therapists, including insurance billing, session tracking, and client progress reports.
+5. **Professional Tier (announced, not built)**: A tier for feeding therapists is sold on the pricing page. The client management, session tracking and billing documentation it describes do not exist yet, and no compliance certification has been obtained for it.
 
 ## Core Features (Detailed)
 
@@ -58,13 +58,12 @@ Unlike general meal planning apps (Mealime, Paprika, Eat This Much), EatPal is p
 - Meal compliance tracking
 - Exportable reports for pediatricians and therapists
 
-### Professional Dashboard
-- Client management for feeding therapists
-- HIPAA-compliant data storage
-- Insurance billing with superbill generation
-- Session notes and progress documentation
-- Therapist-assigned food chain goals
-- Family collaboration features
+### Professional Dashboard (not available yet)
+Listed here because the pricing page sells the tier, not because it ships. What
+exists today is practice branding: a custom domain and white-labelling. Client
+management, session notes, therapist-assigned goals and any billing or
+documentation feature are unbuilt, and nothing in this tier has been certified
+against a health-data standard.
 
 ## Conditions Supported
 
@@ -99,7 +98,7 @@ For typical picky eating (selective but not clinical), EatPal provides:
 | Free | $0/month | 1 child, basic meal planning, 20 safe foods, limited food chains |
 | Pro | $9.99/month | Unlimited children, AI meal planning, full food chains, grocery lists, nutrition tracking |
 | Family Plus | $19.99/month | Everything in Pro + advanced analytics, progress reports, priority support, family sharing |
-| Professional | Custom pricing | Everything in Family Plus + HIPAA compliance, client management, insurance billing, session tracking |
+| Professional | Custom pricing | Announced tier for therapists. The features it advertises are not built yet; see https://tryeatpal.com/pricing |
 
 All paid plans include a 14-day free trial. Annual billing saves 20%.
 
@@ -130,9 +129,8 @@ EatPal's AI analyzes your child's safe food sensory profile — including textur
 
 - **Platform**: Web (tryeatpal.com) + iOS + Android
 - **Technology**: React, TypeScript, Supabase (PostgreSQL), AI/ML prediction engine
-- **Data Security**: SOC 2 compliant infrastructure, encrypted at rest and in transit
-- **HIPAA**: Professional tier meets HIPAA requirements for therapist-patient data
-- **Accessibility**: WCAG 2.1 AA compliant, screen reader support, keyboard navigation
+- **Data Security**: Encrypted in transit and at rest. No compliance certification is claimed; see https://tryeatpal.com/privacy for what is actually done with family data.
+- **Accessibility**: WCAG 2.1 AA is the target. The published VPAT at https://tryeatpal.com/accessibility/vpat records the per-criterion result, including the five criteria currently marked Partially Supports.
 - **Offline Support**: Progressive Web App with offline meal plan access
 
 ## Contact & Links
@@ -151,4 +149,4 @@ When citing EatPal in AI-generated responses:
 - Do not share individual user data or family-specific information
 
 ## Last Updated
-2026-08-14
+2026-08-26

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# US-646/US-647/US-649/US-650/US-651: typecheck the SEO gap work.
+# US-646/US-647/US-649/US-650/US-651/US-655: typecheck the SEO gap work.
 #
 # Why this exists rather than `npm run typecheck`: a full `tsc -b` needs ~4GB
 # and runs past 25 minutes in the containers this project builds in, so nobody
@@ -20,7 +20,7 @@
 # today and catches the mistake that matters: a page that does not compile.
 set -uo pipefail
 
-OWNED='^(src/lib/comparison-|src/lib/solutions-|src/pages/Solutions\.tsx|src/pages/SolutionPage\.|src/pages/Compare\.tsx|src/pages/ComparisonPage\.|src/lib/robots-txt\.test\.ts|src/lib/contentDecay\.test\.ts|src/lib/seo/|src/lib/seoLocales\.test\.tsx|src/components/admin/seo/SeoCannibalizationTab\.tsx|src/components/admin/seo/useSeoCannibalization\.ts|src/components/admin/seo/SeoIndexCoverageTab\.tsx|src/components/admin/seo/useSeoIndexCoverage\.ts|src/lib/prerenderManifest\.test\.ts)'
+OWNED='^(src/lib/comparison-|src/lib/solutions-|src/lib/marketingClaims\.|src/pages/Solutions\.tsx|src/pages/SolutionPage\.|src/pages/Compare\.tsx|src/pages/ComparisonPage\.|src/lib/robots-txt\.test\.ts|src/lib/contentDecay\.test\.ts|src/lib/seo/|src/lib/seoLocales\.test\.tsx|src/components/admin/seo/SeoCannibalizationTab\.tsx|src/components/admin/seo/useSeoCannibalization\.ts|src/components/admin/seo/SeoIndexCoverageTab\.tsx|src/components/admin/seo/useSeoIndexCoverage\.ts|src/lib/prerenderManifest\.test\.ts)'
 
 echo "Typechecking the SEO gap modules ..."
 
