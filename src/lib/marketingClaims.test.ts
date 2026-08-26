@@ -22,16 +22,51 @@ import { coreEntities } from '@/lib/seo-config';
 const repoRoot = path.resolve(__dirname, '../..');
 const read = (rel: string) => readFileSync(path.join(repoRoot, rel), 'utf8');
 
+/**
+ * Remove every match, then check that removing it did not create a new one.
+ *
+ * A single pass is what CodeQL flags as incomplete multi-character
+ * sanitization, and it is right to. Deleting a match can splice the text on
+ * either side of it into a delimiter pair that was not there before:
+ * `<!<!-- x -->-- y -->` becomes `<!-- y -->` once the inner comment goes, and
+ * one pass would stop there and hand the scan a comment as prose. Here that
+ * only skews which text the claim scan reads, but a scanner that can be fooled
+ * by nesting reports what it was given rather than what is in the file.
+ */
+function stripRepeatedly(input: string, pattern: RegExp): string {
+  let out = input;
+  let previous: string;
+  do {
+    previous = out;
+    out = out.replace(pattern, '');
+  } while (out !== previous);
+  return out;
+}
+
 function prose(rel: string): string {
   const source = read(rel);
   if (rel.endsWith('.ts') || rel.endsWith('.tsx')) {
-    return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    return stripRepeatedly(source, /\/\*[\s\S]*?\*\//g).replace(/^\s*\/\/.*$/gm, '');
   }
   if (rel.endsWith('.html')) {
-    return source.replace(/<!--[\s\S]*?-->/g, '');
+    return stripRepeatedly(source, /<!--[\s\S]*?-->/g);
   }
   return source;
 }
+
+describe('the scanner reads what is in the file (US-655)', () => {
+  it('keeps stripping when removing one comment creates another', () => {
+    // Each input is one where deleting the first match splices a NEW comment
+    // out of the text either side of it, so a single pass stops one comment
+    // short and the leftover reaches the claim scan as prose.
+    expect(stripRepeatedly('<!<!-- x -->-- y -->CLAIM', /<!--[\s\S]*?-->/g)).toBe('CLAIM');
+    expect(stripRepeatedly('//*x*/* y */CLAIM', /\/\*[\s\S]*?\*\//g)).toBe('CLAIM');
+  });
+
+  it('leaves a file with no comments untouched', () => {
+    expect(stripRepeatedly('HIPAA compliant', /<!--[\s\S]*?-->/g)).toBe('HIPAA compliant');
+  });
+});
 
 describe('marketing surfaces claim no certification we cannot show (US-655)', () => {
   it.each(MARKETING_SURFACES)('%s exists', (surface) => {
