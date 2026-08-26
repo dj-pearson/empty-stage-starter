@@ -410,3 +410,9 @@ is left is a person's, and a green web gate would only say the copy compiles.
   - A denylist gate is worth nothing untested. Four minutes reintroducing the
     exact claims that were removed proved the patterns fire; without that the
     suite would have been 55 green assertions that never matched anything.
+
+## prd-verify — CI verification pass (ref 5bbff06999428edd56315f1483d43d98d108323a)
+- Gates: web=success, ios=success, android=success.
+- Flipped passes=true (gate green + implementation present): US-645, US-646, US-647, US-649, US-650, US-651, US-652, US-653.
+- Held false: 11 (breakdown {"manual-signoff-required":10,"verified":8,"awaiting-implementation":1}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
