@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, noCacheHeaders } from '../common/headers.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
 
 /**
  * US-312: tonight-mode
@@ -181,6 +182,14 @@ export default async (req: Request) => {
     // caller's own rows (or a household they belong to) so the service role
     // can't be used to read another household.
     const supabase = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+
+    // US-325: per-user rate limit before any DB work. `tonight-mode` is seeded
+    // in rate_limit_config (20/min, 200/hr, 2000/day) but nothing enforced it:
+    // the enforcement was written into the serve() tree, which never deploys.
+    // Uses the service-role client because check_rate_limit_with_tier is
+    // SECURITY DEFINER and takes the user id explicitly.
+    const limited = await enforceRateLimit(supabase, userId, 'tonight-mode', noCacheHeaders());
+    if (limited) return limited;
 
     // Verify household membership before trusting requestedHouseholdId.
     let householdId: string | null = null;
