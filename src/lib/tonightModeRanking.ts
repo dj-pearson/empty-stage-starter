@@ -2,7 +2,7 @@
  * Tonight Mode ranking algorithm (US-293).
  *
  * Pure, dependency-free scoring used by both the Supabase edge function
- * (`functions/tonight-mode/index.ts`) and the web client fallback path
+ * (`supabase/functions/tonight-mode/index.ts`) and the web client fallback path
  * (when the edge function is slow or unreachable). Vitest covers this file
  * directly so the algorithm has a single source of truth.
  *
