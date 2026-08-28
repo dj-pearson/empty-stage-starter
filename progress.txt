@@ -317,3 +317,9 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     that looked right. All three were caught by a test written from the
     behaviour rather than from the implementation.
 ---
+
+## prd-verify — CI verification pass (ref fb0320a5867d47f2a3ec879e34ed4b47c5ffff1d)
+- Gates: web=success, ios=success, android=success.
+- Flipped passes=true (gate green + implementation present): US-645, US-646, US-647, US-649, US-650, US-651, US-652, US-653.
+- Held false: 9 (breakdown {"manual-signoff-required":8,"verified":8,"awaiting-implementation":1}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
