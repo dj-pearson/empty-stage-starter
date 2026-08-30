@@ -64,6 +64,37 @@ const BANNED: ReadonlyArray<{ pattern: RegExp; why: string }> = [
     pattern: /\bfeeding therapy specialists\b/i,
     why: "used as a description of EatPal's own staff",
   },
+  // ---- unsourced numbers ----
+  //
+  // These were added after two survivors of an earlier cleanup turned up. The comment
+  // block in src/lib/seo-config.ts records "70%+ prediction accuracy", "200+ feeding
+  // therapists", "2,000+ families helped" and "100K+ mealtime data points" as removed
+  // for being unsourced. The prediction-accuracy claim was still rendering on the
+  // pricing page, and a lead-magnet email still said the guide had "helped thousands of
+  // parents". Prose deleted in one file has a habit of surviving in three others, which
+  // is the whole reason this test scans rather than trusts.
+  // Anchored on a marketing verb rather than on any number near the word "parents".
+  // The bare version flagged "Professional plan - start with 3 families", which is a
+  // plan limit, and "Foods with 50%+ success rate", which is a label on a value
+  // computed from the user's own tracking data. Neither is a claim about EatPal, and a
+  // gate that cries wolf gets switched off.
+  {
+    pattern:
+      /\b(join|trusted by|used by|helped|helping|loved by|serving|over|more than)\s+(<[^>]+>\s*)?\d[\d,]*\+?\s*(families|parents|therapists|clinicians|users|customers)\b/i,
+    why: "counts users or families without a source",
+  },
+  {
+    pattern: /\b\d+(\.\d+)?\s*%\+?\s*(prediction accuracy|accurate|effective)\b/i,
+    why: "states an accuracy rate with nothing behind it",
+  },
+  {
+    pattern: /\bthousands of (parents|families|kids|children|users)\b/i,
+    why: "an unsourced scale claim",
+  },
+  {
+    pattern: /\b(scientifically|clinically) (proven|validated)\b/i,
+    why: "asserts evidence EatPal does not have",
+  },
 ];
 
 /** Source files whose prose ships to users. Tests and generated types are skipped. */

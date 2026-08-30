@@ -408,10 +408,10 @@ Your Free Picky Eater Guide is Ready!
 
 Hi there!
 
-Thanks for your interest in helping your picky eater! We've put together this guide based on evidence-based strategies that have helped thousands of parents.
+Thanks for your interest in helping your picky eater! This guide is built on food chaining, the feeding therapy method published by Cheri Fraker, RD and Laura Walbert, SLP.
 
 Inside Your Guide:
-- 5 proven food chaining techniques that actually work
+- 5 food chaining techniques, with an example of each
 - Sample meal plan template you can start using today
 - Age-appropriate strategies for kids 2-12
 - Tips to reduce mealtime stress for the whole family

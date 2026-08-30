@@ -498,7 +498,8 @@ export default function PickyEaterQuizResults() {
                 </Button>
 
                 <p className="text-sm text-muted-foreground mt-4">
-                  Risk-free • Cancel anytime • Join 3,142 parents succeeding at mealtimes
+                  {/* The invented "3,142 parents" count was here too. */}
+                  Risk-free • Cancel anytime
                 </p>
               </CardContent>
             </Card>

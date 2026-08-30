@@ -1172,7 +1172,11 @@ export default function Pricing() {
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                    <span>70%+ prediction accuracy</span>
+                    {/* "70%+ prediction accuracy" sat here. src/lib/seo-config.ts
+                        already records that claim as unsourced and removed; it
+                        survived on this card. Replaced with something checkable by
+                        using the product. */}
+                    <span>Plans built around your child's safe foods</span>
                   </li>
                 </ul>
               </CardContent>

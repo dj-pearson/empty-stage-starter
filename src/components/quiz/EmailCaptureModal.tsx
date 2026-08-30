@@ -167,8 +167,11 @@ export function EmailCaptureModal({
             {isSubmitting ? 'Sending...' : 'Get My Complete Guide'}
           </Button>
 
+          {/* "Join 3,142 parents" stood here. The precision is what made it
+              convincing and it was invented; the site has had 741 search clicks in
+              sixteen months. See src/lib/no-false-credentials.test.ts. */}
           <p className="text-center text-sm text-muted-foreground">
-            Join <strong>3,142 parents</strong> finally winning at mealtime
+            No spam. Unsubscribe whenever you like.
           </p>
         </form>
       </DialogContent>
