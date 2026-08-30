@@ -5,7 +5,7 @@ export const Footer = () => {
   return (
     <footer className="border-t py-12 px-4 bg-secondary/5" role="contentinfo" aria-label="Site footer">
       <div className="container mx-auto">
-        <nav className="grid grid-cols-2 md:grid-cols-5 gap-8" aria-label="Footer navigation">
+        <nav className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8" aria-label="Footer navigation">
           <div className="col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
               <picture className="block dark:hidden">
@@ -138,6 +138,55 @@ export const Footer = () => {
               <li>
                 <Link to="/meal-plan" className="hover:text-primary transition-colors">
                   Meal Plan Generator
+                </Link>
+              </li>
+            </ul>
+          </div>
+          {/* The meal-occasion cluster. In the footer rather than buried on one page
+              because a sitewide link is what stops a new cluster being orphaned, which
+              is exactly what happened to /compare and /guides: both shipped finished and
+              collected almost no traffic because nothing pointed at them. */}
+          <div>
+            <h3 className="font-heading font-semibold mb-4 text-primary">Meal Ideas</h3>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              <li>
+                <Link
+                  to="/picky-eater/dinner-ideas"
+                  className="hover:text-primary transition-colors"
+                >
+                  Dinner Ideas
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/picky-eater/lunch-ideas"
+                  className="hover:text-primary transition-colors"
+                >
+                  Lunch Ideas
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/picky-eater/breakfast-ideas"
+                  className="hover:text-primary transition-colors"
+                >
+                  Breakfast Ideas
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/picky-eater/healthy-snacks"
+                  className="hover:text-primary transition-colors"
+                >
+                  Healthy Snacks
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/picky-eater/healthy-meals"
+                  className="hover:text-primary transition-colors"
+                >
+                  Healthy Meals
                 </Link>
               </li>
             </ul>

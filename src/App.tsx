@@ -67,6 +67,9 @@ const BlogPost = lazy(() => import('./pages/BlogPost'));
 const Authors = lazy(() => import('./pages/Authors'));
 const Compare = lazy(() => import('./pages/Compare'));
 const ComparisonPage = lazy(() => import('./pages/ComparisonPage'));
+// The meal-occasion cluster (/picky-eater/*). Targets the ~40 keywords at the
+// 5,000/month tier that the site ranked for nowhere; see src/lib/meal-ideas-content.ts.
+const MealIdeasPage = lazy(() => import('./pages/MealIdeasPage'));
 const SEODashboard = lazy(() => import('./pages/SEODashboard'));
 const SearchTrafficDashboard = lazy(() => import('./pages/SearchTrafficDashboard'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
@@ -859,6 +862,16 @@ const App = () => (
                           <RouteErrorBoundary>
                             <Suspense fallback={<LoadingFallback />}>
                               <ComparisonPage />
+                            </Suspense>
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      <Route
+                        path="/picky-eater/:slug"
+                        element={
+                          <RouteErrorBoundary>
+                            <Suspense fallback={<LoadingFallback />}>
+                              <MealIdeasPage />
                             </Suspense>
                           </RouteErrorBoundary>
                         }

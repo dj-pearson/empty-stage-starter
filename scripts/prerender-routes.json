@@ -4,8 +4,8 @@
     "Only public, unauthenticated, indexable routes belong here. Anything behind",
     "ProtectedRoute would snapshot a logged-out redirect, and anything noindex gains",
     "nothing from being prerendered.",
-    "Blog posts and other DB-backed routes are discovered at build time instead — see",
-    "the `dynamic` section below — because their slugs are not known statically."
+    "Blog posts and other DB-backed routes are discovered at build time instead \u2014 see",
+    "the `dynamic` section below \u2014 because their slugs are not known statically."
   ],
   "static": [
     "/",
@@ -27,7 +27,12 @@
     "/compare/eatpal-vs-yummly",
     "/compare/eatpal-vs-eat-this-much",
     "/compare/eatpal-vs-paprika",
-    "/compare/eatpal-vs-feeding-therapy-workbooks"
+    "/compare/eatpal-vs-feeding-therapy-workbooks",
+    "/picky-eater/dinner-ideas",
+    "/picky-eater/lunch-ideas",
+    "/picky-eater/breakfast-ideas",
+    "/picky-eater/healthy-snacks",
+    "/picky-eater/healthy-meals"
   ],
   "dynamic": {
     "$comment": [
@@ -54,7 +59,10 @@
         "name": "pSEO guides",
         "table": "pseo_pages",
         "select": "slug",
-        "filters": ["generation_status=eq.published", "tier=lte.1"],
+        "filters": [
+          "generation_status=eq.published",
+          "tier=lte.1"
+        ],
         "pattern": "/guides/:slug",
         "limit": 2000
       }

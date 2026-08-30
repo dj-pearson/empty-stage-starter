@@ -36,7 +36,16 @@ interface SitemapEntry {
 }
 
 /** Static routes. Keep in sync with scripts/prerender-routes.json. */
+// The meal-occasion cluster. Hand-written, not pSEO, so it is listed here rather
+// than discovered from a table. Keep in step with MEAL_IDEAS_PAGES in
+// src/lib/meal-ideas-content.ts; src/lib/meal-ideas-content.test.ts checks both.
 const STATIC_ENTRIES: SitemapEntry[] = [
+  { path: '/picky-eater/dinner-ideas', changefreq: 'monthly', priority: '0.8' },
+  { path: '/picky-eater/lunch-ideas', changefreq: 'monthly', priority: '0.8' },
+  { path: '/picky-eater/breakfast-ideas', changefreq: 'monthly', priority: '0.8' },
+  { path: '/picky-eater/healthy-snacks', changefreq: 'monthly', priority: '0.8' },
+  { path: '/picky-eater/healthy-meals', changefreq: 'monthly', priority: '0.8' },
+
   { path: '/', changefreq: 'daily', priority: '1.0' },
   { path: '/pricing', changefreq: 'weekly', priority: '0.9' },
   { path: '/meal-plan', changefreq: 'monthly', priority: '0.8' },
