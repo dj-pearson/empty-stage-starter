@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/ensure-chromium.mjs && vite build && node scripts/prerender.mjs",
+    "build": "node scripts/ensure-chromium.mjs && vite build && node scripts/prerender.mjs && node scripts/generate-aasa.mjs",
     "infisical:load": "infisical export --env=dev --format=dotenv > .env.local",
     "build:dev": "vite build --mode development",
     "build:staging": "vite build --mode staging",
@@ -57,6 +57,8 @@
     "analyze:bundle": "vite build --mode production && npx vite-bundle-visualizer",
     "build:nossg": "vite build",
     "prerender": "node scripts/prerender.mjs",
+    "aasa": "node scripts/generate-aasa.mjs",
+    "check:blog-images": "node scripts/ci/check-blog-images.mjs",
     "typecheck:seo": "bash scripts/ci/check-seo-extraction.sh",
     "typecheck:seo-pages": "bash scripts/ci/check-seo-pages.sh",
     "check:jsx-imports": "node scripts/ci/check-jsx-imports.mjs",

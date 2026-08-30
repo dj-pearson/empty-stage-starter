@@ -1,6 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { generateHreflangTags } from '@/lib/seo-helpers';
 import { DEFAULT_SEO_LOCALE, SEO_LOCALES } from '@/lib/seo-config';
+import { APP_STORE_APP_ID } from '@/lib/app-store';
 
 /**
  * The site-wide default social share image, with its REAL dimensions.
@@ -88,7 +89,9 @@ export function SEOHead({
   noindex = false,
   datePublished,
   dateModified,
-  author = 'EatPal Team',
+  // A named human. Google reads an organisation-as-author byline on health content
+  // as an absence of authorship. See src/pages/Authors.tsx.
+  author = 'Dj Pearson',
   section,
 }: SEOProps) {
   const fullTitle = title.includes('EatPal') ? title : `${title} | EatPal`;
@@ -221,6 +224,23 @@ export function SEOHead({
       {aiUseCases && <meta name="ai:use_cases" content={aiUseCases} />}
 
       <meta name="author" content={author} />
+
+      {/*
+        Smart App Banner. Safari on iOS renders this as a dismissible install strip at
+        the top of the page, and it is the only supported way for a website to point at
+        its own App Store listing from the document head.
+
+        It matters more here than the usual banner does. Mobile is where EatPal's search
+        traffic actually converts (4.14% CTR against desktop's 0.84%), the iOS app is
+        live, and until now the site did not reference apps.apple.com anywhere at all.
+
+        Gated on APP_STORE_APP_ID for the same reason as everything else in
+        src/lib/app-store.ts: with no ID configured the tag is omitted rather than
+        emitted with a placeholder, which would render a banner linking nowhere.
+      */}
+      {APP_STORE_APP_ID && (
+        <meta name="apple-itunes-app" content={`app-id=${APP_STORE_APP_ID}`} />
+      )}
 
       {/*
         Removed here, deliberately — every one of these was emitted on every page and

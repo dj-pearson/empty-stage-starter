@@ -86,6 +86,22 @@ jobs:
       - name: Check storage buckets are declared
         run: node scripts/ci/check-storage-buckets.mjs
 
+      # A published post's featured image is its og:image, its Article schema
+      # `image` and its on-page hero all at once, so one dead URL costs the
+      # search-result thumbnail, every social preview, Discover eligibility and
+      # renders "Image unavailable" mid-article. Four of the twenty
+      # highest-impression posts were serving an image that 400s from Supabase
+      # storage, and nothing caught it: the column was populated, so the null
+      # fallback in BlogPost.tsx never fired. WARN-ONLY for now -- the four
+      # existing breakages need the images re-uploaded, which is a content task,
+      # and a hard gate would block every unrelated PR until then. Flip to a
+      # hard gate (drop --warn) once the run is clean.
+      - name: Check blog featured images resolve
+        run: node scripts/ci/check-blog-images.mjs --warn
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
       # CLAUDE.md records that backup-databases.ps1 and ssl-check.ps1 sat
       # unparseable for months. Nothing in this repo ever runs a .ps1 -- CI is
       # Node, deploys are Cloudflare and EAS -- so a syntax error surfaces when

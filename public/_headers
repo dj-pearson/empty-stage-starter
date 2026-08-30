@@ -155,6 +155,15 @@
 /.well-known/*
   Cache-Control: public, max-age=3600
 
+# Apple Universal Links. Apple's CDN requires application/json and will not follow a
+# redirect, so this path has to answer directly with the right type. The file itself is
+# generated at build time by scripts/generate-aasa.mjs and only exists when
+# APPLE_TEAM_ID is set. Note there is no `charset` here on purpose: the extensionless
+# filename plus a bare application/json is the shape Apple documents.
+/.well-known/apple-app-site-association
+  Cache-Control: public, max-age=3600
+  Content-Type: application/json
+
 # Favicon files - UPDATED: force cache refresh for new favicon
 /favicon.ico
   Cache-Control: public, max-age=86400, must-revalidate

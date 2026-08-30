@@ -155,3 +155,6 @@ prd-verify-report.json
 
 # Local agent scratchpad (verification import-maps/stubs, not part of the repo)
 scratchpad/
+keyword/*
+assets/*
+8bf704ae-d328-40dd-bfb9-f7b4faf339d8-6YWKH6r45VqqbWzpnzMLAw-output.mp4

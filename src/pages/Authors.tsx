@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { SEOHead } from "@/components/SEOHead";
 import { BreadcrumbSchema } from "@/components/schema";
@@ -63,6 +64,23 @@ interface SocialLinks {
  *
  * When there are no authors in the database the page now says so and sets noindex.
  * Populate public.blog_authors with real people to make it indexable.
+ *
+ * The second pass removed a subtler version of the same problem. Nothing on the page
+ * was a fake person any more, but eight pieces of hardcoded copy still asserted a team
+ * that does not exist: the title ("Feeding Therapy Specialists"), the meta description
+ * and aiPurpose ("registered dietitians, occupational therapists", "all authors are
+ * licensed professionals"), the keywords, the aiKeyFeatures, the CollectionPage schema
+ * description, the H1 subhead, and a closing block promising every article was
+ * "reviewed by licensed professionals". None of it was true and all of it was aimed at
+ * parents deciding how to feed a child.
+ *
+ * What replaced it is the claim EatPal can actually support: the software implements a
+ * published feeding-therapy method, and the clinical assertions in the content are
+ * sourced to that published work rather than to in-house credentials. Authorship is
+ * attributed to a named human with the experience he actually has. If a credentialed
+ * reviewer is ever engaged, they go in blog_authors and MedicalWebPageSchema's
+ * reviewedBy prop is finally wired to something real. Until then, nothing here may
+ * imply clinical licensure.
  */
 
 export default function Authors() {
@@ -127,11 +145,15 @@ export default function Authors() {
    * Person entities for every author on the page.
    *
    * The bios here are the E-E-A-T evidence behind health content about ARFID and
-   * pediatric feeding. The credentials were already rendered for human readers, but
-   * nothing on the page declared them as machine-readable entities, so no search or
-   * answer engine could connect "EatPal says X about ARFID" to a licensed clinician.
-   * `knowsAbout` is the field that does that work: it is what resolves an author to a
-   * topic when an engine decides whose claim to quote.
+   * pediatric feeding. They were already rendered for human readers, but nothing on the
+   * page declared them as machine-readable entities, so no search or answer engine
+   * could connect "EatPal says X about ARFID" to the person who wrote it. `knowsAbout`
+   * is the field that does that work: it resolves an author to a topic when an engine
+   * decides whose claim to quote.
+   *
+   * `honorificSuffix` renders only when a row actually carries a credential string. It
+   * must stay empty for anyone who does not hold the credential; a suffix here is a
+   * licensure claim in machine-readable form.
    */
   const authorSchema = useMemo(() => {
     if (authors.length === 0) return undefined;
@@ -141,9 +163,9 @@ export default function Authors() {
       "@type": "CollectionPage",
       "@id": `${canonicalUrl}#authors`,
       url: canonicalUrl,
-      name: "EatPal Authors and Clinical Reviewers",
+      name: "Who Writes EatPal's Content",
       description:
-        "Registered dietitians, occupational therapists, and feeding specialists who write and review EatPal's picky eating, food chaining, and ARFID content.",
+        "The people who write EatPal's picky eating, food chaining, and ARFID content, and the editorial standards that content is held to.",
       isPartOf: { "@id": "https://tryeatpal.com/#website" },
       publisher: { "@id": "https://tryeatpal.com/#organization" },
       mainEntity: authors.map((author) => ({
@@ -168,19 +190,20 @@ export default function Authors() {
 
   return (
     <>
-      {/* noindex below: an author page with no authors is a credentials page that
-          proves nothing. Keep it out of the index until blog_authors has real people
-          in it, rather than ranking an empty promise of expertise. */}
+      {/* This page used to noindex itself whenever blog_authors was empty, because at
+          that point it was a credentials page proving nothing. It now carries the
+          editorial standards statement below, which is substantive and true whether or
+          not the roster has rows, so it is indexable unconditionally. The roster is an
+          addition to that statement, not the reason the page exists. */}
       <SEOHead
         structuredData={authorSchema}
-        noindex={!isLoading && authors.length === 0}
-        title="Our Expert Authors - Feeding Therapy Specialists | EatPal"
-        description="Meet EatPal's team of registered dietitians, occupational therapists, and feeding specialists. Our authors bring decades of combined experience in pediatric nutrition, ARFID treatment, and evidence-based feeding therapy."
-        keywords="feeding therapy experts, pediatric dietitians, occupational therapists, ARFID specialists, food chaining experts, picky eater experts, nutrition scientists"
+        title="Who Writes EatPal's Content | Editorial Standards"
+        description="Who writes EatPal's picky eating, food chaining, and ARFID content, where its clinical claims come from, and what EatPal is not. No one here is a licensed clinician; published feeding-therapy research is cited instead."
+        keywords="EatPal authors, editorial standards, food chaining sources, picky eating content sourcing"
         canonicalUrl={canonicalUrl}
-        aiPurpose="This page showcases EatPal's expert authors and contributors who create evidence-based content on food chaining, picky eating, and feeding therapy. All authors are licensed professionals with specialized training in pediatric feeding disorders."
-        aiAudience="Parents researching author credentials, healthcare professionals evaluating content quality, media seeking expert sources"
-        aiKeyFeatures="Registered dietitians, occupational therapists, speech-language pathologists, Ph.D. nutritional scientists, ARFID specialists, food chaining experts"
+        aiPurpose="This page states who writes EatPal's content and how its clinical claims are sourced. EatPal does not employ licensed clinicians and does not present itself as a clinical provider. The software implements food chaining, a feeding therapy method published by Cheri Fraker, RD and Laura Walbert, SLP, and clinical statements in EatPal's content are attributed to that published work and to other cited primary sources rather than to in-house credentials."
+        aiAudience="Parents checking who stands behind the advice, healthcare professionals evaluating content sourcing, journalists checking claims"
+        aiKeyFeatures="Named authorship, clinical claims attributed to cited published sources, explicit statement that EatPal is not a substitute for professional evaluation"
       />
 
       <BreadcrumbSchema
@@ -197,10 +220,10 @@ export default function Authors() {
             {t('authors.title')}
           </h1>
           <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-            Meet the team of licensed feeding therapy professionals behind
-            EatPal's evidence-based content. Our authors combine decades of
-            clinical experience with the latest research in pediatric nutrition
-            and feeding disorders.
+            Who writes EatPal's content, where its clinical claims come from,
+            and what EatPal is not. Nobody here is a licensed clinician, so the
+            feeding-therapy claims in our articles are attributed to published
+            research rather than to our own credentials.
           </p>
         </header>
 
@@ -237,9 +260,11 @@ export default function Authors() {
         {!isLoading && (
           <>
             {authors.length === 0 && (
-              <div className="border rounded-lg p-8 mb-8 text-center">
+              <div className="border rounded-lg p-8 mb-8">
                 <p className="text-muted-foreground">
-                  Author profiles are being set up and will be published here shortly.
+                  Individual author profiles are not published yet. Until they are, the
+                  editorial standards below describe who writes EatPal's content and how
+                  its claims are sourced.
                 </p>
               </div>
             )}
@@ -357,19 +382,42 @@ export default function Authors() {
           </>
         )}
 
-        {/* Credibility Statement */}
-        <section className="bg-muted/50 rounded-lg p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">
-            Evidence-Based, Expert-Reviewed Content
-          </h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Every article on EatPal is written or reviewed by licensed
-            professionals with specialized training in pediatric feeding
-            disorders. We cite peer-reviewed research and follow the latest
-            evidence-based guidelines for feeding therapy. Our content is
-            regularly updated to reflect new research and clinical best
-            practices.
-          </p>
+        {/* Editorial standards. Every sentence here has to stay checkable: this
+            block exists because the version before it promised licensed reviewers
+            EatPal has never had. */}
+        <section className="bg-muted/50 rounded-lg p-8">
+          <h2 className="text-2xl font-bold mb-4">Editorial standards</h2>
+          <div className="max-w-2xl space-y-4 text-muted-foreground">
+            <p>
+              <strong className="text-foreground">Who writes this.</strong> EatPal's
+              articles are written by Dj Pearson, who has spent more than fifteen years
+              in personal training and has worked with children and families on building
+              healthier habits. That is coaching experience, not a clinical
+              qualification: no dietitian, therapist, or physician writes for this site.
+            </p>
+            <p>
+              <strong className="text-foreground">Where the clinical claims come
+              from.</strong> EatPal implements food chaining, a feeding therapy method
+              published by Cheri Fraker, RD and Laura Walbert, SLP. Where an article
+              states something clinical, that statement is attributed to published work
+              we can point you at, not to credentials we hold. If we cannot source a
+              claim, we do not make it.
+            </p>
+            <p>
+              <strong className="text-foreground">What EatPal is not.</strong> It is a
+              planning and tracking tool, not medical advice, not a diagnosis, and not a
+              substitute for evaluation by a qualified professional. ARFID and pediatric
+              feeding disorders need a real clinician. Plenty of families use EatPal
+              alongside feeding therapy; it is not a replacement for it.
+            </p>
+            <p>
+              <strong className="text-foreground">Found something wrong?</strong>{" "}
+              <Link to="/contact" className="text-primary underline underline-offset-2">
+                Tell us
+              </Link>
+              . We would rather correct an article than defend it.
+            </p>
+          </div>
         </section>
       </div>
     </>
