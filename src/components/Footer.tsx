@@ -108,11 +108,11 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
-                {/* Same reasoning as /guides above: /authors carries the clinical
-                    credentials behind our feeding content and had no inbound link
-                    anywhere on the site. */}
+                {/* Same reasoning as /guides above: /authors had no inbound link
+                    anywhere on the site. The label used to read "Our Experts", which
+                    promised credentials EatPal does not have. */}
                 <Link to="/authors" className="hover:text-primary transition-colors">
-                  Our Experts
+                  Editorial standards
                 </Link>
               </li>
               <li>

@@ -39,11 +39,14 @@ export function ArticleSchema({
   imageUrl,
   datePublished,
   dateModified,
-  authorName = "EatPal Team",
-  // Points at the credentials page, not the homepage. Every pSEO guide renders this
-  // schema with the defaults, so this one URL is what links the whole guide cluster to
-  // the licensed clinicians who stand behind it. A homepage URL asserted authorship and
-  // then resolved to a page with no author information on it.
+  // A named human, not "EatPal Team". Google treats an organisation-as-author byline on
+  // health content as an absence of authorship, and the previous default resolved to a
+  // page that claimed licensed clinicians EatPal does not employ.
+  authorName = "Dj Pearson",
+  // Points at the editorial standards page, not the homepage. Every pSEO guide renders
+  // this schema with the defaults, so this one URL is what links the whole guide cluster
+  // to a statement of who wrote it and how its claims are sourced. A homepage URL
+  // asserted authorship and then resolved to a page with no author information on it.
   authorUrl = "https://tryeatpal.com/authors",
   publisherName = "EatPal",
   publisherLogo = "https://tryeatpal.com/Logo-Green.webp",

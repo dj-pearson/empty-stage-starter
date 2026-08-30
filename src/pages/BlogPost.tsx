@@ -493,16 +493,27 @@ const BlogPost = () => {
           <h3 className="text-lg font-heading font-semibold mb-4">About the Author</h3>
           <div className="flex items-start gap-4">
             <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-xl font-bold text-primary">EP</span>
+              <span className="text-xl font-bold text-primary">DJ</span>
             </div>
+            {/* This bio claimed the content was "reviewed by registered dietitians and
+                feeding specialists". It never was. See the comment block at the top of
+                src/pages/Authors.tsx for why that wording is not allowed back. */}
             <div>
-              <p className="font-semibold text-foreground mb-1">EatPal Team</p>
+              <p className="font-semibold text-foreground mb-1">Dj Pearson</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The EatPal team combines expertise in pediatric nutrition, feeding therapy, and technology to help families navigate picky eating. Our evidence-based content is reviewed by registered dietitians and feeding specialists.
+                Fifteen-plus years in personal training, and years spent helping kids and
+                families build healthier habits. Not a dietitian or a therapist: the
+                feeding-therapy claims in these articles are sourced to published work,
+                and EatPal is a planning tool rather than medical advice.
               </p>
-              <Link to="/blog" className="text-sm text-primary hover:underline mt-2 inline-block">
-                View all articles
-              </Link>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                <Link to="/authors" className="text-sm text-primary hover:underline">
+                  Editorial standards
+                </Link>
+                <Link to="/blog" className="text-sm text-primary hover:underline">
+                  View all articles
+                </Link>
+              </div>
             </div>
           </div>
         </div>

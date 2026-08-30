@@ -108,7 +108,12 @@ describe('ArticleSchema', () => {
 
     const parsed = JSON.parse(capturedJsonLd);
     const article = parsed['@graph'].find((item: Record<string, unknown>) => item['@type'] === 'Article');
-    expect(article.author.name).toBe('EatPal Team');
+    // A named human, not "EatPal Team". Google reads an organisation-as-author byline on
+    // health content as an absence of authorship, and every pSEO guide renders this
+    // schema with the defaults. The author URL has to resolve to a page that actually
+    // describes who wrote it; see src/pages/Authors.tsx.
+    expect(article.author.name).toBe('Dj Pearson');
+    expect(article.author.url).toBe('https://tryeatpal.com/authors');
     expect(article.publisher.name).toBe('EatPal');
   });
 
