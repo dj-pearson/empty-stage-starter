@@ -102,6 +102,45 @@ ${urls}
 </urlset>`;
 }
 
+/**
+ * Blog slugs folded into another URL, which public/_redirects 301s away.
+ *
+ * This duplicates src/lib/retired-blog-slugs.ts because an edge function runs on Deno
+ * and cannot import from src/. src/lib/retired-blog-slugs.test.ts fails the build if
+ * the two lists drift apart, so edit them together.
+ */
+const RETIRED_BLOG_SLUGS = new Set([
+  'build-a-picky-eater-grocery-list-that-actually-works-2',
+  'building-a-positive-food-relationship-from-the-start-2',
+  'feeding-kids-on-a-schedule-what-actually-works',
+  'feeding-kids-on-a-schedule-what-actually-works-3',
+  'feeding-kids-on-a-schedule-what-actually-works-4',
+  'feeding-kids-on-a-schedule-what-actually-works-5',
+  'food-burnout-in-kids-what-it-is-and-how-to-reset-2',
+  'food-burnout-in-kids-what-it-is-and-how-to-reset-3',
+  'food-burnout-in-kids-what-it-is-and-how-to-reset-4',
+  'grocery-shopping-with-kids-who-have-arfid-or-extreme-picky-eating',
+  'grocery-shopping-with-kids-who-have-arfid-or-extreme-picky-eating-3',
+  'how-to-add-variety-without-adding-stress-to-mealtimes-2',
+  'kitchen-tools-that-actually-work-for-picky-eaters-2',
+  'meal-planning-apps-for-picky-eaters-what-parents-need-2',
+  'new-year-mealtime-goals-that-actually-work-for-arfid-families',
+  'nutrition-for-kids-who-refuse-veggies-a-real-guide',
+  'nutrition-for-kids-who-refuse-veggies-a-real-guide-3',
+  'simple-dinners-built-around-your-childs-safe-foods',
+  'simple-dinners-built-around-your-kids-safe-foods-2',
+  'simple-dinners-built-around-your-kids-safe-foods-3',
+  'the-best-lunch-combos-for-picky-eaters-that-actually-work-2',
+  'tiny-mealtime-changes-that-make-a-big-difference',
+  'tiny-mealtime-changes-that-make-a-big-difference-3',
+  'turning-snack-time-into-nutrition-time-for-picky-eaters',
+  'turning-snack-time-into-nutrition-time-for-picky-eaters-2',
+  'turning-snack-time-into-nutrition-time-for-picky-eaters-4',
+  'turning-snack-time-into-nutrition-time-for-picky-eaters-5',
+  'turning-snack-time-into-nutrition-time-for-picky-eaters-6',
+  'why-meal-planning-apps-reduce-mealtime-stress-for-arfid-families-2',
+]);
+
 export default async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -127,6 +166,11 @@ export default async (req: Request): Promise<Response> => {
     if (postsError) throw postsError;
 
     for (const post of posts ?? []) {
+      // A retired duplicate still has a published row; what changed is that its URL now
+      // 301s to the copy that ranks. Submitting it here would put a URL in our own
+      // sitemap that we redirect the moment a crawler follows it.
+      if (RETIRED_BLOG_SLUGS.has(post.slug)) continue;
+
       entries.push({
         path: `/blog/${post.slug}`,
         changefreq: 'monthly',
