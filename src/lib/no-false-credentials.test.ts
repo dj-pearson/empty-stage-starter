@@ -169,6 +169,17 @@ function shippedFilesOutsideSrc(): string[] {
 
   walk(join(repo, "public"));
   out.push(join(repo, "index.html"));
+
+  // The Cloudflare Pages Functions at the top of functions/ are shipped code that emits
+  // copy directly: functions/rss.xml.ts and functions/feed.xml.ts build the feeds that
+  // used to be the static files this block was written for. Only the top level is
+  // scanned; the 47 directories beside them are a non-deployed mirror of
+  // supabase/functions/ and are not shipped copy.
+  for (const entry of readdirSync(join(repo, "functions"))) {
+    const full = join(repo, "functions", entry);
+    if (!statSync(full).isDirectory() && entry.endsWith(".ts")) out.push(full);
+  }
+
   return out;
 }
 
@@ -219,17 +230,17 @@ describe("no false credential claims in shipped copy", () => {
 describe("no false credential claims in shipped files outside src/", () => {
   const files = shippedFilesOutsideSrc();
 
-  it("scans the feeds and the AI-facing files", () => {
+  it("scans the AI-facing files and the feed functions", () => {
     // Named explicitly rather than counted: these four are the ones that carried the
     // claims or are most likely to next, and a walk that silently stopped finding them
     // would make this whole block pass while checking nothing.
     const names = files.map((f) => relative(join(SRC, ".."), f).replace(/\\/g, "/"));
     for (const expected of [
-      "public/rss.xml",
-      "public/feed.xml",
       "public/llms.txt",
       "public/llms-full.txt",
       "index.html",
+      "functions/rss.xml.ts",
+      "functions/feed.xml.ts",
     ]) {
       expect(names, `${expected} is not being scanned`).toContain(expected);
     }

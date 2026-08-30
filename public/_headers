@@ -138,14 +138,10 @@
   Content-Type: text/plain; charset=utf-8
   X-Robots-Tag: noindex
 
-# RSS and Atom feeds
-/rss.xml
-  Cache-Control: public, max-age=3600
-  Content-Type: application/rss+xml; charset=utf-8
-
-/feed.xml
-  Cache-Control: public, max-age=3600
-  Content-Type: application/atom+xml; charset=utf-8
+# RSS and Atom feeds are served by functions/rss.xml.ts and functions/feed.xml.ts, which
+# set their own Content-Type and Cache-Control. They are deliberately not pinned here:
+# the functions return no-store on a 503 so a failed fetch is retried rather than cached
+# for an hour, and a rule in this file could override that.
 
 # Manifest files
 /manifest.json
