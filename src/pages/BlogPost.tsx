@@ -99,34 +99,86 @@ const BlogPost = () => {
       //   logger.warn("View increment skipped:", e);
       // }
 
-      // Fetch related posts
+      // Awaited on purpose, and it is a real tradeoff: the article paints once the
+      // related query returns rather than immediately.
+      //
+      // scripts/prerender.mjs decides a route is ready from <head> alone (canonical,
+      // then a Helmet ld+json, then a head-quiet window). Its only body condition is
+      // that #root has some text. A second wave of body content therefore lands after
+      // the snapshot is taken, which is why the deployed HTML carried no related-post
+      // links even on posts where the query would have returned three. Setting both
+      // pieces of state before isLoading flips means the article and its outbound links
+      // commit together, so what Google sees matches what a reader sees. It also drops
+      // a layout shift.
       const cat = Array.isArray(data.category) ? data.category[0] : data.category;
-      if (cat?.slug) {
-        fetchRelatedPosts(data.id, cat.slug);
-      }
+      await fetchRelatedPosts(data.id, cat?.slug ?? null);
     }
-    
+
     setIsLoading(false);
   };
 
-  const fetchRelatedPosts = async (currentPostId: string, categorySlug: string) => {
-    const { data } = await supabase
-      .from("blog_posts")
-      .select(`
+  /**
+   * Related posts are this site's only article-to-article links.
+   *
+   * A crawl of the live site found exactly two internal links inside <main> on every
+   * blog post, /blog and /picky-eater-quiz, with all 180 posts reachable only from a
+   * single unpaginated /blog index. That is why 70% of them have never had a click:
+   * nothing passes authority between them. This block is the fix, so it has to return
+   * something for every post rather than usually.
+   *
+   * Two bugs kept it empty:
+   *
+   * 1. `.eq("category.slug", ...)` on an embedded resource does not filter the rows it
+   *    looks like it filters. Without `!inner` PostgREST keeps every top-level row and
+   *    nulls the embed where it does not match, so the category constraint did nothing
+   *    and `.limit(3)` then took an arbitrary three.
+   * 2. It was only called when the post had a category. Posts without one got no links
+   *    at all, and no fallback existed.
+   */
+  const fetchRelatedPosts = async (currentPostId: string, categorySlug: string | null) => {
+    const columns = `
         id,
         title,
         slug,
         excerpt,
-        featured_image_url,
-        category:blog_categories(slug)
-      `)
+        featured_image_url
+      `;
+
+    if (categorySlug) {
+      const { data, error } = await supabase
+        .from("blog_posts")
+        .select(`${columns}, category:blog_categories!inner(slug)`)
+        .eq("status", "published")
+        .eq("category.slug", categorySlug)
+        .neq("id", currentPostId)
+        .limit(3);
+
+      if (error) {
+        logger.error("Error fetching related posts by category:", error);
+      } else if (data && data.length > 0) {
+        setRelatedPosts(data);
+        return;
+      }
+    }
+
+    // Fallback: recent published posts. A thin link block beats none, because the
+    // alternative is a leaf page that passes authority nowhere.
+    const { data: recent, error: recentError } = await supabase
+      .from("blog_posts")
+      .select(columns)
       .eq("status", "published")
-      .eq("category.slug", categorySlug)
+      .lte("published_at", new Date().toISOString())
       .neq("id", currentPostId)
+      .order("published_at", { ascending: false })
       .limit(3);
 
-    if (data) {
-      setRelatedPosts(data);
+    if (recentError) {
+      logger.error("Error fetching fallback related posts:", recentError);
+      return;
+    }
+
+    if (recent) {
+      setRelatedPosts(recent);
     }
   };
 
@@ -469,18 +521,58 @@ const BlogPost = () => {
         {/* Main Content */}
         {renderContent}
 
-        {/* CTA Section */}
-        <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-xl p-8 my-8 text-center">
-          <h3 className="text-xl font-bold mb-2">Ready to put these strategies into action?</h3>
-          <p className="text-muted-foreground mb-6 max-w-lg mx-auto">
-            Join thousands of parents using EatPal to create stress-free mealtimes with personalized meal plans.
+        {/*
+          Free tools block. Two jobs.
+
+          The SEO one: these links are static, so unlike the related-posts block below
+          they are in the prerendered HTML unconditionally, with no query to fail and no
+          race with the snapshot. Before this, a blog post's <main> contained exactly two
+          internal links, and /picky-eater-quiz had none of its own, so the three tool
+          pages had almost nothing pointing at them from the 180 articles that should be
+          feeding them.
+
+          The honesty one: this block previously read "Join thousands of parents using
+          EatPal". Nothing supports that number, and it is the same class of unsourced
+          claim removed from /authors and llms.txt. What is here now describes what the
+          tools do, which a reader can check by clicking.
+        */}
+        <div className="bg-primary/5 rounded-xl p-8 my-8">
+          <h3 className="text-xl font-bold mb-2">Free tools for this</h3>
+          <p className="text-muted-foreground mb-6 max-w-xl">
+            No account needed for any of these.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <ul className="grid gap-4 sm:grid-cols-3 mb-6 list-none p-0">
+            <li>
+              <Link to="/picky-eater-quiz" className="font-semibold text-primary hover:underline">
+                Picky eater quiz
+              </Link>
+              <p className="text-sm text-muted-foreground mt-1">
+                Two minutes to identify which eating pattern you are dealing with.
+              </p>
+            </li>
+            <li>
+              <Link to="/meal-plan" className="font-semibold text-primary hover:underline">
+                Meal plan generator
+              </Link>
+              <p className="text-sm text-muted-foreground mt-1">
+                Five days of meals built around the foods your child already accepts.
+              </p>
+            </li>
+            <li>
+              <Link to="/budget-calculator" className="font-semibold text-primary hover:underline">
+                Grocery budget calculator
+              </Link>
+              <p className="text-sm text-muted-foreground mt-1">
+                What a week costs when half the list is safe foods.
+              </p>
+            </li>
+          </ul>
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button asChild size="lg">
-              <Link to="/auth?tab=signup">Start Free Trial</Link>
+              <Link to="/auth?tab=signup">Start free</Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <Link to="/picky-eater-quiz">Take the Picky Eater Quiz</Link>
+              <Link to="/compare">Compare EatPal to other meal planners</Link>
             </Button>
           </div>
         </div>
