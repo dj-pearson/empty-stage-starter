@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ interface BlogPost {
   reading_time_minutes: number | null;
   category: { name: string; slug: string } | null;
 }
+
+import { MEAL_IDEAS_PAGES } from "@/lib/meal-ideas-content";
 
 // Content pillar categories for ARFID/food chaining topical authority
 const contentPillars = [
@@ -64,6 +66,22 @@ const Blog = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+
+  /**
+   * How many published posts each category slug actually has.
+   *
+   * Used to hide filters that would empty the page. Derived from the posts already
+   * fetched rather than from a second query, so it cannot disagree with what is on
+   * screen.
+   */
+  const postCountByCategory = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const post of posts) {
+      const cat = Array.isArray(post.category) ? post.category[0] : post.category;
+      if (cat?.slug) counts.set(cat.slug, (counts.get(cat.slug) ?? 0) + 1);
+    }
+    return counts;
+  }, [posts]);
 
   useEffect(() => {
     fetchPosts();
@@ -226,19 +244,34 @@ const Blog = () => {
             >
               All Articles
             </Button>
-            {contentPillars.map((pillar) => (
-              <Button
-                key={pillar.slug}
-                variant={selectedCategory === pillar.slug ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedCategory(pillar.slug)}
-              >
-                {pillar.name}
-              </Button>
-            ))}
+            {/*
+              Only pillars that actually match a post are offered.
+
+              Every one of these five buttons filtered on `cat?.slug`, and not one of
+              the 180 published posts carries a category, so each of them emptied the
+              page. A filter that always returns nothing is worse than an absent filter:
+              it reads as "we have no articles about ARFID". They come back on their own
+              once posts are tagged.
+            */}
+            {contentPillars
+              .filter((pillar) => postCountByCategory.get(pillar.slug))
+              .map((pillar) => (
+                <Button
+                  key={pillar.slug}
+                  variant={selectedCategory === pillar.slug ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(pillar.slug)}
+                >
+                  {pillar.name}
+                </Button>
+              ))}
             {/* Also show database categories that don't match pillars */}
             {categories
-              .filter((cat) => !contentPillars.some((p) => p.slug === cat.slug))
+              .filter(
+                (cat) =>
+                  !contentPillars.some((p) => p.slug === cat.slug) &&
+                  postCountByCategory.get(cat.slug)
+              )
               .map((category) => (
                 <Button
                   key={category.id}
@@ -257,6 +290,34 @@ const Blog = () => {
                 categories.find((c) => c.slug === selectedCategory)?.name}
             </p>
           )}
+        </div>
+      </section>
+
+      {/*
+        Meal ideas by occasion.
+
+        Real destinations rather than filters, and the second inbound path to the
+        cluster after the sitewide footer. /compare and /guides both shipped finished
+        and then sat unvisited because the only thing pointing at them was the sitemap,
+        so a new cluster gets its links on day one.
+      */}
+      <section className="py-8 px-4 border-b">
+        <div className="container mx-auto max-w-6xl">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+            Meal ideas by occasion
+          </h2>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 list-none p-0">
+            {MEAL_IDEAS_PAGES.map((page) => (
+              <li key={page.slug}>
+                <Link
+                  to={`/picky-eater/${page.slug}`}
+                  className="font-semibold text-primary hover:underline"
+                >
+                  {page.h1}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
