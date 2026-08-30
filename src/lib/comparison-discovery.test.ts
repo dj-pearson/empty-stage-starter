@@ -66,6 +66,10 @@ describe('comparison pages are reachable by a crawler (US-647)', () => {
     ['the footer', 'src/components/Footer.tsx'],
     ['the pricing page', 'src/pages/Pricing.tsx'],
     ['the guides index', 'src/pages/pseo/GuidesIndex.tsx'],
+    // The homepage is the other page people are on while they are comparing, and it
+    // was the one page in this list that never linked here. Six finished comparison
+    // pages had earned two impressions between them.
+    ['the homepage', 'src/pages/Landing.tsx'],
   ])('is linked from %s', (_label, file) => {
     expect(repo(file)).toMatch(/to="\/compare"/);
   });

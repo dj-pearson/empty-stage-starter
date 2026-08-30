@@ -1007,6 +1007,21 @@ const Landing = () => {
                 View full feature comparison <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
+
+            {/* US-647: the /compare cluster is six finished pages that between them have
+                earned two impressions, because the only things linking to them were the
+                footer and a handful of articles. /pricing carries this link already; the
+                homepage is the other page people are on when they are comparing. */}
+            <div className="max-w-2xl mx-auto mt-6 text-center">
+              <p className="text-muted-foreground">
+                Weighing EatPal against another app?{' '}
+                <Link to="/compare" className="text-primary hover:underline font-medium">
+                  See how it compares
+                </Link>{' '}
+                with Mealime, Yummly, Paprika and the paper food chaining workbooks,
+                including where each of those is the better answer.
+              </p>
+            </div>
           </div>
         </section>
 
