@@ -27,9 +27,9 @@ EatPal is a meal planning platform built for families managing picky eating, ARF
 
 ## Pricing
 - Free Plan: 1 child, basic meal planning, limited food library
-- Pro Plan ($9.99/month): Unlimited children, AI features, full food chains, grocery lists
-- Family Plus ($19.99/month): Advanced nutrition tracking, progress reports, priority support
-- Professional Plan: For therapists — client management, insurance billing, HIPAA compliance
+- Pro Plan ($14.99/month, or $143.90/year): Unlimited children, AI features, full food chains, grocery lists
+- Family Plus ($24.99/month, or $239.90/year): Advanced nutrition tracking, progress reports, priority support
+- Professional Plan ($99/month, or $950/year): For therapists - client management, insurance billing, HIPAA compliance
 
 ## Docs
 - [Homepage](https://tryeatpal.com/)

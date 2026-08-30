@@ -13,6 +13,7 @@ import {
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 
+import { priceLabel } from "@/lib/pricing-plans";
 // FAQ categories for filtering
 const FAQ_CATEGORIES = ["All", "Getting Started", "Features", "Billing", "Technical"] as const;
 type FAQCategory = typeof FAQ_CATEGORIES[number];
@@ -176,7 +177,7 @@ const FAQ = () => {
             <p className="text-muted-foreground leading-relaxed">
               <strong>EatPal</strong> is an AI-powered meal planning app for <strong>picky eaters</strong>, <strong>ARFID</strong>, and <strong>selective eating</strong>.
               Features include safe food tracking, daily try bites, automatic grocery lists, multi-child support, and nutrition monitoring.
-              Free plan available, premium plans from $9.99/month. Works alongside feeding therapy. Data is private and secure.
+              Free plan available, premium plans from {priceLabel("pro")}/month. Works alongside feeding therapy. Data is private and secure.
             </p>
           </div>
 

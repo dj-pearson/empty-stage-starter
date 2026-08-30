@@ -24,6 +24,7 @@
 
 import { Helmet } from "react-helmet-async";
 
+import { PRICE_RANGE } from "@/lib/pricing-plans";
 export interface BusinessHours {
   dayOfWeek: string | string[];
   opens: string;
@@ -63,7 +64,7 @@ export function LocalBusinessSchema({
   logo = "https://tryeatpal.com/Logo-Green.webp",
   email = "Support@TryEatPal.com",
   telephone,
-  priceRange = "Free - $19.99/month",
+  priceRange = PRICE_RANGE,
   address,
   geo,
   openingHours,

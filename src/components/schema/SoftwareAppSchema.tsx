@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { APP_STORE_URL, storeSameAs } from "@/lib/app-store";
 
+import { priceString } from "@/lib/pricing-plans";
 export interface SoftwareAppSchemaProps {
   name?: string;
   description?: string;
@@ -46,7 +47,7 @@ export function SoftwareAppSchema({
       name: "Free Plan",
     },
     {
-      price: "9.99",
+      price: priceString("pro"),
       priceCurrency: "USD",
       name: "Pro Plan",
     },

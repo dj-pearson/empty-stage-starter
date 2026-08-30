@@ -97,9 +97,9 @@ For typical picky eating (selective but not clinical), EatPal provides:
 | Plan | Price | Includes |
 |------|-------|----------|
 | Free | $0/month | 1 child, basic meal planning, 20 safe foods, limited food chains |
-| Pro | $9.99/month | Unlimited children, AI meal planning, full food chains, grocery lists, nutrition tracking |
-| Family Plus | $19.99/month | Everything in Pro + advanced analytics, progress reports, priority support, family sharing |
-| Professional | Custom pricing | Everything in Family Plus + HIPAA compliance, client management, insurance billing, session tracking |
+| Pro | $14.99/month | Unlimited children, AI meal planning, full food chains, grocery lists, nutrition tracking |
+| Family Plus | $24.99/month | Everything in Pro + advanced analytics, progress reports, priority support, family sharing |
+| Professional | $99/month | Everything in Family Plus + HIPAA compliance, client management, insurance billing, session tracking |
 
 All paid plans include a 14-day free trial. Annual billing saves 20%.
 

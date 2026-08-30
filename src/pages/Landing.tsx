@@ -37,6 +37,7 @@ import { Link } from "react-router-dom";
 import { SEOHead } from "@/components/SEOHead";
 import { OrganizationSchema, SoftwareAppSchema, FAQSchema } from "@/components/schema";
 import { getPageSEO } from "@/lib/seo-config";
+import { PRICING_PLANS, priceLabel } from "@/lib/pricing-plans";
 import { Footer } from "@/components/Footer";
 import { trackLandingView, trackPageView } from "@/lib/conversion-tracking";
 
@@ -939,7 +940,7 @@ const Landing = () => {
                 </div>
                 <CardHeader className="text-center pb-2 pt-6">
                   <p className="text-sm font-medium text-primary mb-2">PRO</p>
-                  <CardTitle className="text-4xl font-bold">$9.99</CardTitle>
+                  <CardTitle className="text-4xl font-bold">{priceLabel("pro")}</CardTitle>
                   <p className="text-sm text-muted-foreground">per month</p>
                 </CardHeader>
                 <CardContent className="pt-4">
@@ -962,7 +963,7 @@ const Landing = () => {
                   <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                     {formatTrialDisclosure({
                       trialPeriodDays: MARKETING_TRIAL_DAYS,
-                      price: 9.99,
+                      price: PRICING_PLANS.pro.monthly,
                       billingCycle: "monthly",
                     })}
                   </p>
@@ -973,7 +974,7 @@ const Landing = () => {
               <Card className="relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
                 <CardHeader className="text-center pb-2">
                   <p className="text-sm font-medium text-muted-foreground mb-2">FAMILY</p>
-                  <CardTitle className="text-4xl font-bold">$19.99</CardTitle>
+                  <CardTitle className="text-4xl font-bold">{priceLabel("familyPlus")}</CardTitle>
                   <p className="text-sm text-muted-foreground">per month</p>
                 </CardHeader>
                 <CardContent className="pt-4">
@@ -993,7 +994,7 @@ const Landing = () => {
                   <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
                     {formatTrialDisclosure({
                       trialPeriodDays: MARKETING_TRIAL_DAYS,
-                      price: 19.99,
+                      price: PRICING_PLANS.familyPlus.monthly,
                       billingCycle: "monthly",
                     })}
                   </p>

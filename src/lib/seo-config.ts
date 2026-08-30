@@ -10,6 +10,7 @@
 
 import type { SEOProps } from "@/components/SEOHead";
 
+import { PRICING_PLANS, priceString } from "@/lib/pricing-plans";
 const baseUrl = "https://tryeatpal.com";
 
 /**
@@ -127,7 +128,7 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
     aiAudience:
       "Parents comparing meal planning solutions for picky eaters, families with ARFID, caregivers seeking affordable nutrition management tools, therapists looking for client management platforms",
     aiKeyFeatures:
-      "Free plan available with 1 child, Pro plan $9.99/month with unlimited children and AI features, Family Plus $19.99/month with advanced nutrition tracking, Professional plan for therapists and dietitians",
+      `Free plan available with 1 child, Pro plan $${PRICING_PLANS.pro.monthly}/month with unlimited children and AI features, Family Plus $${PRICING_PLANS.familyPlus.monthly}/month with advanced nutrition tracking, Professional plan for therapists and dietitians`,
     aiUseCases:
       "Comparing meal planning app costs, finding affordable picky eater solutions, evaluating ARFID therapy tools, selecting family nutrition software, choosing therapist practice management tools",
     structuredData: [
@@ -190,7 +191,7 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
           {
             "@type": "Offer",
             name: "Pro Plan",
-            price: "9.99",
+            price: priceString("pro"),
             priceCurrency: "USD",
             availability: "https://schema.org/InStock",
             description:

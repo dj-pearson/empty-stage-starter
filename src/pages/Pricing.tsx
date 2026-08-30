@@ -37,6 +37,7 @@ import { formatTrialDisclosure } from "@/lib/trialDisclosure";
 import { Footer } from "@/components/Footer";
 import { BreadcrumbNavigation } from "@/components/BreadcrumbNavigation";
 
+import { priceLabel } from "@/lib/pricing-plans";
 // Lazy load the feature comparison table (below the fold)
 const FeatureComparisonTable = lazy(() =>
   import("@/components/pricing/FeatureComparisonTable").then(m => ({ default: m.FeatureComparisonTable }))
@@ -523,8 +524,8 @@ export default function Pricing() {
           <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
             <p className="text-sm font-semibold text-primary mb-2">TL;DR - Quick Pricing Summary</p>
             <p className="text-muted-foreground leading-relaxed">
-              <strong>For Families:</strong> Free Plan (1 child) or Pro Plan ($9.99/mo) with AI food chaining, unlimited children, and progress tracking.
-              <strong> For Therapists & Clinics:</strong> Family Plus ($19.99/mo) with multi-household support or Professional Plan with full therapist portal, multi-client management, and insurance-compatible documentation.
+              <strong>For Families:</strong> Free Plan (1 child) or Pro Plan ({priceLabel("pro")}/mo) with AI food chaining, unlimited children, and progress tracking.
+              <strong> For Therapists & Clinics:</strong> Family Plus ({priceLabel("familyPlus")}/mo) with multi-household support or Professional Plan with full therapist portal, multi-client management, and insurance-compatible documentation.
               All plans include safe food tracking, try bites, and grocery lists. Paid plans start with a free trial; cancel any time from Account Settings.
             </p>
           </div>
@@ -1156,7 +1157,7 @@ export default function Pricing() {
                 </div>
                 <CardTitle className="text-lg text-primary">EatPal</CardTitle>
                 <CardDescription>
-                  <span className="text-xl font-bold text-primary">$9.99</span>
+                  <span className="text-xl font-bold text-primary">{priceLabel("pro")}</span>
                   <span className="text-muted-foreground"> /month</span>
                 </CardDescription>
               </CardHeader>
