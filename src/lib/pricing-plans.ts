@@ -22,9 +22,17 @@
  *    shipped copy, including public/llms.txt and public/llms-full.txt, which no test
  *    covered before.
  *
- * The subscription_plans table in Supabase drives the interactive cards on /pricing and
- * is NOT covered by any of this. It has to be checked separately, and it is the one
- * place a wrong price becomes a wrong charge.
+ * The subscription_plans table in Supabase drives the interactive cards on /pricing.
+ * src/lib/pricing-stripe-parity.test.ts now covers it as far as the repo can: it pins
+ * the prices below to the live Stripe export, pins the price IDs written into the table
+ * to those same Stripe prices, and pins the migration that seeds price_monthly to both.
+ * Displayed price, seeded price, charged price and marketing copy are one number in four
+ * files, and breaking any one of them fails the build.
+ *
+ * Two things that check cannot reach, both needing credentials nobody has here: whether
+ * the live table still matches its migrations after any admin edit, and whether the
+ * Stripe prices those IDs name still cost what December's export said. The SELECT at the
+ * bottom of scripts/update-stripe-ids-20251230-115613.sql answers both.
  */
 
 export interface PricingPlan {

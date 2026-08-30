@@ -656,7 +656,7 @@ const Landing = () => {
                 {
                   icon: Brain,
                   title: "Evidence-Based Progress, Not Guesswork",
-                  description: "Our AI is grounded in food chaining science—the proven feeding therapy method. It detects patterns in textures, brands, and flavors your child already accepts, then builds bridges to new foods.",
+                  description: "Our AI is grounded in food chaining science—the published feeding therapy method. It detects patterns in textures, brands, and flavors your child already accepts, then builds bridges to new foods.",
                   bullets: [
                     "AI-powered food chains based on your child's unique sensory profile",
                     "Predictions for which new foods your child is most likely to accept",
@@ -1006,6 +1006,21 @@ const Landing = () => {
               <Link to="/pricing" className="text-primary hover:underline font-medium inline-flex items-center gap-1" aria-label="View full pricing feature comparison">
                 View full feature comparison <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
+            </div>
+
+            {/* US-647: the /compare cluster is six finished pages that between them have
+                earned two impressions, because the only things linking to them were the
+                footer and a handful of articles. /pricing carries this link already; the
+                homepage is the other page people are on when they are comparing. */}
+            <div className="max-w-2xl mx-auto mt-6 text-center">
+              <p className="text-muted-foreground">
+                Weighing EatPal against another app?{' '}
+                <Link to="/compare" className="text-primary hover:underline font-medium">
+                  See how it compares
+                </Link>{' '}
+                with Mealime, Yummly, Paprika and the paper food chaining workbooks,
+                including where each of those is the better answer.
+              </p>
             </div>
           </div>
         </section>

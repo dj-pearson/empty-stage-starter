@@ -311,7 +311,7 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
   blog: {
     title: "EatPal Blog - Tips for Picky Eaters, ARFID & Family Nutrition",
     description:
-      "Expert advice on managing picky eating, ARFID strategies, try bite techniques, nutrition tips for selective eaters, and family meal planning. Evidence-based guidance from feeding specialists.",
+      "Practical guidance on picky eating, ARFID, try bites and family meal planning, based on the food chaining method published by Fraker and Walbert.",
     keywords:
       "picky eater blog, ARFID tips, selective eating advice, try bite strategies, kids nutrition articles, feeding therapy techniques, toddler meal ideas, family meal planning tips",
     canonicalUrl: `${baseUrl}/blog`,

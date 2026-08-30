@@ -540,7 +540,7 @@ const Auth = () => {
                 {
                   icon: Sparkles,
                   title: "Evidence-Based Food Chaining",
-                  description: "AI-powered meal plans grounded in the proven feeding therapy method—not guesswork"
+                  description: "AI-powered meal plans grounded in the published feeding therapy method—not guesswork"
                 },
                 {
                   icon: Calendar,

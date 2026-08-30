@@ -57,12 +57,31 @@ const BANNED: ReadonlyArray<{ pattern: RegExp; why: string }> = [
     why: "asserts clinical trial evidence EatPal does not have",
   },
   {
+    // The softer form of the same claim, which "clinically proven" walked straight
+    // past: /pricing's AI card and the /auth sidebar both called food chaining "the
+    // proven feeding therapy method". It is a published method with named authors,
+    // which is a different and checkable claim, and "published" is how the rest of the
+    // site already words it.
+    pattern: /\bproven\s+(feeding therapy|food[- ]chaining)\b/i,
+    why: "asserts food chaining is proven rather than published",
+  },
+  {
     pattern: /\bdecades of (combined )?clinical experience\b/i,
     why: "asserts clinical experience EatPal does not have",
   },
   {
     pattern: /\bfeeding therapy specialists\b/i,
     why: "used as a description of EatPal's own staff",
+  },
+  {
+    // public/rss.xml and public/feed.xml both said "Evidence-based guidance from
+    // feeding specialists", which the pattern above misses because it lacks the word
+    // "therapy". Anchored on the attribution rather than on the job title, so
+    // "share this with your feeding specialist" and "widely used by pediatric feeding
+    // specialists" stay legal; only sourcing EatPal's own output to them is banned.
+    pattern:
+      /\b(guidance|advice|tips|techniques|strategies|content|articles)\s+(from|by|developed by|written by)\s+(our\s+)?(pediatric\s+)?feeding\s+specialists\b/i,
+    why: "attributes EatPal's own content to feeding specialists",
   },
   // ---- unsourced numbers ----
   //
@@ -116,6 +135,60 @@ function sourceFiles(dir: string): string[] {
 }
 
 /**
+ * Shipped copy that lives outside src/, which the walk above cannot see.
+ *
+ * It scans src/ for .ts/.tsx/.json, and that missed four claims sitting in
+ * public/rss.xml and public/feed.xml: "Evidence-based guidance from feeding
+ * specialists" in both channel descriptions, and "techniques developed by feeding
+ * therapy specialists" in both item summaries, alongside an unsourced "from 5 foods to
+ * 50+". SEOHead renders a <link rel="alternate" type="application/rss+xml"> pointing at
+ * /rss.xml on every page, so that feed is advertised sitewide and read by aggregators.
+ * It was as public as the pages the first two cleanups fixed, and no test could see it.
+ *
+ * public/ is served verbatim by Cloudflare Pages and index.html is the document every
+ * visitor gets, so both are shipped copy by any definition. documents/ is deliberately
+ * NOT included: those are internal specs, and lines like "Dietitians, therapists,
+ * feeding specialists (white-label)" describe who EatPal sells to rather than who it
+ * employs. Scanning them would make this gate cry wolf, and a gate that cries wolf gets
+ * switched off.
+ */
+function shippedFilesOutsideSrc(): string[] {
+  const repo = join(SRC, "..");
+  const out: string[] = [];
+
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (/\.(txt|xml|html|json)$/.test(entry)) out.push(full);
+    }
+  };
+
+  walk(join(repo, "public"));
+  out.push(join(repo, "index.html"));
+
+  // The Cloudflare Pages Functions at the top of functions/ are shipped code that emits
+  // copy directly: functions/rss.xml.ts and functions/feed.xml.ts build the feeds that
+  // used to be the static files this block was written for. Only the top level is
+  // scanned; the 47 directories beside them are a non-deployed mirror of
+  // supabase/functions/ and are not shipped copy.
+  for (const entry of readdirSync(join(repo, "functions"))) {
+    const full = join(repo, "functions", entry);
+    if (!statSync(full).isDirectory() && entry.endsWith(".ts")) out.push(full);
+  }
+
+  return out;
+}
+
+/** XML and HTML comments, which withoutComments does not know about. */
+function withoutMarkupComments(source: string): string {
+  return source.replace(/<!--[\s\S]*?-->/g, " ");
+}
+
+/**
  * Comments are stripped before matching. The comment blocks in Authors.tsx,
  * ArticleSchema.tsx and BlogPost.tsx quote the removed wording verbatim so the next
  * person understands why it is banned, and that explanation must not trip the test it
@@ -150,6 +223,48 @@ describe("no false credential claims in shipped copy", () => {
       `Copy ${why}. EatPal has no licensed clinicians on staff; see the comment at the ` +
         `top of src/pages/Authors.tsx. Put a real credentialed reviewer in ` +
         `public.blog_authors and render them from data instead.\n\n${hits.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("no false credential claims in shipped files outside src/", () => {
+  const files = shippedFilesOutsideSrc();
+
+  it("scans the AI-facing files and the feed functions", () => {
+    // Named explicitly rather than counted: these four are the ones that carried the
+    // claims or are most likely to next, and a walk that silently stopped finding them
+    // would make this whole block pass while checking nothing.
+    const names = files.map((f) => relative(join(SRC, ".."), f).replace(/\\/g, "/"));
+    for (const expected of [
+      "public/llms.txt",
+      "public/llms-full.txt",
+      "index.html",
+      "functions/rss.xml.ts",
+      "functions/feed.xml.ts",
+    ]) {
+      expect(names, `${expected} is not being scanned`).toContain(expected);
+    }
+  });
+
+  it.each(BANNED)("never claims: $why", ({ pattern, why }) => {
+    const hits: string[] = [];
+
+    for (const file of files) {
+      const body = withoutMarkupComments(withoutComments(readFileSync(file, "utf8")));
+      for (const [index, line] of body.split("\n").entries()) {
+        if (pattern.test(line)) {
+          hits.push(
+            `${relative(join(SRC, ".."), file)}:${index + 1}  ${line.trim().slice(0, 120)}`,
+          );
+        }
+      }
+    }
+
+    expect(
+      hits,
+      `Shipped copy ${why}, outside src/ where the scan above cannot reach. ` +
+        `public/ is served verbatim and /rss.xml is advertised on every page.\n\n` +
+        `${hits.join("\n")}`,
     ).toEqual([]);
   });
 });

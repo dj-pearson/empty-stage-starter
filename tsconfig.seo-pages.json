@@ -6,7 +6,11 @@
     "container, so it is not a gate anyone actually runs before committing, and",
     "the app tree carries pre-existing type errors that would drown a new one.",
     "This project covers only the files the SEO gap stories add, runs in seconds,",
-    "and is expected to be clean. Add new SEO-page files here as they land."
+    "and is expected to be clean. Add new SEO-page files here as they land.",
+    "US-648/US-649 added the tool-page prose and the /arfid cluster. The",
+    "meal-ideas files landed in 09357f3 without being registered here, which is",
+    "how a gate that relies on people remembering it goes quiet; they are listed",
+    "now too."
   ],
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
@@ -34,6 +38,16 @@
     "src/components/admin/seo/useSeoCannibalization.ts",
     "src/pages/Compare.tsx",
     "src/pages/ComparisonPage.tsx",
-    "src/pages/ComparisonPage.test.tsx"
+    "src/pages/ComparisonPage.test.tsx",
+    "src/lib/meal-ideas-content.ts",
+    "src/lib/meal-ideas-content.test.ts",
+    "src/pages/MealIdeasPage.tsx",
+    "src/lib/arfid-content.ts",
+    "src/lib/arfid-content.test.ts",
+    "src/pages/ArfidPage.tsx",
+    "src/pages/ArfidPage.test.tsx",
+    "src/lib/tool-page-content.ts",
+    "src/lib/tool-page-content.test.ts",
+    "src/pages/toolPagesPrerender.test.tsx"
   ]
 }

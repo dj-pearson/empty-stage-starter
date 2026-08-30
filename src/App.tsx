@@ -70,6 +70,7 @@ const ComparisonPage = lazy(() => import('./pages/ComparisonPage'));
 // The meal-occasion cluster (/picky-eater/*). Targets the ~40 keywords at the
 // 5,000/month tier that the site ranked for nowhere; see src/lib/meal-ideas-content.ts.
 const MealIdeasPage = lazy(() => import('./pages/MealIdeasPage'));
+const ArfidPage = lazy(() => import('./pages/ArfidPage'));
 const SEODashboard = lazy(() => import('./pages/SEODashboard'));
 const SearchTrafficDashboard = lazy(() => import('./pages/SearchTrafficDashboard'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
@@ -872,6 +873,20 @@ const App = () => (
                           <RouteErrorBoundary>
                             <Suspense fallback={<LoadingFallback />}>
                               <MealIdeasPage />
+                            </Suspense>
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      {/* US-649: the ARFID cluster. "arfid eating", "arfid food
+                          disorder" and "avoidant restrictive food intake disorder arfid"
+                          are each in the 50,000/month tier at Low competition and the
+                          site ranked for none of them. */}
+                      <Route
+                        path="/arfid/:slug"
+                        element={
+                          <RouteErrorBoundary>
+                            <Suspense fallback={<LoadingFallback />}>
+                              <ArfidPage />
                             </Suspense>
                           </RouteErrorBoundary>
                         }

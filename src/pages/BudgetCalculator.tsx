@@ -21,6 +21,10 @@ import { calculateBudget, generateBudgetMealSuggestions } from '@/lib/budgetCalc
 import { v4 as uuidv4 } from 'uuid';
 import { SEOHead } from '@/components/SEOHead';
 import { getPageSEO } from '@/lib/seo-config';
+import { FAQSchema } from '@/components/schema/FAQSchema';
+import { HowToSchema } from '@/components/schema/HowToSchema';
+import { BUDGET_PAGE } from '@/lib/tool-page-content';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { getSyncStorage } from '@/lib/platform';
@@ -251,6 +255,13 @@ export default function BudgetCalculator() {
   return (
     <>
       <SEOHead {...getPageSEO("budgetCalculator")!} />
+      <FAQSchema faqs={BUDGET_PAGE.faqs} />
+      <HowToSchema
+        name={BUDGET_PAGE.howTo.name}
+        description={BUDGET_PAGE.howTo.description}
+        totalTime={BUDGET_PAGE.howTo.totalTime}
+        steps={BUDGET_PAGE.howTo.steps}
+      />
 
       <main id="main-content" className="min-h-screen bg-gradient-to-b from-primary/5 to-background py-12 px-4 sm:px-6 lg:px-8">
         <motion.div
@@ -518,6 +529,75 @@ export default function BudgetCalculator() {
             </p>
           </div>
         </motion.div>
+
+        {/*
+          US-648: 270 prerendered words at position 21.8 on 2,566 impressions. The form is
+          the product; this is the page. Prose lives in src/lib/tool-page-content.ts.
+
+          Three of the paragraphs below describe what the calculator does NOT do: it never
+          asks anyone's age and assumes 35 and 8, and it has no waste factor. Both are true
+          of the arithmetic in src/lib/budgetCalculator/calculator.ts, and a page that
+          oversold the number would be the same class of mistake as the invented
+          credentials this repo has already had to strip twice.
+        */}
+        <div className="container mx-auto max-w-3xl px-4 pb-16">
+          <p className="border-l-2 border-primary pl-4 text-lg font-medium leading-relaxed">
+            {BUDGET_PAGE.answer}
+          </p>
+
+          {BUDGET_PAGE.intro.map((paragraph) => (
+            <p key={paragraph} className="mt-4 leading-relaxed text-muted-foreground">
+              {paragraph}
+            </p>
+          ))}
+
+          <h2 className="mt-12 font-heading text-2xl font-bold">{BUDGET_PAGE.howTo.name}</h2>
+          <p className="mt-2 text-muted-foreground">{BUDGET_PAGE.howTo.description}</p>
+          <ol className="mt-4 space-y-5">
+            {BUDGET_PAGE.howTo.steps.map((step) => (
+              <li key={step.name}>
+                <h3 className="font-semibold">{step.name}</h3>
+                <p className="mt-1 leading-relaxed text-muted-foreground">{step.text}</p>
+              </li>
+            ))}
+          </ol>
+
+          <h2 className="mt-12 font-heading text-2xl font-bold">Common questions</h2>
+          <dl className="mt-4 space-y-5">
+            {BUDGET_PAGE.faqs.map((faq) => (
+              <div key={faq.question}>
+                <dt className="font-semibold">{faq.question}</dt>
+                <dd className="mt-1 leading-relaxed text-muted-foreground">{faq.answer}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <nav className="mt-12" aria-label="Related reading">
+            <h2 className="font-heading text-2xl font-bold">Related</h2>
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+              <li>
+                <Link to="/picky-eater/healthy-meals" className="font-semibold text-primary hover:underline">
+                  Healthy meals for picky eaters
+                </Link>
+              </li>
+              <li>
+                <Link to="/arfid/safe-foods-list" className="font-semibold text-primary hover:underline">
+                  Building an ARFID safe foods list
+                </Link>
+              </li>
+              <li>
+                <Link to="/picky-eater-quiz" className="font-semibold text-primary hover:underline">
+                  Picky eater quiz
+                </Link>
+              </li>
+              <li>
+                <Link to="/meal-plan" className="font-semibold text-primary hover:underline">
+                  Meal plan generator
+                </Link>
+              </li>
+            </ul>
+          </nav>
+        </div>
       </main>
     </>
   );
