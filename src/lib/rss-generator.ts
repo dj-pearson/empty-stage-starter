@@ -45,7 +45,7 @@ interface FeedConfig {
 
 const defaultConfig: FeedConfig = {
   title: 'EatPal Blog - Tips for Picky Eaters & ARFID',
-  description: 'Expert advice on managing picky eating, ARFID strategies, food chaining techniques, and family meal planning. Evidence-based guidance from feeding specialists.',
+  description: 'Practical guidance on picky eating, ARFID and meal planning for parents, built around food chaining, the feeding therapy method published by Cheri Fraker, RD and Laura Walbert, SLP.',
   siteUrl: 'https://tryeatpal.com',
   feedUrl: 'https://tryeatpal.com/rss.xml',
   language: 'en-US',
@@ -278,7 +278,7 @@ export function generateJSONFeed(
 export const exampleBlogPosts: BlogPost[] = [
   {
     title: 'Understanding Food Chaining Therapy for Picky Eaters',
-    description: 'Learn how food chaining therapy helps children systematically expand their diet from 5 foods to 50+ by building chains from safe foods.',
+    description: 'How food chaining expands a narrow diet by starting from a food the child already accepts and changing one attribute at a time.',
     url: 'https://tryeatpal.com/blog/understanding-food-chaining-therapy',
     author: 'EatPal Team',
     publishedDate: '2025-01-15T10:00:00Z',
@@ -287,7 +287,7 @@ export const exampleBlogPosts: BlogPost[] = [
   },
   {
     title: '10 Evidence-Based Strategies for ARFID Management',
-    description: 'Expert tips on managing Avoidant/Restrictive Food Intake Disorder (ARFID) with proven feeding therapy techniques.',
+    description: 'Approaches parents use to manage Avoidant/Restrictive Food Intake Disorder (ARFID) at home, and when to involve a feeding therapist.',
     url: 'https://tryeatpal.com/blog/arfid-management-strategies',
     author: 'EatPal Team',
     publishedDate: '2025-01-10T10:00:00Z',

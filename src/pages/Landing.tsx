@@ -656,7 +656,7 @@ const Landing = () => {
                 {
                   icon: Brain,
                   title: "Evidence-Based Progress, Not Guesswork",
-                  description: "Our AI is grounded in food chaining science—the proven feeding therapy method. It detects patterns in textures, brands, and flavors your child already accepts, then builds bridges to new foods.",
+                  description: "Our AI is grounded in food chaining science—the published feeding therapy method. It detects patterns in textures, brands, and flavors your child already accepts, then builds bridges to new foods.",
                   bullets: [
                     "AI-powered food chains based on your child's unique sensory profile",
                     "Predictions for which new foods your child is most likely to accept",

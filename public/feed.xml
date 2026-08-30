@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title><![CDATA[EatPal Blog - Tips for Picky Eaters & ARFID]]></title>
-  <subtitle><![CDATA[Expert advice on managing picky eating, ARFID strategies, food chaining techniques, and family meal planning. Evidence-based guidance from feeding specialists.]]></subtitle>
+  <subtitle><![CDATA[Practical guidance on picky eating, ARFID and meal planning for parents, built around food chaining, the feeding therapy method published by Cheri Fraker, RD and Laura Walbert, SLP.]]></subtitle>
   <link href="https://tryeatpal.com" />
   <link href="https://tryeatpal.com/feed.xml" rel="self" />
   <id>https://tryeatpal.com/</id>
@@ -18,7 +18,7 @@
     <id>https://tryeatpal.com/blog/understanding-food-chaining-therapy</id>
     <published>2025-01-15T10:00:00Z</published>
     <updated>2025-01-15T10:00:00Z</updated>
-    <summary><![CDATA[Learn how food chaining therapy helps children systematically expand their diet from 5 foods to 50+ by building chains from safe foods. Discover evidence-based techniques developed by feeding therapy specialists.]]></summary>
+    <summary><![CDATA[How food chaining expands a narrow diet by starting from a food the child already accepts and changing one attribute at a time. Based on the method published by Cheri Fraker, RD and Laura Walbert, SLP.]]></summary>
     <author><name>EatPal Team</name></author>
     <category term="Feeding Therapy" />
     <category term="Food Chaining" />
@@ -33,7 +33,7 @@
     <id>https://tryeatpal.com/blog/arfid-management-strategies</id>
     <published>2025-01-10T10:00:00Z</published>
     <updated>2025-01-10T10:00:00Z</updated>
-    <summary><![CDATA[Expert tips on managing Avoidant/Restrictive Food Intake Disorder (ARFID) with proven feeding therapy techniques. Learn how to support children with ARFID through structured meal planning and exposure therapy.]]></summary>
+    <summary><![CDATA[Approaches parents use to manage Avoidant/Restrictive Food Intake Disorder (ARFID) at home, and where a feeding therapist rather than a meal planner is the right call.]]></summary>
     <author><name>EatPal Team</name></author>
     <category term="ARFID" />
     <category term="Feeding Disorders" />

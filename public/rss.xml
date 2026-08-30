@@ -6,7 +6,7 @@
      xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title><![CDATA[EatPal Blog - Tips for Picky Eaters & ARFID]]></title>
-    <description><![CDATA[Expert advice on managing picky eating, ARFID strategies, food chaining techniques, and family meal planning. Evidence-based guidance from feeding specialists.]]></description>
+    <description><![CDATA[Practical guidance on picky eating, ARFID and meal planning for parents, built around food chaining, the feeding therapy method published by Cheri Fraker, RD and Laura Walbert, SLP.]]></description>
     <link>https://tryeatpal.com</link>
     <atom:link href="https://tryeatpal.com/rss.xml" rel="self" type="application/rss+xml" />
     <language>en-US</language>
@@ -24,7 +24,7 @@
     <!-- Blog Post 1: Food Chaining Therapy -->
     <item>
       <title><![CDATA[Understanding Food Chaining Therapy for Picky Eaters]]></title>
-      <description><![CDATA[Learn how food chaining therapy helps children systematically expand their diet from 5 foods to 50+ by building chains from safe foods. Discover evidence-based techniques developed by feeding therapy specialists.]]></description>
+      <description><![CDATA[How food chaining expands a narrow diet by starting from a food the child already accepts and changing one attribute at a time. Based on the method published by Cheri Fraker, RD and Laura Walbert, SLP.]]></description>
       <link>https://tryeatpal.com/blog/understanding-food-chaining-therapy</link>
       <guid isPermaLink="true">https://tryeatpal.com/blog/understanding-food-chaining-therapy</guid>
       <pubDate>Wed, 15 Jan 2025 10:00:00 GMT</pubDate>
@@ -38,7 +38,7 @@
     <!-- Blog Post 2: ARFID Management -->
     <item>
       <title><![CDATA[10 Evidence-Based Strategies for ARFID Management]]></title>
-      <description><![CDATA[Expert tips on managing Avoidant/Restrictive Food Intake Disorder (ARFID) with proven feeding therapy techniques. Learn how to support children with ARFID through structured meal planning and exposure therapy.]]></description>
+      <description><![CDATA[Approaches parents use to manage Avoidant/Restrictive Food Intake Disorder (ARFID) at home, and where a feeding therapist rather than a meal planner is the right call.]]></description>
       <link>https://tryeatpal.com/blog/arfid-management-strategies</link>
       <guid isPermaLink="true">https://tryeatpal.com/blog/arfid-management-strategies</guid>
       <pubDate>Fri, 10 Jan 2025 10:00:00 GMT</pubDate>
