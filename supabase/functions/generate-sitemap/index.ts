@@ -45,6 +45,10 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/picky-eater/breakfast-ideas', changefreq: 'monthly', priority: '0.8' },
   { path: '/picky-eater/healthy-snacks', changefreq: 'monthly', priority: '0.8' },
   { path: '/picky-eater/healthy-meals', changefreq: 'monthly', priority: '0.8' },
+  { path: '/arfid/what-is-arfid', changefreq: 'monthly', priority: '0.8' },
+  { path: '/arfid/safe-foods-list', changefreq: 'monthly', priority: '0.8' },
+  { path: '/arfid/arfid-vs-picky-eating', changefreq: 'monthly', priority: '0.8' },
+  { path: '/arfid/arfid-in-adults', changefreq: 'monthly', priority: '0.8' },
 
   { path: '/', changefreq: 'daily', priority: '1.0' },
   { path: '/pricing', changefreq: 'weekly', priority: '0.9' },

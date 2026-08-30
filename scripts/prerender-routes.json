@@ -32,7 +32,11 @@
     "/picky-eater/lunch-ideas",
     "/picky-eater/breakfast-ideas",
     "/picky-eater/healthy-snacks",
-    "/picky-eater/healthy-meals"
+    "/picky-eater/healthy-meals",
+    "/arfid/what-is-arfid",
+    "/arfid/safe-foods-list",
+    "/arfid/arfid-vs-picky-eating",
+    "/arfid/arfid-in-adults"
   ],
   "dynamic": {
     "$comment": [
