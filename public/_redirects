@@ -53,3 +53,42 @@
 # Static files are served first, then index.html for all other routes
 # No explicit /* /index.html 200 rule needed (causes infinite loop warning)
 
+
+# Duplicate blog posts folded into the URL that actually ranks (29 URLs, 16
+# clusters). A generator saved the same brief repeatedly under the next free
+# slug, so the signal was split across up to six copies of one article and none
+# of them won. The mapping, the reasoning and the rule for choosing the survivor
+# live in src/lib/retired-blog-slugs.ts; src/lib/retired-blog-slugs.test.ts fails
+# the build if this block and that file drift apart.
+#
+# 301 rather than 410: these URLs have impressions and a few have clicks, and a
+# permanent redirect is what passes that signal to the survivor.
+/blog/build-a-picky-eater-grocery-list-that-actually-works-2 /blog/build-a-picky-eater-grocery-list-that-actually-works 301
+/blog/building-a-positive-food-relationship-from-the-start-2 /blog/building-a-positive-food-relationship-from-the-start 301
+/blog/feeding-kids-on-a-schedule-what-actually-works /blog/feeding-kids-on-a-schedule-what-actually-works-2 301
+/blog/feeding-kids-on-a-schedule-what-actually-works-3 /blog/feeding-kids-on-a-schedule-what-actually-works-2 301
+/blog/feeding-kids-on-a-schedule-what-actually-works-4 /blog/feeding-kids-on-a-schedule-what-actually-works-2 301
+/blog/feeding-kids-on-a-schedule-what-actually-works-5 /blog/feeding-kids-on-a-schedule-what-actually-works-2 301
+/blog/food-burnout-in-kids-what-it-is-and-how-to-reset-2 /blog/food-burnout-in-kids-what-it-is-and-how-to-reset 301
+/blog/food-burnout-in-kids-what-it-is-and-how-to-reset-3 /blog/food-burnout-in-kids-what-it-is-and-how-to-reset 301
+/blog/food-burnout-in-kids-what-it-is-and-how-to-reset-4 /blog/food-burnout-in-kids-what-it-is-and-how-to-reset 301
+/blog/grocery-shopping-with-kids-who-have-arfid-or-extreme-picky-eating /blog/grocery-shopping-with-kids-who-have-arfid-or-extreme-picky-eating-2 301
+/blog/grocery-shopping-with-kids-who-have-arfid-or-extreme-picky-eating-3 /blog/grocery-shopping-with-kids-who-have-arfid-or-extreme-picky-eating-2 301
+/blog/how-to-add-variety-without-adding-stress-to-mealtimes-2 /blog/how-to-add-variety-without-adding-stress-to-mealtimes 301
+/blog/kitchen-tools-that-actually-work-for-picky-eaters-2 /blog/kitchen-tools-that-actually-work-for-picky-eaters 301
+/blog/meal-planning-apps-for-picky-eaters-what-parents-need-2 /blog/meal-planning-apps-for-picky-eaters-what-parents-need 301
+/blog/new-year-mealtime-goals-that-actually-work-for-arfid-families /blog/new-year-mealtime-goals-that-actually-work-for-arfid-families-2 301
+/blog/nutrition-for-kids-who-refuse-veggies-a-real-guide /blog/nutrition-for-kids-who-refuse-veggies-a-real-guide-2 301
+/blog/nutrition-for-kids-who-refuse-veggies-a-real-guide-3 /blog/nutrition-for-kids-who-refuse-veggies-a-real-guide-2 301
+/blog/simple-dinners-built-around-your-childs-safe-foods /blog/simple-dinners-built-around-your-childs-safe-foods-2 301
+/blog/simple-dinners-built-around-your-kids-safe-foods-2 /blog/simple-dinners-built-around-your-kids-safe-foods 301
+/blog/simple-dinners-built-around-your-kids-safe-foods-3 /blog/simple-dinners-built-around-your-kids-safe-foods 301
+/blog/the-best-lunch-combos-for-picky-eaters-that-actually-work-2 /blog/the-best-lunch-combos-for-picky-eaters-that-actually-work 301
+/blog/tiny-mealtime-changes-that-make-a-big-difference /blog/tiny-mealtime-changes-that-make-a-big-difference-2 301
+/blog/tiny-mealtime-changes-that-make-a-big-difference-3 /blog/tiny-mealtime-changes-that-make-a-big-difference-2 301
+/blog/turning-snack-time-into-nutrition-time-for-picky-eaters /blog/turning-snack-time-into-nutrition-time-for-picky-eaters-3 301
+/blog/turning-snack-time-into-nutrition-time-for-picky-eaters-2 /blog/turning-snack-time-into-nutrition-time-for-picky-eaters-3 301
+/blog/turning-snack-time-into-nutrition-time-for-picky-eaters-4 /blog/turning-snack-time-into-nutrition-time-for-picky-eaters-3 301
+/blog/turning-snack-time-into-nutrition-time-for-picky-eaters-5 /blog/turning-snack-time-into-nutrition-time-for-picky-eaters-3 301
+/blog/turning-snack-time-into-nutrition-time-for-picky-eaters-6 /blog/turning-snack-time-into-nutrition-time-for-picky-eaters-3 301
+/blog/why-meal-planning-apps-reduce-mealtime-stress-for-arfid-families-2 /blog/why-meal-planning-apps-reduce-mealtime-stress-for-arfid-families 301

@@ -35,13 +35,30 @@ Entry points: routes → `src/App.tsx`; state → `AppContext.tsx`; supabase →
 ```bash
 npm run dev              # port 8080
 npm run build
-npm run typecheck        # tsc -b --noEmit (checks the referenced projects — CI gate)
+rm -f *.tsbuildinfo && npm run typecheck   # see the note below before trusting this
 npm run test:run         # vitest
 npm run test:e2e         # playwright
 npm run lint && npm run format
 ```
 
 Required env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_FUNCTIONS_URL`. Optional: `VITE_SENTRY_DSN`, `VITE_STRIPE_PUBLISHABLE_KEY`, `VITE_GA_MEASUREMENT_ID`, `RESEND_API_KEY`.
+
+**`npm run typecheck` is not the CI gate, and on its own it is not a reliable local signal.**
+It runs `tsc -b --noEmit`, and build mode consults `tsconfig.app.tsbuildinfo`. When that
+file looks current, tsc skips the project entirely and exits 0 without checking anything,
+so a green run can mean "no work done" rather than "no errors". Delete the `*.tsbuildinfo`
+files first, or you are reading a skipped build as a clean one. CI is honest about this
+only because `npm ci` on a fresh checkout has no buildinfo to skip on.
+
+The actual gate is `scripts/ci/typecheck-ratchet.sh`: it counts `error TS` lines and fails
+if the count exceeds `.ci/typecheck-baseline.txt`. There is a standing backlog (1182
+against a baseline of 1234 as of this commit), so a passing run means "you added no new
+type errors", not "the tree typechecks". `npm run lint` is a ratchet on
+`.ci/lint-baseline.txt` in the same way.
+
+`npm run format` rewrites `src/**` with Prettier, which is not a declared dependency and
+which the tree does not currently satisfy, so running it touches hundreds of unrelated
+files. There is no format gate in CI. Match the surrounding style instead.
 
 Run `npm run lint && npm run format && npm run test:run` before committing. Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
 
@@ -76,7 +93,13 @@ iOS is live, so branch choice is now a deploy decision. **Always confirm the tar
 - Web-only change while iOS is mid-review → ship from `develop` to a `web/*` tag; do **not** advance the iOS bundle.
 - Never force-push `main`, `develop`, or any `release/*`. Never merge `develop` → `main` directly; it must go through a `release/*` or `hotfix/*`.
 
-Commit prefix `hotfix:` is recognized by CI to auto-fill App Store review notes for expedited submission. Use it sparingly — Apple revokes expedited privileges if abused.
+The `hotfix:` commit prefix and the expedited-submission column above describe intent, not
+wiring: no workflow in `.github/workflows/` reads either. `ios-app-store-deploy.yml` fires
+only on a push to `develop` touching `ios/**`, or on a manual `workflow_dispatch`. So a
+`hotfix/*` branch carrying web-only changes cannot trigger an App Store submission, and
+nothing auto-fills review notes today. Keep using the prefix sparingly anyway, both because
+Apple revokes expedited privileges if abused and because someone will eventually implement
+the column as written.
 
 ## Conventions
 

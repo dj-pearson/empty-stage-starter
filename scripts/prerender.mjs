@@ -23,10 +23,35 @@
 
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir, copyFile, access } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from './resolve-chromium.mjs';
+
+/**
+ * Duplicate blog URLs that public/_redirects 301s to the copy that ranks.
+ *
+ * Parsed out of the TypeScript module rather than re-listed here. This script is .mjs
+ * and cannot import a .ts file, and a hand-copied list is exactly the drift that leaves
+ * a static file sitting on top of a redirect. Throwing on an empty parse is the point:
+ * silently finding no slugs would prerender all 29 retired URLs and quietly undo the
+ * consolidation. See src/lib/retired-blog-slugs.ts.
+ */
+const RETIRED_BLOG_SLUGS = (() => {
+  const source = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'retired-blog-slugs.ts'),
+    'utf8'
+  );
+  const body = source.slice(source.indexOf('RETIRED_BLOG_SLUGS'));
+  const slugs = [...body.matchAll(/^\s*"([a-z0-9-]+)":/gm)].map((m) => m[1]);
+  if (slugs.length === 0) {
+    throw new Error(
+      '[prerender] parsed zero slugs from src/lib/retired-blog-slugs.ts — the file format ' +
+        'changed and retired duplicates would be prerendered on top of their redirects'
+    );
+  }
+  return new Set(slugs);
+})();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -208,11 +233,25 @@ export async function discoverDynamicRoutes(config) {
         continue;
       }
       const rows = await res.json();
+      let retired = 0;
       for (const row of rows) {
         const route = source.pattern.replace(/:(\w+)/g, (_, key) => row[key] ?? '');
-        if (!route.includes('//') && !route.endsWith('/')) routes.push(route);
+        if (route.includes('//') || route.endsWith('/')) continue;
+        // A retired duplicate still has a published row, so it is still discovered here.
+        // Writing dist/blog/<slug>/index.html for one would leave a real static asset at
+        // a path public/_redirects is trying to 301 away, and a static file can win. The
+        // URL would stay alive and keep competing with the copy it was folded into.
+        // See src/lib/retired-blog-slugs.ts.
+        if (RETIRED_BLOG_SLUGS.has(route.replace(/^\/blog\//, ''))) {
+          retired += 1;
+          continue;
+        }
+        routes.push(route);
       }
-      console.log(`[prerender] ${source.name}: discovered ${rows.length} route(s).`);
+      console.log(
+        `[prerender] ${source.name}: discovered ${rows.length} route(s)` +
+          (retired > 0 ? `, skipped ${retired} retired duplicate(s).` : '.')
+      );
     } catch (error) {
       console.warn(`[prerender] ${source.name}: ${error.message} — skipping.`);
     }

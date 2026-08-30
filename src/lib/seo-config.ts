@@ -444,18 +444,22 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
   },
 
   mealPlan: {
-    title: "Free Picky Eater Meal Plan Generator | 7-Day Plans",
+    // This read "7-Day Plans" for months while the generator produced Monday to Friday
+    // (see the days array in src/pages/MealPlanGeneratorResults.tsx). The title and the
+    // meta description are what a parent reads in the search result, so the promise has
+    // to match the tool. If the generator ever produces seven days, change it here too.
+    title: "Free Picky Eater Meal Plan Generator | 5-Day Plans",
     description:
-      "Generate a free 7-day meal plan customized for your picky eater. Balances safe foods with gentle try bites using food chaining methodology. Includes grocery list.",
+      "Generate a free 5-day meal plan customized for your picky eater. Balances safe foods with gentle try bites using food chaining methodology. Includes grocery list.",
     keywords:
       "picky eater meal plan, free meal plan generator, kid-friendly meal plan, selective eating meal plan, ARFID meal plan, weekly meal plan picky eater, food chaining meal plan, toddler meal plan",
     canonicalUrl: `${baseUrl}/meal-plan`,
     aiPurpose:
-      "This free meal plan generator creates customized 7-day meal plans for picky eaters. Unlike generic meal planners, it starts with a child's safe foods and uses food chaining methodology to include strategic try bites (new foods that are similar to accepted ones). Plans balance nutrition within the child's accepted food range and include an auto-generated grocery list. Users can specify allergens, dietary restrictions, and the number of children.",
+      "This free meal plan generator creates customized 5-day (Monday to Friday) meal plans for picky eaters. Unlike generic meal planners, it starts with a child's safe foods and uses food chaining methodology to include strategic try bites (new foods that are similar to accepted ones). Plans balance nutrition within the child's accepted food range and include an auto-generated grocery list. Users can specify allergens, dietary restrictions, and the number of children.",
     aiAudience:
       "Parents seeking structured meal plans for picky eaters, families tired of mealtime battles, caregivers looking for new food introduction strategies built into daily plans, parents of toddlers with limited food acceptance",
     aiKeyFeatures:
-      "7-day customized meal plans, food chaining-based try bite inclusion, safe food prioritization, allergen filtering, multi-child support, auto-generated grocery list, nutrition adequacy check, breakfast/lunch/dinner/snack coverage",
+      "5-day customized meal plans, food chaining-based try bite inclusion, safe food prioritization, allergen filtering, multi-child support, auto-generated grocery list, nutrition adequacy check, breakfast/lunch/dinner/snack coverage",
     aiUseCases:
       "Creating a week of meals a picky toddler will actually eat, planning meals that include both safe foods and new food exposures, generating grocery lists optimized for picky eater families, finding dinner ideas when a child only eats 10 foods, balancing nutrition for a child with very limited diet",
     structuredData: [
@@ -464,7 +468,7 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
         "@id": `${baseUrl}/meal-plan#webpage`,
         url: `${baseUrl}/meal-plan`,
         name: "Free Picky Eater Meal Plan Generator",
-        description: "Generate customized 7-day meal plans for picky eaters using food chaining methodology",
+        description: "Generate customized 5-day meal plans for picky eaters using food chaining methodology",
         isPartOf: { "@id": `${baseUrl}/#website` },
         breadcrumb: { "@id": `${baseUrl}/meal-plan#breadcrumb` },
       },
