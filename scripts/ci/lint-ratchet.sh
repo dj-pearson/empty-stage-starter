@@ -25,8 +25,19 @@ if [ -z "${baseline}" ]; then
 fi
 
 npm run lint > "$LOG" 2>&1
+status=$?
 # eslint stylish format: "  <line>:<col>  error  <message>  <rule>"
 count="$(grep -cE '^[[:space:]]+[0-9]+:[0-9]+[[:space:]]+error[[:space:]]' "$LOG" || true)"
+
+# The same hole this script inherited from typecheck-ratchet.sh: eslint exits
+# non-zero whenever it reports errors, so only "failed AND reported nothing"
+# distinguishes a crash from the ordinary backlog. A config error or a missing
+# plugin otherwise reads as a lint-clean tree.
+if [ "$status" -ne 0 ] && [ "$count" -eq 0 ]; then
+  echo "::error title=Lint did not run::\`npm run lint\` exited ${status} without reporting a single error, so the log cannot be trusted (crash, config error, or a broken setup). NOT treating this as zero errors."
+  tail -40 "$LOG"
+  exit 1
+fi
 
 echo "Lint errors: ${count} (baseline: ${baseline})"
 
