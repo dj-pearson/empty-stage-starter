@@ -4753,17 +4753,21 @@ export type Database = {
           aisle: string | null
           allergens: string[] | null
           barcode: string | null
+          canonical_unit: string | null
           category: string
           created_at: string | null
           household_id: string | null
           id: string
           is_safe: boolean
           is_try_bite: boolean
+          merged_into_id: string | null
           name: string
+          needs_review: boolean
           package_quantity: string | null
           quantity: number | null
           servings_per_container: number | null
           unit: string | null
+          unit_conversions: Json | null
           updated_at: string | null
           user_id: string
         }
@@ -4771,17 +4775,21 @@ export type Database = {
           aisle?: string | null
           allergens?: string[] | null
           barcode?: string | null
+          canonical_unit?: string | null
           category: string
           created_at?: string | null
           household_id?: string | null
           id?: string
           is_safe?: boolean
           is_try_bite?: boolean
+          merged_into_id?: string | null
           name: string
+          needs_review?: boolean
           package_quantity?: string | null
           quantity?: number | null
           servings_per_container?: number | null
           unit?: string | null
+          unit_conversions?: Json | null
           updated_at?: string | null
           user_id: string
         }
@@ -4789,17 +4797,21 @@ export type Database = {
           aisle?: string | null
           allergens?: string[] | null
           barcode?: string | null
+          canonical_unit?: string | null
           category?: string
           created_at?: string | null
           household_id?: string | null
           id?: string
           is_safe?: boolean
           is_try_bite?: boolean
+          merged_into_id?: string | null
           name?: string
+          needs_review?: boolean
           package_quantity?: string | null
           quantity?: number | null
           servings_per_container?: number | null
           unit?: string | null
+          unit_conversions?: Json | null
           updated_at?: string | null
           user_id?: string
         }
@@ -4809,6 +4821,13 @@ export type Database = {
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "foods_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
             referencedColumns: ["id"]
           },
         ]

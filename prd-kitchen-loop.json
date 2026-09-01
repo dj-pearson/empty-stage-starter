@@ -19,7 +19,7 @@
       "slice": 1,
       "platform": "node",
       "loopVerifiable": true,
-      "notes": "scripts/ci/schema-drift-report.mjs + npm run schema:drift. Repo half parses supabase/migrations/*.sql (214 migrations) for create-table bodies and alter-table-add-column on the 9 kitchen-loop tables; reports foods 16 cols, grocery_items 23, plan_entries 13, recipes 30, recipe_ingredients 17, kid_food_ladder 16, kids 12, food_attempts 21, grocery_item_sources 8. Verified both paths: no SCHEMA_SNAPSHOT exits 0 with \"no target configured\"; a synthetic snapshot 3 migrations behind with only 3 foods columns exits 1 and attributes each missing column to the migration that added it (e.g. expiry_date -> 20260425000000_add_expiry_date_to_foods.sql). --emit-sql prints a SELECT-only introspection query. eslint clean, check-invisible-chars clean. DEVIATION from acceptance criterion 1, flagged for review: the script does NOT connect to a database itself. The repo has no pg dependency and every other script in scripts/ci is static analysis over tracked files; putting a service-role credential in a CI script to read information_schema is a worse risk than the drift it detects. Instead it emits the read-only SQL for an operator to run and diffs the returned JSON via SCHEMA_SNAPSHOT. Criteria 2-5 met as written. Spec prerequisite section updated to document the gate."
+      "notes": "scripts/ci/schema-drift-report.mjs + npm run schema:drift. Repo half parses supabase/migrations/*.sql (214 migrations) for create-table bodies and alter-table-add-column on the 9 kitchen-loop tables; reports foods 16 cols, grocery_items 23, plan_entries 13, recipes 30, recipe_ingredients 17, kid_food_ladder 16, kids 12, food_attempts 21, grocery_item_sources 8. Verified both paths: no SCHEMA_SNAPSHOT exits 0 with \"no target configured\"; a synthetic snapshot 3 migrations behind with only 3 foods columns exits 1 and attributes each missing column to the migration that added it (e.g. expiry_date -> 20260425000000_add_expiry_date_to_foods.sql). --emit-sql prints a SELECT-only introspection query. eslint clean, check-invisible-chars clean. DEVIATION from acceptance criterion 1, flagged for review: the script does NOT connect to a database itself. The repo has no pg dependency and every other script in scripts/ci is static analysis over tracked files; putting a service-role credential in a CI script to read information_schema is a worse risk than the drift it detects. Instead it emits the read-only SQL for an operator to run and diffs the returned JSON via SCHEMA_SNAPSHOT. Criteria 2-5 met as written. Spec prerequisite section updated to document the gate. CORRECTION (found in the US-656 iteration): US-654 was marked passing without running npm run test:run, and it had regressed src/lib/ciGatesWired.test.ts -- that suite asserts every scripts/ci/ entry is referenced by a workflow, and schema-drift-report.mjs was unwired (expected [] , got [schema-drift-report.mjs]). Fixed by adding a \"Schema drift report\" step to the migrations job in .github/workflows/ci.yml; ciGatesWired now 4/4. Confirmed the gate passed on main and fails only on this branch, so it was mine."
     },
     {
       "id": "US-655",
@@ -53,9 +53,44 @@
         "src/integrations/supabase/types.ts regenerated and includes the new columns"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "sql",
+      "loopVerifiable": true,
+      "notes": "supabase/migrations/20260831000001_kitchen_loop_foods_catalog_columns.sql + src/integrations/supabase/types.ts. VERIFIED BY EXECUTION on a disposable postgres:16-alpine container (torn down; prod never touched), seeded with foods as it exists today and a pre-migration row inserted BEFORE applying, to prove an old client is unaffected. Evidence: all four columns present with correct shape (merged_into_id uuid nullable, canonical_unit text nullable, unit_conversions jsonb nullable, needs_review boolean NOT NULL default false); the pre-existing row survived with needs_review backfilled to false and the other three null; an old-client INSERT omitting all four still succeeds and gets needs_review=false; canonical_unit CHECK rejects \"kg\" and accepts ml; unit_conversions round-trips {\"can\":400}; both partial indexes exist with the right predicates (foods_needs_review_idx ... WHERE needs_review, foods_merged_into_idx ... WHERE merged_into_id IS NOT NULL); all four column COMMENTs present and referencing the design doc; self-FK foods_merged_into_id_fkey has confdeltype=a (NO ACTION), which is the intended semantics -- deleting a survivor that still has duplicates pointing at it is refused rather than cascading. Re-runnable: second apply succeeds. Gates: check-migration-prefixes.sh 0, check-migration-safety.sh 0 (\"backward-compatible and enable RLS\"), check-invisible-chars.mjs 0, lint-ratchet 1229 = baseline, typecheck-ratchet 1182 = baseline, ciGatesWired 4/4. SCOPE HELD DELIBERATELY: types.ts carries only the four foods columns plus the foods_merged_into_id_fkey relationship. Adding the item_aliases and canonical_products TABLE blocks pushed typecheck to 1183 via TS2589 (type instantiation excessively deep) in src/lib/customer-health.ts -- measured, not guessed: 1183 with the blocks, 1182 with them removed and the columns kept. Raising the baseline is forbidden, so the tables are typed in the new US-690 which US-661 depends on. NOT DONE: not applied to any real environment."
+    },
+    {
+      "id": "US-690",
+      "title": "Type the catalog tables without breaking the typecheck ratchet",
+      "description": "As a developer, I want item_aliases and canonical_products present in types.ts so that the resolver stories compile, without the added Database surface tipping a query over TypeScript's instantiation depth limit.",
+      "acceptanceCriteria": [
+        "src/integrations/supabase/types.ts gains full Row/Insert/Update/Relationships blocks for item_aliases and canonical_products, matching the shapes created by migration 20260831000000",
+        "The TS2589 \"type instantiation is excessively deep\" error this provokes in src/lib/customer-health.ts is resolved at its source -- by narrowing the offending query's generics or extracting an explicit return type -- NOT by raising .ci/typecheck-baseline.txt, which is forbidden",
+        "typecheck-ratchet.sh reports at most the baseline of 1182 with both table blocks present",
+        "A note records why the depth limit was hit, so the next table added to types.ts does not rediscover it the hard way",
+        "npm run test:run shows no new failures"
+      ],
+      "priority": 4,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-691",
+      "title": "Reconcile the pre-existing foods type drift",
+      "description": "As a developer, I want types.ts to match what migrations actually created on foods, because three columns the app reads have been missing from the generated types since April.",
+      "acceptanceCriteria": [
+        "foods Row/Insert/Update in src/integrations/supabase/types.ts gain expiry_date (string | null), price_per_unit (number | null) and currency (string | null)",
+        "Confirmed against the migrations that created them: 20260425000000_add_expiry_date_to_foods.sql and 20260426000000_add_pricing_to_foods_and_grocery.sql",
+        "grocery_items is checked for the same drift, since 20260426000000 added price_per_unit to both tables, and reconciled if it has it",
+        "typecheck-ratchet.sh reports at most baseline; if adding these columns REDUCES the count, lower .ci/typecheck-baseline.txt to the new number",
+        "npm run test:run shows no new failures"
+      ],
+      "priority": 5,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
       "loopVerifiable": true
     },
     {
@@ -70,7 +105,7 @@
         "Pure: no I/O, no clock, no Supabase import",
         "npm run test:run passes"
       ],
-      "priority": 4,
+      "priority": 6,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -89,7 +124,7 @@
         "Unit tests include the moveCheckedToPantry case: 2 gal added to a pantry row measured in fl oz converts rather than landing in a mismatch list",
         "npm run test:run passes"
       ],
-      "priority": 5,
+      "priority": 7,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -109,7 +144,7 @@
         "Unit tests cover each of the five steps plus the provisional path and the merge redirect",
         "npm run test:run passes"
       ],
-      "priority": 6,
+      "priority": 8,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -127,7 +162,7 @@
         "Adding a fixture with no matching implementation behaviour fails the suite",
         "npm run test:run passes"
       ],
-      "priority": 7,
+      "priority": 9,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -146,7 +181,7 @@
         "Existing recipe import tests still pass; new tests cover the confident path, the provisional path, and the skip path",
         "npm run test:run passes"
       ],
-      "priority": 8,
+      "priority": 10,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -164,7 +199,7 @@
         "Unit tests run against the real-shaped duplicates in Database_Backup rather than hand-written fixtures, per the design doc",
         "npm run test:run passes"
       ],
-      "priority": 9,
+      "priority": 11,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -183,7 +218,7 @@
         "Household-scoped: raises if survivor and duplicates do not share a household_id",
         "Rejects a duplicate_ids array containing the survivor"
       ],
-      "priority": 10,
+      "priority": 12,
       "passes": false,
       "slice": 1,
       "platform": "sql",
@@ -202,7 +237,7 @@
         "Tests cover confirm, dismiss, and the dismissed-group-does-not-return behaviour",
         "npm run test:run passes"
       ],
-      "priority": 11,
+      "priority": 13,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -220,7 +255,7 @@
         "A client-supplied duplicate id is rejected by the primary key, making retry idempotent; a test asserts the second insert fails rather than double-counting",
         "src/integrations/supabase/types.ts regenerated"
       ],
-      "priority": 12,
+      "priority": 14,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -238,7 +273,7 @@
         "A test inserts a mixed sequence of movements including a reversal and asserts item_stock equals the fold",
         "Migration is additive only"
       ],
-      "priority": 13,
+      "priority": 15,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -256,7 +291,7 @@
         "Tests assert an old-client style read of foods.quantity matches the canonical balance for the convertible cases",
         "Migration is additive only"
       ],
-      "priority": 14,
+      "priority": 16,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -274,7 +309,7 @@
         "This is the highest-risk object in the epic and carries its own test file covering: old-client write, new-client movement, both interleaved, and a no-op update",
         "Tests assert no infinite trigger recursion under any of the four cases"
       ],
-      "priority": 15,
+      "priority": 17,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -291,7 +326,7 @@
         "After backfill, item_stock for every item equals its previous foods.quantity for all convertible rows; a verification query in the migration asserts this and raises on mismatch",
         "Runs in batches so it does not lock foods for the whole table on a large household set"
       ],
-      "priority": 16,
+      "priority": 18,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -309,7 +344,7 @@
         "Pure: no Supabase import, no clock",
         "npm run test:run passes"
       ],
-      "priority": 17,
+      "priority": 19,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -327,7 +362,7 @@
         "src/contexts/AppContext.precedence.test.tsx style coverage added for the movements slice",
         "npm run test:run passes"
       ],
-      "priority": 18,
+      "priority": 20,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -346,7 +381,7 @@
         "Tests cover correction delta arithmetic, checkout crediting, and duplicate-submit idempotency",
         "npm run test:run passes"
       ],
-      "priority": 19,
+      "priority": 21,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -364,7 +399,7 @@
         "The suite is wired into CI and named so it is obvious that it gates the migration",
         "npm run test:run passes"
       ],
-      "priority": 20,
+      "priority": 22,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -382,7 +417,7 @@
         "meal_slot values match the existing MealSlot vocabulary exactly, including try_bite",
         "Migration is additive only; plan_entries keeps every existing column"
       ],
-      "priority": 21,
+      "priority": 23,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -400,7 +435,7 @@
         "Idempotent: re-running creates no duplicate meals",
         "Runs in batches; a verification query asserts no plan_entry in scope is left with a null meal_id"
       ],
-      "priority": 22,
+      "priority": 24,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -420,7 +455,7 @@
         "Pure, with unit tests covering scaling, projection, package rounding and the unknown-unit case",
         "npm run test:run passes"
       ],
-      "priority": 23,
+      "priority": 25,
       "passes": false,
       "slice": 3,
       "platform": "web",
@@ -439,7 +474,7 @@
         "Both are SECURITY DEFINER with an explicit search_path and are household-scoped",
         "Ingredients with a null food_id are skipped and reported in the return envelope rather than silently ignored"
       ],
-      "priority": 24,
+      "priority": 26,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -457,7 +492,7 @@
         "Neither column is dropped; shipped clients keep reading them",
         "A test asserts flipping one kid's ladder flips the household rollup, and that adding a new kid re-evaluates it"
       ],
-      "priority": 25,
+      "priority": 27,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -476,7 +511,7 @@
         "Tests assert that cooking alone leaves result null, and that a skipped outcome creates no rows",
         "npm run test:run passes"
       ],
-      "priority": 26,
+      "priority": 28,
       "passes": false,
       "slice": 3,
       "platform": "web",
@@ -495,7 +530,7 @@
         "Tests assert a fully-stocked week generates an empty list and a half-stocked week generates only the difference",
         "npm run test:run passes"
       ],
-      "priority": 27,
+      "priority": 29,
       "passes": false,
       "slice": 3,
       "platform": "web",
@@ -513,7 +548,7 @@
         "Tests cover a range with mixed priced and unpriced purchases",
         "npm run test:run passes"
       ],
-      "priority": 28,
+      "priority": 30,
       "passes": false,
       "slice": 5,
       "platform": "web",
@@ -530,7 +565,7 @@
         "The modules are pure and take their context as parameters, matching the TypeScript signatures",
         "VERIFICATION: this box has no Xcode. Write the code and the tests, do not claim they compile or pass, and leave the story open for a Mac to verify."
       ],
-      "priority": 29,
+      "priority": 31,
       "passes": false,
       "slice": 1,
       "platform": "ios",
@@ -548,7 +583,7 @@
         "OfflineStore queues movements by client-generated id so replay is idempotent",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 30,
+      "priority": 32,
       "passes": false,
       "slice": 2,
       "platform": "ios",
@@ -565,7 +600,7 @@
         "The share extension path (EatPalShare) reaches the same review step on first open rather than resolving silently",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 31,
+      "priority": 33,
       "passes": false,
       "slice": 1,
       "platform": "ios",
@@ -583,7 +618,7 @@
         "No existing screen becomes unreachable; a test enumerates every Destination case and asserts a route",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 32,
+      "priority": 34,
       "passes": false,
       "slice": 4,
       "platform": "ios",
@@ -601,7 +636,7 @@
         "PantryView's existing scan, bulk add and expiry affordances survive the move into the segment",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 33,
+      "priority": 35,
       "passes": false,
       "slice": 4,
       "platform": "ios",
@@ -619,7 +654,7 @@
         "Coverage figures come from the one shortfall function, not a local recomputation",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 34,
+      "priority": 36,
       "passes": false,
       "slice": 4,
       "platform": "ios",
@@ -637,7 +672,7 @@
         "The generated content is asserted against the same expectations as buildClinicianLadderReport so the two platforms produce the same report",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 35,
+      "priority": 37,
       "passes": false,
       "slice": 5,
       "platform": "ios",
@@ -654,7 +689,7 @@
         "The backward-compatibility suite from US-673 is retired in the same change with an explicit note saying why",
         "VERIFICATION: requires a real deploy decision and a min-version check. Never autonomous."
       ],
-      "priority": 36,
+      "priority": 38,
       "passes": false,
       "slice": 2,
       "platform": "deploy",
