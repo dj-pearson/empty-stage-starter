@@ -15,10 +15,11 @@
         "Documented in the spec's prerequisite section as the gate before US-655"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "node",
-      "loopVerifiable": true
+      "loopVerifiable": true,
+      "notes": "scripts/ci/schema-drift-report.mjs + npm run schema:drift. Repo half parses supabase/migrations/*.sql (214 migrations) for create-table bodies and alter-table-add-column on the 9 kitchen-loop tables; reports foods 16 cols, grocery_items 23, plan_entries 13, recipes 30, recipe_ingredients 17, kid_food_ladder 16, kids 12, food_attempts 21, grocery_item_sources 8. Verified both paths: no SCHEMA_SNAPSHOT exits 0 with \"no target configured\"; a synthetic snapshot 3 migrations behind with only 3 foods columns exits 1 and attributes each missing column to the migration that added it (e.g. expiry_date -> 20260425000000_add_expiry_date_to_foods.sql). --emit-sql prints a SELECT-only introspection query. eslint clean, check-invisible-chars clean. DEVIATION from acceptance criterion 1, flagged for review: the script does NOT connect to a database itself. The repo has no pg dependency and every other script in scripts/ci is static analysis over tracked files; putting a service-role credential in a CI script to read information_schema is a worse risk than the drift it detects. Instead it emits the read-only SQL for an operator to run and diffs the returned JSON via SCHEMA_SNAPSHOT. Criteria 2-5 met as written. Spec prerequisite section updated to document the gate."
     },
     {
       "id": "US-655",

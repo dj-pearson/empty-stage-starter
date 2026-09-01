@@ -429,6 +429,22 @@ production database is behind its migrations and that `db push` is not used on s
 A ledger cannot land on a database whose current state cannot be asserted. This is a task
 in the plan, not an assumption.
 
+`scripts/ci/schema-drift-report.mjs` (US-654) is that gate, run as `npm run schema:drift`.
+It reports the repo-side expectation with no credentials and exits 0, and diffs against a
+real database only when handed a snapshot:
+
+```
+node scripts/ci/schema-drift-report.mjs --emit-sql > introspect.sql
+# run introspect.sql read-only against the target, save the JSON result
+SCHEMA_SNAPSHOT=./snapshot.json npm run schema:drift
+```
+
+It deliberately does not connect on its own. The repo has no `pg` dependency, the database
+is self-hosted, and a CI script holding a service-role credential to answer this question
+would be a worse problem than the one it solves. The operator runs the read-only query;
+the script does the comparison. Exit 1 means drift, and US-655 does not start until it
+exits 0.
+
 ### Release N - server only, no app rebuild
 
 - Create `canonical_products`, `item_aliases`, `inventory_movements`, `item_stock`, `meals`.

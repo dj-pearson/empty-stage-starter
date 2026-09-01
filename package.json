@@ -62,7 +62,8 @@
     "typecheck:seo": "bash scripts/ci/check-seo-extraction.sh",
     "typecheck:seo-pages": "bash scripts/ci/check-seo-pages.sh",
     "check:jsx-imports": "node scripts/ci/check-jsx-imports.mjs",
-    "check:migration-safety": "bash scripts/ci/check-migration-safety.sh"
+    "check:migration-safety": "bash scripts/ci/check-migration-safety.sh",
+    "schema:drift": "node scripts/ci/schema-drift-report.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
