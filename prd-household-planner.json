@@ -1,7 +1,7 @@
 {
   "project": "EatPal",
   "branchName": "epic/household-planner",
-  "description": "Household planner epic, decomposed from the 2026-09-01 review of the recipe, grocery and meal-planner modules across web, Expo and the Swift iOS app. Goal: one kitchen loop (recipe in, week planned, list generated, shop, stock, cook) that works for every eater in the house, not only children with a pickiness profile. Slices: 1 fix-now bugs and security, 2 one entry primitive plus grocery categorization and structured recipes, 3 kitchen-loop slice 3 dependencies plus household eaters, 4 planner and grocery features people ask for, 5 iOS parity. Stories that depend on prd-kitchen-loop.json say so in notes and must not duplicate that work. loopVerifiable follows the kitchen-loop convention: true when vitest, the typecheck and lint ratchets, or a disposable Postgres can prove it from this machine; false for edge functions that need a deployed target and for Swift.",
+  "description": "Household planner epic, decomposed from the 2026-09-01 review of the recipe, grocery and meal-planner modules across web and the Swift iOS app. The Expo client under app/ is retired (decision 2026-09-01, removed by US-720); Android is the Kotlin app under android-native/ and is out of scope for this epic. Goal: one kitchen loop (recipe in, week planned, list generated, shop, stock, cook) that works for every eater in the house, not only children with a pickiness profile. Slices: 1 fix-now bugs and security, 2 one entry primitive plus grocery categorization and structured recipes, 3 kitchen-loop slice 3 dependencies plus household eaters, 4 planner and grocery features people ask for, 5 iOS parity. Stories that depend on prd-kitchen-loop.json say so in notes and must not duplicate that work. loopVerifiable follows the kitchen-loop convention: true when vitest, the typecheck and lint ratchets, or a disposable Postgres can prove it from this machine; false for edge functions that need a deployed target and for Swift.",
   "userStories": [
     {
       "id": "US-709",
@@ -196,21 +196,26 @@
     },
     {
       "id": "US-720",
-      "title": "Expo reads and subscribes by household, not user",
-      "description": "As a household member on the phone, I want to see the meals, lists and recipes my partner created so that the shared plan is actually shared.",
+      "title": "Retire the Expo client",
+      "description": "As a contributor, I want the retired Expo app out of the tree so that mobile means the Swift app and no loop spends time on a client that will never ship.",
       "acceptanceCriteria": [
-        "A useHouseholdId hook under app/mobile/hooks resolves the household once via ensure_user_household and caches it for the session",
-        "app/(tabs)/lists.tsx, meals.tsx, recipes.tsx and pantry.tsx query with .eq('household_id', householdId) and their realtime channels filter household_id=eq.",
-        "Realtime handlers fold the payload into state (insert, update, delete by id) instead of refetching the whole table; the channel is created once per household id, not per day swipe",
-        "Manual check on two accounts in one household: a row created on web appears on the phone without a reload",
-        "app/(tabs)/meals.tsx routes every plan write through syncQueue.enqueueOrWrite so the offline banner's promise is true; a test replays a queued plan insert"
+        "app/ (the Expo Router tabs, app/mobile, app/index.tsx, app/_layout.tsx), index.mobile.js, metro.config.cjs, app.config.js, eas.json and capacitor.config.ts are deleted; babel.config.js and babel-plugin-module-resolver go with them when a grep shows nothing outside app/ consumes them",
+        "The name-to-unit table in app/mobile/lib/unit-suggestions.ts is ported into src/lib/groceryAisle.ts (US-728) before the directory is deleted; it is the only data in app/ worth keeping",
+        "expo*, react-native*, react-native-reanimated, react-native-safe-area-context, react-native-screens and @capacitor* are removed from package.json; package-lock.json is regenerated with npm install, never edited by hand",
+        "The expo:*, eas:*, expo:prebuild, setup:mobile:assets, android and ios npm scripts are removed, along with scripts/setup-mobile-assets.cjs if only Expo used it",
+        "src/integrations/supabase/client.mobile.ts and src/lib/syncQueue.test.ts (which imports app/mobile/lib/syncQueue) are removed; the comment in src/lib/ladderSyncOps.ts is corrected; src/lib/platform.ts keeps its storage abstraction only if a non-Expo consumer remains",
+        ".github/workflows/ci.yml and ios-app-store-deploy.yml drop their Expo and EAS references; ciGatesWired stays green",
+        "CLAUDE.md lines naming Expo and EAS (the header, the Stack line and the offline-durability paragraph under Load Precedence) are rewritten: Mobile is Swift under ios/EatPal, Android is Kotlin under android-native, and native offline durability points at ios/EatPal/EatPal/Services/OfflineStore.swift",
+        "PLATFORMS.md names ios/EatPal as the App Store client and android-native as the Android client, and records the Expo retirement with the removing commit; native-js-build/ is deleted in the same story if it is the earlier React Native shell with no CI, otherwise its status is recorded there",
+        "npm run test:run, both ratchets and npm run build pass after removal",
+        "Review findings that existed only in Expo (13, P20, P21, P22, G27, G28) are closed by this removal and are not ported anywhere"
       ],
       "priority": 12,
       "passes": false,
       "slice": 1,
-      "platform": "web",
+      "platform": "ops",
       "loopVerifiable": true,
-      "notes": "Review items 13, P21, P22, G27 (realtime part), X5 naming untouched here. Inserts already get household_id from the auto_fill_household_id trigger (20260415000000), so only reads and channels change."
+      "notes": "Review items 13, X1, X10, P20, P21, P22, G27, G28. Decision from Dj 2026-09-01: Expo is retired. android-native (Kotlin, own CI workflow) is untouched by this story."
     },
     {
       "id": "US-721",
@@ -238,7 +243,7 @@
       "acceptanceCriteria": [
         "Migration adds a BEFORE INSERT OR UPDATE trigger on public.recipe_ingredients that copies name<->ingredient_name, optional_notes<->preparation_notes, is_optional<->optional_notes presence and section<->group_label whichever side is null, so either column set stays populated",
         "name, optional_notes and group_label are declared canonical in a comment on the table and in CLAUDE.md",
-        "app/(tabs)/recipes.tsx, RecipeBuilderSheet.tsx and RecipeAddToGroceryModal.tsx read and write the canonical names; the ingredient query error at recipes.tsx:137 is surfaced, not discarded",
+        "ios/EatPal/EatPal/Models/RecipeIngredient.swift and the Swift recipe editor read and write the canonical names, or are confirmed to already do so in notes with file:line; web RecipesContext keeps reading name",
         "npx supabase gen types regenerates src/integrations/supabase/types.ts and the stale-types comment in RecipesContext is removed",
         "Retiring the legacy columns is a separate story gated on MIN_SUPPORTED_IOS_BUILD per the deprecation flow"
       ],
@@ -272,7 +277,7 @@
       "description": "As a developer, I want a single function that adds a meal to the plan so that every entry surface has the same validation and grocery side effects.",
       "acceptanceCriteria": [
         "src/lib/planMeal.ts exports planMeal({date, slot, eaters, source: {recipeId} | {foodId} | {title}, servings, options: {addMissingToGrocery, deductPantry}}) returning the created entries or a typed error",
-        "Planner.handleSelectFood, handleAddEntry, handleMobileAddEntry, MobileMealPlanner.handleDrawerSelectFood, SiblingMealFinder.handleUse, TonightSuggestionsDialog and app/(tabs)/meals.tsx insertPlanRows all call it; no other file inserts into plan_entries directly, enforced by a grep-based test",
+        "Planner.handleSelectFood, handleAddEntry, handleMobileAddEntry, MobileMealPlanner.handleDrawerSelectFood, SiblingMealFinder.handleUse, TonightSuggestionsDialog all call it; no other file inserts into plan_entries directly, enforced by a grep-based test",
         "Dates are built with toISODate from src/lib/date-utils.ts; a lint rule bans toISOString().split('T') in src and app",
         "Free-text titles are accepted; category is inferred and a provisional food is created with needs_review true rather than rejecting the entry",
         "Vitest covers each source kind, the grocery option and the pantry option"
@@ -308,8 +313,8 @@
       "description": "As a household, I want one definition of our meal slots and their times so that every screen, reminder and client agrees.",
       "acceptanceCriteria": [
         "New table public.household_meal_slots(id, household_id, key, label, sort_order, default_time time, enabled) with RLS, seeded per household with the six current keys and 24h default times",
-        "src/lib/mealSlots.ts and a useMealSlots hook replace the hardcoded lists in TodayMeals.tsx, GSAPCalendarMealPlanner.tsx, MobileMealPlanner.tsx, app/(tabs)/meals.tsx and schedule-meal-reminders",
-        "app/(tabs)/meals.tsx renders every enabled slot, including snack2 and try_bite",
+        "src/lib/mealSlots.ts and a useMealSlots hook replace the hardcoded lists in TodayMeals.tsx, GSAPCalendarMealPlanner.tsx, MobileMealPlanner.tsx and schedule-meal-reminders",
+        "Every enabled slot, including snack2 and try_bite, renders on every planner surface: the web grid, the mobile-width web grid, TodayMeals and Swift MealPlanView",
         "TodayMeals derives past/upcoming from default_time, replacing parseInt on '6:00 PM', and reads entry.food_id not food_ids",
         "generate-meal-suggestions emits only keys present in the slot table",
         "The plan_entries meal_slot CHECK is left in place for shipped clients; custom slot keys are a follow-up gated on MIN_SUPPORTED_IOS_BUILD"
@@ -346,15 +351,16 @@
         "src/lib/groceryAisle.ts defines the 32 GroceryAisle values, labels, storeWalkOrder and derivedFoodCategory exactly as ios/EatPal/EatPal/Models/GroceryAisle.swift, plus classify(name)",
         "tests/fixtures/aisle-classify-cases.json is asserted by both src/lib/groceryAisle.test.ts and a Swift test, extending the ingredient-parse-cases pattern; the existing GroceryAisleClassifierTests cases are in the fixture",
         "Unknown names classify to other, never snack; FoodCategory stays for plate-balance colouring and is derived from the aisle",
-        "src/lib/foodCategoryMap.ts is deleted; GroceryContext, parse-grocery-text, receiptParse, pantryQuickAddParser and app/mobile/lib/unit-suggestions.ts all classify through the new module",
-        "grocery_items.aisle_section is written on every insert from web and Expo and used for By Aisle grouping; the free-text aisle column becomes a user override"
+        "src/lib/foodCategoryMap.ts is deleted; GroceryContext, parse-grocery-text, receiptParse, pantryQuickAddParser all classify through the new module",
+        "The name-to-unit suggestion table from app/mobile/lib/unit-suggestions.ts is ported into the module as defaultUnitFor(name) with a fixture, before US-720 deletes app/",
+        "grocery_items.aisle_section is written on every insert from web and used for By Aisle grouping; the free-text aisle column becomes a user override"
       ],
       "priority": 20,
       "passes": false,
       "slice": 2,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items G1, G2, G4, G7, G10, X3 (aisles). Verified: foodCategoryMap.ts is 6 categories with raw includes() and a snack default; canonical_products has no seed."
+      "notes": "Review items G1, G2, G4, G7, G10, X3 (aisles), G14 (the unit-suggestions table). Verified: foodCategoryMap.ts is 6 categories with raw includes() and a snack default; canonical_products has no seed."
     },
     {
       "id": "US-729",
@@ -412,12 +418,12 @@
     },
     {
       "id": "US-732",
-      "title": "Store walk order on the web and Expo lists",
+      "title": "Store walk order on the web list",
       "description": "As a shopper, I want the list grouped in the order I walk the store so that I do not backtrack.",
       "acceptanceCriteria": [
         "src/lib/storeWalkOrder.ts ports walkOrder(for:layoutId:) from Swift, reading store_layouts.aisle_overrides and user_store_layout_overrides",
         "A list can pick its store (grocery_lists.store_layout_id is set by CreateGroceryListDialog and ManageGroceryListsDialog); selectedStoreLayoutId in Grocery.tsx is driven by the selected list",
-        "Groups in Grocery.tsx and app/(tabs)/lists.tsx are sorted by walk order; insertion-order grouping is gone",
+        "Groups in Grocery.tsx are sorted by walk order; insertion-order grouping is gone",
         "store_aisles from ManageStoreAislesDialog is honoured as a per-store override",
         "Fixture-based test for the five seeded layouts"
       ],
@@ -509,7 +515,7 @@
         "On every planMeal call and every meal update or delete, the shortfall for that meal is recomputed and written to grocery_item_sources(meal or plan_entry ref, grocery_item_id, required quantity); grocery_items.quantity is the sum over its sources plus any manual delta",
         "Removing or swapping a meal removes its source rows and decrements or deletes the grocery row; a manual row is never deleted by this path",
         "source_plan_entry_id (and meal_id once US-674 lands) is written on generated rows; regenerate becomes recompute-all-sources for the window",
-        "Expo's per-add Add missing to grocery toggle and the web MissingIngredientsDialog both call the same projection function",
+        "A per-add Add missing to grocery toggle on the web quick-add drawer (the pattern the Expo planner had) and MissingIngredientsDialog both call the same projection function",
         "A By Meal view on Grocery lists rows grouped by the meal that needs them; tapping a row shows for Tuesday stir-fry you have 200 g of 500 g",
         "Tests: add then remove a meal leaves the list unchanged; two meals sharing an item produce one row with the summed quantity"
       ],
@@ -522,10 +528,10 @@
     },
     {
       "id": "US-738",
-      "title": "Cooked action on web and Expo through rpc_mark_meal_made_v2",
+      "title": "Cooked action on web through rpc_mark_meal_made_v2",
       "description": "As a cook, I want marking a meal cooked to take the ingredients out of the pantry and tick the sourced grocery rows so that stock stays honest without a chore.",
       "acceptanceCriteria": [
-        "A Cooked action on the planner cell, Today card and Tonight Mode calls rpc_mark_meal_made_v2 with quantities scaled to servings; the deduct_food_quantity {_amount: 1} calls and Expo's quantity - 1 are removed",
+        "A Cooked action on the planner cell, Today card and Tonight Mode calls rpc_mark_meal_made_v2 with quantities scaled to servings; the deduct_food_quantity {_amount: 1} calls are removed",
         "With the ledger flag on, the RPC (or a v3) appends one cook movement per resolved ingredient with ref_type meal; undo appends reversals via rpc_undo_meal_made",
         "Cooking does not write plan_entries.result; per-plate outcomes are logged separately (kitchen-loop US-679)",
         "Grocery rows sourced from the meal are auto-checked",
@@ -544,11 +550,11 @@
       "title": "Checkout credits the pantry by item id, once, with undo",
       "description": "As a shopper, I want Done shopping to stock the pantry correctly so that I never see duplicate pantry rows or double counts.",
       "acceptanceCriteria": [
-        "A single checkout action on web and Expo writes one purchase movement per checked row using grocery_items.item_id (resolved at add time by US-730); the five lowercased-name matches in Grocery.tsx are removed",
+        "A single checkout action on web writes one purchase movement per checked row using grocery_items.item_id (resolved at add time by US-730); the five lowercased-name matches in Grocery.tsx are removed",
         "The wasSkipped double-credit branch is removed; a row that resolves by item id never also creates a new food",
         "Undo reads current state at click time and appends reversal movements; it does not close over a stale foods array",
         "Price entered at checkout or from a receipt is stored on the movement and on the item as last-known price",
-        "Expo check-off gains the same checkout, keep-awake in shopping mode, swipe-to-check and a non-destructive primary gesture",
+        "The mobile-width web grocery view gains a shopping mode with keep-awake (Screen Wake Lock API, re-acquired on visibilitychange), swipe-to-check and a non-destructive primary gesture, matching Swift ShoppingModeView",
         "Before the ledger flag defaults on, the stockComparison dark-launch telemetry is confirmed to be collected on real households and the agreement rate is recorded in notes",
         "Tests cover credit-once, undo and the price path"
       ],
@@ -586,7 +592,7 @@
       "acceptanceCriteria": [
         "src/lib/nav.ts exports one NAV array consumed by AppSidebar, Navigation, CommandPalette and QuickActionsMenu; the four hand-maintained lists are removed",
         "Food Chaining, Food Tracker, Progress, Sibling Meal Finder and the Kids selector appear only when at least one child eater has a pickiness profile; a household can opt in from settings",
-        "Primary sections are Today, Week, Recipes, Grocery (with a Pantry segment) and Kids, matching the kitchen-loop iOS layout; Expo tabs are renamed from Meals and Lists to Planner and Grocery",
+        "Primary sections are Today, Week, Recipes, Grocery (with a Pantry segment) and Kids, matching the kitchen-loop iOS layout",
         "The signed-in document titles no longer read ARFID and Picky Eater Meal Planner; marketing pages keep their positioning",
         "QuickActionsMenu leads with Plan a meal and Add to list, not Add Child"
       ],
@@ -696,8 +702,7 @@
         "A pg_cron entry (following 20260818000001_trial_reminder_emails.sql) invokes schedule-meal-reminders on a schedule; profiles.timezone is added and used to compute local instants",
         "One notification per meal per household member, not per plate; deep link carries date and slot",
         "New notification types: dinner_tonight at a user-chosen hour naming the planned meal, partner_planned_meal and partner_checked_items (rate limited to one digest per hour), pantry_expiring on web, shopping_day nudge when the projected list is non-empty",
-        "The four weekly-report functions are consolidated into one with a documented schedule",
-        "Expo notifications.ts gains local scheduling for the same topics as Swift NotificationService, or Expo is formally scoped out of notifications in PLATFORMS.md"
+        "The four weekly-report functions are consolidated into one with a documented schedule"
       ],
       "priority": 39,
       "passes": false,
@@ -747,7 +752,7 @@
       "description": "As a cook, I want to find a recipe by an ingredient, see what I can make right now from my own library, and know when we last made it and who liked it.",
       "acceptanceCriteria": [
         "Migration adds a generated tsvector over recipes name, tags and recipe_ingredients names with a GIN index, an index on recipes(household_id, created_at desc), cuisine and course columns with fixed vocabularies, and diet_flags text[]",
-        "One shared searchRecipes in src/lib used by web and Expo: server tsquery plus client Damerau-Levenshtein re-rank; web search covers ingredients and instructions",
+        "One shared searchRecipes in src/lib used by web: server tsquery plus client Damerau-Levenshtein re-rank; web search covers ingredients and instructions",
         "What can I make is a deterministic query over recipe_ingredients.food_id against stock, returning cookable now and cookable with N more; the LLM suggestion remains as a separate optional action",
         "New table recipe_cook_events(recipe_id, meal_id, cooked_on, servings_made, cooked_by, notes) written by the Cooked action; the detail view shows made N times, last made, and per-eater outcomes from meal_votes and plan outcomes",
         "recipe_ratings(recipe_id, eater_id, rating) replaces the single scalar; the scalar becomes a rollup for shipped clients",
@@ -807,7 +812,6 @@
       "acceptanceCriteria": [
         "src/components/AddItemSheet.tsx with mode tabs type, paste, scan, photo; it owns parsing (parseGroceryText, pantryQuickAddParser), resolution (US-730), unit suggestion and category inference, and takes a target (grocery list, pantry, recipe ingredients, plan slot)",
         "AddFoodDialog, BulkAddFoodDialog, AddGroceryItemDialog, FoodSelectorDialog, ImportRecipeToGroceryDialog, MissingIngredientsDialog and PantryQuickAdd are replaced by it or become thin wrappers",
-        "Expo BulkAddSheet and QuickCategoryPicker use the same parsing and resolution modules",
         "EmptyState.tsx is used for the empty grocery, pantry, planner and recipes states",
         "Tests cover each mode's parse path against the shared fixtures"
       ],
@@ -816,25 +820,24 @@
       "slice": 4,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items X7, G14 (unit-suggestions merge), and the EmptyState note from the cohesion review."
+      "notes": "Review items X7 and the EmptyState note from the cohesion review. The unit-suggestions data lands in US-728."
     },
     {
       "id": "US-754",
-      "title": "Declare one iOS client and remove the dead shells",
-      "description": "As a contributor, I want to know which mobile codebase ships so that a mobile change lands in the right place.",
+      "title": "Platform map and a findable minimum iOS build",
+      "description": "As a contributor, I want the platform map and the minimum supported iOS build documented so that CLAUDE.md's migration rule can actually be checked.",
       "acceptanceCriteria": [
-        "PLATFORMS.md names ios/EatPal (Swift) as the App Store client, states whether app/ (Expo) ships to Android or is retired, and lists what each client is expected to implement",
-        "capacitor.config.ts, the @capacitor dependencies, app/mobile/MobileApp.tsx, native-js-build/ and android-native/ are deleted or moved to archive/ per that decision",
-        "If Expo stays: eas.json and app.config.js placeholders are replaced, an expo export smoke job and vitest coverage for the tabs are added to CI, @sentry/react-native replaces the console shim, and the offline queue surfaces dropped operations",
-        "If Expo goes: the expo and eas scripts leave package.json and CLAUDE.md's stack line is corrected either way",
-        "ios/README.md Sentry note is corrected; the location of the min supported iOS build (app_config.min_ios_build via ForceUpdateService) is documented in CLAUDE.md"
+        "PLATFORMS.md (created by US-720) lists, per client, which loop steps it implements today and which stories in this epic and prd-kitchen-loop.json bring it to parity",
+        "ios/README.md no longer says Sentry is not wired on iOS; it points at SentryService.swift",
+        "CLAUDE.md states that the minimum supported iOS build lives in app_config.min_ios_build, read by ios/EatPal/EatPal/Services/ForceUpdateService.swift, and gives the read-only query to fetch it; the Migration Rules section links to it",
+        "npm run ios:min-build prints the value when a read-only target is configured and exits 0 with no target configured, following scripts/ci/schema-drift-report.mjs (no credential in the script)"
       ],
       "priority": 46,
       "passes": false,
       "slice": 1,
       "platform": "ops",
       "loopVerifiable": true,
-      "notes": "Review items X1, X10, X14 (min build). Decision needed from Dj on Expo's future before the delete half runs."
+      "notes": "Review items X1 (docs part), X14 (min build). The Expo removal itself is US-720."
     },
     {
       "id": "US-755",
@@ -855,13 +858,13 @@
     },
     {
       "id": "US-756",
-      "title": "One design token source for web, Expo and Swift",
+      "title": "One design token source for web and Swift",
       "description": "As a user, I want EatPal to look like one product on every screen I own.",
       "acceptanceCriteria": [
-        "design/tokens.json holds colour (primary is the web carrot orange), the type scale and radii; a script generates src/index.css variables, app/mobile/lib/theme.ts and ios/EatPal/EatPal/Utilities/AppTheme.swift, and CI fails if a generated file is stale",
-        "AppTheme.swift no longer uses Color.green; Expo tab icons use @expo/vector-icons matching the SF Symbol choices; a lint rule bans hex literals in app/",
-        "Expo gains skeleton and toast primitives so its screens stop hand-rolling both",
-        "Web and Expo agree on the type scale; families are recorded in the token file even where Swift uses the system font"
+        "design/tokens.json holds colour (primary is the web carrot orange), the type scale and radii; a script generates src/index.css variables and ios/EatPal/EatPal/Utilities/AppTheme.swift, and CI fails if a generated file is stale",
+        "AppTheme.swift no longer uses Color.green; the Swift palette resolves to the same hex values as the web tokens in light and dark",
+        "A lint rule bans hex literals in src/ outside the generated token file",
+        "Web and Swift agree on the type scale; families are recorded in the token file even where Swift uses the system font"
       ],
       "priority": 48,
       "passes": false,
