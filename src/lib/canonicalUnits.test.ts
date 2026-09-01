@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   toCanonical,
   fromCanonical,
+  toCanonicalInItemUnit,
   sumCanonical,
   isUnknown,
   type CanonicalItemFacts,
@@ -322,5 +323,39 @@ describe('fromCanonical: the mirror direction (US-671)', () => {
     const snapshot = JSON.stringify(item);
     fromCanonical(800, 'g', 'can', item);
     expect(JSON.stringify(item)).toBe(snapshot);
+  });
+});
+
+describe('toCanonicalInItemUnit: the write-path inverse (US-672)', () => {
+  it('accepts an opaque unit that IS the count item own display unit', () => {
+    // The US-669 backfill classified this item as 'count' using its quantity in
+    // servings, so one serving is one count by construction.
+    const item = { canonical_unit: 'count', unit: 'servings' } as CanonicalItemFacts & { unit: string };
+    expect(ok(toCanonicalInItemUnit(3, 'servings', item))).toMatchObject({ value: 3, unit: 'count' });
+    expect(ok(toCanonicalInItemUnit(-2, 'Servings', item))).toMatchObject({ value: -2, unit: 'count' });
+  });
+
+  it('refuses a DIFFERENT opaque unit on the same item', () => {
+    // The backfill said what a serving of this item is. It said nothing about
+    // a can, and guessing here is exactly the bug this epic exists to remove.
+    const item = { canonical_unit: 'count', unit: 'servings' } as CanonicalItemFacts & { unit: string };
+    expect(isUnknown(toCanonicalInItemUnit(2, 'cans', item))).toBe(true);
+  });
+
+  it('refuses an opaque unit on a mass or volume item', () => {
+    expect(isUnknown(toCanonicalInItemUnit(2, 'servings', { canonical_unit: 'g', unit: 'servings' }))).toBe(true);
+    expect(isUnknown(toCanonicalInItemUnit(2, 'packages', { canonical_unit: 'ml', unit: 'packages' }))).toBe(true);
+  });
+
+  it('changes nothing that toCanonical already handled', () => {
+    const item = { canonical_unit: 'g', unit: 'kg' } as CanonicalItemFacts & { unit: string };
+    expect(toCanonicalInItemUnit(2, 'kg', item)).toEqual(toCanonical(2, 'kg', item));
+    expect(toCanonicalInItemUnit(2, 'lb', item)).toEqual(toCanonical(2, 'lb', item));
+  });
+
+  it('round-trips against fromCanonical for the opaque count shape', () => {
+    const item = { canonical_unit: 'count', unit: 'servings' } as CanonicalItemFacts & { unit: string };
+    const canonical = ok(toCanonicalInItemUnit(4, 'servings', item));
+    expect(fromCanonical(canonical.value, canonical.unit, 'servings', item)).toBe(4);
   });
 });

@@ -2,7 +2,8 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
-import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan, useRecipes, useInventory } from "@/contexts/AppContext";
+import type { MovementItem, PurchasableGroceryItem } from "@/lib/movementBuilders";
 import { countMissingForRecipe } from "@/lib/recipeShortfall";
 import { analytics } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,9 @@ interface UserContribution {
 export default function Grocery() {
   const { t } = useTranslation();
   const { foods, addFood, updateFood } = useFoods();
+  // US-672: with writes on, checkout appends purchase movements and the pantry
+  // is credited by the ledger rather than by the per-item toggle.
+  const { ledgerWritesEnabled, recordPurchases, recordPurchaseReversal } = useInventory();
   const { kids, activeKidId } = useKids();
   const { planEntries } = usePlan();
   const {
@@ -263,6 +267,13 @@ export default function Grocery() {
         }
       }
 
+      // US-672 criterion 3: when the ledger is doing the crediting, checking a
+      // row off is just marking it bought. The pantry is credited once, by the
+      // same action that closes the rows (handleDoneShopping), rather than
+      // drifting in item by item as the parent walks the aisles. Crediting here
+      // as well would credit twice.
+      if (ledgerWritesEnabled) return;
+
       // Add/update pantry inventory
       const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
       let pantryUpdated = true;
@@ -307,6 +318,8 @@ export default function Grocery() {
       // The grocery item remains checked so the user can finish shopping; on upgrade
       // they can re-check to sync to pantry.
     } else {
+      // Unchecking. Nothing to take back when nothing was credited yet.
+      if (ledgerWritesEnabled) return;
       // Unchecking - remove from pantry
       const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
       if (existingFood && existingFood.quantity) {
@@ -317,7 +330,7 @@ export default function Grocery() {
         toast.info(`${item.name} moved back to shopping list`);
       }
     }
-  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, updateFood, addFood]);
+  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, updateFood, addFood, ledgerWritesEnabled]);
 
   const handleDeleteItem = useCallback((itemId: string) => {
     const item = groceryItems.find(i => i.id === itemId);
@@ -351,14 +364,59 @@ export default function Grocery() {
     updateGroceryItem(itemId, { quantity: newQty });
   }, [groceryItems, updateGroceryItem]);
 
-  // US-282: explicit "Move completed to pantry" action.
+  // US-282, amended by US-672: checkout.
   //
-  // Per-item toggle (handleToggleItem) already increments pantry on check,
-  // so by the time the user hits this button the pantry is up-to-date —
-  // this commit just sweeps the bought items off the active list. Undo
-  // restores both halves: re-creates the grocery rows and rolls back the
-  // pantry quantity delta we attributed to each item.
-  const handleDoneShopping = useCallback(() => {
+  // Two shapes, chosen by the writes flag.
+  //
+  //   flag OFF  the shipped behaviour. The per-item toggle already credited
+  //             the pantry, so this only sweeps the bought rows off the list.
+  //   flag ON   criterion 3. The toggle credited nothing; this one action
+  //             appends a purchase movement per checked row AND closes the
+  //             rows, so the pantry is credited before the car is unloaded
+  //             instead of by a separate "move completed to pantry" chore.
+  //
+  // Rows the ledger cannot take (no matching pantry item, or a unit with no
+  // conversion) fall back to the legacy credit rather than being dropped: a
+  // shop that recorded half of itself would be worse than one that recorded
+  // none of it.
+  const handleDoneShopping = useCallback(async () => {
+    if (ledgerWritesEnabled && purchasedItems.length > 0) {
+      const { skipped } = await recordPurchases(
+        purchasedItems as unknown as PurchasableGroceryItem[],
+        foods as unknown as MovementItem[],
+      );
+      for (const failure of skipped) {
+        logger.warn('US-672: grocery row not recorded as a purchase movement', {
+          reason: failure.reason,
+          itemId: failure.itemId,
+        });
+      }
+      // The legacy credit, for exactly the rows the ledger declined.
+      const skippedItemIds = new Set(skipped.map((f) => f.itemId).filter(Boolean));
+      for (const item of purchasedItems) {
+        const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+        const wasSkipped = !existingFood || skippedItemIds.has(existingFood.id);
+        if (!wasSkipped) continue;
+        if (existingFood) {
+          updateFood(existingFood.id, {
+            ...existingFood,
+            quantity: (existingFood.quantity || 0) + item.quantity,
+            unit: item.unit,
+          });
+        } else {
+          await addFood({
+            name: item.name,
+            category: item.category,
+            is_safe: true,
+            is_try_bite: false,
+            aisle: item.aisle,
+            quantity: item.quantity,
+            unit: item.unit,
+          });
+        }
+      }
+    }
+
     const moved = purchasedItems.map(item => ({
       name: item.name,
       category: item.category,
@@ -422,6 +480,33 @@ export default function Grocery() {
       action: {
         label: 'Undo',
         onClick: () => {
+          // US-672: when the ledger did the crediting, take it back the same
+          // way -- an appended correction that negates each purchase. A direct
+          // decrement of foods.quantity would be translated by the US-668
+          // trigger into a correction of its own, so doing both would take the
+          // shop back twice.
+          if (ledgerWritesEnabled) {
+            // purchasedItems, not `moved`: `moved` is a projection that drops
+            // the grocery row id, and without it the reversal loses the
+            // ref_id that ties it back to the purchase it cancels.
+            void recordPurchaseReversal(
+              purchasedItems as unknown as PurchasableGroceryItem[],
+              foods as unknown as MovementItem[],
+            );
+            moved.forEach(item => {
+              addGroceryItem({
+                name: item.name,
+                category: item.category,
+                quantity: item.quantity,
+                unit: item.unit,
+                aisle: item.aisle,
+                is_manual: item.is_manual,
+                added_via: item.added_via,
+                source_recipe_id: item.source_recipe_id,
+              });
+            });
+            return;
+          }
           // Re-insert each grocery row (as active — user can re-check) and
           // decrement the pantry food we incremented on the original
           // toggle. Best-effort: name-based pantry match is consistent
@@ -449,7 +534,7 @@ export default function Grocery() {
         },
       },
     });
-  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, updateFood, recipes, planEntries]);
+  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, updateFood, addFood, recipes, planEntries, ledgerWritesEnabled, recordPurchases, recordPurchaseReversal]);
 
   const handleSmartRestock = async () => {
     setIsGeneratingRestock(true);

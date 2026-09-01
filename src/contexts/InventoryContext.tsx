@@ -36,6 +36,20 @@ import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { fromCanonical } from "@/lib/canonicalUnits";
 import { foldMovements, balanceOf, type LedgerState } from "@/lib/inventoryLedger";
 import type { ComparableItem, StockRow } from "@/lib/stockComparison";
+import {
+  buildCorrectionMovement,
+  buildPurchaseMovement,
+  buildWasteMovement,
+  buildAdjustmentMovement,
+  partitionMovements,
+  resolveGroceryItemId,
+  isSkipped,
+  type MovementDraft,
+  type MovementItem,
+  type MovementSkipped,
+  type PurchasableGroceryItem,
+} from "@/lib/movementBuilders";
+import { generateId } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "./AuthContext";
 
@@ -48,6 +62,21 @@ export type ItemStock = Database["public"]["Tables"]["item_stock"]["Row"];
  * compared, it just does not render.
  */
 export const LEDGER_READS_FLAG = "kitchen_loop_ledger_reads";
+
+/**
+ * The flag that decides whether an action APPENDS to the ledger (US-672).
+ *
+ * Separate from the reads flag on purpose, because the two stage in opposite
+ * order: writes go on first so the ledger accumulates real history, and reads
+ * only follow once the US-671 comparison says the balance agrees with
+ * foods.quantity. One flag would force them on together and there would be
+ * nothing to compare against.
+ *
+ * It also has to exist at all. These migrations are applied nowhere yet, so an
+ * unconditional insert would fail on every pantry edit for every user, and the
+ * only thing that would achieve is a Sentry full of the same error.
+ */
+export const LEDGER_WRITES_FLAG = "kitchen_loop_ledger_writes";
 
 /**
  * How much history the movements slice carries. Wide enough that "why does it
@@ -189,7 +218,64 @@ interface InventoryContextType {
   foldWindow: LedgerState;
   /** item_stock shaped for the US-671 comparison. */
   stockRows: StockRow[];
+  /** True when actions should append to the ledger (US-672). */
+  ledgerWritesEnabled: boolean;
+  /**
+   * Append movements, optimistically and idempotently.
+   *
+   * A duplicate id is not an error and not a second credit; see the note on
+   * the upsert in the implementation.
+   */
+  appendMovements: (drafts: readonly MovementDraft[]) => Promise<AppendResult>;
+  /**
+   * A parent edited a pantry number. Records the CHANGE.
+   *
+   * Returns `recorded: false` with a reason when the edit could not be
+   * expressed as a movement, which the caller must treat as "fall back to the
+   * legacy write" rather than "the edit is done".
+   */
+  recordPantryCorrection: (
+    item: MovementItem & { quantity?: number | null },
+    newQuantity: number,
+  ) => Promise<RecordResult>;
+  /** A parent threw something out. */
+  recordWaste: (item: MovementItem, quantity: number) => Promise<RecordResult>;
+  /** Checkout: one purchase movement per checked row. */
+  recordPurchases: (
+    groceryItems: readonly PurchasableGroceryItem[],
+    items: readonly MovementItem[],
+  ) => Promise<RecordResult & { skipped: MovementSkipped[] }>;
+  /**
+   * Undo a checkout: append a correction that negates each purchase.
+   *
+   * A true reversal (rpc_reverse_movements_by_ref, US-677) does not exist yet.
+   * In an append-only ledger a negating correction is the same fact recorded
+   * the long way, and it composes with anything else that moved in between.
+   */
+  recordPurchaseReversal: (
+    groceryItems: readonly PurchasableGroceryItem[],
+    items: readonly MovementItem[],
+  ) => Promise<RecordResult>;
   refreshInventory: () => Promise<void>;
+}
+
+export interface AppendResult {
+  /** Rows handed to the server. Duplicates are included; they are no-ops. */
+  attempted: number;
+  /** False when the insert failed and the optimistic rows were rolled back. */
+  ok: boolean;
+  error: unknown | null;
+  /** True when the flag is off, so nothing was attempted at all. */
+  disabled?: boolean;
+}
+
+export interface RecordResult {
+  /** True when at least one movement reached the server. */
+  recorded: boolean;
+  /** How many movements were accepted. */
+  count: number;
+  /** Why nothing was recorded, when nothing was. */
+  reason: string | null;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -203,8 +289,14 @@ function movementWindowStart(now: Date = new Date()): string {
 export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [itemStock, setItemStock] = useState<ItemStock[]>([]);
+  // Movements this client appended that the server has not yet answered for.
+  // item_stock is maintained by a trigger, so between the insert and the
+  // realtime echo the balance on screen would still be the pre-edit one. These
+  // ids let the read overlay add them in for that window.
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const { userId, householdId } = useAuth();
   const ledgerReadsEnabled = useFeatureFlag(LEDGER_READS_FLAG, false);
+  const ledgerWritesEnabled = useFeatureFlag(LEDGER_WRITES_FLAG, false);
 
   // Realtime. Two channels rather than one, so a household switch tears down
   // and rebuilds each independently and the channel names stay diagnosable.
@@ -255,6 +347,196 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId, householdId]);
 
+  /**
+   * Append movements.
+   *
+   * IDEMPOTENT BY UPSERT, and the exact form matters. `ignoreDuplicates: true`
+   * compiles to ON CONFLICT DO NOTHING, so re-sending a movement the server
+   * already has is a no-op rather than an error or a second credit. The other
+   * spelling (`ignoreDuplicates: false`, ON CONFLICT DO UPDATE) would not just
+   * be wrong here, it could not work: inventory_movements REVOKEs UPDATE from
+   * authenticated precisely so history cannot be rewritten, so the update
+   * branch would be refused by the grant.
+   *
+   * Optimistic, then rolled back on failure. A movement that never reached the
+   * server must not keep inflating the local balance, because the next
+   * server-authoritative load would silently drop it and the number on screen
+   * would change with no action from the parent.
+   */
+  const appendMovements = useCallback(
+    async (drafts: readonly MovementDraft[]): Promise<AppendResult> => {
+      const rows = (drafts ?? []).filter(Boolean);
+      if (rows.length === 0) return { attempted: 0, ok: true, error: null };
+      if (!ledgerWritesEnabled) return { attempted: 0, ok: true, error: null, disabled: true };
+      if (!userId || !householdId) {
+        return { attempted: 0, ok: false, error: new Error("not authenticated"), disabled: true };
+      }
+
+      const optimistic = parseMovementRows(rows as unknown[]);
+      const ids = new Set(optimistic.map((m) => m.id));
+      // Dedupe against what is already held, so an optimistic row and the
+      // realtime echo of the same id cannot both count.
+      setMovements((prev) => [...prev.filter((m) => !ids.has(m.id)), ...optimistic]);
+
+      try {
+        const { error } = await supabase
+          .from("inventory_movements")
+          .upsert(rows as never, { onConflict: "id", ignoreDuplicates: true });
+
+        if (error) {
+          setMovements((prev) => prev.filter((m) => !ids.has(m.id)));
+          logger.error("Error appending inventory movements:", error);
+          return { attempted: rows.length, ok: false, error };
+        }
+        // Accepted, but item_stock has not echoed yet. Count these into the
+        // displayed balance until it does.
+        setPendingIds((prev) => new Set([...prev, ...ids]));
+        return { attempted: rows.length, ok: true, error: null };
+      } catch (error) {
+        setMovements((prev) => prev.filter((m) => !ids.has(m.id)));
+        logger.error("Error appending inventory movements:", error);
+        return { attempted: rows.length, ok: false, error };
+      }
+    },
+    [ledgerWritesEnabled, userId, householdId],
+  );
+
+  const recordPantryCorrection = useCallback(
+    async (
+      item: MovementItem & { quantity?: number | null },
+      newQuantity: number,
+    ): Promise<RecordResult> => {
+      if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
+      const draft = buildCorrectionMovement({
+        id: generateId(),
+        householdId: householdId ?? "",
+        userId: userId ?? "",
+        item,
+        currentQuantity: typeof item?.quantity === "number" ? item.quantity : 0,
+        newQuantity,
+      });
+      if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
+      const result = await appendMovements([draft]);
+      return {
+        recorded: result.ok && result.attempted > 0,
+        count: result.ok ? result.attempted : 0,
+        reason: result.ok ? null : "the append failed",
+      };
+    },
+    [ledgerWritesEnabled, householdId, userId, appendMovements],
+  );
+
+  const recordWaste = useCallback(
+    async (item: MovementItem, quantity: number): Promise<RecordResult> => {
+      if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
+      const draft = buildWasteMovement({
+        id: generateId(),
+        householdId: householdId ?? "",
+        userId: userId ?? "",
+        item,
+        quantity,
+      });
+      if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
+      const result = await appendMovements([draft]);
+      return {
+        recorded: result.ok && result.attempted > 0,
+        count: result.ok ? result.attempted : 0,
+        reason: result.ok ? null : "the append failed",
+      };
+    },
+    [ledgerWritesEnabled, householdId, userId, appendMovements],
+  );
+
+  /**
+   * Checkout, in one action.
+   *
+   * Every checked row that resolves to a pantry item becomes a purchase
+   * movement. Rows that do not resolve, or whose unit cannot be converted, come
+   * back in `skipped` so the caller can keep crediting them the legacy way
+   * instead of losing them: a shop that half-recorded would be worse than one
+   * that did not record at all.
+   */
+  const recordPurchases = useCallback(
+    async (
+      groceryItems: readonly PurchasableGroceryItem[],
+      items: readonly MovementItem[],
+    ): Promise<RecordResult & { skipped: MovementSkipped[] }> => {
+      if (!ledgerWritesEnabled) {
+        return { recorded: false, count: 0, reason: "ledger writes are off", skipped: [] };
+      }
+      const results = (groceryItems ?? []).map((row) => {
+        const itemId = resolveGroceryItemId(row, items);
+        const item = itemId ? items.find((i) => i.id === itemId) : undefined;
+        if (!item) {
+          return {
+            skipped: true as const,
+            reason: `no pantry item matches "${row?.name ?? ""}"`,
+            itemId: null,
+          };
+        }
+        return buildPurchaseMovement({
+          householdId: householdId ?? "",
+          userId: userId ?? "",
+          item,
+          groceryItem: row,
+        });
+      });
+
+      const { movements: drafts, skipped } = partitionMovements(results);
+      if (drafts.length === 0) {
+        return { recorded: false, count: 0, reason: "nothing resolved to a pantry item", skipped };
+      }
+      const result = await appendMovements(drafts);
+      return {
+        recorded: result.ok && result.attempted > 0,
+        count: result.ok ? result.attempted : 0,
+        reason: result.ok ? null : "the append failed",
+        skipped,
+      };
+    },
+    [ledgerWritesEnabled, householdId, userId, appendMovements],
+  );
+
+  const recordPurchaseReversal = useCallback(
+    async (
+      groceryItems: readonly PurchasableGroceryItem[],
+      items: readonly MovementItem[],
+    ): Promise<RecordResult> => {
+      if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
+      const results = (groceryItems ?? []).map((row) => {
+        const itemId = resolveGroceryItemId(row, items);
+        const item = itemId ? items.find((i) => i.id === itemId) : undefined;
+        if (!item) {
+          return { skipped: true as const, reason: `no pantry item matches "${row?.name ?? ""}"`, itemId: null };
+        }
+        return buildAdjustmentMovement({
+          // A fresh id: this is a NEW fact appended after the purchase, not a
+          // re-send of it. Reusing the purchase's id would collide with the
+          // row it is meant to cancel and undo nothing at all.
+          id: generateId(),
+          householdId: householdId ?? "",
+          userId: userId ?? "",
+          item,
+          signedQuantity: -Math.abs(typeof row.quantity === "number" ? row.quantity : 1),
+          displayUnit: row.unit ?? item.unit,
+          refType: "grocery_item",
+          refId: row.id,
+        });
+      });
+      const { movements: drafts } = partitionMovements(results);
+      if (drafts.length === 0) {
+        return { recorded: false, count: 0, reason: "nothing resolved to a pantry item" };
+      }
+      const result = await appendMovements(drafts);
+      return {
+        recorded: result.ok && result.attempted > 0,
+        count: result.ok ? result.attempted : 0,
+        reason: result.ok ? null : "the append failed",
+      };
+    },
+    [ledgerWritesEnabled, householdId, userId, appendMovements],
+  );
+
   const refreshInventory = useCallback(async () => {
     if (!userId || !householdId) return;
     try {
@@ -296,14 +578,36 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     [itemStock],
   );
 
+  // Whatever we appended and the server has not yet confirmed into item_stock,
+  // summed per item in canonical units.
+  const pendingCanonicalByItem = useMemo(() => {
+    const map = new Map<string, number>();
+    if (pendingIds.size === 0) return map;
+    for (const m of movements) {
+      if (!pendingIds.has(m.id)) continue;
+      map.set(m.item_id, (map.get(m.item_id) ?? 0) + m.delta);
+    }
+    return map;
+  }, [movements, pendingIds]);
+
+  // Any item_stock change means the trigger has answered. Drop the whole
+  // pending set rather than trying to match rows to movements: erring toward
+  // the SERVER's number is the safe direction. Keeping a pending delta that
+  // item_stock has already absorbed would show the edit twice, while dropping
+  // one early only means the screen shows the truth a moment sooner.
+  useEffect(() => {
+    setPendingIds((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [itemStock]);
+
   const ledgerQuantityOf = useCallback(
     (item: ComparableItem): number | null => {
       if (!item || typeof item.id !== "string") return null;
       const row = stockByItem.get(item.id);
       if (!row) return null;
-      return fromCanonical(row.on_hand_canonical, row.canonical_unit, item.unit, item);
+      const pending = pendingCanonicalByItem.get(item.id) ?? 0;
+      return fromCanonical(row.on_hand_canonical + pending, row.canonical_unit, item.unit, item);
     },
-    [stockByItem],
+    [stockByItem, pendingCanonicalByItem],
   );
 
   const pantryQuantityOf = useCallback(
@@ -324,20 +628,32 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       itemStock,
       setItemStock,
       ledgerReadsEnabled,
+      ledgerWritesEnabled,
       pantryQuantityOf,
       ledgerQuantityOf,
       foldWindow,
       stockRows,
+      appendMovements,
+      recordPantryCorrection,
+      recordWaste,
+      recordPurchases,
+      recordPurchaseReversal,
       refreshInventory,
     }),
     [
       movements,
       itemStock,
       ledgerReadsEnabled,
+      ledgerWritesEnabled,
       pantryQuantityOf,
       ledgerQuantityOf,
       foldWindow,
       stockRows,
+      appendMovements,
+      recordPantryCorrection,
+      recordWaste,
+      recordPurchases,
+      recordPurchaseReversal,
       refreshInventory,
     ],
   );

@@ -295,3 +295,44 @@ export function fromCanonical(
   // Different dimensions with no per-item bridge. Refuse rather than guess.
   return null;
 }
+
+/**
+ * `toCanonical`, plus the one item-scoped rule that makes the write path work
+ * on real data. This is the exact inverse of `fromCanonical`, and it exists for
+ * the same reason.
+ *
+ * `toCanonical(3, 'servings')` is honestly unknown, and must stay that way: a
+ * recipe calling for "1 serving of flour" really has not said how much flour.
+ * But when the ITEM is canonical in 'count' and the amount is expressed in
+ * THAT ITEM'S OWN display unit, one display unit is one count by construction
+ * -- the US-669 backfill is what classified the item as 'count', using its
+ * existing quantity in that very unit.
+ *
+ * Without this, US-672 would refuse to record a pantry edit for essentially
+ * every production item, since every sampled `foods.unit` is 'servings' or
+ * 'packages'. The pantry would appear to accept an edit and the ledger would
+ * quietly record nothing.
+ *
+ * The rule is deliberately narrow. It applies ONLY when the unit matches the
+ * item's own display unit, so "2 cans" of an item displayed in servings is
+ * still refused: the backfill said what a serving of this item is, and said
+ * nothing whatever about a can.
+ */
+export function toCanonicalInItemUnit(
+  quantity: number,
+  unit: string | null | undefined,
+  item: CanonicalItemFacts & { unit?: string | null } = {}
+): CanonicalResult {
+  const direct = toCanonical(quantity, unit, item);
+  if (!isUnknown(direct)) return direct;
+
+  if (String(item.canonical_unit) !== 'count') return direct;
+
+  const token = tokenise(unit);
+  const itemToken = tokenise(item.unit);
+  if (token === '' || itemToken === '' || token !== itemToken) return direct;
+
+  if (typeof quantity !== 'number' || !Number.isFinite(quantity)) return direct;
+
+  return { value: quantity, unit: 'count', via: 'identity' };
+}
