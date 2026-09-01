@@ -78,6 +78,10 @@ const MANUAL = new Set([
   // US-644 is a Swift change with no toolchain in CI; like the rest of this
   // row it can only be closed by a human who built and ran the app.
   'US-644',
+  // US-700/US-701 are Coolify env changes on the production supabase-auth
+  // container. The loop writes the template, the CI check and the runbook; a
+  // human applies the variables. Nothing in CI can assert prod GoTrue config.
+  'US-700', 'US-701',
 ]);
 const ANDROID = new Set(['US-213', 'US-214', 'US-222']);
 const WEB = new Set([
@@ -96,6 +100,10 @@ const WEB = new Set([
   'US-651',
   'US-652',
   'US-653',
+  // US-702 (signup verification screen) and US-707 (funnel_events activation
+  // tracking) are web-only; the iOS gate classify() defaults to would never
+  // verify them.
+  'US-702', 'US-707',
 ]);
 
 function classify(story) {

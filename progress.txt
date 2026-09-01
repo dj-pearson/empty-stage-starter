@@ -323,3 +323,119 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
 - Flipped passes=true (gate green + implementation present): US-645, US-646, US-647, US-649, US-650, US-651, US-652, US-653.
 - Held false: 9 (breakdown {"manual-signoff-required":8,"verified":8,"awaiting-implementation":1}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
 ---
+
+## 2026-09-01 - US-700
+- Restored the guard rails around the signup confirmation email. The template
+  files were never the problem: both supabase/templates/confirmation.html and
+  public/email-templates/confirmation.html render {{ .Token }} and the hosted
+  copy serves it live. GOTRUE_MAILER_TEMPLATES_CONFIRMATION is empty on the
+  production auth container, so GoTrue sends its stock link-only mail while
+  src/pages/Auth.tsx:296 asks for a 6-digit code that no email contains.
+- Files: scripts/ci/check-auth-email-templates.mjs (new gate),
+  src/lib/authEmailTemplates.test.ts (new, 5 tests),
+  docs/US-700-auth-email-template-runbook.md (operator steps),
+  .github/workflows/ci.yml (wired into the quality job).
+- Gates: vitest src/lib/authEmailTemplates.test.ts 5 passed; ciGatesWired 4
+  passed; eslint on both new files exit 0; check-invisible-chars clean; the new
+  gate exits 0 both with and without AUTH_CONFIRMATION_TEMPLATE_URL set.
+- passes stays false. This is an ops story: the env var is applied by a human
+  and verify-stories.mjs classifies US-700 as MANUAL.
+- **Learnings for future iterations:**
+  - A bug can be entirely outside the repo. Everything checked in was correct
+    and 35 of the first 200 accounts still died on it. When client code and
+    fixtures both look right, read the deployed container's env before
+    rewriting anything.
+  - public/email-templates/ 308-redirects to the extensionless path. Any fetch
+    check against it must follow redirects or it reports a false failure.
+  - The two confirmation.html copies had already drifted (titles, body copy, a
+    features block on one). The new test pins only the block that carries the
+    code, so cosmetic drift stays allowed and the load-bearing part cannot move.
+  - There are TWO Supabase stacks on 209.145.59.219. The EatPal one is
+    ig8ow4o4okkogowggkog4cww; kcksoks4kk0kswk0ccs40os8 belongs to another
+    project and has its own auth.users. Check for a `kids` table before
+    trusting a query.
+---
+
+## 2026-09-01 - US-701/US-702/US-703 correction (no implementation)
+- Operator review overturned the fix these three stories prescribed. The audit
+  finding was right (an iOS signup does land on Kong's 401 JSON body, verified
+  live) but the proposed remedy was impossible: Coolify sets GOTRUE_SITE_URL to
+  ${SERVICE_URL_SUPABASEKONG} and it cannot be changed. That constraint is
+  exactly why this project already moved to emailed-token verification.
+- Rewrote US-701 (close off the link path rather than repoint SITE_URL),
+  US-702 (dropped the "I clicked the link" affordance; kept the honest failure
+  states the flow actually lacks) and US-703 (iOS gets a code-entry screen
+  mirroring the shipped password reset, not a redirect handler).
+- Files: prd.json, docs/US-700-auth-email-template-runbook.md.
+- Gates: authEmailTemplates 5 passed, ciGatesWired 4 passed,
+  check-auth-email-templates exit 0.
+- **Learnings for future iterations:**
+  - Read the deployment platform's variable interpolation before proposing an
+    env change. ${SERVICE_URL_SUPABASEKONG} is Coolify-managed; a value that
+    looks like a misconfiguration can be the only value the platform permits.
+  - When a codebase does something that looks like a workaround, it usually is
+    one, and the constraint behind it is worth finding before "fixing" it. The
+    OTP screens on both clients were the tell.
+  - The reference implementation for any emailed-code flow here is 70c4559e
+    (password reset): {{ .Token }} in the template, verifyOtp on the client,
+    on web at src/pages/ResetPassword.tsx:70 and mobile at
+    app/(auth)/reset-password.tsx:58.
+---
+
+## 2026-09-01 - US-700 follow-up: the Coolify key rename
+- The operator set GOTRUE_MAILER_TEMPLATES_CONFIRMATION in Coolify and restarted
+  the stack. The container still reports it empty. docker-compose.yml:475 reads
+  `GOTRUE_MAILER_TEMPLATES_CONFIRMATION: '${MAILER_TEMPLATES_CONFIRMATION}'`, so
+  the key Coolify must hold is the UNPREFIXED one. The prefixed key is written
+  to the service .env and never read by anything.
+- The same indirection hides a second live bug: MAILER_TEMPLATES_RECOVERY is
+  empty too, so the password reset shipped in 70c4559e asks for a code that its
+  email does not contain. Same class, same cause, currently in production.
+- Widened scripts/ci/check-auth-email-templates.mjs and
+  src/lib/authEmailTemplates.test.ts from confirmation only to all five flows
+  (confirmation, recovery, magic_link, email_change, invite). Renamed the CI
+  variable AUTH_CONFIRMATION_TEMPLATE_URL -> AUTH_TEMPLATE_BASE_URL.
+- Rewrote docs/US-700-auth-email-template-runbook.md with the correct key
+  names, the redeploy-not-restart step, and a one-command verification.
+- Files: scripts/ci/check-auth-email-templates.mjs,
+  src/lib/authEmailTemplates.test.ts, docs/US-700-auth-email-template-runbook.md,
+  .github/workflows/ci.yml.
+- Gates: 25 + 4 tests passed; the gate passes both unset and with
+  AUTH_TEMPLATE_BASE_URL=https://tryeatpal.com/email-templates, where all five
+  hosted templates return {{ .Token }}; eslint exit 0 on both files.
+- **Learnings for future iterations:**
+  - Verify an ops change on the container, not on the dashboard. The env was
+    accepted, the service restarted, and the value still was not there.
+  - A restart is not a redeploy. Container env only changes on recreate.
+  - When a compose renames a variable on the way in, the dashboard key and the
+    container key differ, and every error path is silent. Read the compose
+    interpolation before writing a runbook that names a variable.
+  - The service .env carries a dead block of GOTRUE_-prefixed template keys
+    pointing at /templates/*.html, which is not mounted into the auth
+    container. Someone hit this exact trap before. Ignore that block.
+  - The auth container does have outbound network access; a hosted template URL
+    is a workable target. Verified with wget from inside the container.
+---
+
+## 2026-09-01 - US-700 landed in production (operator applied)
+- GOTRUE_MAILER_TEMPLATES_CONFIRMATION and GOTRUE_MAILER_TEMPLATES_RECOVERY now
+  carry their correct URLs on supabase-auth-ig8ow4o4okkogowggkog4cww, verified
+  on the running container, and the container can fetch both (token present).
+- Four attempts, three distinct silent failures, none visible in the dashboard:
+  1. Value written to the GOTRUE_-prefixed Coolify key, which docker-compose.yml
+     never reads (it interpolates the unprefixed name).
+  2. Save never persisted: the key already existed with an empty value, and
+     adding it again as a new variable collided and no-opped. Coolify's DB
+     showed zero writes that day for those keys.
+  3. Confirmation pointed at recovery.html, so signups would have received a
+     body headed "Password Reset" with a valid code in it.
+- Updated docs/US-700-auth-email-template-runbook.md with all three.
+- **Learnings for future iterations:**
+  - A dashboard reporting success is not evidence. `docker inspect` the
+    container is the only source of truth for a container's environment.
+  - Coolify's env table (coolify-db, environment_variables joined to services)
+    answers "did this save at all" in one query, and distinguishes "saved but
+    not applied" from "never saved". Use it before re-editing.
+  - Check the filename in a URL, not just that a URL is present. Five templates
+    with near-identical URLs invite exactly one paste error.
+---

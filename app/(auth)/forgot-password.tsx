@@ -11,12 +11,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { supabase } from '@/integrations/supabase/client.mobile';
 import { isEmailValid, sanitizeTextInput } from '../../app/mobile/lib/validation';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 
 export default function ForgotPasswordScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,9 +34,11 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
 
     try {
+      // No redirectTo: the recovery email carries a 6-digit code rather than a
+      // link, so there is no deep link to come back through. The user enters
+      // that code on the reset-password screen instead.
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        sanitizeTextInput(email).toLowerCase(),
-        { redirectTo: 'eatpal://reset-password' }
+        sanitizeTextInput(email).toLowerCase()
       );
 
       if (resetError) {
@@ -56,17 +59,30 @@ export default function ForgotPasswordScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.successContainer}>
           <Text style={styles.successIcon}>✉</Text>
-          <Text style={styles.successTitle}>Reset link sent</Text>
+          <Text style={styles.successTitle}>Reset code sent</Text>
           <Text style={styles.successText}>
-            If an account exists for {email}, you'll receive a password reset link shortly.
+            If an account exists for {email}, you'll receive a 6-digit reset code shortly.
           </Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() =>
+              router.push({
+                pathname: '/(auth)/reset-password',
+                params: { email: sanitizeTextInput(email).toLowerCase() },
+              })
+            }
+            accessibilityLabel="Enter reset code"
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryButtonText}>Enter Code</Text>
+          </TouchableOpacity>
           <Link href="/(auth)/login" asChild>
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={styles.linkButton}
               accessibilityLabel="Back to login"
-              accessibilityRole="button"
+              accessibilityRole="link"
             >
-              <Text style={styles.primaryButtonText}>Back to Login</Text>
+              <Text style={styles.linkTextBold}>Back to Login</Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -88,7 +104,7 @@ export default function ForgotPasswordScreen() {
             <Text style={styles.logo}>EatPal</Text>
             <Text style={styles.tagline}>Reset your password</Text>
             <Text style={styles.description}>
-              Enter your email and we'll send you a link to reset your password.
+              Enter your email and we'll send you a code to reset your password.
             </Text>
           </View>
 
@@ -124,13 +140,13 @@ export default function ForgotPasswordScreen() {
               ]}
               onPress={handleReset}
               disabled={!isEmailValid(email) || isLoading}
-              accessibilityLabel="Send reset link"
+              accessibilityLabel="Send reset code"
               accessibilityRole="button"
             >
               {isLoading ? (
                 <ActivityIndicator color={colors.background} size="small" />
               ) : (
-                <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+                <Text style={styles.primaryButtonText}>Send Reset Code</Text>
               )}
             </TouchableOpacity>
           </View>
