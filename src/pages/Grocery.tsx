@@ -485,14 +485,11 @@ export default function Grocery() {
           // decrement of foods.quantity would be translated by the US-668
           // trigger into a correction of its own, so doing both would take the
           // shop back twice.
-          if (ledgerWritesEnabled) {
-            // purchasedItems, not `moved`: `moved` is a projection that drops
-            // the grocery row id, and without it the reversal loses the
-            // ref_id that ties it back to the purchase it cancels.
-            void recordPurchaseReversal(
-              purchasedItems as unknown as PurchasableGroceryItem[],
-              foods as unknown as MovementItem[],
-            );
+          // Re-insert each grocery row as active, so the user can re-check it.
+          // One definition for both paths: duplicating the payload duplicates
+          // every type error in it too, which is how US-672's first version
+          // pushed the typecheck ratchet one over its baseline.
+          const restoreGroceryRows = () => {
             moved.forEach(item => {
               addGroceryItem({
                 name: item.name,
@@ -505,24 +502,26 @@ export default function Grocery() {
                 source_recipe_id: item.source_recipe_id,
               });
             });
+          };
+
+          if (ledgerWritesEnabled) {
+            // purchasedItems, not `moved`: `moved` is a projection that drops
+            // the grocery row id, and without it the reversal loses the
+            // ref_id that ties it back to the purchase it cancels.
+            void recordPurchaseReversal(
+              purchasedItems as unknown as PurchasableGroceryItem[],
+              foods as unknown as MovementItem[],
+            );
+            restoreGroceryRows();
             return;
           }
-          // Re-insert each grocery row (as active — user can re-check) and
-          // decrement the pantry food we incremented on the original
-          // toggle. Best-effort: name-based pantry match is consistent
-          // with the toggle path; if no matching food is found we skip
-          // the decrement and just restore the grocery row.
+
+          // Legacy path: restore the rows AND decrement the pantry food the
+          // toggle incremented. Best-effort: name-based pantry match is
+          // consistent with the toggle path; if no matching food is found we
+          // skip the decrement and just restore the grocery row.
+          restoreGroceryRows();
           moved.forEach(item => {
-            addGroceryItem({
-              name: item.name,
-              category: item.category,
-              quantity: item.quantity,
-              unit: item.unit,
-              aisle: item.aisle,
-              is_manual: item.is_manual,
-              added_via: item.added_via,
-              source_recipe_id: item.source_recipe_id,
-            });
             const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
             if (food && food.quantity) {
               updateFood(food.id, {
