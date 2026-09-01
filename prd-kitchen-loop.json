@@ -34,10 +34,11 @@
         "Migration is additive only; no existing object is altered or dropped"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "sql",
-      "loopVerifiable": true
+      "loopVerifiable": true,
+      "notes": "supabase/migrations/20260831000000_kitchen_loop_catalog.sql. VERIFIED BY EXECUTION, not inspection: applied to a disposable postgres:16-alpine container (never prod, torn down after) with a prelude stubbing auth.uid(), public.foods, get_user_household_id and Supabase-equivalent default table grants. Evidence: item_aliases has all 7 specified columns with correct nullability/defaults (id uuid pk gen_random_uuid, household_id NOT NULL, item_id NOT NULL, normalized_text NOT NULL, source NOT NULL, confidence numeric default 1.0, created_at default now); canonical_products has 7 columns with barcode nullable+unique. Indexes present: item_aliases_household_text_unique on (household_id, normalized_text), item_aliases_item_idx, canonical_products_normalized_name_idx, canonical_products_barcode_key. RLS enabled on both (relrowsecurity=t). Policies: 4 household-scoped on item_aliases (SELECT/INSERT/UPDATE/DELETE via get_user_household_id, matching 20260531000001_grocery_household_rls.sql); exactly 1 on canonical_products (SELECT TO authenticated). Behavioural assertions all passed: duplicate (household_id, normalized_text) raises unique violation; source=guessed raises item_aliases_source_check; confidence=1.5 raises item_aliases_confidence_check; deleting the parent food cascades aliases to 0 (confdeltype=c); as authenticated, SELECT on canonical_products returns the row, INSERT raises RLS violation, UPDATE and DELETE affect 0 rows and the row survives unchanged. Re-runnable: second apply of the same file succeeds (IF NOT EXISTS + DROP POLICY IF EXISTS). Gates: check-migration-prefixes.sh exit 0, check-invisible-chars.mjs exit 0. DEVIATION on criterion 5, deliberate: criterion 1 already requires UNIQUE (household_id, normalized_text) and criterion 5 asks for an index on the same pair. A unique constraint IS an index and serves the resolver hot path, so no redundant second index was created. NOT DONE HERE: the migration has not been applied to any real environment; check-migration-safety.sh reports \"No new migrations on this branch\" until the file is committed (it diffs commits, not the index) and is re-run below."
     },
     {
       "id": "US-656",
