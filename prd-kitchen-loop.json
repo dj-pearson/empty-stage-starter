@@ -71,10 +71,11 @@
         "npm run test:run shows no new failures"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
-      "loopVerifiable": true
+      "loopVerifiable": true,
+      "notes": "src/integrations/supabase/types.ts, 18 insertions across 6 blocks. foods Row/Insert/Update gained currency (string|null), expiry_date (string|null), price_per_unit (number|null). grocery_items Row/Insert/Update gained aisle_section (string|null), currency (string|null), price_per_unit (number|null) - criterion 3 asked me to check grocery_items and it had the SAME drift plus a third column, aisle_section. Confirmed against the migrations that created them: 20260425000000_add_expiry_date_to_foods.sql (expiry_date DATE), 20260426000000_add_pricing_to_foods_and_grocery.sql (price_per_unit NUMERIC(10,2) + currency CHAR(3) on BOTH tables), 20260430000000_add_aisle_section_to_grocery_items.sql (aisle_section TEXT). Verified with a scratch differ that parses every migration for create-table bodies and alter-table-add-column and compares against the types.ts Row block: before, foods was missing 3 and grocery_items missing 3; after, both report MISSING: none. Alphabetical ordering preserved by inserting at the sorted position, matching generator output. Gates: typecheck-ratchet 1182 = baseline exactly (criterion 4 said to lower the baseline only if the count DROPPED; it did not move, TS2589 stayed at 49, so .ci/typecheck-baseline.txt is untouched); lint-ratchet 1229 = baseline; vitest 2141 passed, 4 failed. All 4 failures are pre-existing and none reference types.ts, foods or grocery_items: functionTreeBuckets (2, US-643) and storageBucketPolicies (1, US-635) were confirmed failing without this change and are tracked as pending in the root agentic-os prd; resolveChromium (1) passes 11/11 in isolation and is flaky only under full-suite load. NOTE: this closes the drift on these two tables only. 32 other tables the code queries are still absent from types.ts entirely - see US-690, which is blocked on that."
     },
     {
       "id": "US-657",

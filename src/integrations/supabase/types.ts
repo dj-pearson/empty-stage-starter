@@ -4756,6 +4756,8 @@ export type Database = {
           canonical_unit: string | null
           category: string
           created_at: string | null
+          currency: string | null
+          expiry_date: string | null
           household_id: string | null
           id: string
           is_safe: boolean
@@ -4764,6 +4766,7 @@ export type Database = {
           name: string
           needs_review: boolean
           package_quantity: string | null
+          price_per_unit: number | null
           quantity: number | null
           servings_per_container: number | null
           unit: string | null
@@ -4778,6 +4781,8 @@ export type Database = {
           canonical_unit?: string | null
           category: string
           created_at?: string | null
+          currency?: string | null
+          expiry_date?: string | null
           household_id?: string | null
           id?: string
           is_safe?: boolean
@@ -4786,6 +4791,7 @@ export type Database = {
           name: string
           needs_review?: boolean
           package_quantity?: string | null
+          price_per_unit?: number | null
           quantity?: number | null
           servings_per_container?: number | null
           unit?: string | null
@@ -4800,6 +4806,8 @@ export type Database = {
           canonical_unit?: string | null
           category?: string
           created_at?: string | null
+          currency?: string | null
+          expiry_date?: string | null
           household_id?: string | null
           id?: string
           is_safe?: boolean
@@ -4808,6 +4816,7 @@ export type Database = {
           name?: string
           needs_review?: boolean
           package_quantity?: string | null
+          price_per_unit?: number | null
           quantity?: number | null
           servings_per_container?: number | null
           unit?: string | null
@@ -4991,18 +5000,21 @@ export type Database = {
           added_by_user_id: string | null
           added_via: string | null
           aisle: string | null
+          aisle_section: string | null
           auto_generated: boolean | null
           barcode: string | null
           brand_preference: string | null
           category: string
           checked: boolean
           created_at: string | null
+          currency: string | null
           grocery_list_id: string | null
           household_id: string | null
           id: string
           name: string
           notes: string | null
           photo_url: string | null
+          price_per_unit: number | null
           priority: string | null
           quantity: number
           restock_reason: string | null
@@ -5016,18 +5028,21 @@ export type Database = {
           added_by_user_id?: string | null
           added_via?: string | null
           aisle?: string | null
+          aisle_section?: string | null
           auto_generated?: boolean | null
           barcode?: string | null
           brand_preference?: string | null
           category: string
           checked?: boolean
           created_at?: string | null
+          currency?: string | null
           grocery_list_id?: string | null
           household_id?: string | null
           id?: string
           name: string
           notes?: string | null
           photo_url?: string | null
+          price_per_unit?: number | null
           priority?: string | null
           quantity?: number
           restock_reason?: string | null
@@ -5041,18 +5056,21 @@ export type Database = {
           added_by_user_id?: string | null
           added_via?: string | null
           aisle?: string | null
+          aisle_section?: string | null
           auto_generated?: boolean | null
           barcode?: string | null
           brand_preference?: string | null
           category?: string
           checked?: boolean
           created_at?: string | null
+          currency?: string | null
           grocery_list_id?: string | null
           household_id?: string | null
           id?: string
           name?: string
           notes?: string | null
           photo_url?: string | null
+          price_per_unit?: number | null
           priority?: string | null
           quantity?: number
           restock_reason?: string | null
