@@ -5011,6 +5011,7 @@ export type Database = {
           grocery_list_id: string | null
           household_id: string | null
           id: string
+          item_id: string | null
           name: string
           notes: string | null
           photo_url: string | null
@@ -5039,6 +5040,7 @@ export type Database = {
           grocery_list_id?: string | null
           household_id?: string | null
           id?: string
+          item_id?: string | null
           name: string
           notes?: string | null
           photo_url?: string | null
@@ -5067,6 +5069,7 @@ export type Database = {
           grocery_list_id?: string | null
           household_id?: string | null
           id?: string
+          item_id?: string | null
           name?: string
           notes?: string | null
           photo_url?: string | null
