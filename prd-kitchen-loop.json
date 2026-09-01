@@ -60,23 +60,6 @@
       "notes": "supabase/migrations/20260831000001_kitchen_loop_foods_catalog_columns.sql + src/integrations/supabase/types.ts. VERIFIED BY EXECUTION on a disposable postgres:16-alpine container (torn down; prod never touched), seeded with foods as it exists today and a pre-migration row inserted BEFORE applying, to prove an old client is unaffected. Evidence: all four columns present with correct shape (merged_into_id uuid nullable, canonical_unit text nullable, unit_conversions jsonb nullable, needs_review boolean NOT NULL default false); the pre-existing row survived with needs_review backfilled to false and the other three null; an old-client INSERT omitting all four still succeeds and gets needs_review=false; canonical_unit CHECK rejects \"kg\" and accepts ml; unit_conversions round-trips {\"can\":400}; both partial indexes exist with the right predicates (foods_needs_review_idx ... WHERE needs_review, foods_merged_into_idx ... WHERE merged_into_id IS NOT NULL); all four column COMMENTs present and referencing the design doc; self-FK foods_merged_into_id_fkey has confdeltype=a (NO ACTION), which is the intended semantics -- deleting a survivor that still has duplicates pointing at it is refused rather than cascading. Re-runnable: second apply succeeds. Gates: check-migration-prefixes.sh 0, check-migration-safety.sh 0 (\"backward-compatible and enable RLS\"), check-invisible-chars.mjs 0, lint-ratchet 1229 = baseline, typecheck-ratchet 1182 = baseline, ciGatesWired 4/4. SCOPE HELD DELIBERATELY: types.ts carries only the four foods columns plus the foods_merged_into_id_fkey relationship. Adding the item_aliases and canonical_products TABLE blocks pushed typecheck to 1183 via TS2589 (type instantiation excessively deep) in src/lib/customer-health.ts -- measured, not guessed: 1183 with the blocks, 1182 with them removed and the columns kept. Raising the baseline is forbidden, so the tables are typed in the new US-690 which US-661 depends on. NOT DONE: not applied to any real environment."
     },
     {
-      "id": "US-690",
-      "title": "Type the catalog tables without breaking the typecheck ratchet",
-      "description": "As a developer, I want item_aliases and canonical_products present in types.ts so that the resolver stories compile, without the added Database surface tipping a query over TypeScript's instantiation depth limit.",
-      "acceptanceCriteria": [
-        "src/integrations/supabase/types.ts gains full Row/Insert/Update/Relationships blocks for item_aliases and canonical_products, matching the shapes created by migration 20260831000000",
-        "The TS2589 \"type instantiation is excessively deep\" error this provokes in src/lib/customer-health.ts is resolved at its source -- by narrowing the offending query's generics or extracting an explicit return type -- NOT by raising .ci/typecheck-baseline.txt, which is forbidden",
-        "typecheck-ratchet.sh reports at most the baseline of 1182 with both table blocks present",
-        "A note records why the depth limit was hit, so the next table added to types.ts does not rediscover it the hard way",
-        "npm run test:run shows no new failures"
-      ],
-      "priority": 4,
-      "passes": false,
-      "slice": 1,
-      "platform": "web",
-      "loopVerifiable": true
-    },
-    {
       "id": "US-691",
       "title": "Reconcile the pre-existing foods type drift",
       "description": "As a developer, I want types.ts to match what migrations actually created on foods, because three columns the app reads have been missing from the generated types since April.",
@@ -87,7 +70,7 @@
         "typecheck-ratchet.sh reports at most baseline; if adding these columns REDUCES the count, lower .ci/typecheck-baseline.txt to the new number",
         "npm run test:run shows no new failures"
       ],
-      "priority": 5,
+      "priority": 4,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -105,7 +88,7 @@
         "Pure: no I/O, no clock, no Supabase import",
         "npm run test:run passes"
       ],
-      "priority": 6,
+      "priority": 5,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -124,7 +107,7 @@
         "Unit tests include the moveCheckedToPantry case: 2 gal added to a pantry row measured in fl oz converts rather than landing in a mismatch list",
         "npm run test:run passes"
       ],
-      "priority": 7,
+      "priority": 6,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -144,7 +127,7 @@
         "Unit tests cover each of the five steps plus the provisional path and the merge redirect",
         "npm run test:run passes"
       ],
-      "priority": 8,
+      "priority": 7,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -162,11 +145,30 @@
         "Adding a fixture with no matching implementation behaviour fails the suite",
         "npm run test:run passes"
       ],
-      "priority": 9,
+      "priority": 8,
       "passes": false,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true
+    },
+    {
+      "id": "US-690",
+      "title": "Type the catalog tables without breaking the typecheck ratchet",
+      "description": "As a developer, I want item_aliases and canonical_products present in types.ts so that the resolver stories compile, without the added Database surface tipping a query over TypeScript's instantiation depth limit.",
+      "acceptanceCriteria": [
+        "src/integrations/supabase/types.ts gains full Row/Insert/Update/Relationships blocks for item_aliases and canonical_products, matching the shapes created by migration 20260831000000",
+        "The TS2589 \"type instantiation is excessively deep\" error this provokes in src/lib/customer-health.ts is resolved at its source -- by narrowing the offending query's generics or extracting an explicit return type -- NOT by raising .ci/typecheck-baseline.txt, which is forbidden",
+        "typecheck-ratchet.sh reports at most the baseline of 1182 with both table blocks present",
+        "A note records why the depth limit was hit, so the next table added to types.ts does not rediscover it the hard way",
+        "npm run test:run shows no new failures"
+      ],
+      "priority": 9,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "blocked": true,
+      "notes": "BLOCKED - not completable as written, needs a decision from Dj. Attempted and reverted; tree is back at baseline 1182. FINDING: TS2589 is not one error, it is 49 pre-existing ones. Measured: 49 TS2589 without the two new table blocks, 50 with them, so US-655 tables tip exactly one more call site (src/lib/customer-health.ts:170) over TypeScript's instantiation ceiling. ROOT CAUSE, which is much larger than this story: 34 of the 108 tables the code calls .from() on are absent from src/integrations/supabase/types.ts - customer_health_scores, customer_health_history, admin_customer_health_summary, login_history, login_stats_daily, oauth_tokens, prompt_templates, prompt_template_versions, ai_model_configurations, integration_configs, funnel_events, hidden_veggie_techniques and 22 more. .from() on a table the Database type does not know cannot resolve to a row type, so TS falls back to checking the literal against the whole ~400-member union; that is the expensive path, and it is what produces both the TS2589s and the cascade of ResultOne property errors in those files. ATTEMPT 1, reverted: .returns<Record<string, unknown>>() at the failing call site. Did not clear the TS2589 (it just moved with the line shift) and introduced a TS2769 overload error, because the underlying table is not in Database at all. Criterion 2 says fix at source and forbids raising the baseline; the source is a 34-table divergence between the schema and the generated types, not a generic in one file. OPTIONS FOR DJ, none taken autonomously: (a) regenerate types.ts properly - supabase start, apply migrations, supabase gen types typescript --local. Docker 28.3.2 and supabase CLI 2.98.1 are both on this box so it is runnable, and it would close all 34 gaps at once and likely drop the error count well below baseline, but it rewrites a 15k-line generated file wholesale on a live product and the resulting count could move in either direction. Wants explicit sign-off, not a loop decision. (b) add only the 3 tables customer-health.ts queries - targeted, probably a net error reduction, but picks one file arbitrarily and leaves the other 31 gaps. (c) keep item_aliases and canonical_products out of types.ts and have US-661 define local row types - unblocks the epic today, diverges from generated types. NOTE FOR THE LEDGER STORIES: US-665, US-666 and US-674 add inventory_movements, item_stock and meals. On current evidence each new table tips further call sites into TS2589, so this needs resolving before those land, not after."
     },
     {
       "id": "US-661",
