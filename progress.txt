@@ -416,3 +416,26 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - The auth container does have outbound network access; a hosted template URL
     is a workable target. Verified with wget from inside the container.
 ---
+
+## 2026-09-01 - US-700 landed in production (operator applied)
+- GOTRUE_MAILER_TEMPLATES_CONFIRMATION and GOTRUE_MAILER_TEMPLATES_RECOVERY now
+  carry their correct URLs on supabase-auth-ig8ow4o4okkogowggkog4cww, verified
+  on the running container, and the container can fetch both (token present).
+- Four attempts, three distinct silent failures, none visible in the dashboard:
+  1. Value written to the GOTRUE_-prefixed Coolify key, which docker-compose.yml
+     never reads (it interpolates the unprefixed name).
+  2. Save never persisted: the key already existed with an empty value, and
+     adding it again as a new variable collided and no-opped. Coolify's DB
+     showed zero writes that day for those keys.
+  3. Confirmation pointed at recovery.html, so signups would have received a
+     body headed "Password Reset" with a valid code in it.
+- Updated docs/US-700-auth-email-template-runbook.md with all three.
+- **Learnings for future iterations:**
+  - A dashboard reporting success is not evidence. `docker inspect` the
+    container is the only source of truth for a container's environment.
+  - Coolify's env table (coolify-db, environment_variables joined to services)
+    answers "did this save at all" in one query, and distinguishes "saved but
+    not applied" from "never saved". Use it before re-editing.
+  - Check the filename in a URL, not just that a URL is present. Five templates
+    with near-identical URLs invite exactly one paste error.
+---

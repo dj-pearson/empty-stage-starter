@@ -63,7 +63,15 @@ container has outbound network access and fetches them successfully (verified
 
 ## Applying it
 
-1. Coolify, the Supabase service, Environment Variables. Set the five keys above.
+It took four attempts to land this. Each failure looked like success in the
+dashboard, so work top-down and verify on the container at step 3, never on the
+UI.
+
+1. Coolify, the Supabase service, Environment Variables. **These keys already
+   exist in the list with empty values.** Scroll to them and edit each row in
+   place. Do NOT use "Add environment variable": adding a key that already
+   exists collides and silently does nothing, which is how the second attempt
+   was lost with no error shown.
 2. **Redeploy, do not just restart.** A restart reuses the container's existing
    environment; the new values only reach it on a recreate.
 3. Verify the container actually received them:
@@ -72,8 +80,12 @@ container has outbound network access and fetches them successfully (verified
      --format '{{range .Config.Env}}{{println .}}{{end}}' \
      | grep MAILER_TEMPLATES
    ```
-   Every `GOTRUE_MAILER_TEMPLATES_*` line must now carry a URL. If they are
-   still empty, the value went into a prefixed key again.
+   Every `GOTRUE_MAILER_TEMPLATES_*` line must now carry a URL, and each must
+   point at its OWN template. Check the filenames, not just that a URL is
+   present: the third attempt set confirmation to recovery.html, which would
+   have mailed new signups a body headed "Password Reset". If the lines are
+   still empty, the value went into a prefixed key again, or the save collided
+   with an existing row.
 4. Sign up with a throwaway address. The email must show a 6-digit code in the
    green dashed box, not a "Confirm your mail" link.
 5. Request a password reset for the same address and confirm the same.
