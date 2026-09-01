@@ -1,4 +1,6 @@
 import { withStandingLimits } from "../_shared/safety.ts";
+import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
+import { requireUser } from "../_shared/require-admin.ts";
 
 
 const corsHeaders = {
@@ -11,22 +13,26 @@ export default async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Authenticated users only: paid AI call, same gate as parse-recipe.
+  const gate = await requireUser(req);
+  if (!gate.ok) {
+    return new Response(JSON.stringify({ error: gate.error ?? 'Unauthorized' }), {
+      status: gate.status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
-    const { selectedFoodNames, aiModel, childProfile } = await req.json();
-    
+    // US-709: read only the recipe inputs. aiModel used to arrive from the
+    // client and named both the endpoint to POST to and the env var holding
+    // the key, which handed any signed-in user a server secret. The model is
+    // now resolved server-side by AIServiceV2.
+    const { selectedFoodNames, childProfile } = await req.json();
+
     if (!selectedFoodNames || selectedFoodNames.length === 0) {
       return new Response(
         JSON.stringify({ error: 'No foods selected' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Get AI settings from the request
-    const apiKey = Deno.env.get(aiModel.api_key_env_var);
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: `API key ${aiModel.api_key_env_var} not configured` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -81,82 +87,20 @@ Format your response as JSON with these exact fields:
 
     const userPrompt = `Create a recipe using these ingredients: ${selectedFoodNames.join(', ')}`;
 
-    // Prepare the request body
-    const requestBody: any = {
+    const aiService = new AIServiceV2();
+    const aiResponse = await aiService.generateContent({
       messages: [
         { role: 'system', content: withStandingLimits(systemPrompt) },
-        { role: 'user', content: userPrompt }
-      ]
-    };
+        { role: 'user', content: userPrompt },
+      ],
+    }, 'standard');
 
-    // Add model-specific parameters
-    if (aiModel.model_name) {
-      requestBody.model = aiModel.model_name;
-    }
-    if (aiModel.temperature !== null && aiModel.temperature !== undefined) {
-      requestBody.temperature = aiModel.temperature;
-    }
-    if (aiModel.max_tokens) {
-      requestBody.max_tokens = aiModel.max_tokens;
-    }
-    if (aiModel.additional_params) {
-      Object.assign(requestBody, aiModel.additional_params);
-    }
-
-    // Prepare authorization header based on auth type
-    const authHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (aiModel.auth_type === 'bearer') {
-      authHeaders['Authorization'] = `Bearer ${apiKey}`;
-    } else if (aiModel.auth_type === 'api_key') {
-      authHeaders['x-api-key'] = apiKey;
-    }
-
-    console.log('Calling AI endpoint:', aiModel.endpoint_url);
-    
-    const response = await fetch(aiModel.endpoint_url, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI API error:', response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Payment required. Please check your AI service credits.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
+    const recipeText = aiResponse?.content ?? '';
+    if (!recipeText) {
       return new Response(
-        JSON.stringify({ error: 'AI service error', details: errorText }),
+        JSON.stringify({ error: 'No recipe data generated' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-
-    const data = await response.json();
-    console.log('AI response received');
-
-    // Extract the recipe from the AI response
-    let recipeText = '';
-    if (data.choices && data.choices[0]?.message?.content) {
-      recipeText = data.choices[0].message.content;
-    } else if (data.content) {
-      recipeText = data.content;
-    } else {
-      throw new Error('Unexpected AI response format');
     }
 
     // Try to parse as JSON

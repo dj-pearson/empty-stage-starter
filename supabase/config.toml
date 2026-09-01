@@ -204,7 +204,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.parse-recipe]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-sitemap]
 verify_jwt = false

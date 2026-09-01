@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { Loader2, Link2, FileJson, Sparkles, Upload, Camera, ChefHat, Users, User } from "lucide-react";
@@ -187,23 +186,11 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
 
     setIsLoading(true);
     try {
-      const { data: aiSettings } = await supabase
-        .from('ai_settings')
-        .select('*')
-        .eq('is_active', true)
-        .single();
-
-      if (!aiSettings) {
-        toast.error("No active AI model configured");
-        setIsLoading(false);
-        return;
-      }
-
+      // US-709: parse-recipe resolves its own model server-side. The client
+      // sends only the content to parse -- naming an endpoint or an API-key
+      // env var from here would hand any signed-in user a server secret.
       const { data, error } = await invokeEdgeFunction('parse-recipe', {
-        body: {
-          text: recipeText,
-          aiModel: aiSettings,
-        },
+        body: { text: recipeText },
       });
 
       if (error) throw error;

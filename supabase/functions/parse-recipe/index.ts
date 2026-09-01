@@ -47,7 +47,9 @@ export default async (req: Request) => {
   }
 
   try {
-    const { url, text, aiModel } = await req.json();
+    // US-709: read only url and text. Any other key in the body -- aiModel
+    // in particular -- is ignored rather than honoured.
+    const { url, text } = await req.json();
 
     let content: string = text ?? '';
     let imageFromPage: string | null = null;
@@ -80,74 +82,24 @@ export default async (req: Request) => {
     }
 
     const userPrompt = `Parse this recipe content:\n\n${content.slice(0, 8000)}`;
-    let recipeText = '';
 
-    if (aiModel) {
-      // Legacy path: the web client passes a row from the `ai_settings` table.
-      const apiKey = Deno.env.get(aiModel.api_key_env_var);
-      if (!apiKey) {
-        console.error(`API key not found: ${aiModel.api_key_env_var}`);
-        return new Response(
-          JSON.stringify({ error: 'AI API key not configured' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const requestBody: Record<string, unknown> = {
-        model: aiModel.model_name,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-      };
-      if (aiModel.temperature !== null) requestBody.temperature = aiModel.temperature;
-      if (aiModel.max_tokens !== null) requestBody.max_tokens = aiModel.max_tokens;
-      if (aiModel.additional_params) Object.assign(requestBody, aiModel.additional_params);
-
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (aiModel.auth_type === 'bearer') headers['Authorization'] = `Bearer ${apiKey}`;
-      else if (aiModel.auth_type === 'api_key') headers['x-api-key'] = apiKey;
-
-      console.log('Calling AI API:', aiModel.endpoint_url);
-      const aiResponse = await fetch(aiModel.endpoint_url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!aiResponse.ok) {
-        const errorText = await aiResponse.text();
-        console.error('AI API error:', errorText);
-        if (aiResponse.status === 429) {
-          return new Response(
-            JSON.stringify({ error: 'AI API rate limit exceeded. Please try again later.' }),
-            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        return new Response(
-          JSON.stringify({ error: `AI API error: ${aiResponse.statusText}` }),
-          { status: aiResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      const aiData = await aiResponse.json();
-      recipeText = aiData.choices?.[0]?.message?.content || '';
-    } else {
-      // Server-side path used by the iOS app and share extension. No client config.
-      console.log('Using server-side AIServiceV2');
-      const aiService = new AIServiceV2();
-      const aiResponse = await aiService.generateContent({
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-      }, 'lightweight');
-      recipeText = aiResponse?.content ?? '';
-      if (!recipeText) {
-        return new Response(
-          JSON.stringify({ error: 'No recipe data extracted' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    // US-709: the model is resolved server-side. There is no client-supplied
+    // endpoint or API-key env var to name, so a signed-in caller cannot make
+    // this function read an arbitrary secret out of the function environment.
+    console.log('Using server-side AIServiceV2');
+    const aiService = new AIServiceV2();
+    const aiResponse = await aiService.generateContent({
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+    }, 'lightweight');
+    const recipeText = aiResponse?.content ?? '';
+    if (!recipeText) {
+      return new Response(
+        JSON.stringify({ error: 'No recipe data extracted' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const recipe = normalizeRecipe(parseRecipeJson(recipeText), imageFromPage);

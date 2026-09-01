@@ -473,3 +473,57 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - A recovery token is single-use, so the mount-time exchange must be ref
     guarded or StrictMode's double-invoke burns a valid link.
 ---
+
+## 2026-09-01 - US-709 (household planner slice 1)
+- parse-recipe no longer reads aiModel from the request body. The branch that
+  did `Deno.env.get(aiModel.api_key_env_var)` and POSTed to
+  `aiModel.endpoint_url` is deleted; the function now always resolves its model
+  through AIServiceV2. Any signed-in user could previously name a server env var
+  and an endpoint they controlled and be handed the secret.
+- suggest-recipe carried the identical hole (functions/suggest-recipe was clean,
+  the DEPLOYED supabase/functions copy was not). Same fix, plus requireUser,
+  which it did not have at all.
+- Web clients stopped selecting the model: ImportRecipeDialog.handleTextImport
+  and RecipeBuilder.handleAIGenerate no longer query ai_settings, and their
+  request bodies carry only the content to parse. Both files lost their now
+  unused `supabase` import.
+- supabase/config.toml: parse-recipe verify_jwt false -> true, matching
+  suggest-recipe and suggest-recipes-from-pantry. No shipped client regresses:
+  requireUser already rejected anon-key callers, so the 401 just moves to the
+  gateway. iOS EdgeFunctions falls back to the anon key only when there is no
+  session (EdgeFunctions.swift:84), and those calls were already failing.
+- Files: supabase/functions/parse-recipe/index.ts,
+  supabase/functions/suggest-recipe/index.ts, supabase/config.toml,
+  src/components/ImportRecipeDialog.tsx, src/components/RecipeBuilder.tsx,
+  src/lib/clientAiConfig.guard.test.ts (new), .ci/lint-baseline.txt.
+- Gates: 2722 vitest tests passed / 3 skipped, lint ratchet 1226 vs baseline
+  1229 (baseline lowered to 1226), check-function-trees.sh OK,
+  check-invisible-chars.mjs clean.
+- Deviation from AC 5: test-ai-model, suggest-recipes-from-pantry and
+  repurpose-content still contain api_key_env_var. They read it off an
+  ai_settings row they fetch themselves with the service-role client, not off
+  caller input, and test-ai-model exists to validate exactly that row, so a
+  literal clean grep would gut it. The guard test allowlists those three by name
+  and fails on a fourth.
+- Deviation from AC 3: the "returns 200 with aiModel in the body" assertion is a
+  static source guard, not a live call. deno is not installed on the loop
+  machine and ci.yml runs only two named deno test files
+  (functions/_shared/helpers_test.ts, verify-jwt-guard_test.ts), so a new Deno
+  test would never run. The guard was checked by reintroducing the branch: 2 of
+  9 assertions fail, then pass again once reverted.
+- **Learnings for future iterations:**
+  - There are TWO edge-function trees and they diverge. `supabase/functions/`
+    is what Dockerfile.functions copies and what serves production;
+    `functions/` is the serve()-style Agentic OS tree. 13 names exist in both.
+    A vulnerability "already fixed" in `functions/` may still be live. Read
+    scripts/ci/check-function-trees.sh before touching either.
+  - Source-guard tests under `src/` are the way to gate the Deno tree from this
+    repo: vitest reads supabase/functions/**/index.ts with fs and runs in the
+    real CI gate, which a Deno test in this repo does not. Pattern is already
+    established in src/lib/aiSafety.test.ts.
+  - Strip comments before matching source in a guard test. A comment saying
+    "aiModel is ignored" otherwise reads as the branch it documents.
+  - `npm run test:run` needs `npm ci` first; a fresh container has no
+    node_modules and vitest.config.ts fails to load with a confusing
+    ERR_MODULE_NOT_FOUND on vitest itself.
+---

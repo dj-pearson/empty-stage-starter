@@ -8,7 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
@@ -76,18 +75,8 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
 
     setIsGenerating(true);
     try {
-      // Get active AI model
-      const { data: aiSettings, error: aiError } = await supabase
-        .from('ai_settings')
-        .select('*')
-        .eq('is_active', true)
-        .single();
-
-      if (aiError || !aiSettings) {
-        toast.error("No active AI model configured. Please set one up in Admin settings.");
-        setIsGenerating(false);
-        return;
-      }
+      // US-709: suggest-recipe resolves its own model server-side. The client
+      // no longer reads ai_settings or names an endpoint and key env var.
 
       // Get selected food names
       const selectedFoodNames = formData.food_ids
@@ -100,7 +89,6 @@ export function RecipeBuilder({ foods, editRecipe, onSave, onCancel, kids, activ
       const { data, error } = await invokeEdgeFunction('suggest-recipe', {
         body: {
           selectedFoodNames,
-          aiModel: aiSettings,
           childProfile: activeKid || undefined
         },
       });

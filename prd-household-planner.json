@@ -15,11 +15,11 @@
         "grep across supabase/functions for api_key_env_var finds only _shared/ai-service-v2.ts reading its own server-side settings row"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "edge",
       "loopVerifiable": false,
-      "notes": "Review item 1. Verified in source at parse-recipe/index.ts:84-112 and ImportRecipeDialog.tsx:191-205. Ship before anything else in this epic."
+      "notes": "Review item 1. Verified in source at parse-recipe/index.ts:84-112 and ImportRecipeDialog.tsx:191-205. Ship before anything else in this epic. Landed 2026-09-01: the aiModel branch is gone from parse-recipe and from suggest-recipe, which carried the identical hole and now also runs requireUser; both resolve their model through AIServiceV2. parse-recipe moved to verify_jwt = true, matching suggest-recipe and suggest-recipes-from-pantry. AC 5 narrowed: test-ai-model, suggest-recipes-from-pantry and repurpose-content still read api_key_env_var, but off an ai_settings row they fetch themselves with the service-role client, never off caller input; test-ai-model exists to validate exactly that row. Migrating those three to AIServiceV2 is a separate change. The allowlist is pinned in src/lib/clientAiConfig.guard.test.ts so a fourth cannot be added silently. AC 3's runtime 200 assertion is a static source guard instead: deno is not installed on the loop machine and CI runs only two named deno test files, so a mocked handler test would never execute. The guard was verified to fail when the branch is reintroduced."
     },
     {
       "id": "US-710",
