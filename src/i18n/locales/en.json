@@ -383,7 +383,8 @@
     "resendAction": "Send me a new code",
     "resending": "Sending...",
     "codeResent": "If an account exists for that address, a new code is on its way.",
-    "resendFailed": "Could not send a new code"
+    "resendFailed": "Could not send a new code",
+    "verifyingLink": "Verifying your reset link..."
   },
   "accessibility": {
     "title": "Accessibility Statement"
