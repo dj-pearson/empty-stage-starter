@@ -23,6 +23,12 @@ interface FoodCardProps {
   onEdit: (food: Food) => void;
   onDelete: (id: string) => void;
   onQuantityChange?: (id: string, newQuantity: number) => void;
+  /**
+   * US-672: "we threw this out", which the ledger records as waste rather than
+   * as a correction. Optional, so a FoodCard rendered outside the pantry keeps
+   * working without it.
+   */
+  onWaste?: (id: string, quantity: number) => void;
   kidAllergens?: string[];
 }
 
@@ -31,6 +37,7 @@ export const FoodCard = memo(function FoodCard({
   onEdit,
   onDelete,
   onQuantityChange,
+  onWaste,
   kidAllergens,
 }: FoodCardProps) {
   const [showZeroQuantityDialog, setShowZeroQuantityDialog] = useState(false);
@@ -67,6 +74,15 @@ export const FoodCard = memo(function FoodCard({
 
   const handleDeleteFromZero = () => {
     onDelete(food.id);
+    setShowZeroQuantityDialog(false);
+  };
+
+  // The last one is gone because it was thrown out, which is a different fact
+  // from the count having been wrong. Falls back to setting zero when no waste
+  // handler is supplied, so the button never becomes a dead end.
+  const handleThrewOut = () => {
+    if (onWaste) onWaste(food.id, food.quantity ?? 1);
+    else if (onQuantityChange) onQuantityChange(food.id, 0);
     setShowZeroQuantityDialog(false);
   };
 
@@ -228,14 +244,17 @@ export const FoodCard = memo(function FoodCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Quantity reaching zero</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{food.name}</strong> quantity will be 0. Would you like
-              to delete it from your pantry or keep it at quantity 0?
+              <strong>{food.name}</strong> quantity will be 0. Did you use it
+              up, throw it out, or would you rather remove it from your pantry?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button variant="outline" onClick={handleSetToZero}>
               Keep at 0
+            </Button>
+            <Button variant="outline" onClick={handleThrewOut}>
+              Threw it out
             </Button>
             <AlertDialogAction
               onClick={handleDeleteFromZero}

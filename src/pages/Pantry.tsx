@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 // CSS animations used instead of framer-motion for list rendering performance
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan, useInventory } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
 import { ImageFoodCapture, type FoodIdentification } from "@/components/ImageFoodCapture";
@@ -87,6 +87,7 @@ import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { haptic } from "@/lib/haptics";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { logger } from "@/lib/logger";
+import type { MovementItem } from "@/lib/movementBuilders";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +110,10 @@ export default function Pantry() {
   const { planEntries } = usePlan();
   const { kids, activeKidId } = useKids();
   const { addGroceryItem } = useGrocery();
+  // US-671: read-only here. The flag decides whether pantry numbers come from
+  // the ledger; it is off by default and the comparison in AppContext is what
+  // has to agree before it is turned on.
+  const { ledgerReadsEnabled, ledgerQuantityOf, ledgerWritesEnabled, recordPantryCorrection, recordWaste } = useInventory();
   const isMobile = useIsMobile();
 
   // Dialog states
@@ -206,20 +211,37 @@ export default function Pantry() {
 
   const uniqueKidAllergens = useMemo(() => computeUniqueKidAllergens(kids), [kids]);
 
-  const categoryCounts = useMemo(() => computeCategoryCounts(foods), [foods]);
+  // US-671: where a pantry number comes from. With the flag OFF this returns
+  // `foods` BY REFERENCE, so the dark launch cannot move a single pixel; with
+  // it on, every quantity on this page -- the cards, the stock filter and the
+  // stats banner -- reads the ledger balance instead, and they read the same
+  // one, which is the point. An item the ledger cannot express in its display
+  // unit keeps the legacy number rather than rendering a blank.
+  //
+  // Only the READS move. handleQuantityChange still writes foods.quantity;
+  // appending a movement is US-672.
+  const pantryFoods = useMemo(() => {
+    if (!ledgerReadsEnabled) return foods;
+    return foods.map((food) => {
+      const fromLedger = ledgerQuantityOf(food);
+      return fromLedger === null ? food : { ...food, quantity: fromLedger };
+    });
+  }, [foods, ledgerReadsEnabled, ledgerQuantityOf]);
 
-  const stockStats = useMemo(() => computeStockStats(foods), [foods]);
+  const categoryCounts = useMemo(() => computeCategoryCounts(pantryFoods), [pantryFoods]);
+
+  const stockStats = useMemo(() => computeStockStats(pantryFoods), [pantryFoods]);
 
   // Filtered and sorted foods
   const processedFoods = useMemo(
     () =>
-      filterAndSortFoods(foods, {
+      filterAndSortFoods(pantryFoods, {
         search: debouncedSearchQuery,
         category: categoryFilter,
         stock: stockFilter,
         sortBy,
       }),
-    [foods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]
+    [pantryFoods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]
   );
 
   // Paginate: show only visibleCount items (load-more pattern)
@@ -353,14 +375,75 @@ export default function Pantry() {
     setDialogOpen(true);
   }, []);
 
+  // US-672: a pantry edit becomes a correction movement.
+  //
+  // WHY THIS RETURNS INSTEAD OF ALSO WRITING foods.quantity. The two paths are
+  // mutually exclusive, and running both double-counts the same edit. Once the
+  // movement lands, item_stock moves, and the US-667 mirror writes
+  // foods.quantity for us. Writing it here as well would look to the US-668
+  // trigger like a SECOND, independent client edit, and it would translate that
+  // into another correction movement of its own.
+  //
+  // A movement that cannot be built (an unconvertible unit) falls through to
+  // the legacy write rather than dropping the parent's edit on the floor.
   const handleQuantityChange = useCallback(
     (foodId: string, newQuantity: number) => {
       const food = foods.find((f) => f.id === foodId);
-      if (food) {
-        updateFood(foodId, { ...food, quantity: newQuantity });
+      if (!food) return;
+
+      const legacyWrite = () => updateFood(foodId, { ...food, quantity: newQuantity });
+
+      if (!ledgerWritesEnabled) {
+        legacyWrite();
+        return;
       }
+
+      void recordPantryCorrection(food as MovementItem & { quantity?: number | null }, newQuantity)
+        .then((result) => {
+          if (result.recorded) return;
+          logger.warn('US-672: pantry edit not recorded as a movement, using the legacy write', {
+            foodId,
+            reason: result.reason,
+          });
+          legacyWrite();
+        });
     },
-    [foods, updateFood]
+    [foods, updateFood, ledgerWritesEnabled, recordPantryCorrection]
+  );
+
+  // US-672 criterion 4: an explicit "we threw this out" action, which is its
+  // own fact rather than a correction -- US-681 reports waste, and a parent
+  // miscounting is not waste.
+  const handleWaste = useCallback(
+    (foodId: string, quantity: number) => {
+      const food = foods.find((f) => f.id === foodId);
+      if (!food) return;
+      const remaining = Math.max(0, (food.quantity ?? 0) - Math.abs(quantity));
+
+      const legacyWrite = () => updateFood(foodId, { ...food, quantity: remaining });
+
+      if (!ledgerWritesEnabled) {
+        legacyWrite();
+        toast.success(`Threw out ${Math.abs(quantity)} ${food.unit || ''}`.trim(), {
+          description: `${food.name} updated`,
+        });
+        return;
+      }
+
+      void recordWaste(food as MovementItem, quantity).then((result) => {
+        if (!result.recorded) {
+          logger.warn('US-672: waste not recorded as a movement, using the legacy write', {
+            foodId,
+            reason: result.reason,
+          });
+          legacyWrite();
+        }
+        toast.success(`Threw out ${Math.abs(quantity)} ${food.unit || ''}`.trim(), {
+          description: `${food.name} updated`,
+        });
+      });
+    },
+    [foods, updateFood, ledgerWritesEnabled, recordWaste]
   );
 
   const handleAddToGrocery = useCallback(
@@ -968,6 +1051,7 @@ export default function Pantry() {
                         onEdit={handleEdit}
                         onDelete={deleteFood}
                         onQuantityChange={handleQuantityChange}
+                        onWaste={handleWaste}
                         kidAllergens={uniqueKidAllergens}
                       />
                     </div>

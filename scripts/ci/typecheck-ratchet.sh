@@ -24,7 +24,25 @@ if [ -z "${baseline}" ]; then
 fi
 
 npm run typecheck > "$LOG" 2>&1
+status=$?
 count="$(grep -cE 'error TS' "$LOG" || true)"
+
+# A crashed tsc is not a clean tsc.
+#
+# tsc exits non-zero whenever it reports errors, which is the NORMAL state here
+# while the backlog is non-empty, so a bare exit-code check would fail every
+# run. The signal that something actually went wrong is the combination: the
+# tool failed AND reported no errors at all. That is what an OOM kill, a
+# SIGTERM, a missing node_modules or a bad tsconfig looks like.
+#
+# Without this the ratchet reads a truncated log as a clean tree: it prints
+# "Typecheck errors: 0 (baseline: N)", passes, and helpfully suggests lowering
+# the baseline to zero. Observed for real by killing a tsc mid-run.
+if [ "$status" -ne 0 ] && [ "$count" -eq 0 ]; then
+  echo "::error title=Typecheck did not run::\`npm run typecheck\` exited ${status} without reporting a single type error, so the log cannot be trusted (OOM, crash, or a broken setup). NOT treating this as zero errors."
+  tail -40 "$LOG"
+  exit 1
+fi
 
 echo "Typecheck errors: ${count} (baseline: ${baseline})"
 

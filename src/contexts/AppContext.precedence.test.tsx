@@ -19,7 +19,7 @@
 import { render, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { AppProvider, useFoods } from './AppContext';
+import { AppProvider, useFoods, useInventory } from './AppContext';
 
 // ---- Supabase mock: a chainable, thenable query builder per table ----------
 const tableData: Record<string, unknown[]> = {};
@@ -46,6 +46,9 @@ vi.mock('@/integrations/supabase/client', () => ({
       onAuthStateChange: vi.fn().mockReturnValue({
         data: { subscription: { unsubscribe: vi.fn() } },
       }),
+      getUser: vi.fn(() =>
+        Promise.resolve({ data: { user: sessionUser }, error: null })
+      ),
     },
     from: vi.fn((table: string) => makeBuilder(table)),
     channel: vi.fn().mockReturnValue({
@@ -97,6 +100,32 @@ const STORAGE_KEY = 'kid-meal-planner';
 function FoodsProbe({ onFoods }: { onFoods: (names: string[]) => void }) {
   const { foods } = useFoods();
   onFoods(foods.map((f) => f.name));
+  return null;
+}
+
+function PantryQuantityProbe({
+  food,
+  onValue,
+}: {
+  food: { id: string; quantity?: number; unit?: string; canonical_unit?: string };
+  onValue: (v: { rendered: number; enabled: boolean }) => void;
+}) {
+  const { pantryQuantityOf, ledgerReadsEnabled } = useInventory();
+  onValue({ rendered: pantryQuantityOf(food), enabled: ledgerReadsEnabled });
+  return null;
+}
+
+function InventoryProbe({
+  onInventory,
+}: {
+  onInventory: (v: { movementIds: string[]; stockByItem: Record<string, number>; ledgerReadsEnabled: boolean }) => void;
+}) {
+  const { movements, itemStock, ledgerReadsEnabled } = useInventory();
+  onInventory({
+    movementIds: movements.map((m) => m.id),
+    stockByItem: Object.fromEntries(itemStock.map((s) => [s.item_id, Number(s.on_hand_canonical)])),
+    ledgerReadsEnabled,
+  });
   return null;
 }
 
@@ -189,5 +218,167 @@ describe('US-341: load precedence (localStorage vs Supabase)', () => {
     await new Promise((r) => setTimeout(r, 90));
     expect(latest).toEqual(['Server Milk']);
     expect(latest).not.toContain('Stale Local Food');
+  });
+});
+
+/**
+ * US-671 criterion 5: the ledger slices obey the same precedence contract as
+ * every other domain. Nothing about being append-only exempts them from it --
+ * if anything the overwrite is safer here, because there is no local edit to a
+ * movement that a server load could discard.
+ */
+describe('US-671: the ledger slices under the US-341 precedence contract', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    sessionUser = null;
+  });
+
+  it('offline fallback: renders cached movements and stock when there is no session', async () => {
+    storageBacking[STORAGE_KEY] = JSON.stringify({
+      foods: [{ id: 'f1', name: 'Cached Apple', category: 'fruit', is_safe: true, is_try_bite: false }],
+      kids: [{ id: 'k1', name: 'Kid', age: 4 }],
+      recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
+      movements: [
+        { id: 'cached-m1', item_id: 'f1', delta: 500, canonical_unit: 'g', household_id: 'hh-1' },
+      ],
+      itemStock: [
+        { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 500, canonical_unit: 'g' },
+      ],
+    });
+
+    let latest = { movementIds: [] as string[], stockByItem: {} as Record<string, number>, ledgerReadsEnabled: false };
+    render(
+      <AppProvider>
+        <InventoryProbe onInventory={(v) => { latest = v; }} />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(latest.movementIds).toEqual(['cached-m1']));
+    expect(latest.stockByItem).toEqual({ f1: 500 });
+  });
+
+  it('server-authoritative: a successful load overwrites the cached ledger wholesale', async () => {
+    // A cache carrying a movement the server no longer reports -- the shape a
+    // merge would resurrect and an overwrite must not.
+    storageBacking[STORAGE_KEY] = JSON.stringify({
+      foods: [], kids: [{ id: 'k1', name: 'Kid', age: 4 }],
+      recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
+      movements: [
+        { id: 'stale-m', item_id: 'f1', delta: 9999, canonical_unit: 'g', household_id: 'hh-1' },
+      ],
+      itemStock: [
+        { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 9999, canonical_unit: 'g' },
+      ],
+    });
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['inventory_movements'] = [
+      { id: 'srv-m1', item_id: 'f1', delta: 500, canonical_unit: 'g', household_id: 'hh-1', reason: 'purchase' },
+    ];
+    tableData['item_stock'] = [
+      { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 500, canonical_unit: 'g' },
+    ];
+
+    let latest = { movementIds: [] as string[], stockByItem: {} as Record<string, number>, ledgerReadsEnabled: false };
+    render(
+      <AppProvider>
+        <InventoryProbe onInventory={(v) => { latest = v; }} />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(latest.movementIds).toEqual(['srv-m1']));
+    expect(latest.movementIds).not.toContain('stale-m');
+    expect(latest.stockByItem).toEqual({ f1: 500 });
+  });
+
+  it('the flag defaults off, so the ledger loads without changing what renders', async () => {
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['item_stock'] = [
+      { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 500, canonical_unit: 'g' },
+    ];
+
+    let latest = { movementIds: [] as string[], stockByItem: {} as Record<string, number>, ledgerReadsEnabled: true };
+    render(
+      <AppProvider>
+        <InventoryProbe onInventory={(v) => { latest = v; }} />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(latest.stockByItem).toEqual({ f1: 500 }));
+    expect(latest.ledgerReadsEnabled).toBe(false);
+  });
+});
+
+/**
+ * US-671 criterion 2: the flag is what selects where a pantry number comes
+ * from. Off is the shipped behaviour, unchanged; on reads the ledger.
+ */
+describe('US-671: the feature-flag gate on pantry quantity', () => {
+  const FLAG_CACHE_KEY = 'eatpal_feature_flags';
+  // 2 kg on hand in the ledger, while the legacy column still says 1.
+  const FOOD = { id: 'f1', quantity: 1, unit: 'kg', canonical_unit: 'g' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    localStorage.clear();
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['item_stock'] = [
+      { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 2000, canonical_unit: 'g' },
+    ];
+  });
+
+  it('off: renders foods.quantity, exactly as the shipped app does', async () => {
+    let latest = { rendered: -1, enabled: true };
+    render(
+      <AppProvider>
+        <PantryQuantityProbe food={FOOD} onValue={(v) => { latest = v; }} />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(latest.enabled).toBe(false));
+    expect(latest.rendered).toBe(1);
+  });
+
+  it('on: renders the ledger balance converted into the item display unit', async () => {
+    localStorage.setItem(
+      FLAG_CACHE_KEY,
+      JSON.stringify({ flags: { kitchen_loop_ledger_reads: true }, timestamp: Date.now() })
+    );
+
+    let latest = { rendered: -1, enabled: false };
+    render(
+      <AppProvider>
+        <PantryQuantityProbe food={FOOD} onValue={(v) => { latest = v; }} />
+      </AppProvider>
+    );
+
+    // 2000 g rendered in kg, not the 1 the legacy column still holds.
+    await waitFor(() => expect(latest.rendered).toBe(2));
+    expect(latest.enabled).toBe(true);
+  });
+
+  it('on: keeps the legacy number for an item the ledger has no balance for', async () => {
+    localStorage.setItem(
+      FLAG_CACHE_KEY,
+      JSON.stringify({ flags: { kitchen_loop_ledger_reads: true }, timestamp: Date.now() })
+    );
+    tableData['item_stock'] = [];
+
+    let latest = { rendered: -1, enabled: false };
+    render(
+      <AppProvider>
+        <PantryQuantityProbe food={FOOD} onValue={(v) => { latest = v; }} />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(latest.enabled).toBe(true));
+    // A stale number beats a blank one while the backfill is still landing.
+    expect(latest.rendered).toBe(1);
   });
 });

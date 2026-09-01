@@ -1,3 +1,64 @@
+ What's New in EatPal - v1.0.9 (Summer 2026)
+
+> Food ladders come to the meal plan, and grocery quantities finally add up.
+> Drop the relevant section into App Store / TestFlight / blog as needed.
+
+---
+
+ App Store-style summary (<=500 chars)
+
+EatPal 1.0.9 puts food-ladder logging where dinner actually happens.
+
+- Log an exposure straight from the meal plan in three taps, no form to fill
+- "Not today" is treated as an answer, not a failure
+- See where every food sits on a child's ladder in one place
+- Recipe and pantry units now agree, so grocery quantities add up
+- Privacy and reliability fixes
+
+---
+
+ Headline features
+
+ Log an exposure without leaving the plan
+
+When a planned food comes from a ladder, the entry now names the step under the
+food and puts the controls right there. Three taps at the table instead of a
+form, because 6pm on a Tuesday is when the exposure actually happens.
+
+The full logging sheet is still in the tracker, with bites, amount, mood before
+and after, prep and notes, for when you have time to sit down and review
+properly. You never need it to move a ladder along.
+
+Only active foods get the quick controls. A food that is paused or already
+mastered is not something to be asking about at the table.
+
+ "Not today" is an answer
+
+A child turning a food down is information, not an error, so it is not coloured
+like one. There is also no "try again" button: the ladder decides when a food
+comes back around, and straight after a refusal is never the right moment.
+
+ The ladder, on every device
+
+Ladder progress now moves a child identically on iPhone and on the web, so
+logging dinner on your phone and checking in on a laptop cannot show you two
+different answers.
+
+ Grocery quantities that add up
+
+Recipe ingredients and pantry items now speak the same units. "2 cans" and
+"1 can" stack instead of being treated as unrelated things, and all 28 units in
+the picker are recognised, up from 15. In practice that means fewer wrong
+numbers on your shopping list and fewer ingredients quietly missed when EatPal
+checks what you are short of for the week.
+
+ Under the hood
+
+Photos uploaded for a child are stored under an unguessable name, plus the usual
+round of reliability fixes.
+
+---
+
  What's New in EatPal — v1.0.3 (Spring 2026)
 
 > Six big upgrades to the Pantry → Recipes → Plan → Grocery loop, focused on

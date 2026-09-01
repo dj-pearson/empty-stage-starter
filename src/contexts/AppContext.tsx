@@ -15,6 +15,8 @@ import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_S
 import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
+import { InventoryProvider, useInventory, parseMovementRows, parseStockRows, MOVEMENT_WINDOW_DAYS, MOVEMENT_LIMIT } from "./InventoryContext";
+import { compareLedgerToLegacy, summarizeDivergences, type ComparableItem } from "@/lib/stockComparison";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
 
 // US-331: re-export the narrow domain hooks so components can subscribe to only
@@ -28,6 +30,7 @@ export { useKids } from "./KidsContext";
 export { useRecipes } from "./RecipesContext";
 export { usePlan } from "./PlanContext";
 export { useGrocery } from "./GroceryContext";
+export { useInventory } from "./InventoryContext";
 
 interface AppContextType {
   foods: Food[];
@@ -76,6 +79,13 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEY = "kid-meal-planner";
 
+// US-671: how many individual divergences the dark-launch comparison logs
+// before it stops and reports a count instead.
+const LEDGER_DIVERGENCE_LOG_LIMIT = 50;
+
+// Long enough that a burst of realtime events settles into one comparison.
+const LEDGER_COMPARISON_DEBOUNCE_MS = 1000;
+
 const STARTER_FOODS: Omit<Food, "id">[] = [
   { name: "Chicken Nuggets", category: "protein", is_safe: true, is_try_bite: false },
   { name: "Mac & Cheese", category: "carb", is_safe: true, is_try_bite: false },
@@ -102,6 +112,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes } = useRecipes();
   const { planEntries, setPlanEntries, setPlanEntriesState, addPlanEntry, addPlanEntries, updatePlanEntry, copyWeekPlan, deleteWeekPlan } = usePlan();
   const { groceryItems, setGroceryItems, setGroceryItemsState, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
+  // US-671: the ledger slices. Read-only here; nothing in the composer appends.
+  const { movements, setMovements, itemStock, setItemStock, stockRows, ledgerReadsEnabled } = useInventory();
 
   // Tracks which (userId:householdId) scope has been loaded so the Supabase
   // sync runs once per scope, reloads when the household resolves/changes, and
@@ -135,6 +147,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           setActiveKidId(data.activeKidId || (data.kids?.[0]?.id ?? null));
           setPlanEntriesState(data.planEntries || []);
           setGroceryItemsState(data.groceryItems || []);
+          // US-671: the ledger slices hydrate from the cache like every other
+          // domain, so an offline pantry still has a balance to render.
+          setMovements(parseMovementRows(data.movements || []));
+          setItemStock(parseStockRows(data.itemStock || []));
         } else {
           const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
           setFoods(starterFoods);
@@ -186,12 +202,13 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     if (!hydratedRef.current) {
       const isEmpty =
         foods.length === 0 && kids.length === 0 && recipes.length === 0 &&
-        planEntries.length === 0 && groceryItems.length === 0;
+        planEntries.length === 0 && groceryItems.length === 0 &&
+        movements.length === 0 && itemStock.length === 0;
       if (isEmpty) return; // nothing loaded yet — don't overwrite the cache
       hydratedRef.current = true;
     }
-    persistSnapshot({ foods, kids, recipes, activeKidId, planEntries, groceryItems });
-  }, [foods, kids, recipes, activeKidId, planEntries, groceryItems, persistSnapshot]);
+    persistSnapshot({ foods, kids, recipes, activeKidId, planEntries, groceryItems, movements, itemStock });
+  }, [foods, kids, recipes, activeKidId, planEntries, groceryItems, movements, itemStock, persistSnapshot]);
 
   // Sync with Supabase when authenticated.
   //
@@ -233,6 +250,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setActiveKidId(null);
       setPlanEntriesState([]);
       setGroceryItemsState([]);
+      setMovements([]);
+      setItemStock([]);
     }
 
     const loadUserData = async (retried = false): Promise<void> => {
@@ -245,7 +264,14 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         // US-550: this effect is gated on householdId above, so every query is
         // always household-scoped (the previous unscoped ternary branches were
         // dead code that relied solely on RLS).
-        const [kidsRes, foodsRes, recipesRes, planRes, groceryRes] = await Promise.all([
+        // US-671: movements are WINDOWED like plan entries, for the same
+        // reason: an append-only log grows forever and a client does not need
+        // all of it. item_stock is NOT windowed: it is one row per item and it
+        // is the balance, so a partial fetch of it would be a wrong pantry.
+        const movementWindowStart = new Date();
+        movementWindowStart.setDate(movementWindowStart.getDate() - MOVEMENT_WINDOW_DAYS);
+
+        const [kidsRes, foodsRes, recipesRes, planRes, groceryRes, movementsRes, stockRes] = await Promise.all([
           supabase.from('kids').select('*').eq('household_id', householdId).order('created_at', { ascending: true }),
           supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500),
           // US-323: degrade to a plain select if the recipe_ingredients embed
@@ -255,13 +281,18 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
             .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
             .order('date', { ascending: true }),
-          supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500)
+          supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500),
+          supabase.from('inventory_movements').select('*').eq('household_id', householdId)
+            .gte('occurred_at', movementWindowStart.toISOString())
+            .order('occurred_at', { ascending: true })
+            .limit(MOVEMENT_LIMIT),
+          supabase.from('item_stock').select('*').eq('household_id', householdId)
         ]);
 
         // US-316: expired-JWT / 401 / PGRST301 come back as result.error (not
         // thrown), so without this an expired token silently renders an empty
         // app. Detect it on any read, refresh once, then retry or redirect.
-        const firstError = [kidsRes, foodsRes, recipesRes, planRes, groceryRes]
+        const firstError = [kidsRes, foodsRes, recipesRes, planRes, groceryRes, movementsRes, stockRes]
           .find(r => r.error)?.error;
         if (firstError) {
           const outcome = await handleSupabaseAuthError(firstError);
@@ -372,6 +403,15 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           setPlanEntriesState((prev) => mergeWindowedPlanEntries(prev, serverEntries, windowStart, windowEnd));
         }
         if (groceryRes.data) setGroceryItemsState(parseGroceryItemRows(groceryRes.data as unknown[]));
+        // US-671: server-authoritative, same as every slice above. Append-only
+        // makes the wholesale overwrite trivially safe for movements: there is
+        // no local edit to a movement that an overwrite could discard, because
+        // a movement is never edited.
+        // Normalized on the way in, like every other slice: delta and
+        // on_hand_canonical are NUMERIC and do not arrive as JS numbers on
+        // every path.
+        if (movementsRes.data) setMovements(parseMovementRows(movementsRes.data as unknown[]));
+        if (stockRes.data) setItemStock(parseStockRows(stockRes.data as unknown[]));
       } catch (error) {
         // Don't leave the scope marked as loaded if it failed — clear it so
         // the next render retries instead of showing a permanently empty app.
@@ -415,6 +455,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setActiveKidId(null);
       setPlanEntriesState([]);
       setGroceryItemsState([]);
+      setMovements([]);
+      setItemStock([]);
       getStorage()
         .then((storage) => storage.removeItem(STORAGE_KEY))
         .catch((error) => logger.error('Error clearing storage on sign-out:', error));
@@ -422,6 +464,69 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // US-671 dark launch: with the flag OFF, check the ledger against the legacy
+  // column and log what disagrees. This is the evidence the flag flip is
+  // supposed to wait for ("compare, and flip only when they agree"), and it
+  // deliberately changes nothing a parent sees.
+  //
+  // Debounced, because both inputs change on every realtime event and on every
+  // pantry edit, and the interesting signal is the settled state rather than
+  // each intermediate one.
+  useEffect(() => {
+    if (ledgerReadsEnabled) return; // the comparison is what precedes the flip
+    if (foods.length === 0) return;
+
+    const timer = setTimeout(() => {
+      // No balances at all is one fact about the household, not one fact per
+      // item. Before the US-669 backfill reaches a household every food would
+      // otherwise report 'missing_stock_row', and 50 lines saying the same
+      // thing is how the first real mismatch gets missed.
+      if (stockRows.length === 0) {
+        logger.warn('US-671 ledger comparison: no item_stock rows for this household', {
+          householdId,
+          items: foods.length,
+        });
+        return;
+      }
+
+      // `foods` carries the catalog columns the comparison reads
+      // (canonical_unit, unit_conversions, density_g_per_ml): they ride along
+      // through normalizeFoodFromDB's row spread but are not on the `Food`
+      // interface yet, so the shape is widened here rather than narrowed.
+      const divergences = compareLedgerToLegacy(stockRows, foods as ComparableItem[]);
+      const summary = summarizeDivergences(divergences);
+      if (summary.total === 0) return;
+
+      logger.warn('US-671 ledger comparison: ledger and foods.quantity disagree', {
+        householdId,
+        items: foods.length,
+        stockRows: stockRows.length,
+        ...summary,
+      });
+
+      // Capped rather than unbounded: a household that has not been backfilled
+      // yet diverges on every row, and 500 log lines would bury the first real
+      // mismatch that appears after it HAS been backfilled.
+      for (const d of divergences.slice(0, LEDGER_DIVERGENCE_LOG_LIMIT)) {
+        logger.warn(`US-671 divergence [${d.kind}] item ${d.itemId}`, {
+          itemId: d.itemId,
+          ledgerValue: d.ledgerValue,
+          legacyValue: d.legacyValue,
+          canonicalUnit: d.canonicalUnit,
+          displayUnit: d.displayUnit,
+          detail: d.detail,
+        });
+      }
+      if (divergences.length > LEDGER_DIVERGENCE_LOG_LIMIT) {
+        logger.warn(
+          `US-671 divergence: ${divergences.length - LEDGER_DIVERGENCE_LOG_LIMIT} further divergences not logged`
+        );
+      }
+    }, LEDGER_COMPARISON_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [ledgerReadsEnabled, stockRows, foods, householdId]);
 
   // US-331: keep a ref of the latest snapshot so exportData has a stable
   // identity instead of a new reference on every data change. Without this the
@@ -498,9 +603,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           <RecipesProvider>
             <PlanProvider>
               <GroceryProvider>
-                <AppContextComposer>
-                  {children}
-                </AppContextComposer>
+                <InventoryProvider>
+                  <AppContextComposer>
+                    {children}
+                  </AppContextComposer>
+                </InventoryProvider>
               </GroceryProvider>
             </PlanProvider>
           </RecipesProvider>

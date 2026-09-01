@@ -228,3 +228,111 @@ export function sumCanonical(
 
   return { total, unit, unconvertible };
 }
+
+/**
+ * The inverse of `toCanonical`: a canonical balance expressed back in an item's
+ * display unit. `null` means genuinely unconvertible, and a caller must treat
+ * that as "leave the old value alone", never as zero.
+ *
+ * This is the TypeScript half of `public.from_canonical()` (migration
+ * 20260901000003). The two MUST agree, because that SQL function is what the
+ * US-667 trigger uses to write `foods.quantity`, and US-671 compares the ledger
+ * against that column on real households before the flag is flipped. If the
+ * client converted differently it would report drift that the server does not
+ * have, which is the one thing a dark-launch comparison must never do.
+ *
+ * Note the deliberate asymmetry with `toCanonical`, in the third rule below.
+ * `toCanonical(1, 'servings')` is honestly unknown: nobody has said what a
+ * serving weighs. But a COUNT balance rendered into an opaque display unit is
+ * one-to-one by construction, because the US-669 backfill is what classified
+ * those items as 'count' using their existing quantity in that very unit. So
+ * the round trip display -> canonical -> display is NOT total, and that is
+ * correct rather than an oversight: the mirror direction knows something the
+ * parsing direction cannot.
+ *
+ * In the sampled production data every `foods.unit` is 'servings' or
+ * 'packages', so without that rule this would decline to convert almost every
+ * row and the comparison would report nothing at all.
+ */
+export function fromCanonical(
+  value: number | null | undefined,
+  canonicalUnit: string | null | undefined,
+  displayUnit: string | null | undefined,
+  item: CanonicalItemFacts = {}
+): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (canonicalUnit == null || !CANONICAL_UNITS.has(String(canonicalUnit))) return null;
+
+  const token = tokenise(displayUnit);
+
+  // No display unit at all: the number is unitless, so it is already right.
+  if (token === '') return value;
+
+  // A per-item conversion wins, exactly as it does on the way in.
+  const conversions = item.unit_conversions;
+  if (conversions && typeof conversions === 'object') {
+    for (const [key, factor] of Object.entries(conversions)) {
+      if (tokenise(key) !== token) continue;
+      if (typeof factor !== 'number' || !Number.isFinite(factor) || factor === 0) break;
+      return value / factor;
+    }
+  }
+
+  // `normalize(1, token)` is the TS spelling of SQL's unit_to_canonical: the
+  // qty is the factor to the family's canonical unit, the family is the
+  // dimension.
+  const one = normalize(1, token);
+  const dimension = familyToCanonical(one.family);
+  const factor = one.qty;
+
+  if (dimension !== null && dimension === canonicalUnit && Number.isFinite(factor) && factor !== 0) {
+    return value / factor;
+  }
+
+  // An opaque display unit over a COUNT balance is one-to-one. See above.
+  if (dimension === null && canonicalUnit === 'count') return value;
+
+  // Different dimensions with no per-item bridge. Refuse rather than guess.
+  return null;
+}
+
+/**
+ * `toCanonical`, plus the one item-scoped rule that makes the write path work
+ * on real data. This is the exact inverse of `fromCanonical`, and it exists for
+ * the same reason.
+ *
+ * `toCanonical(3, 'servings')` is honestly unknown, and must stay that way: a
+ * recipe calling for "1 serving of flour" really has not said how much flour.
+ * But when the ITEM is canonical in 'count' and the amount is expressed in
+ * THAT ITEM'S OWN display unit, one display unit is one count by construction
+ * -- the US-669 backfill is what classified the item as 'count', using its
+ * existing quantity in that very unit.
+ *
+ * Without this, US-672 would refuse to record a pantry edit for essentially
+ * every production item, since every sampled `foods.unit` is 'servings' or
+ * 'packages'. The pantry would appear to accept an edit and the ledger would
+ * quietly record nothing.
+ *
+ * The rule is deliberately narrow. It applies ONLY when the unit matches the
+ * item's own display unit, so "2 cans" of an item displayed in servings is
+ * still refused: the backfill said what a serving of this item is, and said
+ * nothing whatever about a can.
+ */
+export function toCanonicalInItemUnit(
+  quantity: number,
+  unit: string | null | undefined,
+  item: CanonicalItemFacts & { unit?: string | null } = {}
+): CanonicalResult {
+  const direct = toCanonical(quantity, unit, item);
+  if (!isUnknown(direct)) return direct;
+
+  if (String(item.canonical_unit) !== 'count') return direct;
+
+  const token = tokenise(unit);
+  const itemToken = tokenise(item.unit);
+  if (token === '' || itemToken === '' || token !== itemToken) return direct;
+
+  if (typeof quantity !== 'number' || !Number.isFinite(quantity)) return direct;
+
+  return { value: quantity, unit: 'count', via: 'identity' };
+}

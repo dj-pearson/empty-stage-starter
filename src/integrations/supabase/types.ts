@@ -5913,6 +5913,7 @@ export type Database = {
           canonical_unit: string
           created_at: string
           created_by: string
+          currency: string | null
           delta: number
           display_quantity: number | null
           display_unit: string | null
@@ -5924,11 +5925,13 @@ export type Database = {
           ref_id: string | null
           ref_type: string | null
           reversed_by_id: string | null
+          unit_price: number | null
         }
         Insert: {
           canonical_unit: string
           created_at?: string
           created_by: string
+          currency?: string | null
           delta: number
           display_quantity?: number | null
           display_unit?: string | null
@@ -5940,11 +5943,13 @@ export type Database = {
           ref_id?: string | null
           ref_type?: string | null
           reversed_by_id?: string | null
+          unit_price?: number | null
         }
         Update: {
           canonical_unit?: string
           created_at?: string
           created_by?: string
+          currency?: string | null
           delta?: number
           display_quantity?: number | null
           display_unit?: string | null
@@ -5956,6 +5961,7 @@ export type Database = {
           ref_id?: string | null
           ref_type?: string | null
           reversed_by_id?: string | null
+          unit_price?: number | null
         }
         Relationships: []
       }
