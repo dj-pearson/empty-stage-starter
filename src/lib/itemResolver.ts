@@ -22,7 +22,7 @@
  * Design: docs/superpowers/specs/2026-08-31-unified-kitchen-loop-design.md
  */
 
-import { levenshtein } from '@/lib/editDistance';
+import { osaDistance } from '@/lib/editDistance';
 import { normalizeItemText } from '@/lib/itemNormalize';
 
 /**
@@ -123,12 +123,20 @@ export function isProvisional(r: ResolveResult): r is ProvisionalItem {
   return (r as ProvisionalItem).provisional === true;
 }
 
-/** Similarity in [0,1] from edit distance over the longer string. */
+/**
+ * Similarity in [0,1] from edit distance over the longer string.
+ *
+ * Uses optimal string alignment (US-692) rather than plain Levenshtein, so a
+ * swapped pair of adjacent letters costs one edit instead of two. With the
+ * classic metric, whether a typo was forgiven depended on how long the item
+ * name happened to be: "braest chicken" scored 0.857 and resolved while the
+ * identical mistake in "mikl whole" scored 0.800 and did not.
+ */
 export function similarity(a: string, b: string): number {
   if (a === b) return 1;
   const longest = Math.max(a.length, b.length);
   if (longest === 0) return 1;
-  return Math.max(0, (longest - levenshtein(a, b)) / longest);
+  return Math.max(0, (longest - osaDistance(a, b)) / longest);
 }
 
 function normaliseBarcode(raw: string | null | undefined): string {
