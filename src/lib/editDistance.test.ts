@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { levenshtein, payloadEditDistance, MAX_DIFF_CHARS } from './editDistance';
+import { levenshtein, osaDistance, payloadEditDistance, MAX_DIFF_CHARS } from './editDistance';
 
 describe('levenshtein', () => {
   it('is zero for identical strings', () => {
@@ -43,5 +43,77 @@ describe('payloadEditDistance', () => {
   it('tolerates null/undefined payloads', () => {
     expect(payloadEditDistance(null, null)).toBe(0);
     expect(payloadEditDistance(undefined, {})).toBe(0);
+  });
+});
+
+/**
+ * US-692: optimal string alignment. The property that matters is the one
+ * classic Levenshtein gets wrong for human input — an adjacent swap is one
+ * mistake, not two — because the item resolver divides distance by string
+ * length and therefore inherited a dependence on how long a word happened
+ * to be.
+ */
+describe('osaDistance', () => {
+  it('agrees with levenshtein when there is no transposition', () => {
+    for (const [a, b] of [
+      ['', ''],
+      ['a', ''],
+      ['', 'abc'],
+      ['kitten', 'sitting'],
+      ['chicken', 'chiken'],
+      ['flour', 'flower'],
+      ['same', 'same'],
+    ] as const) {
+      expect(osaDistance(a, b)).toBe(levenshtein(a, b));
+    }
+  });
+
+  it('charges one edit for an adjacent transposition where levenshtein charges two', () => {
+    expect(osaDistance('milk', 'mikl')).toBe(1);
+    expect(levenshtein('milk', 'mikl')).toBe(2);
+    expect(osaDistance('breast', 'braest')).toBe(1);
+    expect(levenshtein('breast', 'braest')).toBe(2);
+  });
+
+  it('is symmetric', () => {
+    for (const [a, b] of [
+      ['milk whole', 'mikl whole'],
+      ['kitten', 'sitting'],
+      ['abcd', 'badc'],
+    ] as const) {
+      expect(osaDistance(a, b)).toBe(osaDistance(b, a));
+    }
+  });
+
+  it('is zero only for identical strings', () => {
+    expect(osaDistance('chicken breast', 'chicken breast')).toBe(0);
+    expect(osaDistance('chicken breast', 'chicken breasts')).toBeGreaterThan(0);
+  });
+
+  it('counts two separate transpositions separately', () => {
+    // "badc" is "abcd" with two independent adjacent swaps.
+    expect(osaDistance('abcd', 'badc')).toBe(2);
+  });
+
+  it('never exceeds the length of the longer string', () => {
+    for (const [a, b] of [
+      ['chicken', 'xyz'],
+      ['a', 'bbbbbbbb'],
+      ['', 'abcdef'],
+    ] as const) {
+      expect(osaDistance(a, b)).toBeLessThanOrEqual(Math.max(a.length, b.length));
+    }
+  });
+
+  it('bounds huge inputs the same way levenshtein does', () => {
+    const long = 'a'.repeat(MAX_DIFF_CHARS + 500);
+    expect(() => osaDistance(long, long + 'b')).not.toThrow();
+    expect(osaDistance(long, long)).toBe(0);
+  });
+
+  it('leaves levenshtein untouched for its US-514 payload callers', () => {
+    // The approval-feedback scoring is calibrated against the classic metric
+    // and a JSON payload diff has no notion of a typo.
+    expect(levenshtein('milk', 'mikl')).toBe(2);
   });
 });

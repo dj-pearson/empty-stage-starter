@@ -3684,6 +3684,36 @@ export type Database = {
         }
         Relationships: []
       }
+      canonical_products: {
+        Row: {
+          barcode: string | null
+          category: string | null
+          created_at: string
+          default_aisle: string | null
+          default_unit: string | null
+          id: string
+          normalized_name: string
+        }
+        Insert: {
+          barcode?: string | null
+          category?: string | null
+          created_at?: string
+          default_aisle?: string | null
+          default_unit?: string | null
+          id?: string
+          normalized_name: string
+        }
+        Update: {
+          barcode?: string | null
+          category?: string | null
+          created_at?: string
+          default_aisle?: string | null
+          default_unit?: string | null
+          id?: string
+          normalized_name?: string
+        }
+        Relationships: []
+      }
       complementary_subscriptions: {
         Row: {
           created_at: string | null
@@ -4748,22 +4778,176 @@ export type Database = {
           },
         ]
       }
+      admin_customer_health_summary: {
+        Row: {
+          avg_days_active: number | null
+          avg_engagement: number | null
+          avg_feature_adoption: number | null
+          avg_score: number | null
+          health_tier: string | null
+          user_count: number | null
+        }
+        Insert: {
+          avg_days_active?: number | null
+          avg_engagement?: number | null
+          avg_feature_adoption?: number | null
+          avg_score?: number | null
+          health_tier?: string | null
+          user_count?: number | null
+        }
+        Update: {
+          avg_days_active?: number | null
+          avg_engagement?: number | null
+          avg_feature_adoption?: number | null
+          avg_score?: number | null
+          health_tier?: string | null
+          user_count?: number | null
+        }
+        Relationships: []
+      }
+      customer_health_history: {
+        Row: {
+          activity_frequency_score: number | null
+          engagement_score: number | null
+          feature_adoption_score: number | null
+          health_score: number
+          health_tier: string
+          id: string
+          recency_score: number | null
+          recorded_at: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_frequency_score?: number | null
+          engagement_score?: number | null
+          feature_adoption_score?: number | null
+          health_score: number
+          health_tier: string
+          id: string
+          recency_score?: number | null
+          recorded_at?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_frequency_score?: number | null
+          engagement_score?: number | null
+          feature_adoption_score?: number | null
+          health_score?: number
+          health_tier?: string
+          id?: string
+          recency_score?: number | null
+          recorded_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      customer_health_scores: {
+        Row: {
+          activity_frequency_score: number | null
+          ai_interactions_30d: number | null
+          avg_session_duration_minutes: number | null
+          breadth_score: number | null
+          calculated_at: string | null
+          created_at: string | null
+          days_active_last_7: number | null
+          days_active_last_30: number | null
+          depth_score: number | null
+          engagement_score: number | null
+          feature_adoption_score: number | null
+          features_used_count: number | null
+          foods_logged_30d: number | null
+          health_score: number | null
+          health_tier: string | null
+          id: string
+          last_activity_at: string | null
+          meals_planned_30d: number | null
+          recency_score: number | null
+          recipes_created_30d: number | null
+          score_change_30d: number | null
+          score_trend: string | null
+          total_sessions_30d: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_frequency_score?: number | null
+          ai_interactions_30d?: number | null
+          avg_session_duration_minutes?: number | null
+          breadth_score?: number | null
+          calculated_at?: string | null
+          created_at?: string | null
+          days_active_last_7?: number | null
+          days_active_last_30?: number | null
+          depth_score?: number | null
+          engagement_score?: number | null
+          feature_adoption_score?: number | null
+          features_used_count?: number | null
+          foods_logged_30d?: number | null
+          health_score?: number | null
+          health_tier?: string | null
+          id: string
+          last_activity_at?: string | null
+          meals_planned_30d?: number | null
+          recency_score?: number | null
+          recipes_created_30d?: number | null
+          score_change_30d?: number | null
+          score_trend?: string | null
+          total_sessions_30d?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_frequency_score?: number | null
+          ai_interactions_30d?: number | null
+          avg_session_duration_minutes?: number | null
+          breadth_score?: number | null
+          calculated_at?: string | null
+          created_at?: string | null
+          days_active_last_7?: number | null
+          days_active_last_30?: number | null
+          depth_score?: number | null
+          engagement_score?: number | null
+          feature_adoption_score?: number | null
+          features_used_count?: number | null
+          foods_logged_30d?: number | null
+          health_score?: number | null
+          health_tier?: string | null
+          id?: string
+          last_activity_at?: string | null
+          meals_planned_30d?: number | null
+          recency_score?: number | null
+          recipes_created_30d?: number | null
+          score_change_30d?: number | null
+          score_trend?: string | null
+          total_sessions_30d?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       foods: {
         Row: {
           aisle: string | null
           allergens: string[] | null
           barcode: string | null
+          canonical_unit: string | null
           category: string
           created_at: string | null
+          currency: string | null
+          expiry_date: string | null
           household_id: string | null
           id: string
           is_safe: boolean
           is_try_bite: boolean
+          merged_into_id: string | null
           name: string
+          needs_review: boolean
           package_quantity: string | null
+          price_per_unit: number | null
           quantity: number | null
           servings_per_container: number | null
           unit: string | null
+          unit_conversions: Json | null
           updated_at: string | null
           user_id: string
         }
@@ -4771,17 +4955,24 @@ export type Database = {
           aisle?: string | null
           allergens?: string[] | null
           barcode?: string | null
+          canonical_unit?: string | null
           category: string
           created_at?: string | null
+          currency?: string | null
+          expiry_date?: string | null
           household_id?: string | null
           id?: string
           is_safe?: boolean
           is_try_bite?: boolean
+          merged_into_id?: string | null
           name: string
+          needs_review?: boolean
           package_quantity?: string | null
+          price_per_unit?: number | null
           quantity?: number | null
           servings_per_container?: number | null
           unit?: string | null
+          unit_conversions?: Json | null
           updated_at?: string | null
           user_id: string
         }
@@ -4789,17 +4980,24 @@ export type Database = {
           aisle?: string | null
           allergens?: string[] | null
           barcode?: string | null
+          canonical_unit?: string | null
           category?: string
           created_at?: string | null
+          currency?: string | null
+          expiry_date?: string | null
           household_id?: string | null
           id?: string
           is_safe?: boolean
           is_try_bite?: boolean
+          merged_into_id?: string | null
           name?: string
+          needs_review?: boolean
           package_quantity?: string | null
+          price_per_unit?: number | null
           quantity?: number | null
           servings_per_container?: number | null
           unit?: string | null
+          unit_conversions?: Json | null
           updated_at?: string | null
           user_id?: string
         }
@@ -4809,6 +5007,13 @@ export type Database = {
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "foods_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
             referencedColumns: ["id"]
           },
         ]
@@ -4972,18 +5177,22 @@ export type Database = {
           added_by_user_id: string | null
           added_via: string | null
           aisle: string | null
+          aisle_section: string | null
           auto_generated: boolean | null
           barcode: string | null
           brand_preference: string | null
           category: string
           checked: boolean
           created_at: string | null
+          currency: string | null
           grocery_list_id: string | null
           household_id: string | null
           id: string
+          item_id: string | null
           name: string
           notes: string | null
           photo_url: string | null
+          price_per_unit: number | null
           priority: string | null
           quantity: number
           restock_reason: string | null
@@ -4997,18 +5206,22 @@ export type Database = {
           added_by_user_id?: string | null
           added_via?: string | null
           aisle?: string | null
+          aisle_section?: string | null
           auto_generated?: boolean | null
           barcode?: string | null
           brand_preference?: string | null
           category: string
           checked?: boolean
           created_at?: string | null
+          currency?: string | null
           grocery_list_id?: string | null
           household_id?: string | null
           id?: string
+          item_id?: string | null
           name: string
           notes?: string | null
           photo_url?: string | null
+          price_per_unit?: number | null
           priority?: string | null
           quantity?: number
           restock_reason?: string | null
@@ -5022,18 +5235,22 @@ export type Database = {
           added_by_user_id?: string | null
           added_via?: string | null
           aisle?: string | null
+          aisle_section?: string | null
           auto_generated?: boolean | null
           barcode?: string | null
           brand_preference?: string | null
           category?: string
           checked?: boolean
           created_at?: string | null
+          currency?: string | null
           grocery_list_id?: string | null
           household_id?: string | null
           id?: string
+          item_id?: string | null
           name?: string
           notes?: string | null
           photo_url?: string | null
+          price_per_unit?: number | null
           priority?: string | null
           quantity?: number
           restock_reason?: string | null
@@ -5690,6 +5907,114 @@ export type Database = {
             referencedColumns: ["food_id"]
           },
         ]
+      }
+      inventory_movements: {
+        Row: {
+          canonical_unit: string
+          created_at: string
+          created_by: string
+          delta: number
+          display_quantity: number | null
+          display_unit: string | null
+          household_id: string
+          id: string
+          item_id: string
+          occurred_at: string
+          reason: string
+          ref_id: string | null
+          ref_type: string | null
+          reversed_by_id: string | null
+        }
+        Insert: {
+          canonical_unit: string
+          created_at?: string
+          created_by: string
+          delta: number
+          display_quantity?: number | null
+          display_unit?: string | null
+          household_id: string
+          id: string
+          item_id: string
+          occurred_at?: string
+          reason: string
+          ref_id?: string | null
+          ref_type?: string | null
+          reversed_by_id?: string | null
+        }
+        Update: {
+          canonical_unit?: string
+          created_at?: string
+          created_by?: string
+          delta?: number
+          display_quantity?: number | null
+          display_unit?: string | null
+          household_id?: string
+          id?: string
+          item_id?: string
+          occurred_at?: string
+          reason?: string
+          ref_id?: string | null
+          ref_type?: string | null
+          reversed_by_id?: string | null
+        }
+        Relationships: []
+      }
+      item_aliases: {
+        Row: {
+          confidence: number
+          created_at: string
+          household_id: string
+          id: string
+          item_id: string
+          normalized_text: string
+          source: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          household_id: string
+          id?: string
+          item_id: string
+          normalized_text: string
+          source: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          household_id?: string
+          id?: string
+          item_id?: string
+          normalized_text?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      item_stock: {
+        Row: {
+          canonical_unit: string
+          household_id: string
+          item_id: string
+          mirror_unconvertible: boolean
+          on_hand_canonical: number
+          updated_at: string
+        }
+        Insert: {
+          canonical_unit: string
+          household_id: string
+          item_id: string
+          mirror_unconvertible?: boolean
+          on_hand_canonical?: number
+          updated_at?: string
+        }
+        Update: {
+          canonical_unit?: string
+          household_id?: string
+          item_id?: string
+          mirror_unconvertible?: boolean
+          on_hand_canonical?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       kid_food_ladder: {
         Row: {
