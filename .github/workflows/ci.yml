@@ -312,6 +312,12 @@ jobs:
       - name: Deno verify_jwt enforcement guard
         run: deno test --allow-read functions/_shared/verify-jwt-guard_test.ts
 
+      # US-710: SSRF, redirect-cap and body-size guards on the recipe URL
+      # fetch. Every case injects fetchImpl and uses IP literals, so no network
+      # and no DNS -- hence no --allow-net.
+      - name: Deno recipe-fetch SSRF guards
+        run: deno test supabase/functions/_shared/url-validator.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest

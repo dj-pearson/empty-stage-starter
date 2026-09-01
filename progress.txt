@@ -527,3 +527,59 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     node_modules and vitest.config.ts fails to load with a confusing
     ERR_MODULE_NOT_FOUND on vitest itself.
 ---
+
+## 2026-09-01 - US-710 (household planner slice 1)
+- supabase/functions/_shared/url-validator.ts (new) exports fetchRecipePage,
+  the only entry point a caller needs. It enforces, in order: https-only and no
+  credentials in the URL; a host that is not loopback, RFC1918, link-local,
+  169.254.169.254 or metadata.google.internal, including the hex (0x7f000001)
+  and decimal (2130706433) spellings of 127.0.0.1; DNS resolution of a
+  hostname re-checked against the same ranges; redirect: 'manual' with a cap of
+  3 hops and every hop re-validated before it is followed;
+  AbortSignal.timeout(10000) per hop; a 2 MB body cap that returns 413.
+- parse-recipe and parse-recipe-grocery both call it. Both
+  `fetch(url, {redirect: 'follow'})` calls are gone, along with the duplicated
+  browser User-Agent header block, which now lives in the helper. The helper's
+  status comes back to the caller, so a refused URL is a 400, an oversized page
+  a 413, a timeout a 504 and an upstream failure a 502 -- previously all of it
+  was one flat 400 or a thrown 500.
+- Ported from functions/_shared/url-validator.ts, which has had safeFetch and
+  readCappedBody since the Agentic OS work. The deployed tree never got them.
+  Adapted rather than copied: https-only instead of http-or-https,
+  AbortSignal.timeout instead of a manual AbortController, a 2 MB cap instead
+  of 10 MB, fetchImpl injection so the tests need no network, and a status on
+  every failure.
+- 16 Deno tests in supabase/functions/_shared/url-validator.test.ts cover the
+  private-range rejection (direct and via redirect), the redirect cap, the size
+  cap (declared Content-Length and a lying server), redirect: 'manual' being
+  set at all, and the 504/502 mapping. Every case injects fetchImpl and uses IP
+  literals, so no network and no DNS: `deno test` with no permission flags.
+  ci.yml runs them as a named step beside the other two Deno test steps.
+- Also fixed the two type errors that made `deno check` fail on
+  parse-recipe-grocery (an implicit-any callback and an unknown catch binding).
+  No behavior change; the file I was editing is now checkable.
+- Files: supabase/functions/_shared/url-validator.ts (new),
+  supabase/functions/_shared/url-validator.test.ts (new),
+  supabase/functions/parse-recipe/index.ts,
+  supabase/functions/parse-recipe-grocery/index.ts, .github/workflows/ci.yml.
+- Gates: 17 Deno tests passed (16 new + the verify_jwt guard), 2722 vitest
+  passed / 3 skipped, lint 1226 at baseline, deno check clean on both edited
+  functions, check-function-trees.sh OK, check-invisible-chars.mjs clean.
+- **Learnings for future iterations:**
+  - deno is NOT installed in the loop container but installs in about a minute:
+    curl the release zip for x86_64-unknown-linux-gnu, unzip, move to
+    /usr/local/bin. Do this first on any edge-function story. It gives you
+    `deno check <file>` (real typechecking of the Deno tree, which tsc never
+    sees) and `deno test`, and it makes stories marked loopVerifiable: false
+    for "needs a deployed target" verifiable when the logic is pure.
+  - A CI Deno test only runs if ci.yml names its file. There is no glob. Adding
+    a *_test.ts or *.test.ts under supabase/functions does nothing on its own.
+  - Design edge-function helpers with an injectable fetchImpl. It turns an
+    SSRF guard into a hermetic unit test with no --allow-net, which is both
+    faster and a smaller permission surface in CI.
+  - `redirect: 'follow'` is the actual SSRF hole in a URL-fetching function,
+    not the initial hostname check. A public host that 302s to
+    169.254.169.254 defeats any amount of front-door validation.
+  - The non-deployed `functions/` tree is worth reading before writing a
+    security helper from scratch. It already had this one.
+---

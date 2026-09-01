@@ -1,6 +1,7 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import type { AIImageSource } from '../_shared/ai-service-v2.ts';
 import { requireUser } from '../_shared/require-admin.ts';
+import { fetchRecipePage } from '../_shared/url-validator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,21 +66,17 @@ export default async (req: Request) => {
     // Handle URL-based recipe parsing
     else if (url) {
       console.log('Fetching recipe from URL:', url);
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-        },
-        redirect: 'follow',
-      });
-      if (!response.ok) {
-        console.error(`URL fetch failed: ${response.status} ${response.statusText}`);
-        throw new Error(`Failed to fetch recipe from URL (HTTP ${response.status})`);
+      // US-710: https-only, no private or metadata address, redirects followed
+      // manually and re-validated, 10s per hop, 2 MB body cap.
+      const page = await fetchRecipePage(url);
+      if (!page.ok) {
+        console.error('Refused or failed URL fetch:', page.status, page.error);
+        return new Response(
+          JSON.stringify({ error: page.error }),
+          { status: page.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-      const html = await response.text();
+      const html = page.html;
       
       // Try to extract JSON-LD recipe schema first (most reliable)
       const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
@@ -92,7 +89,10 @@ export default async (req: Request) => {
             const json = JSON.parse(jsonText);
             // Handle both single objects and arrays (JSON-LD can have @graph)
             const schemas = Array.isArray(json) ? json : (json['@graph'] || [json]);
-            recipeSchema = schemas.find(s => s['@type'] === 'Recipe' || s['@type']?.includes('Recipe'));
+            recipeSchema = schemas.find((s: Record<string, unknown>) => {
+              const t = s?.['@type'];
+              return t === 'Recipe' || (Array.isArray(t) && t.includes('Recipe'));
+            });
             if (recipeSchema) {
               console.log('Found Recipe JSON-LD schema');
               recipeContent = JSON.stringify(recipeSchema, null, 2);
@@ -203,7 +203,9 @@ export default async (req: Request) => {
     } catch (parseError) {
       console.error('JSON parse error:', parseError);
       console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
-      throw new Error(`Failed to parse JSON: ${parseError.message}`);
+      throw new Error(
+        `Failed to parse JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+      );
     }
     
     return new Response(

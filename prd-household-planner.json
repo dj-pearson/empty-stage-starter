@@ -33,11 +33,11 @@
         "Unit tests under supabase/functions/_shared cover the private-range rejection, the redirect cap and the size cap"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "edge",
       "loopVerifiable": false,
-      "notes": "Review item 2. parse-recipe-grocery/index.ts:68 and parse-recipe/index.ts:58."
+      "notes": "Review item 2. parse-recipe-grocery/index.ts:68 and parse-recipe/index.ts:58. Landed 2026-09-01: supabase/functions/_shared/url-validator.ts exports fetchRecipePage (https-only, credentials rejected, private/loopback/link-local and 169.254.169.254 refused before the fetch, DNS-resolved hosts re-checked, redirect:'manual' with a cap of 3 and every hop re-validated, AbortSignal.timeout(10000) per hop, 2 MB body cap -> 413). parse-recipe and parse-recipe-grocery both call it; both redirect:'follow' calls are gone. 16 Deno tests in supabase/functions/_shared/url-validator.test.ts inject fetchImpl and use IP literals, so they need no network and no --allow-net; ci.yml runs them as a named step beside the other two Deno tests. Ported from the non-deployed functions/_shared/url-validator.ts, which had this all along -- the deployed tree never got it. loopVerifiable should be true for this one: deno installs as a single binary and the tests are hermetic."
     },
     {
       "id": "US-711",

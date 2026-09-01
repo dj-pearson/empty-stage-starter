@@ -1,17 +1,10 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { requireUser } from '../_shared/require-admin.ts';
+import { fetchRecipePage } from '../_shared/url-validator.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const FETCH_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Cache-Control': 'no-cache',
-  'Pragma': 'no-cache',
 };
 
 const SYSTEM_PROMPT = `You are a recipe parser. Extract recipe information from the provided content and return it as JSON.
@@ -56,22 +49,19 @@ export default async (req: Request) => {
 
     if (url) {
       console.log('Fetching content from URL:', url);
-      try {
-        const response = await fetch(url, { headers: FETCH_HEADERS, redirect: 'follow' });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
-        }
-        const html = await response.text();
-        const extracted = extractFromHtml(html);
-        content = extracted.content;
-        imageFromPage = extracted.imageUrl;
-      } catch (error) {
-        console.error('Error fetching URL:', error);
+      // US-710: https-only, no private or metadata address, redirects followed
+      // manually and re-validated, 10s per hop, 2 MB body cap.
+      const page = await fetchRecipePage(url);
+      if (!page.ok) {
+        console.error('Refused or failed URL fetch:', page.status, page.error);
         return new Response(
-          JSON.stringify({ error: 'Failed to fetch content from URL' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: page.error }),
+          { status: page.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      const extracted = extractFromHtml(page.html);
+      content = extracted.content;
+      imageFromPage = extracted.imageUrl;
     }
 
     if (!content) {
