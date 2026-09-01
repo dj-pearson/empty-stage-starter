@@ -14,6 +14,11 @@
  * use it, and so iOS can mirror the same canonical behaviour.
  */
 import { normalize, convert } from '@/lib/unitNormalize';
+import {
+  UNIT_NOISE,
+  isNumericToken,
+  singularize,
+} from '@/lib/itemNormalize';
 
 /**
  * US-593: how much of `required` still needs buying, given pantry stock.
@@ -73,95 +78,8 @@ export interface GroceryMergePlan {
   updates: { id: string; quantity: number; unit: string; name: string }[];
 }
 
-/** Unit / packaging words that shouldn't influence what an item *is*. */
-const UNIT_NOISE = new Set<string>([
-  'lb',
-  'lbs',
-  'pound',
-  'pounds',
-  'oz',
-  'ounce',
-  'ounces',
-  'g',
-  'gram',
-  'grams',
-  'kg',
-  'kilo',
-  'kilogram',
-  'kilograms',
-  'ml',
-  'l',
-  'liter',
-  'litre',
-  'liters',
-  'litres',
-  'tsp',
-  'teaspoon',
-  'teaspoons',
-  'tbsp',
-  'tablespoon',
-  'tablespoons',
-  'cup',
-  'cups',
-  'pt',
-  'pint',
-  'pints',
-  'qt',
-  'quart',
-  'quarts',
-  'gal',
-  'gallon',
-  'clove',
-  'cloves',
-  'can',
-  'cans',
-  'jar',
-  'jars',
-  'bag',
-  'bags',
-  'box',
-  'boxes',
-  'package',
-  'packages',
-  'pkg',
-  'piece',
-  'pieces',
-  'pc',
-  'pcs',
-  'slice',
-  'slices',
-  'bunch',
-  'bunches',
-  'head',
-  'heads',
-  'stick',
-  'sticks',
-  'dozen',
-  'pack',
-  'packs',
-  'container',
-  'containers',
-  'bottle',
-  'bottles',
-  'stalk',
-  'stalks',
-  'sprig',
-  'sprigs',
-]);
 
-/** True for pure numbers, fractions, ratios ("80/20"), and percentages. */
-function isNumericToken(tok: string): boolean {
-  return /^\d+([./]\d+)?%?$/.test(tok) || /^\d*[¼½¾⅓⅔⅛]+$/.test(tok);
-}
 
-/** Crude singulariser — enough to align "eggs"/"egg", "tomatoes"/"tomato". */
-function singularize(word: string): string {
-  if (word.length <= 3 || word.endsWith('ss')) return word;
-  if (word.endsWith('ies')) return word.slice(0, -3) + 'y';
-  if (word.endsWith('oes')) return word.slice(0, -2);
-  if (word.endsWith('s')) return word.slice(0, -1);
-  return word;
-}
 
 /**
  * Canonical match key: lower-cases, drops parentheticals, numeric/ratio tokens
