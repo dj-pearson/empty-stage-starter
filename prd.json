@@ -1,6 +1,6 @@
 {
   "project": "EatPal",
-  "branchName": "ralph/agentic-os",
+  "branchName": "hotfix/password-reset",
   "description": "Agentic OS - Autonomous multi-agent operations layer running Supabase-native (Edge Functions + pg_cron + agent_* tables + Claude API). Tier-1 routine work (support triage, lifecycle nurture, content drafting) runs autonomously; all outward-facing actions are draft-first through a human approval queue (tier 2); urgent/sensitive items escalate immediately (tier 3) to an admin Command Center and email. Phase 0 builds the platform (schema, runtime, dispatcher, budget guardrails, approval executor), Phase 0.5 the admin Command Center, Phase 1 customer service + growth (nurture, prospecting/content), Phase 2 dev/maintenance + security/ops + business reporting, Phase 3 the learning loop. Full spec: tasks/prd-agentic-os.md. Prior epic (platform-hardening-v2, US-001..US-474) archived to archive/2026-07-07-platform-hardening-v2/.",
   "userStories": [
     {
@@ -2704,6 +2704,179 @@
       "priority": 17,
       "passes": true,
       "notes": "Built, with one addition the story did not ask for and could not work without: scripts/prerender.mjs now writes dist/prerender-manifest.json. Before that, what a build actually rendered existed only as a line in the build log, so the wall-clock budget skipping 600 guides was invisible from production and the report could only have reconciled against scripts/prerender-routes.json -- the intent, not the result.\n\nLog-file analysis of Googlebot hits stays out of scope, as the story says. That needs Cloudflare Logpush into a queryable store, which is an infrastructure decision. The tab says so on screen rather than leaving the reader to assume crawl budget is covered. | VERIFIED via prd-verify (web gate green @ fb0320a5867d47f2a3ec879e34ed4b47c5ffff1d)"
+    },
+    {
+      "id": "US-700",
+      "title": "Restore the confirmation email template so the verification code actually exists",
+      "description": "As a parent signing up on the web, I want the verification email to contain the 6-digit code the app asks me for, so that I can finish creating my account.",
+      "acceptanceCriteria": [
+        "Document the exact Coolify env change for the supabase-auth container: GOTRUE_MAILER_TEMPLATES_CONFIRMATION (and the non-prefixed MAILER_TEMPLATES_CONFIRMATION) must point at a hosted copy of supabase/templates/confirmation.html, which renders the {{ .Token }} placeholder",
+        "Add that template to public/email-templates/ so it is served from the site at a stable URL, mirroring the existing public/email-templates/recovery.html pattern",
+        "Add a check under scripts/ci/ that fetches the configured template URL and fails if the response does not contain the {{ .Token }} placeholder, so this cannot silently regress again",
+        "Write the change up in docs/ with the before and after env values, marked clearly as an operator step",
+        "Do NOT apply the change to the production container from this loop. The story is done when the template, the check and the runbook exist",
+        "Typecheck, lint and unit tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 1,
+      "platform": "ops",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-01: GOTRUE_MAILER_TEMPLATES_CONFIRMATION is empty on supabase-auth-ig8ow4o4okkogowggkog4cww, so GoTrue sends its stock link-only email while src/pages/Auth.tsx:296 tells the user to enter a 6-digit code that is not in it. 18 accounts sit unconfirmed and 35 of 200 never reached a session. Applying the env change is an operator action and must not be automated from the loop."
+    },
+    {
+      "id": "US-701",
+      "title": "Point GOTRUE_SITE_URL at the site and allowlist the app scheme",
+      "description": "As a parent confirming my account from an email, I want the confirmation link to land me somewhere real, so that I am not dropped on a raw JSON error page.",
+      "acceptanceCriteria": [
+        "Document the Coolify env change: GOTRUE_SITE_URL moves from https://api.tryeatpal.com (the Kong gateway) to https://tryeatpal.com",
+        "GOTRUE_URI_ALLOW_LIST and ADDITIONAL_REDIRECT_URLS gain eatpal:// and eatpal://auth/callback so the native client can pass its own redirectTo",
+        "Verify that https://tryeatpal.com/auth/callback handles a bare verify redirect carrying no stored signup state, and does not 404 or blank-screen",
+        "Add a smoke check asserting the configured site URL returns HTML rather than application/json, so the Kong misconfiguration is caught if it returns",
+        "Runbook entry in docs/ with the exact before and after values, marked as an operator step",
+        "Do NOT apply the change to the production container from this loop",
+        "Typecheck, lint and unit tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 1,
+      "platform": "ops",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-01: GOTRUE_SITE_URL=https://api.tryeatpal.com. A curl of that host returns HTTP 401 application/json with body {\"message\":\"Unauthorized\"}. The web client already dodges this by passing emailRedirectTo (see the comment at src/pages/Auth.tsx:270); iOS passes nothing and inherits the broken fallback. Pairs with US-703."
+    },
+    {
+      "id": "US-702",
+      "title": "Web signup stops depending on a code that may not be in the email",
+      "description": "As a parent who just signed up on the web, I want the verification screen to match whatever the email actually contains, so that I am never stuck hunting for a code that is not there.",
+      "acceptanceCriteria": [
+        "The OTP screen in src/pages/Auth.tsx offers both paths: enter the 6-digit code, and an explicit \"I clicked the link in the email\" action that re-checks the session and proceeds if the account is now confirmed",
+        "Copy no longer promises a code unconditionally; it names both the link and the code",
+        "Resend keeps its 60 second cooldown and states plainly what was re-sent",
+        "A failed verifyOtp with an expired or invalid token surfaces the link path rather than only the raw Supabase message",
+        "New unit tests cover: the code path succeeds, the link path picks up an out-of-band confirmation, an expired code shows the recovery affordance",
+        "New user-facing strings go through i18next per the project convention. Add keys under the existing auth namespace in src/i18n/locales/en.json without reformatting unrelated entries",
+        "Typecheck, lint and unit tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Defence in depth for US-700. Even with the template restored, tying the whole signup to one delivery shape is what turned a config drift into 35 lost accounts. src/pages/Auth.tsx:294 sets the screen, :296 writes the copy, handleVerifyOtp follows at :298. CAUTION: another agent is editing src/i18n/locales/en.json on this branch for the password-reset work. Add keys, do not reformat the file."
+    },
+    {
+      "id": "US-703",
+      "title": "iOS signup passes redirectTo and recovers the user after confirmation",
+      "description": "As a parent creating an account in the iOS app, I want to be taken back into the app once I confirm my email, so that signing up actually gets me into EatPal.",
+      "acceptanceCriteria": [
+        "AuthService.signUp passes a redirectTo of the app universal link or the eatpal:// scheme instead of letting GoTrue fall back to SITE_URL",
+        "The post-signup screen replaces the dead \"Account created! Check your email to verify.\" message with a state that polls, or offers \"I confirmed, sign me in\", and completes the session without retyping the password",
+        "A resend action exists with a cooldown, matching the web client behaviour",
+        "DeepLinkHandler routes the confirmation callback to the signed-in state, with a unit test in EatPalTests covering the parse",
+        "Signing in with an unconfirmed account shows a message naming the next step rather than the raw \"Email not confirmed\" string",
+        "Depends on the allowlist entry from US-701. Note that dependency in the implementation commit"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 1,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/Services/AuthService.swift:31 calls signUp with no redirectTo. AuthViewModel.swift:211 holds the dead-end success message. 75 Apple users got in and zero returned; every email signup from the app lands on the Kong 401. Swift, so it needs Xcode: leave passes:false for the prd-verify iOS gate."
+    },
+    {
+      "id": "US-704",
+      "title": "iOS onboarding creates a child instead of only describing the app",
+      "description": "As a parent opening EatPal for the first time on iPhone, I want setup to actually create my child's profile, so that the app is usable when I reach the home screen.",
+      "acceptanceCriteria": [
+        "OnboardingView collects the child's name (required) and optionally date of birth, allergens and favourite foods, mirroring the four steps in src/components/OnboardingDialog.tsx",
+        "Completing onboarding calls the same create path the Kids screen uses, so the child, the allergens and the seeded pantry foods land in Supabase",
+        "Skip remains available on every step and still sets hasCompletedOnboarding, so nobody is trapped",
+        "Hitting the plan limit surfaces the existing upgrade path rather than failing silently, matching OnboardingDialog.handleComplete",
+        "The marketing slides are cut to at most two and placed after the child is created rather than before",
+        "Unit tests in EatPalTests cover the create path and the skip path"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 2,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/Views/Auth/OnboardingView.swift is five static marketing pages that create nothing. The web equivalent creates a kid (OnboardingDialog.tsx:210) and seeds the pantry (:225). Measured gap: 53% of email users add a child against 37% of Apple users; 11% plan a meal against 5%."
+    },
+    {
+      "id": "US-705",
+      "title": "First-run empty state on the iOS home tab",
+      "description": "As a parent with a brand-new account, I want the home screen to tell me what to do first, so that I am not looking at a grid of zeros.",
+      "acceptanceCriteria": [
+        "When appState.kids is empty, DashboardHomeView renders a single empty state instead of the zeroed QuickStatsGrid and the three quick actions",
+        "The empty state has one primary action that opens the add-child flow directly, not the More tab",
+        "The zero-value stats grid and any card that cannot act without an activeKidId are hidden rather than shown empty",
+        "The state disappears as soon as one child exists, with no lingering dismissal flag",
+        "Quick actions that require an activeKidId are explained rather than merely disabled",
+        "Snapshot or unit coverage for the zero-kid and one-kid renders"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 2,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-01: DashboardHomeView.swift:40 hides the kid selector, meal summary, quiz nudge and expiring card when there are no kids, leaving zeros and three actions, none of which is 'add a child'. Adding food is disabled at :762 while activeKidId is nil. Kids lives under More per MainTabView.swift:20."
+    },
+    {
+      "id": "US-706",
+      "title": "Point AnalyticsService at a real sink so iOS is not invisible",
+      "description": "As the operator of EatPal, I want the iOS app to emit product events somewhere I can query, so that I can see where users drop without hand-reading auth.users.",
+      "acceptanceCriteria": [
+        "AnalyticsService.track and .screen forward to a real destination in addition to the Sentry breadcrumb trail, behind a build-time toggle so debug builds do not pollute the data",
+        "Events batch and survive backgrounding. A failed send never blocks the UI and never throws into a call site",
+        "The existing PII guarantees hold: kid ids stay hashed and no user-typed strings are sent",
+        "Signup, onboarding start/complete/skip, child created, food added and meal planned are all emitted with stable names matching the web event names",
+        "Offline events queue and flush on reconnect, reusing the OfflineStore pattern rather than a second mechanism",
+        "Unit tests in EatPalTests cover redaction and the queue flush"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 3,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/Services/Analytics.swift:31 routes every event into SentryService.leaveBreadcrumb, which only transmits attached to a captured error. The file's own doc comment anticipates this story. Half the user base is currently unmeasured."
+    },
+    {
+      "id": "US-707",
+      "title": "Activation events reach funnel_events, not just GA4",
+      "description": "As the operator of EatPal, I want the funnel table to record what happens after signup, so that activation is measurable in the same place as acquisition.",
+      "acceptanceCriteria": [
+        "conversion-tracking.ts gains activation event types covering onboarding start, onboarding complete, onboarding skip, child created, food added and meal planned",
+        "OnboardingDialog and the AppContext mutations emit them, so events carry the same user_id the domain tables use and can be joined",
+        "trackPaidConversion is wired to the checkout success path, which currently never calls it",
+        "The funnel_events check constraint or enum is extended additively per the project backward-compatible migration rules, and old clients sending only the existing types keep working",
+        "ConversionFunnelDashboard shows the post-signup steps alongside the existing landing and quiz rows",
+        "Unit tests cover the new trackers and the migration is additive only",
+        "Typecheck, lint and unit tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-01: funnel_events holds only landing_view (2020), quiz_start (157), quiz_complete (41) and signup (29). trackPaidConversion and trackEmailCapture are exported from src/lib/conversion-tracking.ts and never called. Onboarding events go to GA4 via analytics.trackEvent (OnboardingDialog.tsx:188), a system with no id that joins back to Supabase."
+    },
+    {
+      "id": "US-708",
+      "title": "iOS writes onboarding completion to profiles",
+      "description": "As the operator of EatPal, I want onboarding_completed to mean the same thing on both platforms, so that re-engagement targeting is not aimed at the wrong people.",
+      "acceptanceCriteria": [
+        "Completing or skipping onboarding on iOS writes profiles.onboarding_completed = true in addition to the local AppStorage flag",
+        "The local flag is seeded from the server value on first load, so a reinstall or a second device does not replay onboarding",
+        "A failed write is retried through the existing offline queue rather than silently dropped",
+        "Any dashboard or re-engagement query reading the column is checked and noted in the commit, since it has been reading false for 174 of 200 accounts",
+        "Unit tests cover the seed-from-server and the write-on-complete paths"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 3,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/App/RootView.swift:6 stores completion in AppStorage hasCompletedOnboarding, device-local, never written to profiles. The column reads false for 174 of 200 accounts including every Apple user who finished the slides."
     }
   ]
 }
