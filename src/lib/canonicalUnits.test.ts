@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   toCanonical,
+  fromCanonical,
   sumCanonical,
   isUnknown,
   type CanonicalItemFacts,
@@ -246,5 +247,80 @@ describe('purity', () => {
     const first = toCanonical(2, 'gal', MILLILITRES);
     toCanonical(999, 'jar', GRAMS);
     expect(toCanonical(2, 'gal', MILLILITRES)).toEqual(first);
+  });
+});
+
+describe('fromCanonical: the mirror direction (US-671)', () => {
+  it('undoes a generic conversion', () => {
+    expect(fromCanonical(2000, 'g', 'kg', GRAMS)).toBeCloseTo(2, 10);
+    expect(fromCanonical(3785.41, 'ml', 'gal', MILLILITRES)).toBeCloseTo(1, 6);
+    expect(fromCanonical(24, 'count', 'dozen', COUNTED)).toBeCloseTo(2, 10);
+  });
+
+  it('round-trips whatever toCanonical accepted', () => {
+    const cases: [number, string, CanonicalItemFacts][] = [
+      [3, 'lb', GRAMS],
+      [1.5, 'cups', MILLILITRES],
+      [7, 'oz', GRAMS],
+      [2, 'can', { canonical_unit: 'g', unit_conversions: { can: 400 } }],
+    ];
+    for (const [qty, unit, item] of cases) {
+      const canonical = ok(toCanonical(qty, unit, item));
+      expect(fromCanonical(canonical.value, canonical.unit, unit, item)).toBeCloseTo(qty, 8);
+    }
+  });
+
+  it('renders a count balance into an opaque display unit one-to-one', () => {
+    // The deliberate asymmetry: toCanonical cannot parse "servings", but the
+    // US-669 backfill classified these items as 'count' USING their quantity in
+    // that unit, so the mirror direction is one-to-one by construction. This is
+    // the case that covers essentially all of the sampled production data.
+    expect(fromCanonical(3, 'count', 'servings', COUNTED)).toBe(3);
+    expect(fromCanonical(3, 'count', 'packages', COUNTED)).toBe(3);
+    expect(isUnknown(toCanonical(3, 'servings', COUNTED))).toBe(true);
+  });
+
+  it('refuses an opaque display unit over a mass or volume balance', () => {
+    expect(fromCanonical(500, 'g', 'servings', GRAMS)).toBeNull();
+    expect(fromCanonical(500, 'ml', 'packages', MILLILITRES)).toBeNull();
+  });
+
+  it('refuses a cross-dimension pair rather than guessing', () => {
+    expect(fromCanonical(500, 'g', 'cups', GRAMS)).toBeNull();
+    expect(fromCanonical(500, 'ml', 'kg', MILLILITRES)).toBeNull();
+  });
+
+  it('treats a missing display unit as already correct', () => {
+    expect(fromCanonical(12, 'g', '', GRAMS)).toBe(12);
+    expect(fromCanonical(12, 'g', null, GRAMS)).toBe(12);
+    expect(fromCanonical(12, 'g', undefined, GRAMS)).toBe(12);
+  });
+
+  it('prefers a per-item conversion over the generic table', () => {
+    const item: CanonicalItemFacts = { canonical_unit: 'g', unit_conversions: { cup: 120 } };
+    // 240 g is 2 of THIS item's cups, not 240/236.588 generic millilitre-cups.
+    expect(fromCanonical(240, 'g', 'cup', item)).toBeCloseTo(2, 10);
+  });
+
+  it('returns null for a value or canonical unit it cannot use', () => {
+    expect(fromCanonical(null, 'g', 'kg', GRAMS)).toBeNull();
+    expect(fromCanonical(Number.NaN, 'g', 'kg', GRAMS)).toBeNull();
+    expect(fromCanonical(Number.POSITIVE_INFINITY, 'g', 'kg', GRAMS)).toBeNull();
+    expect(fromCanonical(100, 'servings', 'kg', GRAMS)).toBeNull();
+    expect(fromCanonical(100, null, 'kg', GRAMS)).toBeNull();
+  });
+
+  it('ignores a per-item conversion that is zero or not a number', () => {
+    const zero: CanonicalItemFacts = { canonical_unit: 'g', unit_conversions: { can: 0 } };
+    expect(fromCanonical(400, 'g', 'can', zero)).toBeNull();
+    const bad = { canonical_unit: 'g', unit_conversions: { can: 'lots' } } as unknown as CanonicalItemFacts;
+    expect(fromCanonical(400, 'g', 'can', bad)).toBeNull();
+  });
+
+  it('does not mutate the item it is given', () => {
+    const item: CanonicalItemFacts = { canonical_unit: 'g', unit_conversions: { can: 400 } };
+    const snapshot = JSON.stringify(item);
+    fromCanonical(800, 'g', 'can', item);
+    expect(JSON.stringify(item)).toBe(snapshot);
   });
 });

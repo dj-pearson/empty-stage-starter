@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 // CSS animations used instead of framer-motion for list rendering performance
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
+import { useFoods, useGrocery, useKids, usePlan, useInventory } from "@/contexts/AppContext";
 import { FoodCard } from "@/components/FoodCard";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
 import { ImageFoodCapture, type FoodIdentification } from "@/components/ImageFoodCapture";
@@ -109,6 +109,10 @@ export default function Pantry() {
   const { planEntries } = usePlan();
   const { kids, activeKidId } = useKids();
   const { addGroceryItem } = useGrocery();
+  // US-671: read-only here. The flag decides whether pantry numbers come from
+  // the ledger; it is off by default and the comparison in AppContext is what
+  // has to agree before it is turned on.
+  const { ledgerReadsEnabled, ledgerQuantityOf } = useInventory();
   const isMobile = useIsMobile();
 
   // Dialog states
@@ -206,20 +210,37 @@ export default function Pantry() {
 
   const uniqueKidAllergens = useMemo(() => computeUniqueKidAllergens(kids), [kids]);
 
-  const categoryCounts = useMemo(() => computeCategoryCounts(foods), [foods]);
+  // US-671: where a pantry number comes from. With the flag OFF this returns
+  // `foods` BY REFERENCE, so the dark launch cannot move a single pixel; with
+  // it on, every quantity on this page -- the cards, the stock filter and the
+  // stats banner -- reads the ledger balance instead, and they read the same
+  // one, which is the point. An item the ledger cannot express in its display
+  // unit keeps the legacy number rather than rendering a blank.
+  //
+  // Only the READS move. handleQuantityChange still writes foods.quantity;
+  // appending a movement is US-672.
+  const pantryFoods = useMemo(() => {
+    if (!ledgerReadsEnabled) return foods;
+    return foods.map((food) => {
+      const fromLedger = ledgerQuantityOf(food);
+      return fromLedger === null ? food : { ...food, quantity: fromLedger };
+    });
+  }, [foods, ledgerReadsEnabled, ledgerQuantityOf]);
 
-  const stockStats = useMemo(() => computeStockStats(foods), [foods]);
+  const categoryCounts = useMemo(() => computeCategoryCounts(pantryFoods), [pantryFoods]);
+
+  const stockStats = useMemo(() => computeStockStats(pantryFoods), [pantryFoods]);
 
   // Filtered and sorted foods
   const processedFoods = useMemo(
     () =>
-      filterAndSortFoods(foods, {
+      filterAndSortFoods(pantryFoods, {
         search: debouncedSearchQuery,
         category: categoryFilter,
         stock: stockFilter,
         sortBy,
       }),
-    [foods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]
+    [pantryFoods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]
   );
 
   // Paginate: show only visibleCount items (load-more pattern)
