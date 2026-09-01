@@ -355,3 +355,29 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     project and has its own auth.users. Check for a `kids` table before
     trusting a query.
 ---
+
+## 2026-09-01 - US-701/US-702/US-703 correction (no implementation)
+- Operator review overturned the fix these three stories prescribed. The audit
+  finding was right (an iOS signup does land on Kong's 401 JSON body, verified
+  live) but the proposed remedy was impossible: Coolify sets GOTRUE_SITE_URL to
+  ${SERVICE_URL_SUPABASEKONG} and it cannot be changed. That constraint is
+  exactly why this project already moved to emailed-token verification.
+- Rewrote US-701 (close off the link path rather than repoint SITE_URL),
+  US-702 (dropped the "I clicked the link" affordance; kept the honest failure
+  states the flow actually lacks) and US-703 (iOS gets a code-entry screen
+  mirroring the shipped password reset, not a redirect handler).
+- Files: prd.json, docs/US-700-auth-email-template-runbook.md.
+- Gates: authEmailTemplates 5 passed, ciGatesWired 4 passed,
+  check-auth-email-templates exit 0.
+- **Learnings for future iterations:**
+  - Read the deployment platform's variable interpolation before proposing an
+    env change. ${SERVICE_URL_SUPABASEKONG} is Coolify-managed; a value that
+    looks like a misconfiguration can be the only value the platform permits.
+  - When a codebase does something that looks like a workaround, it usually is
+    one, and the constraint behind it is worth finding before "fixing" it. The
+    OTP screens on both clients were the tell.
+  - The reference implementation for any emailed-code flow here is 70c4559e
+    (password reset): {{ .Token }} in the template, verifyOtp on the client,
+    on web at src/pages/ResetPassword.tsx:70 and mobile at
+    app/(auth)/reset-password.tsx:58.
+---

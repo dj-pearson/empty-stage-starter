@@ -2726,15 +2726,15 @@
     },
     {
       "id": "US-701",
-      "title": "Point GOTRUE_SITE_URL at the site and allowlist the app scheme",
-      "description": "As a parent confirming my account from an email, I want the confirmation link to land me somewhere real, so that I am not dropped on a raw JSON error page.",
+      "title": "Close off the link path so nothing depends on the Kong fallback",
+      "description": "As the operator of EatPal, I want every auth email flow to verify an emailed code, so that no flow depends on a confirmation link that Coolify makes impossible to point anywhere useful.",
       "acceptanceCriteria": [
-        "Document the Coolify env change: GOTRUE_SITE_URL moves from https://api.tryeatpal.com (the Kong gateway) to https://tryeatpal.com",
-        "GOTRUE_URI_ALLOW_LIST and ADDITIONAL_REDIRECT_URLS gain eatpal:// and eatpal://auth/callback so the native client can pass its own redirectTo",
-        "Verify that https://tryeatpal.com/auth/callback handles a bare verify redirect carrying no stored signup state, and does not 404 or blank-screen",
-        "Add a smoke check asserting the configured site URL returns HTML rather than application/json, so the Kong misconfiguration is caught if it returns",
-        "Runbook entry in docs/ with the exact before and after values, marked as an operator step",
-        "Do NOT apply the change to the production container from this loop",
+        "Document the standing constraint: GOTRUE_SITE_URL is set to ${SERVICE_URL_SUPABASEKONG} by Coolify and cannot be changed. Any GoTrue email link that falls back to it lands on the Kong gateway, which answers 401 application/json. This is why the project verifies emailed codes instead of links",
+        "Audit every auth flow (signup, recovery, magic link, email change, invite) and confirm each one verifies a {{ .Token }} through verifyOtp rather than depending on a redirect",
+        "Extend scripts/ci/check-auth-email-templates.mjs to assert every template under supabase/templates/ and public/email-templates/ renders {{ .Token }}, not just confirmation.html",
+        "Where a client does pass emailRedirectTo, assert it is an https URL already present in GOTRUE_URI_ALLOW_LIST; never let a flow rely on the unset-redirect fallback",
+        "Runbook in docs/ recording the constraint and the reasoning, so the SITE_URL change is not proposed again",
+        "Do NOT apply anything to the production container from this loop",
         "Typecheck, lint and unit tests pass"
       ],
       "priority": 1,
@@ -2742,18 +2742,18 @@
       "slice": 1,
       "platform": "ops",
       "loopVerifiable": false,
-      "notes": "Audit 2026-09-01: GOTRUE_SITE_URL=https://api.tryeatpal.com. A curl of that host returns HTTP 401 application/json with body {\"message\":\"Unauthorized\"}. The web client already dodges this by passing emailRedirectTo (see the comment at src/pages/Auth.tsx:270); iOS passes nothing and inherits the broken fallback. Pairs with US-703."
+      "notes": "CORRECTED 2026-09-01 after operator review. The original story called for moving GOTRUE_SITE_URL to https://tryeatpal.com. That is not possible: Coolify pins it to ${SERVICE_URL_SUPABASEKONG}, which is exactly why the project moved to token-based verification. The audit finding it came from is still valid (an iOS signup does land on a 401 JSON body, verified live against https://api.tryeatpal.com/), but the fix is to remove the dependence on links, not to repoint SITE_URL. The password-reset work in 70c4559e is the reference implementation on both clients."
     },
     {
       "id": "US-702",
       "title": "Web signup stops depending on a code that may not be in the email",
       "description": "As a parent who just signed up on the web, I want the verification screen to match whatever the email actually contains, so that I am never stuck hunting for a code that is not there.",
       "acceptanceCriteria": [
-        "The OTP screen in src/pages/Auth.tsx offers both paths: enter the 6-digit code, and an explicit \"I clicked the link in the email\" action that re-checks the session and proceeds if the account is now confirmed",
-        "Copy no longer promises a code unconditionally; it names both the link and the code",
-        "Resend keeps its 60 second cooldown and states plainly what was re-sent",
-        "A failed verifyOtp with an expired or invalid token surfaces the link path rather than only the raw Supabase message",
-        "New unit tests cover: the code path succeeds, the link path picks up an out-of-band confirmation, an expired code shows the recovery affordance",
+        "The OTP screen in src/pages/Auth.tsx surfaces a clear failure state when no code arrives: a resend with its 60 second cooldown, and copy naming what to check, rather than leaving the user staring at an empty field",
+        "A failed verifyOtp distinguishes an expired code from a wrong one and tells the user which, instead of passing the raw Supabase message straight through",
+        "Copy promises only what the email actually contains: a 6-digit code. No reference to a confirmation link, which cannot work while GOTRUE_SITE_URL is pinned to the Kong gateway",
+        "A user who abandons the screen and returns to /auth with an unconfirmed account is routed back to code entry rather than to a sign-in that will fail",
+        "New unit tests cover: the code path succeeds, an expired code shows the resend affordance, an unconfirmed returning user lands on code entry",
         "New user-facing strings go through i18next per the project convention. Add keys under the existing auth namespace in src/i18n/locales/en.json without reformatting unrelated entries",
         "Typecheck, lint and unit tests pass"
       ],
@@ -2762,26 +2762,27 @@
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Defence in depth for US-700. Even with the template restored, tying the whole signup to one delivery shape is what turned a config drift into 35 lost accounts. src/pages/Auth.tsx:294 sets the screen, :296 writes the copy, handleVerifyOtp follows at :298. CAUTION: another agent is editing src/i18n/locales/en.json on this branch for the password-reset work. Add keys, do not reformat the file."
+      "notes": "CORRECTED 2026-09-01: dropped the \"I clicked the link\" affordance. GOTRUE_SITE_URL is pinned to  by Coolify, so the project is token-only by design and adding a link path would work against it. What remains is the resilience the flow actually lacks: honest failure states and a way back in. Paired with US-700, which keeps the token template wired up. src/pages/Auth.tsx:294 sets the screen, :296 writes the copy, handleVerifyOtp follows at :298. CAUTION: src/i18n/locales/en.json is shared -- add keys, do not reformat."
     },
     {
       "id": "US-703",
-      "title": "iOS signup passes redirectTo and recovers the user after confirmation",
-      "description": "As a parent creating an account in the iOS app, I want to be taken back into the app once I confirm my email, so that signing up actually gets me into EatPal.",
+      "title": "iOS signup verifies an emailed code instead of waiting on a link",
+      "description": "As a parent creating an account in the iOS app, I want to type the code from my email and be signed in, so that signing up actually gets me into EatPal.",
       "acceptanceCriteria": [
-        "AuthService.signUp passes a redirectTo of the app universal link or the eatpal:// scheme instead of letting GoTrue fall back to SITE_URL",
-        "The post-signup screen replaces the dead \"Account created! Check your email to verify.\" message with a state that polls, or offers \"I confirmed, sign me in\", and completes the session without retyping the password",
-        "A resend action exists with a cooldown, matching the web client behaviour",
-        "DeepLinkHandler routes the confirmation callback to the signed-in state, with a unit test in EatPalTests covering the parse",
-        "Signing in with an unconfirmed account shows a message naming the next step rather than the raw \"Email not confirmed\" string",
-        "Depends on the allowlist entry from US-701. Note that dependency in the implementation commit"
+        "After a successful signUp, AuthView presents a 6-digit code entry screen and calls verifyOtp with type 'signup', mirroring src/pages/ResetPassword.tsx and app/(auth)/reset-password.tsx",
+        "The dead \"Account created! Check your email to verify.\" message in AuthViewModel is replaced by that screen; the user is never left on a dead end with nothing to do",
+        "A resend action exists with a 60 second cooldown, matching the web client",
+        "The flow does not pass or depend on redirectTo, and does not depend on GOTRUE_SITE_URL, which is pinned to the Kong gateway and cannot be changed",
+        "A failed or expired code shows a message naming the next step rather than the raw Supabase error string",
+        "Signing in with an unconfirmed account routes to the same code entry screen rather than showing \"Email not confirmed\" and stopping",
+        "Unit tests in EatPalTests cover the verify path, the expired-code path and the resend cooldown"
       ],
       "priority": 1,
       "passes": false,
       "slice": 1,
       "platform": "ios",
       "loopVerifiable": false,
-      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/Services/AuthService.swift:31 calls signUp with no redirectTo. AuthViewModel.swift:211 holds the dead-end success message. 75 Apple users got in and zero returned; every email signup from the app lands on the Kong 401. Swift, so it needs Xcode: leave passes:false for the prd-verify iOS gate."
+      "notes": "CORRECTED 2026-09-01 after operator review. The original story called for passing redirectTo and handling the confirmation link. GOTRUE_SITE_URL is pinned to ${SERVICE_URL_SUPABASEKONG} by Coolify, so the link path cannot be made to work; the project verifies emailed codes instead. Audit 2026-09-01: ios/EatPal/EatPal/Services/AuthService.swift:31 calls signUp with no code-entry follow-up, AuthViewModel.swift:211 holds the dead-end message. 75 Apple users got in and zero returned. Reference implementation is the password reset in 70c4559e. Swift, so it needs Xcode: leave passes:false for the prd-verify iOS gate."
     },
     {
       "id": "US-704",

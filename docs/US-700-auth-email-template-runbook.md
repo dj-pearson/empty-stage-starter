@@ -57,8 +57,12 @@ so it does not need to be uploaded anywhere separately.
 - Do not set `ENABLE_EMAIL_AUTOCONFIRM=true` as a shortcut. It would confirm
   every address without checking it and would let anyone register an address
   they do not own.
-- Do not change `GOTRUE_SITE_URL` here. It is also wrong, but it is a separate
-  fault with a separate blast radius: see US-701.
+- Do not try to fix this by repointing `GOTRUE_SITE_URL`. Coolify sets it to
+  `${SERVICE_URL_SUPABASEKONG}` and it cannot be changed, which is precisely
+  why this project verifies emailed codes rather than links: any GoTrue link
+  that falls back to SITE_URL lands on the Kong gateway and answers
+  `401 application/json`. The token template is not a nicety here, it is the
+  only delivery shape that can work. See US-701.
 
 ## Keeping it fixed
 
