@@ -583,3 +583,57 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - The non-deployed `functions/` tree is worth reading before writing a
     security helper from scratch. It already had this one.
 ---
+
+## 2026-09-01 - US-711 (household planner slice 1)
+- 20260901000009_household_scope_recipe_children.sql replaces the predicate on
+  all eight policies over recipe_ingredients and recipe_components:
+  `r.user_id = auth.uid()` becomes
+  `r.household_id = public.get_user_household_id(auth.uid())`, the same
+  expression `recipes` itself has used since 20251008035900.
+- The bug in one line: `recipes` was household-scoped, its two child tables
+  were owner-scoped, and both said in their comments that going through
+  `recipes` inherited the sharing. It did not. A partner could open a shared
+  recipe and find it had no ingredients and no components.
+- Backward-compatible: this only broadens. An owner is a member of their own
+  household, so every row visible before is visible now. All eight policy names
+  are recreated byte-identical, so nothing that looks a policy up by name
+  breaks. Every statement is DROP IF EXISTS + CREATE, so a replay is a no-op.
+  The UPDATE policies gained the WITH CHECK arm they were missing.
+- Verified against a real PostgreSQL 16.13 (a local cluster: this container has
+  psql and postgres 16 but no docker daemon, so `docker run postgres:16-alpine`
+  was not available). Ran the suite BEFORE the migration to prove the bug, then
+  after: owner 1/1 both times; partner 0/0 -> 1/1; outsider 0/0 both times and
+  still refused on INSERT; partner goes from "new row violates row-level
+  security policy" to a working INSERT/UPDATE/DELETE. Re-applying the migration
+  a second time produced zero notices and no error.
+  pg_policies confirms 8 policies, 0 mentioning user_id, 8 mentioning
+  get_user_household_id.
+- Files: supabase/migrations/20260901000009_household_scope_recipe_children.sql
+  (new), supabase/tests/us711_recipe_children_household_rls.test.sql (new),
+  supabase/tests/us711_recipe_children_household_rls.bootstrap.sql (new).
+- Gates: check-migration-prefixes.sh OK, check-migration-safety.sh OK,
+  check-invisible-chars.mjs clean. No src/ or supabase/functions change, so
+  vitest, lint and typecheck are untouched by this commit.
+- **Learnings for future iterations:**
+  - postgres 16 is installed in the loop container and there is NO docker
+    daemon. `pg_ctlcluster 16 main start` brings up a real cluster on 5432 in
+    two seconds. Connect as the postgres OS user (`su postgres -c "psql ..."`);
+    peer auth rejects root. Any story marked "needs a disposable postgres:16
+    container" is verifiable here.
+  - psql run as the postgres user cannot read files under the scratchpad path
+    (permission denied on the directory). Copy SQL to /tmp/<something> with
+    chmod 755 on the dir and 644 on the files first.
+  - RLS is bypassed for the table owner and for superusers, so a test that
+    seeds and asserts as `postgres` proves nothing. Create a NOLOGIN role,
+    GRANT it the tables, `set role`, and set request.jwt.claim.sub with
+    set_config to impersonate.
+  - A fixture UUID has to be valid hex. 'rrrr0000-...' parses as a uuid
+    nowhere, and the failed seed silently made every count 0, which looks
+    exactly like a passing "outsider sees nothing" assertion. Reset the
+    database and re-run before believing a zero.
+  - Run an RLS suite BEFORE the fix as well. A test that passes against both
+    the old and the new policy is not testing the policy.
+  - supabase/tests/*.test.sql is the existing convention (see us668), run by
+    hand, printing EXPECTED next to each value. There is no SQL test runner
+    wired into CI.
+---

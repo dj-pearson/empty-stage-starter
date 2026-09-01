@@ -50,11 +50,11 @@
         "No column, table or policy name is dropped that a shipped iOS build references"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "sql",
       "loopVerifiable": true,
-      "notes": "Review item 3. Verified: 20260430000001_create_recipe_ingredients.sql:44-52 and 20260806000000_recipe_components.sql:105 still owner-scoped; no later migration touches these policies."
+      "notes": "Review item 3. Verified: 20260430000001_create_recipe_ingredients.sql:44-52 and 20260806000000_recipe_components.sql:105 still owner-scoped; no later migration touches these policies. Landed 2026-09-01: 20260901000009_household_scope_recipe_children.sql replaces the predicate on all eight policies with r.household_id = public.get_user_household_id(auth.uid()), keeping the eight policy names byte-identical so nothing that looks them up by name breaks. Verified on a real PostgreSQL 16.13 (a local cluster, not a container -- this machine has psql and postgres 16 but no docker daemon) with the auth.uid() stub reading request.jwt.claim.sub: owner still 1/1, partner 0/0 -> 1/1, outsider 0/0 and still refused on INSERT, partner can now INSERT/UPDATE/DELETE. Re-applying the migration is a clean no-op. Fixture and assertions shipped as supabase/tests/us711_recipe_children_household_rls.{bootstrap,test}.sql."
     },
     {
       "id": "US-712",
