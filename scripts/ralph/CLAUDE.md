@@ -4,7 +4,12 @@ You are an autonomous coding agent working on a software project.
 
 ## Your Task
 
-1. Read the PRD at `prd.json` (in the same directory as this file)
+1. Read the PRD at `prd.json` (in the same directory as this file), unless the
+   first line of this prompt or the `PRD_FILE` environment variable names a
+   different file. Epic PRDs (`prd-kitchen-loop.json`, `prd-household-planner.json`)
+   sit beside `prd.json`; every reference to `prd.json` below means the targeted
+   file. Start the loop on one with `./ralph.sh --tool claude --prd prd-household-planner.json`,
+   list its open stories with `PRD_FILE=prd-household-planner.json npm run prd:list`.
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
 4. Pick the **highest priority** user story where `passes: false`
@@ -116,6 +121,8 @@ Android-native Kotlin, prod-deploy ops) are NOT flipped by hand. Instead:
   implementing it. Run `node scripts/ralph/verify-stories.mjs`
   for a dry-run report; `--apply` to write. Gate results come from env
   `GATE_WEB` / `GATE_IOS` / `GATE_ANDROID` (GitHub job-result vocabulary).
+  `PRD_FILE=prd-household-planner.json` evaluates an epic file instead of
+  `prd.json`; the workflow runs the engine once per `prd*.json` at the repo root.
 - `.github/workflows/prd-verify.yml` (workflow_dispatch) runs the real gates —
   web (strict typecheck/lint/test/build), iOS (reuses `ios-ci.yml`), Android
   (reuses `android-native-ci.yml`) — then commits the flips with `[skip ci]`.

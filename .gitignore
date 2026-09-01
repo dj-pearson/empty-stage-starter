@@ -152,6 +152,7 @@ scripts/ralph/.last-branch
 
 # Transient PRD verification report (uploaded as a CI artifact, never committed)
 prd-verify-report.json
+*-verify-report.json
 
 # Local agent scratchpad (verification import-maps/stubs, not part of the repo)
 scratchpad/
@@ -159,3 +160,6 @@ keyword/*
 assets/*
 8bf704ae-d328-40dd-bfb9-f7b4faf339d8-6YWKH6r45VqqbWzpnzMLAw-output.mp4
 d0d0a7ec-65e0-410e-b98f-27c88a456d0d-IWFMjF6K9qRAFelVWbL7Og-output.mp4
+
+# Ralph loop bookkeeping (one per targeted PRD)
+scripts/ralph/.last-branch*

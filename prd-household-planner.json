@@ -1,0 +1,930 @@
+{
+  "project": "EatPal",
+  "branchName": "epic/household-planner",
+  "description": "Household planner epic, decomposed from the 2026-09-01 review of the recipe, grocery and meal-planner modules across web and the Swift iOS app. The Expo client under app/ is retired (decision 2026-09-01, removed by US-720); Android is the Kotlin app under android-native/ and is out of scope for this epic. Goal: one kitchen loop (recipe in, week planned, list generated, shop, stock, cook) that works for every eater in the house, not only children with a pickiness profile. Slices: 1 fix-now bugs and security, 2 one entry primitive plus grocery categorization and structured recipes, 3 kitchen-loop slice 3 dependencies plus household eaters, 4 planner and grocery features people ask for, 5 iOS parity. Stories that depend on prd-kitchen-loop.json say so in notes and must not duplicate that work. loopVerifiable follows the kitchen-loop convention: true when vitest, the typecheck and lint ratchets, or a disposable Postgres can prove it from this machine; false for edge functions that need a deployed target and for Swift.",
+  "userStories": [
+    {
+      "id": "US-709",
+      "title": "Remove the client-supplied AI model path from parse-recipe",
+      "description": "As the platform owner, I want parse-recipe to resolve its own model so that no signed-in user can name a server env var and an endpoint and receive the secret.",
+      "acceptanceCriteria": [
+        "supabase/functions/parse-recipe/index.ts no longer reads aiModel from the request body; the branch that calls Deno.env.get(aiModel.api_key_env_var) and fetches aiModel.endpoint_url is deleted",
+        "src/components/ImportRecipeDialog.tsx no longer selects from ai_settings; the request carries only url, text or imageBase64",
+        "A request that still sends aiModel is ignored, not honoured; a test asserts the function returns 200 using AIServiceV2 with aiModel present in the body",
+        "supabase/config.toml keeps verify_jwt for parse-recipe consistent with the other user-facing functions and requireUser remains in place",
+        "grep across supabase/functions for api_key_env_var finds only _shared/ai-service-v2.ts reading its own server-side settings row"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Review item 1. Verified in source at parse-recipe/index.ts:84-112 and ImportRecipeDialog.tsx:191-205. Ship before anything else in this epic."
+    },
+    {
+      "id": "US-710",
+      "title": "SSRF, timeout and size guards on recipe URL fetch",
+      "description": "As the platform owner, I want URL import to refuse internal addresses and unbounded bodies so that the parser cannot be used to read the metadata service or local services.",
+      "acceptanceCriteria": [
+        "A shared fetchRecipePage helper in supabase/functions/_shared rejects any scheme other than https, resolves the host and rejects RFC1918, loopback, link-local and 169.254.169.254 before fetching",
+        "Redirects are followed manually with a cap of 3 and every hop is re-validated",
+        "AbortSignal.timeout(10000) on the fetch; the body is read with a 2 MB cap and a 413 is returned above it",
+        "parse-recipe and parse-recipe-grocery both call the helper; the direct fetch(url, {redirect:'follow'}) calls are gone",
+        "Unit tests under supabase/functions/_shared cover the private-range rejection, the redirect cap and the size cap"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Review item 2. parse-recipe-grocery/index.ts:68 and parse-recipe/index.ts:58."
+    },
+    {
+      "id": "US-711",
+      "title": "Household-scope RLS on recipe_ingredients and recipe_components",
+      "description": "As a household member, I want to see the ingredients of a recipe my partner saved so that the recipe is usable by everyone who can already see it.",
+      "acceptanceCriteria": [
+        "New additive migration replaces every policy on public.recipe_ingredients and public.recipe_components whose predicate is r.user_id = auth.uid() with r.household_id = public.get_user_household_id(auth.uid())",
+        "SELECT, INSERT, UPDATE and DELETE are all household-scoped, matching the recipes policies from 20251008035900",
+        "Applied to a disposable postgres:16 container with the auth.uid() stub used by the kitchen-loop migrations; a second household member can select the rows, a user from another household cannot",
+        "No column, table or policy name is dropped that a shipped iOS build references"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 1,
+      "platform": "sql",
+      "loopVerifiable": true,
+      "notes": "Review item 3. Verified: 20260430000001_create_recipe_ingredients.sql:44-52 and 20260806000000_recipe_components.sql:105 still owner-scoped; no later migration touches these policies."
+    },
+    {
+      "id": "US-712",
+      "title": "Stop deleting checked grocery items on page mount",
+      "description": "As a shopper, I want the items I checked off to survive a page reload so that an interrupted trip does not lose what I already bought.",
+      "acceptanceCriteria": [
+        "The mount effect in src/pages/Grocery.tsx that calls deleteGroceryItems on every checked row is removed along with its toast",
+        "Checked rows remain visible in a collapsed Purchased section until the user takes the explicit checkout action",
+        "The checkout action is the only path that removes purchased rows, and it credits the pantry (movements when the ledger flag is on, foods.quantity otherwise) before removing them",
+        "A test in src/pages renders Grocery with pre-checked items from the cache and asserts no delete call is made on mount"
+      ],
+      "priority": 4,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item 4. Verified at Grocery.tsx:155-167."
+    },
+    {
+      "id": "US-713",
+      "title": "Sync from meal plan persists through the merge path",
+      "description": "As a parent, I want the grocery list I generate from the plan to exist on the server so that it survives a reload and reaches my partner's phone.",
+      "acceptanceCriteria": [
+        "handleRegenerateFromPlan in src/pages/Grocery.tsx no longer calls setGroceryItems; new rows go through addGroceryItemsMerged and retired auto-generated rows through deleteGroceryItems",
+        "generateGroceryList in src/lib/mealPlanner.ts takes a from/to date range and the caller passes the shopping window, defaulting to the visible week, instead of the whole 120-day context window",
+        "Generated rows carry grocery_list_id of the selected list and source_plan_entry_id of the entry that caused them",
+        "Re-running generation for the same week does not create duplicate rows; a vitest covers idempotence",
+        "The is_manual filter is replaced by the persisted auto_generated column so hand-added rows are genuinely preserved"
+      ],
+      "priority": 5,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item 5 and grocery items G12, G18. Verified: GroceryContext.setGroceryItems is local state only. Full recipe-aware quantities land in US-736; this story makes the path persist and idempotent."
+    },
+    {
+      "id": "US-714",
+      "title": "Every grocery add path lands on the selected list",
+      "description": "As a shopper, I want an item I add to appear on the list I am looking at so that the add button is trusted.",
+      "acceptanceCriteria": [
+        "AddGroceryItemDialog receives selectedListId and includes grocery_list_id in onAdd; Grocery.tsx passes it",
+        "addGroceryItem, addGroceryItemsMerged, restock suggestions, receipt scan and recipe import all carry grocery_list_id; the merge insert in GroceryContext also carries brand_preference, barcode, priority, price_per_unit and added_by_user_id",
+        "filterItemsByList in src/lib/groceryData.ts treats grocery_list_id null as belonging to the household's default list",
+        "planGroceryMerge merges only against rows on the target list; a vitest asserts that adding milk to list B does not bump list A"
+      ],
+      "priority": 6,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items 6, G14, G18. Verified at AddGroceryItemDialog.tsx:164-175 and groceryData.ts:47."
+    },
+    {
+      "id": "US-715",
+      "title": "Quick Build and AI Generate Week persist through addPlanEntries",
+      "description": "As a parent, I want a generated week to be saved so that it is still there tomorrow and on my other devices.",
+      "acceptanceCriteria": [
+        "handleQuickBuild and handleAIMealPlan in src/pages/Planner.tsx call addPlanEntries with server-assigned ids and never call setPlanEntries",
+        "Generation merges into the existing plan for the target week and kid; other kids' entries and other weeks are untouched, asserted by a test",
+        "handleAIMealPlan sends startDate for the week in view and supabase/functions/ai-meal-plan honours it instead of new Date()",
+        "setPlanEntries is documented in PlanContext as server-load only, and an eslint no-restricted-syntax rule blocks new callers outside src/contexts"
+      ],
+      "priority": 7,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items 7 and P16. Verified at Planner.tsx:191-192 and :245-266."
+    },
+    {
+      "id": "US-716",
+      "title": "Template apply writes valid rows and is idempotent",
+      "description": "As a parent, I want applying a meal-plan template to work so that a saved week can be reused.",
+      "acceptanceCriteria": [
+        "supabase/functions/manage-meal-plan-templates applyTemplate stamps user_id and household_id on every generated plan_entries row",
+        "Recipe-only template entries with no food_ids are scheduled through schedule_recipe_to_plan (or the meals row once US-674 lands) rather than inserted with food_id null",
+        "Rows are upserted on (household_id, kid_id, date, meal_slot, food_id); applying the same template to the same week twice yields no duplicates",
+        "The dialog offers merge or replace for the target week",
+        "saveFromWeek groups by (date, meal_slot, recipe_id) instead of filtering on is_primary_dish",
+        "The advertised allergen check is implemented server-side using the kid's allergens and dietary_restrictions, or the per-child safety framing is removed from ApplyTemplateDialog"
+      ],
+      "priority": 8,
+      "passes": false,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Review items 8 and P15. Verified: rows built at manage-meal-plan-templates/index.ts:344-368 omit user_id, which is NOT NULL with no trigger; household_id is filled by auto_fill_household_id."
+    },
+    {
+      "id": "US-717",
+      "title": "Plan inserts roll back and surface errors instead of creating phantom rows",
+      "description": "As a parent, I want to know when a meal failed to save so that I do not plan a week that exists only on this screen.",
+      "acceptanceCriteria": [
+        "addPlanEntry and addPlanEntries in src/contexts/PlanContext.tsx use runOptimisticMutation with rollback and a toast, matching updatePlanEntry and deletePlanEntry",
+        "On failure no row with a generated id is appended and the localStorage backup does not receive it",
+        "src/contexts/PlanContext.weekOps.test.tsx gains a case where the insert rejects and asserts state is unchanged and a toast fired",
+        "The same pattern is applied to any other context whose insert error branch appends a local row (audit GroceryContext, FoodsContext, RecipesContext, KidsContext and fix any found)"
+      ],
+      "priority": 9,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item 9. Verified at PlanContext.tsx:102-105 and :121-125."
+    },
+    {
+      "id": "US-718",
+      "title": "Sibling Meal Finder schedules a real food or recipe",
+      "description": "As a parent using the sibling finder, I want Use this meal to put the meal in the plan so that the solver's answer is actionable.",
+      "acceptanceCriteria": [
+        "src/pages/SiblingMealFinder.tsx handleUse no longer writes food_id ''; it schedules the recipe through the shared plan primitive (US-724) or, before that lands, through schedule_recipe_to_plan per kid",
+        "A failed insert is visible to the user (depends on US-717)",
+        "A test asserts the payload sent to the context contains a uuid food_id or a recipe_id and never an empty string"
+      ],
+      "priority": 10,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item 10. Verified at SiblingMealFinder.tsx:185 and :196."
+    },
+    {
+      "id": "US-719",
+      "title": "Remove the broken Planner-page template buttons and the dead AI planner route",
+      "description": "As a parent, I want every button on the planner to do what it says so that I stop learning which ones are decorative.",
+      "acceptanceCriteria": [
+        "The page-level Save Template and Templates controls in src/pages/Planner.tsx are removed; the grid toolbar's working copies remain",
+        "The /dashboard/ai-planner route, its nav entry on Dashboard and src/pages/AIPlanner.tsx are removed, or the page is rewired to the shared plan primitive with a passing test; one or the other, not left as is",
+        "The duplicate top-level /planner route in src/App.tsx is collapsed into the dashboard route with a redirect",
+        "The unreachable SwapMealDialog and DetailedTrackingDialog on Planner.tsx are either wired to a cell menu (US-725) or removed in this story"
+      ],
+      "priority": 11,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items 11, 12, X13 and P9's dead dialogs. Verified prop mismatch at Planner.tsx:893-910."
+    },
+    {
+      "id": "US-720",
+      "title": "Retire the Expo client",
+      "description": "As a contributor, I want the retired Expo app out of the tree so that mobile means the Swift app and no loop spends time on a client that will never ship.",
+      "acceptanceCriteria": [
+        "app/ (the Expo Router tabs, app/mobile, app/index.tsx, app/_layout.tsx), index.mobile.js, metro.config.cjs, app.config.js, eas.json and capacitor.config.ts are deleted; babel.config.js and babel-plugin-module-resolver go with them when a grep shows nothing outside app/ consumes them",
+        "The name-to-unit table in app/mobile/lib/unit-suggestions.ts is ported into src/lib/groceryAisle.ts (US-728) before the directory is deleted; it is the only data in app/ worth keeping",
+        "expo*, react-native*, react-native-reanimated, react-native-safe-area-context, react-native-screens and @capacitor* are removed from package.json; package-lock.json is regenerated with npm install, never edited by hand",
+        "The expo:*, eas:*, expo:prebuild, setup:mobile:assets, android and ios npm scripts are removed, along with scripts/setup-mobile-assets.cjs if only Expo used it",
+        "src/integrations/supabase/client.mobile.ts and src/lib/syncQueue.test.ts (which imports app/mobile/lib/syncQueue) are removed; the comment in src/lib/ladderSyncOps.ts is corrected; src/lib/platform.ts keeps its storage abstraction only if a non-Expo consumer remains",
+        ".github/workflows/ci.yml and ios-app-store-deploy.yml drop their Expo and EAS references; ciGatesWired stays green",
+        "CLAUDE.md lines naming Expo and EAS (the header, the Stack line and the offline-durability paragraph under Load Precedence) are rewritten: Mobile is Swift under ios/EatPal, Android is Kotlin under android-native, and native offline durability points at ios/EatPal/EatPal/Services/OfflineStore.swift",
+        "PLATFORMS.md names ios/EatPal as the App Store client and android-native as the Android client, and records the Expo retirement with the removing commit; native-js-build/ is deleted in the same story if it is the earlier React Native shell with no CI, otherwise its status is recorded there",
+        "npm run test:run, both ratchets and npm run build pass after removal",
+        "Review findings that existed only in Expo (13, P20, P21, P22, G27, G28) are closed by this removal and are not ported anywhere"
+      ],
+      "priority": 12,
+      "passes": false,
+      "slice": 1,
+      "platform": "ops",
+      "loopVerifiable": true,
+      "notes": "Review items 13, X1, X10, P20, P21, P22, G27, G28. Decision from Dj 2026-09-01: Expo is retired. android-native (Kotlin, own CI workflow) is untouched by this story."
+    },
+    {
+      "id": "US-721",
+      "title": "Web recipe builder reads and writes recipe_ingredients rows",
+      "description": "As a cook, I want the quantity and unit I type for each ingredient to be stored so that scaling, shortfall and the grocery list can use them.",
+      "acceptanceCriteria": [
+        "RecipesContext.addRecipe and updateRecipe write one recipe_ingredients row per ingredient with name, quantity, unit, optional_notes, group_label, sort order and food_id when known; updates diff by id rather than delete-all",
+        "EnhancedRecipeBuilder seeds its rows from editRecipe.recipe_ingredients when present and falls back to food_ids only for legacy recipes",
+        "additional_ingredients is written only as a derived display string, never as the source of truth; existing recipes with only additional_ingredients are parsed into rows through parseGroceryText on first edit",
+        "The core-payload retry in addRecipe only fires on a missing-column error class and reports what was dropped",
+        "prepTime and cookTime use parseDurationMinutes from src/lib/recipeFilters.ts, not parseInt",
+        "Tests cover create, edit-preserves-ids, legacy fallback and the retry guard"
+      ],
+      "priority": 13,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items 14, R8, R15. RecipesContext.tsx:215-246 and EnhancedRecipeBuilder.tsx:266-279 today."
+    },
+    {
+      "id": "US-722",
+      "title": "One canonical column set for recipe_ingredients with a transition mirror",
+      "description": "As any client, I want ingredients written on one platform to be readable on every other so that a recipe built on the phone has ingredients on the web.",
+      "acceptanceCriteria": [
+        "Migration adds a BEFORE INSERT OR UPDATE trigger on public.recipe_ingredients that copies name<->ingredient_name, optional_notes<->preparation_notes, is_optional<->optional_notes presence and section<->group_label whichever side is null, so either column set stays populated",
+        "name, optional_notes and group_label are declared canonical in a comment on the table and in CLAUDE.md",
+        "ios/EatPal/EatPal/Models/RecipeIngredient.swift and the Swift recipe editor read and write the canonical names, or are confirmed to already do so in notes with file:line; web RecipesContext keeps reading name",
+        "npx supabase gen types regenerates src/integrations/supabase/types.ts and the stale-types comment in RecipesContext is removed",
+        "Retiring the legacy columns is a separate story gated on MIN_SUPPORTED_IOS_BUILD per the deprecation flow"
+      ],
+      "priority": 14,
+      "passes": false,
+      "slice": 1,
+      "platform": "sql",
+      "loopVerifiable": true,
+      "notes": "Review item 15. 20260531000000 backfilled once and left both column sets live."
+    },
+    {
+      "id": "US-723",
+      "title": "PWA share target lands the recipe in the builder",
+      "description": "As a phone-web user, I want a URL or photo I share to EatPal to become a recipe I can review so that the share sheet is a real capture path.",
+      "acceptanceCriteria": [
+        "src/pages/Recipes.tsx reads location.state.importedRecipe and sourceUrl on mount and opens EnhancedRecipeBuilder prefilled; the state is cleared after consumption",
+        "ShareTarget handles a shared image by sending imageBase64 to the parser and following the same path",
+        "Sharing a URL with Add to grocery parses the recipe and opens ImportRecipeToGroceryDialog instead of toasting",
+        "A test renders Recipes with importedRecipe in router state and asserts the builder opens with the name filled"
+      ],
+      "priority": 15,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item 16. ShareTarget.tsx:142 navigates with state nothing reads."
+    },
+    {
+      "id": "US-724",
+      "title": "One planMeal primitive used by every entry surface",
+      "description": "As a developer, I want a single function that adds a meal to the plan so that every entry surface has the same validation and grocery side effects.",
+      "acceptanceCriteria": [
+        "src/lib/planMeal.ts exports planMeal({date, slot, eaters, source: {recipeId} | {foodId} | {title}, servings, options: {addMissingToGrocery, deductPantry}}) returning the created entries or a typed error",
+        "Planner.handleSelectFood, handleAddEntry, handleMobileAddEntry, MobileMealPlanner.handleDrawerSelectFood, SiblingMealFinder.handleUse, TonightSuggestionsDialog all call it; no other file inserts into plan_entries directly, enforced by a grep-based test",
+        "Dates are built with toISODate from src/lib/date-utils.ts; a lint rule bans toISOString().split('T') in src and app",
+        "Free-text titles are accepted; category is inferred and a provisional food is created with needs_review true rather than rejecting the entry",
+        "Vitest covers each source kind, the grocery option and the pantry option"
+      ],
+      "priority": 16,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P7, P10, P31, R31, and the meal-entity items P1 and R28, which are kitchen-loop US-674/675 and are not duplicated here. Once US-674 lands, planMeal creates the meals row and plates; until then it writes plan_entries."
+    },
+    {
+      "id": "US-725",
+      "title": "Delete, swap and log from a meal cell; confirm and undo on week-level actions",
+      "description": "As a parent, I want to remove or swap one meal without clearing the week so that fixing a mistake is one tap.",
+      "acceptanceCriteria": [
+        "PlanContext exposes deletePlanEntry(id) and deleteMeal(mealId) with optimistic rollback and an undo toast that restores the captured rows",
+        "Each cell in GSAPCalendarMealPlanner and MobileMealPlanner has a menu with Swap (opens SwapMealDialog), Log result (opens DetailedTrackingDialog) and Remove",
+        "Clear Week and Copy Week ask for confirmation and offer a 10-second undo",
+        "Copy Week copies the household's week, not only the active kid, and uses differenceInCalendarDays",
+        "Tests cover delete with undo and the copy-week date math across a DST boundary"
+      ],
+      "priority": 17,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P9, P17."
+    },
+    {
+      "id": "US-726",
+      "title": "Shared meal-slot configuration",
+      "description": "As a household, I want one definition of our meal slots and their times so that every screen, reminder and client agrees.",
+      "acceptanceCriteria": [
+        "New table public.household_meal_slots(id, household_id, key, label, sort_order, default_time time, enabled) with RLS, seeded per household with the six current keys and 24h default times",
+        "src/lib/mealSlots.ts and a useMealSlots hook replace the hardcoded lists in TodayMeals.tsx, GSAPCalendarMealPlanner.tsx, MobileMealPlanner.tsx and schedule-meal-reminders",
+        "Every enabled slot, including snack2 and try_bite, renders on every planner surface: the web grid, the mobile-width web grid, TodayMeals and Swift MealPlanView",
+        "TodayMeals derives past/upcoming from default_time, replacing parseInt on '6:00 PM', and reads entry.food_id not food_ids",
+        "generate-meal-suggestions emits only keys present in the slot table",
+        "The plan_entries meal_slot CHECK is left in place for shipped clients; custom slot keys are a follow-up gated on MIN_SUPPORTED_IOS_BUILD"
+      ],
+      "priority": 18,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P5 (slots), P18, P20, P30."
+    },
+    {
+      "id": "US-727",
+      "title": "Delete the dead planner components and the GSAP twin",
+      "description": "As a developer, I want one planner implementation so that a fix lands once.",
+      "acceptanceCriteria": [
+        "CalendarMealPlanner.tsx, MealPlanningCalendar.tsx, AddMealToCalendarDialog.tsx, QuickSuggestionsPanel.tsx and MealSuggestionCard.tsx are removed after a grep confirms no importer",
+        "GSAPCalendarMealPlanner's mobile branch delegates to src/components/meal-planner/MobileMealPlanner",
+        "gsap is no longer imported by src/pages/Planner.tsx or any authenticated route; it remains available to Landing, EnhancedHero and ParallaxBackground",
+        "rollup-plugin-visualizer is added behind ANALYZE=1 and the dashboard chunk size before and after is recorded in notes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P8, X8."
+    },
+    {
+      "id": "US-728",
+      "title": "Grocery aisle taxonomy in TypeScript, shared with iOS",
+      "description": "As a shopper, I want ground beef under Meat and apples under Produce so that the list reads like the store.",
+      "acceptanceCriteria": [
+        "src/lib/groceryAisle.ts defines the 32 GroceryAisle values, labels, storeWalkOrder and derivedFoodCategory exactly as ios/EatPal/EatPal/Models/GroceryAisle.swift, plus classify(name)",
+        "tests/fixtures/aisle-classify-cases.json is asserted by both src/lib/groceryAisle.test.ts and a Swift test, extending the ingredient-parse-cases pattern; the existing GroceryAisleClassifierTests cases are in the fixture",
+        "Unknown names classify to other, never snack; FoodCategory stays for plate-balance colouring and is derived from the aisle",
+        "src/lib/foodCategoryMap.ts is deleted; GroceryContext, parse-grocery-text, receiptParse, pantryQuickAddParser all classify through the new module",
+        "The name-to-unit suggestion table from app/mobile/lib/unit-suggestions.ts is ported into the module as defaultUnitFor(name) with a fixture, before US-720 deletes app/",
+        "grocery_items.aisle_section is written on every insert from web and used for By Aisle grouping; the free-text aisle column becomes a user override"
+      ],
+      "priority": 20,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items G1, G2, G4, G7, G10, X3 (aisles), G14 (the unit-suggestions table). Verified: foodCategoryMap.ts is 6 categories with raw includes() and a snack default; canonical_products has no seed."
+    },
+    {
+      "id": "US-729",
+      "title": "Auto-categorize on the add dialog and allow aisle correction on edit",
+      "description": "As a shopper, I want the category filled in as I type and fixable later so that I correct an item once.",
+      "acceptanceCriteria": [
+        "AddGroceryItemDialog infers aisle and category on name change (debounced) and pre-selects the dropdowns, which remain overrides",
+        "EditGroceryItemDialog gains an aisle field",
+        "A correction on either dialog writes the aisle to the resolved item (foods.aisle) and an item_aliases row, so the next list is right without asking",
+        "The Math.random() aisle-contribution prompt is removed; the food_aisle_mappings reader assigns the aisle before asking, and asks only when unknown",
+        "Category and aisle inference is covered by tests for ground beef, honeycrisp apples, 2 lbs chicken thighs, graham crackers and almond milk"
+      ],
+      "priority": 21,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items G3, G9, G11. Depends on US-728."
+    },
+    {
+      "id": "US-730",
+      "title": "Resolver and alias memory on every grocery and pantry add path",
+      "description": "As a household, I want the app to learn our names for things so that chicken breasts typed twice is one item.",
+      "acceptanceCriteria": [
+        "addGroceryItem, addGroceryItemsMerged, pantry quick add, bulk add, receipt confirm and paste import call resolveItem and store the returned item id on grocery_items.item_id or foods.id",
+        "A confident resolution to an existing item bumps that item; a provisional result creates the item with needs_review true and never blocks the add",
+        "Every user confirmation (picking an existing item in a disambiguation, correcting a category or aisle) writes an item_aliases row with source user_confirmed",
+        "receiptParse.fuzzyMatchFood is replaced by resolveItem with FUZZY_CONFIDENCE_THRESHOLD; below threshold the receipt review sheet asks",
+        "A single N items need confirming affordance on Grocery and Pantry lists provisional items; proposeMerges from itemMergeProposals is surfaced there as a reviewable merge (US-664 owns the merge UI, this story links to it)",
+        "Tests cover confident, provisional and confirmed paths on the grocery add"
+      ],
+      "priority": 22,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items G5, G17, G25 (identity part). Complements kitchen-loop US-661 (recipes) and US-664 (merge UI); do not duplicate those."
+    },
+    {
+      "id": "US-731",
+      "title": "Seed canonical_products",
+      "description": "As a new household, I want common products already known so that resolution does not start from zero.",
+      "acceptanceCriteria": [
+        "scripts/seed/canonical-products.mjs builds a CSV from Open Food Facts and USDA FoodData Central subsets with normalized_name run through normalizeItemText, category, default_unit, default_aisle and barcode when present; sources and licences recorded in the script header",
+        "A migration or a documented supabase db seed step loads at least 3000 rows; the migration is additive and re-runnable (ON CONFLICT DO NOTHING on barcode and normalized_name)",
+        "A test fixture asserts that resolveItem finds ground beef, whole milk and honeycrisp apples through step 4 with an empty alias table",
+        "The open question in the kitchen-loop spec about seeding is answered in the spec"
+      ],
+      "priority": 23,
+      "passes": false,
+      "slice": 2,
+      "platform": "node",
+      "loopVerifiable": true,
+      "notes": "Review items G6, G13 (normalized_name must be pre-normalized)."
+    },
+    {
+      "id": "US-732",
+      "title": "Store walk order on the web list",
+      "description": "As a shopper, I want the list grouped in the order I walk the store so that I do not backtrack.",
+      "acceptanceCriteria": [
+        "src/lib/storeWalkOrder.ts ports walkOrder(for:layoutId:) from Swift, reading store_layouts.aisle_overrides and user_store_layout_overrides",
+        "A list can pick its store (grocery_lists.store_layout_id is set by CreateGroceryListDialog and ManageGroceryListsDialog); selectedStoreLayoutId in Grocery.tsx is driven by the selected list",
+        "Groups in Grocery.tsx are sorted by walk order; insertion-order grouping is gone",
+        "store_aisles from ManageStoreAislesDialog is honoured as a per-store override",
+        "Fixture-based test for the five seeded layouts"
+      ],
+      "priority": 24,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item G8. Seeds exist in 20260507000000_store_layouts.sql with no JS reader."
+    },
+    {
+      "id": "US-733",
+      "title": "Parse schema.org recipes directly and keep the image",
+      "description": "As a cook importing from a site, I want exact ingredients, times and the photo so that import is fast and faithful.",
+      "acceptanceCriteria": [
+        "One parse function (parse-recipe-grocery retired or merged) parses HTML with deno-dom, walks @graph recursively, decodes entities, and reads recipeIngredient, recipeInstructions including HowToSection and HowToStep, recipeYield, prepTime, cookTime, totalTime, nutrition, aggregateRating and image directly when a Recipe schema exists",
+        "The model is called only when no schema is found, and its output is validated with the same zod schema; the fabricated Imported Recipe fallback returns 422 with the raw text instead",
+        "Ingredient strings are parsed server-side into quantity, unit, name and prep using the shared line parser (parseGroceryText fixtures), returning objects in one snake_case shape",
+        "The recipe image is fetched, stored in the images bucket under the household path and its URL returned; the source URL is stored for attribution; og:image is the fallback",
+        "Photo import stores the captured image and sets source_type photo; the TS source_type union matches the CHECK",
+        "ImportRecipeDialog opens EnhancedRecipeBuilder prefilled for review instead of saving immediately, and warns when source_url already exists in the household"
+      ],
+      "priority": 25,
+      "passes": false,
+      "slice": 2,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Review items R1, R2, R3, R4, R6, R7, R8, R9, R17. R5 (resolver at import) is kitchen-loop US-661, which adds the confirm step inside this same review sheet; not duplicated here."
+    },
+    {
+      "id": "US-734",
+      "title": "Remove dead recipe surfaces and fix the AI buttons that cannot succeed",
+      "description": "As a user, I want every recipe button to work or not exist.",
+      "acceptanceCriteria": [
+        "RecipeImporter.tsx and RecipeBuilder.tsx are deleted after grep confirms no importer",
+        "Generate with AI in EnhancedRecipeBuilder sends selectedFoodNames matching suggest-recipe, or the button is removed",
+        "suggest-recipes-from-pantry calls AIServiceV2.generateContent({messages}, taskType) and the unused ai_settings fetch is removed; saved suggestions carry recipe_ingredients rows with quantities",
+        "RecipeExportActions is mounted in RecipeDetailView (print, copy ingredients, email)",
+        "RecipeShareButton is removed until a public share route exists (US-748)",
+        "A paste-from-clipboard button and URL auto-detect are added to the import dialog"
+      ],
+      "priority": 26,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items R10, R11, R23 (export part)."
+    },
+    {
+      "id": "US-735",
+      "title": "Core-loop analytics events and one loop integration test",
+      "description": "As the product owner, I want the seven loop steps measured so that decisions stop favouring the only features that are instrumented.",
+      "acceptanceCriteria": [
+        "trackEvent calls for meal_planned, grocery_generated, grocery_item_checked, shop_completed, pantry_stocked, meal_cooked and recipe_created with household_id, platform and source properties, emitted once per action (not per rendered card)",
+        "The per-card telemetry effects in DraggableMealItem are removed",
+        "src/test/kitchenLoop.integration.test.tsx walks recipe create, plan, generate list, check off, checkout and cook against the mocked Supabase client and asserts each event fired once",
+        "Analytics contract documented in docs/analytics-events.md with the Swift AnalyticsContractTests names aligned"
+      ],
+      "priority": 27,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items X4, P19 (telemetry). Do this in slice 1; it is half a day and reframes everything after."
+    },
+    {
+      "id": "US-736",
+      "title": "Recipe-aware grocery generation with servings and pantry subtraction",
+      "description": "As a parent, I want the list to reflect what the planned recipes need for the people eating, minus what we have, so that I buy the right amounts.",
+      "acceptanceCriteria": [
+        "generateGroceryList expands each plan entry with a recipe into its recipe_ingredients scaled by servings_planned over recipe base servings, in canonical units via canonicalUnits.toCanonical; unknown conversions are listed in the item's own unit and flagged, never fudged",
+        "Requirements are grouped by item id (falling back to ingredientMatchKey only for unresolved rows), then requiredAfterStock subtracts item_stock when the ledger flag is on and foods.quantity otherwise",
+        "Package rounding uses foods.package_quantity when present",
+        "recipeShortfall.computeRecipeShortfall converts units through unitNormalize.convert; the string-equality comparable check is deleted so the planner badge and the grocery dialog agree",
+        "Property-style vitest: for random plans the generated list plus stock covers the requirement"
+      ],
+      "priority": 28,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items G12, G24, P24, R29. This is kitchen-loop US-676 and US-680 from the grocery side; coordinate so one shortfall function exists, not two."
+    },
+    {
+      "id": "US-737",
+      "title": "Grocery list as a projection of the plan",
+      "description": "As a parent, I want adding, swapping or removing a meal to update the list by itself so that the list is never stale.",
+      "acceptanceCriteria": [
+        "On every planMeal call and every meal update or delete, the shortfall for that meal is recomputed and written to grocery_item_sources(meal or plan_entry ref, grocery_item_id, required quantity); grocery_items.quantity is the sum over its sources plus any manual delta",
+        "Removing or swapping a meal removes its source rows and decrements or deletes the grocery row; a manual row is never deleted by this path",
+        "source_plan_entry_id (and meal_id once US-674 lands) is written on generated rows; regenerate becomes recompute-all-sources for the window",
+        "A per-add Add missing to grocery toggle on the web quick-add drawer (the pattern the Expo planner had) and MissingIngredientsDialog both call the same projection function",
+        "A By Meal view on Grocery lists rows grouped by the meal that needs them; tapping a row shows for Tuesday stir-fry you have 200 g of 500 g",
+        "Tests: add then remove a meal leaves the list unchanged; two meals sharing an item produce one row with the summed quantity"
+      ],
+      "priority": 29,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P23, R30. grocery_item_sources exists since 20260430000002 with zero readers or writers."
+    },
+    {
+      "id": "US-738",
+      "title": "Cooked action on web through rpc_mark_meal_made_v2",
+      "description": "As a cook, I want marking a meal cooked to take the ingredients out of the pantry and tick the sourced grocery rows so that stock stays honest without a chore.",
+      "acceptanceCriteria": [
+        "A Cooked action on the planner cell, Today card and Tonight Mode calls rpc_mark_meal_made_v2 with quantities scaled to servings; the deduct_food_quantity {_amount: 1} calls are removed",
+        "With the ledger flag on, the RPC (or a v3) appends one cook movement per resolved ingredient with ref_type meal; undo appends reversals via rpc_undo_meal_made",
+        "Cooking does not write plan_entries.result; per-plate outcomes are logged separately (kitchen-loop US-679)",
+        "Grocery rows sourced from the meal are auto-checked",
+        "Tonight Mode Cook now creates today's dinner meal through planMeal, marks it cooked, then opens the cook dialog; its grocery add uses the merge path with inferred category and real quantities",
+        "Tests cover scaled debit, auto-check and undo"
+      ],
+      "priority": 30,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items G23, P25, P29. Sequenced after kitchen-loop US-674 (meals) and US-677 (rpc_cook_meal); if those slip, implement against plan_entries and migrate."
+    },
+    {
+      "id": "US-739",
+      "title": "Checkout credits the pantry by item id, once, with undo",
+      "description": "As a shopper, I want Done shopping to stock the pantry correctly so that I never see duplicate pantry rows or double counts.",
+      "acceptanceCriteria": [
+        "A single checkout action on web writes one purchase movement per checked row using grocery_items.item_id (resolved at add time by US-730); the five lowercased-name matches in Grocery.tsx are removed",
+        "The wasSkipped double-credit branch is removed; a row that resolves by item id never also creates a new food",
+        "Undo reads current state at click time and appends reversal movements; it does not close over a stale foods array",
+        "Price entered at checkout or from a receipt is stored on the movement and on the item as last-known price",
+        "The mobile-width web grocery view gains a shopping mode with keep-awake (Screen Wake Lock API, re-acquired on visibilitychange), swipe-to-check and a non-destructive primary gesture, matching Swift ShoppingModeView",
+        "Before the ledger flag defaults on, the stockComparison dark-launch telemetry is confirmed to be collected on real households and the agreement rate is recorded in notes",
+        "Tests cover credit-once, undo and the price path"
+      ],
+      "priority": 31,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items G25, G26, G27 (checkout part), G28, G15 (capture part). Kitchen-loop US-672 owns the movement writers; this story wires the UI to them."
+    },
+    {
+      "id": "US-740",
+      "title": "Household eaters: adults plan too",
+      "description": "As an adult, I want to plan meals for myself and my partner so that EatPal is a household planner, not only a kids tool.",
+      "acceptanceCriteria": [
+        "Migration adds public.household_eaters(id, household_id, kind check in ('adult','child'), display_name, kid_id null references kids, member_user_id null, dietary_restrictions text[], allergens text[], is_active) with RLS; every existing kid is backfilled as a child eater",
+        "Migration adds public.meal_attendees(meal_id, eater_id) with RLS, and makes plan_entries.kid_id nullable once plan_entries.meal_id exists (kitchen-loop US-674); no column is dropped",
+        "Onboarding opens with Who are you planning for: just me, me and a partner, my family; only the family branch asks for a child, and the planner renders for a household with zero kids",
+        "ManageHouseholdDialog lists eaters and lets an adult member mark themselves as an eater with restrictions",
+        "Planner family mode renders one grid with a row per eater rather than one planner instance per kid; nutrition is loaded once through a cached query",
+        "The Swift MealPlanView empty state and OnboardingView copy are updated in the same release so the two funnels do not diverge",
+        "Reminders derive household from plan_entries.household_id, not from kids"
+      ],
+      "priority": 32,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P2, P14, X5 (onboarding part), P32 (kids join). Verified: plan_entries.kid_id NOT NULL, Planner.tsx:574 blocks without kids, OnboardingDialog.tsx:182 requires a child name."
+    },
+    {
+      "id": "US-741",
+      "title": "Gate kid tooling and unify navigation",
+      "description": "As a household without a picky eater, I want the primary navigation to be the kitchen loop so that clinical tools do not crowd it.",
+      "acceptanceCriteria": [
+        "src/lib/nav.ts exports one NAV array consumed by AppSidebar, Navigation, CommandPalette and QuickActionsMenu; the four hand-maintained lists are removed",
+        "Food Chaining, Food Tracker, Progress, Sibling Meal Finder and the Kids selector appear only when at least one child eater has a pickiness profile; a household can opt in from settings",
+        "Primary sections are Today, Week, Recipes, Grocery (with a Pantry segment) and Kids, matching the kitchen-loop iOS layout",
+        "The signed-in document titles no longer read ARFID and Picky Eater Meal Planner; marketing pages keep their positioning",
+        "QuickActionsMenu leads with Plan a meal and Add to list, not Add Child"
+      ],
+      "priority": 33,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items X5, X13 (naming). Web IA rework was out of scope in the kitchen-loop spec; this story brings it in once eaters exist."
+    },
+    {
+      "id": "US-742",
+      "title": "Servings, recurrence, leftovers and eating out on a meal",
+      "description": "As a parent, I want Taco Tuesday every week, Friday takeout and Wednesday leftovers to be plannable so that the list stops buying for meals we will not cook.",
+      "acceptanceCriteria": [
+        "meals gains kind text check in ('cook','leftover_of','eating_out','packed') default 'cook' and source_meal_id uuid null; leftover_of and eating_out contribute nothing to the grocery projection and leftover_of debits nothing on cook",
+        "recipes.servings is stored numerically (servings_default already exists) and the detail view scales ingredient rows and nutrition from it",
+        "New table public.meal_recurrences(household_id, slot, weekday, recipe_id or title, eaters, starts_on, ends_on) with RLS, expanded lazily into meals when a week is opened; editing one occurrence detaches it",
+        "Planner cells show a kind badge; the quick-add sheet offers Leftovers of and Eating out",
+        "Tests cover expansion, detach and the projection exclusions"
+      ],
+      "priority": 34,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P3, P4, R13. Depends on kitchen-loop US-674."
+    },
+    {
+      "id": "US-743",
+      "title": "Range, month and agenda views; copy from any week",
+      "description": "As a planner, I want to see two weeks or a month and copy last week into this one so that the grid fits how I plan.",
+      "acceptanceCriteria": [
+        "The planner grid takes a days parameter (1, 3, 7, 14, 28) with a view switcher; a month view shows one line per meal and an agenda view lists meals chronologically",
+        "Copy week is a source-to-target picker with merge or replace, so last week can be copied forward and a template week can be copied from any past week",
+        "The plan window fetch in AppContext gets an explicit limit and fetches the visible range on navigation instead of relying on the PostgREST max-rows cap",
+        "Planner reads ?date= and ?slot= from the URL and scrolls to them, so reminders and shared links land on the right day",
+        "Tests cover the range switch and the copy picker"
+      ],
+      "priority": 35,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P11, X12, P32 (deep link part)."
+    },
+    {
+      "id": "US-744",
+      "title": "Keyboard-accessible, reliable drag and drop",
+      "description": "As a keyboard or screen-reader user, I want to move a meal without a pointer, and as any user I want a drop to land where I let go.",
+      "acceptanceCriteria": [
+        "The move commits on drag end before the animation, using elementFromPoint hit-testing instead of nearest-centroid; unmounting mid-tween cannot drop a move",
+        "Cells have role gridcell inside role grid, are focusable, and Space or Enter picks up a meal, arrow keys choose a target, Enter drops, Escape cancels; an aria-live region announces the result",
+        "Moving or twisting operates on the meal (all its plates) in family mode and only the active eater's plate in single mode; Twist re-schedules through planMeal so ingredients and shortfall follow the new recipe",
+        "Variety-fatigue memos key on a content hash of (recipe_id, date) pairs, not array length",
+        "Playwright a11y test covers the keyboard move"
+      ],
+      "priority": 36,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P12, P13, P19."
+    },
+    {
+      "id": "US-745",
+      "title": "Household-level plan generation",
+      "description": "As a household, I want the generator to plan for everyone with our constraints so that Quick Build and AI Week are useful beyond a single picky eater.",
+      "acceptanceCriteria": [
+        "supabase/functions/ai-meal-plan accepts {householdId, range, eaterIds, constraints: {maxPrepMinutesByWeekday, weeklyBudget, dietaryRestrictions, batchCook, leftoverPolicy}} and reads pantry, recipes and history server-side; the client no longer ships foods and recipes in the request",
+        "The function returns {recipe_id | food_id | title} per slot; unmatched names are returned as titles for the user to confirm, never dropped; ARFID rules for child eaters are applied as constraints",
+        "buildWeekPlan becomes a deterministic seeded scorer over varietyFatigue, pantry coverage (depletion forecast) and ladder due-ness from ladderScheduler; Math.random selection is removed",
+        "Household settings gain per-weekday max prep minutes and a weekly budget; the planner shows an over budget chip on a day",
+        "Generated weeks are written through planMeal (US-724) and are reviewable before commit",
+        "Tests cover the scorer's determinism and the constraint filters"
+      ],
+      "priority": 37,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P27, P28, P31 (schedule awareness). Edge-function half is loopVerifiable false; the scorer is pure TS."
+    },
+    {
+      "id": "US-746",
+      "title": "Pantry coverage and depletion forecast in the planner",
+      "description": "As a parent, I want the week to tell me I will run out of milk before Thursday's pancakes so that shopping happens before the problem.",
+      "acceptanceCriteria": [
+        "Each meal cell shows a coverage badge (covered, short N items, unknown) from the single shortfall function, matching the iOS PantryCoverage badge",
+        "forecastForFood from depletionForecast.ts is evaluated per planned ingredient against the meal's date and surfaces a will run out by chip on the day",
+        "platePlanner KidPlate breakdowns render inside the dinner cell when the meal has child eaters with restrictions",
+        "Coverage is computed once per week load, not per cell render",
+        "Tests cover the badge states"
+      ],
+      "priority": 38,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items P26, P30 (plates), R20."
+    },
+    {
+      "id": "US-747",
+      "title": "Reminders that fire, in the right timezone, once per meal, plus partner notifications",
+      "description": "As a household, I want dinner and shopping reminders that arrive at the right time and tell me what my partner planned so that the plan is a shared thing.",
+      "acceptanceCriteria": [
+        "A pg_cron entry (following 20260818000001_trial_reminder_emails.sql) invokes schedule-meal-reminders on a schedule; profiles.timezone is added and used to compute local instants",
+        "One notification per meal per household member, not per plate; deep link carries date and slot",
+        "New notification types: dinner_tonight at a user-chosen hour naming the planned meal, partner_planned_meal and partner_checked_items (rate limited to one digest per hour), pantry_expiring on web, shopping_day nudge when the projected list is non-empty",
+        "The four weekly-report functions are consolidated into one with a documented schedule"
+      ],
+      "priority": 39,
+      "passes": false,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Review items P32, X14 (reports). Verified: nothing schedules schedule-meal-reminders today."
+    },
+    {
+      "id": "US-748",
+      "title": "ICS feed and read-only week share",
+      "description": "As a co-parent or nanny without an account, I want to see this week's plan in my calendar so that the plan leaves the app.",
+      "acceptanceCriteria": [
+        "New table public.household_share_tokens(household_id, token, scope check in ('plan_ics','week_view','recipe'), expires_at, revoked_at) with RLS on management and no anon read; edge function plan-ics validates the token with the service role and emits one VEVENT per meal with slot default times",
+        "Settings shows the feed URL with copy and revoke",
+        "A prerendered public route /share/week/:token renders the week read-only with no PII beyond meal names; /share/recipe/:token renders a recipe and replaces the broken RecipeShareButton URL",
+        "Tests cover token expiry and the VEVENT output"
+      ],
+      "priority": 40,
+      "passes": false,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Review items P32 (ICS), R23."
+    },
+    {
+      "id": "US-749",
+      "title": "Price capture, trip total and per-store price history",
+      "description": "As the household budget holder, I want to know what we actually spend and where it is cheaper so that the grocery app pays for itself.",
+      "acceptanceCriteria": [
+        "receiptParse keeps unitPrice and lineTotal; the receipt review sheet writes them to purchase movements and to the item's last-known price",
+        "Checkout allows an optional price per row; the shopping view shows a running estimated total from last-known prices and an actual total after checkout",
+        "New view or table item_price_history(item_id, store_layout_id, price, currency, observed_at) fed from movements; the item detail shows cheaper at X when two stores differ",
+        "BudgetService-equivalent on web reports actual spend by week from movements instead of estimates",
+        "Tests cover the movement price path and the history rollup"
+      ],
+      "priority": 41,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item G15. Columns exist since 20260426000000; buildPurchaseMovement already accepts price."
+    },
+    {
+      "id": "US-750",
+      "title": "Ranked recipe search, cookable-now query, cook history and per-person ratings",
+      "description": "As a cook, I want to find a recipe by an ingredient, see what I can make right now from my own library, and know when we last made it and who liked it.",
+      "acceptanceCriteria": [
+        "Migration adds a generated tsvector over recipes name, tags and recipe_ingredients names with a GIN index, an index on recipes(household_id, created_at desc), cuisine and course columns with fixed vocabularies, and diet_flags text[]",
+        "One shared searchRecipes in src/lib used by web: server tsquery plus client Damerau-Levenshtein re-rank; web search covers ingredients and instructions",
+        "What can I make is a deterministic query over recipe_ingredients.food_id against stock, returning cookable now and cookable with N more; the LLM suggestion remains as a separate optional action",
+        "New table recipe_cook_events(recipe_id, meal_id, cooked_on, servings_made, cooked_by, notes) written by the Cooked action; the detail view shows made N times, last made, and per-eater outcomes from meal_votes and plan outcomes",
+        "recipe_ratings(recipe_id, eater_id, rating) replaces the single scalar; the scalar becomes a rollup for shipped clients",
+        "Recipe library loads with cursor pagination; collections are loaded once in context and memberships filtered by collection",
+        "Tests cover ranking, the cookable query and the rating rollup"
+      ],
+      "priority": 42,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items R14, R16, R19, R20, R21, R24, R25."
+    },
+    {
+      "id": "US-751",
+      "title": "Recipe detail and cook mode fixes",
+      "description": "As a cook, I want the detail view to show amounts, scale correctly, and keep the screen on in the kitchen.",
+      "acceptanceCriteria": [
+        "RecipeDetailView renders 2 cups flour from recipe_ingredients, scales rows and nutrition by the serving control, and shows pantry stock as a secondary badge",
+        "Hooks are called before the early return; new URL(source_url) is guarded",
+        "Nutrition is computed from quantities through canonicalUnits against per-100g data and shows unknown when a conversion is missing; the one-of-each sum is removed",
+        "CookMode gains a pinned ingredient drawer, per-step timers, and re-acquires the wake lock on visibilitychange",
+        "The household recipe library snapshot is available offline for reads via the service worker",
+        "A recipe_ingredients realtime subscription by household folds ingredient edits into the loaded recipe"
+      ],
+      "priority": 43,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items R12, R13, R18, R22, R26, R27."
+    },
+    {
+      "id": "US-752",
+      "title": "Grocery list mechanics: deltas, quantities, presence, export",
+      "description": "As a household shopping together, I want concurrent edits to add up, fractional quantities to work, and to see who is shopping.",
+      "acceptanceCriteria": [
+        "bump_grocery_item_quantities takes deltas and sets quantity = quantity + delta; the realtime reducer ignores an echo whose updated_at is older than local state",
+        "One QuantityInput component with unit-aware steps (0.25 for weight and volume, 1 for count) replaces the stepper that floors at 1 and the dialog that allows 0.25",
+        "priority and added_by_user_id are persisted and rendered (sort by priority, avatar of who added)",
+        "CollaborativeShoppingMode is wired to the household channel as presence (who is shopping, who ticked this) or deleted",
+        "The two per-check-off queries are replaced by one preload per list; Smart Restock refetch is household-filtered and limited; restock rows carry the item's unit, never servings",
+        "CSV export escapes quotes; grocery toggles queue in the service worker when offline",
+        "Tests cover delta merge, the quantity component and presence"
+      ],
+      "priority": 44,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items G13, G16, G17, G18, G19, G20, G21, G22."
+    },
+    {
+      "id": "US-753",
+      "title": "One add-item sheet with input modes",
+      "description": "As a user, I want one way to add something anywhere that offers type, voice, scan, photo and paste so that every add behaves the same.",
+      "acceptanceCriteria": [
+        "src/components/AddItemSheet.tsx with mode tabs type, paste, scan, photo; it owns parsing (parseGroceryText, pantryQuickAddParser), resolution (US-730), unit suggestion and category inference, and takes a target (grocery list, pantry, recipe ingredients, plan slot)",
+        "AddFoodDialog, BulkAddFoodDialog, AddGroceryItemDialog, FoodSelectorDialog, ImportRecipeToGroceryDialog, MissingIngredientsDialog and PantryQuickAdd are replaced by it or become thin wrappers",
+        "EmptyState.tsx is used for the empty grocery, pantry, planner and recipes states",
+        "Tests cover each mode's parse path against the shared fixtures"
+      ],
+      "priority": 45,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items X7 and the EmptyState note from the cohesion review. The unit-suggestions data lands in US-728."
+    },
+    {
+      "id": "US-754",
+      "title": "Platform map and a findable minimum iOS build",
+      "description": "As a contributor, I want the platform map and the minimum supported iOS build documented so that CLAUDE.md's migration rule can actually be checked.",
+      "acceptanceCriteria": [
+        "PLATFORMS.md (created by US-720) lists, per client, which loop steps it implements today and which stories in this epic and prd-kitchen-loop.json bring it to parity",
+        "ios/README.md no longer says Sentry is not wired on iOS; it points at SentryService.swift",
+        "CLAUDE.md states that the minimum supported iOS build lives in app_config.min_ios_build, read by ios/EatPal/EatPal/Services/ForceUpdateService.swift, and gives the read-only query to fetch it; the Migration Rules section links to it",
+        "npm run ios:min-build prints the value when a read-only target is configured and exits 0 with no target configured, following scripts/ci/schema-drift-report.mjs (no credential in the script)"
+      ],
+      "priority": 46,
+      "passes": false,
+      "slice": 1,
+      "platform": "ops",
+      "loopVerifiable": true,
+      "notes": "Review items X1 (docs part), X14 (min build). The Expo removal itself is US-720."
+    },
+    {
+      "id": "US-755",
+      "title": "Make npm run typecheck check src and put budgets on the ratchets",
+      "description": "As a developer, I want the local typecheck to reach src so that a green run means something.",
+      "acceptanceCriteria": [
+        "tsconfig.node.json declares types node and resolves vite, @vitejs/plugin-react-swc, lovable-tagger and @sentry/vite-plugin; tsc -b no longer aborts on vite.config.ts",
+        "rm -f *.tsbuildinfo && npm run typecheck reports the same error count as scripts/ci/typecheck-ratchet.sh",
+        "PlanEntry, GroceryItem and Recipe UI types are derived from src/integrations/supabase/types.ts; the three @ts-expect-error in PlanContext.copyWeekPlan are removed",
+        ".ci/typecheck-baseline.txt and .ci/lint-baseline.txt each drop by at least 100 in this story, and a monthly reduction target is written into CLAUDE.md"
+      ],
+      "priority": 47,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items X11, P6 (type part)."
+    },
+    {
+      "id": "US-756",
+      "title": "One design token source for web and Swift",
+      "description": "As a user, I want EatPal to look like one product on every screen I own.",
+      "acceptanceCriteria": [
+        "design/tokens.json holds colour (primary is the web carrot orange), the type scale and radii; a script generates src/index.css variables and ios/EatPal/EatPal/Utilities/AppTheme.swift, and CI fails if a generated file is stale",
+        "AppTheme.swift no longer uses Color.green; the Swift palette resolves to the same hex values as the web tokens in light and dark",
+        "A lint rule bans hex literals in src/ outside the generated token file",
+        "Web and Swift agree on the type scale; families are recorded in the token file even where Swift uses the system font"
+      ],
+      "priority": 48,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item X6."
+    },
+    {
+      "id": "US-757",
+      "title": "Split the four core pages and bound the Swift load",
+      "description": "As a developer, I want the core-loop pages small enough to test so that they stop being the riskiest files in the repo.",
+      "acceptanceCriteria": [
+        "Pantry.tsx, Grocery.tsx, Recipes.tsx and Planner.tsx each drop below 500 lines by extracting a data-derivation hook and a dialog host; behaviour is pinned by the integration test from US-735 before and after",
+        "Each of the four pages gains at least one render test",
+        "ios/EatPal/EatPal/App/AppState.swift loadAllData applies the same windows and limits web uses (plan window, movement window, recipe and food limits)",
+        "AppState.swift is split along the web context boundaries (foods, kids, recipes, plan, grocery, inventory) as a first step; the design is recorded in docs/superpowers/specs"
+      ],
+      "priority": 49,
+      "passes": false,
+      "slice": 4,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review items X9, X12 (file size). The Swift half is loopVerifiable false."
+    },
+    {
+      "id": "US-758",
+      "title": "Parity fixtures for units, aisles, scaling and shortfall",
+      "description": "As the release owner, I want the numbers a user sees on iOS and web to come from the same rules so that the two clients cannot drift.",
+      "acceptanceCriteria": [
+        "tests/fixtures gains unit-conversion-cases.json, aisle-classify-cases.json (from US-728), recipe-scaling-cases.json and shortfall-cases.json",
+        "Each fixture is asserted by a vitest under src/lib and an XCTest under ios/EatPal/EatPalTests, following SharedIngredientParseCasesTests",
+        "canonicalUnits.ts and UnitConverter.swift, recipeShortfall.ts and PantryCoverage.swift, and a new src/lib/recipeScaling.ts mirroring RecipeScaling.swift all pass their fixture",
+        "ios-ci.yml and ci.yml both run the fixture suites; a fixture change without both tests passing fails CI"
+      ],
+      "priority": 50,
+      "passes": false,
+      "slice": 5,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Review item X3. Extends kitchen-loop US-660."
+    },
+    {
+      "id": "US-759",
+      "title": "Swift adopts the household planner model",
+      "description": "As an iOS user, I want the App Store app to use the same meals, eaters, ledger and resolver as web so that my household's two devices agree.",
+      "acceptanceCriteria": [
+        "Kitchen-loop US-682, US-683, US-684 are complete (resolver, ledger-backed cook, buy and pantry edit, resolver at import)",
+        "MealPlanView reads meals and plates, renders eaters including adults, and supports kind and recurrence from US-742",
+        "GroceryView reads aisle_section and walk order from the shared taxonomy and writes purchase movements at checkout",
+        "Tabs become Today, Week, Recipes, Grocery (List and Pantry segments), Kids per kitchen-loop US-685 to US-687, with the provenance thread",
+        "Onboarding branches on who are you planning for, matching web",
+        "Verified on a Mac with Xcode against a staging Supabase; never marked passing from this machine"
+      ],
+      "priority": 51,
+      "passes": false,
+      "slice": 5,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Review items X2, and the iOS halves of P2, G8, G28. Ships as release N+1; kitchen-loop US-689 retires the mirrors after MIN_SUPPORTED_IOS_BUILD passes it."
+    }
+  ]
+}

@@ -18,6 +18,13 @@
  * Usage:
  *   node scripts/ralph/verify-stories.mjs            # dry-run, prints a report
  *   node scripts/ralph/verify-stories.mjs --apply    # writes prd.json + progress.txt
+ *   PRD_FILE=prd-household-planner.json node scripts/ralph/verify-stories.mjs --apply
+ *
+ * PRD_FILE selects which PRD to evaluate (default prd.json). Epic PRDs such as
+ * prd-kitchen-loop.json and prd-household-planner.json live beside it so a
+ * loop can be pointed at one epic without touching the main backlog. The
+ * report file is named after the PRD (prd-verify-report.json for prd.json,
+ * prd-household-planner-verify-report.json for that epic).
  *
  * The engine is intentionally git-driven (no hand-maintained per-story
  * assertion list): "implementation present" == a commit mentions the id. Run
@@ -28,7 +35,10 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 
 const ROOT = process.cwd();
-const PRD = path.join(ROOT, 'prd.json');
+const PRD_FILE = process.env.PRD_FILE || 'prd.json';
+const PRD = path.resolve(ROOT, PRD_FILE);
+const PRD_NAME = path.basename(PRD, '.json');
+const REPORT = path.join(ROOT, PRD_NAME === 'prd' ? 'prd-verify-report.json' : `${PRD_NAME}-verify-report.json`);
 const PROGRESS = path.join(ROOT, 'progress.txt');
 const APPLY = process.argv.includes('--apply');
 const VERIFY_REF = process.env.VERIFY_REF || 'local';
@@ -176,7 +186,7 @@ function main() {
   // ---- report ----
   const counts = rows.reduce((acc, r) => ((acc[r.status.split(':')[0]] = (acc[r.status.split(':')[0]] || 0) + 1), acc), {});
   const lines = [];
-  lines.push(`prd-verify report (ref=${VERIFY_REF}, apply=${APPLY})`);
+  lines.push(`prd-verify report (prd=${PRD_FILE}, ref=${VERIFY_REF}, apply=${APPLY})`);
   lines.push(`gates: web=${GATES.web} ios=${GATES.ios} android=${GATES.android}`);
   lines.push(`remaining false stories evaluated: ${rows.length}`);
   lines.push(`flipped this run: ${flippedIds.length}${flippedIds.length ? ' -> ' + flippedIds.join(', ') : ''}`);
@@ -189,8 +199,8 @@ function main() {
   console.log(report);
 
   // machine-readable summary for the workflow
-  const summary = { ref: VERIFY_REF, apply: APPLY, gates: GATES, flipped: flippedIds, counts, evaluated: rows.length };
-  fs.writeFileSync(path.join(ROOT, 'prd-verify-report.json'), JSON.stringify(summary, null, 2));
+  const summary = { prd: PRD_FILE, ref: VERIFY_REF, apply: APPLY, gates: GATES, flipped: flippedIds, counts, evaluated: rows.length };
+  fs.writeFileSync(REPORT, JSON.stringify(summary, null, 2));
 
   if (APPLY && flippedIds.length) {
     // Preserve prd.json's exact formatting for a minimal diff: 2-space indent
@@ -208,7 +218,7 @@ function main() {
     fs.writeFileSync(PRD, JSON.stringify(prd, null, 2) + '\n');
     const block = [
       '',
-      `## prd-verify — CI verification pass (ref ${VERIFY_REF})`,
+      `## prd-verify — CI verification pass (${PRD_FILE}, ref ${VERIFY_REF})`,
       `- Gates: web=${GATES.web}, ios=${GATES.ios}, android=${GATES.android}.`,
       `- Flipped passes=true (gate green + implementation present): ${flippedIds.join(', ')}.`,
       `- Held false: ${rows.filter((r) => !r.flip).length} (breakdown ${JSON.stringify(counts)}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.`,

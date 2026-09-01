@@ -25,6 +25,7 @@ on:
       - 'android-native/**'
       - 'src/**'
       - 'prd.json'
+      - 'prd-*.json'
       - 'scripts/ralph/verify-stories.mjs'
       - '.github/workflows/prd-verify.yml'
       - '.github/workflows/ios-ci.yml'
@@ -114,6 +115,10 @@ jobs:
         with:
           node-version: '20'
 
+      # One engine run per PRD at the repo root: the main prd.json plus every
+      # epic file (prd-kitchen-loop.json, prd-household-planner.json, ...).
+      # Epics are separate files so a loop can target one without touching the
+      # main backlog; the flip step still verifies all of them on each run.
       - name: Run verification engine
         env:
           GATE_WEB: ${{ needs.web-gate.result }}
@@ -121,11 +126,14 @@ jobs:
           GATE_ANDROID: ${{ needs.android-gate.result }}
           VERIFY_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          if [ "$APPLY" = "false" ]; then
-            node scripts/ralph/verify-stories.mjs | tee "$GITHUB_STEP_SUMMARY"
-          else
-            node scripts/ralph/verify-stories.mjs --apply | tee "$GITHUB_STEP_SUMMARY"
-          fi
+          for prd in prd.json prd-*.json; do
+            [ -f "$prd" ] || continue
+            if [ "$APPLY" = "false" ]; then
+              PRD_FILE="$prd" node scripts/ralph/verify-stories.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              PRD_FILE="$prd" node scripts/ralph/verify-stories.mjs --apply | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Commit flipped flags
         if: ${{ env.APPLY != 'false' }}
@@ -133,11 +141,11 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- prd.json progress.txt; then
+          if git diff --quiet -- prd.json prd-*.json progress.txt; then
             echo "No stories flipped — nothing to commit."
             exit 0
           fi
-          git add prd.json progress.txt
+          git add prd.json prd-*.json progress.txt
           git commit -m "chore(prd): flip CI-verified stories to passes=true [skip ci]"
           # Retry push a few times for transient network/ref races.
           n=0
@@ -153,6 +161,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: prd-verify-report
-          path: prd-verify-report.json
+          path: '*verify-report.json'
           if-no-files-found: ignore
           retention-days: 30
