@@ -72,6 +72,8 @@ export interface MovementItem extends CanonicalItemFacts {
   id: string;
   /** The item's display unit, which is what a typed quantity is denominated in. */
   unit?: string | null;
+  /** Only `resolveGroceryItemId` reads this, for the legacy name fallback. */
+  name?: string | null;
 }
 
 interface CommonInput {
@@ -350,8 +352,7 @@ export function resolveGroceryItemId(
   const name = typeof groceryItem.name === 'string' ? groceryItem.name.toLowerCase() : '';
   if (name === '') return null;
   const match = (items ?? []).find(
-    (i) => typeof (i as { name?: string }).name === 'string' &&
-      (i as { name?: string }).name!.toLowerCase() === name
+    (i) => typeof i?.name === 'string' && i.name.toLowerCase() === name
   );
   return match?.id ?? null;
 }

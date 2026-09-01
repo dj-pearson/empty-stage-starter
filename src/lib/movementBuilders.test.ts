@@ -270,7 +270,7 @@ describe('partitionMovements', () => {
 });
 
 describe('resolveGroceryItemId', () => {
-  const items = [{ id: 'flour', name: 'Flour', unit: 'kg' }, { id: 'eggs', name: 'Eggs' }] as MovementItem[];
+  const items: MovementItem[] = [{ id: 'flour', name: 'Flour', unit: 'kg' }, { id: 'eggs', name: 'Eggs' }];
 
   it('prefers the resolved item_id the catalog work populates', () => {
     expect(resolveGroceryItemId({ id: 'g', name: 'Anything', item_id: 'flour' }, items)).toBe('flour');

@@ -1031,7 +1031,6 @@ export default function Pantry() {
                     onEdit={handleEdit}
                     onDelete={deleteFood}
                     onQuantityChange={handleQuantityChange}
-                        onWaste={handleWaste}
                     onAddToGrocery={handleAddToGrocery}
                     kidAllergens={uniqueKidAllergens}
                   />
@@ -1087,7 +1086,6 @@ export default function Pantry() {
                               onEdit={handleEdit}
                               onDelete={deleteFood}
                               onQuantityChange={handleQuantityChange}
-                        onWaste={handleWaste}
                               onAddToGrocery={handleAddToGrocery}
                               kidAllergens={uniqueKidAllergens}
                             />
@@ -1108,7 +1106,6 @@ export default function Pantry() {
                         onEdit={handleEdit}
                         onDelete={deleteFood}
                         onQuantityChange={handleQuantityChange}
-                        onWaste={handleWaste}
                         onAddToGrocery={handleAddToGrocery}
                         kidAllergens={uniqueKidAllergens}
                       />
