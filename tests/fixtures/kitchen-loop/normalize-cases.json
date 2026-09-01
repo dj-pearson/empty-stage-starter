@@ -1,0 +1,176 @@
+{
+  "$comment": "US-660: shared cases for normalizeItemText. Asserted by BOTH src/lib/kitchenLoopFixtures.test.ts and the Swift mirror (US-682). Add cases here, never inline in one platform's suite.",
+  "$format": {
+    "name": "human label for the case, shown on failure",
+    "input": "raw string as a parent, a recipe or a receipt would supply it",
+    "expected": "exact normalizeItemText output. Tokens are lowercased, singularised, stripped of quantities/units/preparation/connectives, then SORTED, so word order cannot split one item in two. An all-noise input keeps its cleaned original rather than collapsing to an empty string.",
+    "$note": "Swift mirror: decode as { cases: [ { name, input, expected } ] } and assert normalizeItemText(input) == expected. No transformation of this file is permitted; both platforms read these bytes."
+  },
+  "cases": [
+    {
+      "name": "plain two-word item",
+      "input": "chicken breast",
+      "expected": "breast chicken"
+    },
+    {
+      "name": "plural collapses onto singular",
+      "input": "chicken breasts",
+      "expected": "breast chicken"
+    },
+    {
+      "name": "quantity, unit and preparation all stripped",
+      "input": "2 lb boneless skinless chicken breasts",
+      "expected": "breast chicken"
+    },
+    {
+      "name": "casing and padding are irrelevant",
+      "input": "  Chicken   BREAST  ",
+      "expected": "breast chicken"
+    },
+    {
+      "name": "recipe line with pounds",
+      "input": "2 lbs chicken breast",
+      "expected": "breast chicken"
+    },
+    {
+      "name": "word order does not split an item",
+      "input": "Beef, Ground",
+      "expected": "beef ground"
+    },
+    {
+      "name": "same item written the other way round",
+      "input": "ground beef",
+      "expected": "beef ground"
+    },
+    {
+      "name": "fat ratio is not identity",
+      "input": "Ground Beef 80/20",
+      "expected": "beef ground"
+    },
+    {
+      "name": "percentage is not identity",
+      "input": "milk 2%",
+      "expected": "milk"
+    },
+    {
+      "name": "variety word is kept, so whole milk stays distinct",
+      "input": "whole milk",
+      "expected": "milk whole"
+    },
+    {
+      "name": "almond milk is not milk",
+      "input": "almond milk",
+      "expected": "almond milk"
+    },
+    {
+      "name": "red onion is not onion",
+      "input": "red onion",
+      "expected": "onion red"
+    },
+    {
+      "name": "preparation words are stripped",
+      "input": "finely chopped onion",
+      "expected": "onion"
+    },
+    {
+      "name": "mixed number and unit stripped",
+      "input": "1 1/2 cups sugar",
+      "expected": "sugar"
+    },
+    {
+      "name": "vulgar fraction stripped",
+      "input": "½ cup sugar",
+      "expected": "sugar"
+    },
+    {
+      "name": "packaging unit stripped",
+      "input": "3 cloves garlic",
+      "expected": "garlic"
+    },
+    {
+      "name": "simple plural",
+      "input": "eggs",
+      "expected": "egg"
+    },
+    {
+      "name": "-oes plural",
+      "input": "tomatoes",
+      "expected": "tomato"
+    },
+    {
+      "name": "-ies plural",
+      "input": "berries",
+      "expected": "berry"
+    },
+    {
+      "name": "canned is a different product, not a preparation",
+      "input": "canned tomatoes",
+      "expected": "canned tomato"
+    },
+    {
+      "name": "fresh is stripped",
+      "input": "fresh basil",
+      "expected": "basil"
+    },
+    {
+      "name": "dried is kept, so it stays apart from fresh",
+      "input": "dried basil",
+      "expected": "basil dried"
+    },
+    {
+      "name": "organic is stripped",
+      "input": "organic carrots",
+      "expected": "carrot"
+    },
+    {
+      "name": "connectives dropped",
+      "input": "salt and pepper",
+      "expected": "pepper salt"
+    },
+    {
+      "name": "article and preposition dropped",
+      "input": "a pinch of salt",
+      "expected": "pinch salt"
+    },
+    {
+      "name": "preparation either side of a connective",
+      "input": "peeled and diced potatoes",
+      "expected": "potato"
+    },
+    {
+      "name": "parenthetical dropped",
+      "input": "tomatoes (roma)",
+      "expected": "tomato"
+    },
+    {
+      "name": "receipt line with brand and size",
+      "input": "GREAT VALUE 2% MILK 1 GAL",
+      "expected": "great milk value"
+    },
+    {
+      "name": "receipt line, all caps plural",
+      "input": "BANANAS",
+      "expected": "banana"
+    },
+    {
+      "name": "all-noise input keeps its cleaned original rather than collapsing",
+      "input": "2 cups",
+      "expected": "2 cups"
+    },
+    {
+      "name": "a lone preparation word is still not empty",
+      "input": "chopped",
+      "expected": "chopped"
+    },
+    {
+      "name": "genuinely empty input is empty",
+      "input": "",
+      "expected": ""
+    },
+    {
+      "name": "punctuation-only input is empty",
+      "input": "!!!",
+      "expected": ""
+    }
+  ]
+}

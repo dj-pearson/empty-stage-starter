@@ -1,0 +1,62 @@
+{
+  "$comment": "US-660: shared cases for resolveItem. Asserted by BOTH src/lib/kitchenLoopFixtures.test.ts and the Swift mirror (US-682). One shared context is declared here so both platforms resolve against identical tables.",
+  "$format": {
+    "context": "the household tables the resolver may look at: items (subset of foods), aliases (item_aliases), canonicalProducts (the shared seed). alias normalized_text values are ALREADY normalised, exactly as the column stores them.",
+    "cases": "each has name, input { text, barcode? }, and expected",
+    "expected.itemId": "when a concrete item is resolved",
+    "expected.matchedBy": "which rule won: barcode | alias_exact | alias_fuzzy | canonical_product | none",
+    "expected.provisional": "true when no household item was resolved; steps 4 and 5 both land here because canonical_products has no foods row in this household",
+    "expected.proposedName": "asserted only when present; the parent's own words, never the sorted normalised form",
+    "expected.seed": "asserted key by key when present; absent keys are not checked",
+    "$note": "Swift mirror: decode this whole file, build the context once, and assert each case. Do not reorder `aliases` — the fuzzy step picks the best score, and a stable order keeps ties deterministic across platforms."
+  },
+  "context": {
+    "items": [
+      { "id": "item-chicken", "name": "Chicken breast", "barcode": "012345678905" },
+      { "id": "item-milk", "name": "Whole milk", "barcode": null },
+      { "id": "item-beef", "name": "Ground beef", "barcode": null },
+      { "id": "dupe-chicken", "name": "chicken breasts", "merged_into_id": "item-chicken" }
+    ],
+    "aliases": [
+      { "item_id": "item-chicken", "normalized_text": "breast chicken", "confidence": 1 },
+      { "item_id": "item-milk", "normalized_text": "milk whole", "confidence": 1 },
+      { "item_id": "item-beef", "normalized_text": "beef ground", "confidence": 1 },
+      { "item_id": "dupe-chicken", "normalized_text": "breast chiken", "confidence": 0.7 }
+    ],
+    "canonicalProducts": [
+      {
+        "barcode": "5051234567890",
+        "normalized_name": "greek yogurt",
+        "category": "dairy",
+        "default_unit": "g",
+        "default_aisle": "Dairy"
+      }
+    ]
+  },
+  "cases": [
+    { "name": "barcode exact", "input": { "text": "anything at all", "barcode": "012345678905" }, "expected": { "itemId": "item-chicken", "matchedBy": "barcode" } },
+    { "name": "barcode beats a text alias that would also have matched", "input": { "text": "whole milk", "barcode": "012345678905" }, "expected": { "itemId": "item-chicken", "matchedBy": "barcode" } },
+    { "name": "barcode is trimmed before comparison", "input": { "text": "x", "barcode": "  012345678905 " }, "expected": { "itemId": "item-chicken", "matchedBy": "barcode" } },
+    { "name": "an unknown barcode falls through to the text", "input": { "text": "ground beef", "barcode": "999999999999" }, "expected": { "itemId": "item-beef", "matchedBy": "alias_exact" } },
+    { "name": "alias exact", "input": { "text": "chicken breast" }, "expected": { "itemId": "item-chicken", "matchedBy": "alias_exact" } },
+    { "name": "alias exact through a plural", "input": { "text": "chicken breasts" }, "expected": { "itemId": "item-chicken", "matchedBy": "alias_exact" } },
+    { "name": "alias exact through quantity, unit and preparation", "input": { "text": "2 lb boneless skinless chicken breasts" }, "expected": { "itemId": "item-chicken", "matchedBy": "alias_exact" } },
+    { "name": "alias exact ignores word order", "input": { "text": "Beef, Ground" }, "expected": { "itemId": "item-beef", "matchedBy": "alias_exact" } },
+    { "name": "alias exact ignores a fat ratio", "input": { "text": "Ground Beef 80/20" }, "expected": { "itemId": "item-beef", "matchedBy": "alias_exact" } },
+    { "name": "alias exact ignores a percentage", "input": { "text": "whole milk 2%" }, "expected": { "itemId": "item-milk", "matchedBy": "alias_exact" } },
+    { "name": "an alias pointing at a merged row returns the survivor", "input": { "text": "chiken breast" }, "expected": { "itemId": "item-chicken", "matchedBy": "alias_exact" } },
+    { "name": "fuzzy absorbs a one-character typo", "input": { "text": "chicken braest" }, "expected": { "itemId": "item-chicken", "matchedBy": "alias_fuzzy" } },
+    { "name": "fuzzy absorbs a transposition in a long enough string", "input": { "text": "chicken braest" }, "expected": { "itemId": "item-chicken", "matchedBy": "alias_fuzzy" } },
+    { "name": "LIMITATION: a transposition in a short string falls below threshold and is NOT absorbed", "input": { "text": "whole mikl" }, "expected": { "provisional": true, "matchedBy": "none" }, "$why": "Classic Levenshtein scores a transposition as two edits, and similarity is normalised over string length, so 'mikl whole' vs 'milk whole' is 0.800 against a 0.82 threshold while the longer 'braest chicken' vs 'breast chicken' is 0.857 and passes. Whether a typo is forgiven therefore depends on how long the item name is, which is not a property anyone would choose. Damerau-Levenshtein would score this 0.900. Tracked as US-692; this case pins today's behaviour so the fix is visible when it lands." },
+    { "name": "a different cut of meat is not a typo", "input": { "text": "chicken thigh" }, "expected": { "provisional": true, "matchedBy": "none" } },
+    { "name": "a different dairy product is not a typo", "input": { "text": "almond milk" }, "expected": { "provisional": true, "matchedBy": "none" } },
+    { "name": "the shared seed recognises a name this household has never bought", "input": { "text": "Greek Yogurt" }, "expected": { "provisional": true, "matchedBy": "canonical_product", "proposedName": "Greek Yogurt", "seed": { "category": "dairy", "defaultUnit": "g", "defaultAisle": "Dairy" } } },
+    { "name": "the shared seed recognises a barcode this household has never scanned", "input": { "text": "unknown thing", "barcode": "5051234567890" }, "expected": { "provisional": true, "matchedBy": "canonical_product", "seed": { "barcode": "5051234567890" } } },
+    { "name": "a household alias beats the shared seed", "input": { "text": "chicken breast" }, "expected": { "itemId": "item-chicken", "matchedBy": "alias_exact" } },
+    { "name": "nothing known proposes the parent's own words", "input": { "text": "  Fancy   Sourdough  " }, "expected": { "provisional": true, "matchedBy": "none", "proposedName": "Fancy Sourdough" } },
+    { "name": "an unknown item keeps its barcode on the proposal", "input": { "text": "mystery item", "barcode": "777" }, "expected": { "provisional": true, "matchedBy": "none", "seed": { "barcode": "777" } } },
+    { "name": "empty text is provisional, not a crash", "input": { "text": "" }, "expected": { "provisional": true, "matchedBy": "none" } },
+    { "name": "whitespace-only text is provisional", "input": { "text": "   " }, "expected": { "provisional": true, "matchedBy": "none" } },
+    { "name": "an all-noise string does not collide onto a real item", "input": { "text": "2 cups" }, "expected": { "provisional": true, "matchedBy": "none" } }
+  ]
+}

@@ -150,6 +150,25 @@
         "npm run test:run passes"
       ],
       "priority": 8,
+      "passes": true,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "tests/fixtures/kitchen-loop/{normalize-cases,canonical-unit-cases,resolve-cases}.json + src/lib/kitchenLoopFixtures.test.ts (95 assertions, all passing). Case counts: normalize 33, canonical-unit 33, resolve 24. Criterion 2 asked for at least 20 each, and each group also carries a guard test asserting cases.length >= 20 so the requirement cannot silently erode. Cases drawn from real strings: recipe lines reused from the existing tests/fixtures/ingredient-parse-cases.json (2 lbs chicken breast, 1 1/2 cups sugar, 3 cloves garlic) and receipt-shaped lines (GREAT VALUE 2% MILK 1 GAL, BANANAS). Criterion 3 followed the pattern that already exists here rather than inventing one: tests/fixtures/ingredient-parse-cases.json is read by BOTH src/lib/parse-grocery-text.test.ts and ios/EatPal/EatPalTests/SharedIngredientParseCasesTests.swift. The runner lives in src/ because vitest.config.ts include is src/**/*.{test,spec}.{ts,tsx}; a runner under tests/ would never be collected and the suite would be inert while reading green. Path resolved with process.cwd(), matching the existing shared suite, because import.meta.url is not a file: URL under jsdom. Criterion 4: each file carries a $format block describing every field plus a $note addressed to the Swift mirror, so the format travels with the data instead of in a README that drifts. resolve-cases.json declares one shared context (items/aliases/canonicalProducts) so both platforms resolve against identical tables, and warns not to reorder aliases because the fuzzy step picks best-score. Criterion 5 PROVEN, not assumed: injected a case expecting normalizeItemText of \"chicken breast\" to equal \"this is deliberately wrong\", confirmed the suite went red on exactly that case (1 failed, 95 passed), then removed it and confirmed green again with no PROOF case remaining anywhere. Two further guards against a suite that reads green while asserting nothing: a test asserting the fixture directory lists exactly the three expected files, so a renamed or moved fixture fails loudly; and a test asserting every alias normalized_text in the resolver context is already in normalised form, since a raw phrase there would silently degrade every exact match to fuzzy. FINDING, filed as US-692: writing the fixtures surfaced a real quality gap in the resolver. Classic Levenshtein scores a transposition as two edits and similarity is normalised over string length, so whether a typo is forgiven depends on how long the item name is. \"chicken braest\" scores 0.857 and resolves; \"whole mikl\" scores 0.800 and does not, against a 0.82 threshold. My fixture originally expected the second to resolve: the implementation was right and my expectation was wrong. Rather than delete that case I kept it, expecting today behaviour, named LIMITATION, with a $why explaining the arithmetic, so the fix is visible when it lands. Did NOT change the resolver: US-659 chose that threshold deliberately and switching the distance metric changes resolution for every household, which is a design change and not a fixtures task. Gates: typecheck-ratchet 1182 = baseline, lint-ratchet 1229 = baseline, check-invisible-chars clean over 2768 tracked files, vitest 2315 passed / 3 failed. The 3 are the pre-existing functionTreeBuckets (US-643) and storageBucketPolicies (US-635)."
+    },
+    {
+      "id": "US-692",
+      "title": "Use Damerau-Levenshtein so typo tolerance stops depending on name length",
+      "description": "As a parent who mistypes an item, I want a transposition forgiven regardless of how long the item name is, so that whether the app understands me does not depend on an irrelevant property of the word.",
+      "acceptanceCriteria": [
+        "src/lib/editDistance.ts gains an optimal-string-alignment (Damerau-Levenshtein) variant counting an adjacent transposition as one edit, alongside the existing levenshtein, which keeps its current behaviour and its US-514 callers untouched",
+        "itemResolver.similarity uses the new metric",
+        "The case named LIMITATION in tests/fixtures/kitchen-loop/resolve-cases.json (input \"whole mikl\") is updated to expect a resolved item via alias_fuzzy, and its $why note removed",
+        "FUZZY_CONFIDENCE_THRESHOLD is re-examined against the new metric and adjusted if 0.82 no longer separates typos from different products; \"chicken thigh\" must still NOT resolve to \"chicken breast\"",
+        "All existing itemResolver and shared-fixture tests still pass",
+        "npm run test:run shows no new failures"
+      ],
+      "priority": 9,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -166,7 +185,7 @@
         "A note records why the depth limit was hit, so the next table added to types.ts does not rediscover it the hard way",
         "npm run test:run shows no new failures"
       ],
-      "priority": 9,
+      "priority": 10,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -187,7 +206,7 @@
         "Existing recipe import tests still pass; new tests cover the confident path, the provisional path, and the skip path",
         "npm run test:run passes"
       ],
-      "priority": 10,
+      "priority": 11,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -205,7 +224,7 @@
         "Unit tests run against the real-shaped duplicates in Database_Backup rather than hand-written fixtures, per the design doc",
         "npm run test:run passes"
       ],
-      "priority": 11,
+      "priority": 12,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -224,7 +243,7 @@
         "Household-scoped: raises if survivor and duplicates do not share a household_id",
         "Rejects a duplicate_ids array containing the survivor"
       ],
-      "priority": 12,
+      "priority": 13,
       "passes": false,
       "slice": 1,
       "platform": "sql",
@@ -243,7 +262,7 @@
         "Tests cover confirm, dismiss, and the dismissed-group-does-not-return behaviour",
         "npm run test:run passes"
       ],
-      "priority": 13,
+      "priority": 14,
       "passes": false,
       "slice": 1,
       "platform": "web",
@@ -261,7 +280,7 @@
         "A client-supplied duplicate id is rejected by the primary key, making retry idempotent; a test asserts the second insert fails rather than double-counting",
         "src/integrations/supabase/types.ts regenerated"
       ],
-      "priority": 14,
+      "priority": 15,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -279,7 +298,7 @@
         "A test inserts a mixed sequence of movements including a reversal and asserts item_stock equals the fold",
         "Migration is additive only"
       ],
-      "priority": 15,
+      "priority": 16,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -297,7 +316,7 @@
         "Tests assert an old-client style read of foods.quantity matches the canonical balance for the convertible cases",
         "Migration is additive only"
       ],
-      "priority": 16,
+      "priority": 17,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -315,7 +334,7 @@
         "This is the highest-risk object in the epic and carries its own test file covering: old-client write, new-client movement, both interleaved, and a no-op update",
         "Tests assert no infinite trigger recursion under any of the four cases"
       ],
-      "priority": 17,
+      "priority": 18,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -332,7 +351,7 @@
         "After backfill, item_stock for every item equals its previous foods.quantity for all convertible rows; a verification query in the migration asserts this and raises on mismatch",
         "Runs in batches so it does not lock foods for the whole table on a large household set"
       ],
-      "priority": 18,
+      "priority": 19,
       "passes": false,
       "slice": 2,
       "platform": "sql",
@@ -350,7 +369,7 @@
         "Pure: no Supabase import, no clock",
         "npm run test:run passes"
       ],
-      "priority": 19,
+      "priority": 20,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -368,7 +387,7 @@
         "src/contexts/AppContext.precedence.test.tsx style coverage added for the movements slice",
         "npm run test:run passes"
       ],
-      "priority": 20,
+      "priority": 21,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -387,7 +406,7 @@
         "Tests cover correction delta arithmetic, checkout crediting, and duplicate-submit idempotency",
         "npm run test:run passes"
       ],
-      "priority": 21,
+      "priority": 22,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -405,7 +424,7 @@
         "The suite is wired into CI and named so it is obvious that it gates the migration",
         "npm run test:run passes"
       ],
-      "priority": 22,
+      "priority": 23,
       "passes": false,
       "slice": 2,
       "platform": "web",
@@ -423,7 +442,7 @@
         "meal_slot values match the existing MealSlot vocabulary exactly, including try_bite",
         "Migration is additive only; plan_entries keeps every existing column"
       ],
-      "priority": 23,
+      "priority": 24,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -441,7 +460,7 @@
         "Idempotent: re-running creates no duplicate meals",
         "Runs in batches; a verification query asserts no plan_entry in scope is left with a null meal_id"
       ],
-      "priority": 24,
+      "priority": 25,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -461,7 +480,7 @@
         "Pure, with unit tests covering scaling, projection, package rounding and the unknown-unit case",
         "npm run test:run passes"
       ],
-      "priority": 25,
+      "priority": 26,
       "passes": false,
       "slice": 3,
       "platform": "web",
@@ -480,7 +499,7 @@
         "Both are SECURITY DEFINER with an explicit search_path and are household-scoped",
         "Ingredients with a null food_id are skipped and reported in the return envelope rather than silently ignored"
       ],
-      "priority": 26,
+      "priority": 27,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -498,7 +517,7 @@
         "Neither column is dropped; shipped clients keep reading them",
         "A test asserts flipping one kid's ladder flips the household rollup, and that adding a new kid re-evaluates it"
       ],
-      "priority": 27,
+      "priority": 28,
       "passes": false,
       "slice": 3,
       "platform": "sql",
@@ -517,7 +536,7 @@
         "Tests assert that cooking alone leaves result null, and that a skipped outcome creates no rows",
         "npm run test:run passes"
       ],
-      "priority": 28,
+      "priority": 29,
       "passes": false,
       "slice": 3,
       "platform": "web",
@@ -536,7 +555,7 @@
         "Tests assert a fully-stocked week generates an empty list and a half-stocked week generates only the difference",
         "npm run test:run passes"
       ],
-      "priority": 29,
+      "priority": 30,
       "passes": false,
       "slice": 3,
       "platform": "web",
@@ -554,7 +573,7 @@
         "Tests cover a range with mixed priced and unpriced purchases",
         "npm run test:run passes"
       ],
-      "priority": 30,
+      "priority": 31,
       "passes": false,
       "slice": 5,
       "platform": "web",
@@ -571,7 +590,7 @@
         "The modules are pure and take their context as parameters, matching the TypeScript signatures",
         "VERIFICATION: this box has no Xcode. Write the code and the tests, do not claim they compile or pass, and leave the story open for a Mac to verify."
       ],
-      "priority": 31,
+      "priority": 32,
       "passes": false,
       "slice": 1,
       "platform": "ios",
@@ -589,7 +608,7 @@
         "OfflineStore queues movements by client-generated id so replay is idempotent",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 32,
+      "priority": 33,
       "passes": false,
       "slice": 2,
       "platform": "ios",
@@ -606,7 +625,7 @@
         "The share extension path (EatPalShare) reaches the same review step on first open rather than resolving silently",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 33,
+      "priority": 34,
       "passes": false,
       "slice": 1,
       "platform": "ios",
@@ -624,7 +643,7 @@
         "No existing screen becomes unreachable; a test enumerates every Destination case and asserts a route",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 34,
+      "priority": 35,
       "passes": false,
       "slice": 4,
       "platform": "ios",
@@ -642,7 +661,7 @@
         "PantryView's existing scan, bulk add and expiry affordances survive the move into the segment",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 35,
+      "priority": 36,
       "passes": false,
       "slice": 4,
       "platform": "ios",
@@ -660,7 +679,7 @@
         "Coverage figures come from the one shortfall function, not a local recomputation",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 36,
+      "priority": 37,
       "passes": false,
       "slice": 4,
       "platform": "ios",
@@ -678,7 +697,7 @@
         "The generated content is asserted against the same expectations as buildClinicianLadderReport so the two platforms produce the same report",
         "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
       ],
-      "priority": 37,
+      "priority": 38,
       "passes": false,
       "slice": 5,
       "platform": "ios",
@@ -695,7 +714,7 @@
         "The backward-compatibility suite from US-673 is retired in the same change with an explicit note saying why",
         "VERIFICATION: requires a real deploy decision and a min-version check. Never autonomous."
       ],
-      "priority": 38,
+      "priority": 39,
       "passes": false,
       "slice": 2,
       "platform": "deploy",
