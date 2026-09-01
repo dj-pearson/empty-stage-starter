@@ -323,3 +323,35 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
 - Flipped passes=true (gate green + implementation present): US-645, US-646, US-647, US-649, US-650, US-651, US-652, US-653.
 - Held false: 9 (breakdown {"manual-signoff-required":8,"verified":8,"awaiting-implementation":1}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
 ---
+
+## 2026-09-01 - US-700
+- Restored the guard rails around the signup confirmation email. The template
+  files were never the problem: both supabase/templates/confirmation.html and
+  public/email-templates/confirmation.html render {{ .Token }} and the hosted
+  copy serves it live. GOTRUE_MAILER_TEMPLATES_CONFIRMATION is empty on the
+  production auth container, so GoTrue sends its stock link-only mail while
+  src/pages/Auth.tsx:296 asks for a 6-digit code that no email contains.
+- Files: scripts/ci/check-auth-email-templates.mjs (new gate),
+  src/lib/authEmailTemplates.test.ts (new, 5 tests),
+  docs/US-700-auth-email-template-runbook.md (operator steps),
+  .github/workflows/ci.yml (wired into the quality job).
+- Gates: vitest src/lib/authEmailTemplates.test.ts 5 passed; ciGatesWired 4
+  passed; eslint on both new files exit 0; check-invisible-chars clean; the new
+  gate exits 0 both with and without AUTH_CONFIRMATION_TEMPLATE_URL set.
+- passes stays false. This is an ops story: the env var is applied by a human
+  and verify-stories.mjs classifies US-700 as MANUAL.
+- **Learnings for future iterations:**
+  - A bug can be entirely outside the repo. Everything checked in was correct
+    and 35 of the first 200 accounts still died on it. When client code and
+    fixtures both look right, read the deployed container's env before
+    rewriting anything.
+  - public/email-templates/ 308-redirects to the extensionless path. Any fetch
+    check against it must follow redirects or it reports a false failure.
+  - The two confirmation.html copies had already drifted (titles, body copy, a
+    features block on one). The new test pins only the block that carries the
+    code, so cosmetic drift stays allowed and the load-bearing part cannot move.
+  - There are TWO Supabase stacks on 209.145.59.219. The EatPal one is
+    ig8ow4o4okkogowggkog4cww; kcksoks4kk0kswk0ccs40os8 belongs to another
+    project and has its own auth.users. Check for a `kids` table before
+    trusting a query.
+---

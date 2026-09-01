@@ -122,6 +122,21 @@ jobs:
       - name: Check for invisible characters
         run: node scripts/ci/check-invisible-chars.mjs
 
+      # US-700: the signup confirmation email must carry the 6-digit code the
+      # OTP screen in src/pages/Auth.tsx asks for. GoTrue renders a custom
+      # template only when GOTRUE_MAILER_TEMPLATES_CONFIRMATION points at one;
+      # on production that variable was empty, so it sent its stock link-only
+      # mail and the code the UI demanded existed nowhere. 35 of the first 200
+      # accounts never reached a session. Nothing in the repo could see it --
+      # both templates were correct and the bug was one unset env var.
+      # This asserts the placeholder survives, and when the repo variable
+      # AUTH_CONFIRMATION_TEMPLATE_URL is set it also fetches the URL GoTrue is
+      # pointed at. Unset, it exits 0, so forks and secretless PR runs pass.
+      - name: Check auth email templates
+        env:
+          AUTH_CONFIRMATION_TEMPLATE_URL: ${{ vars.AUTH_CONFIRMATION_TEMPLATE_URL }}
+        run: node scripts/ci/check-auth-email-templates.mjs
+
       # US-641: the DB is shared with every shipped iOS build still on a phone,
       # so CLAUDE.md forbids DROP COLUMN / DROP TABLE / RENAME / SET NOT NULL in
       # a single migration. Those rules lived only in a document. DIFF-SCOPED to
