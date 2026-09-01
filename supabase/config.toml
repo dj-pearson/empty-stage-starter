@@ -8,6 +8,28 @@
 # Email provider configuration
 enable_signup = true
 
+# Password recovery sends a 6-digit OTP, not a link. GoTrue's built-in default
+# recovery template renders {{ .ConfirmationURL }}, which on self-hosted expands
+# to the Kong gateway address -- an alarming-looking host the user has no reason
+# to trust. Pointing at our own template swaps that for {{ .Token }}, which the
+# reset screens on web and iOS ask the user to type.
+#
+# This block covers `supabase start` only. The deployed GoTrue is configured in
+# Coolify, and takes a URL rather than a path -- it fetches the template when it
+# sends. Set these on the GoTrue service and restart it, or production keeps
+# using the built-in default and keeps emailing Kong links:
+#
+#   GOTRUE_MAILER_TEMPLATES_RECOVERY=https://tryeatpal.com/email-templates/recovery
+#   GOTRUE_MAILER_SUBJECTS_RECOVERY="Reset Your EatPal Password"
+#   GOTRUE_MAILER_OTP_EXP=3600
+#
+# The URL is deliberately extensionless: Cloudflare Pages 308-redirects the
+# .html form, and there is no reason to make GoTrue chase a redirect. The 1-hour
+# OTP_EXP has to stay in step with the "expires in 1 hour" line in the template.
+[auth.email.template.recovery]
+subject = "Reset Your EatPal Password"
+content_path = "../public/email-templates/recovery.html"
+
 # Edge Functions Configuration
 #
 # The repo carries two function trees (see scripts/ci/check-function-trees.sh):

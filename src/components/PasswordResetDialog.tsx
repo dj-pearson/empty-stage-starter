@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -14,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { toast } from "sonner";
 import { Mail } from "lucide-react";
+import { getErrorMessage } from "@/lib/api-errors";
 
 interface PasswordResetDialogProps {
   open: boolean;
@@ -21,6 +23,7 @@ interface PasswordResetDialogProps {
 }
 
 export function PasswordResetDialog({ open, onOpenChange }: PasswordResetDialogProps) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -30,19 +33,22 @@ export function PasswordResetDialog({ open, onOpenChange }: PasswordResetDialogP
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
+      // No redirectTo: the recovery email carries a 6-digit code, not a link,
+      // so there is nothing for the auth server to redirect back to. The user
+      // types that code on /auth/reset-password instead.
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.trim().toLowerCase(),
+      );
 
       if (error) throw error;
 
       setEmailSent(true);
       toast.success("Password reset email sent!", {
-        description: "Check your inbox for the reset link",
+        description: "Check your inbox for your reset code",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to send reset email", {
-        description: error.message,
+        description: getErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -55,6 +61,12 @@ export function PasswordResetDialog({ open, onOpenChange }: PasswordResetDialogP
     onOpenChange(false);
   };
 
+  const handleEnterCode = () => {
+    const target = `/auth/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`;
+    handleClose();
+    navigate(target);
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
@@ -62,8 +74,8 @@ export function PasswordResetDialog({ open, onOpenChange }: PasswordResetDialogP
           <DialogTitle>Reset Your Password</DialogTitle>
           <DialogDescription>
             {emailSent
-              ? "We've sent you a password reset link"
-              : "Enter your email address and we'll send you a reset link"}
+              ? "We've sent you a password reset code"
+              : "Enter your email address and we'll send you a reset code"}
           </DialogDescription>
         </DialogHeader>
 
@@ -75,7 +87,7 @@ export function PasswordResetDialog({ open, onOpenChange }: PasswordResetDialogP
             <div className="text-center space-y-2">
               <p className="font-medium">Check your email</p>
               <p className="text-sm text-muted-foreground">
-                We sent a password reset link to <strong>{email}</strong>
+                We sent a 6-digit reset code to <strong>{email}</strong>
               </p>
               <p className="text-xs text-muted-foreground">
                 Didn't receive it? Check your spam folder or try again.
@@ -110,17 +122,18 @@ export function PasswordResetDialog({ open, onOpenChange }: PasswordResetDialogP
                 type="submit"
                 isLoading={loading}
               >
-                Send Reset Link
+                Send Reset Code
               </LoadingButton>
             </DialogFooter>
           </form>
         )}
 
         {emailSent && (
-          <DialogFooter>
-            <Button onClick={handleClose} className="w-full">
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={handleClose}>
               Back to Sign In
             </Button>
+            <Button onClick={handleEnterCode}>Enter Code</Button>
           </DialogFooter>
         )}
       </DialogContent>

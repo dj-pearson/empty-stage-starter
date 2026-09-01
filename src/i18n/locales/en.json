@@ -371,7 +371,19 @@
   },
   "resetPassword": {
     "title": "Create New Password",
-    "description": "Enter a strong password for your account"
+    "description": "Enter a strong password for your account",
+    "verifyTitle": "Enter Your Reset Code",
+    "verifyDescription": "We emailed you a 6-digit code. Enter it below to continue.",
+    "emailLabel": "Email Address",
+    "emailRequired": "Enter your email address first",
+    "codeLabel": "Reset Code",
+    "codeHint": "The code expires in 1 hour. Check your spam folder if it has not arrived.",
+    "verifyAction": "Verify Code",
+    "codeInvalid": "That code did not work",
+    "resendAction": "Send me a new code",
+    "resending": "Sending...",
+    "codeResent": "If an account exists for that address, a new code is on its way.",
+    "resendFailed": "Could not send a new code"
   },
   "accessibility": {
     "title": "Accessibility Statement"

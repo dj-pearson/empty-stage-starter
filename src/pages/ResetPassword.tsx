@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import {
   Card,
   CardContent,
@@ -18,15 +19,30 @@ import { Helmet } from "react-helmet-async";
 import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PasswordSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/api-errors";
+
+const CODE_LENGTH = 6;
 
 export default function ResetPassword() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Two stages: verify the emailed code, then set the new password. The second
+  // stage is only reachable once verifyOtp has returned a recovery session --
+  // updateUser() silently targets whoever is signed in, so gating on our own
+  // flag rather than on an ambient session is what keeps this honest.
+  const [stage, setStage] = useState<"verify" | "password">("verify");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const navigate = useNavigate();
 
   // Reuse the shared PasswordSchema so reset enforces the same policy as signup
   // (previously reset allowed a weaker 8-char password with no special char).
@@ -40,6 +56,59 @@ export default function ResetPassword() {
 
   const isPasswordValid = PasswordSchema.safeParse(password).success;
   const doPasswordsMatch = password === confirmPassword && password.length > 0;
+  const canVerify = email.trim().length > 0 && code.length === CODE_LENGTH;
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canVerify) return;
+
+    setVerifying(true);
+
+    try {
+      // A recovery OTP exchange returns a real session, which is what the
+      // subsequent updateUser() call authenticates against.
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: code,
+        type: "recovery",
+      });
+
+      if (error) throw error;
+
+      setStage("password");
+    } catch (error: unknown) {
+      setCode("");
+      toast.error(t("resetPassword.codeInvalid"), {
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!email.trim()) {
+      toast.error(t("resetPassword.emailRequired"));
+      return;
+    }
+
+    setResending(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.trim().toLowerCase(),
+      );
+      if (error) throw error;
+      // Deliberately not confirming whether the address has an account.
+      toast.success(t("resetPassword.codeResent"));
+    } catch (error: unknown) {
+      toast.error(t("resetPassword.resendFailed"), {
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,9 +139,9 @@ export default function ResetPassword() {
       setTimeout(() => {
         navigate("/dashboard");
       }, 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Failed to reset password", {
-        description: error.message,
+        description: getErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -127,83 +196,146 @@ export default function ResetPassword() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{t('resetPassword.title')}</CardTitle>
+            <CardTitle>
+              {stage === "verify" ? t("resetPassword.verifyTitle") : t("resetPassword.title")}
+            </CardTitle>
             <CardDescription>
-              {t('resetPassword.description')}
+              {stage === "verify"
+                ? t("resetPassword.verifyDescription")
+                : t("resetPassword.description")}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              {/* Password Requirements */}
-              <div className="bg-muted p-3 rounded-lg space-y-2">
-                <p className="text-sm font-medium mb-2">Password must have:</p>
-                {passwordRequirements.map((req, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-sm">
-                    {req.valid ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full border-2 border-muted-foreground" />
-                    )}
-                    <span className={req.valid ? "text-green-600" : "text-muted-foreground"}>
-                      {req.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* New Password */}
-              <div className="space-y-2">
-                <Label htmlFor="password">New Password</Label>
-                <div className="relative">
+            {stage === "verify" ? (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email">{t("resetPassword.emailLabel")}</Label>
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    id="reset-email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="pr-10"
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
                 </div>
-              </div>
 
-              {/* Confirm Password */}
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm Password</Label>
-                <Input
-                  id="confirm-password"
-                  type={showPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-                {confirmPassword && !doPasswordsMatch && (
-                  <p className="text-sm text-destructive">Passwords don't match</p>
-                )}
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reset-code">{t("resetPassword.codeLabel")}</Label>
+                  <InputOTP
+                    id="reset-code"
+                    maxLength={CODE_LENGTH}
+                    value={code}
+                    onChange={setCode}
+                  >
+                    <InputOTPGroup>
+                      {Array.from({ length: CODE_LENGTH }, (_, i) => (
+                        <InputOTPSlot key={i} index={i} />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
+                  <p className="text-sm text-muted-foreground">
+                    {t("resetPassword.codeHint")}
+                  </p>
+                </div>
 
-              <LoadingButton
-                type="submit"
-                className="w-full"
-                isLoading={loading}
-                disabled={!isPasswordValid || !doPasswordsMatch}
-              >
-                Reset Password
-              </LoadingButton>
-            </form>
+                <LoadingButton
+                  type="submit"
+                  className="w-full"
+                  isLoading={verifying}
+                  disabled={!canVerify}
+                >
+                  {t("resetPassword.verifyAction")}
+                </LoadingButton>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={handleResendCode}
+                  disabled={resending}
+                >
+                  {resending
+                    ? t("resetPassword.resending")
+                    : t("resetPassword.resendAction")}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                {/* Password Requirements */}
+                <div className="bg-muted p-3 rounded-lg space-y-2">
+                  <p className="text-sm font-medium mb-2">Password must have:</p>
+                  {passwordRequirements.map((req, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-sm">
+                      {req.valid ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border-2 border-muted-foreground" />
+                      )}
+                      <span className={req.valid ? "text-green-600" : "text-muted-foreground"}>
+                        {req.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* New Password */}
+                <div className="space-y-2">
+                  <Label htmlFor="password">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Confirm Password */}
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm Password</Label>
+                  <Input
+                    id="confirm-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                  {confirmPassword && !doPasswordsMatch && (
+                    <p className="text-sm text-destructive">Passwords don't match</p>
+                  )}
+                </div>
+
+                <LoadingButton
+                  type="submit"
+                  className="w-full"
+                  isLoading={loading}
+                  disabled={!isPasswordValid || !doPasswordsMatch}
+                >
+                  Reset Password
+                </LoadingButton>
+              </form>
+            )}
           </CardContent>
         </Card>
 
