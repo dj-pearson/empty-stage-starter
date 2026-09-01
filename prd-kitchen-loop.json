@@ -272,7 +272,9 @@
       "passes": false,
       "slice": 1,
       "platform": "web",
-      "loopVerifiable": true
+      "loopVerifiable": true,
+      "blocked": true,
+      "notes": "BLOCKED on US-690. This surface calls rpc_merge_items, and RPC names are constrained by the Functions block of src/integrations/supabase/types.ts: an unknown name produces the error shape already visible in src/lib/customer-health.ts:205, \"Argument of type ... is not assignable to parameter of type ... 118 more\". grep confirms rpc_merge_items is absent from types.ts. So is rpc_mark_meal_made, which the LIVE iOS app already calls, so the Functions block is materially incomplete and not only missing this epic additions."
     },
     {
       "id": "US-665",
@@ -290,7 +292,9 @@
       "passes": false,
       "slice": 2,
       "platform": "sql",
-      "loopVerifiable": true
+      "loopVerifiable": true,
+      "blocked": true,
+      "notes": "MIGRATION COMPLETE AND VERIFIED; only criterion 6 (types.ts) is blocked, on US-690. supabase/migrations/20260901000001_kitchen_loop_inventory_movements.sql. VERIFIED BY EXECUTION on a disposable postgres:16-alpine container with authenticated and anon roles and Supabase-equivalent default grants; torn down afterwards, production never touched. Criterion 1 met: all 14 columns present with the specified types and nullability, asserted from information_schema. id has NO default, asserted directly, because the client must supply it. Criterion 2 met and STRENGTHENED. The story asked to revoke UPDATE and DELETE. The privilege listing showed TRUNCATE was still granted to both roles: Supabase default grant on a new public table includes it, RLS does not apply to TRUNCATE, and one statement would erase the whole ledger. Now revoked too. After the change the only privileges left for authenticated and anon are INSERT, REFERENCES, SELECT, TRIGGER. NOTE FOR SEPARATELY: agent_audit_log (20260709000001) revokes only UPDATE and DELETE and has the same hole. Criterion 3 met: RLS enabled (relrowsecurity = t) with exactly two policies, SELECT and INSERT, both household-scoped through get_user_household_id. No UPDATE or DELETE policy exists; their absence is half the enforcement. Asserted as the authenticated role: UPDATE and DELETE both raise permission denied and history stays at 2 rows. Criterion 4 met: inventory_movements_item_idx on (household_id, item_id, occurred_at) and a partial inventory_movements_ref_idx on (ref_type, ref_id) WHERE ref_type IS NOT NULL. Criterion 5 met, asserted exactly as the story words it: inserting a second row with the same client-supplied id raises duplicate key value violates unique constraint inventory_movements_pkey, and the balance afterwards is still 1000 rather than 2000. That is the offline-replay guarantee the current deduct path does not have. Four CHECK constraints were added beyond the story text and each was asserted to bite: delta <> 0 (a movement that moves nothing is noise in an audit trail), canonical_unit in (g, ml, count) matching foods.canonical_unit, reason in the six documented values, and ref_type constrained to meal/grocery_item/receipt/merge. A debit works as an ordinary negative movement: 1000 credit then -450 cook leaves 550. CRITERION 6 NOT MET, and it is the same wall as US-690. Measured rather than assumed: with the inventory_movements table block added to types.ts the typecheck ratchet reports 1183 against a baseline of 1182, one more TS2589 from the Database union growing. The block was reverted and the tree is back at 1182 exactly. This confirms the prediction recorded in US-690 notes in iteration 4, that each further table would tip more call sites over. US-666 (item_stock) and US-674 (meals) will do the same. Gates: check-migration-prefixes 0, check-invisible-chars 0, typecheck-ratchet 1182 = baseline, lint-ratchet 1229 = baseline, vitest 2345 passed / 3 failed (pre-existing functionTreeBuckets US-643, storageBucketPolicies US-635). check-migration-safety re-run after commit. NOT DONE: types.ts, and not applied to any real environment."
     },
     {
       "id": "US-666",
