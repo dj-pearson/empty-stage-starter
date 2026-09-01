@@ -53,6 +53,33 @@ describe('auth email templates', () => {
    * is the file GoTrue renders and the other is the one a human reads when
    * checking whether the email "looks right".
    */
+  /**
+   * The link fallback exists for clients with nowhere to type a code (the
+   * shipped iOS app). It must be built from {{ .TokenHash }}, never GoTrue's
+   * {{ .ConfirmationURL }}, which redirects to SITE_URL -- pinned by Coolify to
+   * the Kong gateway, which answers 401 JSON.
+   *
+   * The landing path is pinned per flow because these URLs differ by one word
+   * and a paste error has already shipped once: confirmation was pointed at
+   * recovery.html in production on 2026-09-01.
+   */
+  const LINK_TARGETS: Record<string, string> = {
+    confirmation: '/auth/callback?token={{ .TokenHash }}&amp;type=signup',
+    recovery: '/auth/reset-password?token_hash={{ .TokenHash }}',
+  };
+
+  it.each(Object.keys(LINK_TARGETS))('%s carries a working link fallback', (flow) => {
+    for (const relPath of [
+      `supabase/templates/${flow}.html`,
+      `public/email-templates/${flow}.html`,
+    ]) {
+      const body = readFileSync(path.join(process.cwd(), relPath), 'utf8');
+      expect(body).toContain(LINK_TARGETS[flow]);
+      // ConfirmationURL would send the user to the Kong gateway.
+      expect(body).not.toContain('{{ .ConfirmationURL }}');
+    }
+  });
+
   it.each(FLOWS)('%s keeps the code block identical across both copies', (flow) => {
     const codeBlock = (relPath: string) => {
       const body = readFileSync(path.join(process.cwd(), relPath), 'utf8');

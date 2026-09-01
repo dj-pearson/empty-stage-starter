@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Helmet } from "react-helmet-async";
-import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PasswordSchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -43,6 +43,45 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // A recovery email carries both a 6-digit code and a link. The link exists
+  // for clients with nowhere to type a code -- notably the shipped iOS app,
+  // which shows "check your inbox" and stops. It lands here with ?token_hash=,
+  // which we exchange for a recovery session so the user goes straight to
+  // setting a new password.
+  //
+  // The link cannot use GoTrue's own {{ .ConfirmationURL }}: that redirects to
+  // SITE_URL, which Coolify pins to the Kong gateway, so it answers 401 JSON.
+  // The template builds this URL from {{ .TokenHash }} instead.
+  const linkTokenHash = searchParams.get("token_hash");
+  const [exchangingLink, setExchangingLink] = useState(Boolean(linkTokenHash));
+  const linkExchanged = useRef(false);
+
+  useEffect(() => {
+    if (!linkTokenHash || linkExchanged.current) return;
+    // StrictMode double-invokes effects in development, and a recovery token is
+    // single-use: the second exchange would fail and strand a valid link.
+    linkExchanged.current = true;
+
+    void (async () => {
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: linkTokenHash,
+          type: "recovery",
+        });
+        if (error) throw error;
+        setStage("password");
+      } catch (error: unknown) {
+        // Fall back to the code form rather than dead-ending: the same email
+        // carries a code that is still good.
+        toast.error(t("resetPassword.codeInvalid"), {
+          description: getErrorMessage(error),
+        });
+      } finally {
+        setExchangingLink(false);
+      }
+    })();
+  }, [linkTokenHash, t]);
 
   // Reuse the shared PasswordSchema so reset enforces the same policy as signup
   // (previously reset allowed a weaker 8-char password with no special char).
@@ -206,7 +245,16 @@ export default function ResetPassword() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {stage === "verify" ? (
+            {exchangingLink ? (
+              <div
+                className="flex flex-col items-center gap-3 py-8 text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+                <p className="text-sm">{t("resetPassword.verifyingLink")}</p>
+              </div>
+            ) : stage === "verify" ? (
               <form onSubmit={handleVerifyCode} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="reset-email">{t("resetPassword.emailLabel")}</Label>

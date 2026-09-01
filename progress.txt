@@ -439,3 +439,37 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - Check the filename in a URL, not just that a URL is present. Five templates
     with near-identical URLs invite exactly one paste error.
 ---
+
+## 2026-09-01 - Link fallback in the auth emails (US-700 follow-up)
+- Pointing GoTrue at the token templates fixed web but REGRESSED the shipped
+  iOS app: the stock email's link used to confirm the account via
+  /auth/v1/verify before dumping the user on the Kong 401, so an iOS email
+  signup at least ended up usable. Token-only removed that, and the Swift app
+  has no code entry (AuthViewModel.swift:211 signup, :215 reset), so those
+  signups could not complete at all.
+- Restored a link alongside the code in confirmation.html and recovery.html
+  (both copies), built from {{ .TokenHash }} rather than GoTrue's
+  {{ .ConfirmationURL }}, which redirects to the pinned SITE_URL:
+    confirmation -> /auth/callback?token={{ .TokenHash }}&type=signup
+    recovery     -> /auth/reset-password?token_hash={{ .TokenHash }}
+  AuthCallback.tsx:72 already verified that shape; ResetPassword.tsx did not,
+  so it now exchanges ?token_hash= on mount and jumps to the password stage.
+- No App Store release needed: templates are fetched over HTTP from
+  public/email-templates/, so they ship with the web deploy.
+- Files: supabase/templates/{confirmation,recovery}.html,
+  public/email-templates/{confirmation,recovery}.html, src/pages/ResetPassword.tsx,
+  src/pages/ResetPassword.link.test.tsx (new), src/lib/authEmailTemplates.test.ts,
+  src/i18n/locales/en.json (one key added in place).
+- Gates: 31 tests passed, eslint exit 0, template gate exit 0, invisible-chars clean.
+- **Learnings for future iterations:**
+  - {{ .TokenHash }} lets a template build its own landing URL and sidestep
+    SITE_URL entirely. GoTrue v2.174.0 supports it. This is the escape hatch
+    when SITE_URL is owned by the platform and cannot be changed.
+  - Fixing a backend for one client can break another. The link removal was
+    invisible on web and fatal on iOS; check every client of a shared surface.
+  - input-otp leaves a selection-mirror timeout running past test teardown and
+    surfaces as "window is not defined". Mock the component in tests that do
+    not type a code.
+  - A recovery token is single-use, so the mount-time exchange must be ref
+    guarded or StrictMode's double-invoke burns a valid link.
+---

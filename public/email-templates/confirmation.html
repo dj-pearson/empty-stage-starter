@@ -34,6 +34,14 @@
                   </td>
                 </tr>
               </table>
+              <!-- Fallback for clients with nowhere to type a code, notably the
+                   shipped iOS app. Built from TokenHash, not ConfirmationURL:
+                   that one redirects to SITE_URL, which Coolify pins to the
+                   Kong gateway, so it answers 401 JSON. -->
+              <p style="color: #6b7280; font-size: 14px; margin: 20px 0 0 0;">
+                Can't enter the code? <a href="https://tryeatpal.com/auth/callback?token={{ .TokenHash }}&amp;type=signup" style="color: #10b981; font-weight: 600; text-decoration: none;">Verify with one tap</a>
+              </p>
+
 
               <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0 0;">This code expires in 1 hour.</p>
 
