@@ -1,55 +1,82 @@
-# US-700: point GoTrue at the confirmation email template
+# US-700: point GoTrue at the auth email templates
 
 **Status: operator action required. Nothing in this repo can apply it.**
 
 ## The fault
 
-`src/pages/Auth.tsx:294` sends every new web signup to an OTP screen, and
-`:296` tells them "We've sent a 6-digit verification code to your email."
+Every auth flow here asks the user for a 6-digit code: signup
+(`src/pages/Auth.tsx:296`) and password reset (`src/pages/ResetPassword.tsx:70`,
+`app/(auth)/reset-password.tsx:58`). The only thing that puts a code in an email
+is the `{{ .Token }}` placeholder in the matching template.
 
-The only thing that puts a code in that email is the `{{ .Token }}` placeholder
-in `supabase/templates/confirmation.html`. GoTrue renders a custom template only
-when `GOTRUE_MAILER_TEMPLATES_CONFIRMATION` points at one. On the production
-container that variable is **empty**, so GoTrue falls back to its stock
-link-only email. There is no code in it. Tapping Resend sends the same
-link-only email again.
+GoTrue renders a custom template only when its `MAILER_TEMPLATES_*` variables
+point at one. On this deployment they are all empty, so GoTrue sends its stock
+link-only emails and the code every client demands exists nowhere. Resend sends
+the same link-only mail again.
 
 Measured on 2026-09-01 against 200 accounts: 18 sat unconfirmed and 35 never
 reached a session at all, at a steady 4 to 8 per month.
 
-Both template files in this repo are correct. The client code is correct. The
-entire bug is one unset environment variable, which is why no test caught it.
+This is not survivable by falling back to the link. `GOTRUE_SITE_URL` is set by
+Coolify to `${SERVICE_URL_SUPABASEKONG}` and cannot be changed, so a link that
+falls back to it lands on the Kong gateway and answers `401 application/json`.
+The token template is the only delivery shape that works.
+
+## The trap: the key Coolify needs is NOT the one the container shows
+
+This has now silently failed twice. `docker-compose.yml:475` reads:
+
+```yaml
+GOTRUE_MAILER_TEMPLATES_CONFIRMATION: '${MAILER_TEMPLATES_CONFIRMATION}'
+```
+
+The variable **inside the container** is `GOTRUE_`-prefixed. The key **Coolify
+must hold** is not. Setting `GOTRUE_MAILER_TEMPLATES_CONFIRMATION` in Coolify
+writes a key the compose never reads; the container keeps its empty value and
+nothing anywhere reports an error.
+
+The service `.env` currently carries a whole dead block from an earlier attempt
+(lines 112-118), pointing at `/templates/*.html` paths that are not mounted into
+the container either. Ignore it. Only the unprefixed keys below do anything.
 
 ## The change
 
-Container: `supabase-auth-ig8ow4o4okkogowggkog4cww` (EatPal's Supabase stack on
-`209.145.59.219`, managed by Coolify). Note there is a second Supabase stack on
-that host belonging to a different project. Confirm you are on the one whose
-`public` schema has a `kids` table before touching anything.
+Service: `ig8ow4o4okkogowggkog4cww` (EatPal's Supabase stack on
+`209.145.59.219`). There are several Supabase stacks on that host; confirm the
+one whose `public` schema has a `kids` table before touching anything.
 
-| Variable                               | Now     | Set to                                                  |
-| -------------------------------------- | ------- | ------------------------------------------------------- |
-| `GOTRUE_MAILER_TEMPLATES_CONFIRMATION` | (empty) | `https://tryeatpal.com/email-templates/confirmation.html` |
-| `MAILER_TEMPLATES_CONFIRMATION`        | (empty) | same value                                              |
+Set these keys in Coolify, **without the `GOTRUE_` prefix**:
 
-Both names are present on the container and GoTrue reads the `GOTRUE_`-prefixed
-one; set both so a future image that drops the prefix does not silently revert
-to the stock template.
+| Coolify key                     | Value                                                       |
+| ------------------------------- | ----------------------------------------------------------- |
+| `MAILER_TEMPLATES_CONFIRMATION` | `https://tryeatpal.com/email-templates/confirmation.html`   |
+| `MAILER_TEMPLATES_RECOVERY`     | `https://tryeatpal.com/email-templates/recovery.html`       |
+| `MAILER_TEMPLATES_MAGIC_LINK`   | `https://tryeatpal.com/email-templates/magic_link.html`     |
+| `MAILER_TEMPLATES_EMAIL_CHANGE` | `https://tryeatpal.com/email-templates/email_change.html`   |
+| `MAILER_TEMPLATES_INVITE`       | `https://tryeatpal.com/email-templates/invite.html`         |
 
-The URL is already live and already serves a body containing `{{ .Token }}`
-(it 308-redirects to the extensionless path, which GoTrue follows). It is
-`public/email-templates/confirmation.html` in this repo, deployed with the site,
-so it does not need to be uploaded anywhere separately.
+All five URLs are already live and already serve `{{ .Token }}`; they are
+`public/email-templates/*.html` in this repo, deployed with the site. They
+308-redirect to their extensionless path, which GoTrue follows. The auth
+container has outbound network access and fetches them successfully (verified
+2026-09-01 with `wget` from inside the container).
 
 ## Applying it
 
-1. Coolify dashboard, the Supabase service, Environment Variables.
-2. Set both variables above.
-3. Restart the auth container.
-4. Verify: `GET https://api.tryeatpal.com/auth/v1/settings` with the anon key
-   still reports `"mailer_autoconfirm": false` (unchanged, this is correct).
-5. Sign up with a throwaway address and confirm the received email shows a
-   6-digit code in the green dashed box, not a "Confirm your mail" link.
+1. Coolify, the Supabase service, Environment Variables. Set the five keys above.
+2. **Redeploy, do not just restart.** A restart reuses the container's existing
+   environment; the new values only reach it on a recreate.
+3. Verify the container actually received them:
+   ```
+   docker inspect supabase-auth-ig8ow4o4okkogowggkog4cww \
+     --format '{{range .Config.Env}}{{println .}}{{end}}' \
+     | grep MAILER_TEMPLATES
+   ```
+   Every `GOTRUE_MAILER_TEMPLATES_*` line must now carry a URL. If they are
+   still empty, the value went into a prefixed key again.
+4. Sign up with a throwaway address. The email must show a 6-digit code in the
+   green dashed box, not a "Confirm your mail" link.
+5. Request a password reset for the same address and confirm the same.
 6. Delete the throwaway account.
 
 ## Do not
@@ -57,25 +84,22 @@ so it does not need to be uploaded anywhere separately.
 - Do not set `ENABLE_EMAIL_AUTOCONFIRM=true` as a shortcut. It would confirm
   every address without checking it and would let anyone register an address
   they do not own.
-- Do not try to fix this by repointing `GOTRUE_SITE_URL`. Coolify sets it to
-  `${SERVICE_URL_SUPABASEKONG}` and it cannot be changed, which is precisely
-  why this project verifies emailed codes rather than links: any GoTrue link
-  that falls back to SITE_URL lands on the Kong gateway and answers
-  `401 application/json`. The token template is not a nicety here, it is the
-  only delivery shape that can work. See US-701.
+- Do not try to fix this by repointing `GOTRUE_SITE_URL`. Coolify owns it and
+  it cannot be changed. See US-701.
+- Do not set the `GOTRUE_`-prefixed keys in Coolify. That is the trap above.
 
 ## Keeping it fixed
 
 `scripts/ci/check-auth-email-templates.mjs` runs in the `quality` job of
-`.github/workflows/ci.yml`. It always asserts both template copies still render
-`{{ .Token }}`, and when `AUTH_CONFIRMATION_TEMPLATE_URL` is set as a repo
-variable it also fetches that URL and fails if the served body has lost the
-placeholder. Unset, it exits 0 with "no target configured", so it is safe on
-forks and in PR runs without secrets.
+`.github/workflows/ci.yml`. It asserts all five templates still render
+`{{ .Token }}` in both copies, and when the repo variable
+`AUTH_TEMPLATE_BASE_URL` is set (to `https://tryeatpal.com/email-templates`) it
+also fetches each hosted template and fails if one has lost the placeholder.
+Unset, it exits 0, so forks and secretless PR runs pass.
 
-`src/lib/authEmailTemplates.test.ts` covers the same placeholder assertion in
-the normal vitest suite, so a local `npm run test:run` catches it before CI.
+`src/lib/authEmailTemplates.test.ts` covers the same assertions in the normal
+vitest suite, so `npm run test:run` catches a regression before CI.
 
-Neither can see the production environment variable. If it is unset again, the
-first signal will be users failing to confirm. The check above narrows the
-search to the container.
+Neither can see the production environment. If the variables are unset again,
+the first signal will be users failing to confirm or reset. Step 3 above is the
+check that tells you in one command.

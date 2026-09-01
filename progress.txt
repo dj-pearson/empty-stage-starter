@@ -381,3 +381,38 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     on web at src/pages/ResetPassword.tsx:70 and mobile at
     app/(auth)/reset-password.tsx:58.
 ---
+
+## 2026-09-01 - US-700 follow-up: the Coolify key rename
+- The operator set GOTRUE_MAILER_TEMPLATES_CONFIRMATION in Coolify and restarted
+  the stack. The container still reports it empty. docker-compose.yml:475 reads
+  `GOTRUE_MAILER_TEMPLATES_CONFIRMATION: '${MAILER_TEMPLATES_CONFIRMATION}'`, so
+  the key Coolify must hold is the UNPREFIXED one. The prefixed key is written
+  to the service .env and never read by anything.
+- The same indirection hides a second live bug: MAILER_TEMPLATES_RECOVERY is
+  empty too, so the password reset shipped in 70c4559e asks for a code that its
+  email does not contain. Same class, same cause, currently in production.
+- Widened scripts/ci/check-auth-email-templates.mjs and
+  src/lib/authEmailTemplates.test.ts from confirmation only to all five flows
+  (confirmation, recovery, magic_link, email_change, invite). Renamed the CI
+  variable AUTH_CONFIRMATION_TEMPLATE_URL -> AUTH_TEMPLATE_BASE_URL.
+- Rewrote docs/US-700-auth-email-template-runbook.md with the correct key
+  names, the redeploy-not-restart step, and a one-command verification.
+- Files: scripts/ci/check-auth-email-templates.mjs,
+  src/lib/authEmailTemplates.test.ts, docs/US-700-auth-email-template-runbook.md,
+  .github/workflows/ci.yml.
+- Gates: 25 + 4 tests passed; the gate passes both unset and with
+  AUTH_TEMPLATE_BASE_URL=https://tryeatpal.com/email-templates, where all five
+  hosted templates return {{ .Token }}; eslint exit 0 on both files.
+- **Learnings for future iterations:**
+  - Verify an ops change on the container, not on the dashboard. The env was
+    accepted, the service restarted, and the value still was not there.
+  - A restart is not a redeploy. Container env only changes on recreate.
+  - When a compose renames a variable on the way in, the dashboard key and the
+    container key differ, and every error path is silent. Read the compose
+    interpolation before writing a runbook that names a variable.
+  - The service .env carries a dead block of GOTRUE_-prefixed template keys
+    pointing at /templates/*.html, which is not mounted into the auth
+    container. Someone hit this exact trap before. Ignore that block.
+  - The auth container does have outbound network access; a hosted template URL
+    is a workable target. Verified with wget from inside the container.
+---

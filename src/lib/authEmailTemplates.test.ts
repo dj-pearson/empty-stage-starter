@@ -21,15 +21,22 @@ import path from 'path';
  */
 const TOKEN_PLACEHOLDER = '{{ .Token }}';
 
-const TEMPLATES = [
-  // What GoTrue is configured to render, when it is configured at all.
-  'supabase/templates/confirmation.html',
-  // The hosted copy, served from the site so GOTRUE_MAILER_TEMPLATES_CONFIRMATION
-  // has a stable URL to point at.
-  'public/email-templates/confirmation.html',
-];
+/**
+ * Every flow that mails a code. `recovery` matters as much as `confirmation`:
+ * the password reset shipped in 70c4559e asks the user for a 6-digit code that
+ * only recovery.html produces.
+ */
+const FLOWS = ['confirmation', 'recovery', 'magic_link', 'email_change', 'invite'];
 
-describe('signup confirmation email template', () => {
+const TEMPLATES = FLOWS.flatMap((flow) => [
+  // What GoTrue renders, when it is pointed at anything at all.
+  `supabase/templates/${flow}.html`,
+  // The hosted copy, served from the site so the MAILER_TEMPLATES_* variables
+  // have a stable URL to point at.
+  `public/email-templates/${flow}.html`,
+]);
+
+describe('auth email templates', () => {
   it.each(TEMPLATES)('%s exists', (relPath) => {
     expect(existsSync(path.join(process.cwd(), relPath))).toBe(true);
   });
@@ -46,7 +53,7 @@ describe('signup confirmation email template', () => {
    * is the file GoTrue renders and the other is the one a human reads when
    * checking whether the email "looks right".
    */
-  it('keeps the code block identical across both copies', () => {
+  it.each(FLOWS)('%s keeps the code block identical across both copies', (flow) => {
     const codeBlock = (relPath: string) => {
       const body = readFileSync(path.join(process.cwd(), relPath), 'utf8');
       const index = body.indexOf(TOKEN_PLACEHOLDER);
@@ -55,6 +62,8 @@ describe('signup confirmation email template', () => {
       return body.slice(Math.max(0, index - 400), index).replace(/\s+/g, ' ').trim();
     };
 
-    expect(codeBlock(TEMPLATES[0])).toBe(codeBlock(TEMPLATES[1]));
+    expect(codeBlock(`supabase/templates/${flow}.html`)).toBe(
+      codeBlock(`public/email-templates/${flow}.html`)
+    );
   });
 });

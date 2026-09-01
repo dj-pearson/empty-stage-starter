@@ -1,42 +1,54 @@
 #!/usr/bin/env node
 /**
- * US-700: the signup confirmation email must carry the code the app asks for.
+ * US-700/US-701: every auth email must carry the code its client asks for.
  *
  * WHY THIS EXISTS, because the failure is invisible from inside the repo:
- * supabase/templates/confirmation.html renders `{{ .Token }}`, a 6-digit code,
- * and src/pages/Auth.tsx puts every new signup on a screen that asks for that
- * code. But GoTrue only uses a custom template when
- * GOTRUE_MAILER_TEMPLATES_CONFIRMATION points at one. On the production
- * container that variable is EMPTY, so GoTrue falls back to its stock
- * link-only email and the code the UI demands does not exist in any message
- * the user receives. Resend sends the same link-only mail again.
+ * GOTRUE_SITE_URL is pinned by Coolify to ${SERVICE_URL_SUPABASEKONG}, so any
+ * GoTrue email LINK that falls back to it lands on the Kong gateway, which
+ * answers 401 application/json. That is why every auth flow here verifies an
+ * emailed {{ .Token }} through verifyOtp instead. The token template is not a
+ * nicety; it is the only delivery shape that can work.
  *
- * That drift cost 35 of the first 200 accounts, and nothing in the repo could
- * see it: both template files are correct, the client code is correct, and the
- * bug lives entirely in one unset environment variable.
+ * GoTrue renders a custom template only when its MAILER_TEMPLATES_* variables
+ * point at one. On this deployment those are wired through a rename that is
+ * very easy to get wrong:
+ *
+ *   docker-compose.yml:475
+ *     GOTRUE_MAILER_TEMPLATES_CONFIRMATION: '${MAILER_TEMPLATES_CONFIRMATION}'
+ *
+ * The container variable is GOTRUE_-prefixed; the key Coolify must hold is
+ * NOT. Setting GOTRUE_MAILER_TEMPLATES_CONFIRMATION in Coolify writes a key
+ * the compose never reads, and the container keeps its empty value with no
+ * error anywhere. That has already happened twice on this service.
  *
  * So this gate checks the two things a repo CAN check:
- *   1. Both template copies still render {{ .Token }}. If someone "tidies" the
- *      placeholder away, signup breaks silently for everyone.
- *   2. When AUTH_CONFIRMATION_TEMPLATE_URL is set, the URL GoTrue is pointed
- *      at actually serves a body containing {{ .Token }}. Unset, it exits 0
- *      with "no target configured" so it is safe in CI, matching
- *      scripts/ci/schema-drift-report.mjs.
+ *   1. Every template still renders {{ .Token }}, in both the supabase/ copy
+ *      and the hosted public/ copy. If someone "tidies" a placeholder away,
+ *      that flow breaks silently for everyone.
+ *   2. When AUTH_TEMPLATE_BASE_URL is set, each hosted template is fetched and
+ *      checked for the placeholder, so a deploy that drops one is caught.
+ *      Unset, it exits 0 with "no target configured" and is safe in CI,
+ *      matching scripts/ci/schema-drift-report.mjs.
  *
- * It cannot assert the production env var itself; that read needs credentials
- * CI does not hold. docs/US-700-auth-email-template-runbook.md carries the
- * operator step.
+ * It cannot read the production environment. docs/US-700-auth-email-template-runbook.md
+ * carries the operator step and the exact key names.
  */
 import fs from 'fs';
 
 const TOKEN_PLACEHOLDER = '{{ .Token }}';
 
-const LOCAL_TEMPLATES = [
-  'supabase/templates/confirmation.html',
-  'public/email-templates/confirmation.html',
+/**
+ * Every flow that mails a code. `recovery` matters as much as `confirmation`:
+ * the password reset shipped in 70c4559e asks the user for a 6-digit code that
+ * only recovery.html produces.
+ */
+const FLOWS = ['confirmation', 'recovery', 'magic_link', 'email_change', 'invite'];
+
+const localCopies = (flow) => [
+  `supabase/templates/${flow}.html`,
+  `public/email-templates/${flow}.html`,
 ];
 
-/** Exit code accumulator; every check runs so one report lists every fault. */
 let failed = false;
 
 function fail(message) {
@@ -48,53 +60,60 @@ function ok(message) {
   console.log(`ok    ${message}`);
 }
 
-for (const relPath of LOCAL_TEMPLATES) {
-  if (!fs.existsSync(relPath)) {
-    fail(`${relPath} is missing. GoTrue has no custom confirmation template to point at.`);
-    continue;
+for (const flow of FLOWS) {
+  for (const relPath of localCopies(flow)) {
+    if (!fs.existsSync(relPath)) {
+      fail(`${relPath} is missing. GoTrue has no custom ${flow} template to point at.`);
+      continue;
+    }
+    const body = fs.readFileSync(relPath, 'utf8');
+    if (!body.includes(TOKEN_PLACEHOLDER)) {
+      fail(
+        `${relPath} does not render ${TOKEN_PLACEHOLDER}. ` +
+          `The ${flow} flow asks the user for a code; without this placeholder no email contains one.`
+      );
+      continue;
+    }
+    ok(`${relPath} renders ${TOKEN_PLACEHOLDER}`);
   }
-  const body = fs.readFileSync(relPath, 'utf8');
-  if (!body.includes(TOKEN_PLACEHOLDER)) {
-    fail(
-      `${relPath} does not render ${TOKEN_PLACEHOLDER}. ` +
-        'The web signup screen asks for a 6-digit code; without this placeholder no email contains one.'
-    );
-    continue;
-  }
-  ok(`${relPath} renders ${TOKEN_PLACEHOLDER}`);
 }
 
-const templateUrl = process.env.AUTH_CONFIRMATION_TEMPLATE_URL;
+const baseUrl = process.env.AUTH_TEMPLATE_BASE_URL;
 
-if (!templateUrl) {
-  console.log('ok    no target configured (AUTH_CONFIRMATION_TEMPLATE_URL unset), skipping the live fetch');
+if (!baseUrl) {
+  console.log('ok    no target configured (AUTH_TEMPLATE_BASE_URL unset), skipping the live fetch');
 } else {
-  try {
-    const res = await fetch(templateUrl, { redirect: 'follow' });
-    if (!res.ok) {
-      fail(`${templateUrl} returned HTTP ${res.status}. GoTrue cannot fetch the template it is pointed at.`);
-    } else {
+  for (const flow of FLOWS) {
+    const url = `${baseUrl.replace(/\/$/, '')}/${flow}.html`;
+    try {
+      // The hosted copies 308-redirect to their extensionless path, so this
+      // must follow redirects or it reports a false failure.
+      const res = await fetch(url, { redirect: 'follow' });
+      if (!res.ok) {
+        fail(`${url} returned HTTP ${res.status}. GoTrue cannot fetch the template it is pointed at.`);
+        continue;
+      }
       const body = await res.text();
       if (!body.includes(TOKEN_PLACEHOLDER)) {
         fail(
-          `${templateUrl} returned HTTP 200 but the body does not contain ${TOKEN_PLACEHOLDER}. ` +
-            'GoTrue would render an email with no verification code in it.'
+          `${url} returned HTTP 200 but the body does not contain ${TOKEN_PLACEHOLDER}. ` +
+            `GoTrue would send a ${flow} email with no code in it.`
         );
-      } else {
-        ok(`${templateUrl} serves a body containing ${TOKEN_PLACEHOLDER}`);
+        continue;
       }
+      ok(`${url} serves a body containing ${TOKEN_PLACEHOLDER}`);
+    } catch (error) {
+      fail(`could not fetch ${url}: ${error.message}`);
     }
-  } catch (error) {
-    fail(`could not fetch ${templateUrl}: ${error.message}`);
   }
 }
 
 if (failed) {
   console.error('');
-  console.error('The signup confirmation email is broken or about to be.');
+  console.error('An auth email is broken or about to be.');
   console.error('See docs/US-700-auth-email-template-runbook.md.');
   process.exit(1);
 }
 
 console.log('');
-console.log('Confirmation email template checks passed.');
+console.log('Auth email template checks passed.');
