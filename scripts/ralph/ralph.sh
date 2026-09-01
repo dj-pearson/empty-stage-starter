@@ -1,12 +1,19 @@
 #!/bin/bash
 # Ralph Wiggum - Long-running AI agent loop
-# Usage: ./ralph.sh [--tool amp|claude] [max_iterations]
+# Usage: ./ralph.sh [--tool amp|claude] [--prd path/to/prd.json] [max_iterations]
+#
+# --prd (or the PRD_FILE env var) points the loop at an epic PRD such as
+# prd-household-planner.json instead of the main prd.json. The chosen path is
+# exported as PRD_FILE for the agent and the helper scripts, and the archive /
+# last-branch bookkeeping is kept per PRD so switching targets does not archive
+# the other epic's run.
 
 set -e
 
 # Parse arguments
 TOOL="amp"  # Default to amp for backwards compatibility
 MAX_ITERATIONS=10
+PRD_ARG="${PRD_FILE:-}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -16,6 +23,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --tool=*)
       TOOL="${1#*=}"
+      shift
+      ;;
+    --prd)
+      PRD_ARG="$2"
+      shift 2
+      ;;
+    --prd=*)
+      PRD_ARG="${1#*=}"
       shift
       ;;
     *)
@@ -34,10 +49,24 @@ if [[ "$TOOL" != "amp" && "$TOOL" != "claude" ]]; then
   exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PRD_FILE="$SCRIPT_DIR/prd.json"
+if [ -n "$PRD_ARG" ]; then
+  PRD_FILE="$(cd "$(dirname "$PRD_ARG")" && pwd)/$(basename "$PRD_ARG")"
+else
+  PRD_FILE="$SCRIPT_DIR/prd.json"
+fi
+if [ ! -f "$PRD_FILE" ]; then
+  echo "Error: PRD file not found: $PRD_FILE"
+  exit 1
+fi
+export PRD_FILE
+PRD_NAME="$(basename "$PRD_FILE" .json)"
 PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
-LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
+if [ "$PRD_NAME" = "prd" ]; then
+  LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
+else
+  LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch-$PRD_NAME"
+fi
 
 # Archive previous run if branch changed
 if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
@@ -79,7 +108,7 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
-echo "Starting Ralph - Tool: $TOOL - Max iterations: $MAX_ITERATIONS"
+echo "Starting Ralph - Tool: $TOOL - PRD: $PRD_FILE - Max iterations: $MAX_ITERATIONS"
 
 for i in $(seq 1 $MAX_ITERATIONS); do
   echo ""
@@ -88,11 +117,14 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo "==============================================================="
 
   # Run the selected tool with the ralph prompt
+  # The prompt names the PRD for this run so the agent reads the targeted file,
+  # not the default prd.json the instructions mention.
+  PRD_HEADER="PRD_FILE for this run: $PRD_FILE (read this file wherever the instructions say prd.json)"
   if [[ "$TOOL" == "amp" ]]; then
-    OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || true
+    OUTPUT=$({ echo "$PRD_HEADER"; echo; cat "$SCRIPT_DIR/prompt.md"; } | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || true
   else
     # Claude Code: use --dangerously-skip-permissions for autonomous operation, --print for output
-    OUTPUT=$(claude --dangerously-skip-permissions --print < "$SCRIPT_DIR/CLAUDE.md" 2>&1 | tee /dev/stderr) || true
+    OUTPUT=$({ echo "$PRD_HEADER"; echo; cat "$SCRIPT_DIR/CLAUDE.md"; } | claude --dangerously-skip-permissions --print 2>&1 | tee /dev/stderr) || true
   fi
   
   # Check for completion signal
