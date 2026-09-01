@@ -1,0 +1,662 @@
+{
+  "project": "EatPal",
+  "branchName": "epic/kitchen-loop",
+  "description": "Unified kitchen loop. Replaces the lowercased-string joins between recipes, meal plan, grocery and pantry with a canonical household item, an append-only inventory ledger, and a real household meal entity. foods.quantity and foods.is_safe survive as trigger-maintained projections so the live App Store build keeps working with no rebuild. Full design: docs/superpowers/specs/2026-08-31-unified-kitchen-loop-design.md. Slices: 1 catalog+resolver, 2 ledger, 3 meals+cook/eat split, 4 iOS IA, 5 insight. Stories carry loopVerifiable: true when this Windows box can actually prove them (SQL files, pure TS under vitest, web against the typecheck/lint ratchets). loopVerifiable: false means write-only here and verification needs a Mac with Xcode or a real Supabase target; those stories must never be marked passing from this machine.",
+  "userStories": [
+    {
+      "id": "US-654",
+      "title": "Assert production schema state before any ledger migration",
+      "description": "As the engineer landing this epic, I want a script that diffs the production database against supabase/migrations so that we never stack a ledger on a schema whose real state we cannot assert.",
+      "acceptanceCriteria": [
+        "New script scripts/ci/schema-drift-report.mjs connects with a read-only URL from env (never a hardcoded credential) and lists: migrations present on disk but not in supabase_migrations.schema_migrations, and vice versa",
+        "Reports per-table column drift for the tables this epic touches: foods, grocery_items, plan_entries, recipes, recipe_ingredients, kid_food_ladder",
+        "Exits non-zero on drift; prints a human-readable summary, not a raw diff dump",
+        "Runs with no target configured and exits 0 with 'no target configured', so it is safe in CI",
+        "Documented in the spec's prerequisite section as the gate before US-655"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 1,
+      "platform": "node",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-655",
+      "title": "Migration: item_aliases and canonical_products",
+      "description": "As a platform engineer, I want the catalog's alias memory and a shared product seed so that item resolution has somewhere to learn and somewhere to start.",
+      "acceptanceCriteria": [
+        "New additive migration creates public.item_aliases: id uuid pk default gen_random_uuid(), household_id uuid not null, item_id uuid not null references foods(id) on delete cascade, normalized_text text not null, source text check in ('barcode','user_confirmed','receipt','import','ai_suggested','legacy_migration'), confidence numeric not null default 1.0, created_at timestamptz default now(), unique (household_id, normalized_text)",
+        "Creates public.canonical_products: id uuid pk, barcode text unique null, normalized_name text not null, category text, default_unit text, default_aisle text, created_at; no household scoping (shared seed)",
+        "RLS enabled on item_aliases with household-scoped SELECT/INSERT/UPDATE/DELETE following the existing grocery_items policy pattern",
+        "RLS enabled on canonical_products with SELECT for authenticated only; no INSERT/UPDATE/DELETE policy for authenticated",
+        "Index on item_aliases(household_id, normalized_text) and on canonical_products(normalized_name)",
+        "Migration is additive only; no existing object is altered or dropped"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 1,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-656",
+      "title": "Migration: additive catalog columns on foods",
+      "description": "As a platform engineer, I want foods to carry canonical-item metadata so that it can serve as the stable identity everything else points at.",
+      "acceptanceCriteria": [
+        "Additive migration adds to public.foods: merged_into_id uuid null references foods(id), canonical_unit text null check in ('g','ml','count'), unit_conversions jsonb null, needs_review boolean not null default false",
+        "Partial index on foods(household_id) where needs_review is true, for the confirm-items affordance",
+        "Partial index on foods(merged_into_id) where merged_into_id is not null",
+        "No column is dropped, renamed, retyped, or given a NOT NULL without a satisfying default",
+        "Comment on each new column explaining its role, referencing the design doc",
+        "src/integrations/supabase/types.ts regenerated and includes the new columns"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 1,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-657",
+      "title": "Text normalization module for item matching",
+      "description": "As a developer, I want one pure function that reduces a raw food or ingredient string to a stable normalized form so that every module compares the same thing.",
+      "acceptanceCriteria": [
+        "New src/lib/itemNormalize.ts exports normalizeItemText(raw: string): string",
+        "Lowercases, trims, collapses whitespace, strips punctuation, removes leading quantities and units, singularizes common plurals, and strips preparation qualifiers (chopped, diced, fresh, frozen, organic, boneless, skinless)",
+        "Never returns an empty string for non-empty input; falls back to the trimmed lowercase original",
+        "Unit tests cover the real failure cases named in the design: 'chicken breast', 'chicken breasts' and '2 lb boneless skinless chicken breasts' all normalize identically",
+        "Pure: no I/O, no clock, no Supabase import",
+        "npm run test:run passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-658",
+      "title": "Canonical unit conversion module",
+      "description": "As a developer, I want conversions into a canonical unit with an explicit unknown result so that pantry arithmetic is either right or visibly absent, never fudged.",
+      "acceptanceCriteria": [
+        "New src/lib/canonicalUnits.ts exports toCanonical(quantity, unit, item): { value, unit } | { unknown: true, reason }",
+        "Handles mass (g), volume (ml) and count families, including us/metric pairs (lb, oz, kg, gal, qt, cup, tbsp, tsp, ml, l)",
+        "Cross-dimension conversion (ml to g) succeeds only when the item supplies a density or a per-item conversion in unit_conversions; otherwise returns unknown with a reason",
+        "Item-specific conversions win over generic ones (a can of this product resolving to a mass)",
+        "Never throws and never silently returns a number for an unconvertible pair; unknown is a value, not an exception",
+        "Unit tests include the moveCheckedToPantry case: 2 gal added to a pantry row measured in fl oz converts rather than landing in a mismatch list",
+        "npm run test:run passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-659",
+      "title": "Item resolver with confidence and provisional items",
+      "description": "As a parent, I want the app to know that the thing on my receipt is the thing in my pantry so that my list and my stock stop disagreeing.",
+      "acceptanceCriteria": [
+        "New src/lib/itemResolver.ts exports resolveItem(input: { text, barcode?, householdId }, ctx: { aliases, items, canonicalProducts }): { itemId, confidence, matchedBy } | { provisional: true, proposedName, confidence }",
+        "Resolution order is exactly: barcode exact, household alias exact on normalized text, household alias fuzzy above threshold, canonical_products seed, propose new",
+        "matchedBy identifies which step won, so callers and tests can assert the path rather than only the outcome",
+        "Below the confidence threshold it returns provisional rather than guessing; the threshold is a named exported constant, not a literal at a call site",
+        "Follows merged_into_id: resolving to a merged item returns the surviving item's id",
+        "Pure: context is passed in, nothing is fetched inside",
+        "Unit tests cover each of the five steps plus the provisional path and the merge redirect",
+        "npm run test:run passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-660",
+      "title": "Shared cross-platform fixture suite for the pure modules",
+      "description": "As a developer, I want the resolver, normalizer and unit converter pinned by fixtures both platforms read so that Swift and TypeScript cannot drift the way only a shared test suite prevents.",
+      "acceptanceCriteria": [
+        "Fixture files live at tests/fixtures/kitchen-loop/*.json as plain data: input, expected output, and a name",
+        "Covers normalizeItemText, toCanonical and resolveItem, with at least 20 cases each drawn from real ingredient and receipt strings",
+        "A TypeScript runner reads the fixtures and asserts them, following the existing src/lib/exposureLadder.ts / ExposureLadderPolicyTests pattern",
+        "The fixture format is documented so the Swift mirror (US-668) can read the same files with no transformation",
+        "Adding a fixture with no matching implementation behaviour fails the suite",
+        "npm run test:run passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-661",
+      "title": "Resolve recipe ingredients at import, not at grocery time",
+      "description": "As a parent importing a recipe, I want ambiguous ingredients confirmed once while the recipe is in front of me so that no module downstream has to guess on my behalf.",
+      "acceptanceCriteria": [
+        "Recipe import (src/components/ImportRecipeDialog.tsx and RecipeImporter.tsx) runs every parsed ingredient through resolveItem and writes recipe_ingredients.food_id for confident matches",
+        "Ingredients returning provisional surface as one review step inside the import sheet listing only the unresolved ones, with a per-row choice of an existing item or create new",
+        "The review step is skippable; skipping leaves food_id null and marks the created items needs_review, and import still completes",
+        "Confirming a row writes an item_aliases row with source 'user_confirmed'",
+        "No resolution happens during grocery generation any more for recipes imported through this path",
+        "Existing recipe import tests still pass; new tests cover the confident path, the provisional path, and the skip path",
+        "npm run test:run passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-662",
+      "title": "Duplicate-item merge proposal engine",
+      "description": "As a parent with three chicken breast rows, I want the app to notice and offer to merge them so that my pantry stops double-counting.",
+      "acceptanceCriteria": [
+        "New src/lib/itemMergeProposals.ts exports proposeMerges(items): MergeGroup[] where each group carries the surviving item, the duplicates, and the evidence (shared barcode, identical normalized text, alias overlap)",
+        "Groups are ranked by confidence; a group never mixes items with different non-null barcodes",
+        "The proposed survivor is the item with the most movement history, falling back to the oldest created_at",
+        "Pure: takes the item list, returns proposals, performs no writes",
+        "Unit tests run against the real-shaped duplicates in Database_Backup rather than hand-written fixtures, per the design doc",
+        "npm run test:run passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-663",
+      "title": "Migration: rpc_merge_items redirects rather than deletes",
+      "description": "As a platform engineer, I want merging to redirect every reference so that an older client holding a stale food id never hits a missing row.",
+      "acceptanceCriteria": [
+        "New migration creates rpc_merge_items(survivor_id uuid, duplicate_ids uuid[]) returning a JSON envelope with counts of rows repointed per table",
+        "Repoints recipe_ingredients.food_id, plan_entries.food_id, grocery_items.item_id, kid_food_ladder.food_id and item_aliases.item_id to the survivor",
+        "Sets foods.merged_into_id on each duplicate; does NOT delete the duplicate rows",
+        "Sums the duplicates' quantity into the survivor via an inventory correction rather than a direct write, once US-666 lands; until then it writes the sum and leaves a TODO referencing US-666",
+        "SECURITY DEFINER with an explicit search_path, matching migration 20260711000002",
+        "Household-scoped: raises if survivor and duplicates do not share a household_id",
+        "Rejects a duplicate_ids array containing the survivor"
+      ],
+      "priority": 10,
+      "passes": false,
+      "slice": 1,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-664",
+      "title": "Merge review UI: never merge silently",
+      "description": "As a parent, I want to approve each merge with the evidence in front of me so that the app never quietly collapses two things I meant to keep apart.",
+      "acceptanceCriteria": [
+        "A pantry-side review surface lists merge proposals from US-662, each showing the survivor, the duplicates, their quantities, and why they were grouped",
+        "Merging is per-group and explicit; there is no merge-all action",
+        "Each group can be dismissed, and a dismissed group does not reappear",
+        "Confirming calls rpc_merge_items and writes item_aliases rows mapping each duplicate's normalized name to the survivor",
+        "The surface is reachable but not modal; it never interrupts another task",
+        "Tests cover confirm, dismiss, and the dismissed-group-does-not-return behaviour",
+        "npm run test:run passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "slice": 1,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-665",
+      "title": "Migration: inventory_movements",
+      "description": "As a platform engineer, I want an append-only movement log so that stock becomes explainable, reversible, and safe to replay offline.",
+      "acceptanceCriteria": [
+        "Additive migration creates public.inventory_movements with: id uuid pk (client-supplied, no default), household_id uuid not null, item_id uuid not null references foods(id), delta numeric not null, canonical_unit text not null, display_quantity numeric null, display_unit text null, reason text not null check in ('purchase','cook','waste','expire','correction','initial'), ref_type text null, ref_id uuid null, occurred_at timestamptz not null default now(), created_by uuid not null, reversed_by_id uuid null references inventory_movements(id), created_at timestamptz default now()",
+        "REVOKE UPDATE, DELETE from authenticated and anon so the log is append-only in the same way agent_audit_log is",
+        "RLS enabled: household-scoped SELECT and INSERT policies only; no UPDATE or DELETE policy",
+        "Indexes on (household_id, item_id, occurred_at) and on (ref_type, ref_id)",
+        "A client-supplied duplicate id is rejected by the primary key, making retry idempotent; a test asserts the second insert fails rather than double-counting",
+        "src/integrations/supabase/types.ts regenerated"
+      ],
+      "priority": 12,
+      "passes": false,
+      "slice": 2,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-666",
+      "title": "Migration: item_stock balance maintained by trigger",
+      "description": "As a developer, I want a cheap current balance per item so that reads do not fold the whole ledger while the ledger stays the source of truth.",
+      "acceptanceCriteria": [
+        "Additive migration creates public.item_stock: item_id uuid pk references foods(id), household_id uuid not null, on_hand_canonical numeric not null default 0, canonical_unit text not null, updated_at timestamptz not null default now()",
+        "AFTER INSERT trigger on inventory_movements upserts item_stock, adding delta",
+        "RLS enabled, household-scoped SELECT; no client INSERT/UPDATE/DELETE policy (trigger-maintained only)",
+        "A reconcile function rpc_reconcile_item_stock(household_id) refolds the ledger and returns rows whose stored balance disagreed, with the delta",
+        "A test inserts a mixed sequence of movements including a reversal and asserts item_stock equals the fold",
+        "Migration is additive only"
+      ],
+      "priority": 13,
+      "passes": false,
+      "slice": 2,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-667",
+      "title": "Migration: mirror item_stock into foods.quantity for shipped clients",
+      "description": "As an iOS user on an older build, I want my pantry numbers to stay correct with no app update so that the migration is invisible to me.",
+      "acceptanceCriteria": [
+        "Trigger on item_stock writes the balance back into foods.quantity, converted from canonical_unit into the item's display unit",
+        "The mirror never fires the direct-write translation trigger from US-668 (guard with a session flag or a trigger-depth check) so the two cannot loop",
+        "When conversion into the display unit is unknown, foods.quantity is left unchanged and the divergence is recorded for the reconcile report rather than written as a wrong number",
+        "A trigger-maintained rollup keeps foods.is_safe true only when every active kid in the household has kid_food_ladder.disposition = 'safe'",
+        "Tests assert an old-client style read of foods.quantity matches the canonical balance for the convertible cases",
+        "Migration is additive only"
+      ],
+      "priority": 14,
+      "passes": false,
+      "slice": 2,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-668",
+      "title": "Migration: translate direct foods.quantity writes into correction movements",
+      "description": "As a platform engineer, I want writes from shipped clients folded into the ledger rather than fighting it, because during release N the old app still writes quantity directly.",
+      "acceptanceCriteria": [
+        "BEFORE UPDATE trigger on foods detects a quantity change that did not originate from the US-667 mirror and appends a correction movement whose delta is new minus current canonical balance",
+        "The trigger is re-entrancy safe: the correction it appends must not re-trigger itself through the item_stock mirror",
+        "Writes from a null quantity to a value are treated as a correction from zero, not an initial movement",
+        "Concurrent updates are safe: the correction is computed against the row's locked current value, not a stale read",
+        "This is the highest-risk object in the epic and carries its own test file covering: old-client write, new-client movement, both interleaved, and a no-op update",
+        "Tests assert no infinite trigger recursion under any of the four cases"
+      ],
+      "priority": 15,
+      "passes": false,
+      "slice": 2,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-669",
+      "title": "Migration: backfill initial movements from existing pantry quantities",
+      "description": "As a platform engineer, I want today's pantry state expressed as ledger movements so that the ledger is complete from the moment it exists.",
+      "acceptanceCriteria": [
+        "Backfill writes one 'initial' movement per foods row with a non-null, non-zero quantity, using the item's canonical_unit and converting from its display unit",
+        "Rows whose unit cannot be converted get canonical_unit set to 'count' with the raw quantity and are flagged needs_review rather than skipped or guessed",
+        "Backfill is idempotent: running it twice does not double the balance (guard on an existing initial movement per item)",
+        "After backfill, item_stock for every item equals its previous foods.quantity for all convertible rows; a verification query in the migration asserts this and raises on mismatch",
+        "Runs in batches so it does not lock foods for the whole table on a large household set"
+      ],
+      "priority": 16,
+      "passes": false,
+      "slice": 2,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-670",
+      "title": "Movement fold module and the balance invariant property test",
+      "description": "As a developer, I want the client-side fold to agree with the server trigger so that optimistic UI and persisted state cannot diverge.",
+      "acceptanceCriteria": [
+        "New src/lib/inventoryLedger.ts exports foldMovements(movements): Map<itemId, { onHand, canonicalUnit }> and applyMovement(state, movement)",
+        "Reversals (reversed_by_id set) are excluded from the balance along with the movement that reversed them",
+        "Folding is order-independent for movements in the same item, and applying the same movement id twice is a no-op",
+        "A property test generates random movement sequences including reversals and duplicates and asserts fold equals the sequential apply",
+        "Pure: no Supabase import, no clock",
+        "npm run test:run passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-671",
+      "title": "Web: load movements and read stock from the ledger behind a flag",
+      "description": "As the engineer rolling this out, I want ledger reads dark-launched so that I can compare them against foods.quantity on real households before trusting them.",
+      "acceptanceCriteria": [
+        "AppContext loads inventory_movements and item_stock as domain slices under the existing US-341 precedence contract (cache on mount, server overwrite on load, realtime merge by id)",
+        "A useFeatureFlag gate selects whether pantry quantity renders from item_stock or from foods.quantity",
+        "With the flag off, a comparison runs in the background and logs any item where the two disagree, with the item id and both values",
+        "Movements being append-only means the realtime merge needs no last-write-wins logic; a test asserts an out-of-order realtime insert still yields the right balance",
+        "src/contexts/AppContext.precedence.test.tsx style coverage added for the movements slice",
+        "npm run test:run passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-672",
+      "title": "Web: pantry edits and grocery checkout write movements",
+      "description": "As a parent, I want editing my pantry and finishing a shop to be one action each, with the ledger recording what actually happened underneath.",
+      "acceptanceCriteria": [
+        "Editing a pantry quantity appends a correction movement whose delta is new minus current; the UI still shows and accepts a single number",
+        "Grocery checkout appends one purchase movement per checked item with canonical quantity, the display quantity and unit as entered, price when known, and ref_type 'grocery_item'",
+        "Checkout no longer needs the separate move-completed-to-pantry step; the pantry is credited by the same action that closes the rows",
+        "An explicit throw-this-out action appends a waste movement",
+        "Movement ids are generated client-side so an offline retry is idempotent",
+        "Tests cover correction delta arithmetic, checkout crediting, and duplicate-submit idempotency",
+        "npm run test:run passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-673",
+      "title": "Backward-compatibility suite gating the migration",
+      "description": "As the engineer with an app live in the App Store, I want a suite that proves an older client still reads correct values so that the migration cannot ship on optimism.",
+      "acceptanceCriteria": [
+        "A test suite reads foods.quantity and foods.is_safe the way the shipped iOS build reads them and asserts they match what the ledger and kid_food_ladder compute",
+        "Covers: purchase, cook, waste, correction, a reversal, and a merge",
+        "Covers the disposition rollup: is_safe true only when every active kid is safe, and flipping one kid flips it",
+        "Explicitly covers the interleaving in US-668: an old-client direct write followed by a new-client movement leaves both readers consistent",
+        "The suite is wired into CI and named so it is obvious that it gates the migration",
+        "npm run test:run passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-674",
+      "title": "Migration: meals table and plan_entries.meal_id",
+      "description": "As a platform engineer, I want the household cooking event to exist as a row so that something owns the pantry debit other than a per-kid record.",
+      "acceptanceCriteria": [
+        "Additive migration creates public.meals: id uuid pk, household_id uuid not null, date date not null, meal_slot text not null, recipe_id uuid null references recipes(id) on delete set null, title text null, servings_planned numeric not null default 1, cooked_at timestamptz null, cooked_servings numeric null, created_at, updated_at",
+        "Adds plan_entries.meal_id uuid null references meals(id) on delete set null",
+        "RLS enabled on meals, household-scoped, following the plan_entries policy pattern",
+        "Index on meals(household_id, date) and a partial index on meals(household_id) where cooked_at is null",
+        "meal_slot values match the existing MealSlot vocabulary exactly, including try_bite",
+        "Migration is additive only; plan_entries keeps every existing column"
+      ],
+      "priority": 21,
+      "passes": false,
+      "slice": 3,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-675",
+      "title": "Migration: backfill meals from existing plan-entry clusters",
+      "description": "As an existing user, I want my history to appear under the new meal model so that the week I already planned does not look empty.",
+      "acceptanceCriteria": [
+        "Backfill groups plan_entries by (household_id, date, meal_slot, recipe_id) and creates one meals row per group",
+        "Every grouped plan_entry gets meal_id set to its new meal",
+        "Entries with a null recipe_id group by (household_id, date, meal_slot) and get a meals row with title derived from the primary dish where is_primary_dish is true",
+        "meals.cooked_at is set from the entry cluster only when every entry in it already has a result, so backfilled history does not claim meals were cooked that were not",
+        "Idempotent: re-running creates no duplicate meals",
+        "Runs in batches; a verification query asserts no plan_entry in scope is left with a null meal_id"
+      ],
+      "priority": 22,
+      "passes": false,
+      "slice": 3,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-676",
+      "title": "One shortfall function replacing four",
+      "description": "As a parent, I want the same missing-items number wherever I look so that the planner and the grocery list stop contradicting each other.",
+      "acceptanceCriteria": [
+        "New src/lib/kitchenShortfall.ts exports requirement(meals, recipes), projectedOnHand(stock, meals, throughDate) and need(...) as described in the design doc",
+        "requirement scales ingredient quantities by servings_planned over recipe servings and groups by item id in canonical units",
+        "projectedOnHand subtracts meals scheduled between now and the shop date, so a Saturday shop accounts for Thursday and Friday cooking",
+        "need subtracts what is already on the grocery list",
+        "Package rounding uses foods.package_quantity and servings_per_container: needing 300 g of an item sold in 500 g packs yields one pack and a recorded surplus",
+        "Items whose unit conversion is unknown are reported separately rather than counted as zero or as fully stocked",
+        "Pure, with unit tests covering scaling, projection, package rounding and the unknown-unit case",
+        "npm run test:run passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-677",
+      "title": "Migration: rpc_cook_meal and generic movement reversal",
+      "description": "As a parent, I want cooking to debit the pantry once and be undoable so that a mistap does not corrupt my stock.",
+      "acceptanceCriteria": [
+        "rpc_cook_meal(meal_id, cooked_servings) sets meals.cooked_at and cooked_servings, appends one cook movement per resolved recipe ingredient scaled to servings, and auto-checks grocery items sourced from that meal",
+        "Idempotent on meal id: a second call within the idempotency window returns already_logged and appends nothing",
+        "It does NOT write plan_entries.result; cooking and eating are separate acts",
+        "rpc_reverse_movements_by_ref(ref_type, ref_id) appends a reversal for every movement carrying that ref and sets reversed_by_id on the originals",
+        "Reversing a cook clears meals.cooked_at and re-opens the grocery rows it checked",
+        "Both are SECURITY DEFINER with an explicit search_path and are household-scoped",
+        "Ingredients with a null food_id are skipped and reported in the return envelope rather than silently ignored"
+      ],
+      "priority": 24,
+      "passes": false,
+      "slice": 3,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-678",
+      "title": "Migration: per-kid disposition becomes truth",
+      "description": "As a parent of more than one child, I want safe to mean safe for a specific kid so that one child's progress stops mislabelling another's plate.",
+      "acceptanceCriteria": [
+        "Adds kid_food_ladder.disposition text check in ('safe','trying','refused','untried'), maintained by trigger from current_rung and status using the ExposureLadderPolicy thresholds",
+        "Backfill sets disposition for every existing kid_food_ladder row",
+        "foods.is_safe becomes a trigger-maintained rollup: true only when every active kid in the household has disposition 'safe' for that item",
+        "foods.is_try_bite becomes a rollup: true when any active kid has disposition 'trying'",
+        "Neither column is dropped; shipped clients keep reading them",
+        "A test asserts flipping one kid's ladder flips the household rollup, and that adding a new kid re-evaluates it"
+      ],
+      "priority": 25,
+      "passes": false,
+      "slice": 3,
+      "platform": "sql",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-679",
+      "title": "Web: split cooking from eating",
+      "description": "As a parent, I want logging that we cooked something and logging how each kid did to be two separate things so that the record a clinician reads is honest.",
+      "acceptanceCriteria": [
+        "The cook action calls rpc_cook_meal and no longer writes plan_entries.result anywhere",
+        "A separate outcome surface lists one row per kid on the meal with ate / tasted / refused, plus a rung selector when the plate was a try bite",
+        "Skipping the outcome writes nothing: plan_entries.result stays null and no food_attempts row is created",
+        "Recording an outcome writes plan_entries.result and, for exposures, a food_attempts row with ladder progression through the existing exposureLadder policy",
+        "Undo on either action calls rpc_reverse_movements_by_ref rather than a bespoke reversal payload",
+        "Tests assert that cooking alone leaves result null, and that a skipped outcome creates no rows",
+        "npm run test:run passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-680",
+      "title": "Web: grocery generation subtracts the pantry on every path",
+      "description": "As a parent, I want my list to be what the plan needs minus what I already have, which is what the product has always claimed it is.",
+      "acceptanceCriteria": [
+        "Meal-plan grocery generation uses kitchenShortfall.need and therefore subtracts projected on-hand; the skipPantryStocked: false behaviour is removed, not just defaulted differently",
+        "Recipe-direct generation uses the same function, so the two paths cannot diverge again",
+        "De-duplication is by resolved item id, not by lowercased name",
+        "grocery_item_sources rows are still written for every contributing meal, preserving the by-recipe grouping",
+        "Items the resolver could not resolve still reach the list, flagged, rather than being dropped",
+        "Tests assert a fully-stocked week generates an empty list and a half-stocked week generates only the difference",
+        "npm run test:run passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-681",
+      "title": "Waste and actual-spend reporting off the ledger",
+      "description": "As a parent, I want to see what we threw away and what we actually spent so that the tracking pays me back for keeping it.",
+      "acceptanceCriteria": [
+        "A waste view reports quantity and estimated value of waste and expire movements over a selectable range, grouped by item and by category",
+        "BudgetService reports actual spend from purchase movement prices rather than estimating from price_per_unit, and says which portion of a total is unpriced instead of implying completeness",
+        "Both read movements only; neither writes",
+        "Ranges with no data render an honest empty state, not a zero that looks like a measurement",
+        "Tests cover a range with mixed priced and unpriced purchases",
+        "npm run test:run passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "slice": 5,
+      "platform": "web",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-682",
+      "title": "Swift: mirror the pure modules against the shared fixtures",
+      "description": "As an iOS developer, I want the Swift resolver, normalizer, unit converter and ledger fold to be provably identical to the TypeScript ones so that the platforms cannot drift.",
+      "acceptanceCriteria": [
+        "Swift equivalents of itemNormalize, canonicalUnits, itemResolver and inventoryLedger live alongside the existing Ladder/ExposureLadderPolicy.swift pattern",
+        "A test target reads tests/fixtures/kitchen-loop/*.json directly and asserts the same expectations the TypeScript runner asserts",
+        "No fixture is duplicated or transformed for Swift; both platforms read the same files",
+        "The modules are pure and take their context as parameters, matching the TypeScript signatures",
+        "VERIFICATION: this box has no Xcode. Write the code and the tests, do not claim they compile or pass, and leave the story open for a Mac to verify."
+      ],
+      "priority": 29,
+      "passes": false,
+      "slice": 1,
+      "platform": "ios",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-683",
+      "title": "Swift: ledger-backed cook, buy and pantry edit",
+      "description": "As an iOS user, I want cooking and shopping to write movements so that the phone and the web agree about what is in my kitchen.",
+      "acceptanceCriteria": [
+        "AppState.markPlanEntryMade is replaced by a cook action calling rpc_cook_meal, and no longer writes result",
+        "moveCheckedToPantry is replaced by checkout appending purchase movements; the name-matching lookup at AppState.swift:1725 is deleted",
+        "Pantry quantity edits append correction movements",
+        "Undo calls rpc_reverse_movements_by_ref; MarkMealMadeResult and reversal_payload handling are retired",
+        "OfflineStore queues movements by client-generated id so replay is idempotent",
+        "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
+      ],
+      "priority": 30,
+      "passes": false,
+      "slice": 2,
+      "platform": "ios",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-684",
+      "title": "Swift: resolver at recipe import and the confirm step",
+      "description": "As an iOS user importing a recipe from Instagram, I want ambiguous ingredients confirmed once, in the import sheet.",
+      "acceptanceCriteria": [
+        "RecipeImportService runs every parsed ingredient through the Swift resolver and populates recipe_ingredients.food_id",
+        "Unresolved ingredients surface as one review step inside the import sheet, skippable, with create-new and pick-existing per row",
+        "Confirmations write item_aliases rows",
+        "The share extension path (EatPalShare) reaches the same review step on first open rather than resolving silently",
+        "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
+      ],
+      "priority": 31,
+      "passes": false,
+      "slice": 1,
+      "platform": "ios",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-685",
+      "title": "Swift: tab structure becomes Today, Week, Recipes, Grocery, Kids",
+      "description": "As a parent, I want tabs that match the questions I actually have rather than the tables the data lives in.",
+      "acceptanceCriteria": [
+        "MainTabView.Tab becomes home (Today), week, recipes, grocery, kids; the More tab is removed and settings moves to a profile control on Today",
+        "Recipes is promoted back out of MoreRoute to a root tab",
+        "Kids consolidates ladders, exposure progress, the picky-eater quiz, food chaining, and the clinician report",
+        "DeepLinkHandler.Destination and the MoreRoute enum are reworked so every existing deep link and notification tap still lands somewhere correct",
+        "No existing screen becomes unreachable; a test enumerates every Destination case and asserts a route",
+        "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
+      ],
+      "priority": 32,
+      "passes": false,
+      "slice": 4,
+      "platform": "ios",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-686",
+      "title": "Swift: Grocery tab with List and Pantry segments",
+      "description": "As a parent, I want shopping and stock in one place because they are the same list at two points in time, without losing the aisle navigation I shop with.",
+      "acceptanceCriteria": [
+        "The Grocery tab holds a List / Pantry segmented control, defaulting to List",
+        "Aisle grouping, the 32-value GroceryAisle taxonomy, StoreLayout walk-order, ShoppingModeView and ARShelfFinderView are preserved unchanged",
+        "Shopping Mode gains a primary button on the List segment rather than living in a menu",
+        "Checking out on List moves rows into the Pantry segment in the same interaction, with no separate move-to-pantry step",
+        "PantryView's existing scan, bulk add and expiry affordances survive the move into the segment",
+        "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
+      ],
+      "priority": 33,
+      "passes": false,
+      "slice": 4,
+      "platform": "ios",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-687",
+      "title": "Swift: time-aware Today and the provenance thread",
+      "description": "As a parent, I want the home screen to answer the question I have at that hour, and I want to be able to tap any number to see where it came from.",
+      "acceptanceCriteria": [
+        "Today changes face by time of day: morning shows what to thaw and what is planned, late afternoon shows the cook card with live coverage, evening shows outcome logging, shopping day surfaces the list",
+        "Tapping a grocery row shows which meals need it and how much of the requirement is already on hand",
+        "Tapping a pantry row shows last purchase, the meals that consumed it, and expiry",
+        "Tapping a cooked meal shows every movement it created, each reversible",
+        "Coverage figures come from the one shortfall function, not a local recomputation",
+        "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
+      ],
+      "priority": 34,
+      "passes": false,
+      "slice": 4,
+      "platform": "ios",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-688",
+      "title": "Swift: clinician ladder report on iOS",
+      "description": "As a parent heading to an appointment, I want the exposure report on my phone, which is where I actually track meals.",
+      "acceptanceCriteria": [
+        "A report export in the Kids tab produces the same content as the web LadderReportDialog: date range, per-food rung history, attempt outcomes",
+        "The report carries the child's first name only, matching the web report's identifier policy",
+        "Everything after the fetch happens on device; nothing is uploaded",
+        "Output is shareable through the standard iOS share sheet",
+        "The generated content is asserted against the same expectations as buildClinicianLadderReport so the two platforms produce the same report",
+        "VERIFICATION: this box has no Xcode. Write the code, do not claim it builds, and leave the story open for a Mac."
+      ],
+      "priority": 35,
+      "passes": false,
+      "slice": 5,
+      "platform": "ios",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-689",
+      "title": "Release N+2: retire the legacy mirrors",
+      "description": "As a platform engineer, I want the compatibility scaffolding removed once no shipped client depends on it, so the model stops carrying two truths.",
+      "acceptanceCriteria": [
+        "BLOCKED until MIN_SUPPORTED_IOS_BUILD is past the release carrying US-683 through US-687; the story must not be started before that is true",
+        "Drops the direct-write translation trigger from US-668",
+        "Stops mirroring into foods.quantity, foods.is_safe and foods.is_try_bite; the columns themselves stay for one further release",
+        "The backward-compatibility suite from US-673 is retired in the same change with an explicit note saying why",
+        "VERIFICATION: requires a real deploy decision and a min-version check. Never autonomous."
+      ],
+      "priority": 36,
+      "passes": false,
+      "slice": 2,
+      "platform": "deploy",
+      "loopVerifiable": false
+    }
+  ]
+}
