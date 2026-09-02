@@ -5,7 +5,6 @@ import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/A
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
-import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
 import { MobileMealPlanner } from "@/components/meal-planner/MobileMealPlanner";
 import { buildWeekPlan } from "@/lib/mealPlanner";
 import {
@@ -15,12 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Save,
-  LayoutTemplate,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
-import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { MissingIngredientsDialog } from "@/components/MissingIngredientsDialog";
 import { computeRecipeShortfall, type Shortfall } from "@/lib/recipeShortfall";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,7 +28,7 @@ interface AiMealPlanDay {
   date: string;
   meals: Record<string, string | null>;
 }
-import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
+import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { calculateAge } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { logger } from "@/lib/logger";
@@ -64,13 +60,12 @@ export default function Planner() {
     addPlanEntry,
     copyWeekPlan,
     deleteWeekPlan,
+    addPlanEntries,
   } = usePlan();
   const { addGroceryItemsMerged } = useGrocery();
 
   const isMobile = useMediaQuery("(max-width: 1023px)");
 
-  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
@@ -83,8 +78,6 @@ export default function Planner() {
     slot: MealSlot;
     kidId: string;
   } | null>(null);
-  const [detailedTrackingOpen, setDetailedTrackingOpen] = useState(false);
-  const [trackingEntry, setTrackingEntry] = useState<PlanEntry | null>(null);
 
   // US-284: missing-ingredient prompt state. `pendingRecipe` holds the
   // recipe that triggered the dialog so we can pass its name to the UI
@@ -188,11 +181,32 @@ export default function Planner() {
     checkStockIssues();
 
     try {
-      const newPlan = buildWeekPlan(activeKid.id, foods, planEntries);
-      setPlanEntries(newPlan);
-      toast.success(`Week plan generated for ${activeKid.name}!`, {
-        description: "Meal plan ready with daily try bites",
-      });
+      // US-715: build the week IN VIEW, and persist it. This used to build from
+      // today and hand the result to setPlanEntries, which is local state only:
+      // the plan was gone on reload, never reached another device, and the
+      // wholesale replace wiped every other kid and every other week.
+      const weekStart = format(currentWeekStart, "yyyy-MM-dd");
+      const newPlan = buildWeekPlan(
+        activeKid.id,
+        foods,
+        planEntries,
+        currentWeekStart
+      );
+
+      // Replace only this kid's entries for this week; other kids and other
+      // weeks are untouched.
+      void (async () => {
+        try {
+          await deleteWeekPlan(weekStart, activeKid.id);
+          await addPlanEntries(newPlan);
+          toast.success(`Week plan generated for ${activeKid.name}!`, {
+            description: "Meal plan ready with daily try bites",
+          });
+        } catch (error) {
+          logger.error("Error saving built week plan:", error);
+          toast.error("Failed to save the generated plan. Please try again.");
+        }
+      })();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to build plan"
@@ -214,6 +228,10 @@ export default function Planner() {
           foods,
           recipes,
           days,
+          // US-715: generate for the week on screen. The function used to start
+          // from its own new Date(), so paging to next week and generating
+          // produced this week's dates.
+          startDate: format(currentWeekStart, "yyyy-MM-dd"),
         },
       });
 
@@ -242,12 +260,14 @@ export default function Planner() {
         return;
       }
 
-      const newEntries: PlanEntry[] = [];
+      // US-715: no client-invented ids. These used to be
+      // `${kid}-${date}-${slot}` strings handed to setPlanEntries, so nothing
+      // was inserted and a generated week did not survive a reload.
+      const newEntries: Omit<PlanEntry, "id">[] = [];
       (data.plan as AiMealPlanDay[]).forEach((day) => {
         Object.entries(day.meals).forEach(([slot, foodId]) => {
           if (foodId) {
             newEntries.push({
-              id: `${activeKid.id}-${day.date}-${slot}`,
               kid_id: activeKid.id,
               date: day.date,
               meal_slot: slot as MealSlot,
@@ -258,12 +278,8 @@ export default function Planner() {
         });
       });
 
-      const dates = (data.plan as AiMealPlanDay[]).map((d) => d.date);
-      const filteredEntries = planEntries.filter(
-        (e) => !dates.includes(e.date) || e.kid_id !== activeKidId
-      );
-
-      setPlanEntries([...filteredEntries, ...newEntries]);
+      await deleteWeekPlan(format(currentWeekStart, "yyyy-MM-dd"), activeKid.id);
+      await addPlanEntries(newEntries);
       toast.success(`AI generated ${days}-day meal plan!`, {
         description: "Review and adjust as needed",
       });
@@ -331,6 +347,8 @@ export default function Planner() {
             .order("date", { ascending: true });
 
           if (planData) {
+            // Fresh server load, which is what setPlanEntries is for (US-715).
+            // eslint-disable-next-line no-restricted-syntax
             setPlanEntries(parsePlanEntryRows(planData));
           }
         }
@@ -453,6 +471,8 @@ export default function Planner() {
           .order("date", { ascending: true });
 
         if (planData) {
+          // Fresh server load, which is what setPlanEntries is for (US-715).
+          // eslint-disable-next-line no-restricted-syntax
           setPlanEntries(parsePlanEntryRows(planData));
         }
       }
@@ -553,13 +573,6 @@ export default function Planner() {
       const targetKid = kids.find((k) => k.id === targetKidId);
       toast.success(`Meal copied to ${targetKid?.name}'s plan`);
     }
-  };
-
-  const handleSwapConfirm = (newFoodId: string) => {
-    if (!selectedEntry) return;
-    updatePlanEntry(selectedEntry.id, { food_id: newFoodId });
-    const newFood = foods.find((f) => f.id === newFoodId);
-    toast.success(`Swapped to ${newFood?.name}`);
   };
 
   // --- No children empty state ---
@@ -709,22 +722,9 @@ export default function Planner() {
                 <RefreshCw className="h-5 w-5 mr-2" />
                 Quick Build
               </Button>
-              <Button
-                onClick={() => setShowSaveTemplate(true)}
-                variant="outline"
-                size="lg"
-              >
-                <Save className="h-5 w-5 mr-2" />
-                Save Template
-              </Button>
-              <Button
-                onClick={() => setShowTemplateGallery(true)}
-                variant="outline"
-                size="lg"
-              >
-                <LayoutTemplate className="h-5 w-5 mr-2" />
-                Templates
-              </Button>
+              {/* US-719: the page-level Save Template and Templates buttons
+                  are gone. The grid toolbar carries working copies; these two
+                  opened dialogs wired to state the page never read back. */}
             </div>
           </div>
 
@@ -852,28 +852,10 @@ export default function Planner() {
           onSelectRecipe={handleSelectRecipe}
         />
 
-        <SwapMealDialog
-          open={swapDialogOpen}
-          onOpenChange={setSwapDialogOpen}
-          entry={selectedEntry}
-          foods={foods}
-          onSwap={handleSwapConfirm}
-        />
-
-        {trackingEntry && (
-          <DetailedTrackingDialog
-            open={detailedTrackingOpen}
-            onOpenChange={setDetailedTrackingOpen}
-            entry={trackingEntry}
-            food={foods.find((f) => f.id === trackingEntry.food_id)!}
-            kidId={activeKidId!}
-            onComplete={(result, attemptId) => {
-              if (trackingEntry) {
-                handleMarkResult(trackingEntry, result, attemptId);
-              }
-            }}
-          />
-        )}
+        {/* US-719: SwapMealDialog and DetailedTrackingDialog were rendered
+            here but unreachable -- nothing ever set selectedEntry or
+            trackingEntry, so neither could open. Removed rather than left as
+            decoration; US-725 wires the real cell menu. */}
 
         {/* US-284: missing-ingredient prompt after a recipe is added to a slot */}
         {pendingRecipeForMissing && (

@@ -312,6 +312,18 @@ jobs:
       - name: Deno verify_jwt enforcement guard
         run: deno test --allow-read functions/_shared/verify-jwt-guard_test.ts
 
+      # US-710: SSRF, redirect-cap and body-size guards on the recipe URL
+      # fetch. Every case injects fetchImpl and uses IP literals, so no network
+      # and no DNS -- hence no --allow-net.
+      - name: Deno recipe-fetch SSRF guards
+        run: deno test supabase/functions/_shared/url-validator.test.ts
+
+      # US-716: the meal-plan-template transforms -- building plan_entries rows
+      # (user_id, allergen skips, recipe-only routing) and folding a planned
+      # week back into template entries. Pure, no network, no DB.
+      - name: Deno meal-plan template transforms
+        run: deno test supabase/functions/_shared/meal-plan-templates.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest

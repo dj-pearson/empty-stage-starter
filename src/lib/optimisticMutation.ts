@@ -33,6 +33,12 @@ export async function runOptimisticMutation<T extends { id: string }>(
     logLabel: string;
     /** user-facing toast on a non-auth failure */
     toastMessage?: string;
+    /**
+     * US-717: return true to handle the error yourself and suppress the toast.
+     * Used for the plan-limit rejections, which surface an upgrade prompt
+     * rather than "couldn't save". The rollback still happens either way.
+     */
+    onError?: (error: unknown) => boolean;
   },
 ): Promise<{ error: unknown } | { error: null }> {
   let snapshot: T[] = [];
@@ -63,7 +69,8 @@ export async function runOptimisticMutation<T extends { id: string }>(
     setState((current) => rollbackOptimistic(current, snapshot, optimisticResult));
   }
 
-  if (authOutcome === "not-auth-error") {
+  const handled = options.onError?.(error) === true;
+  if (authOutcome === "not-auth-error" && !handled) {
     toast.error(
       options.toastMessage ??
         "Couldn't save your change — it's been reverted. Please try again.",
@@ -121,4 +128,94 @@ export function rollbackOptimistic<T extends { id: string }>(
   }
 
   return result;
+}
+
+/**
+ * US-717: optimistic INSERT with server-error rollback.
+ *
+ * Every entity context had the same bug in its insert error branch: when the
+ * server rejected the row, it appended a locally-generated one anyway.
+ *
+ *     if (error) {
+ *       logger.error('Supabase addX error:', error);
+ *       setXRaw(prev => [...prev, { ...row, id: generateId() }]);   // phantom
+ *     }
+ *
+ * The row then looked saved, got written to the localStorage backup by the
+ * debounced persist, and vanished on the next server load -- or worse, stayed
+ * in the cache and reappeared. Nobody was told anything. A parent could plan a
+ * whole week that existed only on that screen.
+ *
+ * This appends the rows optimistically, and on failure removes exactly those
+ * rows (non-destructively, so concurrent realtime events survive) and shows a
+ * toast. On success the temporary rows are swapped for the server's, which
+ * carry the real ids.
+ *
+ * `optimisticRows` must already carry temporary ids; they are matched by
+ * identity, so a realtime event that replaced one is left alone.
+ */
+export async function runOptimisticInsert<T extends { id: string }>(
+  setState: React.Dispatch<React.SetStateAction<T[]>>,
+  optimisticRows: T[],
+  serverCall: () => PromiseLike<{ data: unknown; error: unknown }>,
+  parseRows: (data: unknown) => T[],
+  options: {
+    logLabel: string;
+    toastMessage?: string;
+    onError?: (error: unknown) => boolean;
+  },
+): Promise<{ error: unknown } | { error: null }> {
+  if (optimisticRows.length === 0) return { error: null };
+
+  const temps = new Map(optimisticRows.map((r) => [r.id, r]));
+
+  // Append optimistically. Deliberately NOT routed through
+  // runOptimisticMutation: that captures a snapshot inside the setState
+  // updater, and React may invoke an updater more than once, in which case the
+  // second call's `prev` already contains the optimistic rows and they get
+  // treated as pre-existing and restored instead of dropped. The ids created
+  // here are known up front, so removing them is exact and needs no snapshot.
+  setState((prev) => [...prev, ...optimisticRows]);
+
+  const { data, error } = await serverCall();
+
+  if (!error) {
+    const serverRows = data != null ? parseRows(data) : [];
+    setState((current) => {
+      const kept = current.filter((r) => !(temps.get(r.id) === r));
+      const byId = new Map(kept.map((r) => [r.id, r]));
+      for (const row of serverRows) byId.set(row.id, row);
+      const seen = new Set<string>();
+      const merged: T[] = [];
+      for (const row of kept) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push(byId.get(row.id) as T);
+      }
+      for (const row of serverRows) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push(row);
+      }
+      return merged;
+    });
+    return { error: null };
+  }
+
+  logger.error(options.logLabel, error);
+
+  // Remove exactly the rows added above. Reference equality means a row a
+  // realtime event has since replaced under the same id is left alone.
+  setState((current) => current.filter((r) => !(temps.get(r.id) === r)));
+
+  const authOutcome = await handleSupabaseAuthError(error);
+  const handled = options.onError?.(error) === true;
+  if (authOutcome === "not-auth-error" && !handled) {
+    toast.error(
+      options.toastMessage ??
+        "Couldn't save that — it's been removed. Please try again.",
+    );
+  }
+
+  return { error };
 }

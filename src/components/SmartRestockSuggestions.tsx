@@ -40,7 +40,10 @@ interface SmartRestockSuggestionsProps {
     aisle?: string;
     auto_generated?: boolean;
     restock_reason?: string;
-    priority?: string;
+    // US-714: the union GroceryItem actually declares. This was `string`, so
+    // every consumer spreading one of these into a grocery add failed to
+    // typecheck on `priority` alone.
+    priority?: 'low' | 'medium' | 'high';
   }>) => void;
 }
 

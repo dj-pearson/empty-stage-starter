@@ -52,6 +52,8 @@ export function ApplyTemplateDialog({
   onTemplateApplied,
 }: ApplyTemplateDialogProps) {
   const [startDate, setStartDate] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  // US-716: what to do with meals already planned for the target week.
+  const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>(kids.map(k => k.id));
   const [isLoading, setIsLoading] = useState(false);
 
@@ -92,6 +94,7 @@ export function ApplyTemplateDialog({
             templateId: template.id,
             startDate: startDateStr,
             kidIds: selectedKidIds,
+            mode,
           }),
         }
       );
@@ -110,6 +113,9 @@ export function ApplyTemplateDialog({
           </div>
           <p className="text-sm text-muted-foreground">
             {data.entriesCreated} meals added to your calendar
+            {Array.isArray(data.skipped) && data.skipped.length > 0
+              ? ` (${data.skipped.length} skipped for allergies)`
+              : ''}
           </p>
         </div>
       );
@@ -184,6 +190,33 @@ export function ApplyTemplateDialog({
               <strong>{format(startDate, 'MMM d')}</strong> to{" "}
               <strong>{format(endDate, 'MMM d, yyyy')}</strong>
             </p>
+          </div>
+
+          {/* US-716: what happens to meals already planned for that week. */}
+          <div className="space-y-2">
+            <Label>Meals already planned that week</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={mode === 'merge' ? 'default' : 'outline'}
+                onClick={() => setMode('merge')}
+                aria-pressed={mode === 'merge'}
+                className="h-auto py-2 flex-col items-start gap-0.5"
+              >
+                <span className="font-medium">Merge</span>
+                <span className="text-xs font-normal opacity-80">Keep them</span>
+              </Button>
+              <Button
+                type="button"
+                variant={mode === 'replace' ? 'default' : 'outline'}
+                onClick={() => setMode('replace')}
+                aria-pressed={mode === 'replace'}
+                className="h-auto py-2 flex-col items-start gap-0.5"
+              >
+                <span className="font-medium">Replace</span>
+                <span className="text-xs font-normal opacity-80">Clear the week first</span>
+              </Button>
+            </div>
           </div>
 
           {/* Kid Selection */}

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
@@ -50,7 +51,10 @@ interface GroceryContextType {
    * quantity, folding into an existing unchecked row when one matches.
    * Returns how many list lines were touched (inserts + merges).
    */
-  addGroceryItemsMerged: (items: GroceryAddInput[]) => number;
+  addGroceryItemsMerged: (
+    items: GroceryAddInput[],
+    opts?: { defaultListId?: string | null },
+  ) => number;
   toggleGroceryItem: (id: string) => void;
   updateGroceryItem: (id: string, updates: Partial<GroceryItem>) => void;
   deleteGroceryItem: (id: string) => void;
@@ -112,12 +116,20 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       if (item.brand_preference) newItem.brand_preference = item.brand_preference;
       if (item.barcode) newItem.barcode = item.barcode;
       if (item.source_recipe_id) newItem.source_recipe_id = item.source_recipe_id;
+      // US-713: keep a plan-generated row plan-generated across a checkout undo.
+      // Dropping these turned it into a hand-added row that no later sync would
+      // ever retire.
+      if (item.auto_generated) newItem.auto_generated = true;
+      if (item.source_plan_entry_id) newItem.source_plan_entry_id = item.source_plan_entry_id;
 
       supabase.from('grocery_items').insert(newItem).select().single()
         .then(({ data, error }) => {
           if (error) {
+            // US-717: a rejected insert used to append a locally-generated row
+            // anyway, so the item looked added, reached the localStorage
+            // backup, and existed nowhere else.
             logger.error('Supabase addGroceryItem error:', error);
-            setGroceryItemsRaw(prev => [...prev, { ...item, id: generateId(), checked: false }]);
+            toast.error("Couldn't add that item. Please try again.");
           } else if (data) {
             const inserted = parseGroceryItemRow(data as Record<string, unknown>);
             if (inserted) setGroceryItemsRaw(prev => upsertById(prev, inserted));
@@ -162,7 +174,10 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [userId]);
 
-  const addGroceryItemsMerged = useCallback((items: GroceryAddInput[]): number => {
+  const addGroceryItemsMerged = useCallback((
+    items: GroceryAddInput[],
+    opts: { defaultListId?: string | null } = {},
+  ): number => {
     const cleaned = items.filter((i) => i.name && i.name.trim().length > 0);
     if (cleaned.length === 0) return 0;
 
@@ -182,7 +197,26 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
 
     // Plan against the current list so duplicates stack (issue #3) instead of
     // piling up as separate rows.
-    const plan = planGroceryMerge(expanded, groceryItems);
+    //
+    // US-714: scoped per target list. A batch normally shares one list, but a
+    // caller may mix them, and merging across lists bumped a row the shopper
+    // was not looking at instead of inserting the one they asked for.
+    const byList = new Map<string | null, GroceryAddInput[]>();
+    for (const item of expanded) {
+      const key = item.grocery_list_id ?? null;
+      const bucket = byList.get(key);
+      if (bucket) bucket.push(item);
+      else byList.set(key, [item]);
+    }
+    const plan = { inserts: [], updates: [] } as ReturnType<typeof planGroceryMerge>;
+    for (const [listId, group] of byList) {
+      const part = planGroceryMerge(group, groceryItems, {
+        targetListId: listId,
+        defaultListId: opts.defaultListId,
+      });
+      plan.inserts.push(...part.inserts);
+      plan.updates.push(...part.updates);
+    }
 
     // 1) Bump existing unchecked rows — ONE optimistic re-render + ONE request
     // (US-334), instead of looping updateGroceryItem (N writes + N re-renders).
@@ -233,16 +267,29 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
           };
           if (item.added_via) row.added_via = item.added_via;
           if (item.source_recipe_id) row.source_recipe_id = item.source_recipe_id;
+          // US-713: without these three a plan-generated row lands on no list,
+          // cannot be told apart from a hand-added one, and loses its link back
+          // to the entry that caused it.
+          if (item.grocery_list_id) row.grocery_list_id = item.grocery_list_id;
+          if (item.auto_generated) row.auto_generated = true;
+          if (item.source_plan_entry_id) row.source_plan_entry_id = item.source_plan_entry_id;
+          // US-714: this insert path used to drop everything the add dialog
+          // collected beyond name/quantity/unit/category/notes/aisle, so a
+          // brand, a scanned barcode or a price silently vanished on any add
+          // that went through the merge rather than addGroceryItem.
+          if (item.brand_preference) row.brand_preference = item.brand_preference;
+          if (item.barcode) row.barcode = item.barcode;
+          if (item.priority) row.priority = item.priority;
+          if (item.price_per_unit != null) row.price_per_unit = item.price_per_unit;
+          row.added_by_user_id = item.added_by_user_id ?? userId;
           return row;
         });
         supabase.from('grocery_items').insert(rows).select()
           .then(({ data, error }) => {
             if (error) {
+              // US-717: no phantom rows for a rejected bulk insert.
               logger.error('Supabase addGroceryItemsMerged error:', error);
-              setGroceryItemsRaw(prev => [
-                ...prev,
-                ...plan.inserts.map(i => ({ ...i, unit: i.unit ?? '', category: i.category as GroceryItem['category'], id: generateId(), checked: false }) as GroceryItem),
-              ]);
+              toast.error("Couldn't add those items. Please try again.");
             } else if (data) {
               setGroceryItemsRaw(prev => upsertManyById(prev, parseGroceryItemRows(data as unknown[])));
             }

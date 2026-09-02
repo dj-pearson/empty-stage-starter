@@ -473,3 +473,688 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - A recovery token is single-use, so the mount-time exchange must be ref
     guarded or StrictMode's double-invoke burns a valid link.
 ---
+
+## 2026-09-01 - US-709 (household planner slice 1)
+- parse-recipe no longer reads aiModel from the request body. The branch that
+  did `Deno.env.get(aiModel.api_key_env_var)` and POSTed to
+  `aiModel.endpoint_url` is deleted; the function now always resolves its model
+  through AIServiceV2. Any signed-in user could previously name a server env var
+  and an endpoint they controlled and be handed the secret.
+- suggest-recipe carried the identical hole (functions/suggest-recipe was clean,
+  the DEPLOYED supabase/functions copy was not). Same fix, plus requireUser,
+  which it did not have at all.
+- Web clients stopped selecting the model: ImportRecipeDialog.handleTextImport
+  and RecipeBuilder.handleAIGenerate no longer query ai_settings, and their
+  request bodies carry only the content to parse. Both files lost their now
+  unused `supabase` import.
+- supabase/config.toml: parse-recipe verify_jwt false -> true, matching
+  suggest-recipe and suggest-recipes-from-pantry. No shipped client regresses:
+  requireUser already rejected anon-key callers, so the 401 just moves to the
+  gateway. iOS EdgeFunctions falls back to the anon key only when there is no
+  session (EdgeFunctions.swift:84), and those calls were already failing.
+- Files: supabase/functions/parse-recipe/index.ts,
+  supabase/functions/suggest-recipe/index.ts, supabase/config.toml,
+  src/components/ImportRecipeDialog.tsx, src/components/RecipeBuilder.tsx,
+  src/lib/clientAiConfig.guard.test.ts (new), .ci/lint-baseline.txt.
+- Gates: 2722 vitest tests passed / 3 skipped, lint ratchet 1226 vs baseline
+  1229 (baseline lowered to 1226), check-function-trees.sh OK,
+  check-invisible-chars.mjs clean.
+- Deviation from AC 5: test-ai-model, suggest-recipes-from-pantry and
+  repurpose-content still contain api_key_env_var. They read it off an
+  ai_settings row they fetch themselves with the service-role client, not off
+  caller input, and test-ai-model exists to validate exactly that row, so a
+  literal clean grep would gut it. The guard test allowlists those three by name
+  and fails on a fourth.
+- Deviation from AC 3: the "returns 200 with aiModel in the body" assertion is a
+  static source guard, not a live call. deno is not installed on the loop
+  machine and ci.yml runs only two named deno test files
+  (functions/_shared/helpers_test.ts, verify-jwt-guard_test.ts), so a new Deno
+  test would never run. The guard was checked by reintroducing the branch: 2 of
+  9 assertions fail, then pass again once reverted.
+- **Learnings for future iterations:**
+  - There are TWO edge-function trees and they diverge. `supabase/functions/`
+    is what Dockerfile.functions copies and what serves production;
+    `functions/` is the serve()-style Agentic OS tree. 13 names exist in both.
+    A vulnerability "already fixed" in `functions/` may still be live. Read
+    scripts/ci/check-function-trees.sh before touching either.
+  - Source-guard tests under `src/` are the way to gate the Deno tree from this
+    repo: vitest reads supabase/functions/**/index.ts with fs and runs in the
+    real CI gate, which a Deno test in this repo does not. Pattern is already
+    established in src/lib/aiSafety.test.ts.
+  - Strip comments before matching source in a guard test. A comment saying
+    "aiModel is ignored" otherwise reads as the branch it documents.
+  - `npm run test:run` needs `npm ci` first; a fresh container has no
+    node_modules and vitest.config.ts fails to load with a confusing
+    ERR_MODULE_NOT_FOUND on vitest itself.
+---
+
+## 2026-09-01 - US-710 (household planner slice 1)
+- supabase/functions/_shared/url-validator.ts (new) exports fetchRecipePage,
+  the only entry point a caller needs. It enforces, in order: https-only and no
+  credentials in the URL; a host that is not loopback, RFC1918, link-local,
+  169.254.169.254 or metadata.google.internal, including the hex (0x7f000001)
+  and decimal (2130706433) spellings of 127.0.0.1; DNS resolution of a
+  hostname re-checked against the same ranges; redirect: 'manual' with a cap of
+  3 hops and every hop re-validated before it is followed;
+  AbortSignal.timeout(10000) per hop; a 2 MB body cap that returns 413.
+- parse-recipe and parse-recipe-grocery both call it. Both
+  `fetch(url, {redirect: 'follow'})` calls are gone, along with the duplicated
+  browser User-Agent header block, which now lives in the helper. The helper's
+  status comes back to the caller, so a refused URL is a 400, an oversized page
+  a 413, a timeout a 504 and an upstream failure a 502 -- previously all of it
+  was one flat 400 or a thrown 500.
+- Ported from functions/_shared/url-validator.ts, which has had safeFetch and
+  readCappedBody since the Agentic OS work. The deployed tree never got them.
+  Adapted rather than copied: https-only instead of http-or-https,
+  AbortSignal.timeout instead of a manual AbortController, a 2 MB cap instead
+  of 10 MB, fetchImpl injection so the tests need no network, and a status on
+  every failure.
+- 16 Deno tests in supabase/functions/_shared/url-validator.test.ts cover the
+  private-range rejection (direct and via redirect), the redirect cap, the size
+  cap (declared Content-Length and a lying server), redirect: 'manual' being
+  set at all, and the 504/502 mapping. Every case injects fetchImpl and uses IP
+  literals, so no network and no DNS: `deno test` with no permission flags.
+  ci.yml runs them as a named step beside the other two Deno test steps.
+- Also fixed the two type errors that made `deno check` fail on
+  parse-recipe-grocery (an implicit-any callback and an unknown catch binding).
+  No behavior change; the file I was editing is now checkable.
+- Files: supabase/functions/_shared/url-validator.ts (new),
+  supabase/functions/_shared/url-validator.test.ts (new),
+  supabase/functions/parse-recipe/index.ts,
+  supabase/functions/parse-recipe-grocery/index.ts, .github/workflows/ci.yml.
+- Gates: 17 Deno tests passed (16 new + the verify_jwt guard), 2722 vitest
+  passed / 3 skipped, lint 1226 at baseline, deno check clean on both edited
+  functions, check-function-trees.sh OK, check-invisible-chars.mjs clean.
+- **Learnings for future iterations:**
+  - deno is NOT installed in the loop container but installs in about a minute:
+    curl the release zip for x86_64-unknown-linux-gnu, unzip, move to
+    /usr/local/bin. Do this first on any edge-function story. It gives you
+    `deno check <file>` (real typechecking of the Deno tree, which tsc never
+    sees) and `deno test`, and it makes stories marked loopVerifiable: false
+    for "needs a deployed target" verifiable when the logic is pure.
+  - A CI Deno test only runs if ci.yml names its file. There is no glob. Adding
+    a *_test.ts or *.test.ts under supabase/functions does nothing on its own.
+  - Design edge-function helpers with an injectable fetchImpl. It turns an
+    SSRF guard into a hermetic unit test with no --allow-net, which is both
+    faster and a smaller permission surface in CI.
+  - `redirect: 'follow'` is the actual SSRF hole in a URL-fetching function,
+    not the initial hostname check. A public host that 302s to
+    169.254.169.254 defeats any amount of front-door validation.
+  - The non-deployed `functions/` tree is worth reading before writing a
+    security helper from scratch. It already had this one.
+---
+
+## 2026-09-01 - US-711 (household planner slice 1)
+- 20260901000009_household_scope_recipe_children.sql replaces the predicate on
+  all eight policies over recipe_ingredients and recipe_components:
+  `r.user_id = auth.uid()` becomes
+  `r.household_id = public.get_user_household_id(auth.uid())`, the same
+  expression `recipes` itself has used since 20251008035900.
+- The bug in one line: `recipes` was household-scoped, its two child tables
+  were owner-scoped, and both said in their comments that going through
+  `recipes` inherited the sharing. It did not. A partner could open a shared
+  recipe and find it had no ingredients and no components.
+- Backward-compatible: this only broadens. An owner is a member of their own
+  household, so every row visible before is visible now. All eight policy names
+  are recreated byte-identical, so nothing that looks a policy up by name
+  breaks. Every statement is DROP IF EXISTS + CREATE, so a replay is a no-op.
+  The UPDATE policies gained the WITH CHECK arm they were missing.
+- Verified against a real PostgreSQL 16.13 (a local cluster: this container has
+  psql and postgres 16 but no docker daemon, so `docker run postgres:16-alpine`
+  was not available). Ran the suite BEFORE the migration to prove the bug, then
+  after: owner 1/1 both times; partner 0/0 -> 1/1; outsider 0/0 both times and
+  still refused on INSERT; partner goes from "new row violates row-level
+  security policy" to a working INSERT/UPDATE/DELETE. Re-applying the migration
+  a second time produced zero notices and no error.
+  pg_policies confirms 8 policies, 0 mentioning user_id, 8 mentioning
+  get_user_household_id.
+- Files: supabase/migrations/20260901000009_household_scope_recipe_children.sql
+  (new), supabase/tests/us711_recipe_children_household_rls.test.sql (new),
+  supabase/tests/us711_recipe_children_household_rls.bootstrap.sql (new).
+- Gates: check-migration-prefixes.sh OK, check-migration-safety.sh OK,
+  check-invisible-chars.mjs clean. No src/ or supabase/functions change, so
+  vitest, lint and typecheck are untouched by this commit.
+- **Learnings for future iterations:**
+  - postgres 16 is installed in the loop container and there is NO docker
+    daemon. `pg_ctlcluster 16 main start` brings up a real cluster on 5432 in
+    two seconds. Connect as the postgres OS user (`su postgres -c "psql ..."`);
+    peer auth rejects root. Any story marked "needs a disposable postgres:16
+    container" is verifiable here.
+  - psql run as the postgres user cannot read files under the scratchpad path
+    (permission denied on the directory). Copy SQL to /tmp/<something> with
+    chmod 755 on the dir and 644 on the files first.
+  - RLS is bypassed for the table owner and for superusers, so a test that
+    seeds and asserts as `postgres` proves nothing. Create a NOLOGIN role,
+    GRANT it the tables, `set role`, and set request.jwt.claim.sub with
+    set_config to impersonate.
+  - A fixture UUID has to be valid hex. 'rrrr0000-...' parses as a uuid
+    nowhere, and the failed seed silently made every count 0, which looks
+    exactly like a passing "outsider sees nothing" assertion. Reset the
+    database and re-run before believing a zero.
+  - Run an RLS suite BEFORE the fix as well. A test that passes against both
+    the old and the new policy is not testing the policy.
+  - supabase/tests/*.test.sql is the existing convention (see us668), run by
+    hand, printing EXPECTED next to each value. There is no SQL test runner
+    wired into CI.
+---
+
+## 2026-09-01 - US-712 (household planner slice 1)
+- Removed the mount effect in src/pages/Grocery.tsx that called
+  deleteGroceryItems on every checked row and toasted "Cleared N purchased
+  items from last trip - Items were already added to your pantry". Both halves
+  of that message were false: nothing had been credited to the pantry, and a
+  shopper who reloaded mid-trip lost the record of what was already in the
+  cart. Also removed the hasAutoCleanedRef guard and the now-unused
+  deleteGroceryItems destructure, which means the page no longer holds a bulk
+  deleter at all.
+- AC 2 and AC 3 were already true and were verified rather than built. The
+  collapsed Purchased Collapsible is at Grocery.tsx:1140. handleDoneShopping
+  credits before removing: recordPurchases when ledgerWritesEnabled, with a
+  per-row fallback to updateFood/addFood for the rows the ledger declines, and
+  updateFood/addFood outright when the flag is off; only then
+  clearCheckedGroceryItems(). The single-row handleDeleteItem is the only other
+  removal path and it is an explicit button with an Undo toast.
+- src/pages/Grocery.mountCleanup.test.tsx (new, 4 tests) renders the real page
+  with one checked and one unchecked row in the store, the shape a reload hands
+  over from cache, and asserts: no deleteGroceryItems, no deleteGroceryItem, no
+  clearCheckedGroceryItems on mount; no "purchased item" toast; the Purchased
+  section and its "Move 1 to pantry" button present; and the row itself visible
+  once the section is expanded. Putting the effect back fails 3 of the 4, which
+  was checked before committing.
+- Files: src/pages/Grocery.tsx, src/pages/Grocery.mountCleanup.test.tsx (new).
+- Gates: 2726 vitest passed / 3 skipped (169 files, up 4 tests), lint 1226 at
+  baseline. Typecheck: this change adds ZERO errors -- HEAD without it and the
+  working tree with it both measure exactly 1400 -- but the ratchet FAILS on
+  both, because .ci/typecheck-baseline.txt says 1165. See the open finding
+  below; it is not caused by this story.
+- **Learnings for future iterations:**
+  - Grocery.tsx is renderable in vitest with about 80 lines of mocks: mock
+    @/contexts/AppContext wholesale (it re-exports all six domain hooks), the
+    supabase client, analytics, logger, sonner, and the twelve child components
+    that own their own fetching. No AppContextComposer needed.
+  - vi.mock factories are hoisted above every local const, so a `const stub =
+    (name) => ...` helper used inside one throws "Cannot access 'stub' before
+    initialization". Inline each factory.
+  - A Radix Collapsible does not render its content while closed, so
+    getByText on a row inside a collapsed section fails even though the data is
+    fine. Assert on the section header and count, or click to expand first.
+  - Write the "does it fail without the fix" check into the loop for UI stories
+    too, not just security ones. Two of these four assertions would have passed
+    against the buggy page.
+  - THE TYPECHECK RATCHET GAVE FALSE GREENS ON US-709, US-710 AND US-711.
+    CLAUDE.md warns that `tsc -b` skips the project when tsconfig.app.tsbuildinfo
+    looks current and exits 0 having checked nothing. `rm -f *.tsbuildinfo`
+    before the run is NOT sufficient on its own: those runs produced a 3-line
+    log with zero `error TS` lines and the script passed them, because its crash
+    guard only fires when tsc ALSO exits non-zero. A 3-line log is the tell.
+    Check `wc -l /tmp/typecheck-ratchet.log` -- a real run is ~2400 lines.
+  - To answer "did MY change add type errors", measure both sides the same way
+    instead of trusting one number: `git worktree add /tmp/base <ref>`, symlink
+    node_modules into it, `rm -f *.tsbuildinfo`, `npx tsc -b --noEmit` in each,
+    and diff the counts. About 20 minutes per side on this machine.
+
+## FINDING (2026-09-02): the Typecheck ratchet is RED ON MAIN, and has been
+- A complete `tsc -b --noEmit` measures **1400** errors on origin/main (0e79899).
+  `.ci/typecheck-baseline.txt` says **1165**. scripts/ci/typecheck-ratchet.sh
+  therefore exits 1 on an untouched checkout of main, and ci.yml:173 runs it
+  with no continue-on-error, so that job is a hard gate and it is failing.
+- Measured three ways with the same node_modules and the same command, each in
+  its own `git worktree` with *.tsbuildinfo deleted first:
+    origin/main (0e79899)          1400
+    4166dca (US-709/710/711)       1400
+    working tree (+ US-712)        1400
+  Not just equal counts: comparing the error sets with the line/column numbers
+  stripped gives 0 unique to main and 0 unique to this branch. The four commits
+  on this branch add no type errors and remove none.
+- So the gap predates this branch. Either the baseline was lowered without a
+  full run, or a merge landed ~235 errors while the ratchet was passing on a
+  skipped build. Not diagnosed further.
+- NOT FIXED HERE, deliberately. The script's own failure message says "Do NOT
+  raise .ci/typecheck-baseline.txt", and the two real options -- raise it to
+  1400 with a written justification, or fix 235 errors -- are both larger than
+  any story in this epic and neither is mine to choose. Raised with the user.
+- Practical consequence for the loop: `bash scripts/ci/typecheck-ratchet.sh`
+  cannot be used as a pass/fail gate on this branch. Until the baseline is
+  settled, prove "my change adds no type errors" by the worktree diff above,
+  which is what US-712 did.
+
+## CORRECTION (2026-09-02): US-709, US-710 and US-711 reported a false green
+- Their progress entries and commit messages say "typecheck ratchet exit 0".
+  That exit 0 came from `tsc -b` skipping the project and checking nothing, the
+  trap CLAUDE.md documents. `rm -f *.tsbuildinfo` before the run did not prevent
+  it, and the script's crash guard did not catch it because that guard only
+  fires when tsc ALSO exits non-zero.
+- The tell is the log length: `wc -l /tmp/typecheck-ratchet.log`. A real run is
+  ~2400 lines. Those runs produced 3.
+- The commits themselves are fine -- the worktree diff above proves all three
+  add zero type errors -- but the gate they cited was not run.
+---
+
+## 2026-09-02 - US-713 (household planner slice 1)
+- handleRegenerateFromPlan in src/pages/Grocery.tsx no longer ends in
+  setGroceryItems. That call was local state only: the generated list looked
+  right until a reload, never reached the server, and never reached a partner's
+  phone. New rows now go through addGroceryItemsMerged and rows the plan no
+  longer calls for go through deleteGroceryItems.
+- generateGroceryList (src/lib/mealPlanner.ts) takes an optional ShoppingWindow
+  {from, to} of YYYY-MM-DD keys and filters plan entries to it. The page passes
+  the current Sunday-Saturday week; previously generation ran over every entry
+  the context held, so a sync put roughly 120 days of dinners on one week's
+  list. Dates are compared on the first 10 characters so an entry carrying a
+  time still matches.
+- Generated rows carry grocery_list_id, auto_generated and
+  source_plan_entry_id. GroceryAddInput gained all three and the insert row in
+  addGroceryItemsMerged now writes them; without grocery_list_id a generated row
+  is invisible under every named list, because filterItemsByList matches on it.
+  source_plan_entry_id names the EARLIEST contributing entry, since a row is
+  aggregated across every entry for that food in the window.
+- Idempotence comes from the shape, not from a dedupe pass: a generated row that
+  is already on the list as an unchecked plan-sync row is neither new nor stale,
+  so it is left alone rather than deleted and re-inserted. A second sync for the
+  same week is a no-op -- no duplicate rows, no doubled quantities, no realtime
+  churn on a partner's phone. 17 tests in src/lib/planSync.test.ts, including
+  idempotence end to end through generateGroceryList.
+- AC 5, with a deviation. The is_manual filter is gone: is_manual was never a
+  column, only a field on a local interface, so it was undefined on every row
+  loaded from the server and the filter preserved nothing but checked rows --
+  hand-added items were swept on every sync. But auto_generated alone cannot
+  replace it as the RETIRE predicate: auto_add_restock_items
+  (20251010221000:172) sets the same flag, and its column comment still reads
+  "True if item was auto-added by restock system". Retiring on that flag alone
+  would delete the user's restock suggestions on every sync. A row is
+  regenerable only when it is auto_generated AND carries a plan-sync
+  fingerprint: source_plan_entry_id, or added_via = 'meal_plan_sync'. This
+  preserves strictly more than the AC asks for.
+- The is_manual swap also reached the two checkout-undo payloads, which carried
+  is_manual and dropped auto_generated/source_plan_entry_id. Undoing a checkout
+  restored a plan-generated row as a hand-added one, which no later sync would
+  ever retire. Both now carry the persisted pair, and addGroceryItem writes them.
+  The dead ExtendedGroceryItem interface is deleted.
+- Files: src/lib/mealPlanner.ts, src/lib/groceryData.ts, src/lib/groceryMerge.ts,
+  src/contexts/GroceryContext.tsx, src/pages/Grocery.tsx,
+  src/lib/planSync.test.ts (new).
+- Gates: 2743 vitest passed / 3 skipped (up 17), lint 1226 at baseline.
+  Typecheck 1398 against origin/main's 1400: this REMOVES two errors (both the
+  is_manual phantom field) and adds none, established by diffing the error sets
+  with line and column numbers stripped, not by comparing counts.
+- **Learnings for future iterations:**
+  - `is_manual` does not exist in the database. Anything reading it is reading
+    undefined. It was still being written into two insert payloads and was
+    itself producing two of the tree's type errors. If another surface reads it,
+    that surface is also broken.
+  - auto_generated is overloaded: smart restock and meal-plan sync both set it.
+    Anything that DELETES on the strength of that flag needs a second
+    discriminator or it will eat the other feature's rows. added_via is the
+    cheap one to stamp.
+  - GroceryContext has two insert paths with separately hand-maintained column
+    allowlists -- addGroceryItem and addGroceryItemsMerged. A new column has to
+    be added to BOTH or it silently vanishes on one of them.
+  - parseGroceryItemRow uses a passthrough zod schema and spreads the row, so a
+    new column reaches the client with no normalizer change. That is why
+    auto_generated works as a predicate where is_manual never could.
+  - The typecheck comparison is cheaper than it looks now that origin/main's
+    error set is captured: keep /tmp/main.errs (line/col stripped, sorted) and
+    diff each story's run against it. One 20-minute run per story, not two.
+---
+
+## 2026-09-02 - US-714 (household planner slice 1)
+- AddGroceryItemDialog takes selectedListId and stamps grocery_list_id on both
+  of its onAdd call sites -- the manual form and the import tab, which was the
+  one easy to miss. Grocery.tsx passes it.
+- Every other add path on the page now carries the list: restock suggestions
+  (onAddItems), the checkout-undo payload (both the `moved` projection and the
+  re-insert), and the plan sync. Recipe import and delete-undo already did.
+- filterItemsByList takes an optional defaultListId and treats a null
+  grocery_list_id as belonging to it. A null list id was never "on no list": it
+  is what rows got before named lists existed and from any path that forgot to
+  stamp one, and a strict equality filter hid every one of them the moment a
+  list was selected. With no default resolved yet it falls back to the old
+  strict match, so nothing appears on the wrong list during load.
+- GroceryListSelector reports the default list through a new
+  onDefaultListChange. It already fetched the lists and picked the default to
+  auto-select; nothing else on the page knew which id that was.
+- planGroceryMerge takes a scope {targetListId, defaultListId} and indexes only
+  unchecked rows on the target list. Adding milk to list B used to bump the milk
+  on list A: the merge saw every unchecked row the client held, so the new row
+  was never inserted and the quantity landed on a list the shopper was not
+  looking at. addGroceryItemsMerged buckets a batch by grocery_list_id and plans
+  each bucket separately, so a mixed batch is correct too.
+
+- **THIS COMMIT REPAIRS US-713 (ce355f4), which did not work.** planGroceryMerge
+  built its insert rows from a hand-written list of six fields, so everything
+  else on the input was dropped before GroceryContext ever saw it. US-713 added
+  grocery_list_id, auto_generated and source_plan_entry_id to GroceryAddInput
+  and to the context's insert row, and all three were being stripped in between:
+  plan-sync rows reached the database with none of their stamps. The US-713
+  tests covered planRegenerationFromPlan, which produces the additions, and
+  never followed them through planGroceryMerge -- the gap was between two
+  tested units. The insert now spreads the input instead, so a new field
+  survives by default, and a test asserts eleven fields make it through.
+- Files: src/components/AddGroceryItemDialog.tsx,
+  src/components/GroceryListSelector.tsx, src/contexts/GroceryContext.tsx,
+  src/lib/groceryData.ts, src/lib/groceryMerge.ts, src/pages/Grocery.tsx,
+  src/lib/listScoping.test.ts (new).
+- Deviation from AC 2: ScanReceiptDialog has no grocery add path. It writes to
+  the pantry (its own copy reads "we'll add the items to your pantry") and never
+  calls addGroceryItem, so there is nothing to stamp. Left alone.
+- Also narrowed SmartRestockSuggestions' onAddItems `priority` from `string` to
+  the 'low' | 'medium' | 'high' union GroceryItem actually declares. It was one
+  of the tree's standing type errors and it blocked spreading a restock
+  suggestion into a grocery add at all.
+- Gates: 2753 vitest passed / 3 skipped (up 10), lint 1226 at baseline.
+  Typecheck 1397 against origin/main's 1400: three errors removed (both
+  is_manual ones and the restock priority mismatch), zero added, by set diff.
+- **Learnings for future iterations:**
+  - A hand-written field allowlist in a mapping function is where stamped data
+    goes to die, and it fails silently. There were THREE in this flow:
+    planGroceryMerge's insert builder, addGroceryItem's newItem, and
+    addGroceryItemsMerged's row. Adding a column means finding all of them.
+  - Unit tests on both sides of a pipeline do not test the pipeline. US-713 had
+    a green test on the producer and a green test on nothing in particular, and
+    the field was dropped in the function between them. When a story is "make X
+    persist", assert on the object that reaches the persistence call.
+  - A null foreign key is rarely "none" in this schema -- it usually means "the
+    default". Check what the null case means before writing an equality filter.
+---
+
+## 2026-09-02 - US-715 (household planner slice 1)
+- Quick Build (handleBuildWeek in source; the AC calls it handleQuickBuild) and
+  handleAIMealPlan both ended in setPlanEntries, which is local state only.
+  Nothing was inserted, so a generated week was gone on reload and never reached
+  a partner's device, and the wholesale replace wiped every other kid and every
+  other week on the way. Both now run deleteWeekPlan(weekInView, activeKid) then
+  addPlanEntries, so the replace is scoped and the result persists.
+- buildWeekPlan takes a startDate (defaulting to today) and returns
+  Omit<PlanEntry, 'id'>[]. It used to build from its own new Date(), so paging
+  to next week and building produced this week's dates, and it invented ids that
+  were never real. The server assigns them now.
+- handleAIMealPlan sends startDate; supabase/functions/ai-meal-plan reads it and
+  falls back to new Date() only when it is absent or not YYYY-MM-DD.
+- setPlanEntries is documented on PlanContextType as server-load only, and an
+  eslint no-restricted-syntax rule blocks CallExpressions named setPlanEntries
+  outside src/contexts. The two remaining callers in Planner.tsx are fresh
+  server loads and carry an inline disable that says so.
+- Files: src/lib/mealPlanner.ts, src/pages/Planner.tsx,
+  src/contexts/PlanContext.tsx, supabase/functions/ai-meal-plan/index.ts,
+  eslint.config.js, src/lib/buildWeekPlan.test.ts (new),
+  src/pages/Planner.persist.test.tsx (new).
+- Gates: 2766 vitest passed / 3 skipped (up 13), lint 1226 at baseline,
+  17 Deno tests, function-tree and invisible-char guards clean. Typecheck 1396
+  against origin/main's 1400: four removed, zero added, by set diff. Reverting
+  Quick Build to setPlanEntries fails 3 of the 5 Planner tests, which was
+  checked before committing.
+- Near miss worth recording: the first pass stripped `id: generateId()` from
+  buildWeekPlan with a line-range regex, and the range also caught buildDayPlan
+  further down the same file, which still returns PlanEntry[]. That surfaced as
+  2 ADDED type errors on the first diff against main and nowhere else -- vitest
+  and the lint ratchet were both green with it broken, because buildDayPlan has
+  no callers and no tests. The ids are restored.
+- **Learnings for future iterations:**
+  - Planner.tsx renders in vitest with roughly the same mock set as Grocery:
+    @/contexts/AppContext wholesale, supabase, @/lib/edge-functions, logger,
+    sonner, useMediaQuery, and six child components. Under 90 lines of setup.
+  - The AC names in this PRD do not always match the source. handleQuickBuild
+    is handleBuildWeek. Grep for the behaviour, not the name.
+  - An eslint no-restricted-syntax rule on a context setter is a cheap way to
+    make "this is server-load only" enforceable rather than a comment. Add the
+    inline disables for the legitimate callers in the same commit or the lint
+    ratchet fails.
+  - Never apply a line-range regex edit to a file with more than one function
+    of the same shape. mealPlanner.ts has buildWeekPlan AND buildDayPlan, both
+    pushing into a `plan` array; an edit meant for one silently hit both.
+  - buildDayPlan (src/lib/mealPlanner.ts:78) has NO callers anywhere in src/ or
+    app/. Dead, untested, and it still typechecks, so nothing flags it. Left
+    alone here as out of scope, but it is a deletion candidate.
+---
+
+## 2026-09-02 - US-716 (household planner slice 1)
+- applyTemplate had never worked, and failed for two independent reasons at
+  once. It omitted user_id, which is NOT NULL on plan_entries with no trigger to
+  fill it, so every insert was rejected. And a recipe-only template entry was
+  inserted with `food_id: entry.food_ids ? entry.food_ids[0] : null` -- food_id
+  is also NOT NULL, so those rows were rejected too. Both fixed: user_id and
+  household_id are stamped, and recipe-only entries route through
+  schedule_recipe_to_plan, which expands the recipe's own foods. An RPC failure
+  there (recipe with no foods, or one this caller may not schedule) is logged
+  and skipped rather than failing the whole apply.
+- 20260901000010 adds the uniqueness the upsert needs:
+  (household_id, kid_id, date, meal_slot, food_id), NULLS NOT DISTINCT, after
+  collapsing existing duplicates oldest-wins. It is a plain column list rather
+  than a COALESCE expression because PostgREST's on_conflict can only name
+  columns; NULLS NOT DISTINCT (PG15+) is what keeps legacy null-household rows
+  inside the constraint. Verified on PostgreSQL 16.13: 4 seeded rows deduped to
+  2 (including the null-household pair), a null-household duplicate then
+  rejected, and ON CONFLICT DO NOTHING accepted on the column list.
+- The dialog offers Merge (keep what is planned) or Replace (clear the week for
+  the selected kids first), sends `mode`, and reports allergen skips in the
+  success toast.
+- saveFromWeek: the `.eq('is_primary_dish', true)` filter is gone. It had been
+  discarding every side dish, so a saved week came back as one food per slot.
+  Entries are grouped by (date, meal_slot, recipe_id) instead, which keeps the
+  whole meal in one template entry's food_ids and still collapses duplicates.
+- AC 6 resolved by implementing, not removing: ApplyTemplateDialog carries no
+  per-child safety framing to remove (it only lists children with photos and
+  ages), so the honest option was the check itself. It matches kid.allergens and
+  kid.dietary_restrictions against food.allergens case-insensitively, skips the
+  food for that kid only, and returns the skips to the client.
+- The two pure transforms moved to supabase/functions/_shared/
+  meal-plan-templates.ts (buildTemplatePlanRows, groupPlannedWeekIntoTemplate-
+  Entries, unsafeReason, dateForOffset) with 18 Deno tests wired into ci.yml.
+  The story is marked loopVerifiable: false; it is verified anyway.
+- Files: supabase/migrations/20260901000010_plan_entries_template_idempotence.sql
+  (new), supabase/functions/_shared/meal-plan-templates.ts (new),
+  supabase/functions/_shared/meal-plan-templates.test.ts (new),
+  supabase/functions/manage-meal-plan-templates/index.ts,
+  src/components/ApplyTemplateDialog.tsx, .github/workflows/ci.yml,
+  .ci/lint-baseline.txt (1226 -> 1225).
+- Gates: 35 Deno tests, 2766 vitest, lint 1225 (ratcheted down one), typecheck
+  1396 vs origin/main's 1400 -- four removed, zero added, by set diff.
+  Migration, function-tree and invisible-char guards clean.
+- **Learnings for future iterations:**
+  - plan_entries.user_id AND plan_entries.food_id are both NOT NULL. Any edge
+    function building rows for that table has to carry both. auto_fill_household_id
+    covers household_id; nothing covers user_id.
+  - PostgREST `on_conflict` takes a COLUMN LIST, so a unique index built on an
+    expression (COALESCE(...)) cannot be used as an upsert target. When a
+    nullable column is part of the key, reach for NULLS NOT DISTINCT instead.
+  - A python `s.index(anchor)` splice is dangerous when the anchor is not
+    unique: `const { error: entriesError } = await supabaseClient` appears in
+    BOTH createTemplate and saveFromWeek, the earlier match was used as the end
+    of a slice that started later, and the file went from 503 to 1041 lines by
+    duplicating its own middle. `git checkout HEAD -- <file>` and redo with
+    unique anchors; do not try to repair it in place.
+  - eslint lints supabase/functions/**, not just src/. A new `any` there moves
+    the lint ratchet.
+---
+
+## 2026-09-02 - US-717 (household planner slice 1)
+- Every entity context had the same bug in its insert error branch: when the
+  server rejected the row it appended a locally-generated one anyway. The row
+  looked saved, the debounced persist wrote it to the localStorage backup, and
+  it existed nowhere else. Nobody was told anything. A parent could plan a whole
+  week that lived only on that screen.
+- runOptimisticInsert (src/lib/optimisticMutation.ts, new) backs addPlanEntry
+  and addPlanEntries: append optimistically, remove exactly the rows it added on
+  failure (matched by reference, so a realtime event that replaced one under the
+  same id is left alone), toast, and on success swap the temporary rows for the
+  server's, which carry the real ids.
+- It deliberately does NOT reuse runOptimisticMutation. That helper captures its
+  snapshot inside the setState updater, and React can invoke an updater more
+  than once -- the second call's `prev` already contains the optimistic rows, so
+  rollbackOptimistic sees them in the snapshot, treats them as pre-existing and
+  RESTORES them instead of dropping them. The first version of this story did
+  reuse it and two tests failed for exactly that reason.
+- AC 4 audit found SEVEN phantom-append sites, all fixed:
+    PlanContext     addPlanEntry, addPlanEntries
+    GroceryContext  addGroceryItem, addGroceryItemsMerged
+    FoodsContext    addFood, addFoods
+    KidsContext     addKid
+  RecipesContext was already correct: its error branch throws.
+- Deviation from AC 4's wording: only the two PlanContext paths use
+  runOptimisticInsert. The other five are PESSIMISTIC inserts -- they await the
+  server before touching state at all -- so there is no optimistic row to roll
+  back and the correct fix is simply not appending, plus a toast. Converting
+  them to optimistic inserts would be a behaviour change the story does not ask
+  for. The plan-limit branches in Foods/Kids already returned before the phantom
+  append and are untouched; runOptimisticMutation/Insert gained an `onError`
+  hook so a caller can suppress the toast for that case if it ever needs it.
+- The generateId() appends still in those files are the signed-out, local-only
+  branches. Those are correct: with no user there is no server to reject.
+- Files: src/lib/optimisticMutation.ts, src/contexts/PlanContext.tsx,
+  src/contexts/GroceryContext.tsx, src/contexts/FoodsContext.tsx,
+  src/contexts/KidsContext.tsx, src/contexts/PlanContext.weekOps.test.tsx.
+- Gates: 2770 vitest passed / 3 skipped (up 4), lint 1225 at baseline.
+  Typecheck deferred to the slice-1 checkpoint (batching, per the user).
+- **Learnings for future iterations:**
+  - A setState updater is not guaranteed to run once. Anything that captures
+    state INSIDE an updater and later diffs against it is unsafe for an
+    append-then-rollback. Know the ids you created and remove those.
+  - Mocking supabase for a context test needs @/lib/supabaseAuthError stubbed
+    too. runOptimisticMutation awaits handleSupabaseAuthError before rolling
+    back, and the real one reaches for supabase.auth; without the stub it throws
+    and the rollback never runs, which looks exactly like a broken rollback.
+  - A supabase mock has to serve both `.select()` and `.select().single()`.
+    Object.assign(Promise.resolve(x), { single: () => ... }) is a thenable that
+    also carries .single(), which covers both callers with one object.
+---
+
+## 2026-09-02 - US-718 (household planner slice 1)
+- SiblingMealFinder's "Use this meal" called addPlanEntry with `food_id: ''`.
+  plan_entries.food_id is a NOT NULL uuid, so an empty string is invalid rather
+  than absent: the insert was rejected every time, and before US-717 the context
+  appended a locally-generated row anyway, so the meal appeared on the planner
+  and existed nowhere else.
+- A solver result names a RECIPE, so there is no food_id to send. handleUse now
+  builds one schedule_recipe_to_plan payload per child through
+  buildSiblingScheduleRequests (src/lib/siblingSchedule.ts) and stops on the
+  first RPC error with a toast, which is AC 2.
+- Consequence worth knowing: the RPC writes server-side, so the new rows reach
+  the UI through the existing plan_entries realtime subscription rather than an
+  optimistic local update. There is a beat before they appear. US-724's shared
+  plan primitive is where that gets an optimistic path.
+- Files: src/lib/siblingSchedule.ts (new), src/lib/siblingSchedule.test.ts
+  (new, 9 tests), src/pages/SiblingMealFinder.tsx.
+
+## 2026-09-02 - US-719 (household planner slice 1)
+- Page-level Save Template and Templates buttons removed from Planner.tsx. The
+  grid toolbar's working copies remain in BOTH render branches (mobile ~647,
+  desktop ~875) -- they look like duplicates in a grep and are not.
+- /dashboard/ai-planner, src/pages/AIPlanner.tsx and every entry pointing at it
+  are deleted: the Navigation nav list AND its separate mobile NavLink block,
+  the Dashboard nav list, CommandPalette, and QuickActionsMenu (which pointed at
+  /ai-planner, a route that never existed). AC 2 offered "remove or rewire"; the
+  page wrote nothing to plan_entries, so there was nothing to rewire.
+- The duplicate top-level /planner route was not a duplicate route, it mounted a
+  SECOND copy of the whole Dashboard + Planner tree, so the same page existed at
+  two URLs with separate state. It is a Navigate redirect to /dashboard/planner
+  now.
+- SwapMealDialog and DetailedTrackingDialog were rendered on Planner.tsx but
+  unreachable: nothing ever called setSelectedEntry or setTrackingEntry, so
+  neither could open. Removed along with their state and handleSwapConfirm.
+  US-725 wires the real cell menu.
+- Files: src/App.tsx, src/pages/Planner.tsx, src/pages/Dashboard.tsx,
+  src/components/Navigation.tsx, src/components/CommandPalette.tsx,
+  src/components/QuickActionsMenu.tsx, src/pages/AIPlanner.tsx (deleted),
+  .ci/lint-baseline.txt (1225 -> 1218).
+- Gates for both: 2779 vitest passed / 3 skipped (up 9), lint 1218 (ratcheted
+  down seven by the dead-code removal), check-jsx-imports and
+  check-invisible-chars clean. Typecheck batched to the slice-1 checkpoint.
+- **Learnings for future iterations:**
+  - An empty string is not a null. `food_id: ''` into a NOT NULL uuid column is
+    an invalid-input error, not a missing-value error, and it reads as
+    "intentionally blank" to anyone skimming the call site.
+  - A nav entry usually lives in FOUR places in this app: the Navigation array,
+    a separate mobile NavLink block further down the same file, the Dashboard
+    array, and CommandPalette. QuickActionsMenu is a fifth. Grep for the path,
+    not for the label, and expect more than one hit per file.
+  - Deleting genuinely dead UI moved the lint ratchet by 7 on its own. The
+    backlog has a dead-code component to it, not only a typing one.
+---
+
+## 2026-09-02 - US-720 BLOCKED (household planner slice 1)
+- The recursive `git rm -r app native-js-build ...` was refused by the session's
+  auto-mode safety classifier, which guards bulk directory deletion. Nothing was
+  deleted; the tree is untouched. Asked Dj, who chose to skip and keep going.
+- AC 2 is done and shipped anyway: app/mobile/lib/unit-suggestions.ts is ported
+  to src/lib/groceryAisle.ts, which is the only data in app/ worth keeping and
+  which US-728 builds on. The port does not depend on the deletion.
+- Survey for whoever picks this up, so it does not have to be redone:
+  - KEEP src/lib/platform.ts. It has 10+ web consumers (AppContext,
+    AccessibilityContext, useSmartDefaults, both barcode scanners, five tests),
+    so AC 5's "only if a non-Expo consumer remains" resolves to keep.
+  - native-js-build/ is the earlier pure-JavaScript React Native shell. No CI
+    workflow or package.json script references it, so AC 8's delete branch
+    applies rather than its record-status branch.
+  - babel.config.js exists only to configure babel-plugin-module-resolver, and
+    nothing outside app/ imports through that alias. Both go.
+  - scripts/setup-mobile-assets.cjs has exactly one consumer, the
+    setup:mobile:assets script. Both go.
+  - 19 npm scripts to remove: expo:start/android/ios/web/clear,
+    eas:build:{ios,android,all}:{preview,production}, eas:submit:{ios,android},
+    expo:prebuild, setup:mobile:assets, android, ios.
+  - 17 dependencies to remove: expo, expo-camera, expo-constants,
+    expo-file-system, expo-haptics, expo-image-picker, expo-linking,
+    expo-local-authentication, expo-router, expo-secure-store,
+    expo-splash-screen, expo-status-bar, react-native,
+    react-native-safe-area-context, react-native-screens,
+    react-native-reanimated, babel-plugin-module-resolver.
+  - AC 3 names @capacitor* but NO @capacitor package is in package.json. Only
+    capacitor.config.ts exists, orphaned. Delete the file; there is no dep.
+- Files: src/lib/groceryAisle.ts (new, the AC 2 port).
+---
+
+## 2026-09-02 - US-721 (household planner slice 1)
+- The web builder collected a quantity and a unit for every ingredient and threw
+  both away: linked ingredients were reduced to a food_ids uuid array, unlinked
+  ones flattened into one comma-joined additional_ingredients string.
+  recipe_ingredients has had columns for all of it since US-265 (April) and the
+  web client had never written a row, so scaling, shortfall and recipe-aware
+  grocery generation had nothing to read.
+- src/lib/recipeIngredients.ts holds the pure transforms: toIngredientPayloads,
+  diffIngredientRows, draftsFromRecipe, buildAdditionalIngredientsDisplay,
+  parseIngredientQuantity.
+- RecipesContext.addRecipe writes the rows after the recipe row exists;
+  updateRecipe diffs them by id. Diffing rather than delete-all matters because
+  recipe_components (US-612) points at recipe_ingredients.id -- a
+  delete-then-reinsert would orphan every reference on every save.
+- EnhancedRecipeBuilder seeds in preference order: recipe_ingredients, then
+  food_ids for a legacy recipe, then additional_ingredients parsed into rows.
+  Falling back to food_ids when rows exist would silently drop every quantity,
+  which is why the order is asserted by a test.
+- additional_ingredients is now DERIVED on every save and never read as the
+  source of truth. It is still written because shipped iOS builds read it;
+  rebuilding it from the rows each time is what stops the two drifting.
+- The core-payload retry in addRecipe fired on ANY insert error. A constraint
+  violation or an RLS rejection was retried with two thirds of the recipe
+  stripped out, and that retry "succeeded", saving a mangled row. It now fires
+  only on a missing-column error class (PGRST204, 42703, or a message matching
+  the usual phrasings) and toasts which columns it dropped.
+- prepTime/cookTime use parseDurationMinutes. parseInt("1 hr 30 min") is 1, so
+  total_time_minutes has been wrong for every recipe entered with units.
+- Files: src/lib/recipeIngredients.ts (new), src/lib/recipeIngredients.test.ts
+  (new, 27 tests), src/contexts/RecipesContext.tsx, src/types/index.ts,
+  src/components/recipes/EnhancedRecipeBuilder.tsx,
+  src/components/recipes/IngredientRow.tsx.
+- Gates: 2806 vitest passed / 3 skipped (up 27), lint 1218 at baseline,
+  typecheck 1392 vs origin/main's 1400 -- eight removed, zero added, by set
+  diff. Caveat on that run: it started before the last edit (stripping
+  recipe_ingredient_rows out of updateRecipe's optimistic local state) landed,
+  so that one destructure is covered by vitest and eslint but not by this
+  typecheck run.
+- **Learnings for future iterations:**
+  - parseGroceryText does NOT split on commas, on purpose, so "beef, ground"
+    stays one grocery item. Reading the old comma-joined
+    additional_ingredients back therefore needs a comma split first, and a
+    comma inside an ingredient name becomes two rows. Recoverable in the editor
+    but worth knowing before trusting a parsed legacy recipe.
+  - recipe_ingredients has no column for "optional". It is folded into
+    optional_notes as a "(optional)" suffix and parsed back out on read. If a
+    real column ever lands, both halves are in recipeIngredients.ts.
+  - A blanket `if (error) retryWithLessData()` is worse than no retry. It turns
+    every failure class into a silent partial save. Gate a retry on the error
+    class it was written for.
+  - Recipe carries recipe_ingredient_rows as write-only transport from the
+    builder to the context. It is not a column: addRecipe and updateRecipe both
+    build their payloads field-by-field, and updateRecipe strips it from local
+    state so a later edit cannot re-send stale rows.
+---

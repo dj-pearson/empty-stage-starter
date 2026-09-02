@@ -3,9 +3,14 @@ import { z } from "zod";
 import { Recipe, RecipeIngredient } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
+import {
+  diffIngredientRows,
+  type IngredientRowPayload,
+} from "@/lib/recipeIngredients";
 import { upsertById } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
 import type { Database } from "@/integrations/supabase/types";
@@ -178,6 +183,88 @@ interface RecipesContextType {
 
 const RecipesContext = createContext<RecipesContextType | undefined>(undefined);
 
+/**
+ * US-721: is this failure "the database does not have that column"?
+ *
+ * PostgREST reports an unknown column as PGRST204, and Postgres itself as
+ * 42703. Anything else -- a constraint violation, an RLS rejection, a network
+ * failure -- must NOT trigger the core-payload retry, which strips two thirds
+ * of the recipe and would otherwise "succeed" with a mangled row.
+ */
+export function isMissingColumnError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  if (!e) return false;
+  if (e.code === 'PGRST204' || e.code === '42703') return true;
+  const message = (e.message ?? '').toLowerCase();
+  return (
+    /could not find the .* column/.test(message) ||
+    /column .* does not exist/.test(message) ||
+    /unknown column/.test(message)
+  );
+}
+
+/**
+ * US-721: persist the structured ingredient rows for a recipe.
+ *
+ * Diffs by id so recipe_ingredients.id survives an edit -- recipe_components
+ * (US-612) points at those ids, and a delete-all-then-reinsert would orphan
+ * every reference on every save.
+ */
+/** Re-read a recipe's ingredient rows so local state carries the server ids. */
+async function readIngredientRows(recipeId: string): Promise<RecipeIngredient[]> {
+  const { data, error } = await supabase
+    .from('recipe_ingredients')
+    .select('*')
+    .eq('recipe_id', recipeId)
+    .order('sort_order', { ascending: true });
+  if (error) {
+    logger.error('Supabase recipe_ingredients read error:', error);
+    return [];
+  }
+  return (data ?? []) as unknown as RecipeIngredient[];
+}
+
+async function persistIngredientRows(
+  recipeId: string,
+  rows: IngredientRowPayload[],
+): Promise<void> {
+  const { data: existing, error: readError } = await supabase
+    .from('recipe_ingredients')
+    .select('id')
+    .eq('recipe_id', recipeId);
+
+  if (readError) {
+    logger.error('Supabase recipe_ingredients read error:', readError);
+    return;
+  }
+
+  const diff = diffIngredientRows((existing ?? []) as Array<{ id: string }>, rows);
+
+  if (diff.deleteIds.length > 0) {
+    const { error } = await supabase
+      .from('recipe_ingredients')
+      .delete()
+      .in('id', diff.deleteIds);
+    if (error) logger.error('Supabase recipe_ingredients delete error:', error);
+  }
+
+  for (const row of diff.updates) {
+    const { id, ...fields } = row;
+    const { error } = await supabase
+      .from('recipe_ingredients')
+      .update(fields)
+      .eq('id', id as string);
+    if (error) logger.error('Supabase recipe_ingredients update error:', error);
+  }
+
+  if (diff.inserts.length > 0) {
+    const { error } = await supabase
+      .from('recipe_ingredients')
+      .insert(diff.inserts.map((row) => ({ ...row, recipe_id: recipeId })));
+    if (error) logger.error('Supabase recipe_ingredients insert error:', error);
+  }
+}
+
 export function RecipesProvider({ children }: { children: React.ReactNode }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const { userId, householdId } = useAuth();
@@ -209,6 +296,7 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
       supabase.removeChannel(channel);
     };
   }, [userId, householdId]);
+
 
   const addRecipe = useCallback(async (recipe: Omit<Recipe, "id">): Promise<Recipe> => {
     if (userId) {
@@ -245,7 +333,12 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
 
       let { data, error } = await supabase.from('recipes').insert([dbPayload]).select().single();
 
-      if (error) {
+      // US-721: the core-payload retry used to fire on ANY insert failure, so a
+      // constraint violation or an RLS rejection was silently retried with two
+      // thirds of the recipe stripped out -- and it "succeeded", saving a
+      // mangled row. It only fires on a missing-column error now, and it says
+      // which columns it dropped.
+      if (error && isMissingColumnError(error)) {
         const corePayload: Record<string, unknown> = {
           name: dbPayload.name, description: dbPayload.description,
           food_ids: dbPayload.food_ids ?? [], instructions: dbPayload.instructions,
@@ -258,10 +351,21 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
           if (corePayload[k] === undefined) delete corePayload[k];
         });
 
+        const dropped = Object.keys(dbPayload).filter((k) => !(k in corePayload));
+        logger.warn('addRecipe: schema is missing columns, retrying without them', {
+          reason: (error as { message?: string }).message,
+          dropped,
+        });
+
         const retry = await supabase.from('recipes').insert([corePayload]).select().single();
         if (retry.error) {
           logger.error('Supabase addRecipe retry failed:', retry.error);
           throw new Error(`Database error: ${retry.error.message}`);
+        }
+        if (dropped.length > 0) {
+          toast.warning(`Saved without ${dropped.length} field${dropped.length === 1 ? '' : 's'}`, {
+            description: `This database is missing: ${dropped.join(', ')}`,
+          });
         }
         data = retry.data;
         error = null;
@@ -271,6 +375,12 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
       if (data) {
         const newRecipe = parseRecipeRow(data);
         if (newRecipe) {
+          // US-721: the quantity and unit the cook typed, as real rows.
+          const rows = recipe.recipe_ingredient_rows;
+          if (rows && rows.length > 0) {
+            await persistIngredientRows(newRecipe.id, rows);
+            newRecipe.recipe_ingredients = await readIngredientRows(newRecipe.id);
+          }
           setRecipes(prev => upsertById(prev, newRecipe));
           return newRecipe;
         }
@@ -312,12 +422,26 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
 
       // US-320: optimistic update (camelCase `updates` to local state) with
       // rollback + toast if the snake_case `dbUpdates` write is rejected.
+      // US-721: recipe_ingredient_rows is write-only transport, not a column
+      // and not state. Keeping it would let a later edit re-send stale rows.
+      const { recipe_ingredient_rows: _rows, ...localUpdates } = updates;
       void runOptimisticMutation<Recipe>(
         setRecipes,
-        prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)),
+        prev => prev.map(r => (r.id === id ? { ...r, ...localUpdates } : r)),
         () => supabase.from('recipes').update(dbUpdates).eq('id', id),
         { logLabel: 'Supabase updateRecipe error:' }
       );
+
+      // US-721: ingredient rows are a separate table, so they are diffed
+      // separately. Rows the edit kept keep their ids.
+      const rows = updates.recipe_ingredient_rows;
+      if (rows) {
+        void (async () => {
+          await persistIngredientRows(id, rows);
+          const fresh = await readIngredientRows(id);
+          setRecipes(prev => prev.map(r => (r.id === id ? { ...r, recipe_ingredients: fresh } : r)));
+        })();
+      }
     } else {
       setRecipes(prev => prev.map(r => (r.id === id ? { ...r, ...updates } : r)));
     }

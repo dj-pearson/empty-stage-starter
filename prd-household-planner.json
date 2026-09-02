@@ -15,11 +15,11 @@
         "grep across supabase/functions for api_key_env_var finds only _shared/ai-service-v2.ts reading its own server-side settings row"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "edge",
       "loopVerifiable": false,
-      "notes": "Review item 1. Verified in source at parse-recipe/index.ts:84-112 and ImportRecipeDialog.tsx:191-205. Ship before anything else in this epic."
+      "notes": "Review item 1. Verified in source at parse-recipe/index.ts:84-112 and ImportRecipeDialog.tsx:191-205. Ship before anything else in this epic. Landed 2026-09-01: the aiModel branch is gone from parse-recipe and from suggest-recipe, which carried the identical hole and now also runs requireUser; both resolve their model through AIServiceV2. parse-recipe moved to verify_jwt = true, matching suggest-recipe and suggest-recipes-from-pantry. AC 5 narrowed: test-ai-model, suggest-recipes-from-pantry and repurpose-content still read api_key_env_var, but off an ai_settings row they fetch themselves with the service-role client, never off caller input; test-ai-model exists to validate exactly that row. Migrating those three to AIServiceV2 is a separate change. The allowlist is pinned in src/lib/clientAiConfig.guard.test.ts so a fourth cannot be added silently. AC 3's runtime 200 assertion is a static source guard instead: deno is not installed on the loop machine and CI runs only two named deno test files, so a mocked handler test would never execute. The guard was verified to fail when the branch is reintroduced."
     },
     {
       "id": "US-710",
@@ -33,11 +33,11 @@
         "Unit tests under supabase/functions/_shared cover the private-range rejection, the redirect cap and the size cap"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "edge",
       "loopVerifiable": false,
-      "notes": "Review item 2. parse-recipe-grocery/index.ts:68 and parse-recipe/index.ts:58."
+      "notes": "Review item 2. parse-recipe-grocery/index.ts:68 and parse-recipe/index.ts:58. Landed 2026-09-01: supabase/functions/_shared/url-validator.ts exports fetchRecipePage (https-only, credentials rejected, private/loopback/link-local and 169.254.169.254 refused before the fetch, DNS-resolved hosts re-checked, redirect:'manual' with a cap of 3 and every hop re-validated, AbortSignal.timeout(10000) per hop, 2 MB body cap -> 413). parse-recipe and parse-recipe-grocery both call it; both redirect:'follow' calls are gone. 16 Deno tests in supabase/functions/_shared/url-validator.test.ts inject fetchImpl and use IP literals, so they need no network and no --allow-net; ci.yml runs them as a named step beside the other two Deno tests. Ported from the non-deployed functions/_shared/url-validator.ts, which had this all along -- the deployed tree never got it. loopVerifiable should be true for this one: deno installs as a single binary and the tests are hermetic."
     },
     {
       "id": "US-711",
@@ -50,11 +50,11 @@
         "No column, table or policy name is dropped that a shipped iOS build references"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "sql",
       "loopVerifiable": true,
-      "notes": "Review item 3. Verified: 20260430000001_create_recipe_ingredients.sql:44-52 and 20260806000000_recipe_components.sql:105 still owner-scoped; no later migration touches these policies."
+      "notes": "Review item 3. Verified: 20260430000001_create_recipe_ingredients.sql:44-52 and 20260806000000_recipe_components.sql:105 still owner-scoped; no later migration touches these policies. Landed 2026-09-01: 20260901000009_household_scope_recipe_children.sql replaces the predicate on all eight policies with r.household_id = public.get_user_household_id(auth.uid()), keeping the eight policy names byte-identical so nothing that looks them up by name breaks. Verified on a real PostgreSQL 16.13 (a local cluster, not a container -- this machine has psql and postgres 16 but no docker daemon) with the auth.uid() stub reading request.jwt.claim.sub: owner still 1/1, partner 0/0 -> 1/1, outsider 0/0 and still refused on INSERT, partner can now INSERT/UPDATE/DELETE. Re-applying the migration is a clean no-op. Fixture and assertions shipped as supabase/tests/us711_recipe_children_household_rls.{bootstrap,test}.sql."
     },
     {
       "id": "US-712",
@@ -67,11 +67,11 @@
         "A test in src/pages renders Grocery with pre-checked items from the cache and asserts no delete call is made on mount"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 4. Verified at Grocery.tsx:155-167."
+      "notes": "Review item 4. Verified at Grocery.tsx:155-167. Landed 2026-09-01: the mount effect, its toast, the hasAutoCleanedRef guard and the now-unused deleteGroceryItems destructure are all gone from Grocery.tsx. AC 2 and AC 3 already held before this change and were re-verified rather than built: the collapsed Purchased Collapsible is at Grocery.tsx:1140 and handleDoneShopping credits via recordPurchases when ledgerWritesEnabled and via updateFood/addFood otherwise, then calls clearCheckedGroceryItems. The only other removal path is handleDeleteItem, an explicit per-row delete with an Undo toast. src/pages/Grocery.mountCleanup.test.tsx renders the real page with a pre-checked row from the store; 3 of its 4 assertions fail when the effect is put back, which was checked. Typecheck: adds zero errors (HEAD without it and the working tree with it both measure exactly 1400), but the ratchet fails on both because the committed baseline of 1165 is 235 below a real full run -- a pre-existing condition tracked as an open finding in progress.txt, not caused by this story."
     },
     {
       "id": "US-713",
@@ -85,11 +85,11 @@
         "The is_manual filter is replaced by the persisted auto_generated column so hand-added rows are genuinely preserved"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 5 and grocery items G12, G18. Verified: GroceryContext.setGroceryItems is local state only. Full recipe-aware quantities land in US-736; this story makes the path persist and idempotent."
+      "notes": "Review item 5 and grocery items G12, G18. Verified: GroceryContext.setGroceryItems is local state only. Full recipe-aware quantities land in US-736; this story makes the path persist and idempotent. Landed 2026-09-02: handleRegenerateFromPlan no longer calls setGroceryItems. New rows go through addGroceryItemsMerged stamped with grocery_list_id, auto_generated and source_plan_entry_id (GroceryAddInput and the insert row in GroceryContext gained all three); rows the plan no longer calls for go through deleteGroceryItems. generateGroceryList takes an optional ShoppingWindow and the page passes the current Mon-Sun week. One deviation worth knowing: auto_generated alone cannot decide what a sync may retire, because auto_add_restock_items (20251010221000) sets the same flag -- its column comment still reads 'added by restock system'. Retiring on that flag alone would delete the user's restock suggestions on every sync, so a row is regenerable only when it also carries source_plan_entry_id or added_via = 'meal_plan_sync'. That preserves strictly more than the AC asks. The is_manual swap also reached the checkout-undo payloads, which carried is_manual and so restored a plan row as a hand-added one that no sync would ever retire. 17 vitest in src/lib/planSync.test.ts, idempotence covered both on the planner alone and end to end through generateGroceryList. Typecheck: 1398 errors against 1400 on origin/main -- this removes the two is_manual errors and adds none, verified by diffing the error sets."
     },
     {
       "id": "US-714",
@@ -102,11 +102,11 @@
         "planGroceryMerge merges only against rows on the target list; a vitest asserts that adding milk to list B does not bump list A"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 6, G14, G18. Verified at AddGroceryItemDialog.tsx:164-175 and groceryData.ts:47."
+      "notes": "Review items 6, G14, G18. Verified at AddGroceryItemDialog.tsx:164-175 and groceryData.ts:47. Landed 2026-09-02: AddGroceryItemDialog takes selectedListId and stamps grocery_list_id on both its onAdd call sites (manual and the import tab); Grocery.tsx passes it. Restock suggestions, the checkout-undo payload and the plan sync now stamp it too; recipe import and delete-undo already did. filterItemsByList takes defaultListId and treats a null grocery_list_id as belonging to it, with GroceryListSelector reporting which list is default via a new onDefaultListChange (it already fetched the lists; nothing else knew). planGroceryMerge takes a scope and indexes only rows on the target list. ScanReceiptDialog is NOT covered: it adds to the pantry, not to a grocery list, so there is nothing to stamp -- AC 2's 'receipt scan' has no grocery add path today. The merge insert also stopped being a hand-written column allowlist: it spreads the input, which is what carries brand_preference, barcode, priority, price_per_unit and added_by_user_id, and which also repaired US-713 (see progress.txt). 10 vitest in src/lib/listScoping.test.ts. Typecheck 1397 vs origin/main's 1400: three removed (both is_manual errors plus a restock priority mismatch fixed by narrowing SmartRestockSuggestions' onAddItems priority to the real union), zero added."
     },
     {
       "id": "US-715",
@@ -119,11 +119,11 @@
         "setPlanEntries is documented in PlanContext as server-load only, and an eslint no-restricted-syntax rule blocks new callers outside src/contexts"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 7 and P16. Verified at Planner.tsx:191-192 and :245-266."
+      "notes": "Review items 7 and P16. Verified at Planner.tsx:191-192 and :245-266. Landed 2026-09-02: the function the AC calls handleQuickBuild is named handleBuildWeek in source. Both it and handleAIMealPlan now run deleteWeekPlan(weekInView, activeKid) then addPlanEntries, and neither calls setPlanEntries. buildWeekPlan takes a startDate (defaulting to today) and returns Omit<PlanEntry,'id'>[]; the ids it used to invent were never real. handleAIMealPlan sends startDate and ai-meal-plan parses it, falling back to new Date() only when it is absent or not YYYY-MM-DD. setPlanEntries is documented in PlanContext as server-load only and an eslint no-restricted-syntax rule blocks callers outside src/contexts; the two remaining callers in Planner.tsx are genuine server loads and carry an inline disable saying so. 13 vitest (8 on buildWeekPlan, 5 rendering the real Planner); reverting Quick Build to setPlanEntries fails 3 of the 5, which was checked. Typecheck 1396 vs origin/main's 1400: four removed, zero added, by set diff."
     },
     {
       "id": "US-716",
@@ -138,11 +138,11 @@
         "The advertised allergen check is implemented server-side using the kid's allergens and dietary_restrictions, or the per-child safety framing is removed from ApplyTemplateDialog"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "edge",
       "loopVerifiable": false,
-      "notes": "Review items 8 and P15. Verified: rows built at manage-meal-plan-templates/index.ts:344-368 omit user_id, which is NOT NULL with no trigger; household_id is filled by auto_fill_household_id."
+      "notes": "Review items 8 and P15. Verified: rows built at manage-meal-plan-templates/index.ts:344-368 omit user_id, which is NOT NULL with no trigger; household_id is filled by auto_fill_household_id. Landed 2026-09-02: applyTemplate never worked at all -- it omitted user_id (NOT NULL, no trigger) AND passed food_id null for recipe-only entries (also NOT NULL), so every apply was rejected twice over. Both fixed. Recipe-only entries route through schedule_recipe_to_plan; a failure there is logged and skipped rather than failing the whole apply. 20260901000010 adds a UNIQUE index on (household_id, kid_id, date, meal_slot, food_id) NULLS NOT DISTINCT, after collapsing existing duplicates oldest-wins; the upsert targets it by column list, which is why it is NULLS NOT DISTINCT rather than a COALESCE expression (PostgREST's on_conflict can only name columns). Verified on PostgreSQL 16.13: 4 rows deduped to 2, a null-household duplicate rejected, ON CONFLICT DO NOTHING accepted. The dialog offers Merge/Replace and reports allergen skips. saveFromWeek groups by (date, meal_slot, recipe_id) and the is_primary_dish filter is gone -- it had been discarding every side dish. AC 6: implemented rather than removed, since ApplyTemplateDialog carries no safety framing to remove; the allergen check matches kid.allergens and kid.dietary_restrictions against food.allergens, case-insensitively. The two pure transforms moved to supabase/functions/_shared/meal-plan-templates.ts with 18 Deno tests, wired into ci.yml, so this story is verified despite loopVerifiable: false."
     },
     {
       "id": "US-717",
@@ -155,11 +155,11 @@
         "The same pattern is applied to any other context whose insert error branch appends a local row (audit GroceryContext, FoodsContext, RecipesContext, KidsContext and fix any found)"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 9. Verified at PlanContext.tsx:102-105 and :121-125."
+      "notes": "Review item 9. Verified at PlanContext.tsx:102-105 and :121-125. Landed 2026-09-02: a new runOptimisticInsert in src/lib/optimisticMutation.ts backs addPlanEntry and addPlanEntries -- it appends optimistically, removes exactly the rows it added on failure (by reference, so a realtime replacement survives), toasts, and on success swaps the temporary rows for the server's. It deliberately does NOT reuse runOptimisticMutation's snapshot: React can invoke a setState updater more than once, and the second call's prev already contains the optimistic rows, so they get snapshotted as pre-existing and restored instead of dropped. That was a real failing test, not a theory. Audit of AC 4 found SEVEN phantom-append sites, all fixed: PlanContext x2, GroceryContext x2 (addGroceryItem, addGroceryItemsMerged), FoodsContext x2 (addFood, addFoods), KidsContext x1 (addKid). RecipesContext was already correct -- it throws. Deviation: only the two PlanContext paths use runOptimisticInsert; the other five are pessimistic inserts that await the server before touching state, so there is nothing to roll back and the fix is simply not appending plus a toast. Converting them to optimistic would be a behaviour change the AC does not ask for. The remaining generateId() appends in those files are the signed-out local-only branches, which are correct. 4 new cases in PlanContext.weekOps.test.tsx."
     },
     {
       "id": "US-718",
@@ -171,11 +171,11 @@
         "A test asserts the payload sent to the context contains a uuid food_id or a recipe_id and never an empty string"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 10. Verified at SiblingMealFinder.tsx:185 and :196."
+      "notes": "Review item 10. Verified at SiblingMealFinder.tsx:185 and :196. Landed 2026-09-02: handleUse no longer calls addPlanEntry at all. A solver result names a recipe, not a food, and food_id is a NOT NULL uuid -- '' was invalid rather than absent, so the insert was rejected every time (and before US-717 the context appended a phantom row anyway). It now builds one schedule_recipe_to_plan payload per child via buildSiblingScheduleRequests in src/lib/siblingSchedule.ts and stops on the first RPC error with a toast. Note: the RPC writes server-side, so the new rows reach the UI through the existing plan_entries realtime subscription rather than an optimistic local update. 9 vitest assert no empty string is ever emitted, one payload per sibling, dedupe, and nothing emitted without a recipe/kid/date/slot."
     },
     {
       "id": "US-719",
@@ -188,11 +188,11 @@
         "The unreachable SwapMealDialog and DetailedTrackingDialog on Planner.tsx are either wired to a cell menu (US-725) or removed in this story"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 11, 12, X13 and P9's dead dialogs. Verified prop mismatch at Planner.tsx:893-910."
+      "notes": "Review items 11, 12, X13 and P9's dead dialogs. Verified prop mismatch at Planner.tsx:893-910. Landed 2026-09-02: page-level Save Template and Templates buttons removed (the grid toolbar's working copies remain, in both the mobile and desktop branches). /dashboard/ai-planner, src/pages/AIPlanner.tsx and its four nav entries (Navigation list + mobile NavLink, Dashboard list, CommandPalette, QuickActionsMenu) are deleted -- the page wrote nothing to plan_entries, so rewiring it had nothing to rewire. The duplicate top-level /planner route mounted a SECOND copy of the whole Dashboard+Planner tree; it is now a Navigate redirect to /dashboard/planner. SwapMealDialog and DetailedTrackingDialog were rendered but unreachable (nothing ever set selectedEntry or trackingEntry) and are removed with their state and handleSwapConfirm; US-725 wires the real cell menu."
     },
     {
       "id": "US-720",
@@ -215,7 +215,7 @@
       "slice": 1,
       "platform": "ops",
       "loopVerifiable": true,
-      "notes": "Review items 13, X1, X10, P20, P21, P22, G27, G28. Decision from Dj 2026-09-01: Expo is retired. android-native (Kotlin, own CI workflow) is untouched by this story."
+      "notes": "Review items 13, X1, X10, P20, P21, P22, G27, G28. Decision from Dj 2026-09-01: Expo is retired. android-native (Kotlin, own CI workflow) is untouched by this story. BLOCKED 2026-09-02: the recursive `git rm -r app native-js-build ...` was refused by the session's auto-mode safety classifier, which guards bulk directory deletion. Nothing was deleted and the tree is untouched. Dj's call on being asked: skip and keep going, run the deletion later. AC 2 is already DONE and landed separately -- the unit-suggestions table is ported to src/lib/groceryAisle.ts, which US-728 builds on, so the port is not blocking anything. Survey findings for whoever picks this up: src/lib/platform.ts must be KEPT (10+ web consumers: AppContext, AccessibilityContext, useSmartDefaults, the barcode scanners and five tests). native-js-build/ is the earlier pure-JavaScript React Native shell with no CI reference anywhere, so AC 8's delete branch applies. babel.config.js exists only for babel-plugin-module-resolver, which nothing outside app/ uses. scripts/setup-mobile-assets.cjs has exactly one consumer, the setup:mobile:assets script. 19 npm scripts to remove (expo:* x5, eas:* x8, expo:prebuild, setup:mobile:assets, android, ios) and 17 dependencies (expo + 11 expo-*, react-native, react-native-safe-area-context, react-native-screens, react-native-reanimated, babel-plugin-module-resolver). No @capacitor* package is actually in package.json despite AC 3 naming them; only capacitor.config.ts exists."
     },
     {
       "id": "US-721",
@@ -230,11 +230,11 @@
         "Tests cover create, edit-preserves-ids, legacy fallback and the retry guard"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 14, R8, R15. RecipesContext.tsx:215-246 and EnhancedRecipeBuilder.tsx:266-279 today."
+      "notes": "Review items 14, R8, R15. RecipesContext.tsx:215-246 and EnhancedRecipeBuilder.tsx:266-279 today. Landed 2026-09-02: src/lib/recipeIngredients.ts holds the pure transforms (toIngredientPayloads, diffIngredientRows, draftsFromRecipe, buildAdditionalIngredientsDisplay, parseIngredientQuantity). RecipesContext.addRecipe and updateRecipe write recipe_ingredients rows and diff by id, so recipe_components (US-612) keeps its references across an edit -- a delete-all would orphan them. EnhancedRecipeBuilder seeds from recipe_ingredients, falls back to food_ids for legacy recipes, and parses additional_ingredients as a last resort. The core-payload retry now fires only on PGRST204 / 42703 / a missing-column message and toasts which columns it dropped; it used to fire on ANY error, so a constraint violation or an RLS rejection was retried with two thirds of the recipe stripped and then 'succeeded'. prepTime/cookTime use parseDurationMinutes; parseInt('1 hr 30 min') was 1. Two things worth knowing: optionality has no column, so it is folded into optional_notes as '(optional)' and parsed back out; and reading the legacy blob needs a comma split before parseGroceryText, which deliberately does not split on commas so that 'beef, ground' survives -- a comma inside an ingredient name therefore becomes two rows, recoverable in the editor the user is already looking at. 27 vitest cover create, edit-preserves-ids, legacy fallback, blob parsing and the retry guard."
     },
     {
       "id": "US-722",

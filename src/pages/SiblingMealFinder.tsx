@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Star } from 'lucide-react';
 import { toast } from 'sonner';
-import { useFoods, useKids, usePlan, useRecipes } from '@/contexts/AppContext';
+import { useFoods, useKids, useRecipes } from '@/contexts/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSiblingResolutions } from '@/hooks/useSiblingResolutions';
 import {
@@ -36,6 +36,8 @@ import type { SolverResult } from '@/lib/siblingConstraintSolver';
 import { analytics } from '@/lib/analytics';
 import { logger } from '@/lib/logger';
 import { todayIso } from '@/lib/tonightMode';
+import { supabase } from '@/integrations/supabase/client';
+import { buildSiblingScheduleRequests } from '@/lib/siblingSchedule';
 import { SiblingPickerChips } from '@/components/sibling-meal-finder/SiblingPickerChips';
 import { SiblingMealResultCard } from '@/components/sibling-meal-finder/SiblingMealResultCard';
 import { FairnessIndicator } from '@/components/sibling-meal-finder/FairnessIndicator';
@@ -56,7 +58,6 @@ export default function SiblingMealFinder() {
   const { kids } = useKids();
   const { foods } = useFoods();
   const { recipes } = useRecipes();
-  const { addPlanEntry } = usePlan();
   const { history, recordResolution } = useSiblingResolutions();
 
   const [selectedKidIds, setSelectedKidIds] = useLocalStorage<string[]>(STORAGE_KEY, []);
@@ -178,27 +179,34 @@ export default function SiblingMealFinder() {
   const handleUse = useCallback(
     async (result: SolverResult) => {
       try {
-        addPlanEntry({
-          kid_id: effectiveKidIds[0] ?? '',
+        // US-718: a solver result names a recipe, not a food. This used to send
+        // `food_id: ''` to addPlanEntry -- an empty string into a NOT NULL uuid
+        // column, rejected every time -- so schedule the recipe instead and let
+        // it expand into real rows, once per child.
+        const requests = buildSiblingScheduleRequests({
+          recipeId: result.recipeId,
+          kidIds: effectiveKidIds,
           date: mealDate,
-          meal_slot: mealSlot,
-          food_id: '',
-          result: null,
-          recipe_id: result.recipeId,
-          is_primary_dish: true,
+          mealSlot,
         });
-        // Add a plan entry per additional kid so each sibling has the meal logged.
-        for (const kidId of effectiveKidIds.slice(1)) {
-          addPlanEntry({
-            kid_id: kidId,
-            date: mealDate,
-            meal_slot: mealSlot,
-            food_id: '',
-            result: null,
-            recipe_id: result.recipeId,
-            is_primary_dish: true,
-          });
+
+        if (requests.length === 0) {
+          toast.error("That meal has no recipe to schedule.");
+          return;
         }
+
+        let scheduled = 0;
+        for (const request of requests) {
+          const { error } = await supabase.rpc('schedule_recipe_to_plan', request);
+          if (error) {
+            // US-718 AC2: a failed insert is visible, not swallowed.
+            logger.error('schedule_recipe_to_plan failed', error);
+            toast.error("Couldn't add that meal to the plan. Please try again.");
+            return;
+          }
+          scheduled += 1;
+        }
+        void scheduled;
 
         const ok = await recordResolution({
           result,
@@ -233,7 +241,7 @@ export default function SiblingMealFinder() {
         toast.error("Couldn't add the meal to the planner.");
       }
     },
-    [addPlanEntry, effectiveKidIds, mealDate, mealSlot, recordResolution, minKidScore]
+    [effectiveKidIds, mealDate, mealSlot, recordResolution, minKidScore]
   );
 
   const handleCook = useCallback((result: SolverResult) => {

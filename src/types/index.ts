@@ -122,6 +122,13 @@ export interface Recipe {
   parent_recipe_id?: string;
   variant_kind?: string;
   recipe_ingredients?: RecipeIngredient[];
+  /**
+   * US-721: structured ingredient rows on their way TO the database. Write-only
+   * transport from the builder to RecipesContext -- it is never a column on
+   * `recipes`, and it is stripped before the recipes insert. Read them back
+   * from `recipe_ingredients`.
+   */
+  recipe_ingredient_rows?: IngredientRowPayload[];
   nutrition_info?: {
     calories?: number;
     protein_g?: number;
@@ -146,6 +153,23 @@ export interface GroceryList {
   is_archived: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * US-721: one recipe_ingredients row on its way to the database. `id` present
+ * means the row already exists and should be updated rather than inserted.
+ * Declared here rather than in lib/ so `Recipe` does not have to import from a
+ * module that imports `Recipe` back.
+ */
+export interface IngredientRowPayload {
+  id?: string;
+  food_id: string | null;
+  sort_order: number;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  group_label: string | null;
+  optional_notes: string | null;
 }
 
 export interface RecipeIngredient {

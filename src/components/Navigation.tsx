@@ -18,7 +18,6 @@ const baseNavItems = [
   { to: "/dashboard/pantry", icon: Utensils, label: "Pantry" },
   { to: "/dashboard/recipes", icon: ChefHat, label: "Recipes" },
   { to: "/dashboard/planner", icon: Calendar, label: "Planner" },
-  { to: "/dashboard/ai-planner", icon: Sparkles, label: "AI Planner" },
   { to: "/dashboard/insights", icon: TrendingUp, label: "Insights" },
   { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/dashboard/grocery", icon: ShoppingCart, label: "Grocery" },
@@ -410,21 +409,6 @@ export function Navigation() {
                 {/* Insights Section */}
                 <div className="space-y-1 mt-4">
                   <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">INSIGHTS</p>
-                  <NavLink
-                    to="/dashboard/ai-planner"
-                    onClick={closeMobileMenu}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full",
-                        isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-foreground hover:bg-muted"
-                      )
-                    }
-                  >
-                    <Sparkles className="h-5 w-5 shrink-0" />
-                    <span>AI Planner</span>
-                  </NavLink>
                   <NavLink
                     to="/dashboard/insights"
                     onClick={closeMobileMenu}

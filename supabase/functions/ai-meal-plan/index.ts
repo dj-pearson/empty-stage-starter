@@ -22,7 +22,7 @@ export default async (req: Request) => {
   }
 
   try {
-    const { kid, foods, recipes, days = 7 } = await req.json();
+    const { kid, foods, recipes, days = 7, startDate: startDateInput } = await req.json();
 
     if (!kid) {
       return new Response(
@@ -96,7 +96,13 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
   ]
 }`;
 
-    const startDate = new Date();
+    // US-715: honour the week the client is looking at. Defaulting to the
+    // function's own today meant paging to next week and generating produced
+    // this week's dates, which then collided with the plan already there.
+    const startDate =
+      typeof startDateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(startDateInput)
+        ? new Date(`${startDateInput}T00:00:00Z`)
+        : new Date();
     const userPrompt = `Create a ${days}-day meal plan starting from ${startDate.toISOString().split('T')[0]}.`;
 
     console.log('[ai-meal-plan] Generating plan with AIServiceV2...');

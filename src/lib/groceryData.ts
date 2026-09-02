@@ -39,12 +39,27 @@ export function categoryLabel(category: string | null | undefined): string {
   return OTHER_CATEGORY_LABEL;
 }
 
-/** Restrict items to a selected list, or return all when none is selected. */
+/**
+ * Restrict items to a selected list, or return all when none is selected.
+ *
+ * US-714: a null grocery_list_id is not "on no list" -- it is the household's
+ * default list. Rows added before named lists existed, and rows from any add
+ * path that forgot to stamp one, all carry null, and a strict equality filter
+ * hid every one of them the moment a list was selected. When the selected list
+ * IS the default, those rows belong to it.
+ */
 export function filterItemsByList(
   items: GroceryItem[],
-  selectedListId: string | null
+  selectedListId: string | null,
+  defaultListId?: string | null
 ): GroceryItem[] {
-  return selectedListId ? items.filter((item) => item.grocery_list_id === selectedListId) : items;
+  if (!selectedListId) return items;
+  const selectedIsDefault = defaultListId != null && selectedListId === defaultListId;
+  return items.filter((item) =>
+    item.grocery_list_id == null
+      ? selectedIsDefault
+      : item.grocery_list_id === selectedListId
+  );
 }
 
 export interface SplitItems {
@@ -111,4 +126,117 @@ export function flattenGroupedRows(grouped: Record<string, GroceryItem[]>): Virt
     }
   }
   return rows;
+}
+
+// --- Plan sync (US-713) -----------------------------------------------------
+
+/** Stamped on every row a meal-plan sync creates, so a later sync can find
+ *  its own rows and leave everyone else's alone. */
+export const MEAL_PLAN_SYNC = 'meal_plan_sync' as const;
+
+/** The subset of a generated row this planner needs. */
+export interface GeneratedRow {
+  name: string;
+  quantity: number;
+  unit?: string;
+  category?: string;
+  aisle?: string;
+  source_plan_entry_id?: string;
+}
+
+export interface RegenerationPlan {
+  /** Auto-generated, unchecked rows the plan no longer calls for. */
+  retireIds: string[];
+  /** Rows to hand to addGroceryItemsMerged, already stamped for the list. */
+  additions: Array<{
+    name: string;
+    quantity: number;
+    unit?: string;
+    category?: string;
+    aisle?: string;
+    grocery_list_id?: string | null;
+    auto_generated: true;
+    source_plan_entry_id?: string | null;
+    added_via: typeof MEAL_PLAN_SYNC;
+  }>;
+  /** Rows left exactly as they are: hand-added, or already bought. */
+  preservedCount: number;
+}
+
+/**
+ * Work out what a "sync from meal plan" should change, without touching state.
+ *
+ * The shape that makes this idempotent: a generated row already sitting on the
+ * list as an unchecked auto-generated row is neither new nor stale, so it is
+ * left alone rather than deleted and re-inserted. Running the sync twice for
+ * the same week is therefore a no-op -- no duplicate rows, no doubled
+ * quantities, and no realtime churn on a partner's phone.
+ *
+ * US-713 also replaces the old `is_manual` filter. `is_manual` was never a
+ * column: it existed only on a local interface, so it was undefined on every
+ * row loaded from the server and the filter preserved nothing but checked rows.
+ * Hand-added items were being swept away on every sync. `auto_generated` is
+ * persisted, so the inverse test is the one that actually holds.
+ *
+ * `auto_generated` alone is NOT enough to decide what a sync may retire. The
+ * smart-restock RPC (20251010221000) sets the same flag -- its column comment
+ * still reads "True if item was auto-added by restock system" -- so retiring on
+ * that flag alone would sweep away a user's restock suggestions on every sync.
+ * A row is regenerable only when it also carries a plan-sync fingerprint:
+ * source_plan_entry_id, or added_via = 'meal_plan_sync'.
+ */
+/** True only for rows a previous meal-plan sync created. */
+function isPlanSyncRow(item: GroceryItem): boolean {
+  return Boolean(item.source_plan_entry_id) || item.added_via === MEAL_PLAN_SYNC;
+}
+
+export function planRegenerationFromPlan(args: {
+  existing: GroceryItem[];
+  generated: GeneratedRow[];
+  selectedListId: string | null;
+  /** US-714: the list that owns rows with a null grocery_list_id. */
+  defaultListId?: string | null;
+}): RegenerationPlan {
+  const { existing, generated, selectedListId, defaultListId } = args;
+  const key = (name: string) => name.trim().toLowerCase();
+
+  const target = selectedListId ?? defaultListId ?? null;
+  const sameList = (item: GroceryItem) =>
+    (item.grocery_list_id ?? defaultListId ?? null) === target;
+  const inSelectedList = existing.filter(sameList);
+
+  // Hand-added rows, restock suggestions and anything already bought are
+  // untouchable. Only rows this sync itself created may be retired.
+  const preserved = inSelectedList.filter(
+    (item) => !item.auto_generated || item.checked || !isPlanSyncRow(item),
+  );
+  const preservedNames = new Set(preserved.map((item) => key(item.name)));
+
+  const generatedNames = new Set(generated.map((row) => key(row.name)));
+
+  const regenerable = inSelectedList.filter(
+    (item) => item.auto_generated && !item.checked && isPlanSyncRow(item),
+  );
+  const retireIds = regenerable
+    .filter((item) => !generatedNames.has(key(item.name)))
+    .map((item) => item.id);
+  const keptNames = new Set(
+    regenerable.filter((item) => generatedNames.has(key(item.name))).map((item) => key(item.name)),
+  );
+
+  const additions = generated
+    .filter((row) => !preservedNames.has(key(row.name)) && !keptNames.has(key(row.name)))
+    .map((row) => ({
+      name: row.name,
+      quantity: row.quantity,
+      unit: row.unit,
+      category: row.category,
+      aisle: row.aisle,
+      grocery_list_id: selectedListId ?? undefined,
+      auto_generated: true as const,
+      source_plan_entry_id: row.source_plan_entry_id ?? undefined,
+      added_via: MEAL_PLAN_SYNC,
+    }));
+
+  return { retireIds, additions, preservedCount: preserved.length };
 }

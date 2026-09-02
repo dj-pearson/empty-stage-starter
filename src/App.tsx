@@ -42,7 +42,6 @@ const Home = lazy(() => import('./pages/Home'));
 const Pantry = lazy(() => import('./pages/Pantry'));
 const Recipes = lazy(() => import('./pages/Recipes'));
 const Planner = lazy(() => import('./pages/Planner'));
-const AIPlanner = lazy(() => import('./pages/AIPlanner'));
 const Grocery = lazy(() => import('./pages/Grocery'));
 const Kids = lazy(() => import('./pages/Kids'));
 const InsightsDashboard = lazy(() => import('./pages/InsightsDashboard'));
@@ -505,14 +504,6 @@ const App = () => (
                           }
                         />
                         <Route
-                          path="ai-planner"
-                          element={
-                            <RouteErrorBoundary>
-                              <AIPlanner />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                        <Route
                           path="insights"
                           element={
                             <RouteErrorBoundary>
@@ -676,25 +667,11 @@ const App = () => (
                           }
                         />
                       </Route>
-                      <Route
-                        path="/planner"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <Planner />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
+                      {/* US-719: /planner used to mount a second copy of the
+                          whole Dashboard + Planner tree, so the same page
+                          existed at two URLs with separate state. It is a
+                          redirect to the canonical route now. */}
+                      <Route path="/planner" element={<Navigate to="/dashboard/planner" replace />} />
                       <Route
                         path="/grocery"
                         element={
