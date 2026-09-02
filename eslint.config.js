@@ -37,6 +37,29 @@ export default tseslint.config(
     },
   },
   {
+    // US-715: setPlanEntries replaces the whole plan slice in local state and
+    // writes nothing to the server. It exists for ONE job: dropping in a fresh
+    // server load. Every other use is a bug -- Quick Build and AI Generate Week
+    // both used it, so a generated week was gone on reload, never reached a
+    // partner's device, and wiped every other kid and week on the way. Mutating
+    // callers belong on addPlanEntries / updatePlanEntry / deleteWeekPlan.
+    //
+    // The two remaining callers in Planner.tsx are server loads and carry an
+    // inline disable saying so. New ones are blocked here.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/contexts/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.name='setPlanEntries']",
+          message:
+            "setPlanEntries is server-load only (US-715). To change the plan use addPlanEntries, updatePlanEntry or deleteWeekPlan, which persist. If this really is a fresh server load, disable this rule on the line and say so.",
+        },
+      ],
+    },
+  },
+  {
     // US-343: app code must log through `@/lib/logger`, not console. Scoped to
     // src/ so the Deno edge functions (functions/, which legitimately use
     // console for server logging) are unaffected. logger.ts is the logging

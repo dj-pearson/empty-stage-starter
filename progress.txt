@@ -856,3 +856,53 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - A null foreign key is rarely "none" in this schema -- it usually means "the
     default". Check what the null case means before writing an equality filter.
 ---
+
+## 2026-09-02 - US-715 (household planner slice 1)
+- Quick Build (handleBuildWeek in source; the AC calls it handleQuickBuild) and
+  handleAIMealPlan both ended in setPlanEntries, which is local state only.
+  Nothing was inserted, so a generated week was gone on reload and never reached
+  a partner's device, and the wholesale replace wiped every other kid and every
+  other week on the way. Both now run deleteWeekPlan(weekInView, activeKid) then
+  addPlanEntries, so the replace is scoped and the result persists.
+- buildWeekPlan takes a startDate (defaulting to today) and returns
+  Omit<PlanEntry, 'id'>[]. It used to build from its own new Date(), so paging
+  to next week and building produced this week's dates, and it invented ids that
+  were never real. The server assigns them now.
+- handleAIMealPlan sends startDate; supabase/functions/ai-meal-plan reads it and
+  falls back to new Date() only when it is absent or not YYYY-MM-DD.
+- setPlanEntries is documented on PlanContextType as server-load only, and an
+  eslint no-restricted-syntax rule blocks CallExpressions named setPlanEntries
+  outside src/contexts. The two remaining callers in Planner.tsx are fresh
+  server loads and carry an inline disable that says so.
+- Files: src/lib/mealPlanner.ts, src/pages/Planner.tsx,
+  src/contexts/PlanContext.tsx, supabase/functions/ai-meal-plan/index.ts,
+  eslint.config.js, src/lib/buildWeekPlan.test.ts (new),
+  src/pages/Planner.persist.test.tsx (new).
+- Gates: 2766 vitest passed / 3 skipped (up 13), lint 1226 at baseline,
+  17 Deno tests, function-tree and invisible-char guards clean. Typecheck 1396
+  against origin/main's 1400: four removed, zero added, by set diff. Reverting
+  Quick Build to setPlanEntries fails 3 of the 5 Planner tests, which was
+  checked before committing.
+- Near miss worth recording: the first pass stripped `id: generateId()` from
+  buildWeekPlan with a line-range regex, and the range also caught buildDayPlan
+  further down the same file, which still returns PlanEntry[]. That surfaced as
+  2 ADDED type errors on the first diff against main and nowhere else -- vitest
+  and the lint ratchet were both green with it broken, because buildDayPlan has
+  no callers and no tests. The ids are restored.
+- **Learnings for future iterations:**
+  - Planner.tsx renders in vitest with roughly the same mock set as Grocery:
+    @/contexts/AppContext wholesale, supabase, @/lib/edge-functions, logger,
+    sonner, useMediaQuery, and six child components. Under 90 lines of setup.
+  - The AC names in this PRD do not always match the source. handleQuickBuild
+    is handleBuildWeek. Grep for the behaviour, not the name.
+  - An eslint no-restricted-syntax rule on a context setter is a cheap way to
+    make "this is server-load only" enforceable rather than a comment. Add the
+    inline disables for the legitimate callers in the same commit or the lint
+    ratchet fails.
+  - Never apply a line-range regex edit to a file with more than one function
+    of the same shape. mealPlanner.ts has buildWeekPlan AND buildDayPlan, both
+    pushing into a `plan` array; an edit meant for one silently hit both.
+  - buildDayPlan (src/lib/mealPlanner.ts:78) has NO callers anywhere in src/ or
+    app/. Dead, untested, and it still typechecks, so nothing flags it. Left
+    alone here as out of scope, but it is a deletion candidate.
+---

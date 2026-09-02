@@ -119,11 +119,11 @@
         "setPlanEntries is documented in PlanContext as server-load only, and an eslint no-restricted-syntax rule blocks new callers outside src/contexts"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 7 and P16. Verified at Planner.tsx:191-192 and :245-266."
+      "notes": "Review items 7 and P16. Verified at Planner.tsx:191-192 and :245-266. Landed 2026-09-02: the function the AC calls handleQuickBuild is named handleBuildWeek in source. Both it and handleAIMealPlan now run deleteWeekPlan(weekInView, activeKid) then addPlanEntries, and neither calls setPlanEntries. buildWeekPlan takes a startDate (defaulting to today) and returns Omit<PlanEntry,'id'>[]; the ids it used to invent were never real. handleAIMealPlan sends startDate and ai-meal-plan parses it, falling back to new Date() only when it is absent or not YYYY-MM-DD. setPlanEntries is documented in PlanContext as server-load only and an eslint no-restricted-syntax rule blocks callers outside src/contexts; the two remaining callers in Planner.tsx are genuine server loads and carry an inline disable saying so. 13 vitest (8 on buildWeekPlan, 5 rendering the real Planner); reverting Quick Build to setPlanEntries fails 3 of the 5, which was checked. Typecheck 1396 vs origin/main's 1400: four removed, zero added, by set diff."
     },
     {
       "id": "US-716",

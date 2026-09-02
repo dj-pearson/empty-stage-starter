@@ -3,12 +3,21 @@ import { generateId } from "./utils";
 
 const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack2"];
 
+/**
+ * Build a week of meals for one kid.
+ *
+ * US-715: takes the week to build and returns entries WITHOUT ids. The ids it
+ * used to invent were never real -- the caller replaced local state with them
+ * and nothing was ever inserted, so the plan was gone on reload and never
+ * reached another device. The server assigns ids now, via addPlanEntries.
+ */
 export function buildWeekPlan(
   kidId: string,
   foods: Food[],
-  history: PlanEntry[]
-): PlanEntry[] {
-  const plan: PlanEntry[] = [];
+  history: PlanEntry[],
+  startDate: Date = new Date()
+): Omit<PlanEntry, "id">[] {
+  const plan: Omit<PlanEntry, "id">[] = [];
   const days = 7;
   const safeFoods = foods.filter(f => f.is_safe);
   const tryBites = foods.filter(f => f.is_try_bite);
@@ -21,7 +30,7 @@ export function buildWeekPlan(
     throw new Error("Please add some try bite foods first!");
   }
 
-  const today = new Date();
+  const today = startDate;
 
   for (let d = 0; d < days; d++) {
     const date = new Date(today);
@@ -45,7 +54,6 @@ export function buildWeekPlan(
         : safeFoods[Math.floor(Math.random() * safeFoods.length)];
 
       plan.push({
-        id: generateId(),
         kid_id: kidId,
         date: dateStr,
         meal_slot: slot,
@@ -57,7 +65,6 @@ export function buildWeekPlan(
     // Try bite slot
     const tryBite = tryBites[d % tryBites.length];
     plan.push({
-      id: generateId(),
       kid_id: kidId,
       date: dateStr,
       meal_slot: "try_bite",

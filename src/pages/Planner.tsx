@@ -64,6 +64,7 @@ export default function Planner() {
     addPlanEntry,
     copyWeekPlan,
     deleteWeekPlan,
+    addPlanEntries,
   } = usePlan();
   const { addGroceryItemsMerged } = useGrocery();
 
@@ -188,11 +189,32 @@ export default function Planner() {
     checkStockIssues();
 
     try {
-      const newPlan = buildWeekPlan(activeKid.id, foods, planEntries);
-      setPlanEntries(newPlan);
-      toast.success(`Week plan generated for ${activeKid.name}!`, {
-        description: "Meal plan ready with daily try bites",
-      });
+      // US-715: build the week IN VIEW, and persist it. This used to build from
+      // today and hand the result to setPlanEntries, which is local state only:
+      // the plan was gone on reload, never reached another device, and the
+      // wholesale replace wiped every other kid and every other week.
+      const weekStart = format(currentWeekStart, "yyyy-MM-dd");
+      const newPlan = buildWeekPlan(
+        activeKid.id,
+        foods,
+        planEntries,
+        currentWeekStart
+      );
+
+      // Replace only this kid's entries for this week; other kids and other
+      // weeks are untouched.
+      void (async () => {
+        try {
+          await deleteWeekPlan(weekStart, activeKid.id);
+          await addPlanEntries(newPlan);
+          toast.success(`Week plan generated for ${activeKid.name}!`, {
+            description: "Meal plan ready with daily try bites",
+          });
+        } catch (error) {
+          logger.error("Error saving built week plan:", error);
+          toast.error("Failed to save the generated plan. Please try again.");
+        }
+      })();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to build plan"
@@ -214,6 +236,10 @@ export default function Planner() {
           foods,
           recipes,
           days,
+          // US-715: generate for the week on screen. The function used to start
+          // from its own new Date(), so paging to next week and generating
+          // produced this week's dates.
+          startDate: format(currentWeekStart, "yyyy-MM-dd"),
         },
       });
 
@@ -242,12 +268,14 @@ export default function Planner() {
         return;
       }
 
-      const newEntries: PlanEntry[] = [];
+      // US-715: no client-invented ids. These used to be
+      // `${kid}-${date}-${slot}` strings handed to setPlanEntries, so nothing
+      // was inserted and a generated week did not survive a reload.
+      const newEntries: Omit<PlanEntry, "id">[] = [];
       (data.plan as AiMealPlanDay[]).forEach((day) => {
         Object.entries(day.meals).forEach(([slot, foodId]) => {
           if (foodId) {
             newEntries.push({
-              id: `${activeKid.id}-${day.date}-${slot}`,
               kid_id: activeKid.id,
               date: day.date,
               meal_slot: slot as MealSlot,
@@ -258,12 +286,8 @@ export default function Planner() {
         });
       });
 
-      const dates = (data.plan as AiMealPlanDay[]).map((d) => d.date);
-      const filteredEntries = planEntries.filter(
-        (e) => !dates.includes(e.date) || e.kid_id !== activeKidId
-      );
-
-      setPlanEntries([...filteredEntries, ...newEntries]);
+      await deleteWeekPlan(format(currentWeekStart, "yyyy-MM-dd"), activeKid.id);
+      await addPlanEntries(newEntries);
       toast.success(`AI generated ${days}-day meal plan!`, {
         description: "Review and adjust as needed",
       });
@@ -331,6 +355,8 @@ export default function Planner() {
             .order("date", { ascending: true });
 
           if (planData) {
+            // Fresh server load, which is what setPlanEntries is for (US-715).
+            // eslint-disable-next-line no-restricted-syntax
             setPlanEntries(parsePlanEntryRows(planData));
           }
         }
@@ -453,6 +479,8 @@ export default function Planner() {
           .order("date", { ascending: true });
 
         if (planData) {
+          // Fresh server load, which is what setPlanEntries is for (US-715).
+          // eslint-disable-next-line no-restricted-syntax
           setPlanEntries(parsePlanEntryRows(planData));
         }
       }

@@ -37,6 +37,18 @@ export function applyPlanEntryRealtime(
 
 interface PlanContextType {
   planEntries: PlanEntry[];
+  /**
+   * SERVER-LOAD ONLY (US-715).
+   *
+   * Replaces the whole plan slice in local state and writes nothing. Its only
+   * legitimate use is dropping in a fresh load from Supabase. Quick Build and
+   * AI Generate Week both used it to "save" a generated week: nothing was
+   * inserted, so the week was gone on reload and never reached another device,
+   * and the wholesale replace wiped every other kid and every other week on the
+   * way. To CHANGE the plan use addPlanEntries, updatePlanEntry or
+   * deleteWeekPlan, which persist. An eslint no-restricted-syntax rule blocks
+   * new callers outside src/contexts.
+   */
   setPlanEntries: (entries: PlanEntry[]) => void;
   setPlanEntriesState: React.Dispatch<React.SetStateAction<PlanEntry[]>>;
   addPlanEntry: (entry: Omit<PlanEntry, "id">) => void;
