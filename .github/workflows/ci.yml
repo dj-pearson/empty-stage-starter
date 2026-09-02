@@ -318,6 +318,12 @@ jobs:
       - name: Deno recipe-fetch SSRF guards
         run: deno test supabase/functions/_shared/url-validator.test.ts
 
+      # US-716: the meal-plan-template transforms -- building plan_entries rows
+      # (user_id, allergen skips, recipe-only routing) and folding a planned
+      # week back into template entries. Pure, no network, no DB.
+      - name: Deno meal-plan template transforms
+        run: deno test supabase/functions/_shared/meal-plan-templates.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest

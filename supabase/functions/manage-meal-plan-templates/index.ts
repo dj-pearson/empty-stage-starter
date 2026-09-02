@@ -1,4 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import {
+  buildTemplatePlanRows,
+  dateForOffset,
+  groupPlannedWeekIntoTemplateEntries,
+  type FoodSafety,
+} from "../_shared/meal-plan-templates.ts";
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
 
 export default async (req: Request) => {
@@ -29,7 +35,7 @@ export default async (req: Request) => {
       );
     }
 
-    const { action, templateId, templateData, startDate, kidIds } = await req.json();
+    const { action, templateId, templateData, startDate, kidIds, mode } = await req.json();
 
     // Route to appropriate handler
     switch (action) {
@@ -44,7 +50,7 @@ export default async (req: Request) => {
       case 'delete':
         return await deleteTemplate(supabaseClient, templateId, corsHeaders);
       case 'apply':
-        return await applyTemplate(supabaseClient, user.id, templateId, startDate, kidIds, corsHeaders);
+        return await applyTemplate(supabaseClient, user.id, templateId, startDate, kidIds, corsHeaders, mode === 'replace' ? 'replace' : 'merge');
       case 'saveFromWeek':
         return await saveFromWeek(supabaseClient, user.id, templateData, corsHeaders);
       default:
@@ -56,7 +62,9 @@ export default async (req: Request) => {
   } catch (error) {
     console.error('Error in manage-meal-plan-templates:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({
+        error: (error instanceof Error ? error.message : null) || 'Internal server error',
+      }),
       { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
@@ -295,7 +303,8 @@ async function applyTemplate(
   templateId: string,
   startDate: string,
   kidIds: string[],
-  corsHeaders: any
+  corsHeaders: any,
+  mode: 'merge' | 'replace' = 'merge'
 ) {
   // Get template with entries
   const { data: template, error: templateError } = await supabaseClient
@@ -327,59 +336,128 @@ async function applyTemplate(
     );
   }
 
-  // Parse start date
-  const start = new Date(startDate);
+  // US-716: the household this user writes into. plan_entries.user_id is NOT
+  // NULL with no trigger to fill it, and the rows below never carried it, so
+  // every apply was rejected outright. household_id is stamped explicitly too,
+  // because it is part of the upsert conflict target.
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('profiles')
+    .select('household_id')
+    .eq('user_id', userId)
+    .single();
 
-  // Create plan entries for each kid
-  const planEntries = [];
+  if (profileError || !profile) {
+    return new Response(
+      JSON.stringify({ error: 'Profile not found' }),
+      { status: 404, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Foods referenced by the template, for the allergen check that has been a
+  // `// TODO: Check allergens` in this function since it was written.
+  const foodIds = new Set<string>();
   for (const entry of template.meal_plan_template_entries) {
-    // Calculate actual date (start date + day_of_week offset)
-    const entryDate = new Date(start);
-    entryDate.setDate(start.getDate() + entry.day_of_week);
-    const dateStr = entryDate.toISOString().split('T')[0];
+    for (const id of entry.food_ids ?? []) foodIds.add(id);
+  }
 
-    // Create entry for each kid
-    for (const kid of kids) {
-      // TODO: Check allergens in recipe/foods and skip if unsafe for this kid
-      // For now, we'll create all entries
+  let foodsById = new Map<string, FoodSafety>();
+  if (foodIds.size > 0) {
+    const { data: foodRows, error: foodsError } = await supabaseClient
+      .from('foods')
+      .select('id, name, allergens')
+      .in('id', [...foodIds]);
+    if (foodsError) {
+      return new Response(
+        JSON.stringify({ error: foodsError.message }),
+        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
+      );
+    }
+    foodsById = new Map(
+      (foodRows ?? []).map(
+        (f: { id: string; name: string; allergens: string[] | null }) =>
+          [f.id, { name: f.name, allergens: f.allergens ?? [] }] as const
+      )
+    );
+  }
 
-      planEntries.push({
-        kid_id: kid.id,
-        date: dateStr,
-        meal_slot: entry.meal_slot,
-        recipe_id: entry.recipe_id,
-        food_id: entry.food_ids ? entry.food_ids[0] : null, // Take first food if multiple
-        is_primary_dish: true,
-        notes: `From template: ${template.name}${entry.notes ? ` | ${entry.notes}` : ''}`,
-      });
-
-      // Add additional foods as non-primary dishes
-      if (entry.food_ids && entry.food_ids.length > 1) {
-        for (let i = 1; i < entry.food_ids.length; i++) {
-          planEntries.push({
-            kid_id: kid.id,
-            date: dateStr,
-            meal_slot: entry.meal_slot,
-            food_id: entry.food_ids[i],
-            is_primary_dish: false,
-            notes: `From template: ${template.name}`,
-          });
-        }
+  // US-716: replace clears the target week for the selected kids first; merge
+  // leaves what is there and lets the upsert settle collisions.
+  if (mode === 'replace') {
+    const uniqueDates = [
+      ...new Set(
+        template.meal_plan_template_entries.map((e: { day_of_week: number }) =>
+          dateForOffset(startDate, e.day_of_week)
+        )
+      ),
+    ];
+    if (uniqueDates.length > 0) {
+      const { error: clearError } = await supabaseClient
+        .from('plan_entries')
+        .delete()
+        .in('kid_id', kidIds)
+        .in('date', uniqueDates);
+      if (clearError) {
+        return new Response(
+          JSON.stringify({ error: clearError.message }),
+          { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
+        );
       }
     }
   }
 
-  // Insert plan entries
-  const { data: insertedEntries, error: insertError } = await supabaseClient
-    .from('plan_entries')
-    .insert(planEntries)
-    .select();
+  const { rows: planEntries, recipeOnly, skipped } = buildTemplatePlanRows({
+    templateEntries: template.meal_plan_template_entries,
+    kids,
+    foodsById,
+    userId,
+    householdId: profile.household_id,
+    startDate,
+    templateName: template.name,
+  });
 
-  if (insertError) {
-    return new Response(
-      JSON.stringify({ error: insertError.message }),
-      { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
-    );
+  // US-716: upsert on the key added in 20260901000010, so applying the same
+  // template to the same week twice updates rather than duplicating.
+  let insertedEntries: unknown[] = [];
+  if (planEntries.length > 0) {
+    const { data, error: insertError } = await supabaseClient
+      .from('plan_entries')
+      .upsert(planEntries, {
+        onConflict: 'household_id,kid_id,date,meal_slot,food_id',
+        ignoreDuplicates: false,
+      })
+      .select();
+
+    if (insertError) {
+      return new Response(
+        JSON.stringify({ error: insertError.message }),
+        { status: 400, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
+      );
+    }
+    insertedEntries = data ?? [];
+  }
+
+  // US-716: a recipe-only entry has no food to put in food_id, which is NOT
+  // NULL. It used to be inserted as null and rejected. schedule_recipe_to_plan
+  // expands the recipe's own foods instead.
+  let recipeEntriesCreated = 0;
+  for (const item of recipeOnly) {
+    const { data: count, error: rpcError } = await supabaseClient.rpc('schedule_recipe_to_plan', {
+      p_kid_id: item.kid_id,
+      p_recipe_id: item.recipe_id,
+      p_date: item.date,
+      p_meal_slot: item.meal_slot,
+    });
+    if (rpcError) {
+      // A recipe with no foods, or one this caller may not schedule, is not a
+      // reason to fail the whole apply.
+      console.warn('US-716: recipe-only template entry not scheduled', {
+        recipe_id: item.recipe_id,
+        kid_id: item.kid_id,
+        reason: rpcError.message,
+      });
+      continue;
+    }
+    recipeEntriesCreated += Number(count) || 0;
   }
 
   // Increment times_used counter
@@ -391,8 +469,10 @@ async function applyTemplate(
   return new Response(
     JSON.stringify({
       message: 'Template applied successfully',
-      entriesCreated: insertedEntries.length,
+      entriesCreated: insertedEntries.length + recipeEntriesCreated,
       entries: insertedEntries,
+      recipeEntriesCreated,
+      skipped,
     }),
     { status: 200, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
   );
@@ -424,8 +504,10 @@ async function saveFromWeek(supabaseClient: any, userId: string, templateData: a
       recipes (id, name)
     `)
     .gte('date', startDate)
-    .lte('date', endDate)
-    .eq('is_primary_dish', true); // Only primary dishes to avoid duplicates
+    .lte('date', endDate);
+  // US-716: no is_primary_dish filter. It dropped every side dish, so a saved
+  // week came back as one food per slot and the rest of the meal was lost.
+  // The rows are grouped by (date, meal_slot, recipe_id) below instead.
 
   // Optionally filter by specific kid
   if (kidId) {
@@ -462,22 +544,11 @@ async function saveFromWeek(supabaseClient: any, userId: string, templateData: a
     );
   }
 
-  // Convert plan entries to template entries
-  // Group by date to calculate day_of_week
-  const start = new Date(startDate);
-  const templateEntries = planEntries.map((entry: any) => {
-    const entryDate = new Date(entry.date);
-    const daysDiff = Math.floor((entryDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-
-    return {
-      template_id: template.id,
-      day_of_week: daysDiff,
-      meal_slot: entry.meal_slot,
-      recipe_id: entry.recipe_id,
-      food_ids: entry.food_id ? [entry.food_id] : [],
-      notes: entry.notes,
-    };
-  });
+  // US-716: group by (date, meal_slot, recipe_id) instead of mapping one plan
+  // row to one template entry, which lost every non-primary food in a meal.
+  const templateEntries = groupPlannedWeekIntoTemplateEntries(planEntries, startDate).map(
+    (group) => ({ template_id: template.id, ...group })
+  );
 
   const { error: entriesError } = await supabaseClient
     .from('meal_plan_template_entries')

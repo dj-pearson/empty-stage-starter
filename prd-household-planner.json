@@ -138,11 +138,11 @@
         "The advertised allergen check is implemented server-side using the kid's allergens and dietary_restrictions, or the per-child safety framing is removed from ApplyTemplateDialog"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "edge",
       "loopVerifiable": false,
-      "notes": "Review items 8 and P15. Verified: rows built at manage-meal-plan-templates/index.ts:344-368 omit user_id, which is NOT NULL with no trigger; household_id is filled by auto_fill_household_id."
+      "notes": "Review items 8 and P15. Verified: rows built at manage-meal-plan-templates/index.ts:344-368 omit user_id, which is NOT NULL with no trigger; household_id is filled by auto_fill_household_id. Landed 2026-09-02: applyTemplate never worked at all -- it omitted user_id (NOT NULL, no trigger) AND passed food_id null for recipe-only entries (also NOT NULL), so every apply was rejected twice over. Both fixed. Recipe-only entries route through schedule_recipe_to_plan; a failure there is logged and skipped rather than failing the whole apply. 20260901000010 adds a UNIQUE index on (household_id, kid_id, date, meal_slot, food_id) NULLS NOT DISTINCT, after collapsing existing duplicates oldest-wins; the upsert targets it by column list, which is why it is NULLS NOT DISTINCT rather than a COALESCE expression (PostgREST's on_conflict can only name columns). Verified on PostgreSQL 16.13: 4 rows deduped to 2, a null-household duplicate rejected, ON CONFLICT DO NOTHING accepted. The dialog offers Merge/Replace and reports allergen skips. saveFromWeek groups by (date, meal_slot, recipe_id) and the is_primary_dish filter is gone -- it had been discarding every side dish. AC 6: implemented rather than removed, since ApplyTemplateDialog carries no safety framing to remove; the allergen check matches kid.allergens and kid.dietary_restrictions against food.allergens, case-insensitively. The two pure transforms moved to supabase/functions/_shared/meal-plan-templates.ts with 18 Deno tests, wired into ci.yml, so this story is verified despite loopVerifiable: false."
     },
     {
       "id": "US-717",
