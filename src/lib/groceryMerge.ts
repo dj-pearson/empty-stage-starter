@@ -69,6 +69,12 @@ export interface GroceryAddInput {
   auto_generated?: boolean;
   /** US-713: the plan entry that put this row on the list. */
   source_plan_entry_id?: string | null;
+  /** US-714: collected by the add dialog and previously dropped on this path. */
+  brand_preference?: string;
+  barcode?: string;
+  priority?: string;
+  price_per_unit?: number | null;
+  added_by_user_id?: string | null;
 }
 
 export interface ExistingGroceryItem {
@@ -77,6 +83,15 @@ export interface ExistingGroceryItem {
   quantity?: number;
   unit?: string | null;
   checked?: boolean;
+  /** US-714: which list the row is on. null/undefined means the default list. */
+  grocery_list_id?: string | null;
+}
+
+export interface GroceryMergeScope {
+  /** The list the incoming items are being added to. */
+  targetListId?: string | null;
+  /** The household's default list, which owns every row with a null list id. */
+  defaultListId?: string | null;
 }
 
 export interface GroceryMergePlan {
@@ -253,10 +268,30 @@ function parseFraction(s: string): number {
  * fold each group into an existing *unchecked* grocery row when one matches,
  * otherwise emit an insert. The caller applies inserts + updates.
  */
+/**
+ * Resolve a row's list. A null grocery_list_id is not "no list" -- it is the
+ * household's default list, which is what a row gets when it was added before
+ * named lists existed or by a path that never stamped one.
+ */
+const effectiveList = (
+  listId: string | null | undefined,
+  defaultListId: string | null | undefined,
+): string | null => listId ?? defaultListId ?? null;
+
+/**
+ * US-714: merging is scoped to one list.
+ *
+ * Without the scope, adding milk to list B bumped the milk already on list A:
+ * the merge indexed every unchecked row the client held, whatever list it was
+ * on, so the new row was never inserted and the quantity landed somewhere the
+ * shopper was not looking.
+ */
 export function planGroceryMerge(
   newItems: GroceryAddInput[],
-  existing: ExistingGroceryItem[]
+  existing: ExistingGroceryItem[],
+  scope: GroceryMergeScope = {}
 ): GroceryMergePlan {
+  const target = effectiveList(scope.targetListId, scope.defaultListId);
   // Group incoming items by canonical key, preserving first-seen order.
   const groups = new Map<string, GroceryAddInput[]>();
   const order: string[] = [];
@@ -269,10 +304,11 @@ export function planGroceryMerge(
     groups.get(key)!.push(item);
   }
 
-  // Index existing UNCHECKED rows by key (first wins).
+  // Index existing UNCHECKED rows ON THE TARGET LIST by key (first wins).
   const existingByKey = new Map<string, ExistingGroceryItem>();
   for (const e of existing) {
     if (e.checked) continue;
+    if (effectiveList(e.grocery_list_id, scope.defaultListId) !== target) continue;
     const key = ingredientMatchKey(e.name);
     if (!existingByKey.has(key)) existingByKey.set(key, e);
   }
@@ -296,15 +332,17 @@ export function planGroceryMerge(
       const name = match.name?.trim() ? match.name : displayName;
       updates.push({ id: match.id, quantity: merged.quantity, unit: merged.unit, name });
     } else {
+      // US-714: spread rather than re-listing fields. This was a hand-written
+      // allowlist of six columns, so every other field on the input was
+      // silently dropped on the way to the insert -- grocery_list_id and the
+      // US-713 plan-sync stamps among them, which is why a row could be
+      // stamped by its caller and still reach the database with none of it.
+      // Spreading means a new GroceryAddInput field survives by default.
       inserts.push({
+        ...meta,
         name: displayName,
         quantity: summed.quantity,
         unit: summed.unit,
-        category: meta.category,
-        aisle: meta.aisle,
-        added_via: meta.added_via,
-        source_recipe_id: meta.source_recipe_id,
-        notes: meta.notes,
       });
     }
   }

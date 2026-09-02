@@ -99,6 +99,8 @@ export default function Grocery() {
   const [userId, setUserId] = useState<string | null>(null);
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  // US-714: which list owns the rows whose grocery_list_id is null.
+  const [defaultListId, setDefaultListId] = useState<string | null>(null);
   const [showCreateListDialog, setShowCreateListDialog] = useState(false);
   const [showManageListsDialog, setShowManageListsDialog] = useState(false);
 
@@ -159,8 +161,8 @@ export default function Grocery() {
 
   // Filter grocery items by selected list
   const filteredGroceryItems = useMemo(
-    () => filterItemsByList(groceryItems, selectedListId),
-    [groceryItems, selectedListId]
+    () => filterItemsByList(groceryItems, selectedListId, defaultListId),
+    [groceryItems, selectedListId, defaultListId]
   );
 
   // Split into active (unchecked) and purchased (checked) items
@@ -220,10 +222,13 @@ export default function Grocery() {
       existing: groceryItems,
       generated,
       selectedListId,
+      defaultListId,
     });
 
     if (plan.retireIds.length > 0) deleteGroceryItems(plan.retireIds);
-    const touched = plan.additions.length > 0 ? addGroceryItemsMerged(plan.additions) : 0;
+    const touched = plan.additions.length > 0
+      ? addGroceryItemsMerged(plan.additions, { defaultListId })
+      : 0;
 
     if (touched === 0 && plan.retireIds.length === 0) {
       toast.info("Already up to date", {
@@ -239,7 +244,7 @@ export default function Grocery() {
     });
   }, [
     planEntries, isFamilyMode, activeKidId, foods, shoppingWindow, groceryItems,
-    selectedListId, deleteGroceryItems, addGroceryItemsMerged,
+    selectedListId, defaultListId, deleteGroceryItems, addGroceryItemsMerged,
   ]);
 
   const handleToggleItem = useCallback(async (itemId: string) => {
@@ -445,6 +450,9 @@ export default function Grocery() {
       source_plan_entry_id: item.source_plan_entry_id,
       added_via: item.added_via,
       source_recipe_id: item.source_recipe_id,
+      // US-714: without this an undone checkout puts every row back on the
+      // default list, off whichever list the shopper actually bought it from.
+      grocery_list_id: item.grocery_list_id,
     }));
     if (moved.length === 0) return;
 
@@ -520,6 +528,7 @@ export default function Grocery() {
                 source_plan_entry_id: item.source_plan_entry_id,
                 added_via: item.added_via,
                 source_recipe_id: item.source_recipe_id,
+                grocery_list_id: item.grocery_list_id,
               });
             });
           };
@@ -791,6 +800,7 @@ export default function Grocery() {
                 onListChange={setSelectedListId}
                 onCreateNew={() => setShowCreateListDialog(true)}
                 onManageLists={() => setShowManageListsDialog(true)}
+                onDefaultListChange={setDefaultListId}
               />
             </div>
           )}
@@ -864,7 +874,11 @@ export default function Grocery() {
               userId={userId}
               kidId={activeKidId || undefined}
               onAddItems={(items) => {
-                items.forEach(item => addGroceryItem(item));
+                // US-714: stamp the list on screen, or the row lands with a
+                // null list id and is hidden the moment a list is selected.
+                items.forEach(item =>
+                  addGroceryItem({ ...item, grocery_list_id: selectedListId ?? undefined }),
+                );
               }}
             />
           </div>
@@ -1256,6 +1270,7 @@ export default function Grocery() {
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onAdd={addGroceryItem}
+        selectedListId={selectedListId}
       />
 
       <EditGroceryItemDialog

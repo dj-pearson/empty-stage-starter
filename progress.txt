@@ -796,3 +796,63 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     error set is captured: keep /tmp/main.errs (line/col stripped, sorted) and
     diff each story's run against it. One 20-minute run per story, not two.
 ---
+
+## 2026-09-02 - US-714 (household planner slice 1)
+- AddGroceryItemDialog takes selectedListId and stamps grocery_list_id on both
+  of its onAdd call sites -- the manual form and the import tab, which was the
+  one easy to miss. Grocery.tsx passes it.
+- Every other add path on the page now carries the list: restock suggestions
+  (onAddItems), the checkout-undo payload (both the `moved` projection and the
+  re-insert), and the plan sync. Recipe import and delete-undo already did.
+- filterItemsByList takes an optional defaultListId and treats a null
+  grocery_list_id as belonging to it. A null list id was never "on no list": it
+  is what rows got before named lists existed and from any path that forgot to
+  stamp one, and a strict equality filter hid every one of them the moment a
+  list was selected. With no default resolved yet it falls back to the old
+  strict match, so nothing appears on the wrong list during load.
+- GroceryListSelector reports the default list through a new
+  onDefaultListChange. It already fetched the lists and picked the default to
+  auto-select; nothing else on the page knew which id that was.
+- planGroceryMerge takes a scope {targetListId, defaultListId} and indexes only
+  unchecked rows on the target list. Adding milk to list B used to bump the milk
+  on list A: the merge saw every unchecked row the client held, so the new row
+  was never inserted and the quantity landed on a list the shopper was not
+  looking at. addGroceryItemsMerged buckets a batch by grocery_list_id and plans
+  each bucket separately, so a mixed batch is correct too.
+
+- **THIS COMMIT REPAIRS US-713 (ce355f4), which did not work.** planGroceryMerge
+  built its insert rows from a hand-written list of six fields, so everything
+  else on the input was dropped before GroceryContext ever saw it. US-713 added
+  grocery_list_id, auto_generated and source_plan_entry_id to GroceryAddInput
+  and to the context's insert row, and all three were being stripped in between:
+  plan-sync rows reached the database with none of their stamps. The US-713
+  tests covered planRegenerationFromPlan, which produces the additions, and
+  never followed them through planGroceryMerge -- the gap was between two
+  tested units. The insert now spreads the input instead, so a new field
+  survives by default, and a test asserts eleven fields make it through.
+- Files: src/components/AddGroceryItemDialog.tsx,
+  src/components/GroceryListSelector.tsx, src/contexts/GroceryContext.tsx,
+  src/lib/groceryData.ts, src/lib/groceryMerge.ts, src/pages/Grocery.tsx,
+  src/lib/listScoping.test.ts (new).
+- Deviation from AC 2: ScanReceiptDialog has no grocery add path. It writes to
+  the pantry (its own copy reads "we'll add the items to your pantry") and never
+  calls addGroceryItem, so there is nothing to stamp. Left alone.
+- Also narrowed SmartRestockSuggestions' onAddItems `priority` from `string` to
+  the 'low' | 'medium' | 'high' union GroceryItem actually declares. It was one
+  of the tree's standing type errors and it blocked spreading a restock
+  suggestion into a grocery add at all.
+- Gates: 2753 vitest passed / 3 skipped (up 10), lint 1226 at baseline.
+  Typecheck 1397 against origin/main's 1400: three errors removed (both
+  is_manual ones and the restock priority mismatch), zero added, by set diff.
+- **Learnings for future iterations:**
+  - A hand-written field allowlist in a mapping function is where stamped data
+    goes to die, and it fails silently. There were THREE in this flow:
+    planGroceryMerge's insert builder, addGroceryItem's newItem, and
+    addGroceryItemsMerged's row. Adding a column means finding all of them.
+  - Unit tests on both sides of a pipeline do not test the pipeline. US-713 had
+    a green test on the producer and a green test on nothing in particular, and
+    the field was dropped in the function between them. When a story is "make X
+    persist", assert on the object that reaches the persistence call.
+  - A null foreign key is rarely "none" in this schema -- it usually means "the
+    default". Check what the null case means before writing an equality filter.
+---

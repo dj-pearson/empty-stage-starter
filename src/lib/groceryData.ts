@@ -39,12 +39,27 @@ export function categoryLabel(category: string | null | undefined): string {
   return OTHER_CATEGORY_LABEL;
 }
 
-/** Restrict items to a selected list, or return all when none is selected. */
+/**
+ * Restrict items to a selected list, or return all when none is selected.
+ *
+ * US-714: a null grocery_list_id is not "on no list" -- it is the household's
+ * default list. Rows added before named lists existed, and rows from any add
+ * path that forgot to stamp one, all carry null, and a strict equality filter
+ * hid every one of them the moment a list was selected. When the selected list
+ * IS the default, those rows belong to it.
+ */
 export function filterItemsByList(
   items: GroceryItem[],
-  selectedListId: string | null
+  selectedListId: string | null,
+  defaultListId?: string | null
 ): GroceryItem[] {
-  return selectedListId ? items.filter((item) => item.grocery_list_id === selectedListId) : items;
+  if (!selectedListId) return items;
+  const selectedIsDefault = defaultListId != null && selectedListId === defaultListId;
+  return items.filter((item) =>
+    item.grocery_list_id == null
+      ? selectedIsDefault
+      : item.grocery_list_id === selectedListId
+  );
 }
 
 export interface SplitItems {
@@ -179,12 +194,15 @@ export function planRegenerationFromPlan(args: {
   existing: GroceryItem[];
   generated: GeneratedRow[];
   selectedListId: string | null;
+  /** US-714: the list that owns rows with a null grocery_list_id. */
+  defaultListId?: string | null;
 }): RegenerationPlan {
-  const { existing, generated, selectedListId } = args;
+  const { existing, generated, selectedListId, defaultListId } = args;
   const key = (name: string) => name.trim().toLowerCase();
 
+  const target = selectedListId ?? defaultListId ?? null;
   const sameList = (item: GroceryItem) =>
-    (item.grocery_list_id ?? null) === (selectedListId ?? null);
+    (item.grocery_list_id ?? defaultListId ?? null) === target;
   const inSelectedList = existing.filter(sameList);
 
   // Hand-added rows, restock suggestions and anything already bought are

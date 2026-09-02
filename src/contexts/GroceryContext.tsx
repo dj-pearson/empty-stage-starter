@@ -50,7 +50,10 @@ interface GroceryContextType {
    * quantity, folding into an existing unchecked row when one matches.
    * Returns how many list lines were touched (inserts + merges).
    */
-  addGroceryItemsMerged: (items: GroceryAddInput[]) => number;
+  addGroceryItemsMerged: (
+    items: GroceryAddInput[],
+    opts?: { defaultListId?: string | null },
+  ) => number;
   toggleGroceryItem: (id: string) => void;
   updateGroceryItem: (id: string, updates: Partial<GroceryItem>) => void;
   deleteGroceryItem: (id: string) => void;
@@ -167,7 +170,10 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [userId]);
 
-  const addGroceryItemsMerged = useCallback((items: GroceryAddInput[]): number => {
+  const addGroceryItemsMerged = useCallback((
+    items: GroceryAddInput[],
+    opts: { defaultListId?: string | null } = {},
+  ): number => {
     const cleaned = items.filter((i) => i.name && i.name.trim().length > 0);
     if (cleaned.length === 0) return 0;
 
@@ -187,7 +193,26 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
 
     // Plan against the current list so duplicates stack (issue #3) instead of
     // piling up as separate rows.
-    const plan = planGroceryMerge(expanded, groceryItems);
+    //
+    // US-714: scoped per target list. A batch normally shares one list, but a
+    // caller may mix them, and merging across lists bumped a row the shopper
+    // was not looking at instead of inserting the one they asked for.
+    const byList = new Map<string | null, GroceryAddInput[]>();
+    for (const item of expanded) {
+      const key = item.grocery_list_id ?? null;
+      const bucket = byList.get(key);
+      if (bucket) bucket.push(item);
+      else byList.set(key, [item]);
+    }
+    const plan = { inserts: [], updates: [] } as ReturnType<typeof planGroceryMerge>;
+    for (const [listId, group] of byList) {
+      const part = planGroceryMerge(group, groceryItems, {
+        targetListId: listId,
+        defaultListId: opts.defaultListId,
+      });
+      plan.inserts.push(...part.inserts);
+      plan.updates.push(...part.updates);
+    }
 
     // 1) Bump existing unchecked rows — ONE optimistic re-render + ONE request
     // (US-334), instead of looping updateGroceryItem (N writes + N re-renders).
@@ -244,6 +269,15 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
           if (item.grocery_list_id) row.grocery_list_id = item.grocery_list_id;
           if (item.auto_generated) row.auto_generated = true;
           if (item.source_plan_entry_id) row.source_plan_entry_id = item.source_plan_entry_id;
+          // US-714: this insert path used to drop everything the add dialog
+          // collected beyond name/quantity/unit/category/notes/aisle, so a
+          // brand, a scanned barcode or a price silently vanished on any add
+          // that went through the merge rather than addGroceryItem.
+          if (item.brand_preference) row.brand_preference = item.brand_preference;
+          if (item.barcode) row.barcode = item.barcode;
+          if (item.priority) row.priority = item.priority;
+          if (item.price_per_unit != null) row.price_per_unit = item.price_per_unit;
+          row.added_by_user_id = item.added_by_user_id ?? userId;
           return row;
         });
         supabase.from('grocery_items').insert(rows).select()

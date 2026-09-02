@@ -31,7 +31,15 @@ interface AddGroceryItemDialogProps {
     barcode?: string;
     brand_preference?: string;
     is_family_item?: boolean;
+    /** US-714: the list the shopper is looking at. */
+    grocery_list_id?: string;
   }) => void;
+  /**
+   * US-714: the list currently on screen. Without it every add landed with a
+   * null grocery_list_id, which filterItemsByList then hid under any named
+   * list -- the item was saved and the shopper could not see it.
+   */
+  selectedListId?: string | null;
 }
 
 interface PantryItem {
@@ -51,7 +59,7 @@ const categoryLabels: Record<FoodCategory, string> = {
   snack: "Snacks",
 };
 
-export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryItemDialogProps) {
+export function AddGroceryItemDialog({ open, onOpenChange, onAdd, selectedListId }: AddGroceryItemDialogProps) {
   const { foods } = useFoods();
   const [activeTab, setActiveTab] = useState<"manual" | "barcode" | "camera" | "import">("manual");
   
@@ -172,6 +180,7 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
       barcode: barcode.trim() || undefined,
       brand_preference: brandPreference.trim() || undefined,
       is_family_item: isFamilyItem,
+      grocery_list_id: selectedListId ?? undefined,
     });
 
     // Reset form
@@ -286,6 +295,7 @@ export function AddGroceryItemDialog({ open, onOpenChange, onAdd }: AddGroceryIt
                         quantity: item.quantity,
                         unit: item.unit,
                         category: item.category,
+                        grocery_list_id: selectedListId ?? undefined,
                       });
                     }
                     resetForm();

@@ -102,11 +102,11 @@
         "planGroceryMerge merges only against rows on the target list; a vitest asserts that adding milk to list B does not bump list A"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 6, G14, G18. Verified at AddGroceryItemDialog.tsx:164-175 and groceryData.ts:47."
+      "notes": "Review items 6, G14, G18. Verified at AddGroceryItemDialog.tsx:164-175 and groceryData.ts:47. Landed 2026-09-02: AddGroceryItemDialog takes selectedListId and stamps grocery_list_id on both its onAdd call sites (manual and the import tab); Grocery.tsx passes it. Restock suggestions, the checkout-undo payload and the plan sync now stamp it too; recipe import and delete-undo already did. filterItemsByList takes defaultListId and treats a null grocery_list_id as belonging to it, with GroceryListSelector reporting which list is default via a new onDefaultListChange (it already fetched the lists; nothing else knew). planGroceryMerge takes a scope and indexes only rows on the target list. ScanReceiptDialog is NOT covered: it adds to the pantry, not to a grocery list, so there is nothing to stamp -- AC 2's 'receipt scan' has no grocery add path today. The merge insert also stopped being a hand-written column allowlist: it spreads the input, which is what carries brand_preference, barcode, priority, price_per_unit and added_by_user_id, and which also repaired US-713 (see progress.txt). 10 vitest in src/lib/listScoping.test.ts. Typecheck 1397 vs origin/main's 1400: three removed (both is_manual errors plus a restock priority mismatch fixed by narrowing SmartRestockSuggestions' onAddItems priority to the real union), zero added."
     },
     {
       "id": "US-715",

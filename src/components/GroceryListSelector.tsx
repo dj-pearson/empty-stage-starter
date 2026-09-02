@@ -21,6 +21,12 @@ interface GroceryListSelectorProps {
   onListChange: (listId: string) => void;
   onCreateNew: () => void;
   onManageLists: () => void;
+  /**
+   * US-714: reports which list is the household default, so the page can treat
+   * rows with a null grocery_list_id as belonging to it. The selector already
+   * fetches the lists; nothing else on the page knows which one is default.
+   */
+  onDefaultListChange?: (listId: string | null) => void;
 }
 
 export function GroceryListSelector({
@@ -30,6 +36,7 @@ export function GroceryListSelector({
   onListChange,
   onCreateNew,
   onManageLists,
+  onDefaultListChange,
 }: GroceryListSelectorProps) {
   const [lists, setLists] = useState<GroceryList[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,9 +65,11 @@ export function GroceryListSelector({
           const groceryLists = data as unknown as GroceryList[];
           setLists(groceryLists);
 
+          const defaultList = groceryLists.find(l => l.is_default) || groceryLists[0];
+          onDefaultListChange?.(defaultList?.id ?? null);
+
           // Auto-select default list if none selected
-          if (!selectedListId && groceryLists.length > 0) {
-            const defaultList = groceryLists.find(l => l.is_default) || groceryLists[0];
+          if (!selectedListId && defaultList) {
             onListChange(defaultList.id);
           }
         }
@@ -72,7 +81,7 @@ export function GroceryListSelector({
     };
 
     loadLists();
-  }, [userId, householdId, selectedListId, onListChange]);
+  }, [userId, householdId, selectedListId, onListChange, onDefaultListChange]);
 
   if (loading) {
     return (
