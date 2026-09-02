@@ -5,7 +5,6 @@ import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/A
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
-import { DetailedTrackingDialog } from "@/components/DetailedTrackingDialog";
 import { MobileMealPlanner } from "@/components/meal-planner/MobileMealPlanner";
 import { buildWeekPlan } from "@/lib/mealPlanner";
 import {
@@ -15,12 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Save,
-  LayoutTemplate,
 } from "lucide-react";
 import { toast } from "sonner";
 import { MealSlot, PlanEntry } from "@/types";
-import { SwapMealDialog } from "@/components/SwapMealDialog";
 import { MissingIngredientsDialog } from "@/components/MissingIngredientsDialog";
 import { computeRecipeShortfall, type Shortfall } from "@/lib/recipeShortfall";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,7 +28,7 @@ interface AiMealPlanDay {
   date: string;
   meals: Record<string, string | null>;
 }
-import { format, startOfWeek, addWeeks, subWeeks, addDays } from "date-fns";
+import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { calculateAge } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { logger } from "@/lib/logger";
@@ -70,8 +66,6 @@ export default function Planner() {
 
   const isMobile = useMediaQuery("(max-width: 1023px)");
 
-  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<PlanEntry | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(
     startOfWeek(new Date(), { weekStartsOn: 0 })
   );
@@ -84,8 +78,6 @@ export default function Planner() {
     slot: MealSlot;
     kidId: string;
   } | null>(null);
-  const [detailedTrackingOpen, setDetailedTrackingOpen] = useState(false);
-  const [trackingEntry, setTrackingEntry] = useState<PlanEntry | null>(null);
 
   // US-284: missing-ingredient prompt state. `pendingRecipe` holds the
   // recipe that triggered the dialog so we can pass its name to the UI
@@ -583,13 +575,6 @@ export default function Planner() {
     }
   };
 
-  const handleSwapConfirm = (newFoodId: string) => {
-    if (!selectedEntry) return;
-    updatePlanEntry(selectedEntry.id, { food_id: newFoodId });
-    const newFood = foods.find((f) => f.id === newFoodId);
-    toast.success(`Swapped to ${newFood?.name}`);
-  };
-
   // --- No children empty state ---
   const plannerHelmet = (
     <Helmet>
@@ -737,22 +722,9 @@ export default function Planner() {
                 <RefreshCw className="h-5 w-5 mr-2" />
                 Quick Build
               </Button>
-              <Button
-                onClick={() => setShowSaveTemplate(true)}
-                variant="outline"
-                size="lg"
-              >
-                <Save className="h-5 w-5 mr-2" />
-                Save Template
-              </Button>
-              <Button
-                onClick={() => setShowTemplateGallery(true)}
-                variant="outline"
-                size="lg"
-              >
-                <LayoutTemplate className="h-5 w-5 mr-2" />
-                Templates
-              </Button>
+              {/* US-719: the page-level Save Template and Templates buttons
+                  are gone. The grid toolbar carries working copies; these two
+                  opened dialogs wired to state the page never read back. */}
             </div>
           </div>
 
@@ -880,28 +852,10 @@ export default function Planner() {
           onSelectRecipe={handleSelectRecipe}
         />
 
-        <SwapMealDialog
-          open={swapDialogOpen}
-          onOpenChange={setSwapDialogOpen}
-          entry={selectedEntry}
-          foods={foods}
-          onSwap={handleSwapConfirm}
-        />
-
-        {trackingEntry && (
-          <DetailedTrackingDialog
-            open={detailedTrackingOpen}
-            onOpenChange={setDetailedTrackingOpen}
-            entry={trackingEntry}
-            food={foods.find((f) => f.id === trackingEntry.food_id)!}
-            kidId={activeKidId!}
-            onComplete={(result, attemptId) => {
-              if (trackingEntry) {
-                handleMarkResult(trackingEntry, result, attemptId);
-              }
-            }}
-          />
-        )}
+        {/* US-719: SwapMealDialog and DetailedTrackingDialog were rendered
+            here but unreachable -- nothing ever set selectedEntry or
+            trackingEntry, so neither could open. Removed rather than left as
+            decoration; US-725 wires the real cell menu. */}
 
         {/* US-284: missing-ingredient prompt after a recipe is added to a slot */}
         {pendingRecipeForMissing && (

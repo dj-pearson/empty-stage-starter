@@ -148,17 +148,6 @@ export function CommandPalette() {
         group: "navigation",
       },
       {
-        id: "nav-ai-planner",
-        label: "Go to AI Planner",
-        icon: Sparkles,
-        action: () => {
-          navigate("/dashboard/ai-planner");
-          setOpen(false);
-        },
-        keywords: ["artificial intelligence", "auto", "smart"],
-        group: "navigation",
-      },
-      {
         id: "nav-insights",
         label: "Go to Insights",
         icon: BarChart3,

@@ -1017,3 +1017,56 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     Object.assign(Promise.resolve(x), { single: () => ... }) is a thenable that
     also carries .single(), which covers both callers with one object.
 ---
+
+## 2026-09-02 - US-718 (household planner slice 1)
+- SiblingMealFinder's "Use this meal" called addPlanEntry with `food_id: ''`.
+  plan_entries.food_id is a NOT NULL uuid, so an empty string is invalid rather
+  than absent: the insert was rejected every time, and before US-717 the context
+  appended a locally-generated row anyway, so the meal appeared on the planner
+  and existed nowhere else.
+- A solver result names a RECIPE, so there is no food_id to send. handleUse now
+  builds one schedule_recipe_to_plan payload per child through
+  buildSiblingScheduleRequests (src/lib/siblingSchedule.ts) and stops on the
+  first RPC error with a toast, which is AC 2.
+- Consequence worth knowing: the RPC writes server-side, so the new rows reach
+  the UI through the existing plan_entries realtime subscription rather than an
+  optimistic local update. There is a beat before they appear. US-724's shared
+  plan primitive is where that gets an optimistic path.
+- Files: src/lib/siblingSchedule.ts (new), src/lib/siblingSchedule.test.ts
+  (new, 9 tests), src/pages/SiblingMealFinder.tsx.
+
+## 2026-09-02 - US-719 (household planner slice 1)
+- Page-level Save Template and Templates buttons removed from Planner.tsx. The
+  grid toolbar's working copies remain in BOTH render branches (mobile ~647,
+  desktop ~875) -- they look like duplicates in a grep and are not.
+- /dashboard/ai-planner, src/pages/AIPlanner.tsx and every entry pointing at it
+  are deleted: the Navigation nav list AND its separate mobile NavLink block,
+  the Dashboard nav list, CommandPalette, and QuickActionsMenu (which pointed at
+  /ai-planner, a route that never existed). AC 2 offered "remove or rewire"; the
+  page wrote nothing to plan_entries, so there was nothing to rewire.
+- The duplicate top-level /planner route was not a duplicate route, it mounted a
+  SECOND copy of the whole Dashboard + Planner tree, so the same page existed at
+  two URLs with separate state. It is a Navigate redirect to /dashboard/planner
+  now.
+- SwapMealDialog and DetailedTrackingDialog were rendered on Planner.tsx but
+  unreachable: nothing ever called setSelectedEntry or setTrackingEntry, so
+  neither could open. Removed along with their state and handleSwapConfirm.
+  US-725 wires the real cell menu.
+- Files: src/App.tsx, src/pages/Planner.tsx, src/pages/Dashboard.tsx,
+  src/components/Navigation.tsx, src/components/CommandPalette.tsx,
+  src/components/QuickActionsMenu.tsx, src/pages/AIPlanner.tsx (deleted),
+  .ci/lint-baseline.txt (1225 -> 1218).
+- Gates for both: 2779 vitest passed / 3 skipped (up 9), lint 1218 (ratcheted
+  down seven by the dead-code removal), check-jsx-imports and
+  check-invisible-chars clean. Typecheck batched to the slice-1 checkpoint.
+- **Learnings for future iterations:**
+  - An empty string is not a null. `food_id: ''` into a NOT NULL uuid column is
+    an invalid-input error, not a missing-value error, and it reads as
+    "intentionally blank" to anyone skimming the call site.
+  - A nav entry usually lives in FOUR places in this app: the Navigation array,
+    a separate mobile NavLink block further down the same file, the Dashboard
+    array, and CommandPalette. QuickActionsMenu is a fifth. Grep for the path,
+    not for the label, and expect more than one hit per file.
+  - Deleting genuinely dead UI moved the lint ratchet by 7 on its own. The
+    backlog has a dead-code component to it, not only a typing one.
+---

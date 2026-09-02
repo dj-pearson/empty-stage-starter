@@ -171,11 +171,11 @@
         "A test asserts the payload sent to the context contains a uuid food_id or a recipe_id and never an empty string"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 10. Verified at SiblingMealFinder.tsx:185 and :196."
+      "notes": "Review item 10. Verified at SiblingMealFinder.tsx:185 and :196. Landed 2026-09-02: handleUse no longer calls addPlanEntry at all. A solver result names a recipe, not a food, and food_id is a NOT NULL uuid -- '' was invalid rather than absent, so the insert was rejected every time (and before US-717 the context appended a phantom row anyway). It now builds one schedule_recipe_to_plan payload per child via buildSiblingScheduleRequests in src/lib/siblingSchedule.ts and stops on the first RPC error with a toast. Note: the RPC writes server-side, so the new rows reach the UI through the existing plan_entries realtime subscription rather than an optimistic local update. 9 vitest assert no empty string is ever emitted, one payload per sibling, dedupe, and nothing emitted without a recipe/kid/date/slot."
     },
     {
       "id": "US-719",
@@ -188,11 +188,11 @@
         "The unreachable SwapMealDialog and DetailedTrackingDialog on Planner.tsx are either wired to a cell menu (US-725) or removed in this story"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 11, 12, X13 and P9's dead dialogs. Verified prop mismatch at Planner.tsx:893-910."
+      "notes": "Review items 11, 12, X13 and P9's dead dialogs. Verified prop mismatch at Planner.tsx:893-910. Landed 2026-09-02: page-level Save Template and Templates buttons removed (the grid toolbar's working copies remain, in both the mobile and desktop branches). /dashboard/ai-planner, src/pages/AIPlanner.tsx and its four nav entries (Navigation list + mobile NavLink, Dashboard list, CommandPalette, QuickActionsMenu) are deleted -- the page wrote nothing to plan_entries, so rewiring it had nothing to rewire. The duplicate top-level /planner route mounted a SECOND copy of the whole Dashboard+Planner tree; it is now a Navigate redirect to /dashboard/planner. SwapMealDialog and DetailedTrackingDialog were rendered but unreachable (nothing ever set selectedEntry or trackingEntry) and are removed with their state and handleSwapConfirm; US-725 wires the real cell menu."
     },
     {
       "id": "US-720",

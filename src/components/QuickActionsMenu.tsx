@@ -72,13 +72,6 @@ export function QuickActionsMenu() {
       action: () => navigate("/pantry"),
       color: "bg-yellow-500 hover:bg-yellow-600",
     },
-    {
-      id: "ai-planner",
-      label: "AI Planner",
-      icon: Sparkles,
-      action: () => navigate("/ai-planner"),
-      color: "bg-pink-500 hover:bg-pink-600",
-    },
   ];
 
   return (
