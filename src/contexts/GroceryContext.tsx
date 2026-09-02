@@ -112,6 +112,11 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       if (item.brand_preference) newItem.brand_preference = item.brand_preference;
       if (item.barcode) newItem.barcode = item.barcode;
       if (item.source_recipe_id) newItem.source_recipe_id = item.source_recipe_id;
+      // US-713: keep a plan-generated row plan-generated across a checkout undo.
+      // Dropping these turned it into a hand-added row that no later sync would
+      // ever retire.
+      if (item.auto_generated) newItem.auto_generated = true;
+      if (item.source_plan_entry_id) newItem.source_plan_entry_id = item.source_plan_entry_id;
 
       supabase.from('grocery_items').insert(newItem).select().single()
         .then(({ data, error }) => {
@@ -233,6 +238,12 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
           };
           if (item.added_via) row.added_via = item.added_via;
           if (item.source_recipe_id) row.source_recipe_id = item.source_recipe_id;
+          // US-713: without these three a plan-generated row lands on no list,
+          // cannot be told apart from a hand-added one, and loses its link back
+          // to the entry that caused it.
+          if (item.grocery_list_id) row.grocery_list_id = item.grocery_list_id;
+          if (item.auto_generated) row.auto_generated = true;
+          if (item.source_plan_entry_id) row.source_plan_entry_id = item.source_plan_entry_id;
           return row;
         });
         supabase.from('grocery_items').insert(rows).select()

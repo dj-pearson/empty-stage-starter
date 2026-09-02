@@ -27,6 +27,7 @@ import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
 import { ScanReceiptDialog } from "@/components/ScanReceiptDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
+import { startOfWeek, endOfWeek, toISODate } from "@/lib/date-utils";
 import {
   ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
   Sparkles, Store, Barcode, RefreshCw, ChevronDown, ChevronRight,
@@ -42,17 +43,13 @@ import {
   milestoneMessage,
   groupItems,
   flattenGroupedRows,
+  planRegenerationFromPlan,
 } from "@/lib/groceryData";
 import { supabase } from "@/integrations/supabase/client";
 import { parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { logger } from "@/lib/logger";
 
 // Extended type for grocery items with additional database properties
-interface ExtendedGroceryItem extends GroceryItem {
-  is_manual?: boolean;
-  confidence_level?: 'low' | 'medium' | 'high';
-}
-
 // Type for aisle mapping records
 interface AisleMapping {
   id: string;
@@ -89,8 +86,8 @@ export default function Grocery() {
   const {
     groceryItems,
     setGroceryItems, addGroceryItem, toggleGroceryItem,
-    updateGroceryItem, deleteGroceryItem,
-    clearCheckedGroceryItems
+    updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
+    addGroceryItemsMerged, clearCheckedGroceryItems
   } = useGrocery();
   const { recipes } = useRecipes();
 
@@ -183,8 +180,25 @@ export default function Grocery() {
   // Milestone message based on progress percentage
   const milestone = useMemo(() => milestoneMessage(progressPercent), [progressPercent]);
 
-  // Manual regeneration function
-  const handleRegenerateFromPlan = () => {
+  // US-713: the days a sync shops for. The Grocery page has no week picker, so
+  // the visible week is the current one. When the planner grows range and month
+  // views (US-743) this is the single place that has to learn about them.
+  const shoppingWindow = useMemo(() => {
+    const now = new Date();
+    return { from: toISODate(startOfWeek(now)), to: toISODate(endOfWeek(now)) };
+  }, []);
+
+  // US-713: sync from the meal plan, persisted.
+  //
+  // This used to end in setGroceryItems, which is local state only: the list
+  // looked right until a reload, never reached the server, and never reached a
+  // partner's phone. New rows now go through addGroceryItemsMerged (one insert,
+  // stamped with the list, auto_generated and the plan entry that caused them)
+  // and rows the plan no longer calls for go through deleteGroceryItems.
+  //
+  // Quantities here are still one-per-meal counts, not recipe-aware amounts.
+  // US-736 replaces the arithmetic; this story makes the path persist.
+  const handleRegenerateFromPlan = useCallback(() => {
     if (planEntries.length === 0) {
       toast.info("No meal plan found", { description: "Create a meal plan first to generate a grocery list" });
       return;
@@ -192,32 +206,41 @@ export default function Grocery() {
     const filteredEntries = isFamilyMode
       ? planEntries
       : planEntries.filter(e => e.kid_id === activeKidId);
-    const generated = generateGroceryList(filteredEntries, foods);
-    const extendedItems = groceryItems as ExtendedGroceryItem[];
 
-    // Only the currently selected list is regenerated. Items on every OTHER list
-    // are left untouched — previously the wholesale setGroceryItems replace below
-    // dropped every unchecked, non-manual item, including those on other lists.
-    const sameList = (a?: string) => (a ?? null) === (selectedListId ?? null);
-    const otherLists = extendedItems.filter(item => !sameList(item.grocery_list_id));
-    const inSelectedList = extendedItems.filter(item => sameList(item.grocery_list_id));
+    // Shop for the week on screen, not for the whole 120-day context window.
+    const generated = generateGroceryList(filteredEntries, foods, shoppingWindow);
+    if (generated.length === 0) {
+      toast.info("Nothing to add", {
+        description: "Every meal planned for this week is already covered by your pantry and list",
+      });
+      return;
+    }
 
-    // Within the selected list keep manual items and anything already purchased;
-    // the unchecked auto-generated items are what we regenerate from the plan.
-    const preserved = inSelectedList.filter(item => item.is_manual || item.checked);
-    const existingNames = new Set(preserved.map(i => i.name.toLowerCase()));
-
-    // Stamp new items with the selected list so they actually appear under it —
-    // filterItemsByList hides items whose grocery_list_id doesn't match.
-    const newItems = generated
-      .filter(gen => !existingNames.has(gen.name.toLowerCase()))
-      .map(gen => ({ ...gen, grocery_list_id: selectedListId ?? undefined }));
-
-    setGroceryItems([...otherLists, ...preserved, ...newItems]);
-    toast.success(`Added ${newItems.length} items from meal plan`, {
-      description: `Preserved ${otherLists.length + preserved.length} existing items`
+    const plan = planRegenerationFromPlan({
+      existing: groceryItems,
+      generated,
+      selectedListId,
     });
-  };
+
+    if (plan.retireIds.length > 0) deleteGroceryItems(plan.retireIds);
+    const touched = plan.additions.length > 0 ? addGroceryItemsMerged(plan.additions) : 0;
+
+    if (touched === 0 && plan.retireIds.length === 0) {
+      toast.info("Already up to date", {
+        description: `This week's plan is already on your list (${plan.preservedCount} item${plan.preservedCount === 1 ? '' : 's'} kept)`,
+      });
+      return;
+    }
+
+    toast.success(`Added ${touched} item${touched === 1 ? '' : 's'} from meal plan`, {
+      description: plan.retireIds.length > 0
+        ? `Removed ${plan.retireIds.length} no longer planned, kept ${plan.preservedCount}`
+        : `Kept ${plan.preservedCount} existing item${plan.preservedCount === 1 ? '' : 's'}`,
+    });
+  }, [
+    planEntries, isFamilyMode, activeKidId, foods, shoppingWindow, groceryItems,
+    selectedListId, deleteGroceryItems, addGroceryItemsMerged,
+  ]);
 
   const handleToggleItem = useCallback(async (itemId: string) => {
     const item = groceryItems.find(i => i.id === itemId);
@@ -414,7 +437,12 @@ export default function Grocery() {
       quantity: item.quantity,
       unit: item.unit,
       aisle: item.aisle,
-      is_manual: item.is_manual,
+      // US-713: is_manual was never a column -- it lived on a local interface
+      // only, so this carried undefined and wrote nothing. The persisted pair
+      // is what an undo has to restore, or a plan-generated row comes back as a
+      // hand-added one that no later sync will retire.
+      auto_generated: item.auto_generated,
+      source_plan_entry_id: item.source_plan_entry_id,
       added_via: item.added_via,
       source_recipe_id: item.source_recipe_id,
     }));
@@ -488,7 +516,8 @@ export default function Grocery() {
                 quantity: item.quantity,
                 unit: item.unit,
                 aisle: item.aisle,
-                is_manual: item.is_manual,
+                auto_generated: item.auto_generated,
+                source_plan_entry_id: item.source_plan_entry_id,
                 added_via: item.added_via,
                 source_recipe_id: item.source_recipe_id,
               });

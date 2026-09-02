@@ -128,19 +128,82 @@ export function buildDayPlan(
 }
 
 
-export function generateGroceryList(planEntries: PlanEntry[], foods: Food[]) {
-  const foodCount: Record<string, { food: Food; count: number; inStock: number }> = {};
+/**
+ * An inclusive shopping window, as YYYY-MM-DD date keys.
+ *
+ * US-713: generation used to run over every plan entry the context held -- a
+ * 120-day window -- so "sync from meal plan" put three months of dinners on a
+ * single week's shopping list. The caller now names the days it is shopping
+ * for.
+ */
+export interface ShoppingWindow {
+  /** Inclusive first day, YYYY-MM-DD. */
+  from: string;
+  /** Inclusive last day, YYYY-MM-DD. */
+  to: string;
+}
 
-  planEntries.forEach(entry => {
+/** Plan entry dates may carry a time; compare on the date key alone. */
+const dateKey = (value: string): string => value.slice(0, 10);
+
+export interface GeneratedGroceryRow {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  checked: boolean;
+  category: Food["category"];
+  aisle?: string;
+  /** US-713: marks the row as regenerable, so a later sync can retire it. */
+  auto_generated: true;
+  /**
+   * US-713: the first plan entry that put this food on the list. A row is
+   * aggregated across every entry for the same food in the window, so this
+   * names the earliest contributor rather than all of them -- enough to answer
+   * "why is this on my list" and to trace a row back to the plan.
+   */
+  source_plan_entry_id?: string;
+}
+
+export function generateGroceryList(
+  planEntries: PlanEntry[],
+  foods: Food[],
+  window?: ShoppingWindow,
+): GeneratedGroceryRow[] {
+  const entries = window
+    ? planEntries.filter(
+        (entry) =>
+          typeof entry.date === "string" &&
+          dateKey(entry.date) >= window.from &&
+          dateKey(entry.date) <= window.to,
+      )
+    : planEntries;
+
+  const foodCount: Record<
+    string,
+    { food: Food; count: number; inStock: number; sourcePlanEntryId?: string; firstDate?: string }
+  > = {};
+
+  entries.forEach(entry => {
     const food = foods.find(f => f.id === entry.food_id);
     if (food) {
-      if (foodCount[food.id]) {
-        foodCount[food.id].count++;
+      const existing = foodCount[food.id];
+      if (existing) {
+        existing.count++;
+        // Keep the earliest entry in the window as the source, so the answer
+        // does not depend on the order the entries happen to arrive in.
+        const candidate = typeof entry.date === "string" ? dateKey(entry.date) : undefined;
+        if (candidate && (!existing.firstDate || candidate < existing.firstDate)) {
+          existing.firstDate = candidate;
+          existing.sourcePlanEntryId = entry.id;
+        }
       } else {
-        foodCount[food.id] = { 
-          food, 
-          count: 1, 
-          inStock: food.quantity || 0 
+        foodCount[food.id] = {
+          food,
+          count: 1,
+          inStock: food.quantity || 0,
+          sourcePlanEntryId: entry.id,
+          firstDate: typeof entry.date === "string" ? dateKey(entry.date) : undefined,
         };
       }
     }
@@ -149,7 +212,7 @@ export function generateGroceryList(planEntries: PlanEntry[], foods: Food[]) {
   // Only include items that are needed (count > stock)
   return Object.values(foodCount)
     .filter(({ count, inStock }) => count > inStock)
-    .map(({ food, count, inStock }) => ({
+    .map(({ food, count, inStock, sourcePlanEntryId }) => ({
       id: generateId(),
       name: food.name,
       quantity: count - inStock, // Only need the difference
@@ -157,5 +220,7 @@ export function generateGroceryList(planEntries: PlanEntry[], foods: Food[]) {
       checked: false,
       category: food.category,
       aisle: food.aisle,
+      auto_generated: true as const,
+      source_plan_entry_id: sourcePlanEntryId,
     }));
 }

@@ -729,3 +729,70 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
 - The commits themselves are fine -- the worktree diff above proves all three
   add zero type errors -- but the gate they cited was not run.
 ---
+
+## 2026-09-02 - US-713 (household planner slice 1)
+- handleRegenerateFromPlan in src/pages/Grocery.tsx no longer ends in
+  setGroceryItems. That call was local state only: the generated list looked
+  right until a reload, never reached the server, and never reached a partner's
+  phone. New rows now go through addGroceryItemsMerged and rows the plan no
+  longer calls for go through deleteGroceryItems.
+- generateGroceryList (src/lib/mealPlanner.ts) takes an optional ShoppingWindow
+  {from, to} of YYYY-MM-DD keys and filters plan entries to it. The page passes
+  the current Sunday-Saturday week; previously generation ran over every entry
+  the context held, so a sync put roughly 120 days of dinners on one week's
+  list. Dates are compared on the first 10 characters so an entry carrying a
+  time still matches.
+- Generated rows carry grocery_list_id, auto_generated and
+  source_plan_entry_id. GroceryAddInput gained all three and the insert row in
+  addGroceryItemsMerged now writes them; without grocery_list_id a generated row
+  is invisible under every named list, because filterItemsByList matches on it.
+  source_plan_entry_id names the EARLIEST contributing entry, since a row is
+  aggregated across every entry for that food in the window.
+- Idempotence comes from the shape, not from a dedupe pass: a generated row that
+  is already on the list as an unchecked plan-sync row is neither new nor stale,
+  so it is left alone rather than deleted and re-inserted. A second sync for the
+  same week is a no-op -- no duplicate rows, no doubled quantities, no realtime
+  churn on a partner's phone. 17 tests in src/lib/planSync.test.ts, including
+  idempotence end to end through generateGroceryList.
+- AC 5, with a deviation. The is_manual filter is gone: is_manual was never a
+  column, only a field on a local interface, so it was undefined on every row
+  loaded from the server and the filter preserved nothing but checked rows --
+  hand-added items were swept on every sync. But auto_generated alone cannot
+  replace it as the RETIRE predicate: auto_add_restock_items
+  (20251010221000:172) sets the same flag, and its column comment still reads
+  "True if item was auto-added by restock system". Retiring on that flag alone
+  would delete the user's restock suggestions on every sync. A row is
+  regenerable only when it is auto_generated AND carries a plan-sync
+  fingerprint: source_plan_entry_id, or added_via = 'meal_plan_sync'. This
+  preserves strictly more than the AC asks for.
+- The is_manual swap also reached the two checkout-undo payloads, which carried
+  is_manual and dropped auto_generated/source_plan_entry_id. Undoing a checkout
+  restored a plan-generated row as a hand-added one, which no later sync would
+  ever retire. Both now carry the persisted pair, and addGroceryItem writes them.
+  The dead ExtendedGroceryItem interface is deleted.
+- Files: src/lib/mealPlanner.ts, src/lib/groceryData.ts, src/lib/groceryMerge.ts,
+  src/contexts/GroceryContext.tsx, src/pages/Grocery.tsx,
+  src/lib/planSync.test.ts (new).
+- Gates: 2743 vitest passed / 3 skipped (up 17), lint 1226 at baseline.
+  Typecheck 1398 against origin/main's 1400: this REMOVES two errors (both the
+  is_manual phantom field) and adds none, established by diffing the error sets
+  with line and column numbers stripped, not by comparing counts.
+- **Learnings for future iterations:**
+  - `is_manual` does not exist in the database. Anything reading it is reading
+    undefined. It was still being written into two insert payloads and was
+    itself producing two of the tree's type errors. If another surface reads it,
+    that surface is also broken.
+  - auto_generated is overloaded: smart restock and meal-plan sync both set it.
+    Anything that DELETES on the strength of that flag needs a second
+    discriminator or it will eat the other feature's rows. added_via is the
+    cheap one to stamp.
+  - GroceryContext has two insert paths with separately hand-maintained column
+    allowlists -- addGroceryItem and addGroceryItemsMerged. A new column has to
+    be added to BOTH or it silently vanishes on one of them.
+  - parseGroceryItemRow uses a passthrough zod schema and spreads the row, so a
+    new column reaches the client with no normalizer change. That is why
+    auto_generated works as a predicate where is_manual never could.
+  - The typecheck comparison is cheaper than it looks now that origin/main's
+    error set is captured: keep /tmp/main.errs (line/col stripped, sorted) and
+    diff each story's run against it. One 20-minute run per story, not two.
+---

@@ -85,11 +85,11 @@
         "The is_manual filter is replaced by the persisted auto_generated column so hand-added rows are genuinely preserved"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 5 and grocery items G12, G18. Verified: GroceryContext.setGroceryItems is local state only. Full recipe-aware quantities land in US-736; this story makes the path persist and idempotent."
+      "notes": "Review item 5 and grocery items G12, G18. Verified: GroceryContext.setGroceryItems is local state only. Full recipe-aware quantities land in US-736; this story makes the path persist and idempotent. Landed 2026-09-02: handleRegenerateFromPlan no longer calls setGroceryItems. New rows go through addGroceryItemsMerged stamped with grocery_list_id, auto_generated and source_plan_entry_id (GroceryAddInput and the insert row in GroceryContext gained all three); rows the plan no longer calls for go through deleteGroceryItems. generateGroceryList takes an optional ShoppingWindow and the page passes the current Mon-Sun week. One deviation worth knowing: auto_generated alone cannot decide what a sync may retire, because auto_add_restock_items (20251010221000) sets the same flag -- its column comment still reads 'added by restock system'. Retiring on that flag alone would delete the user's restock suggestions on every sync, so a row is regenerable only when it also carries source_plan_entry_id or added_via = 'meal_plan_sync'. That preserves strictly more than the AC asks. The is_manual swap also reached the checkout-undo payloads, which carried is_manual and so restored a plan row as a hand-added one that no sync would ever retire. 17 vitest in src/lib/planSync.test.ts, idempotence covered both on the planner alone and end to end through generateGroceryList. Typecheck: 1398 errors against 1400 on origin/main -- this removes the two is_manual errors and adds none, verified by diffing the error sets."
     },
     {
       "id": "US-714",

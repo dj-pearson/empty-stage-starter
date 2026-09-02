@@ -61,6 +61,14 @@ export interface GroceryAddInput {
   added_via?: string;
   source_recipe_id?: string;
   notes?: string | null;
+  /** US-713: the list the row belongs to. Without it a generated row is
+   *  invisible under every named list, since filterItemsByList matches on it. */
+  grocery_list_id?: string | null;
+  /** US-713: true for rows a plan sync created, so a later sync may retire
+   *  them. Hand-added rows leave it unset and are never swept. */
+  auto_generated?: boolean;
+  /** US-713: the plan entry that put this row on the list. */
+  source_plan_entry_id?: string | null;
 }
 
 export interface ExistingGroceryItem {
