@@ -1070,3 +1070,35 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - Deleting genuinely dead UI moved the lint ratchet by 7 on its own. The
     backlog has a dead-code component to it, not only a typing one.
 ---
+
+## 2026-09-02 - US-720 BLOCKED (household planner slice 1)
+- The recursive `git rm -r app native-js-build ...` was refused by the session's
+  auto-mode safety classifier, which guards bulk directory deletion. Nothing was
+  deleted; the tree is untouched. Asked Dj, who chose to skip and keep going.
+- AC 2 is done and shipped anyway: app/mobile/lib/unit-suggestions.ts is ported
+  to src/lib/groceryAisle.ts, which is the only data in app/ worth keeping and
+  which US-728 builds on. The port does not depend on the deletion.
+- Survey for whoever picks this up, so it does not have to be redone:
+  - KEEP src/lib/platform.ts. It has 10+ web consumers (AppContext,
+    AccessibilityContext, useSmartDefaults, both barcode scanners, five tests),
+    so AC 5's "only if a non-Expo consumer remains" resolves to keep.
+  - native-js-build/ is the earlier pure-JavaScript React Native shell. No CI
+    workflow or package.json script references it, so AC 8's delete branch
+    applies rather than its record-status branch.
+  - babel.config.js exists only to configure babel-plugin-module-resolver, and
+    nothing outside app/ imports through that alias. Both go.
+  - scripts/setup-mobile-assets.cjs has exactly one consumer, the
+    setup:mobile:assets script. Both go.
+  - 19 npm scripts to remove: expo:start/android/ios/web/clear,
+    eas:build:{ios,android,all}:{preview,production}, eas:submit:{ios,android},
+    expo:prebuild, setup:mobile:assets, android, ios.
+  - 17 dependencies to remove: expo, expo-camera, expo-constants,
+    expo-file-system, expo-haptics, expo-image-picker, expo-linking,
+    expo-local-authentication, expo-router, expo-secure-store,
+    expo-splash-screen, expo-status-bar, react-native,
+    react-native-safe-area-context, react-native-screens,
+    react-native-reanimated, babel-plugin-module-resolver.
+  - AC 3 names @capacitor* but NO @capacitor package is in package.json. Only
+    capacitor.config.ts exists, orphaned. Delete the file; there is no dep.
+- Files: src/lib/groceryAisle.ts (new, the AC 2 port).
+---
