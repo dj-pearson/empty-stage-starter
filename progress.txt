@@ -637,3 +637,70 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     hand, printing EXPECTED next to each value. There is no SQL test runner
     wired into CI.
 ---
+
+## 2026-09-01 - US-712 (household planner slice 1)
+- Removed the mount effect in src/pages/Grocery.tsx that called
+  deleteGroceryItems on every checked row and toasted "Cleared N purchased
+  items from last trip - Items were already added to your pantry". Both halves
+  of that message were false: nothing had been credited to the pantry, and a
+  shopper who reloaded mid-trip lost the record of what was already in the
+  cart. Also removed the hasAutoCleanedRef guard and the now-unused
+  deleteGroceryItems destructure, which means the page no longer holds a bulk
+  deleter at all.
+- AC 2 and AC 3 were already true and were verified rather than built. The
+  collapsed Purchased Collapsible is at Grocery.tsx:1140. handleDoneShopping
+  credits before removing: recordPurchases when ledgerWritesEnabled, with a
+  per-row fallback to updateFood/addFood for the rows the ledger declines, and
+  updateFood/addFood outright when the flag is off; only then
+  clearCheckedGroceryItems(). The single-row handleDeleteItem is the only other
+  removal path and it is an explicit button with an Undo toast.
+- src/pages/Grocery.mountCleanup.test.tsx (new, 4 tests) renders the real page
+  with one checked and one unchecked row in the store, the shape a reload hands
+  over from cache, and asserts: no deleteGroceryItems, no deleteGroceryItem, no
+  clearCheckedGroceryItems on mount; no "purchased item" toast; the Purchased
+  section and its "Move 1 to pantry" button present; and the row itself visible
+  once the section is expanded. Putting the effect back fails 3 of the 4, which
+  was checked before committing.
+- Files: src/pages/Grocery.tsx, src/pages/Grocery.mountCleanup.test.tsx (new).
+- Gates: 2726 vitest passed / 3 skipped (169 files, up 4 tests), lint 1226 at
+  baseline. Typecheck: this change adds ZERO errors -- HEAD without it and the
+  working tree with it both measure exactly 1400 -- but the ratchet FAILS on
+  both, because .ci/typecheck-baseline.txt says 1165. See the open finding
+  below; it is not caused by this story.
+- **Learnings for future iterations:**
+  - Grocery.tsx is renderable in vitest with about 80 lines of mocks: mock
+    @/contexts/AppContext wholesale (it re-exports all six domain hooks), the
+    supabase client, analytics, logger, sonner, and the twelve child components
+    that own their own fetching. No AppContextComposer needed.
+  - vi.mock factories are hoisted above every local const, so a `const stub =
+    (name) => ...` helper used inside one throws "Cannot access 'stub' before
+    initialization". Inline each factory.
+  - A Radix Collapsible does not render its content while closed, so
+    getByText on a row inside a collapsed section fails even though the data is
+    fine. Assert on the section header and count, or click to expand first.
+  - Write the "does it fail without the fix" check into the loop for UI stories
+    too, not just security ones. Two of these four assertions would have passed
+    against the buggy page.
+  - THE TYPECHECK RATCHET GAVE FALSE GREENS ON US-709, US-710 AND US-711.
+    CLAUDE.md warns that `tsc -b` skips the project when tsconfig.app.tsbuildinfo
+    looks current and exits 0 having checked nothing. `rm -f *.tsbuildinfo`
+    before the run is NOT sufficient on its own: those runs produced a 3-line
+    log with zero `error TS` lines and the script passed them, because its crash
+    guard only fires when tsc ALSO exits non-zero. A 3-line log is the tell.
+    Check `wc -l /tmp/typecheck-ratchet.log` -- a real run is ~2400 lines.
+  - To answer "did MY change add type errors", measure both sides the same way
+    instead of trusting one number: `git worktree add /tmp/base <ref>`, symlink
+    node_modules into it, `rm -f *.tsbuildinfo`, `npx tsc -b --noEmit` in each,
+    and diff the counts. About 20 minutes per side on this machine.
+
+## OPEN FINDING (2026-09-02): .ci/typecheck-baseline.txt is 235 below reality
+- A complete `tsc -b --noEmit` measures 1400 errors, both on this branch and on
+  4166dca (US-711, before US-712). The committed baseline is 1165, so
+  scripts/ci/typecheck-ratchet.sh exits 1 on an unmodified tree.
+- A measurement of origin/main was started to establish whether the gap predates
+  this branch. Not finished at the time of this commit -- do not treat the
+  ratchet as green until that number is in and the cause is known.
+- If main is also 1400, the baseline file is stale and needs its own change with
+  its own justification; raising it inside a feature commit is exactly what the
+  script's own error message forbids.
+---

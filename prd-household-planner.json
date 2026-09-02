@@ -67,11 +67,11 @@
         "A test in src/pages renders Grocery with pre-checked items from the cache and asserts no delete call is made on mount"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 4. Verified at Grocery.tsx:155-167."
+      "notes": "Review item 4. Verified at Grocery.tsx:155-167. Landed 2026-09-01: the mount effect, its toast, the hasAutoCleanedRef guard and the now-unused deleteGroceryItems destructure are all gone from Grocery.tsx. AC 2 and AC 3 already held before this change and were re-verified rather than built: the collapsed Purchased Collapsible is at Grocery.tsx:1140 and handleDoneShopping credits via recordPurchases when ledgerWritesEnabled and via updateFood/addFood otherwise, then calls clearCheckedGroceryItems. The only other removal path is handleDeleteItem, an explicit per-row delete with an Undo toast. src/pages/Grocery.mountCleanup.test.tsx renders the real page with a pre-checked row from the store; 3 of its 4 assertions fail when the effect is put back, which was checked. Typecheck: adds zero errors (HEAD without it and the working tree with it both measure exactly 1400), but the ratchet fails on both because the committed baseline of 1165 is 235 below a real full run -- a pre-existing condition tracked as an open finding in progress.txt, not caused by this story."
     },
     {
       "id": "US-713",

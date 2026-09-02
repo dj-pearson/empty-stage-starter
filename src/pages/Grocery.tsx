@@ -89,7 +89,7 @@ export default function Grocery() {
   const {
     groceryItems,
     setGroceryItems, addGroceryItem, toggleGroceryItem,
-    updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
+    updateGroceryItem, deleteGroceryItem,
     clearCheckedGroceryItems
   } = useGrocery();
   const { recipes } = useRecipes();
@@ -123,9 +123,6 @@ export default function Grocery() {
   // Purchased section state
   const [purchasedOpen, setPurchasedOpen] = useState(false);
 
-  // Auto-cleanup flag to prevent running multiple times
-  const hasAutoCleanedRef = useRef(false);
-
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -152,19 +149,13 @@ export default function Grocery() {
     loadUserData();
   }, []);
 
-  // Auto-cleanup: Remove stale checked items from previous sessions on mount
-  useEffect(() => {
-    if (hasAutoCleanedRef.current) return;
-    const checkedItems = groceryItems.filter(item => item.checked);
-    if (checkedItems.length > 0) {
-      hasAutoCleanedRef.current = true;
-      const checkedIds = checkedItems.map(i => i.id);
-      deleteGroceryItems(checkedIds);
-      toast.info(`Cleared ${checkedItems.length} purchased item${checkedItems.length === 1 ? '' : 's'} from last trip`, {
-        description: "Items were already added to your pantry"
-      });
-    }
-  }, [groceryItems, deleteGroceryItems]); // Run once when grocery items first load (ref guard prevents re-runs)
+  // US-712: there is deliberately no mount-time cleanup of checked rows.
+  // This used to delete every checked item on load and toast "already added to
+  // your pantry", which was false twice over: nothing had been credited, and a
+  // shopper who reloaded mid-trip lost the record of what they had already put
+  // in the cart. Checked rows now live in the Purchased section until the
+  // explicit checkout below, which is the only path that credits the pantry and
+  // the only path that removes them.
 
   const isFamilyMode = !activeKidId;
   const activeKid = kids.find(k => k.id === activeKidId);
