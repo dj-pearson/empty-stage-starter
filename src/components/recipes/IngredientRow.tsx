@@ -13,6 +13,8 @@ import { GripVertical, X } from "lucide-react";
 
 export interface IngredientRowData {
   id: string;
+  /** US-721: recipe_ingredients.id when this row came from a saved recipe. */
+  rowId?: string;
   food_id?: string;
   name: string;
   quantity: string;

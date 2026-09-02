@@ -1102,3 +1102,59 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     capacitor.config.ts exists, orphaned. Delete the file; there is no dep.
 - Files: src/lib/groceryAisle.ts (new, the AC 2 port).
 ---
+
+## 2026-09-02 - US-721 (household planner slice 1)
+- The web builder collected a quantity and a unit for every ingredient and threw
+  both away: linked ingredients were reduced to a food_ids uuid array, unlinked
+  ones flattened into one comma-joined additional_ingredients string.
+  recipe_ingredients has had columns for all of it since US-265 (April) and the
+  web client had never written a row, so scaling, shortfall and recipe-aware
+  grocery generation had nothing to read.
+- src/lib/recipeIngredients.ts holds the pure transforms: toIngredientPayloads,
+  diffIngredientRows, draftsFromRecipe, buildAdditionalIngredientsDisplay,
+  parseIngredientQuantity.
+- RecipesContext.addRecipe writes the rows after the recipe row exists;
+  updateRecipe diffs them by id. Diffing rather than delete-all matters because
+  recipe_components (US-612) points at recipe_ingredients.id -- a
+  delete-then-reinsert would orphan every reference on every save.
+- EnhancedRecipeBuilder seeds in preference order: recipe_ingredients, then
+  food_ids for a legacy recipe, then additional_ingredients parsed into rows.
+  Falling back to food_ids when rows exist would silently drop every quantity,
+  which is why the order is asserted by a test.
+- additional_ingredients is now DERIVED on every save and never read as the
+  source of truth. It is still written because shipped iOS builds read it;
+  rebuilding it from the rows each time is what stops the two drifting.
+- The core-payload retry in addRecipe fired on ANY insert error. A constraint
+  violation or an RLS rejection was retried with two thirds of the recipe
+  stripped out, and that retry "succeeded", saving a mangled row. It now fires
+  only on a missing-column error class (PGRST204, 42703, or a message matching
+  the usual phrasings) and toasts which columns it dropped.
+- prepTime/cookTime use parseDurationMinutes. parseInt("1 hr 30 min") is 1, so
+  total_time_minutes has been wrong for every recipe entered with units.
+- Files: src/lib/recipeIngredients.ts (new), src/lib/recipeIngredients.test.ts
+  (new, 27 tests), src/contexts/RecipesContext.tsx, src/types/index.ts,
+  src/components/recipes/EnhancedRecipeBuilder.tsx,
+  src/components/recipes/IngredientRow.tsx.
+- Gates: 2806 vitest passed / 3 skipped (up 27), lint 1218 at baseline,
+  typecheck 1392 vs origin/main's 1400 -- eight removed, zero added, by set
+  diff. Caveat on that run: it started before the last edit (stripping
+  recipe_ingredient_rows out of updateRecipe's optimistic local state) landed,
+  so that one destructure is covered by vitest and eslint but not by this
+  typecheck run.
+- **Learnings for future iterations:**
+  - parseGroceryText does NOT split on commas, on purpose, so "beef, ground"
+    stays one grocery item. Reading the old comma-joined
+    additional_ingredients back therefore needs a comma split first, and a
+    comma inside an ingredient name becomes two rows. Recoverable in the editor
+    but worth knowing before trusting a parsed legacy recipe.
+  - recipe_ingredients has no column for "optional". It is folded into
+    optional_notes as a "(optional)" suffix and parsed back out on read. If a
+    real column ever lands, both halves are in recipeIngredients.ts.
+  - A blanket `if (error) retryWithLessData()` is worse than no retry. It turns
+    every failure class into a silent partial save. Gate a retry on the error
+    class it was written for.
+  - Recipe carries recipe_ingredient_rows as write-only transport from the
+    builder to the context. It is not a column: addRecipe and updateRecipe both
+    build their payloads field-by-field, and updateRecipe strips it from local
+    state so a later edit cannot re-send stale rows.
+---

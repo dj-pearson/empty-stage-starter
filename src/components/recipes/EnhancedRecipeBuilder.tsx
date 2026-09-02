@@ -13,6 +13,13 @@ import {
 import { Sparkles, ChevronDown, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import { parseDurationMinutes } from "@/lib/recipeFilters";
+import {
+  buildAdditionalIngredientsDisplay,
+  draftsFromRecipe,
+  toIngredientPayloads,
+  type IngredientDraft,
+} from "@/lib/recipeIngredients";
 import { Recipe, Food, Kid } from "@/types";
 import { cn } from "@/lib/utils";
 import { IngredientSelector } from "./IngredientSelector";
@@ -68,23 +75,23 @@ export function EnhancedRecipeBuilder({
   const [tagInput, setTagInput] = useState("");
 
   // Ingredients
-  const [ingredients, setIngredients] = useState<IngredientRowData[]>(() => {
-    if (editRecipe?.food_ids && editRecipe.food_ids.length > 0) {
-      return editRecipe.food_ids.map((foodId) => {
-        const food = foods.find((f) => f.id === foodId);
-        return {
-          id: generateIngredientId(),
-          food_id: foodId,
-          name: food?.name ?? "Unknown",
-          quantity: "",
-          unit: "",
-          prepNotes: "",
-          isOptional: false,
-        };
-      });
-    }
-    return [];
-  });
+  // US-721: seed from the real recipe_ingredients rows when they exist, so an
+  // edit does not wipe every quantity and unit. food_ids is the legacy fallback
+  // and additional_ingredients is parsed as a last resort, which is how a
+  // recipe that only ever had the free-text blob becomes structured.
+  const [ingredients, setIngredients] = useState<IngredientRowData[]>(() =>
+    draftsFromRecipe(editRecipe, foods).map((draft) => ({
+      id: draft.id,
+      rowId: draft.rowId ?? undefined,
+      food_id: draft.food_id ?? undefined,
+      name: draft.name,
+      quantity: draft.quantity,
+      unit: draft.unit,
+      prepNotes: draft.prepNotes,
+      isOptional: draft.isOptional,
+      section: draft.section,
+    })),
+  );
 
   // Instructions
   const [steps, setSteps] = useState<string[]>(() => {
@@ -267,16 +274,22 @@ export function EnhancedRecipeBuilder({
         .filter((ing) => ing.food_id)
         .map((ing) => ing.food_id!);
 
-      const additionalIngredients = ingredients
-        .filter((ing) => !ing.food_id)
-        .map((ing) => {
-          let str = ing.name;
-          if (ing.quantity) str = `${ing.quantity} ${ing.unit} ${str}`;
-          if (ing.prepNotes) str += ` (${ing.prepNotes})`;
-          if (ing.isOptional) str += " [optional]";
-          return str;
-        })
-        .join(", ");
+      // US-721: the rows are the source of truth now. additional_ingredients is
+      // rebuilt from them on every save as a DISPLAY string, because shipped
+      // iOS builds still read it -- deriving it is what stops the two drifting.
+      const drafts: IngredientDraft[] = ingredients.map((ing) => ({
+        id: ing.id,
+        rowId: ing.rowId ?? null,
+        food_id: ing.food_id ?? null,
+        name: ing.name,
+        quantity: ing.quantity,
+        unit: ing.unit,
+        prepNotes: ing.prepNotes,
+        isOptional: ing.isOptional,
+        section: ing.section,
+      }));
+      const ingredientRows = toIngredientPayloads(drafts);
+      const additionalIngredients = buildAdditionalIngredientsDisplay(drafts);
 
       // Store steps as JSON array for structured display
       const instructionsStr =
@@ -299,11 +312,14 @@ export function EnhancedRecipeBuilder({
         tags: tags.length > 0 ? tags : undefined,
         assigned_kid_ids: selectedKids.length > 0 ? selectedKids : undefined,
         additionalIngredients: additionalIngredients || undefined,
+        recipe_ingredient_rows: ingredientRows,
       };
 
       // Calculate total time
-      const prep = parseInt(prepTime || "0");
-      const cook = parseInt(cookTime || "0");
+      // US-721: parseInt("1 hr 30 min") is 1. parseDurationMinutes reads the
+      // units, so an hour is 60 minutes rather than one.
+      const prep = parseDurationMinutes(prepTime) ?? 0;
+      const cook = parseDurationMinutes(cookTime) ?? 0;
       if (prep + cook > 0) {
         recipeData.total_time_minutes = prep + cook;
       }

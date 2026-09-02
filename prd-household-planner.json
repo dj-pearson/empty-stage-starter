@@ -230,11 +230,11 @@
         "Tests cover create, edit-preserves-ids, legacy fallback and the retry guard"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items 14, R8, R15. RecipesContext.tsx:215-246 and EnhancedRecipeBuilder.tsx:266-279 today."
+      "notes": "Review items 14, R8, R15. RecipesContext.tsx:215-246 and EnhancedRecipeBuilder.tsx:266-279 today. Landed 2026-09-02: src/lib/recipeIngredients.ts holds the pure transforms (toIngredientPayloads, diffIngredientRows, draftsFromRecipe, buildAdditionalIngredientsDisplay, parseIngredientQuantity). RecipesContext.addRecipe and updateRecipe write recipe_ingredients rows and diff by id, so recipe_components (US-612) keeps its references across an edit -- a delete-all would orphan them. EnhancedRecipeBuilder seeds from recipe_ingredients, falls back to food_ids for legacy recipes, and parses additional_ingredients as a last resort. The core-payload retry now fires only on PGRST204 / 42703 / a missing-column message and toasts which columns it dropped; it used to fire on ANY error, so a constraint violation or an RLS rejection was retried with two thirds of the recipe stripped and then 'succeeded'. prepTime/cookTime use parseDurationMinutes; parseInt('1 hr 30 min') was 1. Two things worth knowing: optionality has no column, so it is folded into optional_notes as '(optional)' and parsed back out; and reading the legacy blob needs a comma split before parseGroceryText, which deliberately does not split on commas so that 'beef, ground' survives -- a comma inside an ingredient name therefore becomes two rows, recoverable in the editor the user is already looking at. 27 vitest cover create, edit-preserves-ids, legacy fallback, blob parsing and the retry guard."
     },
     {
       "id": "US-722",
