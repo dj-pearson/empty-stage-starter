@@ -693,14 +693,39 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     node_modules into it, `rm -f *.tsbuildinfo`, `npx tsc -b --noEmit` in each,
     and diff the counts. About 20 minutes per side on this machine.
 
-## OPEN FINDING (2026-09-02): .ci/typecheck-baseline.txt is 235 below reality
-- A complete `tsc -b --noEmit` measures 1400 errors, both on this branch and on
-  4166dca (US-711, before US-712). The committed baseline is 1165, so
-  scripts/ci/typecheck-ratchet.sh exits 1 on an unmodified tree.
-- A measurement of origin/main was started to establish whether the gap predates
-  this branch. Not finished at the time of this commit -- do not treat the
-  ratchet as green until that number is in and the cause is known.
-- If main is also 1400, the baseline file is stale and needs its own change with
-  its own justification; raising it inside a feature commit is exactly what the
-  script's own error message forbids.
+## FINDING (2026-09-02): the Typecheck ratchet is RED ON MAIN, and has been
+- A complete `tsc -b --noEmit` measures **1400** errors on origin/main (0e79899).
+  `.ci/typecheck-baseline.txt` says **1165**. scripts/ci/typecheck-ratchet.sh
+  therefore exits 1 on an untouched checkout of main, and ci.yml:173 runs it
+  with no continue-on-error, so that job is a hard gate and it is failing.
+- Measured three ways with the same node_modules and the same command, each in
+  its own `git worktree` with *.tsbuildinfo deleted first:
+    origin/main (0e79899)          1400
+    4166dca (US-709/710/711)       1400
+    working tree (+ US-712)        1400
+  Not just equal counts: comparing the error sets with the line/column numbers
+  stripped gives 0 unique to main and 0 unique to this branch. The four commits
+  on this branch add no type errors and remove none.
+- So the gap predates this branch. Either the baseline was lowered without a
+  full run, or a merge landed ~235 errors while the ratchet was passing on a
+  skipped build. Not diagnosed further.
+- NOT FIXED HERE, deliberately. The script's own failure message says "Do NOT
+  raise .ci/typecheck-baseline.txt", and the two real options -- raise it to
+  1400 with a written justification, or fix 235 errors -- are both larger than
+  any story in this epic and neither is mine to choose. Raised with the user.
+- Practical consequence for the loop: `bash scripts/ci/typecheck-ratchet.sh`
+  cannot be used as a pass/fail gate on this branch. Until the baseline is
+  settled, prove "my change adds no type errors" by the worktree diff above,
+  which is what US-712 did.
+
+## CORRECTION (2026-09-02): US-709, US-710 and US-711 reported a false green
+- Their progress entries and commit messages say "typecheck ratchet exit 0".
+  That exit 0 came from `tsc -b` skipping the project and checking nothing, the
+  trap CLAUDE.md documents. `rm -f *.tsbuildinfo` before the run did not prevent
+  it, and the script's crash guard did not catch it because that guard only
+  fires when tsc ALSO exits non-zero.
+- The tell is the log length: `wc -l /tmp/typecheck-ratchet.log`. A real run is
+  ~2400 lines. Those runs produced 3.
+- The commits themselves are fine -- the worktree diff above proves all three
+  add zero type errors -- but the gate they cited was not run.
 ---
