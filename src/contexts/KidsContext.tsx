@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Kid } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { checkFeatureLimit, isPlanLimitError } from "@/lib/featureLimits";
@@ -113,8 +114,11 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
           });
           return false;
         }
+        // US-717: a rejected insert used to append a locally-generated child
+        // anyway, so the profile looked created and existed nowhere else.
         logger.error('Supabase addKid error:', error);
-        setKids(prev => [...prev, { ...kid, id: generateId() }]);
+        toast.error("Couldn't save that child profile. Please try again.");
+        return false;
       } else if (data) {
         const inserted = parseKidRow(data as Record<string, unknown>);
         if (inserted) setKids(prev => upsertById(prev, inserted));

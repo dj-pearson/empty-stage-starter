@@ -2,11 +2,10 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { PlanEntry } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
-import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
-import { runOptimisticMutation } from "@/lib/optimisticMutation";
+import { runOptimisticInsert, runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
-import { parsePlanEntryRow, parsePlanEntryRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
+import { parsePlanEntryRow, parsePlanEntryRows } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -106,20 +105,27 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
 
   const addPlanEntry = useCallback((entry: Omit<PlanEntry, "id">) => {
     if (userId && householdId) {
-      supabase
-        .from('plan_entries')
-        .insert([{ ...entry, user_id: userId, household_id: householdId }])
-        .select()
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            logger.error('Supabase addPlanEntry error:', error);
-            setPlanEntriesRaw(prev => [...prev, { ...entry, id: generateId() }]);
-          } else if (data) {
-            const inserted = parsePlanEntryRow(data as Record<string, unknown>);
-            if (inserted) setPlanEntriesRaw(prev => upsertById(prev, inserted));
-          }
-        });
+      // US-717: a rejected insert used to append a locally-generated row
+      // anyway, so the meal looked planned, reached the localStorage backup,
+      // and existed nowhere else. Roll it back and say so instead.
+      void runOptimisticInsert<PlanEntry>(
+        setPlanEntriesRaw,
+        [{ ...entry, id: generateId() }],
+        () =>
+          supabase
+            .from('plan_entries')
+            .insert([{ ...entry, user_id: userId, household_id: householdId }])
+            .select()
+            .single(),
+        (data) => {
+          const inserted = parsePlanEntryRow(data as Record<string, unknown>);
+          return inserted ? [inserted] : [];
+        },
+        {
+          logLabel: 'Supabase addPlanEntry error:',
+          toastMessage: "Couldn't save that meal — it's been removed. Please try again.",
+        },
+      );
     } else {
       setPlanEntriesRaw(prev => [...prev, { ...entry, id: generateId() }]);
     }
@@ -128,15 +134,19 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const addPlanEntries = useCallback(async (entries: Omit<PlanEntry, "id">[]) => {
     if (userId && householdId) {
       const entriesWithIds = entries.map(e => ({ ...e, user_id: userId, household_id: householdId }));
-      const { data, error } = await supabase.from('plan_entries').insert(entriesWithIds).select();
-
-      if (error) {
-        logger.error('Supabase addPlanEntries error:', error);
-        const localEntries = entries.map(e => ({ ...e, id: generateId() }));
-        setPlanEntriesRaw(prev => [...prev, ...localEntries]);
-      } else if (data) {
-        setPlanEntriesRaw(prev => upsertManyById(prev, parsePlanEntryRows(data as unknown[])));
-      }
+      // US-717: same as addPlanEntry, for a whole generated week. This is the
+      // one that mattered most -- a failed insert here left seven days of
+      // phantom meals on screen with no error anywhere.
+      await runOptimisticInsert<PlanEntry>(
+        setPlanEntriesRaw,
+        entries.map(e => ({ ...e, id: generateId() })),
+        () => supabase.from('plan_entries').insert(entriesWithIds).select(),
+        (data) => parsePlanEntryRows(data as unknown[]),
+        {
+          logLabel: 'Supabase addPlanEntries error:',
+          toastMessage: "Couldn't save those meals — they've been removed. Please try again.",
+        },
+      );
     } else {
       const newEntries = entries.map(e => ({ ...e, id: generateId() }));
       setPlanEntriesRaw(prev => [...prev, ...newEntries]);

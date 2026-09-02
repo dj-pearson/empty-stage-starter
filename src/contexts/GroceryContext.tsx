@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
@@ -124,8 +125,11 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       supabase.from('grocery_items').insert(newItem).select().single()
         .then(({ data, error }) => {
           if (error) {
+            // US-717: a rejected insert used to append a locally-generated row
+            // anyway, so the item looked added, reached the localStorage
+            // backup, and existed nowhere else.
             logger.error('Supabase addGroceryItem error:', error);
-            setGroceryItemsRaw(prev => [...prev, { ...item, id: generateId(), checked: false }]);
+            toast.error("Couldn't add that item. Please try again.");
           } else if (data) {
             const inserted = parseGroceryItemRow(data as Record<string, unknown>);
             if (inserted) setGroceryItemsRaw(prev => upsertById(prev, inserted));
@@ -283,11 +287,9 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         supabase.from('grocery_items').insert(rows).select()
           .then(({ data, error }) => {
             if (error) {
+              // US-717: no phantom rows for a rejected bulk insert.
               logger.error('Supabase addGroceryItemsMerged error:', error);
-              setGroceryItemsRaw(prev => [
-                ...prev,
-                ...plan.inserts.map(i => ({ ...i, unit: i.unit ?? '', category: i.category as GroceryItem['category'], id: generateId(), checked: false }) as GroceryItem),
-              ]);
+              toast.error("Couldn't add those items. Please try again.");
             } else if (data) {
               setGroceryItemsRaw(prev => upsertManyById(prev, parseGroceryItemRows(data as unknown[])));
             }

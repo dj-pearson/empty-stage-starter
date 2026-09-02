@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useEf
 import { Food } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { checkFeatureLimit, isPlanLimitError } from "@/lib/featureLimits";
 import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
@@ -110,8 +111,12 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
           });
           return false;
         }
+        // US-717: this used to append a locally-generated row after the
+        // server refused it, so the food looked saved, reached the
+        // localStorage backup, and existed nowhere else. Say so instead.
         logger.error('Supabase addFood error:', error);
-        setFoods(prev => [...prev, { ...food, id: generateId() }]);
+        toast.error("Couldn't save that food. Please try again.");
+        return false;
       } else if (data) {
         const inserted = parseFoodRow(data as Record<string, unknown>);
         if (inserted) setFoods(prev => upsertById(prev, inserted));
@@ -180,9 +185,10 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
           });
           return false;
         }
+        // US-717: no phantom rows for a rejected bulk insert.
         logger.error('Supabase addFoods error:', error);
-        const localFoods = foodsToAdd.map(f => ({ ...f, id: generateId() }));
-        setFoods(prev => [...prev, ...localFoods]);
+        toast.error("Couldn't save those foods. Please try again.");
+        return false;
       } else if (data) {
         setFoods(prev => upsertManyById(prev, parseFoodRows(data as unknown[])));
       }

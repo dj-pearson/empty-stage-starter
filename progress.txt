@@ -966,3 +966,54 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - eslint lints supabase/functions/**, not just src/. A new `any` there moves
     the lint ratchet.
 ---
+
+## 2026-09-02 - US-717 (household planner slice 1)
+- Every entity context had the same bug in its insert error branch: when the
+  server rejected the row it appended a locally-generated one anyway. The row
+  looked saved, the debounced persist wrote it to the localStorage backup, and
+  it existed nowhere else. Nobody was told anything. A parent could plan a whole
+  week that lived only on that screen.
+- runOptimisticInsert (src/lib/optimisticMutation.ts, new) backs addPlanEntry
+  and addPlanEntries: append optimistically, remove exactly the rows it added on
+  failure (matched by reference, so a realtime event that replaced one under the
+  same id is left alone), toast, and on success swap the temporary rows for the
+  server's, which carry the real ids.
+- It deliberately does NOT reuse runOptimisticMutation. That helper captures its
+  snapshot inside the setState updater, and React can invoke an updater more
+  than once -- the second call's `prev` already contains the optimistic rows, so
+  rollbackOptimistic sees them in the snapshot, treats them as pre-existing and
+  RESTORES them instead of dropping them. The first version of this story did
+  reuse it and two tests failed for exactly that reason.
+- AC 4 audit found SEVEN phantom-append sites, all fixed:
+    PlanContext     addPlanEntry, addPlanEntries
+    GroceryContext  addGroceryItem, addGroceryItemsMerged
+    FoodsContext    addFood, addFoods
+    KidsContext     addKid
+  RecipesContext was already correct: its error branch throws.
+- Deviation from AC 4's wording: only the two PlanContext paths use
+  runOptimisticInsert. The other five are PESSIMISTIC inserts -- they await the
+  server before touching state at all -- so there is no optimistic row to roll
+  back and the correct fix is simply not appending, plus a toast. Converting
+  them to optimistic inserts would be a behaviour change the story does not ask
+  for. The plan-limit branches in Foods/Kids already returned before the phantom
+  append and are untouched; runOptimisticMutation/Insert gained an `onError`
+  hook so a caller can suppress the toast for that case if it ever needs it.
+- The generateId() appends still in those files are the signed-out, local-only
+  branches. Those are correct: with no user there is no server to reject.
+- Files: src/lib/optimisticMutation.ts, src/contexts/PlanContext.tsx,
+  src/contexts/GroceryContext.tsx, src/contexts/FoodsContext.tsx,
+  src/contexts/KidsContext.tsx, src/contexts/PlanContext.weekOps.test.tsx.
+- Gates: 2770 vitest passed / 3 skipped (up 4), lint 1225 at baseline.
+  Typecheck deferred to the slice-1 checkpoint (batching, per the user).
+- **Learnings for future iterations:**
+  - A setState updater is not guaranteed to run once. Anything that captures
+    state INSIDE an updater and later diffs against it is unsafe for an
+    append-then-rollback. Know the ids you created and remove those.
+  - Mocking supabase for a context test needs @/lib/supabaseAuthError stubbed
+    too. runOptimisticMutation awaits handleSupabaseAuthError before rolling
+    back, and the real one reaches for supabase.auth; without the stub it throws
+    and the rollback never runs, which looks exactly like a broken rollback.
+  - A supabase mock has to serve both `.select()` and `.select().single()`.
+    Object.assign(Promise.resolve(x), { single: () => ... }) is a thenable that
+    also carries .single(), which covers both callers with one object.
+---

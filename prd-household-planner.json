@@ -155,11 +155,11 @@
         "The same pattern is applied to any other context whose insert error branch appends a local row (audit GroceryContext, FoodsContext, RecipesContext, KidsContext and fix any found)"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 9. Verified at PlanContext.tsx:102-105 and :121-125."
+      "notes": "Review item 9. Verified at PlanContext.tsx:102-105 and :121-125. Landed 2026-09-02: a new runOptimisticInsert in src/lib/optimisticMutation.ts backs addPlanEntry and addPlanEntries -- it appends optimistically, removes exactly the rows it added on failure (by reference, so a realtime replacement survives), toasts, and on success swaps the temporary rows for the server's. It deliberately does NOT reuse runOptimisticMutation's snapshot: React can invoke a setState updater more than once, and the second call's prev already contains the optimistic rows, so they get snapshotted as pre-existing and restored instead of dropped. That was a real failing test, not a theory. Audit of AC 4 found SEVEN phantom-append sites, all fixed: PlanContext x2, GroceryContext x2 (addGroceryItem, addGroceryItemsMerged), FoodsContext x2 (addFood, addFoods), KidsContext x1 (addKid). RecipesContext was already correct -- it throws. Deviation: only the two PlanContext paths use runOptimisticInsert; the other five are pessimistic inserts that await the server before touching state, so there is nothing to roll back and the fix is simply not appending plus a toast. Converting them to optimistic would be a behaviour change the AC does not ask for. The remaining generateId() appends in those files are the signed-out local-only branches, which are correct. 4 new cases in PlanContext.weekOps.test.tsx."
     },
     {
       "id": "US-718",
