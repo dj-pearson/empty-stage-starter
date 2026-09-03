@@ -10,5 +10,6 @@
  */
 
 export declare const SW_BUILD_ID_PLACEHOLDER: string;
+export declare function collectAssetFiles(dir: string, base?: string): string[];
 export declare function buildIdFromAssets(fileNames: readonly string[]): string;
 export declare function stampServiceWorker(source: string, buildId: string): string;

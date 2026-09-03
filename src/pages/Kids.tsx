@@ -71,7 +71,7 @@ export default function Kids() {
                   })
                 }
               >
-                <Link to="/sibling-meal-finder">
+                <Link to="/dashboard/sibling-meal-finder">
                   <Users2 className="h-4 w-4" />
                   Find a meal everyone will eat
                 </Link>

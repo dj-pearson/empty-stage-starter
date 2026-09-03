@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import {
   buildIdFromAssets,
+  collectAssetFiles,
   stampServiceWorker,
   SW_BUILD_ID_PLACEHOLDER,
 } from '../../scripts/build/stamp-sw.mjs';
@@ -40,6 +42,55 @@ describe('buildIdFromAssets', () => {
 
   it('is short hex, so it is legible in a cache name', () => {
     expect(buildIdFromAssets(['index-a1b2.js'])).toMatch(/^[a-f0-9]{12}$/);
+  });
+});
+
+describe('collectAssetFiles', () => {
+  /**
+   * Regression: the first version of this script hashed
+   * readdirSync('dist/assets') directly. Vite writes dist/assets/{js,css,fonts}/,
+   * so that returned exactly ["css","fonts","js"] -- three directory names
+   * identical in every build ever produced. The build id was therefore a
+   * constant, the service worker cache name never changed, and the stamping
+   * accomplished nothing while looking like it worked.
+   *
+   * It shipped that way. The unit tests above passed because they fed
+   * buildIdFromAssets a flat list of filenames by hand and never exercised the
+   * directory walk the CLI actually used. Caught by rebuilding after a source
+   * change and noticing the id had not moved.
+   */
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'sw-assets-'));
+    mkdirSync(path.join(dir, 'js'), { recursive: true });
+    mkdirSync(path.join(dir, 'css'), { recursive: true });
+    writeFileSync(path.join(dir, 'js', 'index-a1b2.js'), '');
+    writeFileSync(path.join(dir, 'css', 'index-c3d4.css'), '');
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('finds files nested under the asset subdirectories', () => {
+    expect(collectAssetFiles(dir).sort()).toEqual(['css/index-c3d4.css', 'js/index-a1b2.js']);
+  });
+
+  it('returns paths, not the bare directory names the bug hashed', () => {
+    expect(collectAssetFiles(dir)).not.toContain('js');
+    expect(collectAssetFiles(dir)).not.toContain('css');
+  });
+
+  it('changes the build id when a nested asset hash changes', () => {
+    const before = buildIdFromAssets(collectAssetFiles(dir));
+    rmSync(path.join(dir, 'js', 'index-a1b2.js'));
+    writeFileSync(path.join(dir, 'js', 'index-9999.js'), '');
+    const after = buildIdFromAssets(collectAssetFiles(dir));
+    // The broken version produced the same id here, which is the whole defect.
+    expect(after).not.toBe(before);
+  });
+
+  it('uses / separators so the id does not differ by platform', () => {
+    expect(collectAssetFiles(dir).every((f) => !f.includes('\\'))).toBe(true);
   });
 });
 

@@ -546,7 +546,7 @@ export default function Recipes() {
                   })
                 }
               >
-                <Link to="/sibling-meal-finder">
+                <Link to="/dashboard/sibling-meal-finder">
                   <Users2 className="h-5 w-5 mr-2" />
                   Find a meal everyone will eat
                 </Link>

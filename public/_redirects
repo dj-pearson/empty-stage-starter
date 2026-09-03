@@ -19,13 +19,33 @@
 # Admin panel redirect if not authenticated
 /admin /auth?redirect=/admin 302
 
-# Handle trailing slashes consistently
-/kids/ /kids 301
-/planner/ /planner 301
+# Legacy top-level app URLs -> their canonical /dashboard route (US-766).
+#
+# Each of these used to mount a SECOND copy of the Dashboard shell in the SPA,
+# so /pantry and /dashboard/pantry were two React trees with separate state.
+# They are client-side redirects now, and these 301s mean a bookmark, an
+# external link or a crawler resolves in one hop at the edge instead of loading
+# the app and bouncing.
+#
+# Kept forever rather than deleted: these are URLs people have saved.
+/kids /dashboard/kids 301
+/pantry /dashboard/pantry 301
+/recipes /dashboard/recipes 301
+/planner /dashboard/planner 301
+/grocery /dashboard/grocery 301
+/food-tracker /dashboard/food-tracker 301
+/meal-builder /dashboard/meal-builder 301
+/insights /dashboard/insights 301
+/sibling-meal-finder /dashboard/sibling-meal-finder 301
+
+# Handle trailing slashes consistently. The alias forms go straight to the
+# canonical target rather than chaining through a second 301.
+/kids/ /dashboard/kids 301
+/planner/ /dashboard/planner 301
 /tracker/ /tracker 301
-/recipes/ /recipes 301
-/pantry/ /pantry 301
-/grocery/ /grocery 301
+/recipes/ /dashboard/recipes 301
+/pantry/ /dashboard/pantry 301
+/grocery/ /dashboard/grocery 301
 /dashboard/ /dashboard 301
 
 # public/llms.txt advertised /features/kids-meal-planning and /solutions/arfid-meal-planning

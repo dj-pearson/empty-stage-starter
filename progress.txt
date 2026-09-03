@@ -1358,3 +1358,55 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - Playwright strict mode turns a loose text locator into a failure the moment
     a page renders MORE of what you asked for. Two "failures" here were pages
     working better than the selector expected.
+
+## 2026-09-03 - US-766 (collapse the alias routes) + a US-765 bug fixed
+- Eight top-level URLs (/kids, /pantry, /recipes, /grocery, /food-tracker,
+  /meal-builder, /insights, /sibling-meal-finder) each mounted a SECOND copy of
+  the Dashboard shell plus its page. /pantry and /dashboard/pantry were two
+  React trees with separate state: a filter set on one did not exist on the
+  other. US-719 found exactly this for /planner, fixed that one route, and left
+  the other eight standing -- which is why this is pinned by a test rather than
+  trusted to the diff.
+- src/lib/routeAliases.ts is the single list, consumed by App.tsx (which now
+  renders them from a map), by the test, and by the assertions that keep them
+  out of the prerender list. All nine including /planner go through it now, so
+  the US-719 special case is gone.
+- No ProtectedRoute on the redirects: the canonical route is already guarded,
+  so an unauthenticated visitor redirects and then bounces to /auth from there.
+- public/_redirects gains a 301 per alias so a bookmark resolves in one hop at
+  the edge instead of booting the app to bounce. The pre-existing trailing-slash
+  rules (/kids/ -> /kids) pointed at the alias and would now chain through two
+  301s; they point at the canonical target instead.
+- In-app links rewritten: Recipes.tsx and Kids.tsx linked /sibling-meal-finder,
+  QuickActionsMenu.tsx navigated to five aliases.
+- Files: src/lib/routeAliases.ts (new), src/lib/routeAliases.test.ts (new, 25
+  tests), src/App.tsx, public/_redirects, src/pages/Recipes.tsx,
+  src/pages/Kids.tsx, src/components/QuickActionsMenu.tsx.
+
+### A bug in US-765, shipped an hour earlier and fixed here
+- scripts/build/stamp-sw.mjs hashed `readdirSync('dist/assets')` to build the
+  service worker cache id. Vite writes dist/assets/{js,css,fonts}/, so that
+  returned exactly ["css","fonts","js"] -- three directory names identical in
+  every build ever produced. The id was a CONSTANT, so the cache name never
+  changed and the whole point of US-765's versioning was defeated while the
+  build printed a plausible-looking hash each time.
+- Caught by accident: rebuilding after the App.tsx change and noticing the
+  printed id had not moved (ac8d6961cdc3 both times). Now walks recursively --
+  744 files, id e749e17bc710, and it moves when any content hash does.
+- **Learnings for future iterations:**
+  - The unit tests passed the whole time because they fed buildIdFromAssets a
+    hand-written flat list of filenames. The directory walk the CLI actually
+    used had NO test. A pure function tested with tidy fixtures says nothing
+    about the impure caller that feeds it real data -- and the seam between
+    them is exactly where this bug lived.
+  - "The script ran and printed a hash" is not evidence it computed the right
+    hash. The verification that mattered was cheap and I did not do it at the
+    time: change a source file, rebuild, check the id CHANGED. A hash that
+    never varies looks identical to a hash that works until you vary the input.
+  - Deleting a route is not enough; the links pointing at it have to move too,
+    or the redirect just becomes the path everyone takes. grep for `to="`,
+    `href=` and `navigate(` per alias, not only for the route definition.
+  - The runtime proof of the alias fix needs an authenticated session (both the
+    alias and the canonical route redirect to /auth when signed out), so the
+    assertions here are source-level: no `path="/alias"`, exactly one
+    `<Dashboard />` mount. Nine mounts was the bug; the count is the invariant.

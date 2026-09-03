@@ -26,6 +26,27 @@ import { fileURLToPath } from 'node:url';
 export const SW_BUILD_ID_PLACEHOLDER = '__SW_BUILD_ID__';
 
 /**
+ * Every built asset file, as paths relative to `dir`, sorted.
+ *
+ * MUST recurse. Vite writes dist/assets/{js,css,fonts}/, so a plain
+ * readdirSync('dist/assets') returns exactly ["css","fonts","js"] -- three
+ * directory names that are identical in every build ever produced. Hashing
+ * that yielded a constant build id, which meant the service worker cache name
+ * never changed, which is the precise failure the stamping exists to prevent.
+ * It shipped that way and was caught by rebuilding after a source change and
+ * noticing the id had not moved.
+ */
+export function collectAssetFiles(dir, base = dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...collectAssetFiles(full, base));
+    else out.push(path.relative(base, full).split(path.sep).join('/'));
+  }
+  return out;
+}
+
+/**
  * Deterministic short id for a set of built asset filenames.
  * Sorted so directory-read order cannot change the answer.
  */
@@ -62,7 +83,11 @@ function main() {
     throw new Error('stamp-sw: dist/assets not found. Run this after vite build.');
   }
 
-  const buildId = buildIdFromAssets(readdirSync(assetsDir));
+  const assetFiles = collectAssetFiles(assetsDir);
+  if (assetFiles.length === 0) {
+    throw new Error('stamp-sw: dist/assets contains no files. Run this after vite build.');
+  }
+  const buildId = buildIdFromAssets(assetFiles);
   const stamped = stampServiceWorker(readFileSync(swPath, 'utf8'), buildId);
   writeFileSync(swPath, stamped);
   console.log(`stamp-sw: dist/sw.js cache name is now tryeatpal-${buildId}`);

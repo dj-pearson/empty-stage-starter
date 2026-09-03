@@ -8,6 +8,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
 import { AppProvider } from '@/contexts/AppContext';
+import { ROUTE_ALIAS_ENTRIES } from '@/lib/routeAliases';
 import { AccessibilityProvider, useAccessibility } from '@/contexts/AccessibilityContext';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -609,164 +610,28 @@ const App = () => (
                         />
                       </Route>
 
-                      {/* Convenience aliases - redirect to dashboard nested routes - Protected */}
-                      <Route
-                        path="/kids"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <Kids />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
-                      <Route
-                        path="/pantry"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <Pantry />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
-                      <Route
-                        path="/recipes"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <Recipes />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
-                      {/* US-719: /planner used to mount a second copy of the
-                          whole Dashboard + Planner tree, so the same page
-                          existed at two URLs with separate state. It is a
-                          redirect to the canonical route now. */}
-                      <Route path="/planner" element={<Navigate to="/dashboard/planner" replace />} />
-                      <Route
-                        path="/grocery"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <Grocery />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
-                      <Route
-                        path="/food-tracker"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <FoodTracker />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
-                      <Route
-                        path="/meal-builder"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <MealBuilder />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
-                      <Route
-                        path="/insights"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <InsightsDashboard />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
-                      <Route
-                        path="/sibling-meal-finder"
-                        element={
-                          <ProtectedRoute>
-                            <RouteErrorBoundary>
-                              <Dashboard />
-                            </RouteErrorBoundary>
-                          </ProtectedRoute>
-                        }
-                      >
-                        <Route
-                          index
-                          element={
-                            <RouteErrorBoundary>
-                              <SiblingMealFinder />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                      </Route>
+                      {/*
+                        Convenience aliases (US-766).
+
+                        Every one of these used to mount a SECOND copy of the
+                        Dashboard shell plus its page, so /pantry and
+                        /dashboard/pantry were two React trees with separate
+                        state -- a filter set on one did not exist on the
+                        other. US-719 found that for /planner and fixed only
+                        that one; these are the remaining eight.
+
+                        No ProtectedRoute here on purpose: the canonical route
+                        is already guarded, so an unauthenticated visitor
+                        redirects and then bounces to /auth from there. Wrapping
+                        the redirect too would just run the check twice.
+
+                        The list lives in src/lib/routeAliases.ts so the routes,
+                        the test and the prerender/sitemap exclusion cannot
+                        drift apart.
+                      */}
+                      {ROUTE_ALIAS_ENTRIES.map(([from, to]) => (
+                        <Route key={from} path={from} element={<Navigate to={to} replace />} />
+                      ))}
                       {/*
                         pSEO programmatic pages.
 
