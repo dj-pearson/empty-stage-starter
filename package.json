@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/ensure-chromium.mjs && vite build && node scripts/prerender.mjs && node scripts/generate-aasa.mjs",
+    "build": "node scripts/ensure-chromium.mjs && vite build && node scripts/build/stamp-sw.mjs && node scripts/prerender.mjs && node scripts/generate-aasa.mjs",
     "infisical:load": "infisical export --env=dev --format=dotenv > .env.local",
     "build:dev": "vite build --mode development",
     "build:staging": "vite build --mode staging",

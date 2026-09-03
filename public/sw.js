@@ -1,8 +1,22 @@
 // TryEatPal Service Worker - Progressive Web App with Offline Support
-// Version: 1.0.0
+//
+// SW_BUILD_ID is rewritten by scripts/build/stamp-sw.mjs during `npm run build`
+// from a hash of the built asset filenames, so every deploy that changes the
+// output gets a new cache name and the activate handler below drops the caches
+// belonging to the previous one. The literal placeholder is what ships in the
+// source tree; the stamp script fails the build if it is missing, and the
+// service worker is only ever registered from a production build (US-765).
+const SW_BUILD_ID = '__SW_BUILD_ID__';
 
-const CACHE_NAME = 'tryeatpal-v1';
+const CACHE_NAME = 'tryeatpal-' + SW_BUILD_ID;
 const OFFLINE_URL = '/offline.html';
+
+// The share-target handoff cache is intentionally NOT versioned and must
+// survive activation. It holds a share the user just made, which
+// src/pages/ShareTarget.tsx reads on the very next navigation -- a share that
+// lands while a new worker activates would otherwise be deleted before the page
+// that consumes it ever runs.
+const SHARE_CACHE = 'share-target-cache';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -58,15 +72,19 @@ self.addEventListener('activate', (event) => {
 
   event.waitUntil(
     (async () => {
-      // Delete old caches
+      // Delete caches from previous builds. KEEP is a set rather than a
+      // comparison against CACHE_NAME alone: that earlier form deleted
+      // share-target-cache on every activation, which threw away a pending
+      // share whenever a new worker took over.
+      const KEEP = new Set([CACHE_NAME, SHARE_CACHE]);
       const cacheNames = await caches.keys();
       await Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+        cacheNames
+          .filter((cacheName) => !KEEP.has(cacheName))
+          .map((cacheName) => {
             console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
-          }
-        })
+          })
       );
 
       // Take control of all clients immediately
@@ -75,9 +93,6 @@ self.addEventListener('activate', (event) => {
     })()
   );
 });
-
-// Share Target Cache name
-const SHARE_CACHE = 'share-target-cache';
 
 // Fetch event - implement caching strategies
 self.addEventListener('fetch', (event) => {

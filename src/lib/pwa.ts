@@ -2,13 +2,43 @@
 
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { isServiceWorkerEnabled, unregisterServiceWorkers } from '@/lib/swRegistration';
 
 const SW_UPDATE_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Run once the page has loaded, or immediately if it already has.
+ *
+ * The bare `window.addEventListener('load', ...)` this replaced was correct
+ * while registration happened during module evaluation. US-765 moved the call
+ * to after first render, where the load event may already have fired -- and a
+ * listener added after that never runs, so the worker would silently never
+ * register on exactly the fast loads it is meant to help.
+ */
+function onWindowLoad(fn: () => void) {
+  if (document.readyState === 'complete') {
+    fn();
+    return;
+  }
+  window.addEventListener('load', fn, { once: true });
+}
 
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
-  window.addEventListener('load', async () => {
+  // The kill switch runs before anything else, and unregisters rather than
+  // merely declining: a worker already installed on a device keeps serving
+  // there until something removes it. See src/lib/swRegistration.ts.
+  if (!isServiceWorkerEnabled()) {
+    void unregisterServiceWorkers().then((removed) => {
+      if (removed > 0) {
+        logger.info('Service Worker disabled by flag; removed registrations:', removed);
+      }
+    });
+    return;
+  }
+
+  onWindowLoad(async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');
       logger.info('Service Worker registered:', registration.scope);

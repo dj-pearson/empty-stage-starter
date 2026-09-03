@@ -36,6 +36,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { initializeSentry, resolveSentryDsn } from './lib/sentry';
 import { validateEnv } from './lib/env';
 import { initWebVitals } from './lib/webVitals';
+import { registerServiceWorker } from './lib/pwa';
 
 // Validate environment variables (dev only, non-blocking)
 if (import.meta.env.DEV) {
@@ -98,6 +99,14 @@ try {
   initWebVitals().catch(() => {
     debugLog('Web vitals initialization failed (non-critical)');
   });
+
+  // Register the service worker (US-765). Production only: a worker caching a
+  // dev server's responses makes HMR lie about what is on disk. The flag check
+  // and the unregister-on-disable path live in src/lib/swRegistration.ts, which
+  // registerServiceWorker consults before it touches the registration.
+  if (import.meta.env.PROD) {
+    registerServiceWorker();
+  }
 } catch (error) {
   // Always log render errors - critical for production debugging
   logger.error('[EatPal] Failed to render app:', error);

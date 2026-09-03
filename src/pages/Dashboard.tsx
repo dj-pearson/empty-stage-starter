@@ -16,6 +16,7 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
 import { BindEmailBanner } from "@/components/auth/BindEmailBanner";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 import {
   Sheet,
   SheetContent,
@@ -175,6 +176,14 @@ const Dashboard = () => {
         <meta name="description" content="Manage your family's meal plans, food tracking, and nutrition insights" />
         <meta name="robots" content="noindex" />
       </Helmet>
+      {/*
+        Offline banner (US-765). Mounted once outside the desktop/mobile split
+        because it positions itself fixed and both layouts need it; it renders
+        null while online. It was written for the service worker that until now
+        was never registered, so nothing in the app had ever told a user their
+        connection had dropped.
+      */}
+      <OfflineIndicator />
       {/* Desktop Layout with Sidebar */}
       <div className="hidden md:block">
         <SidebarProvider defaultOpen={true}>

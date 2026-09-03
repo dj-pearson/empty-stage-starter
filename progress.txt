@@ -1177,3 +1177,79 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   so the iOS gate default cannot flip them.
 - Verified: check-invisible-chars clean, verify-stories dry run classifies all
   31 (21 web, 10 manual), no duplicate ids, prd.json open count 18 -> 49.
+
+## 2026-09-03 - US-765 (register the service worker)
+- public/sw.js (407 lines), public/offline.html and registerServiceWorker() in
+  src/lib/pwa.ts were all complete and finished, and no file in src/ imported
+  @/lib/pwa. Nothing had ever registered a worker, so the entire PWA layer was
+  inert: no offline cache, offline.html unreachable, and the manifest's POST
+  share_target advertising an endpoint no CDN can serve. The whole feature was
+  one missing import, which is exactly why nobody found it -- every file
+  involved reads as working code.
+- src/lib/swRegistration.ts (new) holds the policy: isServiceWorkerEnabled()
+  and unregisterServiceWorkers(). main.tsx calls registerServiceWorker() after
+  first render, gated on import.meta.env.PROD.
+- The kill switch UNREGISTERS rather than declining to register. A service
+  worker outlives the page that installed it, so removing the call from
+  main.tsx would fix nothing for a browser that already has one -- the worker
+  is what decides whether the fix is even fetched. This is the part that makes
+  "turn it off without a deploy" true rather than aspirational.
+- The flag is read from the eatpal_feature_flags localStorage cache that
+  useFeatureFlag and the admin FeatureFlagDashboard already share, key
+  pwa_service_worker. The 5-minute TTL that hook applies is deliberately
+  IGNORED here: an off that expires back on five minutes later is not a kill
+  switch. Off is sticky, on is the default, and every unreadable-storage path
+  fails open so a browser blocking storage does not lose the PWA.
+- sw.js cache name is now 'tryeatpal-' + SW_BUILD_ID, stamped by the new
+  scripts/build/stamp-sw.mjs during npm run build from a sha256 of the
+  dist/assets filenames. Vite copies publicDir verbatim, so nothing in the
+  normal pipeline could vary it and every deploy had reused 'tryeatpal-v1' --
+  the activate handler found no old cache to delete and a returning visitor
+  kept being served the previous build's JS out of a cache-first strategy.
+- Verified end to end: `npx vite build && node scripts/build/stamp-sw.mjs`
+  produced tryeatpal-ac8d6961cdc3, and a second run of the script exits
+  non-zero rather than silently no-opping.
+- tests/pwa-offline.spec.ts (new, 5 Playwright tests) run green against the
+  built dist, serially and in parallel: install + versioned cache name, the
+  offline fallback, the kill switch, the share-target POST, and the activation
+  sweep. Not in CI yet -- wiring Playwright up is US-764.
+- Files: src/lib/swRegistration.ts (new), src/lib/swRegistration.test.ts (new,
+  14 tests), src/lib/swBuildStamp.test.ts (new, 14 tests),
+  scripts/build/stamp-sw.mjs (new), scripts/build/stamp-sw.d.mts (new),
+  tests/pwa-offline.spec.ts (new), src/lib/pwa.ts, src/main.tsx,
+  src/pages/Dashboard.tsx, public/sw.js, package.json,
+  public/site.webmanifest (deleted).
+- Gates: 2834 vitest passed / 3 skipped (up 28), lint 1218 at baseline.
+- **Learnings for future iterations:**
+  - TWO BUGS IN sw.js, both found by writing the browser test rather than by
+    reading the file. First: the activate handler deleted every cache whose
+    name differed from CACHE_NAME, which included share-target-cache -- so a
+    share arriving around an activation was destroyed before ShareTarget could
+    read it. Versioning the cache name would have made that fire on EVERY
+    deploy, so the fix had to land in the same change. It is now a KEEP set.
+    Second: SHARE_CACHE was declared twice.
+  - `window.addEventListener('load', ...)` is wrong the moment registration
+    moves later in the boot. A listener added after the load event has fired
+    never runs, so the worker would have silently failed to register on
+    exactly the fast loads it helps most. pwa.ts now checks
+    document.readyState first.
+  - In Playwright, `registration.active` is NOT the same as
+    `navigator.serviceWorker.controller`. sw.js calls clients.claim() in
+    activate and that resolves asynchronously, so a page can have an active
+    worker that is not yet intercepting its fetches. Two of the five tests
+    failed on this and both looked like source bugs: the share POST reached
+    the static server, which answered with the SPA fallback, so the request
+    "succeeded" and the cache was empty; and the offline navigation hit
+    Chromium's own error page (an empty body) instead of the fallback. Wait
+    for the controller whenever the assertion is about interception.
+  - A test that polls one half of an async cleanup reads the other half
+    mid-flight. unregisterServiceWorkers() removes registrations then deletes
+    caches; polling only the registration count saw caches that were about to
+    go. One waitForFunction covering both.
+  - LATENT, NOT FIXED HERE: cache.addAll(STATIC_ASSETS) in the install handler
+    is atomic. All seven assets exist in dist today, but if any one of them
+    404s the whole call rejects and NOTHING is cached, including offline.html
+    -- the offline page would silently stop existing while the worker still
+    installed and reported healthy. Worth caching them individually.
+  - `test-results/.last-run.json` is git-tracked, so any local Playwright run
+    dirties the tree. Worth adding test-results/ to .gitignore.
