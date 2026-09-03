@@ -3416,7 +3416,7 @@
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md). Cross-reference only. See household-planner US-755 and US-776."
+      "notes": "Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md). Cross-reference only. See household-planner US-755 and US-776. || MEASURED 2026-09-03 on branch claude/web-platform-roadmap-vd2zid: the gap does NOT reproduce. A full \"rm -f *.tsbuildinfo && bash scripts/ci/typecheck-ratchet.sh\" completed in this container in about 25 minutes and reported 1158 errors against the 1165 baseline; a second clean run after the US-771 deletions reported 1152. CI run 800 on deb2c1c also passed its Typecheck ratchet step. So the ratchet is green, it does finish, and the 1400 figure recorded 2026-09-02 could not be reproduced by any of these runs. Whoever closes this should either identify what that measurement was actually measuring (a different tsconfig, a partially-built tree, or the tsconfig-bypass admin exclude that US-776 owns) or close it as not-reproducible. Baseline lowered to 1152."
     }
   ]
 }

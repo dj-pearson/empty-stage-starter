@@ -854,7 +854,7 @@
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items X11, P6 (type part). || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): before lowering baselines, explain the 1400 vs 1165 gap. ci.yml run 800 on deb2c1c passed the Typecheck ratchet while progress.txt measured 1400 on the same commit; the difference is likely the tsconfig-bypass.json admin exclude (prd.json US-776) or the tsbuildinfo skip. prd.json US-790 tracks the cross-reference."
+      "notes": "Review items X11, P6 (type part). || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): before lowering baselines, explain the 1400 vs 1165 gap. ci.yml run 800 on deb2c1c passed the Typecheck ratchet while progress.txt measured 1400 on the same commit; the difference is likely the tsconfig-bypass.json admin exclude (prd.json US-776) or the tsbuildinfo skip. prd.json US-790 tracks the cross-reference. || SUPERSEDED IN PART 2026-09-03: the note above says to explain the 1400 vs 1165 gap before lowering baselines. That gap does not reproduce -- see prd.json US-790. Measured on this branch: 1158, then 1152 after the US-771 deletions, against a baseline now at 1152, with the ratchet passing. This story's real remaining work is the tsconfig.node.json fix so tsc -b reaches src at all, deriving the three UI types from the generated Supabase types, and the monthly reduction target -- not a discrepancy investigation."
     },
     {
       "id": "US-756",

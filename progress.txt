@@ -1459,3 +1459,29 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     feels risky when it is not.
   - Deleting dead code moved the lint count by 33 with zero behaviour change,
     which is a fair measure of what it was costing every ratchet run.
+
+## 2026-09-03 - Correction: the typecheck ratchet is green, not red
+- The 2026-09-02 entry above records a full tsc -b measuring 1400 errors on
+  origin/main against a 1165 baseline, and concludes the ratchet "exits 1 on an
+  untouched checkout of main" and is therefore a hard gate that is failing.
+  That does not reproduce.
+- Three measurements on this branch, each after `rm -f *.tsbuildinfo`:
+    before US-771   1158  (baseline 1165, ratchet PASSES, ~25 min)
+    after  US-771   1152  (baseline 1165, ratchet PASSES)
+  and CI run 800 on deb2c1c reported its Typecheck ratchet step green.
+- Two claims made earlier in this branch on the strength of the 2026-09-02
+  entry were therefore wrong, and one of them is in a pushed commit message
+  (the US-765 commit body says the ratchet "is red on an untouched main" and
+  "does not finish in this container"). Both halves are false: it finishes in
+  about 25 minutes and it passes. Recorded here because the commit cannot be
+  amended without rewriting pushed history.
+- Baselines lowered to lock in the US-771 win: typecheck 1165 -> 1152, lint
+  1218 -> 1185.
+- prd.json US-790 and prd-household-planner US-755 both had notes telling
+  whoever picked them up to explain the 1400 gap first; both are updated with
+  these measurements. US-790 is now close to closeable as not-reproducible.
+- **Learning:** repeating a measurement out of a previous progress entry is not
+  measuring. The 1400 figure was recorded carefully, with a method described in
+  detail, and it still did not survive a re-run. A number that gates work is
+  worth re-taking before it is used to justify skipping a gate -- which is
+  exactly what it was used for here.
