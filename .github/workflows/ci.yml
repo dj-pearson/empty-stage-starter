@@ -248,6 +248,14 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-for-ci-build' }}
           VITE_FUNCTIONS_URL: ${{ secrets.VITE_FUNCTIONS_URL }}
 
+      # US-775. vite.config.ts's chunking is empirically derived scar tissue --
+      # every rule in it names a production breakage it prevents -- and until
+      # now nothing measured the result, so a change that moved a megabyte into
+      # the entry bundle shipped looking like one that helped. Budgets and the
+      # measured baseline are in .ci/bundle-budget.{json,md}.
+      - name: Check bundle budget
+        run: node scripts/ci/check-bundle-budget.mjs
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

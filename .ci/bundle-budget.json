@@ -1,0 +1,24 @@
+{
+  "_comment": "Gzipped byte budgets for dist/assets/js, enforced by scripts/ci/check-bundle-budget.mjs. Measured values and the reasoning are in .ci/bundle-budget.md. Regenerate with --update only for a deliberate, explained change.",
+  "_measuredAt": "2026-09-03",
+  "_headroom": 1.05,
+  "totalJs": 2749000,
+  "chunks": {
+    "index": 124000,
+    "vendor-animation": 41000,
+    "vendor-forms": 14378,
+    "vendor-gsap": 62000,
+    "vendor-markdown": 148000,
+    "vendor-query": 14329,
+    "vendor-react": 65000,
+    "vendor-router": 10645,
+    "vendor-sentry": 136000,
+    "vendor-supabase": 2933,
+    "vendor-swagger": 306000,
+    "vendor-swagger-deps": 36000,
+    "vendor-three-core": 181000,
+    "vendor-three-eco": 55000,
+    "vendor-tiptap": 149000,
+    "vendor-utils": 17137
+  }
+}

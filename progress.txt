@@ -1485,3 +1485,45 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   detail, and it still did not survive a re-run. A number that gates work is
   worth re-taking before it is used to justify skipping a gate -- which is
   exactly what it was used for here.
+
+## 2026-09-03 - US-775 (bundle-size budget)
+- scripts/ci/check-bundle-budget.mjs gzips every file in dist/assets/js and
+  compares the entry chunk, each named vendor chunk and the total against
+  .ci/bundle-budget.json. Wired into the Build job right after npm run build.
+- Measured 2026-09-03: 320 files, 2617.3 kB gzipped. Budgets are measured + 5%
+  with a 2 kB floor. .ci/bundle-budget.md carries the table and the reasoning.
+- Proven non-vacuous: setting the vendor-swagger budget to 1 kB makes it exit 1
+  with the overage named; restoring it passes.
+- rollup-plugin-visualizer was NOT added -- the existing analyze:bundle script
+  already runs `npx vite-bundle-visualizer`, so the AC's requirement is met
+  without a new dependency.
+- What the numbers say, all four with an open story: vendor-swagger is 291 kB
+  gzipped for ONE page (/api/docs); three.js core+eco is 223 kB for one landing
+  hero on a beta @react-three/fiber; gsap is 58 kB sitting beside framer-motion,
+  which is already loaded. US-772 and US-727 between them would take roughly
+  570 kB off the total, over a fifth, without touching product code.
+- Files: scripts/ci/check-bundle-budget.mjs (new),
+  scripts/ci/check-bundle-budget.d.mts (new), .ci/bundle-budget.json (new),
+  .ci/bundle-budget.md (new), src/lib/bundleBudget.test.ts (new, 9 tests),
+  .github/workflows/ci.yml.
+- Gates: 2880 vitest passing, lint 1185 at baseline, orphan and invisible-char
+  scans clean.
+- **Learnings for future iterations:**
+  - Vite content hashes are base64url and CONTAIN hyphens
+    (vendor-supabase-Dx3Vi-Xp.js). Two plausible ways of stripping the hash off
+    a chunk name both failed, and both failed SILENTLY:
+    `-[A-Za-z0-9_-]{8,}$` is greedy from the first hyphen because the class
+    holds one, so vendor-swagger-B_m6f195 became `vendor`, failed the vendor-
+    prefix filter, and the generated budget covered the entry chunk ALONE;
+    `-[^-]+$` left the fragment `Dx3Vi` in the key, which would never match
+    again on the next build. Anchoring to Vite's exact 8-char hash is what
+    works. Both wrong versions printed a cheerful summary line and exited 0.
+  - This is the third bug in this branch of the same shape: a script that runs,
+    prints something plausible, and measures the wrong thing (the sw stamp
+    hashing directory names; the orphan checker counting direct importers; this
+    one). Generating the artifact is not verifying it. The cheap check each
+    time was to look at the output and ask whether the CONTENT is what I meant,
+    not whether the command exited 0.
+  - Round budgets need an absolute floor, not just a percentage. 5% of 1 kB is
+    50 bytes, and a gate that fails on 50 bytes of noise gets --update'd until
+    it stops meaning anything.
