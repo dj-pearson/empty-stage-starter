@@ -1158,3 +1158,22 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     build their payloads field-by-field, and updateRecipe strips it from local
     state so a later edit cannot re-send stale rows.
 ---
+
+## 2026-09-03 - Web platform roadmap survey (no story; backlog edit)
+- Survey of main at deb2c1c across ios/, src/, supabase/, CI and the three
+  PRD files, written up in docs/web-platform-roadmap-2026-09.md.
+- prd.json gains US-760 to US-790 (31 stories) for the findings no PRD held:
+  the two Supabase-backed CI jobs red on main since run 782, stale types.ts
+  (~63 tables untyped), the skipped-but-green Cloudflare deploy, develop stale
+  since 2026-07-02, Playwright never run in CI, the unregistered service
+  worker, eight alias routes remounting the Dashboard shell, ~10k lines of
+  unreferenced components, no bundle gate, no entitlement gating on either
+  client, and the ledger drift and dark-launch checks the kitchen-loop spec
+  requires.
+- Notes appended (no AC changes) to prd.json US-570/648/706/707/708,
+  household-planner US-720/723/730/738/739/741/755 and kitchen-loop
+  US-664/671/676 to cross-reference the new stories.
+- scripts/ralph/verify-stories.mjs: new ids added to the WEB and MANUAL sets
+  so the iOS gate default cannot flip them.
+- Verified: check-invisible-chars clean, verify-stories dry run classifies all
+  31 (21 web, 10 manual), no duplicate ids, prd.json open count 18 -> 49.
