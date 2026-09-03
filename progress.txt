@@ -1410,3 +1410,52 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     alias and the canonical route redirect to /auth when signed out), so the
     assertions here are source-level: no `path="/alias"`, exactly one
     `<Dashboard />` mount. Nine mounts was the bug; the count is the invariant.
+
+## 2026-09-03 - US-771 (unreachable components: a gate, and 29 deletions)
+- Deleted 28 components + src/pages/Index.tsx, 7334 lines, none of which had a
+  test or an importer: Navigation (a third complete nav tree beside AppSidebar
+  and the Dashboard mobile nav), AccessibleNav, CardNav, the AccessibleFormField
+  /Table/Loading family, LqipImage, GroceryDeliveryPanel, UserLoginHistory,
+  ReferralDashboard, AICostDashboard, BackupSettings, AnimatedFormInputs,
+  ReportHistory, SuccessAnimations, DataImportDialog, GestureTutorial,
+  ContextualHelp, ProcessSteps, Card3D, Card3DTilt, TrustBadge,
+  RecipeNutritionCalculator, SessionTimeoutWarning, SocialShareButtons,
+  SocialShare, WaitlistForm, SafeHTML.
+- scripts/ci/check-orphan-components.mjs is the gate, wired into the quality job
+  beside check-jsx-imports.mjs, which guards the opposite direction.
+- 45 files stay, allowlisted with the story that resolves each: US-727 (5 dead
+  planner components), US-734 (3 recipe ones, incl. RecipeExportActions which
+  that story MOUNTS rather than deletes), US-753 (EmptyState), US-752
+  (CollaborativeShoppingMode), US-741 (QuickActionsMenu), US-725
+  (SwapMealDialog, DetailedTrackingDialog), US-769 (billing/ and subscription/).
+- Gates: 2867 vitest passing, build clean, lint 1218 -> 1185 (baseline lowered
+  to lock it in), jsx-import and invisible-char scans clean.
+- **22 files are unreachable with NO story, and need an owner decision.** The
+  big one is a whole admin cluster of 11: AIModelManager, AITicketAnalysis,
+  ActivityTimeline, AdminControlPanel, BudgetAnalyticsDashboard, CRMIntegration,
+  CustomerHealthDashboard, EmailSequenceBuilder, KnowledgeBaseManager,
+  QuizAnalyticsDashboard, StorageManagement, WorkflowBuilder. Plus
+  blog/BlogPostTemplate, blog/ReadingProgress, AnimatedSection,
+  BarcodeScannerScreen, HarmonizedFoodDisplay, KidMealVoting, MealVotingCard,
+  NotificationPreferencesDialog, StructuredIngredientsEditor, WeeklyReportCard.
+  Not deleted here: an admin surface that large is a product question, not a
+  cleanup one. Note admin/StorageManagement.tsx was BUILT for US-643 and has its
+  own passing test, and is mounted nowhere -- so that story's UI shipped
+  unreachable.
+- **Learnings for future iterations:**
+  - "Has an importer" is the wrong question; reachability from src/main.tsx is
+    the right one. The first version of this script counted direct importers,
+    reported 56 orphans, and missed all five files in src/components/billing/ --
+    they are imported by billing/index.ts, a barrel nothing imports either. A
+    ring of dead files that reference each other keeps every member "imported"
+    forever. Rewriting it as a walk from the entry point found 74.
+  - The same trap caught an earlier survey in this branch, which recorded that
+    "only UsageMeter.tsx is used" in src/components/subscription/. UsageMeter is
+    imported solely by UsageDashboard, which is itself dead. All five are dead.
+  - A passing test is not evidence a component ships.
+    src/components/HarmonizedFoodDisplay.test.tsx and
+    admin/StorageManagement.test.tsx both pass against components nothing
+    renders. Tests keep dead code looking alive, and they are why deleting it
+    feels risky when it is not.
+  - Deleting dead code moved the lint count by 33 with zero behaviour change,
+    which is a fair measure of what it was costing every ratchet run.

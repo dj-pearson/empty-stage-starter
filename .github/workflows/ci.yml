@@ -56,6 +56,13 @@ jobs:
       - name: Check components are imported
         run: node scripts/ci/check-jsx-imports.mjs
 
+      # The other direction (US-771): a component nothing imports at all.
+      # Reachability from src/main.tsx, not a direct-importer count -- a ring of
+      # dead files that import each other keeps every member "imported" forever,
+      # which is how all five of src/components/billing/ stayed invisible.
+      - name: Check components are reachable
+        run: node scripts/ci/check-orphan-components.mjs
+
       # US-553 split SEOManager (5593 lines) into 13 tab components and 8
       # hooks. The whole-file typecheck is a count-based ratchet, so a
       # TS2304 introduced by that kind of move hides inside a backlog of
