@@ -248,6 +248,73 @@ jobs:
           path: dist/
           retention-days: 7
 
+  # US-764. The 28 spec files under tests/ existed for months and no workflow
+  # ran any of them. That was not simple neglect: switching this on before the
+  # story would have failed instantly and taught nobody anything, because
+  # tests/mobile-responsive.spec.ts had a collection error that aborted the
+  # whole run, and 20 specs hardcoded http://localhost:8080 and so ignored the
+  # baseURL this job's server listens on.
+  #
+  # Runs against the SAME dist/ artifact the build job produced and
+  # deploy-production uploads, not a rebuild -- an e2e job that tests a
+  # different artifact from the one that ships is worse than none.
+  #
+  # Only tests/*.spec.ts. tests/functions/** drives DEPLOYED edge functions over
+  # the network and already runs in types-and-functions; tests/accessibility/
+  # arrives with US-778, which owns the axe threshold and the authenticated
+  # pages. The 15 backend-dependent specs skip themselves through
+  # tests/helpers/requires-backend.ts and run when E2E_BACKEND is set.
+  #
+  # continue-on-error until 2026-09-17: two known-red results are real product
+  # findings, not flakes, and neither is this job's to fix -- the homepage meta
+  # description is 214 characters against Google's ~160 truncation, and
+  # tests/accessibility carries genuine contrast violations. Flip this to false
+  # on that date; if the findings are still open by then they are overdue, not
+  # a reason to extend.
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: build
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Download the built site
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      # Resolves an existing browser before reaching for a download, and fails
+      # loudly rather than silently launching nothing. Same helper the build
+      # uses, so both run the same Chromium.
+      - name: Resolve or install Chromium
+        run: node scripts/ensure-chromium.mjs
+
+      # E2E_TARGET=dist makes playwright.config.ts serve the downloaded dist/
+      # through scripts/dev/serve-dist.mjs on 4173, which resolves URLs the way
+      # Cloudflare Pages does -- prerendered dist/<route>/index.html first,
+      # SPA fallback after. `npm run dev` would test a different resolver.
+      - name: Run Playwright
+        run: npx playwright test --project=chromium tests/*.spec.ts
+        env:
+          E2E_TARGET: dist
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   migration-test:
     name: Migration Test
     runs-on: ubuntu-latest

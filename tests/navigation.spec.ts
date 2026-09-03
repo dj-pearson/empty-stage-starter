@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
 
 /**
  * Navigation Tests
@@ -44,7 +45,12 @@ test.describe('Navigation', () => {
 
   test('should handle 404 pages', async ({ page }) => {
     await page.goto('/nonexistent-page-12345');
-    await expect(page.locator('text=/not found|404|page.*exist/i')).toBeVisible({ timeout: 5000 });
+    // .first(): the 404 page renders "404", "Page not found" AND an
+    // explanatory line, so the bare locator matched three elements and failed
+    // strict mode -- against a page that was working correctly (US-764).
+    await expect(page.locator('text=/not found|404|page.*exist/i').first()).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test('should navigate back with browser button', async ({ page }) => {
@@ -56,6 +62,9 @@ test.describe('Navigation', () => {
   });
 
   test('should handle deep links when authenticated', async ({ page }) => {
+    // The only test in this otherwise-public file that needs a session.
+    requiresLiveBackend();
+
     // Sign in first
     await page.goto('/auth');
     await page.click('button:has-text("Sign In")');

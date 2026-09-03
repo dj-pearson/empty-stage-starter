@@ -1299,3 +1299,62 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - A spec that hardcodes its own base URL silently opts out of every
     environment switch the config offers. Grep for `localhost:` in a spec
     directory before believing a suite is portable.
+
+## 2026-09-03 - US-764 part 2 (the E2E job, and what the suite actually says)
+- With the suite runnable (part 1), the first full sweep against a built dist/
+  gave the real picture: 123 passed, and the failures fall into three kinds
+  that need three different answers. Guessing which was which from the file
+  names would have been wrong in both directions.
+- KIND 1, needs a live backend (15 files, ~207 tests): auth, dashboard,
+  ai-features, critical-flows, grocery-list, insights, kids-management,
+  meal-planning, meal-plan-workflow, pantry, recipes, settings,
+  subscription-flow, payment, onboarding. Every one dies at the same login
+  step against a dist/ built without credentials, so they would have produced a
+  permanently red job saying nothing about the change under review. They now
+  skip through tests/helpers/requires-backend.ts with an explicit reason, and
+  run under E2E_BACKEND=1. Note this contradicts US-764's own AC, which names
+  auth, onboarding, meal-planning, grocery-list, pantry and recipes as the
+  specs the job should run: the story was written from the survey, before
+  anyone had run them, and those six are exactly the ones that cannot pass
+  without a Supabase session. Implemented the intent, not the letter.
+- KIND 2, test bugs against working pages (3, all fixed): landing's hero
+  locator '[data-testid="hero"], .hero, section' resolved .first() to sonner's
+  HIDDEN notification <section>; navigation's 404 assertion matched three
+  elements and failed strict mode against a 404 page that renders perfectly;
+  and picky-eater-quiz requested /quiz, which does not exist -- the route is
+  /picky-eater-quiz.
+- KIND 3, a real product defect, left red on purpose: the homepage meta
+  description is 214 characters against Google's ~160 truncation, so the last
+  quarter of it never appears in a search result. Source is
+  src/lib/seo-config.ts:83. NOT fixed here: that is homepage marketing copy and
+  the call belongs to Dj, not to a CI story. A shorter on-message variant
+  already exists at seo-config.ts:106 (123 chars) if it helps.
+- The job runs tests/*.spec.ts only. tests/functions/** drives DEPLOYED edge
+  functions over the network and already runs in types-and-functions;
+  tests/accessibility/ is left to US-778, which owns the axe threshold -- it
+  currently has 12 genuine violations and folding them in here would have
+  buried this job in noise it does not own.
+- It runs against the dist/ artifact the build job already produced, not a
+  rebuild. An e2e job testing a different artifact from the one that deploys is
+  worse than no job.
+- Final state, exactly as CI will run it: 70 passed, 207 skipped, 1 failed
+  (the meta description). continue-on-error until 2026-09-17, named in the
+  workflow so a non-blocking job cannot quietly stay non-blocking forever.
+- Files: .github/workflows/ci.yml (new e2e job),
+  tests/helpers/requires-backend.ts (new), src/lib/ciGatesWired.test.ts
+  (4 new assertions), 15 spec files guarded, 3 spec files fixed.
+- Gates: 2838 vitest passed / 3 skipped (up 4), lint 1218 at baseline,
+  invisible-char scan clean.
+- **Learnings for future iterations:**
+  - `if (await thing.isVisible())` around an assertion is not a test. Five of
+    the six picky-eater-quiz tests requested a URL that 404s and still passed,
+    because their assertions sat behind that guard and quietly did nothing.
+    Only the one test that asserted unconditionally caught the wrong route.
+    Grep for that pattern before trusting a green spec file.
+  - A story's AC can be wrong when it was written from a survey rather than
+    from a run. US-764 named six spec files to put in CI; all six need a
+    backend. Reading the AC literally would have produced a job that was red
+    forever and looked deliberate.
+  - Playwright strict mode turns a loose text locator into a failure the moment
+    a page renders MORE of what you asked for. Two "failures" here were pages
+    working better than the selector expected.

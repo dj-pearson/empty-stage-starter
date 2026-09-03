@@ -8,12 +8,19 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Picky Eater Quiz', () => {
   test('should display quiz landing page', async ({ page }) => {
-    await page.goto('/quiz');
-    await expect(page.locator('text=/quiz|assessment|picky.*eater/i')).toBeVisible({ timeout: 5000 });
+    await page.goto('/picky-eater-quiz');
+    // Assert the heading, not a page-wide text regex: the latter matched 18
+    // elements and failed strict mode against a page that renders correctly.
+    // The route is /picky-eater-quiz -- these specs used to request /quiz,
+    // which 404s, and only this test noticed because the rest guard their
+    // assertions behind `if (await x.isVisible())` (US-764).
+    await expect(page.getByRole('heading', { name: /picky eater/i }).first()).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test('should start quiz', async ({ page }) => {
-    await page.goto('/quiz');
+    await page.goto('/picky-eater-quiz');
 
     const startButton = page.locator('button:has-text("Start"), button:has-text("Begin"), button:has-text("Take Quiz")');
 
@@ -24,7 +31,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should navigate between questions', async ({ page }) => {
-    await page.goto('/quiz');
+    await page.goto('/picky-eater-quiz');
 
     const startButton = page.locator('button:has-text("Start"), button:has-text("Begin")');
     if (await startButton.isVisible()) {
@@ -44,7 +51,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should go back to previous question', async ({ page }) => {
-    await page.goto('/quiz');
+    await page.goto('/picky-eater-quiz');
 
     const startButton = page.locator('button:has-text("Start")');
     if (await startButton.isVisible()) {
@@ -67,7 +74,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should show progress indicator', async ({ page }) => {
-    await page.goto('/quiz');
+    await page.goto('/picky-eater-quiz');
 
     const startButton = page.locator('button:has-text("Start")');
     if (await startButton.isVisible()) {
@@ -81,7 +88,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should complete quiz and show results', async ({ page }) => {
-    await page.goto('/quiz');
+    await page.goto('/picky-eater-quiz');
 
     const startButton = page.locator('button:has-text("Start")');
     if (await startButton.isVisible()) {

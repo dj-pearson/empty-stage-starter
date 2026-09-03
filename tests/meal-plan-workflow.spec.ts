@@ -1,4 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * US-057: Comprehensive E2E Test for Meal Planning Workflow

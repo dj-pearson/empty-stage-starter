@@ -1,5 +1,8 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { BASE_URL } from './helpers/base-url';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Subscription Purchase Flow E2E Tests

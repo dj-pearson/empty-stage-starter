@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Dashboard Tests

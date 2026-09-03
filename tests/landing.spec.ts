@@ -12,8 +12,11 @@ test.describe('Landing Page', () => {
   });
 
   test('should display hero section', async ({ page }) => {
-    const hero = page.locator('[data-testid="hero"], .hero, section').first();
-    await expect(hero).toBeVisible({ timeout: 5000 });
+    // Not `section` -- sonner renders a hidden <section aria-label="Notifications">
+    // as the first section on the page, so .first() resolved to that and the
+    // assertion failed against a page whose hero was rendering fine (US-764).
+    const hero = page.getByRole('banner').or(page.locator('main section').first());
+    await expect(hero.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should display main heading', async ({ page }) => {

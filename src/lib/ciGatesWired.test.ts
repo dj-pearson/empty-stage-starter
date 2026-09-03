@@ -44,6 +44,43 @@ describe('CI gates are wired into a workflow', () => {
  * Pinned rather than trusted because the two commands look interchangeable and
  * the difference shows up nowhere except in what crawlers receive.
  */
+/**
+ * The Playwright suite runs somewhere (US-764).
+ *
+ * 28 spec files sat in tests/ for months with no workflow referencing them, so
+ * they were maintained, committed, and never executed -- coverage on paper and
+ * nothing in fact. Two structural faults kept them unrunnable (a collection
+ * error that aborted every file, and 20 specs hardcoding localhost:8080 past
+ * the config's baseURL), which is exactly why nobody noticed: turning the job
+ * on would have failed at once.
+ *
+ * Pinned here because the failure mode is silence. A deleted job does not break
+ * anything; it just stops telling you things.
+ */
+describe('the E2E job runs the Playwright suite', () => {
+  const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  it('has an e2e job', () => {
+    expect(ci).toMatch(/^ {2}e2e:$/m);
+  });
+
+  it('runs playwright', () => {
+    expect(ci).toContain('npx playwright test --project=chromium');
+  });
+
+  it('tests the built artifact rather than a dev server', () => {
+    // E2E_TARGET=dist points the config at scripts/dev/serve-dist.mjs, which
+    // resolves prerendered routes the way Pages does. Against `npm run dev`
+    // this job would exercise a different resolver from the one that ships.
+    expect(ci).toContain('E2E_TARGET: dist');
+  });
+
+  it('names the date its continue-on-error expires', () => {
+    // A non-blocking job with no end date is a job that never blocks.
+    expect(ci).toMatch(/continue-on-error until \d{4}-\d{2}-\d{2}/);
+  });
+});
+
 describe('the Build job runs the prerendering build', () => {
   const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
 
