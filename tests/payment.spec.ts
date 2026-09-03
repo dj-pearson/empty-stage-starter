@@ -8,11 +8,10 @@ import { test, expect } from '@playwright/test';
  * Test card: 4242 4242 4242 4242
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Payment & Subscription Flow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
   });
 
   test('should display pricing page', async ({ page }) => {
@@ -25,14 +24,14 @@ test.describe('Payment & Subscription Flow', () => {
   });
 
   test('should show subscription features', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Check for feature lists
     await expect(page.locator('text=/feature|include|unlimited/i')).toBeVisible();
   });
 
   test('should initiate checkout for premium plan', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Find and click subscribe button (adjust selector based on your UI)
     const subscribeButton = page.locator('button:has-text("Subscribe"), button:has-text("Get Started"), button:has-text("Upgrade")').first();
@@ -78,7 +77,7 @@ test.describe('Payment & Subscription Flow', () => {
 
   test('should show subscription status when logged in', async ({ page }) => {
     // Sign in first
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -98,7 +97,7 @@ test.describe('Payment & Subscription Flow', () => {
   });
 
   test('should display free trial information', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Check for free trial mentions
     const hasTrial = await page.locator('text=/free trial|trial period|14.*day|7.*day/i').isVisible();
@@ -110,7 +109,7 @@ test.describe('Payment & Subscription Flow', () => {
 
   test('should show upgrade prompts for free users', async ({ page }) => {
     // Sign in with free account
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');

@@ -5,11 +5,10 @@ import { test, expect } from '@playwright/test';
  * Tests food inventory, barcode scanning, and allergen tracking
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Pantry Management', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -18,13 +17,13 @@ test.describe('Pantry Management', () => {
   });
 
   test('should display pantry page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
     await expect(page).toHaveURL(/.*pantry/);
     await expect(page.locator('text=/pantry|food|inventory/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should add food item', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const addButton = page.locator('button:has-text("Add Food"), button:has-text("Add")').first();
     if (await addButton.isVisible()) {
@@ -41,7 +40,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should mark food as safe', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     // Look for safe food toggle
     const safeToggle = page.locator('input[name*="safe"], label:has-text("Safe")').first();
@@ -52,7 +51,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should mark food as try-bite', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const tryBiteToggle = page.locator('input[name*="try"], label:has-text("Try")').first();
 
@@ -62,7 +61,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should set food allergens', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const editButton = page.locator('button[aria-label*="edit"], button:has-text("Edit")').first();
 
@@ -77,7 +76,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should update food quantity', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const quantityInput = page.locator('input[type="number"], input[name*="quantity"]').first();
 
@@ -89,7 +88,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should search foods', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const searchInput = page.locator('input[placeholder*="search"], input[type="search"]');
 
@@ -100,7 +99,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should filter foods by category', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const categoryFilter = page.locator('select, [role="combobox"], button:has-text("Category")').first();
 
@@ -111,7 +110,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should filter safe foods only', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const safeFilter = page.locator('button:has-text("Safe"), input[name*="safe-filter"]');
 
@@ -121,7 +120,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should view food nutrition info', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const foodItem = page.locator('[data-testid="food-item"], .food-card').first();
 
@@ -136,7 +135,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should delete food item', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const deleteButton = page.locator('button[aria-label*="delete"], button:has-text("Delete")').first();
 
@@ -151,7 +150,7 @@ test.describe('Pantry Management', () => {
   });
 
   test('should show barcode scanner option', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pantry`);
+    await page.goto('/pantry');
 
     const scanButton = page.locator('button:has-text("Scan"), button[aria-label*="barcode"]');
 

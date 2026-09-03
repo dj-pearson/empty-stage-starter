@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { findExistingChromium } from './scripts/resolve-chromium.mjs';
+import { BASE_URL, PORT, TARGET_DIST } from './tests/helpers/base-url';
 
 /**
  * Playwright Configuration for EatPal E2E Tests
@@ -40,9 +41,12 @@ import { findExistingChromium } from './scripts/resolve-chromium.mjs';
 const chromiumPath = findExistingChromium();
 const chromiumLaunch = chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {};
 
-const TARGET_DIST = process.env.E2E_TARGET === 'dist';
-const PORT = TARGET_DIST ? 4173 : 8080;
-const BASE_URL = `http://localhost:${PORT}`;
+/*
+ * Resolved in tests/helpers/base-url.ts so the port cannot drift between the
+ * server started below and the URL the specs navigate to. Twenty specs used to
+ * hardcode 8080 and ignore baseURL entirely, which is why the suite could not
+ * be pointed at CI's server (US-764).
+ */
 
 export default defineConfig({
   testDir: './tests',

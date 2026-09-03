@@ -5,16 +5,15 @@ import { test, expect } from '@playwright/test';
  * Tests onboarding quiz for picky eater assessment
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Picky Eater Quiz', () => {
   test('should display quiz landing page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz`);
+    await page.goto('/quiz');
     await expect(page.locator('text=/quiz|assessment|picky.*eater/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should start quiz', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz`);
+    await page.goto('/quiz');
 
     const startButton = page.locator('button:has-text("Start"), button:has-text("Begin"), button:has-text("Take Quiz")');
 
@@ -25,7 +24,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should navigate between questions', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz`);
+    await page.goto('/quiz');
 
     const startButton = page.locator('button:has-text("Start"), button:has-text("Begin")');
     if (await startButton.isVisible()) {
@@ -45,7 +44,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should go back to previous question', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz`);
+    await page.goto('/quiz');
 
     const startButton = page.locator('button:has-text("Start")');
     if (await startButton.isVisible()) {
@@ -68,7 +67,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should show progress indicator', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz`);
+    await page.goto('/quiz');
 
     const startButton = page.locator('button:has-text("Start")');
     if (await startButton.isVisible()) {
@@ -82,7 +81,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should complete quiz and show results', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz`);
+    await page.goto('/quiz');
 
     const startButton = page.locator('button:has-text("Start")');
     if (await startButton.isVisible()) {
@@ -113,7 +112,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should show personalized recommendations', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz/results`);
+    await page.goto('/quiz/results');
 
     const recommendations = page.locator('text=/recommendation|suggest|personalized/i');
 
@@ -123,7 +122,7 @@ test.describe('Picky Eater Quiz', () => {
   });
 
   test('should allow retaking quiz', async ({ page }) => {
-    await page.goto(`${BASE_URL}/quiz/results`);
+    await page.goto('/quiz/results');
 
     const retakeButton = page.locator('button:has-text("Retake"), button:has-text("Try Again")');
 

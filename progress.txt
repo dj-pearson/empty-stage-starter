@@ -1253,3 +1253,49 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     installed and reported healthy. Worth caching them individually.
   - `test-results/.last-run.json` is git-tracked, so any local Playwright run
     dirties the tree. Worth adding test-results/ to .gitignore.
+
+## 2026-09-03 - US-764 part 1 (make the Playwright suite runnable)
+- The roadmap survey recorded 28 spec files sitting outside CI as "unrealized
+  value". That framing was wrong and the correction is the finding: the suite
+  could not have been switched on, because it did not run at all.
+- TWO structural blockers, both found by running it rather than reading it:
+  1. tests/mobile-responsive.spec.ts called `test.use({ ...devices[...] })`
+     inside a test.describe. devices[] carries defaultBrowserType, which forces
+     a new worker, and Playwright rejects that outright. It is a COLLECTION
+     error, so it aborted the whole run before a single spec in ANY file
+     executed. Two lines made `npx playwright test` unusable repo-wide.
+  2. 20 of the 28 specs declared their own
+     `const BASE_URL = 'http://localhost:8080'` and navigated to it directly,
+     ignoring the baseURL playwright.config.ts sets. The config's webServer
+     starts serve-dist on 4173 under E2E_TARGET=dist, so every one of those
+     specs got ECONNREFUSED. Wiring the suite into CI would have failed
+     instantly and taught nobody anything.
+- Fixes: tests/helpers/base-url.ts is now the single definition of the target
+  and playwright.config.ts imports it, so the port cannot drift between the
+  server the config starts and the URL the specs use. Specs navigate with
+  relative paths and let the config resolve them; only performance.spec.ts and
+  subscription-flow.spec.ts still import BASE_URL, for a page.request.get of an
+  asset and for the `url:` field of mocked route fulfilments, which genuinely
+  need an absolute URL. mobile-responsive destructures defaultBrowserType away
+  and keeps the viewport fields.
+- Artifact hygiene: playwright-report/index.html and test-results/.last-run.json
+  were git-tracked with no .gitignore entry, so any local run dirtied the tree
+  and one machine's report overwrote another's. Both untracked; test-results/,
+  playwright-report/ and a11y-results/ ignored.
+- Before: 0 tests executed (collection aborted). After: the suite collects and
+  runs. Full pass/fail sweep against a built dist/ is still in flight; the CI
+  job in part 2 will name only the specs that actually pass, and tag the rest.
+- Files: tests/helpers/base-url.ts (new), playwright.config.ts, 20 spec files
+  under tests/, .gitignore.
+- Gates: lint 1218 at baseline, invisible-char scan clean. vitest untouched by
+  this change (no vitest test reads playwright.config.ts or tests/helpers).
+- **Learnings for future iterations:**
+  - A Playwright collection error is silent about its blast radius. The output
+    names one file and one line; what it does not say is that no other file ran
+    either. If a suite reports far fewer tests than it has, look for a collect
+    failure before assuming the specs are skipped.
+  - `test.use({ ...devices['iPhone 13'] })` is only legal at the top level of a
+    file. Inside a describe, spread the device but drop defaultBrowserType.
+  - A spec that hardcodes its own base URL silently opts out of every
+    environment switch the config offers. Grep for `localhost:` in a spec
+    directory before believing a suite is portable.

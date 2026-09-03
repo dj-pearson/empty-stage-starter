@@ -5,13 +5,24 @@ import { test, expect, devices } from '@playwright/test';
  * Tests mobile-specific behavior and responsive design
  */
 
-const BASE_URL = 'http://localhost:8080';
+
+/*
+ * devices[...] carries defaultBrowserType, and setting that inside a
+ * test.describe forces a new worker, which Playwright rejects outright:
+ * "Cannot use({ defaultBrowserType }) in a describe group". That is a
+ * COLLECTION error, not a test failure, so it aborted the entire run before a
+ * single spec in any file executed -- `npx playwright test` was unusable
+ * repo-wide because of these two lines (US-764). The viewport fields are the
+ * part these blocks actually want; the browser is chosen by the project.
+ */
+const { defaultBrowserType: _iphoneBrowser, ...IPHONE_13 } = devices['iPhone 13'];
+const { defaultBrowserType: _ipadBrowser, ...IPAD_PRO_11 } = devices['iPad Pro 11'];
 
 test.describe('Mobile Responsive', () => {
-  test.use({ ...devices['iPhone 13'] });
+  test.use(IPHONE_13);
 
   test('should display mobile navigation', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     // Look for hamburger menu
     const menuButton = page.locator('button[aria-label*="menu"], button:has-text("Menu"), [data-testid="mobile-menu"]');
@@ -19,7 +30,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should open mobile menu', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const menuButton = page.locator('button[aria-label*="menu"], [data-testid="mobile-menu"]');
     if (await menuButton.isVisible()) {
@@ -29,7 +40,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should close mobile menu on navigation', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const menuButton = page.locator('button[aria-label*="menu"]');
     if (await menuButton.isVisible()) {
@@ -44,7 +55,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should stack content vertically on mobile', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     // Check that flex columns are stacked
     const viewport = page.viewportSize();
@@ -52,7 +63,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should have touch-friendly button sizes', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const buttons = page.locator('button, a.button, [role="button"]');
     const firstButton = buttons.first();
@@ -67,7 +78,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should hide desktop-only elements', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const desktopElements = page.locator('.hidden-mobile, .desktop-only');
     for (const element of await desktopElements.all()) {
@@ -77,7 +88,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should show mobile-only elements', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const mobileElements = page.locator('.mobile-only, .show-mobile');
     for (const element of await mobileElements.all()) {
@@ -89,7 +100,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should have scrollable content areas', async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -110,7 +121,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should work with swipe gestures', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     // Simulate swipe (touch events)
     await page.touchscreen.tap(200, 400);
@@ -118,7 +129,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('should not have horizontal scroll', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const hasHorizontalScroll = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
@@ -129,10 +140,10 @@ test.describe('Mobile Responsive', () => {
 });
 
 test.describe('Tablet Responsive', () => {
-  test.use({ ...devices['iPad Pro 11'] });
+  test.use(IPAD_PRO_11);
 
   test('should display tablet-optimized layout', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const viewport = page.viewportSize();
     expect(viewport?.width).toBeGreaterThan(700);
@@ -140,7 +151,7 @@ test.describe('Tablet Responsive', () => {
   });
 
   test('should show sidebar on tablet', async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');

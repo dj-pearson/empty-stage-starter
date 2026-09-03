@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { BASE_URL } from './helpers/base-url';
 
 /**
  * Performance Tests
  * Tests page load performance and core web vitals
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Performance', () => {
   test('should load landing page within 3 seconds', async ({ page }) => {
@@ -18,7 +18,7 @@ test.describe('Performance', () => {
 
   test('should load dashboard within 5 seconds', async ({ page }) => {
     // Sign in first
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -36,7 +36,7 @@ test.describe('Performance', () => {
   });
 
   test('should have optimized images', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const images = page.locator('img');
     const count = await images.count();
@@ -55,7 +55,7 @@ test.describe('Performance', () => {
   });
 
   test('should lazy load below-fold images', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const lazyImages = page.locator('img[loading="lazy"]');
     const lazyCount = await lazyImages.count();
@@ -65,7 +65,7 @@ test.describe('Performance', () => {
   });
 
   test('should not have render-blocking resources', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     // Check for async/defer on scripts
     const blockingScripts = await page.locator('script:not([async]):not([defer]):not([type="application/ld+json"])').count();
@@ -75,7 +75,7 @@ test.describe('Performance', () => {
   });
 
   test('should have gzip compression', async ({ page }) => {
-    const response = await page.goto(BASE_URL);
+    const response = await page.goto('/');
 
     if (response) {
       const encoding = response.headers()['content-encoding'];
@@ -87,7 +87,7 @@ test.describe('Performance', () => {
   });
 
   test('should cache static assets', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     // Get a CSS or JS file
     const scripts = page.locator('script[src]');
@@ -108,7 +108,7 @@ test.describe('Performance', () => {
   });
 
   test('should minimize DOM size', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const domSize = await page.evaluate(() => document.querySelectorAll('*').length);
 
@@ -130,7 +130,7 @@ test.describe('Performance', () => {
   });
 
   test('should have First Contentful Paint under 2s', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     const fcp = await page.evaluate(() => {
       return new Promise((resolve) => {

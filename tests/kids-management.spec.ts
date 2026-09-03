@@ -5,11 +5,10 @@ import { test, expect } from '@playwright/test';
  * Tests child profile management including creation, editing, allergens
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Kids Management', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -18,13 +17,13 @@ test.describe('Kids Management', () => {
   });
 
   test('should display kids page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
     await expect(page).toHaveURL(/.*kids/);
     await expect(page.locator('text=/child|kid|profile/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should open add kid form', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
 
     const addButton = page.locator('button:has-text("Add"), button:has-text("Create")').first();
     if (await addButton.isVisible()) {
@@ -34,7 +33,7 @@ test.describe('Kids Management', () => {
   });
 
   test('should create new child profile', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
 
     const addButton = page.locator('button:has-text("Add"), button:has-text("Create")').first();
     if (await addButton.isVisible()) {
@@ -59,7 +58,7 @@ test.describe('Kids Management', () => {
   });
 
   test('should edit child profile', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
 
     // Find edit button for existing child
     const editButton = page.locator('button:has-text("Edit"), button[aria-label*="edit"]').first();
@@ -71,7 +70,7 @@ test.describe('Kids Management', () => {
   });
 
   test('should manage allergens', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
 
     // Open child profile or allergen section
     const childCard = page.locator('[data-testid="kid-card"], .kid-profile').first();
@@ -88,7 +87,7 @@ test.describe('Kids Management', () => {
   });
 
   test('should upload profile picture', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
 
     const editButton = page.locator('button:has-text("Edit"), button[aria-label*="edit"]').first();
 
@@ -105,7 +104,7 @@ test.describe('Kids Management', () => {
   });
 
   test('should set favorite foods', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
 
     const editButton = page.locator('button:has-text("Edit"), button[aria-label*="edit"]').first();
 
@@ -121,7 +120,7 @@ test.describe('Kids Management', () => {
   });
 
   test('should delete child profile', async ({ page }) => {
-    await page.goto(`${BASE_URL}/kids`);
+    await page.goto('/kids');
 
     const deleteButton = page.locator('button:has-text("Delete"), button[aria-label*="delete"]').first();
 

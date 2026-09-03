@@ -5,11 +5,10 @@ import { test, expect } from '@playwright/test';
  * Tests main dashboard functionality and navigation
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');

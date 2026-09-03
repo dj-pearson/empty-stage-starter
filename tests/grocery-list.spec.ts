@@ -5,11 +5,10 @@ import { test, expect } from '@playwright/test';
  * Tests grocery list functionality including generation, editing, and checkout
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Grocery List', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -18,13 +17,13 @@ test.describe('Grocery List', () => {
   });
 
   test('should display grocery page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
     await expect(page).toHaveURL(/.*grocery/);
     await expect(page.locator('text=/grocery|shopping|list/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should add item to grocery list', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const addButton = page.locator('button:has-text("Add"), input[placeholder*="add"]').first();
 
@@ -43,7 +42,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should check off grocery item', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const checkbox = page.locator('input[type="checkbox"]').first();
 
@@ -55,7 +54,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should delete grocery item', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const deleteButton = page.locator('button[aria-label*="delete"], button:has-text("Remove")').first();
 
@@ -76,7 +75,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should generate grocery list from meal plan', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("From Meal Plan")');
 
@@ -88,7 +87,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should filter grocery list by category', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const categoryFilter = page.locator('select, [role="combobox"], button:has-text("Category")').first();
 
@@ -99,7 +98,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should edit grocery item quantity', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const quantityInput = page.locator('input[type="number"], input[name*="quantity"]').first();
 
@@ -111,7 +110,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should show Instacart integration', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     // Look for Instacart or delivery option
     const instacartButton = page.locator('button:has-text("Instacart"), button:has-text("Order"), a:has-text("Instacart")');
@@ -122,7 +121,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should clear completed items', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const clearButton = page.locator('button:has-text("Clear"), button:has-text("Remove Checked")');
 
@@ -137,7 +136,7 @@ test.describe('Grocery List', () => {
   });
 
   test('should export grocery list', async ({ page }) => {
-    await page.goto(`${BASE_URL}/grocery`);
+    await page.goto('/grocery');
 
     const exportButton = page.locator('button:has-text("Export"), button:has-text("Share"), button:has-text("Print")');
 

@@ -5,11 +5,10 @@ import { test, expect } from '@playwright/test';
  * Tests recipe creation, editing, nutrition, and scaling
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Recipe Management', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -18,13 +17,13 @@ test.describe('Recipe Management', () => {
   });
 
   test('should display recipes page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
     await expect(page).toHaveURL(/.*recipes/);
     await expect(page.locator('text=/recipe|meal|dish/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should open add recipe form', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const addButton = page.locator('button:has-text("Add"), button:has-text("Create"), button:has-text("New")').first();
     if (await addButton.isVisible()) {
@@ -34,7 +33,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should create new recipe', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const addButton = page.locator('button:has-text("Add"), button:has-text("Create")').first();
     if (await addButton.isVisible()) {
@@ -59,7 +58,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should add ingredients to recipe', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     // Open existing recipe or create new
     const recipeCard = page.locator('[data-testid="recipe-card"], .recipe-item').first();
@@ -76,7 +75,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should view recipe nutrition', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const recipeCard = page.locator('[data-testid="recipe-card"], .recipe-item').first();
 
@@ -92,7 +91,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should scale recipe servings', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const recipeCard = page.locator('[data-testid="recipe-card"], .recipe-item').first();
 
@@ -109,7 +108,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should search recipes', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const searchInput = page.locator('input[placeholder*="search"], input[type="search"]');
 
@@ -120,7 +119,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should filter recipes by category', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const categoryFilter = page.locator('select, [role="combobox"], button:has-text("Category")').first();
 
@@ -131,7 +130,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should import recipe from URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const importButton = page.locator('button:has-text("Import"), button:has-text("URL")');
 
@@ -142,7 +141,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should favorite/bookmark recipe', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const favoriteButton = page.locator('button[aria-label*="favorite"], button:has-text("Save")').first();
 
@@ -152,7 +151,7 @@ test.describe('Recipe Management', () => {
   });
 
   test('should delete recipe', async ({ page }) => {
-    await page.goto(`${BASE_URL}/recipes`);
+    await page.goto('/recipes');
 
     const deleteButton = page.locator('button[aria-label*="delete"], button:has-text("Delete")').first();
 
