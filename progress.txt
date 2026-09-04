@@ -1669,3 +1669,61 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - The single highest-value a11y fix was one shared component. Scanning seven
     pages and finding the same violation seven times is a strong hint the fix
     is one file, not seven.
+
+## 2026-09-03 - Owner decisions 2 and 4: meta description, and the brand contrast
+- DECISION (Dj, 2026-09-03): shorten the homepage meta description to the
+  existing 120-char variant, and darken the primary rather than split the token.
+
+### Meta description
+- Was 214 characters against Google's ~155-160 truncation, so the food-chaining
+  explanation and the "Start free" call to action never reached a result. Now
+  120, the variant that already existed for the SoftwareApplication offer.
+- src/lib/seo-config.ts AND index.html both carry it: a test
+  (src/lib/seo-static-head.test.ts) asserts the static head matches the config,
+  and it caught the half-done change immediately. Three tags in index.html --
+  description, og:description, twitter:description.
+- tests/seo.spec.ts is now 13/13; that length assertion had been failing the
+  whole time.
+
+### Brand contrast
+- Light theme --primary went 24 95% 53% -> 38%. NOT 39%: against the real
+  --background (36 33% 97%) 39% measures 4.44:1, just under. 38% gives 4.64:1
+  as text and 4.92:1 for white on top.
+- Dark theme was the OPPOSITE problem and needed the opposite fix. Its lighter
+  orange (60%) already reads 7.25:1 as text on the dark background; what failed
+  was white ON that orange at 2.47:1 -- worse than the light theme ever was, so
+  every primary button was the least readable thing on a dark screen.
+  --primary-foreground there is now the dark background colour: 7.25:1.
+- src/pages/VPAT.tsx:63 published "Text contrast meets 4.5:1 (normal) / 3:1
+  (large) in the default theme", which was untrue -- the default theme's own
+  primary was 2.68:1. Corrected in the same change. The repo has twice had to
+  remediate overstated public claims (invented author credentials, a fabricated
+  aggregateRating); this was the same class, on the page procurement reads.
+- Four accessible-name fixes found by the scan: the Pantry sort Select (a Radix
+  combobox announcing as an unnamed button), two unnamed progress bars in
+  ChildProfileCard, and its per-child Edit button -- that last one renders once
+  per child, so the Kids page had as many nameless controls as the household
+  has children.
+- RESULT, serious+critical axe nodes: dashboard 20->3, planner 14->0,
+  grocery 19->3, recipes 16->1, kids 16->0, settings 15->0, pantry 15->46.
+  ZERO critical violations anywhere now.
+- **The pantry number went UP, and that is the important entry here.** 15 was
+  never real. The first baseline used `await page.waitForLoadState('networkidle')`
+  alone, which on a cold server fires while Pantry is still showing its loading
+  SKELETON -- so the scan measured a page with no content and reported 15. It
+  was stable across repeat runs, which made a timing artefact look like solid
+  data. The spec now waits for main, waits for .animate-pulse to detach, then
+  settles; 46 is the honest figure with the category chips rendered.
+- What remains is entirely colour-contrast on the FOOD-CATEGORY badge palette
+  (white on #5abc7d at 2.31:1, white on #f27978 at 2.65:1, and similar), which
+  is a different palette from the brand primary and needs its own decision.
+  46 of the 53 remaining nodes are on Pantry, which renders every category chip.
+- **Learnings for future iterations:**
+  - Compute contrast against the REAL token, not an approximation. 39% looked
+    fine against a guessed #faf8f5 and failed against the actual 36 33% 97%.
+  - A dark theme is not the light theme with different numbers. Darkening the
+    primary would have FIXED light mode and BROKEN dark mode further; the fix
+    there was the foreground, not the background.
+  - `networkidle` is not "the page has rendered". Any scan or screenshot
+    assertion against this app needs to wait for the skeletons to detach, or it
+    silently measures an empty page and reports a number that repeats.

@@ -55,10 +55,24 @@ test.describe('Accessibility - authenticated pages', () => {
       await signIn(context);
       await page.goto(route);
 
-      // The dashboard shell loads its data after first paint; scanning before
-      // it settles measures a skeleton and reports a clean page that nobody
-      // ever sees.
+      // networkidle alone is NOT enough, and trusting it produced a wrong
+      // baseline once already: on a cold server it fires while Pantry is still
+      // showing its loading skeleton, and the scan then reports 15 violations
+      // for a page that has 47 once its category chips render. The numbers were
+      // stable on repeat runs, which made the under-measurement look like solid
+      // data rather than a timing artefact.
+      //
+      // So: wait for the shell, then for the skeletons to go, then settle.
       await page.waitForLoadState('networkidle');
+      await page.locator('main, [role="main"]').first().waitFor({ state: 'visible' });
+      await page
+        .locator('.animate-pulse')
+        .first()
+        .waitFor({ state: 'detached', timeout: 10_000 })
+        .catch(() => {
+          // No skeleton on this page, or it never mounted. Either is fine.
+        });
+      await page.waitForTimeout(750);
 
       // Fail loudly rather than scanning the login screen and calling it clean.
       expect(new URL(page.url()).pathname, `${name} redirected to ${page.url()}`).not.toMatch(

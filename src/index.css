@@ -30,8 +30,20 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 24 95% 53%;
-    /* Vibrant Carrot Orange (HSL 24, 95%, 53%) */
+    /*
+      Carrot orange, darkened from 53% to 38% lightness for WCAG AA (US-778).
+
+      At 53% it measured 2.68:1 as text on --background and 2.85:1 for white
+      text on top of it, against a 4.5:1 requirement -- and since it is the
+      active nav labels and every primary button, it accounted for nearly every
+      serious violation the first authenticated axe scan found. It also made
+      the published VPAT's 1.4.3 claim untrue.
+
+      38% is the threshold, not a round number: 39% still measures 4.44:1
+      against this exact background. Both directions clear it now -- 4.64:1 as
+      text, 4.92:1 for white on top.
+    */
+    --primary: 24 95% 38%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 142 76% 36%;
@@ -116,9 +128,17 @@ All colors MUST be HSL.
     --popover: 217 33% 17%;
     --popover-foreground: 36 33% 97%;
 
+    /*
+      Dark theme keeps the LIGHTER orange and changes the foreground instead.
+
+      Darkening it here would be exactly wrong: at 60% it already reads 7.25:1
+      as text on the dark background. The failure in this theme was the other
+      way round -- white on that orange is 2.47:1, worse than the light theme
+      ever was, so every primary button was the least readable thing on screen.
+      A dark foreground on the light orange gives 7.25:1.
+    */
     --primary: 24 95% 60%;
-    /* Lighter Carrot Orange */
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 222 47% 11%;
 
     --secondary: 142 70% 45%;
     /* Lighter Broccoli Green */
