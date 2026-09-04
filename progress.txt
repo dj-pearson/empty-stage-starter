@@ -1767,3 +1767,56 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - A component with no Supabase call and every state array initialised to []
     is a prototype, and that is a much stronger signal than line count. The
     four largest files in the whole deletion were the emptiest.
+
+## 2026-09-03 - Owner decision 3: US-780's premise was wrong, and there is a billing bug
+- DECISION (Dj, 2026-09-03): the entitlement table is approved. Implementing it
+  turned up that most of it already exists, and that the real defect is
+  elsewhere.
+- A GATING SYSTEM ALREADY EXISTS and has for months: src/lib/featureLimits.ts
+  (checkFeatureLimit + the check_feature_limit RPC), the enforce_plan_row_limit
+  TRIGGER from migration 20260723123300 which is the authoritative gate, and
+  max_children / max_pantry_foods / max_recipes / max_meal_plans columns on
+  subscription_plans. Children and pantry foods are enforced on BOTH client and
+  server. There are seven checkFeatureLimit call sites plus a FeatureGate
+  component.
+- I told Dj "nothing enforces any of it" in the decision brief. That was wrong,
+  and the way it went wrong is the lesson: the survey grepped for isSubscribed,
+  `tier ===` and subscription.status -- the shapes a hand-rolled check would
+  take -- and never for checkFeatureLimit. Searching for the pattern you expect
+  finds only the pattern you expect. The honest search is "what does the insert
+  path actually call", from the write site outwards.
+- **THE REAL BUG: App Store subscribers are gated as free.**
+  enforce_plan_row_limit resolves a plan with
+  `SELECT us.plan_id FROM user_subscriptions us WHERE us.user_id = NEW.user_id`
+  -- user_subscriptions ONLY. A subscription bought in the iOS app lives in
+  apple_subscriptions (migration 20260601000002), and nothing joins the two. So
+  an Apple subscriber resolves to NO plan, falls through to the Free row, and is
+  capped at 1 child and the free pantry size WHILE PAYING. check_feature_limit
+  has the identical blind spot, so the client agrees with the server and nothing
+  looks broken from either side. iOS is the live product; this is billing
+  correctness, not a feature gap.
+- I had written a parallel src/lib/entitlements.ts + useEntitlement.ts + 24
+  tests before finding this, and DELETED them before commit. Shipping a second
+  entitlement system beside a working one is precisely the failure this repo has
+  already paid for three times (three shortfall functions, three grocery insert
+  allowlists, two calendar implementations) and that US-777 existed to undo.
+  The tests were green. Green tests on a duplicate system are worth nothing.
+- docs/entitlements.md now records what exists, the Apple gap with the four
+  StoreKit product ids that need mapping, the agreed table with a per-row
+  status, and the rule that there is ONE entitlement system.
+- prd.json US-780 notes rewritten with the corrected premise and the real
+  remaining scope, in order: join apple_subscriptions into both lookups; gate
+  household-member seats; add a usage counter for the two AI rate limits (no
+  such table exists -- usage_alerts notifies, it does not count); hand iOS the
+  table, since StoreKitService.isSubscribed(to:) still has no call sites.
+- **Learnings for future iterations:**
+  - Before building a system, grep the WRITE PATH, not the concept. `addKid`
+    already called checkFeatureLimit on its second line; one read of the
+    function I was about to modify would have saved the whole detour.
+  - A story's premise can be stale in the direction of "this does not exist"
+    just as easily as "this is broken". US-764's AC was wrong about which specs
+    could run; US-780's was wrong about whether gating existed. Both were
+    written from a survey rather than from the code.
+  - Deleting your own finished, passing work is the right move when it
+    duplicates something that already ships. The sunk cost is the 24 tests, and
+    they were testing a module that should not exist.
