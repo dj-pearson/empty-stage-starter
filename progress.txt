@@ -1820,3 +1820,102 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - Deleting your own finished, passing work is the right move when it
     duplicates something that already ships. The sunk cost is the 24 tests, and
     they were testing a module that should not exist.
+
+================================================================================
+2026-09-03 -- US-780 item (1): a subscriber is a subscriber whichever store they
+bought from. Migration 20260903000001_apple_subscribers_count_as_paid.sql.
+================================================================================
+
+- SCOPE WAS WIDER THAN THE STORY SAID. The note above framed this as "join
+  apple_subscriptions into both lookups". Grepping every `FROM user_subscriptions`
+  in supabase/migrations found THREE tables that grant entitlement and no
+  function reading more than two of them:
+
+      check_feature_limit (client pre-check)  Stripe only
+      enforce_plan_row_limit (the trigger)    Stripe only
+      get_usage_stats (usage dashboard)       Stripe + complementary, not Apple
+      custom-domain INSERT policies           Stripe only
+
+  So comped users were capped at Free limits by the trigger while their usage
+  dashboard showed the paid plan, and an App Store *Professional* subscriber was
+  refused by the professional_custom_domains RLS policy on a feature they pay
+  for. Fixing only the two the story named would have left the other two to be
+  found separately, which is how this class of bug survives in the first place.
+
+- ONE RESOLVER: public.effective_plan_id(uuid), read by all four. Ordered by
+  GENEROSITY, not by store: someone holding two entitlements at once (a web
+  subscriber who later buys on the phone) must never be handed the smaller, and
+  no source ranking guarantees that. A user with one entitlement has exactly one
+  candidate, so a Stripe subscriber resolves to precisely the plan they did
+  before -- verified, not assumed.
+
+- I VERIFIED THIS AGAINST A REAL POSTGRES instead of shipping unproven SQL.
+  supabase/tests/us780_apple_entitlement{,.bootstrap}.sql stands up the pieces
+  Supabase provides and then applies the REAL migration files unchanged, so the
+  test exercises what ships rather than a hand-written approximation of it.
+  11 cases, each printing EXPECTED beside the value. Measured:
+
+      user shape          kid capacity BEFORE   AFTER
+      free                1                     1
+      stripe Pro          3                     3      <- no regression
+      apple Family Plus   1  (paying!)          unlimited
+      complementary       1  (comped!)          unlimited
+      apple Professional  1  (paying!)          unlimited
+      apple expired       1                     1
+      apple revoked       1                     1
+      stripe canceled     1                     1
+
+  And the suite was run WITHOUT the migration to confirm cases 1, 2, 6 and 11
+  fail there. A test that passes with and without the fix measures nothing.
+
+- CORRECTION TO AN EARLIER ENTRY. I told the user US-784 was blocked because
+  "this container has the psql client but no server binaries". That was wrong.
+  `which initdb` misses them because Postgres 16 lives at
+  /usr/lib/postgresql/16/bin, off PATH; initdb also refuses to run as root, so
+  the cluster needs `su postgres`. There IS a working Postgres 16 here, US-784's
+  "test in a disposable Postgres" AC can be honoured, and it was never blocked.
+
+- NEAR MISS, AGAIN THE SAME SHAPE. My first rewrite of check_feature_limit was
+  written from what the call sites appeared to need and silently dropped the
+  ai_coach daily-usage and food_tracker monthly-usage branches -- both live.
+  Removing working enforcement while claiming to fix entitlement would have been
+  worse than the bug. Fix: copy the original verbatim and change ONLY the lookup
+  block, then PROVE it with a diff. Both copies are pure insertions, 0 lines
+  removed or changed below the lookup, asserted programmatically rather than by
+  eye. get_usage_stats got the same treatment.
+
+- HARDENING FOUND ON THE WAY. effective_plan_id is SECURITY DEFINER and takes a
+  user id, so left executable by PUBLIC any signed-in user could ask which plan
+  anyone else is on, reading apple_subscriptions and complementary_subscriptions
+  straight past their RLS. REVOKEd; its two callers are themselves SECURITY
+  DEFINER and reach it regardless (verified as a non-superuser role, since a
+  superuser would have proved nothing). RLS policies evaluate as the querying
+  user, so they use the argument-free current_user_plan_name() instead, which
+  cannot report on anyone but the caller.
+
+- PRODUCT ID MAPPING IS ORDER-SENSITIVE. 'professional' contains 'pro', so a
+  naive CASE returns Pro for com.eatpal.app.professional.yearly and silently
+  downgrades the most expensive tier. Most-specific-first, and all six ids from
+  StoreKitService.swift are pinned in the test -- read from the Swift file, not
+  from my own earlier note about it.
+
+- LEFT ALONE DELIBERATELY, recorded in docs/entitlements.md: get_usage_stats
+  reports is_complementary=false for comped users (PL/pgSQL `RECORD IS NOT NULL`
+  is true only when EVERY field is non-null, and Family Plus has max_children
+  NULL -- cosmetic, confirmed pre-existing); the Pro seed's max_children=3
+  contradicts the agreed table's "unlimited", which is a pricing data change;
+  can_add_child is Stripe-only and dead.
+
+- **Learnings for future iterations:**
+  - "Fix X" is a claim about scope that deserves one grep before you believe it.
+    `grep -n "FROM user_subscriptions" supabase/migrations/*.sql` took seconds
+    and doubled the size of the real bug.
+  - Two of my "measurements" this session were harness artefacts that looked
+    like findings: a Stripe control that failed because auth.uid() was set to a
+    different user than the row being probed, and a "children.limit=unlimited"
+    for a free user that was just the wrong JSON path. Both would have been
+    reported as bugs if I had not gone back to check why the number was odd.
+    An unexpected result is a reason to doubt the instrument first.
+  - Not having a tool is worth re-checking before repeating the claim. I
+    reported US-784 blocked on a missing Postgres that was installed the whole
+    time, because I tested with `which` instead of looking.
