@@ -1727,3 +1727,43 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - `networkidle` is not "the page has rendered". Any scan or screenshot
     assertion against this app needs to wait for the skeletons to detach, or it
     silently measures an empty page and reports a number that repeats.
+
+## 2026-09-03 - Owner decision 1: delete the unwired prototypes
+- DECISION (Dj, 2026-09-03): delete the unreachable prototypes, keep the ones
+  that are wired, file stories for those.
+- Deleted 14 files, 8067 lines. Nine admin (KnowledgeBaseManager 1393,
+  EmailSequenceBuilder 1230, WorkflowBuilder 1208, CRMIntegration 1198,
+  ActivityTimeline, AdminControlPanel, BudgetAnalyticsDashboard,
+  CustomerHealthDashboard, QuizAnalyticsDashboard), two blog (BlogPostTemplate,
+  ReadingProgress), and three others (AnimatedSection,
+  StructuredIngredientsEditor -- superseded by recipes/IngredientRow from
+  US-721 -- and WeeklyReportCard).
+- The four biggest made ZERO Supabase calls and initialised every state array
+  to []. Mounted, they would render empty. That is what made the call easy: not
+  "is this used" but "is there anything behind it".
+- KEPT MORE THAN THE DECISION ALLOWED FOR, in the safe direction, because
+  checking each candidate turned up wiring the summary had not:
+    admin/AITicketAnalysis    reads support_tickets, support_ticket_ai_analysis
+    admin/AIModelManager      reads ai_environment_config, ai_model_configurations
+    admin/StorageManagement   built for US-643, has a passing test
+    NotificationPreferencesDialog  reads notification_preferences, profiles
+    KidMealVoting             reads meal_votes, voting_achievements, profiles,
+                              backed by migration 20251110000004_meal_voting.sql
+    MealVotingCard            the card half of that feature
+    BarcodeScannerScreen      has its own passing test
+    HarmonizedFoodDisplay     has its own passing test
+  Six of those are BUILT FEATURES NEVER MOUNTED, not dead code. They need a
+  story each, which is a different piece of work from a cleanup.
+- The ALLOWED list in check-orphan-components.mjs is rebuilt with a real reason
+  per entry: which story resolves it, or why it is being kept.
+- Gates: 2909 vitest passing, vite build clean, lint 1185 -> 1163 (baseline
+  lowered), jsx-import and invisible-char scans clean, orphan checker green at
+  335 components.
+- **Learnings for future iterations:**
+  - "Unreachable" and "dead" are different questions. Of 22 unreachable files,
+    8 were wired to real tables or carried passing tests. Grepping each
+    candidate for `from('...')` before deleting took a couple of minutes and
+    changed the answer for a third of them.
+  - A component with no Supabase call and every state array initialised to []
+    is a prototype, and that is a much stronger signal than line count. The
+    four largest files in the whole deletion were the emptiest.
