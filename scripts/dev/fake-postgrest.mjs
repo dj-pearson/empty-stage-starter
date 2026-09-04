@@ -82,6 +82,58 @@ const POSTS = [
 ];
 
 
+/**
+ * The identity every authenticated browser test runs as (US-778).
+ *
+ * Exported so tests/helpers/auth.ts injects exactly the session this server
+ * answers for, rather than two hand-written copies drifting apart.
+ */
+export const TEST_USER = {
+  id: '00000000-0000-4000-8000-000000000001',
+  aud: 'authenticated',
+  role: 'authenticated',
+  email: 'e2e@example.test',
+  email_confirmed_at: '2026-01-01T00:00:00.000Z',
+  phone: '',
+  confirmed_at: '2026-01-01T00:00:00.000Z',
+  last_sign_in_at: '2026-01-01T00:00:00.000Z',
+  app_metadata: { provider: 'email', providers: ['email'] },
+  user_metadata: {},
+  identities: [],
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  is_anonymous: false,
+};
+
+/**
+ * A JWT-shaped access token. Unsigned in any meaningful sense -- the signature
+ * segment is a literal -- because nothing in this server verifies it. It is
+ * JWT-SHAPED rather than a random string only because client code decodes the
+ * payload to read `sub` and `role`.
+ */
+const TEST_JWT_PAYLOAD = Buffer.from(
+  JSON.stringify({
+    sub: TEST_USER.id,
+    role: 'authenticated',
+    aud: 'authenticated',
+    // Far enough out that supabase-js never tries to refresh mid-test.
+    exp: 4102444800,
+    iat: 1767225600,
+    email: TEST_USER.email,
+  })
+).toString('base64url');
+
+export const TEST_ACCESS_TOKEN = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${TEST_JWT_PAYLOAD}.e2e-not-a-real-signature`;
+
+export const TEST_SESSION = {
+  access_token: TEST_ACCESS_TOKEN,
+  token_type: 'bearer',
+  expires_in: 3600,
+  expires_at: 4102444800,
+  refresh_token: 'e2e-refresh-token',
+  user: TEST_USER,
+};
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': '*',
@@ -92,6 +144,35 @@ createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
   if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS);
+    return res.end();
+  }
+
+  // ---------------------------------------------------------------------------
+  // GoTrue, enough of it (US-778).
+  //
+  // Fifteen spec files need a signed-in session and were skipped for want of
+  // one, and every authenticated page -- the planner, the grocery list, the
+  // settings screen -- was therefore unreachable to any browser test. That is
+  // also why the a11y scan only ever covered marketing pages, which is the half
+  // of the app nobody is logged into.
+  //
+  // This does NOT implement auth. It answers the three calls supabase-js makes
+  // once a session already exists in localStorage, so a test can inject one and
+  // get past ProtectedRoute. Nothing here validates a token, and nothing should:
+  // it is a stand-in for a backend, not a security boundary, and it listens on
+  // 127.0.0.1 only.
+  if (url.pathname === '/auth/v1/user') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(TEST_USER));
+  }
+
+  if (url.pathname === '/auth/v1/token') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(TEST_SESSION));
+  }
+
+  if (url.pathname === '/auth/v1/logout') {
     res.writeHead(204, CORS);
     return res.end();
   }

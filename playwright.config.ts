@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { findExistingChromium } from './scripts/resolve-chromium.mjs';
-import { BASE_URL, PORT, TARGET_DIST } from './tests/helpers/base-url';
+import { BASE_URL, DIST_DIR, PORT, TARGET_DIST } from './tests/helpers/base-url';
 
 /**
  * Playwright Configuration for EatPal E2E Tests
@@ -119,7 +119,9 @@ export default defineConfig({
    * assertions than hidden by an implicit rebuild.
    */
   webServer: {
-    command: TARGET_DIST ? `node scripts/dev/serve-dist.mjs --port ${PORT}` : 'npm run dev',
+    command: TARGET_DIST
+      ? `node scripts/dev/serve-dist.mjs --port ${PORT} --dist ${DIST_DIR}`
+      : 'npm run dev',
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

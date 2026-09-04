@@ -1601,3 +1601,71 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     `git diff origin/main...HEAD`, so it reports "No new migrations on this
     branch" for a migration that is only STAGED. It has to be committed before
     the gate sees it. Worth knowing before concluding a migration passed.
+
+## 2026-09-03 - US-778 (accessibility behind the login) + the fixture that unblocks it
+- REORDERED ahead of US-767/768 on purpose. Those are p2 and this is p3, but
+  every remaining responsive story needs to see an authenticated page in a
+  browser, and nothing could: ProtectedRoute redirects to /auth and 15 spec
+  files were skipped for exactly that reason. This story owns the fixture, so
+  doing it first unblocks the rest rather than shipping UI changes nobody can
+  verify.
+- tests/helpers/auth.ts writes a supabase-js session into localStorage under
+  the client's storageKey ('sb-auth-token') via addInitScript, BEFORE the app
+  boots. No login form is driven: supabase-js restores its session from storage
+  synchronously on construction and only talks to GoTrue afterwards, so this is
+  both simpler and far more stable than typing into a form and racing a
+  redirect.
+- scripts/dev/fake-postgrest.mjs gains /auth/v1/user, /auth/v1/token and
+  /auth/v1/logout. It already returned [] for any unknown table, so PostgREST
+  reads needed nothing. It validates no token and is not meant to: it is a
+  stand-in for a backend, on 127.0.0.1 only.
+- THE CATCH, which cost a wrong first run: the default dist/ is built WITHOUT
+  Supabase credentials, so src/integrations/supabase/client.ts instantiates a
+  MOCK client. A mock has no session to restore no matter what is in storage,
+  so the first spike redirected to /auth and looked like the fixture was
+  broken. Authenticated runs need their own build against the fake backend --
+  hence E2E_DIST and the dist-e2e tree.
+- MEASURED, first ever scan of these pages (serious + critical axe nodes):
+    dashboard 20, grocery 19, recipes 16, kids 16, pantry 15, settings 15,
+    planner 14.
+  Every one included exactly ONE critical button-name: the floating action
+  button in src/components/ui/QuickActionMenu.tsx, icon-only with no
+  accessible name, rendered by the Dashboard shell on every page. One control,
+  seven pages. Fixed with aria-label + aria-expanded; all seven button-name
+  violations gone, counts now 19/18/15/15/14/14/13.
+- What remains is almost entirely color-contrast, and it is a PALETTE decision
+  rather than a code fix: the brand orange #f97015 on the #faf8f5 app
+  background measures 2.69:1 against a 4.5:1 AA requirement, and white on that
+  orange is 2.85:1. That is the active nav labels and every primary button.
+  NOT changed here -- it would alter the look of the whole product and belongs
+  to Dj. Recorded in the baseline file so it cannot be forgotten.
+- The compliance audit's "~109 nameless icon buttons" did not reproduce: a
+  static scan of seven pages found one. The rest are presumably inside dialogs
+  and menus axe never opens, which is worth knowing before anyone budgets that
+  number as work.
+- Files: tests/helpers/auth.ts (new),
+  tests/accessibility/authenticated-a11y.spec.ts (new, 7 tests),
+  tests/accessibility/authenticated-baseline.json (new),
+  scripts/dev/fake-postgrest.mjs, tests/helpers/base-url.ts,
+  playwright.config.ts, src/components/ui/QuickActionMenu.tsx,
+  src/lib/ciGatesWired.test.ts, .github/workflows/ci.yml, .gitignore.
+- Gates: 2909 vitest passing, lint 1185 at baseline, orphan and invisible-char
+  scans clean, the 7 authenticated a11y tests pass against the measured
+  baseline, and the baseline is proven non-vacuous (setting grocery to 5 fails
+  with the real count).
+- **Learnings for future iterations:**
+  - A build configured differently is a different app. The mock Supabase client
+    is invisible in the source you are reading and decides whether a session
+    can exist at all. Any browser test touching auth needs the build to be
+    pointed at a backend, real or fake.
+  - `npx vite build` is NOT `npm run build`: it skips the prerender and now
+    also the service-worker stamp, so dist/sw.js keeps the literal
+    __SW_BUILD_ID__ placeholder. The US-765 test caught it immediately, which
+    is the gate working, but it means a locally bare-built dist fails a test
+    that CI will pass. Stamp after a bare build or use npm run build.
+  - An a11y threshold of `critical` passes over every nameless control, because
+    axe rates those `serious`. The repo's existing scan was tuned to ignore the
+    defect class the repo actually has.
+  - The single highest-value a11y fix was one shared component. Scanning seven
+    pages and finding the same violation seven times is a strong hint the fix
+    is one file, not seven.

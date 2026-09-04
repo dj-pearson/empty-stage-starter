@@ -27,3 +27,14 @@ export const PORT = TARGET_DIST ? 4173 : 8080;
 
 /** Overridable so a run can be aimed at a preview or staging deployment. */
 export const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
+
+/**
+ * Which built directory the dist server serves (US-778).
+ *
+ * The default `dist/` is built without Supabase credentials, so the app
+ * instantiates a MOCK client -- which has no session to restore no matter what
+ * a test writes into localStorage, and every authenticated route redirects to
+ * /auth. Authenticated runs build a second tree against the fake backend and
+ * point here at it.
+ */
+export const DIST_DIR = process.env.E2E_DIST ?? 'dist';

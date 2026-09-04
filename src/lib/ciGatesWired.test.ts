@@ -32,19 +32,6 @@ describe('CI gates are wired into a workflow', () => {
 });
 
 /**
- * The Build job builds the same thing Cloudflare Pages does.
- *
- * `npx vite build` and `npm run build` differ by the prerender step, and that
- * step is the whole of US-570: it writes the dist/<route>/index.html files a
- * crawler without JavaScript reads. CI ran the first while Pages runs the
- * second, so the artifact CI validated -- and that deploy-production uploads --
- * was not the artifact the site is built from, and no guardrail inside
- * scripts/prerender.mjs ran on any pull request.
- *
- * Pinned rather than trusted because the two commands look interchangeable and
- * the difference shows up nowhere except in what crawlers receive.
- */
-/**
  * The Playwright suite runs somewhere (US-764).
  *
  * 28 spec files sat in tests/ for months with no workflow referencing them, so
@@ -75,12 +62,33 @@ describe('the E2E job runs the Playwright suite', () => {
     expect(ci).toContain('E2E_TARGET: dist');
   });
 
+  it('scans the authenticated pages, not only the marketing ones', () => {
+    // US-778: the pre-existing scan covered public pages, which is the half of
+    // the app nobody is signed into. A gate that never looks behind the login
+    // reports a clean product while every screen a parent uses is unscanned.
+    expect(ci).toContain('tests/accessibility/authenticated-a11y.spec.ts');
+    expect(ci).toContain('E2E_DIST: dist-e2e');
+  });
+
   it('names the date its continue-on-error expires', () => {
     // A non-blocking job with no end date is a job that never blocks.
     expect(ci).toMatch(/continue-on-error until \d{4}-\d{2}-\d{2}/);
   });
 });
 
+/**
+ * The Build job builds the same thing Cloudflare Pages does.
+ *
+ * `npx vite build` and `npm run build` differ by the prerender step, and that
+ * step is the whole of US-570: it writes the dist/<route>/index.html files a
+ * crawler without JavaScript reads. CI ran the first while Pages runs the
+ * second, so the artifact CI validated -- and that deploy-production uploads --
+ * was not the artifact the site is built from, and no guardrail inside
+ * scripts/prerender.mjs ran on any pull request.
+ *
+ * Pinned rather than trusted because the two commands look interchangeable and
+ * the difference shows up nowhere except in what crawlers receive.
+ */
 describe('the Build job runs the prerendering build', () => {
   const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
 

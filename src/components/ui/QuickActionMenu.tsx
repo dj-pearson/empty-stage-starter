@@ -68,10 +68,21 @@ export function QuickActionMenu({ actions, position = 'bottom-right' }: QuickAct
         </div>
       )}
 
-      {/* Main FAB button */}
+      {/*
+        Main FAB button.
+
+        aria-label and aria-expanded (US-778): this is icon-only, so a screen
+        reader announced it as an unnamed button -- the single critical
+        button-name violation axe reported on EVERY authenticated page, since
+        the Dashboard shell renders it on all of them. One control, seven pages.
+        The label tracks the state because the icon does: it is a plus that
+        rotates into a close.
+      */}
       <Button
         onClick={() => setIsOpen(!isOpen)}
         size="icon"
+        aria-label={isOpen ? 'Close quick actions' : 'Open quick actions'}
+        aria-expanded={isOpen}
         className={cn(
           'h-14 w-14 rounded-full shadow-lg transition-transform',
           isOpen && 'rotate-45'

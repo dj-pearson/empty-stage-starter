@@ -1,0 +1,10 @@
+{
+  "_comment": "US-778. Serious+critical axe node counts per authenticated route, measured 2026-09-03 after the QuickActionMenu button-name fix. These may only go DOWN: the assertion is <=, so fixing a control tightens the gate automatically and adding one fails it. Regenerate deliberately, never to turn a red run green. What remains is almost entirely color-contrast on the brand orange (#f97015 on #faf8f5 is 2.69:1 against a 4.5:1 AA requirement), which is a palette decision, not a code fix.",
+  "dashboard": 19,
+  "planner": 13,
+  "grocery": 18,
+  "pantry": 14,
+  "recipes": 15,
+  "kids": 15,
+  "settings": 14
+}
