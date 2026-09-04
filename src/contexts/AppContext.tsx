@@ -17,6 +17,7 @@ import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import { InventoryProvider, useInventory, parseMovementRows, parseStockRows, MOVEMENT_WINDOW_DAYS, MOVEMENT_LIMIT } from "./InventoryContext";
 import { compareLedgerToLegacy, summarizeDivergences, type ComparableItem } from "@/lib/stockComparison";
+import { buildStockComparisonSample, sampleSignature, type StockComparisonSample } from "@/lib/stockComparisonSample";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
 
 // US-331: re-export the narrow domain hooks so components can subscribe to only
@@ -465,6 +466,30 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // US-785: write one comparison sample per DISTINCT observation.
+  //
+  // The effect below re-runs on every realtime event and every pantry edit, so
+  // inserting unconditionally would bill a household's noise as evidence and
+  // bury the moment something actually changed. The signature covers the
+  // counts, not the per-item detail or the time, because two runs disagreeing
+  // about the same items in the same way are one observation.
+  //
+  // Failure is swallowed on purpose. This is instrumentation for a release
+  // decision; it must never surface an error to a parent or interrupt a load.
+  const lastSampleSignature = useRef<string | null>(null);
+  const recordComparisonSample = useCallback((sample: StockComparisonSample) => {
+    const signature = sampleSignature(sample);
+    if (lastSampleSignature.current === signature) return;
+    lastSampleSignature.current = signature;
+
+    void supabase
+      .from('stock_comparison_samples')
+      .insert(sample)
+      .then(({ error }) => {
+        if (error) logger.warn('US-785: could not record comparison sample', { error });
+      });
+  }, []);
+
   // US-671 dark launch: with the flag OFF, check the ledger against the legacy
   // column and log what disagrees. This is the evidence the flag flip is
   // supposed to wait for ("compare, and flip only when they agree"), and it
@@ -496,7 +521,22 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       // interface yet, so the shape is widened here rather than narrowed.
       const divergences = compareLedgerToLegacy(stockRows, foods as ComparableItem[]);
       const summary = summarizeDivergences(divergences);
-      if (summary.total === 0) return;
+      if (summary.total === 0) {
+        // US-785: a run that AGREES is the numerator of the agreement rate.
+        // Returning silently here would record only the failures, and a rate
+        // computed from failures alone is not a rate.
+        recordComparisonSample(
+          buildStockComparisonSample({
+            householdId,
+            itemCount: foods.length,
+            stockRowCount: stockRows.length,
+            divergences,
+            summary,
+            appVersion: import.meta.env.VITE_APP_VERSION || null,
+          })
+        );
+        return;
+      }
 
       logger.warn('US-671 ledger comparison: ledger and foods.quantity disagree', {
         householdId,
@@ -523,10 +563,26 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           `US-671 divergence: ${divergences.length - LEDGER_DIVERGENCE_LOG_LIMIT} further divergences not logged`
         );
       }
+
+      // US-785: the logs above are Sentry breadcrumbs, and a breadcrumb only
+      // transmits attached to a captured error -- so on a household where
+      // nothing crashes this comparison disagreed with itself and told nobody.
+      // Record it where it can be counted. The flag flip in US-739 is gated on
+      // an agreement rate that cannot otherwise be measured.
+      recordComparisonSample(
+        buildStockComparisonSample({
+          householdId,
+          itemCount: foods.length,
+          stockRowCount: stockRows.length,
+          divergences,
+          summary,
+          appVersion: import.meta.env.VITE_APP_VERSION || null,
+        })
+      );
     }, LEDGER_COMPARISON_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [ledgerReadsEnabled, stockRows, foods, householdId]);
+  }, [ledgerReadsEnabled, stockRows, foods, householdId, recordComparisonSample]);
 
   // US-331: keep a ref of the latest snapshot so exportData has a stable
   // identity instead of a new reference on every data change. Without this the

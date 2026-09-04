@@ -1560,3 +1560,44 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - The test that matters is the everything-set one -- a draft carrying every
     optional column, asserting each survives. Both previous regressions would
     have failed it, and neither was caught by the tests that existed.
+
+## 2026-09-03 - US-785 (the ledger dark-launch becomes measurable)
+- Kitchen-loop US-671 compares the ledger against foods.quantity while the flag
+  is OFF and reports through logger.warn. In production that is a Sentry
+  breadcrumb, and a breadcrumb only transmits ATTACHED TO A CAPTURED ERROR --
+  so on a household where nothing crashes, the comparison ran, disagreed, and
+  told nobody. "What fraction of households agree" was unanswerable, which is
+  precisely the gate household-planner US-739 AC 6 puts on flipping the flag.
+- New table public.stock_comparison_samples (migration 20260903000000), one row
+  per distinct comparison run: household, item and stock-row denominators,
+  divergence count, per-kind counts, the capped per-item detail as jsonb, and
+  the app version. RLS on, household-scoped, INSERT and SELECT only -- append
+  only, deliberately: a client that can rewrite its own measurements can make
+  the agreement rate say anything, and this table exists to be the thing a
+  release decision is checked against.
+- src/lib/stockComparisonSample.ts holds the pure builder and the dedupe
+  signature. AppContext records through it on BOTH branches of the comparison.
+- supabase/diagnostics/us-785-stock-comparison.sql answers the headline rate,
+  the rate excluding the two kinds that are not the ledger being wrong, per
+  household latest, kind breakdown, top divergent items, and rate over time by
+  build.
+- Files: supabase/migrations/20260903000000_stock_comparison_samples.sql (new),
+  supabase/diagnostics/us-785-stock-comparison.sql (new),
+  src/lib/stockComparisonSample.ts (new), src/lib/stockComparisonSample.test.ts
+  (new, 14 tests), src/contexts/AppContext.tsx.
+- Gates: 2908 vitest passing, lint 1185 at baseline, migration prefix and
+  safety gates pass, invisible-char scan clean.
+- **Learnings for future iterations:**
+  - The agreeing case is the one that was not being recorded. AppContext had
+    `if (summary.total === 0) return;` -- an early return that skipped the
+    numerator of the rate it was collecting. Telemetry that only fires on
+    failure cannot produce a rate, only a count of failures, and the two are
+    easy to confuse when reading the code.
+  - The divergence COUNT must come from the summary and not from the capped
+    detail array. Taking `.length` of the capped list would record a household
+    diverging on 120 rows as diverging on 50, and the error flatters the
+    number in exactly the direction that argues for flipping the flag.
+  - scripts/ci/check-migration-safety.sh is diff-scoped as
+    `git diff origin/main...HEAD`, so it reports "No new migrations on this
+    branch" for a migration that is only STAGED. It has to be committed before
+    the gate sees it. Worth knowing before concluding a migration passed.
