@@ -1527,3 +1527,36 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
   - Round budgets need an absolute floor, not just a percentage. 5% of 1 kB is
     50 bytes, and a gate that fails on 50 bytes of noise gets --update'd until
     it stops meaning anything.
+
+## 2026-09-03 - US-777 (one grocery row builder)
+- src/lib/groceryRow.ts exports buildGroceryRow(draft, ctx), typed as
+  Database['public']['Tables']['grocery_items']['Insert']. Both insert paths in
+  GroceryContext call it; the two hand-written field lists are gone and the file
+  drops from 375 to 345 lines.
+- The two paths were STILL out of step when this landed, which is the finding:
+  addGroceryItem carried neither priority, price_per_unit nor added_by_user_id,
+  while addGroceryItemsMerged carried all three. Setting a priority on a single
+  add lost it; the same field survived a bulk add. That is the third time this
+  seam has dropped columns -- US-713 (grocery_list_id, auto_generated,
+  source_plan_entry_id) and US-714 (brand_preference, barcode, priority,
+  price_per_unit) each restored a different set through a different door.
+- Typing the return as the generated Insert row makes an unknown column a
+  compile error instead of a value PostgREST discards, and a missing required
+  column a compile error instead of a runtime rejection.
+- Two behaviour fixes fell out of unifying them: quantity now uses `?? 1`
+  instead of `|| 1`, so a deliberate 0 is no longer rewritten to 1, and
+  added_by_user_id defaults to the acting user on both paths.
+- Files: src/lib/groceryRow.ts (new), src/lib/groceryRow.test.ts (new, 14
+  tests), src/contexts/GroceryContext.tsx.
+- Gates: 2894 vitest passing, lint 1185 at baseline, scoped tsc clean,
+  invisible-char scan clean.
+- **Learnings for future iterations:**
+  - The columns the builder OWNS (user_id, household_id, added_by_user_id) are
+    the ones that diverged, not the ones the caller passes. A caller forgets a
+    field once; a hand-written allowlist forgets it on every call forever.
+  - `|| 1` on a quantity and `if (item.x)` on an optional column are the same
+    mistake: both treat a falsy-but-real value as absent. The builder omits on
+    undefined and null only, so 0 and false survive.
+  - The test that matters is the everything-set one -- a draft carrying every
+    optional column, asserting each survives. Both previous regressions would
+    have failed it, and neither was caught by the tests that existed.
