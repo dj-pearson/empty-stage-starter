@@ -1919,3 +1919,82 @@ bought from. Migration 20260903000001_apple_subscribers_count_as_paid.sql.
   - Not having a tool is worth re-checking before repeating the claim. I
     reported US-784 blocked on a missing Postgres that was installed the whole
     time, because I tested with `which` instead of looking.
+
+================================================================================
+2026-09-05 -- US-784: nightly ledger drift check.
+Migration 20260905000000_ledger_drift_nightly_check.sql.
+================================================================================
+
+- TWO WRONG PREMISES IN THE STORY, both caught by reading the schema first.
+  (a) The AC says "compares item_stock.quantity". There is no such column: the
+      balance is item_stock.on_hand_canonical, and quantity lives on foods.
+  (b) "A migration adds a SQL function that per item compares..." -- one already
+      existed. rpc_reconcile_item_stock(uuid), from 20260901000002, does exactly
+      that comparison with a well-built FULL OUTER JOIN. It is household-scoped
+      and granted to authenticated, so a nightly sweep cannot use it and must
+      not be reachable by a client (it would report on every household). So:
+      detect_item_stock_drift() alongside it, same join shape, all households,
+      plus the last movement's timestamp/reason/ref_type so the alert can name
+      the writing path. The existing RPC is untouched.
+
+- THE TRAP. admin_alerts is declared TWICE:
+
+      20251013120000_admin_live_activity.sql   alert_type CHECK, 8 values
+      20251220000000_admin_tables.sql          alert_type free text
+
+  Both are CREATE TABLE IF NOT EXISTS, so the EARLIER one wins and the
+  constrained shape is live. I verified it rather than reasoning about it:
+  applied both in order, inserted alert_type='ledger_drift', got
+  "violates check constraint admin_alerts_alert_type_check".
+
+  Un-widened, this story ships a job that raises every single night and the
+  drift it exists to report goes unreported -- the exact failure mode being
+  guarded against, reintroduced by the guard. The migration widens the CHECK
+  and tolerates either shape, so it is a no-op wherever the free-text table won.
+
+- ALERT DESIGN: one unresolved ledger_drift row, UPDATED night after night
+  rather than a fresh row each time -- 30 nights of one unfixed drift should be
+  one dashboard item, not 30 -- and resolved automatically when the drift
+  clears, so a fixed problem stops sitting unread. Bounded 20-row sample in
+  alert_data so a systemic break does not write a megabyte of JSON.
+
+- A TEST THAT PASSED ON EMPTY TABLES, caught by accident. My first fixture used
+  'house000-0000-...' as a household id. 'h', 's' and 'u' are not hex, so every
+  INSERT failed -- and CASE 1 and CASE 2 still printed "0 EXPECTED 0", because
+  zero drifting items is trivially true of three empty tables. It read as two
+  passing cases. Added CASE 0, which asserts the fixtures landed (3 foods / 4
+  movements / 3 stock rows) before anything below it is believed. This is the
+  fifth time this session a thing that ran and printed something plausible had
+  measured nothing.
+
+- AN EXPECTATION I GOT WRONG, which is the point of printing them. I predicted
+  the alert's source summary would read "meal, grocery_item, unknown-source".
+  It read "grocery_item, meal, receipt": every drifting item happened to have a
+  ref_type, so the unknown-source branch was never exercised. The code was
+  right and my prediction was wrong -- but it also meant a live branch had no
+  coverage, so I changed a fixture movement to carry ref_type NULL. An EXPECTED
+  that disagrees with the output is worth reading twice: sometimes it indicts
+  the code, sometimes the test, and here it indicted the coverage.
+
+- Verified against Postgres 16: 11 cases, each printing EXPECTED beside the
+  value; migration replays cleanly (no duplicate constraint); and the suite was
+  run WITHOUT the migration to confirm it is inert there.
+
+- WHAT IS NOT VERIFIED, said plainly: pg_cron is not in the stock postgres:16
+  image and is not installable in this container, so only the ELSE branch of
+  the scheduling block ran (the NOTICE). The schedule itself is unproven here.
+  CASE 10 checks cron.job for the entry and SKIPS when the extension is absent,
+  so running this suite against a Supabase instance proves it. The DO block's
+  shape is copied from 20260709000002_agent_dispatcher_cron.sql, which is
+  scheduling in production, so the risk is low -- but low is not verified.
+
+- **Learnings for future iterations:**
+  - Before writing a function the story asks for, grep for one that already
+    does it. Two stories in a row now (US-780, US-784) asked me to build
+    something that existed; both times the real work was smaller and different.
+  - CREATE TABLE IF NOT EXISTS twice for the same table is not redundancy, it
+    is a coin flip resolved by filename order, and the loser's columns and
+    constraints are fiction. Worth a grep for duplicate declarations of any
+    table a new migration writes to.
+  - A test whose setup silently failed is indistinguishable from a passing
+    test. Assert the fixtures.
