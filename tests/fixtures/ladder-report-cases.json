@@ -1,0 +1,226 @@
+{
+  "$comment": "US-782: shared cases for the clinician ladder report. Asserted by src/lib/clinicianLadderReportFixtures.test.ts and, once kitchen-loop US-688 lands its report, by the Swift mirror. The point is that the PDF a parent exports on the phone and the one they export on the web say the same thing: a clinician reading two documents about one child must not have to reconcile them.",
+  "$format": {
+    "name": "human label for the case, shown on failure",
+    "input": "a ClinicianReportInput: kidFirstName, from, to (inclusive 'YYYY-MM-DD'), attempts[], ladderRows[], foodNames{}",
+    "expect": "the assertions to run against the built report. Every key is optional; only what a case names is checked, so a case stays readable and a new report field does not break every case.",
+    "expect.totals": "exact match on { foods, attempts, mastered }",
+    "expect.rowOrder": "foodName in order, top to bottom. This is the reading order a clinician scans, so it is part of the contract, not an accident of Map iteration.",
+    "expect.rows": "keyed by foodId; each may pin foodName, currentRung, status, startRung, rungHistory, outcomeCounts, bestPreps",
+    "$note": "Swift mirror: decode and assert against the iOS report builder. Rows are ordered most-worked first with ties broken by foodName, so the same range always produces the same document on both platforms. acceptanceRate is credit/attempts with a partial worth half, rounded to 2dp; a preparation method is only listed once it has at least MIN_PREP_ATTEMPTS (2) attempts behind it, and at most MAX_PREPS_LISTED (3) are shown. Rung history records TRANSITIONS only -- a food worked at one rung for three weeks is one line, not twenty."
+  },
+  "identifierPolicy": {
+    "$note": "US-782 AC 3. The report carries exactly one identifier, a first name, and the input type deliberately has nowhere to put more. Both platforms assert this: a document that leaves a household with a surname, an email or a date of birth on it is a different kind of artefact from the one this is meant to be.",
+    "allowedIdentifierKeys": ["kidFirstName"],
+    "forbiddenSubstrings": ["lastName", "last_name", "surname", "email", "dob", "dateOfBirth", "date_of_birth", "address", "phone", "mrn", "insurance"]
+  },
+  "cases": [
+    {
+      "name": "one food, one attempt, nothing else",
+      "input": {
+        "kidFirstName": "Sam",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-10T18:00:00.000Z", "preparationMethod": null }
+        ],
+        "ladderRows": [{ "foodId": "f1", "currentRung": "touching", "status": "active" }],
+        "foodNames": { "f1": "broccoli" }
+      },
+      "expect": {
+        "totals": { "foods": 1, "attempts": 1, "mastered": 0 },
+        "rowOrder": ["broccoli"],
+        "rows": {
+          "f1": {
+            "foodName": "broccoli",
+            "currentRung": "touching",
+            "status": "active",
+            "startRung": "looking",
+            "rungHistory": [{ "rung": "looking", "on": "2026-03-10" }],
+            "outcomeCounts": { "success": 1, "partial": 0, "refused": 0, "tantrum": 0, "total": 1 },
+            "bestPreps": []
+          }
+        }
+      }
+    },
+    {
+      "name": "attempts outside the range are excluded, on both edges",
+      "input": {
+        "kidFirstName": "Sam",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-02-28T23:59:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-01T00:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": "refused", "attemptedAt": "2026-03-31T23:59:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-04-01T00:00:00.000Z", "preparationMethod": null }
+        ],
+        "ladderRows": [],
+        "foodNames": { "f1": "broccoli" }
+      },
+      "expect": {
+        "totals": { "foods": 1, "attempts": 2, "mastered": 0 },
+        "rows": {
+          "f1": { "outcomeCounts": { "success": 1, "partial": 0, "refused": 1, "tantrum": 0, "total": 2 } }
+        }
+      }
+    },
+    {
+      "name": "rung history records transitions, not every attempt",
+      "input": {
+        "kidFirstName": "Ada",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-03T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": "partial", "attemptedAt": "2026-03-04T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "touching", "outcome": "success", "attemptedAt": "2026-03-09T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "touching", "outcome": "success", "attemptedAt": "2026-03-10T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "licking", "outcome": "refused", "attemptedAt": "2026-03-20T10:00:00.000Z", "preparationMethod": null }
+        ],
+        "ladderRows": [{ "foodId": "f1", "currentRung": "licking", "status": "active" }],
+        "foodNames": { "f1": "carrot" }
+      },
+      "expect": {
+        "totals": { "foods": 1, "attempts": 6, "mastered": 0 },
+        "rows": {
+          "f1": {
+            "startRung": "looking",
+            "rungHistory": [
+              { "rung": "looking", "on": "2026-03-02" },
+              { "rung": "touching", "on": "2026-03-09" },
+              { "rung": "licking", "on": "2026-03-20" }
+            ],
+            "outcomeCounts": { "success": 4, "partial": 1, "refused": 1, "tantrum": 0, "total": 6 }
+          }
+        }
+      }
+    },
+    {
+      "name": "preparation methods rank by acceptance, a partial counting half",
+      "input": {
+        "kidFirstName": "Ada",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": "f1", "stage": "small_bite", "outcome": "success", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": "roasted" },
+          { "foodId": "f1", "stage": "small_bite", "outcome": "success", "attemptedAt": "2026-03-03T10:00:00.000Z", "preparationMethod": "Roasted" },
+          { "foodId": "f1", "stage": "small_bite", "outcome": "partial", "attemptedAt": "2026-03-04T10:00:00.000Z", "preparationMethod": "steamed" },
+          { "foodId": "f1", "stage": "small_bite", "outcome": "refused", "attemptedAt": "2026-03-05T10:00:00.000Z", "preparationMethod": "steamed" },
+          { "foodId": "f1", "stage": "small_bite", "outcome": "success", "attemptedAt": "2026-03-06T10:00:00.000Z", "preparationMethod": "raw" }
+        ],
+        "ladderRows": [],
+        "foodNames": { "f1": "carrot" }
+      },
+      "expect": {
+        "$why": "raw has a perfect record but only one attempt, so it is below the MIN_PREP_ATTEMPTS floor and must not be recommended off a single data point. 'Roasted' and 'roasted' are one method, labelled the way the parent first typed it.",
+        "rows": {
+          "f1": {
+            "bestPreps": [
+              { "method": "roasted", "attempts": 2, "acceptanceRate": 1 },
+              { "method": "steamed", "attempts": 2, "acceptanceRate": 0.25 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "rows are ordered most-worked first, ties broken by name",
+      "input": {
+        "kidFirstName": "Ada",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f2", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f2", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-03T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f2", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-04T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f3", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-05T10:00:00.000Z", "preparationMethod": null }
+        ],
+        "ladderRows": [],
+        "foodNames": { "f1": "banana", "f2": "carrot", "f3": "apple" }
+      },
+      "expect": {
+        "$why": "carrot has three attempts so it leads. apple and banana tie on one each and sort alphabetically, which is what makes the same range produce the same document twice running.",
+        "rowOrder": ["carrot", "apple", "banana"],
+        "totals": { "foods": 3, "attempts": 5, "mastered": 0 }
+      }
+    },
+    {
+      "name": "a food on the ladder with no attempts in the range still appears",
+      "input": {
+        "kidFirstName": "Sam",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null }
+        ],
+        "ladderRows": [
+          { "foodId": "f1", "currentRung": "touching", "status": "active" },
+          { "foodId": "f2", "currentRung": "full_portion", "status": "mastered" }
+        ],
+        "foodNames": { "f1": "broccoli", "f2": "pasta" }
+      },
+      "expect": {
+        "$why": "A food paused or mastered before the range still belongs in 'where things stand'; a clinician asking 'what about pasta' should not have to be told it was left out for lack of recent activity.",
+        "totals": { "foods": 2, "attempts": 1, "mastered": 1 },
+        "rowOrder": ["broccoli", "pasta"],
+        "rows": {
+          "f2": {
+            "currentRung": "full_portion",
+            "status": "mastered",
+            "startRung": null,
+            "rungHistory": [],
+            "outcomeCounts": { "success": 0, "partial": 0, "refused": 0, "tantrum": 0, "total": 0 }
+          }
+        }
+      }
+    },
+    {
+      "name": "unusable attempts are dropped, not counted as refusals",
+      "input": {
+        "kidFirstName": "Sam",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": null, "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": null, "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": "not_a_real_outcome", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null },
+          { "foodId": "f1", "stage": "looking", "outcome": "success", "attemptedAt": null, "preparationMethod": null },
+          { "foodId": "f1", "stage": "not_a_rung", "outcome": "tantrum", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null }
+        ],
+        "ladderRows": [],
+        "foodNames": { "f1": "broccoli" }
+      },
+      "expect": {
+        "$why": "The last row counts -- its outcome is real -- but contributes no rung history, because an unrecognised stage is not a rung. The other four are unusable and must not silently become data.",
+        "totals": { "foods": 1, "attempts": 1, "mastered": 0 },
+        "rows": {
+          "f1": {
+            "startRung": null,
+            "rungHistory": [],
+            "outcomeCounts": { "success": 0, "partial": 0, "refused": 0, "tantrum": 1, "total": 1 }
+          }
+        }
+      }
+    },
+    {
+      "name": "a food with no display name falls back to its id",
+      "input": {
+        "kidFirstName": "Sam",
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "attempts": [
+          { "foodId": "f-unnamed", "stage": "looking", "outcome": "success", "attemptedAt": "2026-03-02T10:00:00.000Z", "preparationMethod": null }
+        ],
+        "ladderRows": [],
+        "foodNames": {}
+      },
+      "expect": {
+        "rowOrder": ["f-unnamed"],
+        "rows": { "f-unnamed": { "foodName": "f-unnamed" } }
+      }
+    }
+  ]
+}
