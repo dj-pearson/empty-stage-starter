@@ -19,8 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle, Mail, ArrowLeft } from "lucide-react";
-import { FcGoogle } from "react-icons/fc";
-import { FaApple } from "react-icons/fa";
+import { GoogleIcon, AppleIcon } from "@/components/BrandIcons";
 import { Link } from "react-router-dom";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
@@ -868,7 +867,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('google')}
                         className="w-full h-11"
                       >
-                        <FcGoogle className="h-5 w-5 mr-2" />
+                        <GoogleIcon className="h-5 w-5 mr-2" />
                         Google
                       </Button>
                       <Button
@@ -877,7 +876,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('apple')}
                         className="w-full h-11"
                       >
-                        <FaApple className="h-5 w-5 mr-2" />
+                        <AppleIcon className="h-5 w-5 mr-2" />
                         Apple
                       </Button>
                     </div>
@@ -967,7 +966,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('google')}
                         className="w-full h-11"
                       >
-                        <FcGoogle className="h-5 w-5 mr-2" />
+                        <GoogleIcon className="h-5 w-5 mr-2" />
                         Google
                       </Button>
                       <Button
@@ -976,7 +975,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('apple')}
                         className="w-full h-11"
                       >
-                        <FaApple className="h-5 w-5 mr-2" />
+                        <AppleIcon className="h-5 w-5 mr-2" />
                         Apple
                       </Button>
                     </div>

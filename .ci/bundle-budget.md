@@ -71,3 +71,42 @@ total, a little over a fifth of it, without touching a line of product code.
 JSON. That is for a deliberate, explained change — a dependency added on
 purpose, or a win being locked in. Running it to turn a red build green is how a
 budget stops being one. Update the table above in the same commit.
+
+## Re-measured 2026-09-05, after US-772
+
+317 JS files, **2390.1 kB gzipped total**, down from 2617.3 kB. Budget
+lowered from 2749 kB to 2510 kB.
+
+The 227 kB came out as whole chunks rather than as trimming:
+
+| chunk | gzipped | why it is gone |
+| --- | --- | --- |
+| `vendor-three-core` | 181 kB | three.js, loaded to float six emoji |
+| `vendor-three-eco` | 55 kB | `@react-three/fiber` + `drei` around it |
+
+`ThreeDHeroScene` rendered six floating emoji and four translucent shapes
+behind the landing headline. `VisibleFoodOrbit` already did the same job in
+CSS and was already what every phone visitor and every reduced-motion visitor
+saw, so the 3D branch was 824 kB of uncompressed JavaScript serving desktop
+visitors above 1280px a version of a decoration nobody had reported the phone
+one as worse than. `@react-three/fiber` was also pinned at `9.0.0-beta.1` in
+production dependencies.
+
+`react-icons` and `@lottiefiles/react-lottie-player` came out in the same pass
+without moving the total much: the lottie player had no importer at all, and
+react-icons had two, both in `Auth.tsx`, both tree-shaken to a single glyph
+each. They are gone from `package.json` regardless, because a dependency with
+no importer is a dependency somebody will import.
+
+### What did NOT change, and why
+
+`vendor-swagger` (306 kB) and `vendor-swagger-deps` (36 kB) stay. US-772 asked
+for "its two manual chunks go", but `ApiDocs` is already behind a lazy route,
+so swagger only loads on `/api/docs` -- the AC's actual goal was already met --
+and deleting the manual chunks would merge a 342 kB pair into whatever chunk
+rollup picked next. The split is what keeps it isolated, not what makes it big.
+
+`vendor-gsap` (62 kB) stays. GSAP has two importers: `ParallaxBackground`, which
+could move to CSS today, and `GSAPCalendarMealPlanner`, which is the LIVE
+planner. Removing the dependency waits on household-planner US-727 taking GSAP
+out of the planner, exactly as US-772's own AC 2 says.
