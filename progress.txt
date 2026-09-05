@@ -1998,3 +1998,100 @@ Migration 20260905000000_ledger_drift_nightly_check.sql.
     table a new migration writes to.
   - A test whose setup silently failed is indistinguishable from a passing
     test. Assert the fixtures.
+
+================================================================================
+2026-09-05 -- US-779, US-768, US-782, US-772, US-789, US-767, US-770.
+Seven stories in one pass.
+================================================================================
+
+- FIVE OF THE SEVEN STORIES HAD A WRONG PREMISE. That is now the rule rather
+  than the exception, and every one was written from the roadmap survey rather
+  than from the code:
+
+    US-779  "mock create-checkout-session, assert the request carries the price
+            id" -- UpgradeDialog does not call checkout at all (it navigates to
+            /pricing), the function is create-checkout, and the client MUST NOT
+            send a price id: create-checkout reads it from subscription_plans
+            server-side so a caller cannot name a cheaper one (US-326). Writing
+            the AC as specified would have PINNED THE VULNERABILITY. The test
+            asserts the opposite.
+    US-768  Framed as layout. The real defect was accessibility: `hidden
+            sm:inline` on all five tab labels left five aria-hidden icons with
+            no accessible name below 640px.
+    US-772  "so the landing page loads without a 3D engine on a phone" -- the
+            phone already got the CSS version; the 3D branch was desktop-only
+            above 1280px. And "react-icons is removed in favour of lucide-react"
+            cannot be done: its two consumers are the Google and Apple BRAND
+            marks and lucide ships no brand logos on purpose.
+    US-770  "OnboardingProgressBar and OnboardingReengagement read the server
+            column, not localStorage" -- Reengagement already reads it, and
+            ProgressBar does not gate on completion at all. Both use
+            localStorage for a per-device DISMISSAL, which is correct.
+    US-767  "no md: breakpoints, therefore broken at phone width" -- the page
+            does not pan sideways at 390px. The real defect was 35 tap targets
+            at 40-42px and 7 unnamed check-off controls.
+
+- A TEST THAT READ THROUGH `display: none`. US-768's first assertion used
+  getByRole({name}) and allTextContents(), both of which see text inside a
+  display:none element. It PASSED against the broken build. A test for a
+  hidden-label bug that reads hidden labels is worse than no test: it is a
+  green light on the exact defect. Fixed with toHaveAccessibleName, and then
+  measured both ways -- pre-fix build fails, post-fix build passes.
+
+- A PROBE THAT MEASURED AN EMPTY PAGE. US-767's first run reported zero
+  undersized targets, zero unnamed controls and no overflow on the grocery
+  list. scripts/dev/fake-postgrest.mjs answers every table with an empty array,
+  so the page had no rows and a cookie banner was its only heading. With eight
+  grocery items served, the same probe found 35 undersized controls and 7
+  nameless ones. KNOCK-ON: tests/accessibility/authenticated-baseline.json was
+  measured against those same empty screens, so grocery's "3" is 3 violations
+  on an empty list. Worth re-baselining now the fixtures exist.
+
+- A METRIC THAT WAS WRONG ABOUT A CORRECT PAGE. US-768's overflow check
+  compared documentElement.scrollWidth (400) to clientWidth (390) and failed a
+  page where no unclipped element exceeds the viewport and nothing can be
+  panned to -- Chromium folds part of a deliberately-scrollable tab strip into
+  that number. Proved it by walking every element and excluding those clipped
+  by a scrolling ancestor: zero offenders. The assertion now asks the browser
+  to pan and checks scrollX stays 0. The tempting fix was a tolerance, which
+  widens until it measures nothing.
+
+- MUTATION-CHECKED RATHER THAN ASSUMED. US-779: forcing billingCycle, leaking a
+  priceId, dropping the {CHECKOUT_SESSION_ID} placeholder, removing the
+  trackPaidConversion call, and making the dunning banner both absent and
+  unconditional each fail. US-782: recording every attempt instead of rung
+  transitions, counting a partial as a full success, sorting alphabetically,
+  and dropping the two-attempt floor each fail. All 13 US-782 tests passed on
+  the first run, which is exactly when a fixture is most likely to be pinning
+  nothing.
+
+- REAL BUGS FOUND WHILE DOING SOMETHING ELSE:
+  - trackPaidConversion had no caller. paid_conversion was a defined funnel
+    event with no emitter, so the conversion rate read as a flat zero however
+    many people paid. Wired into CheckoutSuccess on the confirmed row.
+  - ManageHouseholdDialog created invite codes through create_household_invite
+    (which writes household_invite_codes) but listed pending invitations from
+    household_invitations, a leftover of the flow US-337 replaced. The code you
+    had just made never appeared and an outstanding one could not be revoked.
+  - The old OnboardingDialog required a child's name at step 1, so a couple
+    planning for themselves could not complete setup without inventing a child.
+
+- MEASURED, NOT CLAIMED: bundle 2617.3 kB gz -> 2390.1 kB, budget 2749 -> 2510.
+  Grocery 35 undersized controls -> 0, 7 unnamed -> 0, same 14 checkboxes still
+  rendering. Settings tabs: accessible-name test fails pre-fix, passes post-fix.
+
+- SCOPE LEFT UNDONE, said plainly rather than quietly dropped: US-767's By
+  Aisle accordions and shopping mode (both want US-757's page split first);
+  US-770's onboarding no longer collects allergens, favourite foods or a photo
+  as the four-step dialog did, and somebody should decide whether to bring any
+  back; US-772's gsap removal (blocked on US-727, the live planner uses it);
+  US-782's AC 1 (the iOS report does not exist yet); US-789's AC 4 (types need
+  credentials this repo does not carry).
+
+- **Learnings for future iterations:**
+  - When a story says a thing is broken, MEASURE IT before fixing it. Three of
+    these stories named the wrong defect on a page that did have one.
+  - A probe against a fixture-less backend measures the fixture, not the page.
+    Assert the fixture rendered before believing any result derived from it.
+  - An assertion that passes against the broken build is not a test. Run every
+    new gate against the code it is supposed to catch, before the fix.

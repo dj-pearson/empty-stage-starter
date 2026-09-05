@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, Outlet, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchOnboardingCompleted, readLocalOnboardingFlag } from "@/lib/onboardingStatus";
 import { SupportWidget } from "@/components/SupportWidget";
 import { AppInstallPrompt } from "@/components/AppInstallPrompt";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -85,6 +86,34 @@ const Dashboard = () => {
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams, toast]);
+
+  /**
+   * Send a user who never finished setup to /onboarding (US-770).
+   *
+   * Onboarding used to fire as a dialog from Auth.tsx, so somebody who closed
+   * it, or who arrived at /dashboard by any route other than a fresh sign-in,
+   * simply never saw it again. The cached flag is checked first so a returning
+   * user does not wait on a round trip before the dashboard renders; the server
+   * column -- the same one iOS US-708 writes -- is the authority and seeds the
+   * cache.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    if (readLocalOnboardingFlag() === true) return;
+
+    void fetchOnboardingCompleted().then((done) => {
+      // null means we could not tell (signed out mid-flight, a failed read).
+      // Not knowing is not a reason to interrupt somebody's dashboard.
+      if (!cancelled && done === false) {
+        navigate("/onboarding", { replace: true });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   useEffect(() => {
     // Set up listener for auth state changes
