@@ -88,6 +88,47 @@ const POSTS = [
  * Exported so tests/helpers/auth.ts injects exactly the session this server
  * answers for, rather than two hand-written copies drifting apart.
  */
+const HOUSEHOLD_ID = '00000000-0000-4000-8000-00000000aaa1';
+const LIST_ID = '00000000-0000-4000-8000-00000000bbb1';
+
+/**
+ * A shopping list with enough on it to measure a list screen (US-767).
+ *
+ * Deliberately varied: several aisles so the By Aisle grouping has something to
+ * group, a checked item so the check-off state renders, and one deliberately
+ * long name because a name that wraps is how a row overflows a phone.
+ */
+const TEST_USER_ID_LITERAL = '00000000-0000-4000-8000-000000000001';
+
+const GROCERY_ITEMS = [
+  ['Whole milk', 'Dairy', 2, 'gal', false],
+  ['Sharp cheddar', 'Dairy', 1, 'block', false],
+  ['Chicken breast', 'Meat', 6, 'count', false],
+  ['Broccoli florets', 'Produce', 1, 'bag', true],
+  ['Bananas', 'Produce', 6, 'count', false],
+  ['Organic rolled oats, old fashioned, large container', 'Pantry', 1, 'box', false],
+  ['Olive oil', 'Pantry', 1, 'bottle', false],
+  ['Frozen peas', 'Frozen', 2, 'bag', false],
+].map(([name, category, quantity, unit, checked], i) => ({
+  id: `cccccccc-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  user_id: TEST_USER_ID_LITERAL,
+  list_id: LIST_ID,
+  name,
+  category,
+  quantity,
+  unit,
+  checked,
+  created_at: `2026-09-0${i + 1}T00:00:00.000Z`,
+}));
+
+/** PostgREST answers an object rather than an array for .single()/.maybeSingle(). */
+function sendRows(res, req, rows) {
+  const single = (req.headers.accept || '').includes('vnd.pgrst.object');
+  res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+  return res.end(JSON.stringify(single ? (rows[0] ?? null) : rows));
+}
+
 export const TEST_USER = {
   id: '00000000-0000-4000-8000-000000000001',
   aud: 'authenticated',
@@ -202,6 +243,57 @@ createServer((req, res) => {
     const single = (req.headers.accept || '').includes('vnd.pgrst.object');
     res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
     return res.end(single ? 'null' : '[]');
+  }
+
+  // ---------------------------------------------------------------------------
+  // A household with things in it (US-767).
+  //
+  // Everything above answers empty, which is a valid backend response and a
+  // useless one to measure a LIST screen against. The grocery page rendered
+  // with zero rows, so a phone-width probe reported no small tap targets and no
+  // horizontal overflow -- for a page with nothing on it. The cookie banner was
+  // the only heading. That reads exactly like a page that passes.
+  //
+  // The same blind spot reaches further than this story: the authenticated a11y
+  // baselines in tests/accessibility/authenticated-baseline.json were measured
+  // against these same empty screens, so grocery's "3" is 3 violations on an
+  // empty list, not on a list.
+  //
+  // Rows are shaped from the real columns the app selects and writes. Reads
+  // only: a POST or PATCH still falls through to the empty answer below, which
+  // is honest -- this stands in for a backend, it does not implement one.
+  if (url.pathname === '/rest/v1/households') {
+    return sendRows(res, req, [{ id: HOUSEHOLD_ID, name: 'Test Household', created_by: TEST_USER.id }]);
+  }
+
+  if (url.pathname === '/rest/v1/household_members') {
+    return sendRows(res, req, [
+      {
+        id: 'aaaaaaaa-0000-4000-8000-000000000001',
+        household_id: HOUSEHOLD_ID,
+        user_id: TEST_USER.id,
+        role: 'parent',
+        joined_at: '2026-01-05T00:00:00.000Z',
+        profiles: { full_name: 'E2E Parent' },
+      },
+    ]);
+  }
+
+  if (url.pathname === '/rest/v1/grocery_lists') {
+    return sendRows(res, req, [
+      {
+        id: LIST_ID,
+        household_id: HOUSEHOLD_ID,
+        user_id: TEST_USER.id,
+        name: 'Weekly shop',
+        is_default: true,
+        created_at: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+  }
+
+  if (url.pathname === '/rest/v1/grocery_items') {
+    return sendRows(res, req, GROCERY_ITEMS);
   }
 
   // anything else: an empty set is a valid answer.
