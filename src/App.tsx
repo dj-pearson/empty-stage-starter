@@ -84,6 +84,7 @@ const MealPlanGeneratorResults = lazy(() => import('./pages/MealPlanGeneratorRes
 const SiblingMealFinder = lazy(() => import('./pages/SiblingMealFinder'));
 const ProfessionalSettings = lazy(() => import('./pages/dashboard/ProfessionalSettings'));
 const Billing = lazy(() => import('./pages/dashboard/Billing'));
+const Household = lazy(() => import('./pages/dashboard/Household'));
 const AccountSettings = lazy(() => import('./pages/dashboard/AccountSettings'));
 const AccessibilitySettingsPage = lazy(() => import('./pages/dashboard/AccessibilitySettings'));
 const ApiDocs = lazy(() => import('./pages/ApiDocs'));
@@ -589,6 +590,14 @@ const App = () => (
                           element={
                             <RouteErrorBoundary>
                               <Billing />
+                            </RouteErrorBoundary>
+                          }
+                        />
+                        <Route
+                          path="household"
+                          element={
+                            <RouteErrorBoundary>
+                              <Household />
                             </RouteErrorBoundary>
                           }
                         />
