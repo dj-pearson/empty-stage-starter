@@ -70,6 +70,15 @@ describe('the E2E job runs the Playwright suite', () => {
     expect(ci).toContain('E2E_DIST: dist-e2e');
   });
 
+  it('checks the phone viewport, not only the desktop one', () => {
+    // US-768: the authenticated a11y scan runs at desktop width, where the
+    // settings tab labels are visible. Below 640px they were display:none and
+    // each tab was an aria-hidden icon with no accessible name -- a serious
+    // violation the desktop scan reported as a clean page. Pinned because the
+    // failure mode is a green gate looking the wrong way.
+    expect(ci).toContain('tests/responsive/');
+  });
+
   it('names the date its continue-on-error expires', () => {
     // A non-blocking job with no end date is a job that never blocks.
     expect(ci).toMatch(/continue-on-error until \d{4}-\d{2}-\d{2}/);

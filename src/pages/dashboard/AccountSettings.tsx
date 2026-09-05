@@ -477,26 +477,38 @@ export default function AccountSettings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="profile" className="flex items-center gap-2">
+          {/*
+            A SCROLLABLE STRIP AT PHONE WIDTH, not five squeezed columns
+            (US-768). The grid-cols-5 version fitted by hiding every label
+            below 640px with `hidden sm:inline`, which left five buttons whose
+            only content was an aria-hidden icon -- so each tab had NO
+            accessible name on a phone, a WCAG 4.1.2 failure that axe rates
+            serious. The authenticated a11y scan missed it because it runs at
+            desktop width, where the labels are visible.
+
+            h-auto because the strip wraps to two lines of content at small
+            sizes and the base TabsList pins h-10.
+          */}
+          <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto p-1 sm:grid sm:grid-cols-5 lg:w-auto lg:inline-grid">
+            <TabsTrigger value="profile" className="flex shrink-0 items-center gap-2">
               <User className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Profile</span>
+              <span>Profile</span>
             </TabsTrigger>
-            <TabsTrigger value="subscription" className="flex items-center gap-2">
+            <TabsTrigger value="subscription" className="flex shrink-0 items-center gap-2">
               <Crown className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Subscription</span>
+              <span>Subscription</span>
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="flex items-center gap-2">
+            <TabsTrigger value="notifications" className="flex shrink-0 items-center gap-2">
               <Bell className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Notifications</span>
+              <span>Notifications</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="flex items-center gap-2">
+            <TabsTrigger value="security" className="flex shrink-0 items-center gap-2">
               <Shield className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Security</span>
+              <span>Security</span>
             </TabsTrigger>
-            <TabsTrigger value="accessibility" className="flex items-center gap-2">
+            <TabsTrigger value="accessibility" className="flex shrink-0 items-center gap-2">
               <Accessibility className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Accessibility</span>
+              <span>Accessibility</span>
             </TabsTrigger>
           </TabsList>
 

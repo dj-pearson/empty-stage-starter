@@ -347,6 +347,20 @@ jobs:
           E2E_TARGET: dist
           E2E_DIST: dist-e2e
 
+      # US-768. The a11y scan above runs at desktop width, so a defect that only
+      # exists on a phone is invisible to it -- the settings tabs hid every
+      # label below 640px and left five buttons whose only content was an
+      # aria-hidden icon, and the desktop scan reported that page clean.
+      # A gate that only ever looks at one viewport is not looking at the phone.
+      - name: Phone-width checks on the authenticated pages
+        run: |
+          node scripts/dev/fake-postgrest.mjs &
+          sleep 2
+          npx playwright test --project=chromium tests/responsive/
+        env:
+          E2E_TARGET: dist
+          E2E_DIST: dist-e2e
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
