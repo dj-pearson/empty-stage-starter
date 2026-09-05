@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
@@ -128,13 +128,6 @@ beforeEach(() => {
     value: { ...window.location, origin: "https://app.test", href: "" },
   });
 });
-
-/** The body Pricing.tsx sends for a given plan and interval. */
-function checkoutBody(): Record<string, unknown> {
-  const call = invokeEdgeFunction.mock.calls.find((c) => c[0] === "create-checkout");
-  expect(call, "no create-checkout call was made").toBeTruthy();
-  return (call![1] as { body: Record<string, unknown> }).body;
-}
 
 function renderPricing(Pricing: React.ComponentType) {
   // SEOHead renders react-helmet-async, which throws on an absent context and
