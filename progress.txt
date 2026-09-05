@@ -1158,3 +1158,940 @@ Full suite after all four: 1946 passed, 3 skipped, 146 files.
     build their payloads field-by-field, and updateRecipe strips it from local
     state so a later edit cannot re-send stale rows.
 ---
+
+## 2026-09-03 - Web platform roadmap survey (no story; backlog edit)
+- Survey of main at deb2c1c across ios/, src/, supabase/, CI and the three
+  PRD files, written up in docs/web-platform-roadmap-2026-09.md.
+- prd.json gains US-760 to US-790 (31 stories) for the findings no PRD held:
+  the two Supabase-backed CI jobs red on main since run 782, stale types.ts
+  (~63 tables untyped), the skipped-but-green Cloudflare deploy, develop stale
+  since 2026-07-02, Playwright never run in CI, the unregistered service
+  worker, eight alias routes remounting the Dashboard shell, ~10k lines of
+  unreferenced components, no bundle gate, no entitlement gating on either
+  client, and the ledger drift and dark-launch checks the kitchen-loop spec
+  requires.
+- Notes appended (no AC changes) to prd.json US-570/648/706/707/708,
+  household-planner US-720/723/730/738/739/741/755 and kitchen-loop
+  US-664/671/676 to cross-reference the new stories.
+- scripts/ralph/verify-stories.mjs: new ids added to the WEB and MANUAL sets
+  so the iOS gate default cannot flip them.
+- Verified: check-invisible-chars clean, verify-stories dry run classifies all
+  31 (21 web, 10 manual), no duplicate ids, prd.json open count 18 -> 49.
+
+## 2026-09-03 - US-765 (register the service worker)
+- public/sw.js (407 lines), public/offline.html and registerServiceWorker() in
+  src/lib/pwa.ts were all complete and finished, and no file in src/ imported
+  @/lib/pwa. Nothing had ever registered a worker, so the entire PWA layer was
+  inert: no offline cache, offline.html unreachable, and the manifest's POST
+  share_target advertising an endpoint no CDN can serve. The whole feature was
+  one missing import, which is exactly why nobody found it -- every file
+  involved reads as working code.
+- src/lib/swRegistration.ts (new) holds the policy: isServiceWorkerEnabled()
+  and unregisterServiceWorkers(). main.tsx calls registerServiceWorker() after
+  first render, gated on import.meta.env.PROD.
+- The kill switch UNREGISTERS rather than declining to register. A service
+  worker outlives the page that installed it, so removing the call from
+  main.tsx would fix nothing for a browser that already has one -- the worker
+  is what decides whether the fix is even fetched. This is the part that makes
+  "turn it off without a deploy" true rather than aspirational.
+- The flag is read from the eatpal_feature_flags localStorage cache that
+  useFeatureFlag and the admin FeatureFlagDashboard already share, key
+  pwa_service_worker. The 5-minute TTL that hook applies is deliberately
+  IGNORED here: an off that expires back on five minutes later is not a kill
+  switch. Off is sticky, on is the default, and every unreadable-storage path
+  fails open so a browser blocking storage does not lose the PWA.
+- sw.js cache name is now 'tryeatpal-' + SW_BUILD_ID, stamped by the new
+  scripts/build/stamp-sw.mjs during npm run build from a sha256 of the
+  dist/assets filenames. Vite copies publicDir verbatim, so nothing in the
+  normal pipeline could vary it and every deploy had reused 'tryeatpal-v1' --
+  the activate handler found no old cache to delete and a returning visitor
+  kept being served the previous build's JS out of a cache-first strategy.
+- Verified end to end: `npx vite build && node scripts/build/stamp-sw.mjs`
+  produced tryeatpal-ac8d6961cdc3, and a second run of the script exits
+  non-zero rather than silently no-opping.
+- tests/pwa-offline.spec.ts (new, 5 Playwright tests) run green against the
+  built dist, serially and in parallel: install + versioned cache name, the
+  offline fallback, the kill switch, the share-target POST, and the activation
+  sweep. Not in CI yet -- wiring Playwright up is US-764.
+- Files: src/lib/swRegistration.ts (new), src/lib/swRegistration.test.ts (new,
+  14 tests), src/lib/swBuildStamp.test.ts (new, 14 tests),
+  scripts/build/stamp-sw.mjs (new), scripts/build/stamp-sw.d.mts (new),
+  tests/pwa-offline.spec.ts (new), src/lib/pwa.ts, src/main.tsx,
+  src/pages/Dashboard.tsx, public/sw.js, package.json,
+  public/site.webmanifest (deleted).
+- Gates: 2834 vitest passed / 3 skipped (up 28), lint 1218 at baseline.
+- **Learnings for future iterations:**
+  - TWO BUGS IN sw.js, both found by writing the browser test rather than by
+    reading the file. First: the activate handler deleted every cache whose
+    name differed from CACHE_NAME, which included share-target-cache -- so a
+    share arriving around an activation was destroyed before ShareTarget could
+    read it. Versioning the cache name would have made that fire on EVERY
+    deploy, so the fix had to land in the same change. It is now a KEEP set.
+    Second: SHARE_CACHE was declared twice.
+  - `window.addEventListener('load', ...)` is wrong the moment registration
+    moves later in the boot. A listener added after the load event has fired
+    never runs, so the worker would have silently failed to register on
+    exactly the fast loads it helps most. pwa.ts now checks
+    document.readyState first.
+  - In Playwright, `registration.active` is NOT the same as
+    `navigator.serviceWorker.controller`. sw.js calls clients.claim() in
+    activate and that resolves asynchronously, so a page can have an active
+    worker that is not yet intercepting its fetches. Two of the five tests
+    failed on this and both looked like source bugs: the share POST reached
+    the static server, which answered with the SPA fallback, so the request
+    "succeeded" and the cache was empty; and the offline navigation hit
+    Chromium's own error page (an empty body) instead of the fallback. Wait
+    for the controller whenever the assertion is about interception.
+  - A test that polls one half of an async cleanup reads the other half
+    mid-flight. unregisterServiceWorkers() removes registrations then deletes
+    caches; polling only the registration count saw caches that were about to
+    go. One waitForFunction covering both.
+  - LATENT, NOT FIXED HERE: cache.addAll(STATIC_ASSETS) in the install handler
+    is atomic. All seven assets exist in dist today, but if any one of them
+    404s the whole call rejects and NOTHING is cached, including offline.html
+    -- the offline page would silently stop existing while the worker still
+    installed and reported healthy. Worth caching them individually.
+  - `test-results/.last-run.json` is git-tracked, so any local Playwright run
+    dirties the tree. Worth adding test-results/ to .gitignore.
+
+## 2026-09-03 - US-764 part 1 (make the Playwright suite runnable)
+- The roadmap survey recorded 28 spec files sitting outside CI as "unrealized
+  value". That framing was wrong and the correction is the finding: the suite
+  could not have been switched on, because it did not run at all.
+- TWO structural blockers, both found by running it rather than reading it:
+  1. tests/mobile-responsive.spec.ts called `test.use({ ...devices[...] })`
+     inside a test.describe. devices[] carries defaultBrowserType, which forces
+     a new worker, and Playwright rejects that outright. It is a COLLECTION
+     error, so it aborted the whole run before a single spec in ANY file
+     executed. Two lines made `npx playwright test` unusable repo-wide.
+  2. 20 of the 28 specs declared their own
+     `const BASE_URL = 'http://localhost:8080'` and navigated to it directly,
+     ignoring the baseURL playwright.config.ts sets. The config's webServer
+     starts serve-dist on 4173 under E2E_TARGET=dist, so every one of those
+     specs got ECONNREFUSED. Wiring the suite into CI would have failed
+     instantly and taught nobody anything.
+- Fixes: tests/helpers/base-url.ts is now the single definition of the target
+  and playwright.config.ts imports it, so the port cannot drift between the
+  server the config starts and the URL the specs use. Specs navigate with
+  relative paths and let the config resolve them; only performance.spec.ts and
+  subscription-flow.spec.ts still import BASE_URL, for a page.request.get of an
+  asset and for the `url:` field of mocked route fulfilments, which genuinely
+  need an absolute URL. mobile-responsive destructures defaultBrowserType away
+  and keeps the viewport fields.
+- Artifact hygiene: playwright-report/index.html and test-results/.last-run.json
+  were git-tracked with no .gitignore entry, so any local run dirtied the tree
+  and one machine's report overwrote another's. Both untracked; test-results/,
+  playwright-report/ and a11y-results/ ignored.
+- Before: 0 tests executed (collection aborted). After: the suite collects and
+  runs. Full pass/fail sweep against a built dist/ is still in flight; the CI
+  job in part 2 will name only the specs that actually pass, and tag the rest.
+- Files: tests/helpers/base-url.ts (new), playwright.config.ts, 20 spec files
+  under tests/, .gitignore.
+- Gates: lint 1218 at baseline, invisible-char scan clean. vitest untouched by
+  this change (no vitest test reads playwright.config.ts or tests/helpers).
+- **Learnings for future iterations:**
+  - A Playwright collection error is silent about its blast radius. The output
+    names one file and one line; what it does not say is that no other file ran
+    either. If a suite reports far fewer tests than it has, look for a collect
+    failure before assuming the specs are skipped.
+  - `test.use({ ...devices['iPhone 13'] })` is only legal at the top level of a
+    file. Inside a describe, spread the device but drop defaultBrowserType.
+  - A spec that hardcodes its own base URL silently opts out of every
+    environment switch the config offers. Grep for `localhost:` in a spec
+    directory before believing a suite is portable.
+
+## 2026-09-03 - US-764 part 2 (the E2E job, and what the suite actually says)
+- With the suite runnable (part 1), the first full sweep against a built dist/
+  gave the real picture: 123 passed, and the failures fall into three kinds
+  that need three different answers. Guessing which was which from the file
+  names would have been wrong in both directions.
+- KIND 1, needs a live backend (15 files, ~207 tests): auth, dashboard,
+  ai-features, critical-flows, grocery-list, insights, kids-management,
+  meal-planning, meal-plan-workflow, pantry, recipes, settings,
+  subscription-flow, payment, onboarding. Every one dies at the same login
+  step against a dist/ built without credentials, so they would have produced a
+  permanently red job saying nothing about the change under review. They now
+  skip through tests/helpers/requires-backend.ts with an explicit reason, and
+  run under E2E_BACKEND=1. Note this contradicts US-764's own AC, which names
+  auth, onboarding, meal-planning, grocery-list, pantry and recipes as the
+  specs the job should run: the story was written from the survey, before
+  anyone had run them, and those six are exactly the ones that cannot pass
+  without a Supabase session. Implemented the intent, not the letter.
+- KIND 2, test bugs against working pages (3, all fixed): landing's hero
+  locator '[data-testid="hero"], .hero, section' resolved .first() to sonner's
+  HIDDEN notification <section>; navigation's 404 assertion matched three
+  elements and failed strict mode against a 404 page that renders perfectly;
+  and picky-eater-quiz requested /quiz, which does not exist -- the route is
+  /picky-eater-quiz.
+- KIND 3, a real product defect, left red on purpose: the homepage meta
+  description is 214 characters against Google's ~160 truncation, so the last
+  quarter of it never appears in a search result. Source is
+  src/lib/seo-config.ts:83. NOT fixed here: that is homepage marketing copy and
+  the call belongs to Dj, not to a CI story. A shorter on-message variant
+  already exists at seo-config.ts:106 (123 chars) if it helps.
+- The job runs tests/*.spec.ts only. tests/functions/** drives DEPLOYED edge
+  functions over the network and already runs in types-and-functions;
+  tests/accessibility/ is left to US-778, which owns the axe threshold -- it
+  currently has 12 genuine violations and folding them in here would have
+  buried this job in noise it does not own.
+- It runs against the dist/ artifact the build job already produced, not a
+  rebuild. An e2e job testing a different artifact from the one that deploys is
+  worse than no job.
+- Final state, exactly as CI will run it: 70 passed, 207 skipped, 1 failed
+  (the meta description). continue-on-error until 2026-09-17, named in the
+  workflow so a non-blocking job cannot quietly stay non-blocking forever.
+- Files: .github/workflows/ci.yml (new e2e job),
+  tests/helpers/requires-backend.ts (new), src/lib/ciGatesWired.test.ts
+  (4 new assertions), 15 spec files guarded, 3 spec files fixed.
+- Gates: 2838 vitest passed / 3 skipped (up 4), lint 1218 at baseline,
+  invisible-char scan clean.
+- **Learnings for future iterations:**
+  - `if (await thing.isVisible())` around an assertion is not a test. Five of
+    the six picky-eater-quiz tests requested a URL that 404s and still passed,
+    because their assertions sat behind that guard and quietly did nothing.
+    Only the one test that asserted unconditionally caught the wrong route.
+    Grep for that pattern before trusting a green spec file.
+  - A story's AC can be wrong when it was written from a survey rather than
+    from a run. US-764 named six spec files to put in CI; all six need a
+    backend. Reading the AC literally would have produced a job that was red
+    forever and looked deliberate.
+  - Playwright strict mode turns a loose text locator into a failure the moment
+    a page renders MORE of what you asked for. Two "failures" here were pages
+    working better than the selector expected.
+
+## 2026-09-03 - US-766 (collapse the alias routes) + a US-765 bug fixed
+- Eight top-level URLs (/kids, /pantry, /recipes, /grocery, /food-tracker,
+  /meal-builder, /insights, /sibling-meal-finder) each mounted a SECOND copy of
+  the Dashboard shell plus its page. /pantry and /dashboard/pantry were two
+  React trees with separate state: a filter set on one did not exist on the
+  other. US-719 found exactly this for /planner, fixed that one route, and left
+  the other eight standing -- which is why this is pinned by a test rather than
+  trusted to the diff.
+- src/lib/routeAliases.ts is the single list, consumed by App.tsx (which now
+  renders them from a map), by the test, and by the assertions that keep them
+  out of the prerender list. All nine including /planner go through it now, so
+  the US-719 special case is gone.
+- No ProtectedRoute on the redirects: the canonical route is already guarded,
+  so an unauthenticated visitor redirects and then bounces to /auth from there.
+- public/_redirects gains a 301 per alias so a bookmark resolves in one hop at
+  the edge instead of booting the app to bounce. The pre-existing trailing-slash
+  rules (/kids/ -> /kids) pointed at the alias and would now chain through two
+  301s; they point at the canonical target instead.
+- In-app links rewritten: Recipes.tsx and Kids.tsx linked /sibling-meal-finder,
+  QuickActionsMenu.tsx navigated to five aliases.
+- Files: src/lib/routeAliases.ts (new), src/lib/routeAliases.test.ts (new, 25
+  tests), src/App.tsx, public/_redirects, src/pages/Recipes.tsx,
+  src/pages/Kids.tsx, src/components/QuickActionsMenu.tsx.
+
+### A bug in US-765, shipped an hour earlier and fixed here
+- scripts/build/stamp-sw.mjs hashed `readdirSync('dist/assets')` to build the
+  service worker cache id. Vite writes dist/assets/{js,css,fonts}/, so that
+  returned exactly ["css","fonts","js"] -- three directory names identical in
+  every build ever produced. The id was a CONSTANT, so the cache name never
+  changed and the whole point of US-765's versioning was defeated while the
+  build printed a plausible-looking hash each time.
+- Caught by accident: rebuilding after the App.tsx change and noticing the
+  printed id had not moved (ac8d6961cdc3 both times). Now walks recursively --
+  744 files, id e749e17bc710, and it moves when any content hash does.
+- **Learnings for future iterations:**
+  - The unit tests passed the whole time because they fed buildIdFromAssets a
+    hand-written flat list of filenames. The directory walk the CLI actually
+    used had NO test. A pure function tested with tidy fixtures says nothing
+    about the impure caller that feeds it real data -- and the seam between
+    them is exactly where this bug lived.
+  - "The script ran and printed a hash" is not evidence it computed the right
+    hash. The verification that mattered was cheap and I did not do it at the
+    time: change a source file, rebuild, check the id CHANGED. A hash that
+    never varies looks identical to a hash that works until you vary the input.
+  - Deleting a route is not enough; the links pointing at it have to move too,
+    or the redirect just becomes the path everyone takes. grep for `to="`,
+    `href=` and `navigate(` per alias, not only for the route definition.
+  - The runtime proof of the alias fix needs an authenticated session (both the
+    alias and the canonical route redirect to /auth when signed out), so the
+    assertions here are source-level: no `path="/alias"`, exactly one
+    `<Dashboard />` mount. Nine mounts was the bug; the count is the invariant.
+
+## 2026-09-03 - US-771 (unreachable components: a gate, and 29 deletions)
+- Deleted 28 components + src/pages/Index.tsx, 7334 lines, none of which had a
+  test or an importer: Navigation (a third complete nav tree beside AppSidebar
+  and the Dashboard mobile nav), AccessibleNav, CardNav, the AccessibleFormField
+  /Table/Loading family, LqipImage, GroceryDeliveryPanel, UserLoginHistory,
+  ReferralDashboard, AICostDashboard, BackupSettings, AnimatedFormInputs,
+  ReportHistory, SuccessAnimations, DataImportDialog, GestureTutorial,
+  ContextualHelp, ProcessSteps, Card3D, Card3DTilt, TrustBadge,
+  RecipeNutritionCalculator, SessionTimeoutWarning, SocialShareButtons,
+  SocialShare, WaitlistForm, SafeHTML.
+- scripts/ci/check-orphan-components.mjs is the gate, wired into the quality job
+  beside check-jsx-imports.mjs, which guards the opposite direction.
+- 45 files stay, allowlisted with the story that resolves each: US-727 (5 dead
+  planner components), US-734 (3 recipe ones, incl. RecipeExportActions which
+  that story MOUNTS rather than deletes), US-753 (EmptyState), US-752
+  (CollaborativeShoppingMode), US-741 (QuickActionsMenu), US-725
+  (SwapMealDialog, DetailedTrackingDialog), US-769 (billing/ and subscription/).
+- Gates: 2867 vitest passing, build clean, lint 1218 -> 1185 (baseline lowered
+  to lock it in), jsx-import and invisible-char scans clean.
+- **22 files are unreachable with NO story, and need an owner decision.** The
+  big one is a whole admin cluster of 11: AIModelManager, AITicketAnalysis,
+  ActivityTimeline, AdminControlPanel, BudgetAnalyticsDashboard, CRMIntegration,
+  CustomerHealthDashboard, EmailSequenceBuilder, KnowledgeBaseManager,
+  QuizAnalyticsDashboard, StorageManagement, WorkflowBuilder. Plus
+  blog/BlogPostTemplate, blog/ReadingProgress, AnimatedSection,
+  BarcodeScannerScreen, HarmonizedFoodDisplay, KidMealVoting, MealVotingCard,
+  NotificationPreferencesDialog, StructuredIngredientsEditor, WeeklyReportCard.
+  Not deleted here: an admin surface that large is a product question, not a
+  cleanup one. Note admin/StorageManagement.tsx was BUILT for US-643 and has its
+  own passing test, and is mounted nowhere -- so that story's UI shipped
+  unreachable.
+- **Learnings for future iterations:**
+  - "Has an importer" is the wrong question; reachability from src/main.tsx is
+    the right one. The first version of this script counted direct importers,
+    reported 56 orphans, and missed all five files in src/components/billing/ --
+    they are imported by billing/index.ts, a barrel nothing imports either. A
+    ring of dead files that reference each other keeps every member "imported"
+    forever. Rewriting it as a walk from the entry point found 74.
+  - The same trap caught an earlier survey in this branch, which recorded that
+    "only UsageMeter.tsx is used" in src/components/subscription/. UsageMeter is
+    imported solely by UsageDashboard, which is itself dead. All five are dead.
+  - A passing test is not evidence a component ships.
+    src/components/HarmonizedFoodDisplay.test.tsx and
+    admin/StorageManagement.test.tsx both pass against components nothing
+    renders. Tests keep dead code looking alive, and they are why deleting it
+    feels risky when it is not.
+  - Deleting dead code moved the lint count by 33 with zero behaviour change,
+    which is a fair measure of what it was costing every ratchet run.
+
+## 2026-09-03 - Correction: the typecheck ratchet is green, not red
+- The 2026-09-02 entry above records a full tsc -b measuring 1400 errors on
+  origin/main against a 1165 baseline, and concludes the ratchet "exits 1 on an
+  untouched checkout of main" and is therefore a hard gate that is failing.
+  That does not reproduce.
+- Three measurements on this branch, each after `rm -f *.tsbuildinfo`:
+    before US-771   1158  (baseline 1165, ratchet PASSES, ~25 min)
+    after  US-771   1152  (baseline 1165, ratchet PASSES)
+  and CI run 800 on deb2c1c reported its Typecheck ratchet step green.
+- Two claims made earlier in this branch on the strength of the 2026-09-02
+  entry were therefore wrong, and one of them is in a pushed commit message
+  (the US-765 commit body says the ratchet "is red on an untouched main" and
+  "does not finish in this container"). Both halves are false: it finishes in
+  about 25 minutes and it passes. Recorded here because the commit cannot be
+  amended without rewriting pushed history.
+- Baselines lowered to lock in the US-771 win: typecheck 1165 -> 1152, lint
+  1218 -> 1185.
+- prd.json US-790 and prd-household-planner US-755 both had notes telling
+  whoever picked them up to explain the 1400 gap first; both are updated with
+  these measurements. US-790 is now close to closeable as not-reproducible.
+- **Learning:** repeating a measurement out of a previous progress entry is not
+  measuring. The 1400 figure was recorded carefully, with a method described in
+  detail, and it still did not survive a re-run. A number that gates work is
+  worth re-taking before it is used to justify skipping a gate -- which is
+  exactly what it was used for here.
+
+## 2026-09-03 - US-775 (bundle-size budget)
+- scripts/ci/check-bundle-budget.mjs gzips every file in dist/assets/js and
+  compares the entry chunk, each named vendor chunk and the total against
+  .ci/bundle-budget.json. Wired into the Build job right after npm run build.
+- Measured 2026-09-03: 320 files, 2617.3 kB gzipped. Budgets are measured + 5%
+  with a 2 kB floor. .ci/bundle-budget.md carries the table and the reasoning.
+- Proven non-vacuous: setting the vendor-swagger budget to 1 kB makes it exit 1
+  with the overage named; restoring it passes.
+- rollup-plugin-visualizer was NOT added -- the existing analyze:bundle script
+  already runs `npx vite-bundle-visualizer`, so the AC's requirement is met
+  without a new dependency.
+- What the numbers say, all four with an open story: vendor-swagger is 291 kB
+  gzipped for ONE page (/api/docs); three.js core+eco is 223 kB for one landing
+  hero on a beta @react-three/fiber; gsap is 58 kB sitting beside framer-motion,
+  which is already loaded. US-772 and US-727 between them would take roughly
+  570 kB off the total, over a fifth, without touching product code.
+- Files: scripts/ci/check-bundle-budget.mjs (new),
+  scripts/ci/check-bundle-budget.d.mts (new), .ci/bundle-budget.json (new),
+  .ci/bundle-budget.md (new), src/lib/bundleBudget.test.ts (new, 9 tests),
+  .github/workflows/ci.yml.
+- Gates: 2880 vitest passing, lint 1185 at baseline, orphan and invisible-char
+  scans clean.
+- **Learnings for future iterations:**
+  - Vite content hashes are base64url and CONTAIN hyphens
+    (vendor-supabase-Dx3Vi-Xp.js). Two plausible ways of stripping the hash off
+    a chunk name both failed, and both failed SILENTLY:
+    `-[A-Za-z0-9_-]{8,}$` is greedy from the first hyphen because the class
+    holds one, so vendor-swagger-B_m6f195 became `vendor`, failed the vendor-
+    prefix filter, and the generated budget covered the entry chunk ALONE;
+    `-[^-]+$` left the fragment `Dx3Vi` in the key, which would never match
+    again on the next build. Anchoring to Vite's exact 8-char hash is what
+    works. Both wrong versions printed a cheerful summary line and exited 0.
+  - This is the third bug in this branch of the same shape: a script that runs,
+    prints something plausible, and measures the wrong thing (the sw stamp
+    hashing directory names; the orphan checker counting direct importers; this
+    one). Generating the artifact is not verifying it. The cheap check each
+    time was to look at the output and ask whether the CONTENT is what I meant,
+    not whether the command exited 0.
+  - Round budgets need an absolute floor, not just a percentage. 5% of 1 kB is
+    50 bytes, and a gate that fails on 50 bytes of noise gets --update'd until
+    it stops meaning anything.
+
+## 2026-09-03 - US-777 (one grocery row builder)
+- src/lib/groceryRow.ts exports buildGroceryRow(draft, ctx), typed as
+  Database['public']['Tables']['grocery_items']['Insert']. Both insert paths in
+  GroceryContext call it; the two hand-written field lists are gone and the file
+  drops from 375 to 345 lines.
+- The two paths were STILL out of step when this landed, which is the finding:
+  addGroceryItem carried neither priority, price_per_unit nor added_by_user_id,
+  while addGroceryItemsMerged carried all three. Setting a priority on a single
+  add lost it; the same field survived a bulk add. That is the third time this
+  seam has dropped columns -- US-713 (grocery_list_id, auto_generated,
+  source_plan_entry_id) and US-714 (brand_preference, barcode, priority,
+  price_per_unit) each restored a different set through a different door.
+- Typing the return as the generated Insert row makes an unknown column a
+  compile error instead of a value PostgREST discards, and a missing required
+  column a compile error instead of a runtime rejection.
+- Two behaviour fixes fell out of unifying them: quantity now uses `?? 1`
+  instead of `|| 1`, so a deliberate 0 is no longer rewritten to 1, and
+  added_by_user_id defaults to the acting user on both paths.
+- Files: src/lib/groceryRow.ts (new), src/lib/groceryRow.test.ts (new, 14
+  tests), src/contexts/GroceryContext.tsx.
+- Gates: 2894 vitest passing, lint 1185 at baseline, scoped tsc clean,
+  invisible-char scan clean.
+- **Learnings for future iterations:**
+  - The columns the builder OWNS (user_id, household_id, added_by_user_id) are
+    the ones that diverged, not the ones the caller passes. A caller forgets a
+    field once; a hand-written allowlist forgets it on every call forever.
+  - `|| 1` on a quantity and `if (item.x)` on an optional column are the same
+    mistake: both treat a falsy-but-real value as absent. The builder omits on
+    undefined and null only, so 0 and false survive.
+  - The test that matters is the everything-set one -- a draft carrying every
+    optional column, asserting each survives. Both previous regressions would
+    have failed it, and neither was caught by the tests that existed.
+
+## 2026-09-03 - US-785 (the ledger dark-launch becomes measurable)
+- Kitchen-loop US-671 compares the ledger against foods.quantity while the flag
+  is OFF and reports through logger.warn. In production that is a Sentry
+  breadcrumb, and a breadcrumb only transmits ATTACHED TO A CAPTURED ERROR --
+  so on a household where nothing crashes, the comparison ran, disagreed, and
+  told nobody. "What fraction of households agree" was unanswerable, which is
+  precisely the gate household-planner US-739 AC 6 puts on flipping the flag.
+- New table public.stock_comparison_samples (migration 20260903000000), one row
+  per distinct comparison run: household, item and stock-row denominators,
+  divergence count, per-kind counts, the capped per-item detail as jsonb, and
+  the app version. RLS on, household-scoped, INSERT and SELECT only -- append
+  only, deliberately: a client that can rewrite its own measurements can make
+  the agreement rate say anything, and this table exists to be the thing a
+  release decision is checked against.
+- src/lib/stockComparisonSample.ts holds the pure builder and the dedupe
+  signature. AppContext records through it on BOTH branches of the comparison.
+- supabase/diagnostics/us-785-stock-comparison.sql answers the headline rate,
+  the rate excluding the two kinds that are not the ledger being wrong, per
+  household latest, kind breakdown, top divergent items, and rate over time by
+  build.
+- Files: supabase/migrations/20260903000000_stock_comparison_samples.sql (new),
+  supabase/diagnostics/us-785-stock-comparison.sql (new),
+  src/lib/stockComparisonSample.ts (new), src/lib/stockComparisonSample.test.ts
+  (new, 14 tests), src/contexts/AppContext.tsx.
+- Gates: 2908 vitest passing, lint 1185 at baseline, migration prefix and
+  safety gates pass, invisible-char scan clean.
+- **Learnings for future iterations:**
+  - The agreeing case is the one that was not being recorded. AppContext had
+    `if (summary.total === 0) return;` -- an early return that skipped the
+    numerator of the rate it was collecting. Telemetry that only fires on
+    failure cannot produce a rate, only a count of failures, and the two are
+    easy to confuse when reading the code.
+  - The divergence COUNT must come from the summary and not from the capped
+    detail array. Taking `.length` of the capped list would record a household
+    diverging on 120 rows as diverging on 50, and the error flatters the
+    number in exactly the direction that argues for flipping the flag.
+  - scripts/ci/check-migration-safety.sh is diff-scoped as
+    `git diff origin/main...HEAD`, so it reports "No new migrations on this
+    branch" for a migration that is only STAGED. It has to be committed before
+    the gate sees it. Worth knowing before concluding a migration passed.
+
+## 2026-09-03 - US-778 (accessibility behind the login) + the fixture that unblocks it
+- REORDERED ahead of US-767/768 on purpose. Those are p2 and this is p3, but
+  every remaining responsive story needs to see an authenticated page in a
+  browser, and nothing could: ProtectedRoute redirects to /auth and 15 spec
+  files were skipped for exactly that reason. This story owns the fixture, so
+  doing it first unblocks the rest rather than shipping UI changes nobody can
+  verify.
+- tests/helpers/auth.ts writes a supabase-js session into localStorage under
+  the client's storageKey ('sb-auth-token') via addInitScript, BEFORE the app
+  boots. No login form is driven: supabase-js restores its session from storage
+  synchronously on construction and only talks to GoTrue afterwards, so this is
+  both simpler and far more stable than typing into a form and racing a
+  redirect.
+- scripts/dev/fake-postgrest.mjs gains /auth/v1/user, /auth/v1/token and
+  /auth/v1/logout. It already returned [] for any unknown table, so PostgREST
+  reads needed nothing. It validates no token and is not meant to: it is a
+  stand-in for a backend, on 127.0.0.1 only.
+- THE CATCH, which cost a wrong first run: the default dist/ is built WITHOUT
+  Supabase credentials, so src/integrations/supabase/client.ts instantiates a
+  MOCK client. A mock has no session to restore no matter what is in storage,
+  so the first spike redirected to /auth and looked like the fixture was
+  broken. Authenticated runs need their own build against the fake backend --
+  hence E2E_DIST and the dist-e2e tree.
+- MEASURED, first ever scan of these pages (serious + critical axe nodes):
+    dashboard 20, grocery 19, recipes 16, kids 16, pantry 15, settings 15,
+    planner 14.
+  Every one included exactly ONE critical button-name: the floating action
+  button in src/components/ui/QuickActionMenu.tsx, icon-only with no
+  accessible name, rendered by the Dashboard shell on every page. One control,
+  seven pages. Fixed with aria-label + aria-expanded; all seven button-name
+  violations gone, counts now 19/18/15/15/14/14/13.
+- What remains is almost entirely color-contrast, and it is a PALETTE decision
+  rather than a code fix: the brand orange #f97015 on the #faf8f5 app
+  background measures 2.69:1 against a 4.5:1 AA requirement, and white on that
+  orange is 2.85:1. That is the active nav labels and every primary button.
+  NOT changed here -- it would alter the look of the whole product and belongs
+  to Dj. Recorded in the baseline file so it cannot be forgotten.
+- The compliance audit's "~109 nameless icon buttons" did not reproduce: a
+  static scan of seven pages found one. The rest are presumably inside dialogs
+  and menus axe never opens, which is worth knowing before anyone budgets that
+  number as work.
+- Files: tests/helpers/auth.ts (new),
+  tests/accessibility/authenticated-a11y.spec.ts (new, 7 tests),
+  tests/accessibility/authenticated-baseline.json (new),
+  scripts/dev/fake-postgrest.mjs, tests/helpers/base-url.ts,
+  playwright.config.ts, src/components/ui/QuickActionMenu.tsx,
+  src/lib/ciGatesWired.test.ts, .github/workflows/ci.yml, .gitignore.
+- Gates: 2909 vitest passing, lint 1185 at baseline, orphan and invisible-char
+  scans clean, the 7 authenticated a11y tests pass against the measured
+  baseline, and the baseline is proven non-vacuous (setting grocery to 5 fails
+  with the real count).
+- **Learnings for future iterations:**
+  - A build configured differently is a different app. The mock Supabase client
+    is invisible in the source you are reading and decides whether a session
+    can exist at all. Any browser test touching auth needs the build to be
+    pointed at a backend, real or fake.
+  - `npx vite build` is NOT `npm run build`: it skips the prerender and now
+    also the service-worker stamp, so dist/sw.js keeps the literal
+    __SW_BUILD_ID__ placeholder. The US-765 test caught it immediately, which
+    is the gate working, but it means a locally bare-built dist fails a test
+    that CI will pass. Stamp after a bare build or use npm run build.
+  - An a11y threshold of `critical` passes over every nameless control, because
+    axe rates those `serious`. The repo's existing scan was tuned to ignore the
+    defect class the repo actually has.
+  - The single highest-value a11y fix was one shared component. Scanning seven
+    pages and finding the same violation seven times is a strong hint the fix
+    is one file, not seven.
+
+## 2026-09-03 - Owner decisions 2 and 4: meta description, and the brand contrast
+- DECISION (Dj, 2026-09-03): shorten the homepage meta description to the
+  existing 120-char variant, and darken the primary rather than split the token.
+
+### Meta description
+- Was 214 characters against Google's ~155-160 truncation, so the food-chaining
+  explanation and the "Start free" call to action never reached a result. Now
+  120, the variant that already existed for the SoftwareApplication offer.
+- src/lib/seo-config.ts AND index.html both carry it: a test
+  (src/lib/seo-static-head.test.ts) asserts the static head matches the config,
+  and it caught the half-done change immediately. Three tags in index.html --
+  description, og:description, twitter:description.
+- tests/seo.spec.ts is now 13/13; that length assertion had been failing the
+  whole time.
+
+### Brand contrast
+- Light theme --primary went 24 95% 53% -> 38%. NOT 39%: against the real
+  --background (36 33% 97%) 39% measures 4.44:1, just under. 38% gives 4.64:1
+  as text and 4.92:1 for white on top.
+- Dark theme was the OPPOSITE problem and needed the opposite fix. Its lighter
+  orange (60%) already reads 7.25:1 as text on the dark background; what failed
+  was white ON that orange at 2.47:1 -- worse than the light theme ever was, so
+  every primary button was the least readable thing on a dark screen.
+  --primary-foreground there is now the dark background colour: 7.25:1.
+- src/pages/VPAT.tsx:63 published "Text contrast meets 4.5:1 (normal) / 3:1
+  (large) in the default theme", which was untrue -- the default theme's own
+  primary was 2.68:1. Corrected in the same change. The repo has twice had to
+  remediate overstated public claims (invented author credentials, a fabricated
+  aggregateRating); this was the same class, on the page procurement reads.
+- Four accessible-name fixes found by the scan: the Pantry sort Select (a Radix
+  combobox announcing as an unnamed button), two unnamed progress bars in
+  ChildProfileCard, and its per-child Edit button -- that last one renders once
+  per child, so the Kids page had as many nameless controls as the household
+  has children.
+- RESULT, serious+critical axe nodes: dashboard 20->3, planner 14->0,
+  grocery 19->3, recipes 16->1, kids 16->0, settings 15->0, pantry 15->46.
+  ZERO critical violations anywhere now.
+- **The pantry number went UP, and that is the important entry here.** 15 was
+  never real. The first baseline used `await page.waitForLoadState('networkidle')`
+  alone, which on a cold server fires while Pantry is still showing its loading
+  SKELETON -- so the scan measured a page with no content and reported 15. It
+  was stable across repeat runs, which made a timing artefact look like solid
+  data. The spec now waits for main, waits for .animate-pulse to detach, then
+  settles; 46 is the honest figure with the category chips rendered.
+- What remains is entirely colour-contrast on the FOOD-CATEGORY badge palette
+  (white on #5abc7d at 2.31:1, white on #f27978 at 2.65:1, and similar), which
+  is a different palette from the brand primary and needs its own decision.
+  46 of the 53 remaining nodes are on Pantry, which renders every category chip.
+- **Learnings for future iterations:**
+  - Compute contrast against the REAL token, not an approximation. 39% looked
+    fine against a guessed #faf8f5 and failed against the actual 36 33% 97%.
+  - A dark theme is not the light theme with different numbers. Darkening the
+    primary would have FIXED light mode and BROKEN dark mode further; the fix
+    there was the foreground, not the background.
+  - `networkidle` is not "the page has rendered". Any scan or screenshot
+    assertion against this app needs to wait for the skeletons to detach, or it
+    silently measures an empty page and reports a number that repeats.
+
+## 2026-09-03 - Owner decision 1: delete the unwired prototypes
+- DECISION (Dj, 2026-09-03): delete the unreachable prototypes, keep the ones
+  that are wired, file stories for those.
+- Deleted 14 files, 8067 lines. Nine admin (KnowledgeBaseManager 1393,
+  EmailSequenceBuilder 1230, WorkflowBuilder 1208, CRMIntegration 1198,
+  ActivityTimeline, AdminControlPanel, BudgetAnalyticsDashboard,
+  CustomerHealthDashboard, QuizAnalyticsDashboard), two blog (BlogPostTemplate,
+  ReadingProgress), and three others (AnimatedSection,
+  StructuredIngredientsEditor -- superseded by recipes/IngredientRow from
+  US-721 -- and WeeklyReportCard).
+- The four biggest made ZERO Supabase calls and initialised every state array
+  to []. Mounted, they would render empty. That is what made the call easy: not
+  "is this used" but "is there anything behind it".
+- KEPT MORE THAN THE DECISION ALLOWED FOR, in the safe direction, because
+  checking each candidate turned up wiring the summary had not:
+    admin/AITicketAnalysis    reads support_tickets, support_ticket_ai_analysis
+    admin/AIModelManager      reads ai_environment_config, ai_model_configurations
+    admin/StorageManagement   built for US-643, has a passing test
+    NotificationPreferencesDialog  reads notification_preferences, profiles
+    KidMealVoting             reads meal_votes, voting_achievements, profiles,
+                              backed by migration 20251110000004_meal_voting.sql
+    MealVotingCard            the card half of that feature
+    BarcodeScannerScreen      has its own passing test
+    HarmonizedFoodDisplay     has its own passing test
+  Six of those are BUILT FEATURES NEVER MOUNTED, not dead code. They need a
+  story each, which is a different piece of work from a cleanup.
+- The ALLOWED list in check-orphan-components.mjs is rebuilt with a real reason
+  per entry: which story resolves it, or why it is being kept.
+- Gates: 2909 vitest passing, vite build clean, lint 1185 -> 1163 (baseline
+  lowered), jsx-import and invisible-char scans clean, orphan checker green at
+  335 components.
+- **Learnings for future iterations:**
+  - "Unreachable" and "dead" are different questions. Of 22 unreachable files,
+    8 were wired to real tables or carried passing tests. Grepping each
+    candidate for `from('...')` before deleting took a couple of minutes and
+    changed the answer for a third of them.
+  - A component with no Supabase call and every state array initialised to []
+    is a prototype, and that is a much stronger signal than line count. The
+    four largest files in the whole deletion were the emptiest.
+
+## 2026-09-03 - Owner decision 3: US-780's premise was wrong, and there is a billing bug
+- DECISION (Dj, 2026-09-03): the entitlement table is approved. Implementing it
+  turned up that most of it already exists, and that the real defect is
+  elsewhere.
+- A GATING SYSTEM ALREADY EXISTS and has for months: src/lib/featureLimits.ts
+  (checkFeatureLimit + the check_feature_limit RPC), the enforce_plan_row_limit
+  TRIGGER from migration 20260723123300 which is the authoritative gate, and
+  max_children / max_pantry_foods / max_recipes / max_meal_plans columns on
+  subscription_plans. Children and pantry foods are enforced on BOTH client and
+  server. There are seven checkFeatureLimit call sites plus a FeatureGate
+  component.
+- I told Dj "nothing enforces any of it" in the decision brief. That was wrong,
+  and the way it went wrong is the lesson: the survey grepped for isSubscribed,
+  `tier ===` and subscription.status -- the shapes a hand-rolled check would
+  take -- and never for checkFeatureLimit. Searching for the pattern you expect
+  finds only the pattern you expect. The honest search is "what does the insert
+  path actually call", from the write site outwards.
+- **THE REAL BUG: App Store subscribers are gated as free.**
+  enforce_plan_row_limit resolves a plan with
+  `SELECT us.plan_id FROM user_subscriptions us WHERE us.user_id = NEW.user_id`
+  -- user_subscriptions ONLY. A subscription bought in the iOS app lives in
+  apple_subscriptions (migration 20260601000002), and nothing joins the two. So
+  an Apple subscriber resolves to NO plan, falls through to the Free row, and is
+  capped at 1 child and the free pantry size WHILE PAYING. check_feature_limit
+  has the identical blind spot, so the client agrees with the server and nothing
+  looks broken from either side. iOS is the live product; this is billing
+  correctness, not a feature gap.
+- I had written a parallel src/lib/entitlements.ts + useEntitlement.ts + 24
+  tests before finding this, and DELETED them before commit. Shipping a second
+  entitlement system beside a working one is precisely the failure this repo has
+  already paid for three times (three shortfall functions, three grocery insert
+  allowlists, two calendar implementations) and that US-777 existed to undo.
+  The tests were green. Green tests on a duplicate system are worth nothing.
+- docs/entitlements.md now records what exists, the Apple gap with the four
+  StoreKit product ids that need mapping, the agreed table with a per-row
+  status, and the rule that there is ONE entitlement system.
+- prd.json US-780 notes rewritten with the corrected premise and the real
+  remaining scope, in order: join apple_subscriptions into both lookups; gate
+  household-member seats; add a usage counter for the two AI rate limits (no
+  such table exists -- usage_alerts notifies, it does not count); hand iOS the
+  table, since StoreKitService.isSubscribed(to:) still has no call sites.
+- **Learnings for future iterations:**
+  - Before building a system, grep the WRITE PATH, not the concept. `addKid`
+    already called checkFeatureLimit on its second line; one read of the
+    function I was about to modify would have saved the whole detour.
+  - A story's premise can be stale in the direction of "this does not exist"
+    just as easily as "this is broken". US-764's AC was wrong about which specs
+    could run; US-780's was wrong about whether gating existed. Both were
+    written from a survey rather than from the code.
+  - Deleting your own finished, passing work is the right move when it
+    duplicates something that already ships. The sunk cost is the 24 tests, and
+    they were testing a module that should not exist.
+
+================================================================================
+2026-09-03 -- US-780 item (1): a subscriber is a subscriber whichever store they
+bought from. Migration 20260903000001_apple_subscribers_count_as_paid.sql.
+================================================================================
+
+- SCOPE WAS WIDER THAN THE STORY SAID. The note above framed this as "join
+  apple_subscriptions into both lookups". Grepping every `FROM user_subscriptions`
+  in supabase/migrations found THREE tables that grant entitlement and no
+  function reading more than two of them:
+
+      check_feature_limit (client pre-check)  Stripe only
+      enforce_plan_row_limit (the trigger)    Stripe only
+      get_usage_stats (usage dashboard)       Stripe + complementary, not Apple
+      custom-domain INSERT policies           Stripe only
+
+  So comped users were capped at Free limits by the trigger while their usage
+  dashboard showed the paid plan, and an App Store *Professional* subscriber was
+  refused by the professional_custom_domains RLS policy on a feature they pay
+  for. Fixing only the two the story named would have left the other two to be
+  found separately, which is how this class of bug survives in the first place.
+
+- ONE RESOLVER: public.effective_plan_id(uuid), read by all four. Ordered by
+  GENEROSITY, not by store: someone holding two entitlements at once (a web
+  subscriber who later buys on the phone) must never be handed the smaller, and
+  no source ranking guarantees that. A user with one entitlement has exactly one
+  candidate, so a Stripe subscriber resolves to precisely the plan they did
+  before -- verified, not assumed.
+
+- I VERIFIED THIS AGAINST A REAL POSTGRES instead of shipping unproven SQL.
+  supabase/tests/us780_apple_entitlement{,.bootstrap}.sql stands up the pieces
+  Supabase provides and then applies the REAL migration files unchanged, so the
+  test exercises what ships rather than a hand-written approximation of it.
+  11 cases, each printing EXPECTED beside the value. Measured:
+
+      user shape          kid capacity BEFORE   AFTER
+      free                1                     1
+      stripe Pro          3                     3      <- no regression
+      apple Family Plus   1  (paying!)          unlimited
+      complementary       1  (comped!)          unlimited
+      apple Professional  1  (paying!)          unlimited
+      apple expired       1                     1
+      apple revoked       1                     1
+      stripe canceled     1                     1
+
+  And the suite was run WITHOUT the migration to confirm cases 1, 2, 6 and 11
+  fail there. A test that passes with and without the fix measures nothing.
+
+- CORRECTION TO AN EARLIER ENTRY. I told the user US-784 was blocked because
+  "this container has the psql client but no server binaries". That was wrong.
+  `which initdb` misses them because Postgres 16 lives at
+  /usr/lib/postgresql/16/bin, off PATH; initdb also refuses to run as root, so
+  the cluster needs `su postgres`. There IS a working Postgres 16 here, US-784's
+  "test in a disposable Postgres" AC can be honoured, and it was never blocked.
+
+- NEAR MISS, AGAIN THE SAME SHAPE. My first rewrite of check_feature_limit was
+  written from what the call sites appeared to need and silently dropped the
+  ai_coach daily-usage and food_tracker monthly-usage branches -- both live.
+  Removing working enforcement while claiming to fix entitlement would have been
+  worse than the bug. Fix: copy the original verbatim and change ONLY the lookup
+  block, then PROVE it with a diff. Both copies are pure insertions, 0 lines
+  removed or changed below the lookup, asserted programmatically rather than by
+  eye. get_usage_stats got the same treatment.
+
+- HARDENING FOUND ON THE WAY. effective_plan_id is SECURITY DEFINER and takes a
+  user id, so left executable by PUBLIC any signed-in user could ask which plan
+  anyone else is on, reading apple_subscriptions and complementary_subscriptions
+  straight past their RLS. REVOKEd; its two callers are themselves SECURITY
+  DEFINER and reach it regardless (verified as a non-superuser role, since a
+  superuser would have proved nothing). RLS policies evaluate as the querying
+  user, so they use the argument-free current_user_plan_name() instead, which
+  cannot report on anyone but the caller.
+
+- PRODUCT ID MAPPING IS ORDER-SENSITIVE. 'professional' contains 'pro', so a
+  naive CASE returns Pro for com.eatpal.app.professional.yearly and silently
+  downgrades the most expensive tier. Most-specific-first, and all six ids from
+  StoreKitService.swift are pinned in the test -- read from the Swift file, not
+  from my own earlier note about it.
+
+- LEFT ALONE DELIBERATELY, recorded in docs/entitlements.md: get_usage_stats
+  reports is_complementary=false for comped users (PL/pgSQL `RECORD IS NOT NULL`
+  is true only when EVERY field is non-null, and Family Plus has max_children
+  NULL -- cosmetic, confirmed pre-existing); the Pro seed's max_children=3
+  contradicts the agreed table's "unlimited", which is a pricing data change;
+  can_add_child is Stripe-only and dead.
+
+- **Learnings for future iterations:**
+  - "Fix X" is a claim about scope that deserves one grep before you believe it.
+    `grep -n "FROM user_subscriptions" supabase/migrations/*.sql` took seconds
+    and doubled the size of the real bug.
+  - Two of my "measurements" this session were harness artefacts that looked
+    like findings: a Stripe control that failed because auth.uid() was set to a
+    different user than the row being probed, and a "children.limit=unlimited"
+    for a free user that was just the wrong JSON path. Both would have been
+    reported as bugs if I had not gone back to check why the number was odd.
+    An unexpected result is a reason to doubt the instrument first.
+  - Not having a tool is worth re-checking before repeating the claim. I
+    reported US-784 blocked on a missing Postgres that was installed the whole
+    time, because I tested with `which` instead of looking.
+
+================================================================================
+2026-09-05 -- US-784: nightly ledger drift check.
+Migration 20260905000000_ledger_drift_nightly_check.sql.
+================================================================================
+
+- TWO WRONG PREMISES IN THE STORY, both caught by reading the schema first.
+  (a) The AC says "compares item_stock.quantity". There is no such column: the
+      balance is item_stock.on_hand_canonical, and quantity lives on foods.
+  (b) "A migration adds a SQL function that per item compares..." -- one already
+      existed. rpc_reconcile_item_stock(uuid), from 20260901000002, does exactly
+      that comparison with a well-built FULL OUTER JOIN. It is household-scoped
+      and granted to authenticated, so a nightly sweep cannot use it and must
+      not be reachable by a client (it would report on every household). So:
+      detect_item_stock_drift() alongside it, same join shape, all households,
+      plus the last movement's timestamp/reason/ref_type so the alert can name
+      the writing path. The existing RPC is untouched.
+
+- THE TRAP. admin_alerts is declared TWICE:
+
+      20251013120000_admin_live_activity.sql   alert_type CHECK, 8 values
+      20251220000000_admin_tables.sql          alert_type free text
+
+  Both are CREATE TABLE IF NOT EXISTS, so the EARLIER one wins and the
+  constrained shape is live. I verified it rather than reasoning about it:
+  applied both in order, inserted alert_type='ledger_drift', got
+  "violates check constraint admin_alerts_alert_type_check".
+
+  Un-widened, this story ships a job that raises every single night and the
+  drift it exists to report goes unreported -- the exact failure mode being
+  guarded against, reintroduced by the guard. The migration widens the CHECK
+  and tolerates either shape, so it is a no-op wherever the free-text table won.
+
+- ALERT DESIGN: one unresolved ledger_drift row, UPDATED night after night
+  rather than a fresh row each time -- 30 nights of one unfixed drift should be
+  one dashboard item, not 30 -- and resolved automatically when the drift
+  clears, so a fixed problem stops sitting unread. Bounded 20-row sample in
+  alert_data so a systemic break does not write a megabyte of JSON.
+
+- A TEST THAT PASSED ON EMPTY TABLES, caught by accident. My first fixture used
+  'house000-0000-...' as a household id. 'h', 's' and 'u' are not hex, so every
+  INSERT failed -- and CASE 1 and CASE 2 still printed "0 EXPECTED 0", because
+  zero drifting items is trivially true of three empty tables. It read as two
+  passing cases. Added CASE 0, which asserts the fixtures landed (3 foods / 4
+  movements / 3 stock rows) before anything below it is believed. This is the
+  fifth time this session a thing that ran and printed something plausible had
+  measured nothing.
+
+- AN EXPECTATION I GOT WRONG, which is the point of printing them. I predicted
+  the alert's source summary would read "meal, grocery_item, unknown-source".
+  It read "grocery_item, meal, receipt": every drifting item happened to have a
+  ref_type, so the unknown-source branch was never exercised. The code was
+  right and my prediction was wrong -- but it also meant a live branch had no
+  coverage, so I changed a fixture movement to carry ref_type NULL. An EXPECTED
+  that disagrees with the output is worth reading twice: sometimes it indicts
+  the code, sometimes the test, and here it indicted the coverage.
+
+- Verified against Postgres 16: 11 cases, each printing EXPECTED beside the
+  value; migration replays cleanly (no duplicate constraint); and the suite was
+  run WITHOUT the migration to confirm it is inert there.
+
+- WHAT IS NOT VERIFIED, said plainly: pg_cron is not in the stock postgres:16
+  image and is not installable in this container, so only the ELSE branch of
+  the scheduling block ran (the NOTICE). The schedule itself is unproven here.
+  CASE 10 checks cron.job for the entry and SKIPS when the extension is absent,
+  so running this suite against a Supabase instance proves it. The DO block's
+  shape is copied from 20260709000002_agent_dispatcher_cron.sql, which is
+  scheduling in production, so the risk is low -- but low is not verified.
+
+- **Learnings for future iterations:**
+  - Before writing a function the story asks for, grep for one that already
+    does it. Two stories in a row now (US-780, US-784) asked me to build
+    something that existed; both times the real work was smaller and different.
+  - CREATE TABLE IF NOT EXISTS twice for the same table is not redundancy, it
+    is a coin flip resolved by filename order, and the loser's columns and
+    constraints are fiction. Worth a grep for duplicate declarations of any
+    table a new migration writes to.
+  - A test whose setup silently failed is indistinguishable from a passing
+    test. Assert the fixtures.
+
+================================================================================
+2026-09-05 -- US-779, US-768, US-782, US-772, US-789, US-767, US-770.
+Seven stories in one pass.
+================================================================================
+
+- FIVE OF THE SEVEN STORIES HAD A WRONG PREMISE. That is now the rule rather
+  than the exception, and every one was written from the roadmap survey rather
+  than from the code:
+
+    US-779  "mock create-checkout-session, assert the request carries the price
+            id" -- UpgradeDialog does not call checkout at all (it navigates to
+            /pricing), the function is create-checkout, and the client MUST NOT
+            send a price id: create-checkout reads it from subscription_plans
+            server-side so a caller cannot name a cheaper one (US-326). Writing
+            the AC as specified would have PINNED THE VULNERABILITY. The test
+            asserts the opposite.
+    US-768  Framed as layout. The real defect was accessibility: `hidden
+            sm:inline` on all five tab labels left five aria-hidden icons with
+            no accessible name below 640px.
+    US-772  "so the landing page loads without a 3D engine on a phone" -- the
+            phone already got the CSS version; the 3D branch was desktop-only
+            above 1280px. And "react-icons is removed in favour of lucide-react"
+            cannot be done: its two consumers are the Google and Apple BRAND
+            marks and lucide ships no brand logos on purpose.
+    US-770  "OnboardingProgressBar and OnboardingReengagement read the server
+            column, not localStorage" -- Reengagement already reads it, and
+            ProgressBar does not gate on completion at all. Both use
+            localStorage for a per-device DISMISSAL, which is correct.
+    US-767  "no md: breakpoints, therefore broken at phone width" -- the page
+            does not pan sideways at 390px. The real defect was 35 tap targets
+            at 40-42px and 7 unnamed check-off controls.
+
+- A TEST THAT READ THROUGH `display: none`. US-768's first assertion used
+  getByRole({name}) and allTextContents(), both of which see text inside a
+  display:none element. It PASSED against the broken build. A test for a
+  hidden-label bug that reads hidden labels is worse than no test: it is a
+  green light on the exact defect. Fixed with toHaveAccessibleName, and then
+  measured both ways -- pre-fix build fails, post-fix build passes.
+
+- A PROBE THAT MEASURED AN EMPTY PAGE. US-767's first run reported zero
+  undersized targets, zero unnamed controls and no overflow on the grocery
+  list. scripts/dev/fake-postgrest.mjs answers every table with an empty array,
+  so the page had no rows and a cookie banner was its only heading. With eight
+  grocery items served, the same probe found 35 undersized controls and 7
+  nameless ones. KNOCK-ON: tests/accessibility/authenticated-baseline.json was
+  measured against those same empty screens, so grocery's "3" is 3 violations
+  on an empty list. Worth re-baselining now the fixtures exist.
+
+- A METRIC THAT WAS WRONG ABOUT A CORRECT PAGE. US-768's overflow check
+  compared documentElement.scrollWidth (400) to clientWidth (390) and failed a
+  page where no unclipped element exceeds the viewport and nothing can be
+  panned to -- Chromium folds part of a deliberately-scrollable tab strip into
+  that number. Proved it by walking every element and excluding those clipped
+  by a scrolling ancestor: zero offenders. The assertion now asks the browser
+  to pan and checks scrollX stays 0. The tempting fix was a tolerance, which
+  widens until it measures nothing.
+
+- MUTATION-CHECKED RATHER THAN ASSUMED. US-779: forcing billingCycle, leaking a
+  priceId, dropping the {CHECKOUT_SESSION_ID} placeholder, removing the
+  trackPaidConversion call, and making the dunning banner both absent and
+  unconditional each fail. US-782: recording every attempt instead of rung
+  transitions, counting a partial as a full success, sorting alphabetically,
+  and dropping the two-attempt floor each fail. All 13 US-782 tests passed on
+  the first run, which is exactly when a fixture is most likely to be pinning
+  nothing.
+
+- REAL BUGS FOUND WHILE DOING SOMETHING ELSE:
+  - trackPaidConversion had no caller. paid_conversion was a defined funnel
+    event with no emitter, so the conversion rate read as a flat zero however
+    many people paid. Wired into CheckoutSuccess on the confirmed row.
+  - ManageHouseholdDialog created invite codes through create_household_invite
+    (which writes household_invite_codes) but listed pending invitations from
+    household_invitations, a leftover of the flow US-337 replaced. The code you
+    had just made never appeared and an outstanding one could not be revoked.
+  - The old OnboardingDialog required a child's name at step 1, so a couple
+    planning for themselves could not complete setup without inventing a child.
+
+- MEASURED, NOT CLAIMED: bundle 2617.3 kB gz -> 2390.1 kB, budget 2749 -> 2510.
+  Grocery 35 undersized controls -> 0, 7 unnamed -> 0, same 14 checkboxes still
+  rendering. Settings tabs: accessible-name test fails pre-fix, passes post-fix.
+
+- SCOPE LEFT UNDONE, said plainly rather than quietly dropped: US-767's By
+  Aisle accordions and shopping mode (both want US-757's page split first);
+  US-770's onboarding no longer collects allergens, favourite foods or a photo
+  as the four-step dialog did, and somebody should decide whether to bring any
+  back; US-772's gsap removal (blocked on US-727, the live planner uses it);
+  US-782's AC 1 (the iOS report does not exist yet); US-789's AC 4 (types need
+  credentials this repo does not carry).
+
+- **Learnings for future iterations:**
+  - When a story says a thing is broken, MEASURE IT before fixing it. Three of
+    these stories named the wrong defect on a page that did have one.
+  - A probe against a fixture-less backend measures the fixture, not the page.
+    Assert the fixture rendered before believing any result derived from it.
+  - An assertion that passes against the broken build is not a test. Run every
+    new gate against the code it is supposed to catch, before the fix.

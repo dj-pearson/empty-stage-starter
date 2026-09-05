@@ -1,16 +1,18 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Meal Planning Flow Tests
  * Tests meal planning functionality including calendar, drag-drop, templates
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Meal Planning', () => {
   test.beforeEach(async ({ page }) => {
     // Sign in before each test
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -19,7 +21,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should display meal planner calendar', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
     await expect(page).toHaveURL(/.*planner/);
 
     // Verify week days are visible
@@ -30,7 +32,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should navigate between weeks', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
 
     // Look for navigation buttons
     const nextButton = page.locator('button[aria-label*="next"], button:has-text("Next")');
@@ -44,7 +46,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should add meal to a day', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
 
     // Click on add meal button or meal slot
     const addMealButton = page.locator('button:has-text("Add Meal"), button:has-text("+")').first();
@@ -58,7 +60,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should display meal slots for each day', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
 
     // Check for meal slot labels
     const mealSlots = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -71,7 +73,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should copy meal plan to another week', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
 
     // Look for copy week functionality
     const copyButton = page.locator('button:has-text("Copy"), button:has-text("Duplicate")');
@@ -83,7 +85,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should generate AI meal plan', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
 
     // Look for AI generation button
     const aiButton = page.locator('button:has-text("AI"), button:has-text("Generate"), button:has-text("Auto")').first();
@@ -96,7 +98,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should mark meal as completed', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
 
     // Look for meal items with completion checkbox/button
     const mealItem = page.locator('[data-testid="meal-item"], .meal-entry').first();
@@ -110,7 +112,7 @@ test.describe('Meal Planning', () => {
   });
 
   test('should filter meal plan by child', async ({ page }) => {
-    await page.goto(`${BASE_URL}/planner`);
+    await page.goto('/planner');
 
     // Look for child filter/selector
     const childSelector = page.locator('select, [role="combobox"]').first();

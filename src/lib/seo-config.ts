@@ -79,8 +79,14 @@ export const seoConfig: Record<string, Omit<SEOProps, "children">> = {
     // points", "70%+ prediction accuracy" - was unsourced, and two of them
     // contradicted llms.txt, which simultaneously claimed "over 10,000 families".
     // What replaced them describes what the product does, which is checkable.
+    // 214 characters previously, against Google's ~155-160 truncation point, so
+    // the last quarter -- the whole food-chaining explanation and the "Start
+    // free" call to action -- never reached a search result. This is the
+    // shorter variant that already existed below for the SoftwareApplication
+    // offer; one description, 120 characters, all of it visible. Caught by
+    // tests/seo.spec.ts, which had been failing on the length the whole time.
     description:
-      "AI meal planning for ARFID, extreme picky eating, and autism-related feeding challenges. Built on food chaining, the feeding-therapy method that grows a child's diet by changing one attribute at a time. Start free.",
+      "AI meal planning for ARFID, extreme picky eating, and autism-related feeding challenges, built on food chaining science.",
     // Trimmed from 23 phrases to the handful the page actually targets. Google ignores
     // this tag outright; a 23-term list is only visible to the engines that read it as a
     // keyword-stuffing signal. The long-tail terms belong on the pages that serve them

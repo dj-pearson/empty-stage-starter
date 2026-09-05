@@ -1,4 +1,8 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { BASE_URL } from './helpers/base-url';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Subscription Purchase Flow E2E Tests
@@ -15,7 +19,6 @@ import { test, expect, type Page, type Route } from '@playwright/test';
  * Supabase edge function calls are intercepted to simulate backend responses.
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 // Stripe test card numbers (documented at https://docs.stripe.com/testing)
 const STRIPE_TEST_CARDS = {
@@ -34,7 +37,7 @@ const STRIPE_TEST_CARDS = {
  * Matches the pattern used across existing E2E tests (auth.spec.ts, dashboard.spec.ts).
  */
 async function signIn(page: Page) {
-  await page.goto(`${BASE_URL}/auth`);
+  await page.goto('/auth');
   await page.click('button:has-text("Sign In")');
   await page.fill('input[type="email"]', 'test@example.com');
   await page.fill('input[type="password"]', 'TestPassword123!');
@@ -173,7 +176,7 @@ async function mockManageSubscriptionEdgeFunction(page: Page, options?: {
 
 test.describe('Pricing Page - Navigation and Display', () => {
   test('should navigate to pricing page from landing page', async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
 
     // Click the pricing link in navigation
     const pricingLink = page.locator('a[href="/pricing"]').first();
@@ -184,7 +187,7 @@ test.describe('Pricing Page - Navigation and Display', () => {
   });
 
   test('should display all subscription plan cards', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Wait for plans to load (the loading state shows "Loading plans...")
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {
@@ -200,7 +203,7 @@ test.describe('Pricing Page - Navigation and Display', () => {
   });
 
   test('should display plan prices and features', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Wait for loading to finish
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
@@ -213,7 +216,7 @@ test.describe('Pricing Page - Navigation and Display', () => {
   });
 
   test('should toggle between monthly and yearly billing', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Wait for plans to load
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
@@ -234,7 +237,7 @@ test.describe('Pricing Page - Navigation and Display', () => {
   });
 
   test('should show "Save 20%" badge on yearly toggle', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -243,7 +246,7 @@ test.describe('Pricing Page - Navigation and Display', () => {
   });
 
   test('should display Popular and Best Value badges on plans', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -261,7 +264,7 @@ test.describe('Pricing Page - Navigation and Display', () => {
   });
 
   test('should have accessible billing cycle toggle with ARIA labels', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -279,7 +282,7 @@ test.describe('Pricing Page - Navigation and Display', () => {
 
 test.describe('Pricing Page - Unauthenticated User', () => {
   test('should show "Get Started Now" on plan buttons for unauthenticated users', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -291,7 +294,7 @@ test.describe('Pricing Page - Unauthenticated User', () => {
   });
 
   test('should redirect to auth page when unauthenticated user clicks plan button', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -307,7 +310,7 @@ test.describe('Pricing Page - Unauthenticated User', () => {
   });
 
   test('should display Sign In and Get Started Free in the pricing page header', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Verify auth navigation links are present for unauthenticated users
     const signInLink = page.locator('a[href*="auth?tab=signin"]').first();
@@ -334,7 +337,7 @@ test.describe('Checkout Flow - Stripe Redirect', () => {
   test('should initiate checkout for a paid plan and redirect', async ({ page }) => {
     await mockCheckoutEdgeFunction(page);
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Wait for plans to load
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
@@ -380,7 +383,7 @@ test.describe('Checkout Flow - Stripe Redirect', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
     const upgradeButton = page.locator(
@@ -409,7 +412,7 @@ test.describe('Checkout Flow - Stripe Redirect', () => {
       errorMessage: 'Price not configured',
     });
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
     const upgradeButton = page.locator(
@@ -427,7 +430,7 @@ test.describe('Checkout Flow - Stripe Redirect', () => {
   });
 
   test('should show "Current Plan" button for the users active plan', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -480,7 +483,7 @@ test.describe('Checkout Success Page', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/checkout/success?session_id=cs_test_mock_session_123`);
+    await page.goto('/checkout/success?session_id=cs_test_mock_session_123');
 
     // Should show the success page with confirmation elements
     // Wait for "Processing Your Payment..." to disappear (or for success content to appear)
@@ -513,7 +516,7 @@ test.describe('Checkout Success Page', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/checkout/success?session_id=cs_test_mock_session_123`);
+    await page.goto('/checkout/success?session_id=cs_test_mock_session_123');
 
     // Should display the plan name
     await expect(
@@ -545,7 +548,7 @@ test.describe('Checkout Success Page', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/checkout/success?session_id=cs_test_mock_session_123`);
+    await page.goto('/checkout/success?session_id=cs_test_mock_session_123');
 
     // Should display "Active" badge
     await expect(
@@ -577,7 +580,7 @@ test.describe('Checkout Success Page', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/checkout/success?session_id=cs_test_mock_session_123`);
+    await page.goto('/checkout/success?session_id=cs_test_mock_session_123');
 
     // Should show "Go to Dashboard" and "Start Planning Meals" buttons
     await expect(
@@ -613,7 +616,7 @@ test.describe('Checkout Success Page', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/checkout/success?session_id=cs_test_mock_session_123`);
+    await page.goto('/checkout/success?session_id=cs_test_mock_session_123');
 
     const dashboardButton = page.locator('button:has-text("Go to Dashboard")');
     await expect(dashboardButton).toBeVisible({ timeout: 20000 });
@@ -623,7 +626,7 @@ test.describe('Checkout Success Page', () => {
   });
 
   test('should redirect to dashboard when session_id is missing', async ({ page }) => {
-    await page.goto(`${BASE_URL}/checkout/success`);
+    await page.goto('/checkout/success');
 
     // Without session_id, the page should redirect to dashboard
     await expect(page).toHaveURL(/.*dashboard/, { timeout: 10000 });
@@ -653,7 +656,7 @@ test.describe('Checkout Success Page', () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/checkout/success?session_id=cs_test_mock_session_123`);
+    await page.goto('/checkout/success?session_id=cs_test_mock_session_123');
 
     // Should display the Quick Start Guide
     await expect(
@@ -672,7 +675,7 @@ test.describe('Subscription Status in Dashboard', () => {
   });
 
   test('should display subscription status banner on dashboard', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard`);
+    await page.goto('/dashboard');
 
     // Should show some subscription-related information
     // Either "Upgrade Now" (free plan), plan name, or trial info
@@ -682,7 +685,7 @@ test.describe('Subscription Status in Dashboard', () => {
   });
 
   test('should display billing page with subscription details', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     // Should show subscription or billing related content
     await expect(
@@ -691,7 +694,7 @@ test.describe('Subscription Status in Dashboard', () => {
   });
 
   test('should show "Change Plan" button on billing page for active subscribers', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     // Wait for loading to complete
     await page.waitForTimeout(2000);
@@ -709,7 +712,7 @@ test.describe('Subscription Status in Dashboard', () => {
   });
 
   test('should show "View Plans" button for users without subscription', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -723,7 +726,7 @@ test.describe('Subscription Status in Dashboard', () => {
   });
 
   test('should show Upgrade Now prompt for free plan users on dashboard', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard`);
+    await page.goto('/dashboard');
 
     const upgradeButton = page.locator('button:has-text("Upgrade Now"), button:has-text("Upgrade")');
 
@@ -734,7 +737,7 @@ test.describe('Subscription Status in Dashboard', () => {
   });
 
   test('should display Active badge for active subscribers on billing page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -746,7 +749,7 @@ test.describe('Subscription Status in Dashboard', () => {
   });
 
   test('should display billing period progress for active subscribers', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -769,7 +772,7 @@ test.describe('Subscription Cancellation Flow', () => {
   });
 
   test('should show Cancel Subscription button on billing page for active subscribers', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -783,7 +786,7 @@ test.describe('Subscription Cancellation Flow', () => {
   test('should show confirmation dialog when canceling subscription', async ({ page }) => {
     await mockManageSubscriptionEdgeFunction(page, { action: 'cancel' });
 
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -808,7 +811,7 @@ test.describe('Subscription Cancellation Flow', () => {
   });
 
   test('should dismiss cancellation when user clicks Cancel in dialog', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -828,7 +831,7 @@ test.describe('Subscription Cancellation Flow', () => {
   });
 
   test('should show cancellation notice when subscription is pending cancellation', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -841,7 +844,7 @@ test.describe('Subscription Cancellation Flow', () => {
   });
 
   test('should show Reactivate button when subscription is pending cancellation', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -855,7 +858,7 @@ test.describe('Subscription Cancellation Flow', () => {
   test('should reactivate subscription when Reactivate button is clicked', async ({ page }) => {
     await mockManageSubscriptionEdgeFunction(page, { action: 'reactivate' });
 
-    await page.goto(`${BASE_URL}/dashboard/billing`);
+    await page.goto('/dashboard/billing');
 
     await page.waitForTimeout(2000);
 
@@ -887,7 +890,7 @@ test.describe('Stripe Test Card Scenarios', () => {
     // Mock a successful checkout flow
     await mockCheckoutEdgeFunction(page);
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
     const upgradeButton = page.locator(
@@ -909,7 +912,7 @@ test.describe('Stripe Test Card Scenarios', () => {
       errorMessage: 'Your card was declined',
     });
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
     const upgradeButton = page.locator(
@@ -935,7 +938,7 @@ test.describe('Stripe Test Card Scenarios', () => {
       errorMessage: 'Your card has insufficient funds',
     });
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
     const upgradeButton = page.locator(
@@ -956,7 +959,7 @@ test.describe('Stripe Test Card Scenarios', () => {
       errorMessage: 'Your card has expired',
     });
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
     const upgradeButton = page.locator(
@@ -995,7 +998,7 @@ test.describe('Subscription Management Dialog', () => {
   });
 
   test('should open subscription management dialog from dashboard banner', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard`);
+    await page.goto('/dashboard');
 
     // Look for "Manage Plan" button that opens the SubscriptionManagementDialog
     const managePlanButton = page.locator('button:has-text("Manage Plan")');
@@ -1011,7 +1014,7 @@ test.describe('Subscription Management Dialog', () => {
   });
 
   test('should display current plan badge in management dialog', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard`);
+    await page.goto('/dashboard');
 
     const managePlanButton = page.locator('button:has-text("Manage Plan")');
 
@@ -1027,7 +1030,7 @@ test.describe('Subscription Management Dialog', () => {
   });
 
   test('should show upgrade and downgrade badges for other plans', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard`);
+    await page.goto('/dashboard');
 
     const managePlanButton = page.locator('button:has-text("Manage Plan")');
 
@@ -1051,7 +1054,7 @@ test.describe('Subscription Management Dialog', () => {
   });
 
   test('should close management dialog when Cancel button is clicked', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard`);
+    await page.goto('/dashboard');
 
     const managePlanButton = page.locator('button:has-text("Manage Plan")');
 
@@ -1083,7 +1086,7 @@ test.describe('Downgrade to Free Plan', () => {
   });
 
   test('should show Downgrade button for free plan on pricing page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -1098,7 +1101,7 @@ test.describe('Downgrade to Free Plan', () => {
   test('should redirect to Stripe portal for downgrade to free plan', async ({ page }) => {
     await mockStripePortalEdgeFunction(page);
 
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -1124,7 +1127,7 @@ test.describe('Downgrade to Free Plan', () => {
 
 test.describe('Subscription Flow - Edge Cases', () => {
   test('should show loading state while plans are being fetched', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     // Should briefly show loading indicator
     const loadingIndicator = page.locator('text=/loading plans/i');
@@ -1140,7 +1143,7 @@ test.describe('Subscription Flow - Edge Cases', () => {
     await signIn(page);
 
     // Don't mock subscription endpoint so it keeps polling
-    await page.goto(`${BASE_URL}/checkout/success?session_id=cs_test_mock_session_123`);
+    await page.goto('/checkout/success?session_id=cs_test_mock_session_123');
 
     // Should show processing/loading message initially
     const processingText = page.locator('text=/processing|please wait|confirm/i');
@@ -1151,7 +1154,7 @@ test.describe('Subscription Flow - Edge Cases', () => {
   });
 
   test('should handle pricing page with SEO elements', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 
@@ -1163,7 +1166,7 @@ test.describe('Subscription Flow - Edge Cases', () => {
   });
 
   test('should display Feature Comparison Table on pricing page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/pricing`);
+    await page.goto('/pricing');
 
     await page.waitForSelector('text=/Loading plans/i', { state: 'hidden', timeout: 10000 }).catch(() => {});
 

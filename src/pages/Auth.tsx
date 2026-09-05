@@ -19,10 +19,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Eye, EyeOff, CheckCircle, Sparkles, Calendar, ShoppingCart, TrendingUp, XCircle, AlertCircle, Mail, ArrowLeft } from "lucide-react";
-import { FcGoogle } from "react-icons/fc";
-import { FaApple } from "react-icons/fa";
+import { GoogleIcon, AppleIcon } from "@/components/BrandIcons";
 import { Link } from "react-router-dom";
-import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { PasswordResetDialog } from "@/components/PasswordResetDialog";
 import { PasswordSchema, EmailSchema, sanitizeURL } from "@/lib/validations";
 import { isDisposableEmail, DISPOSABLE_EMAIL_ERROR_MESSAGE } from "@/lib/disposable-email";
@@ -86,7 +84,6 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
@@ -179,8 +176,11 @@ const Auth = () => {
               if (error || profile?.onboarding_completed) {
                 navigate(finalRedirect, { replace: true });
               } else {
-                // First time login with profile but incomplete onboarding
-                setShowOnboarding(true);
+                // US-770: onboarding is a route now, not a dialog fired from
+                // this one screen. A route can be returned to, linked to, and
+                // resumed; a dialog that only ever opens here happens once or
+                // not at all.
+                navigate("/onboarding", { replace: true });
               }
             });
         }, 0);
@@ -200,7 +200,7 @@ const Auth = () => {
             if (error || profile?.onboarding_completed) {
               navigate(redirectTo, { replace: true });
             } else {
-              setShowOnboarding(true);
+              navigate("/onboarding", { replace: true });
               setCheckingSession(false);
             }
           });
@@ -421,24 +421,6 @@ const Auth = () => {
     }
   };
 
-  const handleOnboardingComplete = async () => {
-    setShowOnboarding(false);
-
-    // Mark onboarding as complete
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      await supabase
-        .from("profiles")
-        .update({ onboarding_completed: true })
-        .eq("id", user.id);
-    }
-
-    // Navigate to intended destination (or dashboard if none)
-    navigate(redirectTo, { replace: true });
-  };
-
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
     // Store the intended destination so we can redirect after OAuth completes
     sessionStorage.setItem('oauth_redirect', redirectTo);
@@ -499,12 +481,6 @@ const Auth = () => {
         <meta property="og:description" content="Sign in or create your EatPal account. AI-powered meal planning built on food chaining science for families managing ARFID and feeding disorders." />
         <meta property="og:type" content="website" />
       </Helmet>
-
-      <OnboardingDialog
-        open={showOnboarding}
-        onComplete={handleOnboardingComplete}
-        onOpenChange={setShowOnboarding}
-      />
 
       <PasswordResetDialog
         open={showResetDialog}
@@ -868,7 +844,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('google')}
                         className="w-full h-11"
                       >
-                        <FcGoogle className="h-5 w-5 mr-2" />
+                        <GoogleIcon className="h-5 w-5 mr-2" />
                         Google
                       </Button>
                       <Button
@@ -877,7 +853,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('apple')}
                         className="w-full h-11"
                       >
-                        <FaApple className="h-5 w-5 mr-2" />
+                        <AppleIcon className="h-5 w-5 mr-2" />
                         Apple
                       </Button>
                     </div>
@@ -967,7 +943,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('google')}
                         className="w-full h-11"
                       >
-                        <FcGoogle className="h-5 w-5 mr-2" />
+                        <GoogleIcon className="h-5 w-5 mr-2" />
                         Google
                       </Button>
                       <Button
@@ -976,7 +952,7 @@ const Auth = () => {
                         onClick={() => signInWithOAuth('apple')}
                         className="w-full h-11"
                       >
-                        <FaApple className="h-5 w-5 mr-2" />
+                        <AppleIcon className="h-5 w-5 mr-2" />
                         Apple
                       </Button>
                     </div>

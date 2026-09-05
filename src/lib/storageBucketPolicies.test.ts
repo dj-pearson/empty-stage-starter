@@ -158,10 +158,9 @@ describe('storage.objects SELECT policies', () => {
 });
 
 describe('profile photo object paths', () => {
-  const UPLOAD_SITES = [
-    'src/components/ManageKidsDialog.tsx',
-    'src/components/OnboardingDialog.tsx',
-  ];
+  // OnboardingDialog.tsx was the second entry until US-770 replaced it with the
+  // /onboarding route, which does not upload a photo at all.
+  const UPLOAD_SITES = ['src/components/ManageKidsDialog.tsx'];
 
   it.each(UPLOAD_SITES)('%s builds an unguessable object name', (site) => {
     const source = readFileSync(path.resolve(__dirname, '../..', site), 'utf-8');
@@ -257,18 +256,13 @@ describe('US-634: stored kid photos render through KidAvatarImage', () => {
     };
     walk(componentsDir);
 
-    // OnboardingDialog is the one legitimate case: its value is only ever the
-    // URL of a file uploaded in that session, never a stored object.
-    expect(offenders).toEqual(['OnboardingDialog.tsx']);
-  });
-
-  it('OnboardingDialog may keep a bare AvatarImage, because its value is only ever a fresh upload', () => {
-    const src = read('OnboardingDialog.tsx');
-    // childData.profile_picture_url starts as "" and is only ever assigned the
-    // URL of a file uploaded in this session, so there is nothing to sign. If
-    // that ever changes -- if the dialog starts loading an existing kid -- this
-    // assertion is the thing that should be revisited, not silently deleted.
-    expect(src).not.toMatch(/profile_picture_url:\s*kid\./);
+    // There used to be exactly one permitted offender, OnboardingDialog.tsx,
+    // whose value was only ever the URL of a file uploaded in that same
+    // session. US-770 replaced that dialog with the /onboarding route, which
+    // uploads no photo, so the exception is GONE rather than moved -- the list
+    // is empty and this assertion is now strictly tighter than it was. A new
+    // bare AvatarImage anywhere fails here, with no allowed case to hide in.
+    expect(offenders).toEqual([]);
   });
 });
 

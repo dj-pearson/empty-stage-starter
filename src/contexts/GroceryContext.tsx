@@ -9,6 +9,7 @@ import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 import { planGroceryMerge, splitIngredientBlock, type GroceryAddInput } from "@/lib/groceryMerge";
+import { buildGroceryRow } from "@/lib/groceryRow";
 import { parseGroceryItemRow, parseGroceryItemRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
@@ -106,21 +107,15 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
 
   const addGroceryItem = useCallback((item: Omit<GroceryItem, "id" | "checked">) => {
     if (userId && householdId) {
-      const newItem: Record<string, unknown> = {
-        name: item.name, quantity: item.quantity || 1, unit: item.unit || '',
-        category: item.category || inferFoodCategory(item.name), notes: item.notes || null,
-        aisle: item.aisle || null, grocery_list_id: item.grocery_list_id || null,
-        user_id: userId, household_id: householdId, checked: false
-      };
-      if (item.added_via) newItem.added_via = item.added_via;
-      if (item.brand_preference) newItem.brand_preference = item.brand_preference;
-      if (item.barcode) newItem.barcode = item.barcode;
-      if (item.source_recipe_id) newItem.source_recipe_id = item.source_recipe_id;
-      // US-713: keep a plan-generated row plan-generated across a checkout undo.
-      // Dropping these turned it into a hand-added row that no later sync would
-      // ever retire.
-      if (item.auto_generated) newItem.auto_generated = true;
-      if (item.source_plan_entry_id) newItem.source_plan_entry_id = item.source_plan_entry_id;
+      // US-777: one builder for both insert paths. This one used to carry its
+      // own field list and was missing priority, price_per_unit and
+      // added_by_user_id, so a priority set on a single add was lost while the
+      // same field survived a bulk add.
+      const newItem = buildGroceryRow(item, {
+        userId,
+        householdId,
+        inferCategory: inferFoodCategory,
+      });
 
       supabase.from('grocery_items').insert(newItem).select().single()
         .then(({ data, error }) => {
@@ -253,37 +248,12 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     // 2) Insert the genuinely-new rows.
     if (plan.inserts.length > 0) {
       if (userId && householdId) {
-        const rows = plan.inserts.map((item) => {
-          const row: Record<string, unknown> = {
-            name: item.name,
-            quantity: item.quantity || 1,
-            unit: item.unit || '',
-            category: item.category || inferFoodCategory(item.name),
-            notes: item.notes || null,
-            aisle: item.aisle || null,
-            user_id: userId,
-            household_id: householdId,
-            checked: false,
-          };
-          if (item.added_via) row.added_via = item.added_via;
-          if (item.source_recipe_id) row.source_recipe_id = item.source_recipe_id;
-          // US-713: without these three a plan-generated row lands on no list,
-          // cannot be told apart from a hand-added one, and loses its link back
-          // to the entry that caused it.
-          if (item.grocery_list_id) row.grocery_list_id = item.grocery_list_id;
-          if (item.auto_generated) row.auto_generated = true;
-          if (item.source_plan_entry_id) row.source_plan_entry_id = item.source_plan_entry_id;
-          // US-714: this insert path used to drop everything the add dialog
-          // collected beyond name/quantity/unit/category/notes/aisle, so a
-          // brand, a scanned barcode or a price silently vanished on any add
-          // that went through the merge rather than addGroceryItem.
-          if (item.brand_preference) row.brand_preference = item.brand_preference;
-          if (item.barcode) row.barcode = item.barcode;
-          if (item.priority) row.priority = item.priority;
-          if (item.price_per_unit != null) row.price_per_unit = item.price_per_unit;
-          row.added_by_user_id = item.added_by_user_id ?? userId;
-          return row;
-        });
+        // US-777: the same builder the single-add path uses. Two hand-written
+        // field lists is how US-713 and US-714 each had to restore columns
+        // that one path dropped and the other kept.
+        const rows = plan.inserts.map((item) =>
+          buildGroceryRow(item, { userId, householdId, inferCategory: inferFoodCategory })
+        );
         supabase.from('grocery_items').insert(rows).select()
           .then(({ data, error }) => {
             if (error) {

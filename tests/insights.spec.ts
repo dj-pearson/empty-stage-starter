@@ -1,15 +1,17 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Insights/Analytics Tests
  * Tests nutrition insights, progress tracking, and reports
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Insights & Analytics', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -18,13 +20,13 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should display insights page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
     await expect(page).toHaveURL(/.*insights/);
     await expect(page.locator('text=/insight|analytics|progress|report/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should show nutrition summary', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const nutritionSection = page.locator('text=/nutrition|calorie|protein|vitamin/i');
 
@@ -34,7 +36,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should display charts/graphs', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const charts = page.locator('canvas, svg, [data-testid="chart"], .recharts-wrapper');
 
@@ -44,7 +46,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should filter by date range', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const dateFilter = page.locator('button:has-text("Week"), button:has-text("Month"), select[name*="period"]');
 
@@ -54,7 +56,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should filter by child', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const childFilter = page.locator('select, [role="combobox"]').first();
 
@@ -64,7 +66,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should show meal acceptance rate', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const acceptanceSection = page.locator('text=/acceptance|success.*rate|completed/i');
 
@@ -74,7 +76,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should display try-bite progress', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const tryBiteProgress = page.locator('text=/try.*bite|new.*food|expand.*diet/i');
 
@@ -84,7 +86,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should export report', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const exportButton = page.locator('button:has-text("Export"), button:has-text("Download"), button:has-text("PDF")');
 
@@ -94,7 +96,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should share report', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const shareButton = page.locator('button:has-text("Share"), button[aria-label*="share"]');
 
@@ -104,7 +106,7 @@ test.describe('Insights & Analytics', () => {
   });
 
   test('should show weekly summary', async ({ page }) => {
-    await page.goto(`${BASE_URL}/insights`);
+    await page.goto('/insights');
 
     const weeklySection = page.locator('text=/weekly|this week|past.*week/i');
 

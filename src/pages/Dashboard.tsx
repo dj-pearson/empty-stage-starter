@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, Outlet, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchOnboardingCompleted, readLocalOnboardingFlag } from "@/lib/onboardingStatus";
 import { SupportWidget } from "@/components/SupportWidget";
 import { AppInstallPrompt } from "@/components/AppInstallPrompt";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -16,6 +17,7 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
 import { BindEmailBanner } from "@/components/auth/BindEmailBanner";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 import {
   Sheet,
   SheetContent,
@@ -84,6 +86,34 @@ const Dashboard = () => {
       setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams, toast]);
+
+  /**
+   * Send a user who never finished setup to /onboarding (US-770).
+   *
+   * Onboarding used to fire as a dialog from Auth.tsx, so somebody who closed
+   * it, or who arrived at /dashboard by any route other than a fresh sign-in,
+   * simply never saw it again. The cached flag is checked first so a returning
+   * user does not wait on a round trip before the dashboard renders; the server
+   * column -- the same one iOS US-708 writes -- is the authority and seeds the
+   * cache.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    if (readLocalOnboardingFlag() === true) return;
+
+    void fetchOnboardingCompleted().then((done) => {
+      // null means we could not tell (signed out mid-flight, a failed read).
+      // Not knowing is not a reason to interrupt somebody's dashboard.
+      if (!cancelled && done === false) {
+        navigate("/onboarding", { replace: true });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   useEffect(() => {
     // Set up listener for auth state changes
@@ -175,6 +205,14 @@ const Dashboard = () => {
         <meta name="description" content="Manage your family's meal plans, food tracking, and nutrition insights" />
         <meta name="robots" content="noindex" />
       </Helmet>
+      {/*
+        Offline banner (US-765). Mounted once outside the desktop/mobile split
+        because it positions itself fixed and both layouts need it; it renders
+        null while online. It was written for the service worker that until now
+        was never registered, so nothing in the app had ever told a user their
+        connection had dropped.
+      */}
+      <OfflineIndicator />
       {/* Desktop Layout with Sidebar */}
       <div className="hidden md:block">
         <SidebarProvider defaultOpen={true}>

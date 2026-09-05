@@ -92,6 +92,13 @@ const MANUAL = new Set([
   // container. The loop writes the template, the CI check and the runbook; a
   // human applies the variables. Nothing in CI can assert prod GoTrue config.
   'US-700', 'US-701',
+  // Roadmap survey 2026-09-03. Each of these is closed by a person: a CI
+  // root-cause on the hosted runner, a repo-secret or deploy-path decision,
+  // a branch reconciliation, an external monitor, a doc pass, an owner call
+  // on the agentic OS PRD, or a Swift-side decision. None can be asserted
+  // from a green web gate.
+  'US-760', 'US-762', 'US-763', 'US-773', 'US-774', 'US-781', 'US-783',
+  'US-786', 'US-787', 'US-788',
 ]);
 const ANDROID = new Set(['US-213', 'US-214', 'US-222']);
 const WEB = new Set([
@@ -114,6 +121,12 @@ const WEB = new Set([
   // tracking) are web-only; the iOS gate classify() defaults to would never
   // verify them.
   'US-702', 'US-707',
+  // Roadmap survey 2026-09-03: web-only stories (types regeneration, PWA
+  // registration, route and nav cleanup, responsive passes, dead-code
+  // removal, bundle and a11y gates, ledger checks in SQL run by vitest).
+  'US-761', 'US-764', 'US-765', 'US-766', 'US-767', 'US-768', 'US-769',
+  'US-770', 'US-771', 'US-772', 'US-775', 'US-776', 'US-777', 'US-778',
+  'US-779', 'US-780', 'US-782', 'US-784', 'US-785', 'US-789', 'US-790',
 ]);
 
 function classify(story) {

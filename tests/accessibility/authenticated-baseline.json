@@ -1,0 +1,11 @@
+{
+  "_comment": "US-778. Serious+critical axe node counts per authenticated route, measured 2026-09-03 after the primary-colour darkening and four accessible-name fixes. Zero critical violations remain anywhere. What is left is entirely colour-contrast on the FOOD-CATEGORY badge palette (greens, reds and ambers defined per category, e.g. white on #5abc7d at 2.31:1), which is a separate palette problem from the brand primary and needs its own decision. These numbers may only go DOWN: the assertion is <=, so a fix tightens the gate automatically. Regenerate deliberately, never to turn a red run green.",
+  "_measurementNote": "Measured serially with the deterministic wait in the spec. An earlier baseline taken with networkidle alone under parallel load reported pantry at 15 because the scan hit its loading skeleton; the real figure with chips rendered is 46. Trust these numbers, not the pre-change ones.",
+  "dashboard": 3,
+  "planner": 0,
+  "grocery": 3,
+  "pantry": 46,
+  "recipes": 1,
+  "kids": 0,
+  "settings": 0
+}

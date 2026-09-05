@@ -215,7 +215,7 @@
       "slice": 1,
       "platform": "ops",
       "loopVerifiable": true,
-      "notes": "Review items 13, X1, X10, P20, P21, P22, G27, G28. Decision from Dj 2026-09-01: Expo is retired. android-native (Kotlin, own CI workflow) is untouched by this story. BLOCKED 2026-09-02: the recursive `git rm -r app native-js-build ...` was refused by the session's auto-mode safety classifier, which guards bulk directory deletion. Nothing was deleted and the tree is untouched. Dj's call on being asked: skip and keep going, run the deletion later. AC 2 is already DONE and landed separately -- the unit-suggestions table is ported to src/lib/groceryAisle.ts, which US-728 builds on, so the port is not blocking anything. Survey findings for whoever picks this up: src/lib/platform.ts must be KEPT (10+ web consumers: AppContext, AccessibilityContext, useSmartDefaults, the barcode scanners and five tests). native-js-build/ is the earlier pure-JavaScript React Native shell with no CI reference anywhere, so AC 8's delete branch applies. babel.config.js exists only for babel-plugin-module-resolver, which nothing outside app/ uses. scripts/setup-mobile-assets.cjs has exactly one consumer, the setup:mobile:assets script. 19 npm scripts to remove (expo:* x5, eas:* x8, expo:prebuild, setup:mobile:assets, android, ios) and 17 dependencies (expo + 11 expo-*, react-native, react-native-safe-area-context, react-native-screens, react-native-reanimated, babel-plugin-module-resolver). No @capacitor* package is actually in package.json despite AC 3 naming them; only capacitor.config.ts exists."
+      "notes": "Review items 13, X1, X10, P20, P21, P22, G27, G28. Decision from Dj 2026-09-01: Expo is retired. android-native (Kotlin, own CI workflow) is untouched by this story. BLOCKED 2026-09-02: the recursive `git rm -r app native-js-build ...` was refused by the session's auto-mode safety classifier, which guards bulk directory deletion. Nothing was deleted and the tree is untouched. Dj's call on being asked: skip and keep going, run the deletion later. AC 2 is already DONE and landed separately -- the unit-suggestions table is ported to src/lib/groceryAisle.ts, which US-728 builds on, so the port is not blocking anything. Survey findings for whoever picks this up: src/lib/platform.ts must be KEPT (10+ web consumers: AppContext, AccessibilityContext, useSmartDefaults, the barcode scanners and five tests). native-js-build/ is the earlier pure-JavaScript React Native shell with no CI reference anywhere, so AC 8's delete branch applies. babel.config.js exists only for babel-plugin-module-resolver, which nothing outside app/ uses. scripts/setup-mobile-assets.cjs has exactly one consumer, the setup:mobile:assets script. 19 npm scripts to remove (expo:* x5, eas:* x8, expo:prebuild, setup:mobile:assets, android, ios) and 17 dependencies (expo + 11 expo-*, react-native, react-native-safe-area-context, react-native-screens, react-native-reanimated, babel-plugin-module-resolver). No @capacitor* package is actually in package.json despite AC 3 naming them; only capacitor.config.ts exists. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): still blocked; a person must run the bulk delete. package.json still carries 24 expo/react-native entries and src/components/mobile/NativeBarcodeScanner.tsx and src/test/setup.ts still reference react-native, so add both to the removal list."
     },
     {
       "id": "US-721",
@@ -269,7 +269,7 @@
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review item 16. ShareTarget.tsx:142 navigates with state nothing reads."
+      "notes": "Review item 16. ShareTarget.tsx:142 navigates with state nothing reads. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): depends on prd.json US-765. Nothing registers public/sw.js, so the manifest share_target POST has no handler today and ShareTarget.tsx reads a cache no worker writes; AC 2 and 3 cannot pass until the worker is registered."
     },
     {
       "id": "US-724",
@@ -397,7 +397,7 @@
       "slice": 2,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items G5, G17, G25 (identity part). Complements kitchen-loop US-661 (recipes) and US-664 (merge UI); do not duplicate those."
+      "notes": "Review items G5, G17, G25 (identity part). Complements kitchen-loop US-661 (recipes) and US-664 (merge UI); do not duplicate those. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): add ScanReceiptDialog to the enumerated add paths. Its write goes straight to the pantry (progress.txt US-714 deviation), bypassing grocery_list_id, aisle classification and the resolver, so receipt items never gain an item id. Use the shared row builder from prd.json US-777."
     },
     {
       "id": "US-731",
@@ -543,7 +543,7 @@
       "slice": 3,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items G23, P25, P29. Sequenced after kitchen-loop US-674 (meals) and US-677 (rpc_cook_meal); if those slip, implement against plan_entries and migrate."
+      "notes": "Review items G23, P25, P29. Sequenced after kitchen-loop US-674 (meals) and US-677 (rpc_cook_meal); if those slip, implement against plan_entries and migrate. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): also consume source_recipe_id and added_via='recipe'. They are written by TonightSuggestionsDialog and the recipe add paths and read nowhere in src/ (2026-06-03 review item R3); auto-checking sourced rows on Cooked is the consumer."
     },
     {
       "id": "US-739",
@@ -563,7 +563,7 @@
       "slice": 3,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items G25, G26, G27 (checkout part), G28, G15 (capture part). Kitchen-loop US-672 owns the movement writers; this story wires the UI to them."
+      "notes": "Review items G25, G26, G27 (checkout part), G28, G15 (capture part). Kitchen-loop US-672 owns the movement writers; this story wires the UI to them. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): AC 6's agreement rate is produced by prd.json US-785 (comparison table plus query) and guarded by US-784 (nightly drift check); do not flip the flag default before both exist."
     },
     {
       "id": "US-740",
@@ -601,7 +601,7 @@
       "slice": 3,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items X5, X13 (naming). Web IA rework was out of scope in the kitchen-loop spec; this story brings it in once eaters exist."
+      "notes": "Review items X5, X13 (naming). Web IA rework was out of scope in the kitchen-loop spec; this story brings it in once eaters exist. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): the hand-maintained lists are five, not four. src/pages/Dashboard.tsx mobileNavItems (lines 49-64, bottom nav slices the first four) is a separate tree from AppSidebar, and AppSidebar omits Insights while the mobile nav has it. Both consume the NAV array. prd.json US-766 collapses the eight alias routes first so NAV has one path per section."
     },
     {
       "id": "US-742",
@@ -854,7 +854,7 @@
       "slice": 1,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items X11, P6 (type part)."
+      "notes": "Review items X11, P6 (type part). || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): before lowering baselines, explain the 1400 vs 1165 gap. ci.yml run 800 on deb2c1c passed the Typecheck ratchet while progress.txt measured 1400 on the same commit; the difference is likely the tsconfig-bypass.json admin exclude (prd.json US-776) or the tsbuildinfo skip. prd.json US-790 tracks the cross-reference. || SUPERSEDED IN PART 2026-09-03: the note above says to explain the 1400 vs 1165 gap before lowering baselines. That gap does not reproduce -- see prd.json US-790. Measured on this branch: 1158, then 1152 after the US-771 deletions, against a baseline now at 1152, with the ratchet passing. This story's real remaining work is the tsconfig.node.json fix so tsc -b reaches src at all, deriving the three UI types from the generated Supabase types, and the monthly reduction target -- not a discrepancy investigation."
     },
     {
       "id": "US-756",

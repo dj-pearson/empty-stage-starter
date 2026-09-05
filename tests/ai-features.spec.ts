@@ -1,15 +1,17 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * AI Features Tests
  * Tests AI-powered meal planning, suggestions, and coaching
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('AI Features', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -18,13 +20,13 @@ test.describe('AI Features', () => {
   });
 
   test('should access AI meal planner', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-planner`);
+    await page.goto('/ai-planner');
 
     await expect(page.locator('text=/ai|intelligent|smart|generate/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should configure AI preferences', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-planner`);
+    await page.goto('/ai-planner');
 
     const preferencesButton = page.locator('button:has-text("Preferences"), button:has-text("Settings")');
 
@@ -35,7 +37,7 @@ test.describe('AI Features', () => {
   });
 
   test('should generate AI meal suggestions', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-planner`);
+    await page.goto('/ai-planner');
 
     const generateButton = page.locator('button:has-text("Generate"), button:has-text("Create Plan")');
 
@@ -47,7 +49,7 @@ test.describe('AI Features', () => {
   });
 
   test('should display AI coaching tips', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-coach`);
+    await page.goto('/ai-coach');
 
     if (await page.url().includes('ai-coach')) {
       await expect(page.locator('text=/coach|tip|advice|suggestion/i')).toBeVisible({ timeout: 5000 });
@@ -55,7 +57,7 @@ test.describe('AI Features', () => {
   });
 
   test('should show food chaining recommendations', async ({ page }) => {
-    await page.goto(`${BASE_URL}/food-chaining`);
+    await page.goto('/food-chaining');
 
     if (await page.url().includes('food-chaining')) {
       await expect(page.locator('text=/chain|similar|bridge.*food/i')).toBeVisible({ timeout: 5000 });
@@ -63,7 +65,7 @@ test.describe('AI Features', () => {
   });
 
   test('should accept or reject AI suggestions', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-planner`);
+    await page.goto('/ai-planner');
 
     const suggestionCard = page.locator('[data-testid="ai-suggestion"], .suggestion-card').first();
 
@@ -81,7 +83,7 @@ test.describe('AI Features', () => {
   });
 
   test('should regenerate AI suggestions', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-planner`);
+    await page.goto('/ai-planner');
 
     const regenerateButton = page.locator('button:has-text("Regenerate"), button:has-text("Try Again"), button[aria-label*="refresh"]');
 
@@ -91,7 +93,7 @@ test.describe('AI Features', () => {
   });
 
   test('should customize AI generation parameters', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-planner`);
+    await page.goto('/ai-planner');
 
     const daysInput = page.locator('input[name*="days"], select[name*="days"]');
 
@@ -104,7 +106,7 @@ test.describe('AI Features', () => {
   });
 
   test('should view AI generation history', async ({ page }) => {
-    await page.goto(`${BASE_URL}/ai-planner`);
+    await page.goto('/ai-planner');
 
     const historyButton = page.locator('button:has-text("History"), a:has-text("History")');
 

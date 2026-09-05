@@ -1,4 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * US-057: Comprehensive E2E Test for Meal Planning Workflow
@@ -14,7 +17,6 @@ import { test, expect, Page } from '@playwright/test';
  * Each test is isolated and independent - they do not depend on each other.
  */
 
-const BASE_URL = 'http://localhost:8080';
 const TEST_EMAIL = 'test@example.com';
 const TEST_PASSWORD = 'TestPassword123!';
 
@@ -22,7 +24,7 @@ const TEST_PASSWORD = 'TestPassword123!';
  * Helper: Sign in and wait for dashboard to load.
  */
 async function signIn(page: Page) {
-  await page.goto(`${BASE_URL}/auth`);
+  await page.goto('/auth');
   await page.click('button:has-text("Sign In")');
   await page.fill('input[type="email"]', TEST_EMAIL);
   await page.fill('input[type="password"]', TEST_PASSWORD);
@@ -41,7 +43,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
 
   test.describe('Step 1: Create kid profile with allergens', () => {
     test('should navigate to kids page and see the management interface', async ({ page }) => {
-      await page.goto(`${BASE_URL}/kids`);
+      await page.goto('/kids');
       await expect(page).toHaveURL(/.*kids/);
 
       // The page should display the "My Children" heading or empty state
@@ -51,7 +53,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should open the Add Child dialog and display form fields', async ({ page }) => {
-      await page.goto(`${BASE_URL}/kids`);
+      await page.goto('/kids');
 
       // Click the "Add Child" button (present in both empty and populated states)
       const addButton = page.locator('button:has-text("Add Child")').first();
@@ -68,7 +70,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should create a child profile with allergens selected', async ({ page }) => {
-      await page.goto(`${BASE_URL}/kids`);
+      await page.goto('/kids');
 
       const addButton = page.locator('button:has-text("Add Child")').first();
       await expect(addButton).toBeVisible({ timeout: 5000 });
@@ -105,7 +107,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display allergen badges on a child profile', async ({ page }) => {
-      await page.goto(`${BASE_URL}/kids`);
+      await page.goto('/kids');
 
       // If there are child profiles, check for allergen indicators
       const childCard = page.locator('[class*="card"], [data-testid="kid-card"]').first();
@@ -125,7 +127,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
 
   test.describe('Step 2: Add foods to the pantry', () => {
     test('should navigate to pantry page and display the interface', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pantry`);
+      await page.goto('/pantry');
       await expect(page).toHaveURL(/.*pantry/);
 
       // The page heading "My Pantry" should be visible
@@ -135,7 +137,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should open the Add Food dialog and fill in food details', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pantry`);
+      await page.goto('/pantry');
 
       // Click the "Add Food" button
       const addFoodButton = page.locator('button:has-text("Add Food")').first();
@@ -169,7 +171,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should add a food item and see it appear in the pantry', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pantry`);
+      await page.goto('/pantry');
 
       const addFoodButton = page.locator('button:has-text("Add Food")').first();
       await expect(addFoodButton).toBeVisible({ timeout: 5000 });
@@ -204,7 +206,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should add multiple food items for meal planning', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pantry`);
+      await page.goto('/pantry');
 
       const foodsToAdd = ['Workflow Banana', 'Workflow Rice'];
 
@@ -237,7 +239,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should search for foods in the pantry', async ({ page }) => {
-      await page.goto(`${BASE_URL}/pantry`);
+      await page.goto('/pantry');
 
       const searchInput = page.locator(
         'input[placeholder*="search" i], input[placeholder*="Search pantry" i], input[type="search"]'
@@ -257,7 +259,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
 
   test.describe('Step 3: Create meal plan entries', () => {
     test('should navigate to the planner page', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
       await expect(page).toHaveURL(/.*planner/);
 
       // Verify the planner interface loads
@@ -267,7 +269,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display meal slots on the planner', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // Verify at least some meal slot labels are visible
       const mealSlots = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -293,7 +295,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should open food selector when clicking add meal button', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // Look for "Add Meal" or "+" buttons on meal slots
       const addMealButton = page.locator(
@@ -315,7 +317,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display week navigation controls', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // Check for week navigation buttons
       const nextButton = page.locator(
@@ -338,7 +340,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should support "This Week" quick navigation', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       const thisWeekButton = page.locator('button:has-text("This Week")');
       if (await thisWeekButton.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -354,7 +356,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should offer Quick Build and AI Generate options', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // Check for the "Quick Build" button
       const quickBuildButton = page.locator('button:has-text("Quick Build")');
@@ -378,7 +380,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
 
   test.describe('Step 4: View weekly meal plan calendar', () => {
     test('should display the weekly calendar view with days', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // Verify that day columns or labels are visible
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat',
@@ -402,7 +404,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should show the current week date range in the header', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // The planner displays "Week of MMM d, yyyy" in the header
       const weekHeader = page.locator('text=/week.*of|week/i').first();
@@ -412,7 +414,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should navigate to next week and show updated dates', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       const nextButton = page.locator(
         'button[aria-label*="next" i], button[aria-label*="Next week" i]'
@@ -439,7 +441,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display child name in the planner header', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // If there are kids, the active kid's name should appear in the header
       // or a child selector should be visible
@@ -453,7 +455,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should handle copy week plan flow', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // Look for copy functionality
       const copyButton = page.locator(
@@ -479,7 +481,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
 
   test.describe('Step 5: Generate grocery list from meal plan', () => {
     test('should navigate to the grocery page and display the interface', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
       await expect(page).toHaveURL(/.*grocery/);
 
       // Verify the grocery list header is visible
@@ -489,7 +491,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display the "Sync from Meal Plan" option', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // The "Sync from Meal Plan" button is in the more options dropdown
       const moreButton = page.locator('button:has(svg), button[aria-label*="more" i]').last();
@@ -506,7 +508,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should trigger grocery list generation from meal plan', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // Try the more options menu for "Sync from Meal Plan"
       const moreButton = page.locator('button:has(svg), button[aria-label*="more" i]').last();
@@ -535,7 +537,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should allow adding a manual grocery item', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // Click "Add Item" button
       const addButton = page.locator('button:has-text("Add Item")').first();
@@ -566,7 +568,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display the Smart Restock button', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       const smartRestockButton = page.locator('button:has-text("Smart Restock")');
       if (await smartRestockButton.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -577,7 +579,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display shopping progress when items exist', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // If there are grocery items, a progress bar should appear
       const progressIndicator = page.locator('text=/shopping progress|of.*items/i');
@@ -593,7 +595,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
 
   test.describe('Step 6: Mark grocery items as purchased', () => {
     test('should check off a grocery item as purchased', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // Find a checkbox for a grocery item
       const checkbox = page.locator(
@@ -613,7 +615,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should show purchased items in a collapsible section', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // If there are purchased items, they appear in a "Purchased" section
       const purchasedSection = page.locator('text=/purchased/i');
@@ -634,7 +636,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should uncheck a purchased item to move it back to shopping list', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // Look for already-checked items
       const checkedCheckbox = page.locator(
@@ -654,7 +656,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should show "Done Shopping" button when items are purchased', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // The "Done Shopping" button appears when some items are checked
       const doneButton = page.locator('button:has-text("Done Shopping")');
@@ -667,7 +669,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should handle the "Done Shopping" action', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // First, check if there are items to purchase
       const checkbox = page.locator(
@@ -695,7 +697,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should display quantity controls for grocery items', async ({ page }) => {
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
 
       // Grocery items have quantity controls (visible on hover/focus)
       const quantityDisplay = page.locator('text=/\\d+\\s*(ct|oz|lb|g|ml|each|pkg|unit)/i').first();
@@ -712,32 +714,32 @@ test.describe('Meal Planning Workflow - US-057', () => {
   test.describe('Full workflow integration', () => {
     test('should be able to navigate between all meal planning pages', async ({ page }) => {
       // Kids page
-      await page.goto(`${BASE_URL}/kids`);
+      await page.goto('/kids');
       await expect(page).toHaveURL(/.*kids/);
 
       // Pantry page
-      await page.goto(`${BASE_URL}/pantry`);
+      await page.goto('/pantry');
       await expect(page).toHaveURL(/.*pantry/);
 
       // Planner page
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
       await expect(page).toHaveURL(/.*planner/);
 
       // Grocery page
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
       await expect(page).toHaveURL(/.*grocery/);
     });
 
     test('should show empty states gracefully when no data exists', async ({ page }) => {
       // Navigate to planner - should handle empty state (no kids or no plan)
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
       const plannerContent = page.locator(
         'text=/no children|meal planner|weekly/i'
       );
       await expect(plannerContent.first()).toBeVisible({ timeout: 5000 });
 
       // Navigate to grocery - should handle empty state
-      await page.goto(`${BASE_URL}/grocery`);
+      await page.goto('/grocery');
       const groceryContent = page.locator(
         'text=/grocery|shopping|list.*empty|add item/i'
       );
@@ -745,7 +747,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should maintain responsive layout on the planner', async ({ page }) => {
-      await page.goto(`${BASE_URL}/planner`);
+      await page.goto('/planner');
 
       // Verify page loads without errors at current viewport
       await expect(page).toHaveURL(/.*planner/);
@@ -763,7 +765,7 @@ test.describe('Meal Planning Workflow - US-057', () => {
     });
 
     test('should have accessible navigation between workflow steps', async ({ page }) => {
-      await page.goto(`${BASE_URL}/dashboard`);
+      await page.goto('/dashboard');
 
       // Verify navigation links are present for all workflow pages
       const navLinks = [

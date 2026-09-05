@@ -1,15 +1,17 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Settings Page Tests
  * Tests user settings, preferences, notifications, and account management
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Settings', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -18,13 +20,13 @@ test.describe('Settings', () => {
   });
 
   test('should display settings page', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
     await expect(page).toHaveURL(/.*settings/);
     await expect(page.locator('text=/settings|preferences|account/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should update profile information', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     const nameInput = page.locator('input[name="name"], input[placeholder*="name"]');
 
@@ -38,7 +40,7 @@ test.describe('Settings', () => {
   });
 
   test('should toggle notification preferences', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     // Navigate to notifications section
     const notificationsTab = page.locator('button:has-text("Notification"), a:has-text("Notification")');
@@ -54,7 +56,7 @@ test.describe('Settings', () => {
   });
 
   test('should view subscription status', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     // Navigate to subscription/billing section
     const billingTab = page.locator('button:has-text("Billing"), a:has-text("Subscription"), button:has-text("Subscription")');
@@ -66,7 +68,7 @@ test.describe('Settings', () => {
   });
 
   test('should access data export', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     const exportButton = page.locator('button:has-text("Export"), button:has-text("Download Data")');
 
@@ -76,7 +78,7 @@ test.describe('Settings', () => {
   });
 
   test('should access backup settings', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     const backupSection = page.locator('text=/backup/i');
 
@@ -86,7 +88,7 @@ test.describe('Settings', () => {
   });
 
   test('should change password', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     const changePasswordButton = page.locator('button:has-text("Change Password"), a:has-text("Change Password")');
 
@@ -98,7 +100,7 @@ test.describe('Settings', () => {
   });
 
   test('should manage connected accounts', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     const connectedSection = page.locator('text=/connected|linked|integration/i');
 
@@ -108,7 +110,7 @@ test.describe('Settings', () => {
   });
 
   test('should toggle dark mode', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     const themeToggle = page.locator('button[aria-label*="theme"], button:has-text("Dark"), [data-testid="theme-toggle"]');
 
@@ -118,7 +120,7 @@ test.describe('Settings', () => {
   });
 
   test('should access delete account option', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`);
+    await page.goto('/settings');
 
     const deleteSection = page.locator('text=/delete.*account|danger.*zone/i');
 

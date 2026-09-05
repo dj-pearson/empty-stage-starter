@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# US-778: the fake-backend build the authenticated a11y scan runs against
+dist-e2e
+a11y-results
 *.local
 
 # Editor directories and files
@@ -163,3 +166,10 @@ d0d0a7ec-65e0-410e-b98f-27c88a456d0d-IWFMjF6K9qRAFelVWbL7Og-output.mp4
 
 # Ralph loop bookkeeping (one per targeted PRD)
 scripts/ralph/.last-branch*
+
+# Playwright output (US-764). playwright-report/index.html and
+# test-results/.last-run.json were committed, so any local `playwright test`
+# run dirtied the tree and a report from one machine overwrote another's.
+test-results/
+playwright-report/
+a11y-results/

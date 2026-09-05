@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Authentication Flow Tests
@@ -7,11 +10,10 @@ import { test, expect } from '@playwright/test';
 
 const TEST_EMAIL = `test-${Date.now()}@example.com`;
 const TEST_PASSWORD = 'TestPassword123!';
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Authentication Flow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(BASE_URL);
+    await page.goto('/');
   });
 
   test('should display sign up and sign in forms', async ({ page }) => {
@@ -29,7 +31,7 @@ test.describe('Authentication Flow', () => {
   });
 
   test('should show validation errors for invalid inputs', async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
 
     // Click sign up tab
     await page.click('button:has-text("Sign Up")');
@@ -42,7 +44,7 @@ test.describe('Authentication Flow', () => {
   });
 
   test('should not allow sign up with invalid email', async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign Up")');
 
     // Fill invalid email
@@ -55,7 +57,7 @@ test.describe('Authentication Flow', () => {
   });
 
   test('should successfully sign up new user', async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign Up")');
 
     // Fill form
@@ -75,7 +77,7 @@ test.describe('Authentication Flow', () => {
   test('should successfully sign in existing user', async ({ page }) => {
     // Note: This test assumes a user already exists
     // In real tests, you'd set up test data beforehand
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
 
     // Fill form with existing credentials
@@ -90,7 +92,7 @@ test.describe('Authentication Flow', () => {
   });
 
   test('should show error for wrong password', async ({ page }) => {
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
 
     await page.fill('input[type="email"]', 'test@example.com');
@@ -103,7 +105,7 @@ test.describe('Authentication Flow', () => {
 
   test('should maintain session after page refresh', async ({ page }) => {
     // Sign in first
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -121,7 +123,7 @@ test.describe('Authentication Flow', () => {
 
   test('should successfully sign out', async ({ page }) => {
     // Sign in first
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');

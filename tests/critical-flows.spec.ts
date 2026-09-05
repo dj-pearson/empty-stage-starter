@@ -1,16 +1,18 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Critical User Flow Tests
  * End-to-end tests for core app functionality
  */
 
-const BASE_URL = 'http://localhost:8080';
 
 test.describe('Critical User Flows', () => {
   test.beforeEach(async ({ page }) => {
     // Sign in before each test
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign In")');
     await page.fill('input[type="email"]', 'test@example.com');
     await page.fill('input[type="password"]', 'TestPassword123!');

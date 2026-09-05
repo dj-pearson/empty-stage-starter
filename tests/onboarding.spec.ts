@@ -1,17 +1,19 @@
 import { test, expect } from '@playwright/test';
+import { requiresLiveBackend } from './helpers/requires-backend';
+
+requiresLiveBackend();
 
 /**
  * Onboarding Flow Tests
  * Tests new user onboarding experience
  */
 
-const BASE_URL = 'http://localhost:8080';
 const UNIQUE_EMAIL = `onboard-${Date.now()}@test.com`;
 
 test.describe('Onboarding Flow', () => {
   test('should redirect new users to onboarding', async ({ page }) => {
     // Sign up new user
-    await page.goto(`${BASE_URL}/auth`);
+    await page.goto('/auth');
     await page.click('button:has-text("Sign Up")');
     await page.fill('input[type="email"]', UNIQUE_EMAIL);
     await page.fill('input[type="password"]', 'TestPassword123!');
@@ -24,12 +26,12 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should display welcome screen', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
     await expect(page.locator('text=/welcome|get.*started|let.*begin/i')).toBeVisible({ timeout: 5000 });
   });
 
   test('should collect household information', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     // Look for household/family setup step
     const householdSection = page.locator('text=/household|family|member/i');
@@ -40,7 +42,7 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should add first child during onboarding', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     const addChildStep = page.locator('text=/add.*child|child.*profile|kid/i');
 
@@ -53,7 +55,7 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should set dietary preferences', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     const dietarySection = page.locator('text=/dietary|preference|restriction|allerg/i');
 
@@ -63,7 +65,7 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should navigate through onboarding steps', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     const nextButton = page.locator('button:has-text("Next"), button:has-text("Continue")');
 
@@ -74,7 +76,7 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should skip optional steps', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     const skipButton = page.locator('button:has-text("Skip"), a:has-text("Skip")');
 
@@ -84,7 +86,7 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should show progress through onboarding', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     const progressIndicator = page.locator('[role="progressbar"], .stepper, [data-testid="steps"]');
 
@@ -94,7 +96,7 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should complete onboarding and redirect to dashboard', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     // Try to complete onboarding
     const completeButton = page.locator('button:has-text("Complete"), button:has-text("Finish"), button:has-text("Get Started")');
@@ -108,7 +110,7 @@ test.describe('Onboarding Flow', () => {
   });
 
   test('should persist onboarding progress', async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`);
+    await page.goto('/onboarding');
 
     // Navigate to step 2
     const nextButton = page.locator('button:has-text("Next")');

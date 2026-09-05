@@ -65,14 +65,10 @@ export default defineConfig(({ mode }) => ({
       drop: ['console', 'debugger'],
     } : undefined,
     rollupOptions: {
-      // Handle circular dependencies (common in Three.js)
-      onwarn(warning, warn) {
-        // Suppress circular dependency warnings for Three.js
-        if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.ids?.some((id: string) => id.includes('three'))) {
-          return;
-        }
-        warn(warning);
-      },
+      // The CIRCULAR_DEPENDENCY suppressor that used to live here existed only
+      // to silence three.js, which US-772 removed. A warning filter outlives the
+      // thing it was written for and quietly hides the next real cycle, so it
+      // goes with the dependency.
       output: {
         // Manual chunking for better caching and smaller initial bundles
         manualChunks: (id) => {
@@ -124,15 +120,6 @@ export default defineConfig(({ mode }) => ({
             // in the same chunk as lowlight/@tiptap to avoid cross-chunk CJS interop failures
             if (id.includes('@tiptap') || id.includes('prosemirror') || id.includes('lowlight') || id.includes('highlight.js') || id.includes('react-syntax-highlighter')) {
               return 'vendor-tiptap';
-            }
-            // 3D graphics (only on landing page via lazy-loaded ThreeDHeroScene)
-            // Split into core (three.js engine) and ecosystem (@react-three + helpers)
-            // to keep each chunk under 500KB
-            if (/[\\/]node_modules[\\/]three[\\/]/.test(id)) {
-              return 'vendor-three-core';
-            }
-            if (id.includes('@react-three') || id.includes('meshline') || id.includes('camera-controls') || id.includes('maath') || id.includes('troika') || id.includes('three-mesh-bvh') || id.includes('three-stdlib') || id.includes('stats-gl')) {
-              return 'vendor-three-eco';
             }
             // Swagger UI (only on /api/docs page)
             // Split into core swagger package and its heavy dependencies

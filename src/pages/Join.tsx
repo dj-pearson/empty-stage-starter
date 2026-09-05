@@ -82,8 +82,13 @@ export default function Join() {
               <p className="text-muted-foreground">
                 You now share this household's kids, meal plans, and grocery lists.
               </p>
-              <Button onClick={() => { window.location.href = "/dashboard"; }} className="mt-2">
-                Go to dashboard
+              {/*
+                US-789: land on the household page, not the dashboard. Somebody
+                who has just accepted an invite wants to see who else is here
+                and what they now share, and that is the page that answers it.
+              */}
+              <Button onClick={() => { window.location.href = "/dashboard/household"; }} className="mt-2">
+                See your household
               </Button>
             </div>
           )}

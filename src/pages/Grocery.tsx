@@ -75,6 +75,16 @@ interface UserContribution {
 // src/lib/groceryData.ts (unit-tested) so they're separated from this JSX and
 // the heavy list subtree can memoize on stable outputs (US-553 AC2).
 
+/**
+ * The check-off control, sized for a thumb (US-767).
+ *
+ * The shadcn Checkbox is h-4 w-4 by default and this page overrode it to h-6
+ * w-6, which measured 24px against Apple's and Google's 44px floor -- on the
+ * one control a shopper uses standing in an aisle holding a phone in one hand.
+ * 44px below sm, back to a tidy 24 on a pointer device where precision is free.
+ */
+const GROCERY_CHECKBOX_CLASS = "shrink-0 h-11 w-11 sm:h-6 sm:w-6";
+
 export default function Grocery() {
   const { t } = useTranslation();
   const { foods, addFood, updateFood } = useFoods();
@@ -981,7 +991,8 @@ export default function Grocery() {
                         <Checkbox
                           checked={false}
                           onCheckedChange={() => handleToggleItem(item.id)}
-                          className="shrink-0"
+                          aria-label={`Check off ${item.name}`}
+                          className={GROCERY_CHECKBOX_CLASS}
                         />
                         {item.photo_url && (
                           <img
@@ -1013,7 +1024,7 @@ export default function Grocery() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
+                            className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, -1)}
                             disabled={item.quantity <= 1}
                             aria-label="Decrease quantity"
@@ -1026,7 +1037,7 @@ export default function Grocery() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
+                            className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                             onClick={() => handleQuantityChange(item.id, 1)}
                             aria-label="Increase quantity"
                           >
@@ -1036,7 +1047,7 @@ export default function Grocery() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                          className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                           onClick={() => setEditingItem(item)}
                           aria-label="Edit item"
                         >
@@ -1045,7 +1056,7 @@ export default function Grocery() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                           onClick={() => handleDeleteItem(item.id)}
                           aria-label="Delete item"
                         >
@@ -1081,7 +1092,8 @@ export default function Grocery() {
                             <Checkbox
                               checked={false}
                               onCheckedChange={() => handleToggleItem(item.id)}
-                              className="shrink-0"
+                              aria-label={`Check off ${item.name}`}
+                              className={GROCERY_CHECKBOX_CLASS}
                             />
 
                             {/* Item photo */}
@@ -1119,7 +1131,7 @@ export default function Grocery() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
+                                className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, -1)}
                                 disabled={item.quantity <= 1}
                                 aria-label="Decrease quantity"
@@ -1132,7 +1144,7 @@ export default function Grocery() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
+                                className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                                 onClick={() => handleQuantityChange(item.id, 1)}
                                 aria-label="Increase quantity"
                               >
@@ -1144,7 +1156,7 @@ export default function Grocery() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                              className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                               onClick={() => setEditingItem(item)}
                               aria-label="Edit item"
                             >
@@ -1154,7 +1166,7 @@ export default function Grocery() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                              className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                               onClick={() => handleDeleteItem(item.id)}
                               aria-label="Delete item"
                             >
@@ -1230,7 +1242,8 @@ export default function Grocery() {
                           <Checkbox
                             checked={true}
                             onCheckedChange={() => handleToggleItem(item.id)}
-                            className="shrink-0"
+                            aria-label={`Put ${item.name} back on the list`}
+                            className={GROCERY_CHECKBOX_CLASS}
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm line-through text-muted-foreground truncate">

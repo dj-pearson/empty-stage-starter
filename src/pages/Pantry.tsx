@@ -860,7 +860,10 @@ export default function Pantry() {
                 value={sortBy}
                 onValueChange={(v) => setSortBy(v as SortOption)}
               >
-                <SelectTrigger className="w-[160px] h-9 text-sm">
+                {/* aria-label (US-778): the trigger renders an icon and the
+                    selected value, so a screen reader announced it as an
+                    unnamed button -- the one critical violation on this page. */}
+                <SelectTrigger className="w-[160px] h-9 text-sm" aria-label="Sort pantry items">
                   <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 shrink-0" />
                   <SelectValue />
                 </SelectTrigger>

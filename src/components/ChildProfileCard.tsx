@@ -114,7 +114,13 @@ export function ChildProfileCard({
               {/* Profile completion indicator */}
               <div className="mt-2">
                 <div className="flex items-center gap-2">
-                  <Progress value={profileCompletion} className="h-1.5 w-24" />
+                  {/* aria-label (US-778): a progressbar with no name announces
+                      only a percentage, with nothing saying what it measures. */}
+                  <Progress
+                    value={profileCompletion}
+                    className="h-1.5 w-24"
+                    aria-label={`Profile ${profileCompletion}% complete`}
+                  />
                   <span className={`text-xs font-medium ${profileCompletion >= 80 ? "text-primary" : "text-muted-foreground"}`}>
                     Profile {profileCompletion}% complete
                   </span>
@@ -130,7 +136,15 @@ export function ChildProfileCard({
               </div>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={onEdit}>
+          {/* aria-label (US-778): icon-only, so it announced as an unnamed
+              button -- and it is rendered once per child, so the Kids page had
+              as many nameless controls as the household has children. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onEdit}
+            aria-label={`Edit ${kid.name}'s profile`}
+          >
             <Edit className="h-4 w-4" />
           </Button>
         </div>
@@ -243,7 +257,11 @@ export function ChildProfileCard({
                 <span className="text-muted-foreground">Meal Progress</span>
                 <span className="font-medium">{completedMeals} / {totalMeals}</span>
               </div>
-              <Progress value={mealProgress} className="h-2" />
+              <Progress
+                value={mealProgress}
+                className="h-2"
+                aria-label={`Meal progress: ${completedMeals} of ${totalMeals} complete`}
+              />
             </div>
           </TabsContent>
 
