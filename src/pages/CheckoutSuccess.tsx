@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
+import { trackPaidConversion } from "@/lib/conversion-tracking";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,13 @@ export default function CheckoutSuccess() {
         if (data) {
           setSubscription(data);
           setLoading(false);
+          // The paid conversion, recorded where it actually happens (US-779).
+          // Stripe's redirect landing here with a confirmed subscription row is
+          // the only point in the app that knows a payment completed; the
+          // funnel had every step up to checkout_start and then nothing, so
+          // paid_conversion was a defined event with no emitter and the
+          // conversion rate read as zero.
+          trackPaidConversion(data.plan_id ?? undefined, data.plan?.price_monthly ?? undefined);
           return;
         }
 
