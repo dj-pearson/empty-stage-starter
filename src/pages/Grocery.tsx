@@ -826,7 +826,17 @@ export default function Grocery() {
                   {purchasedCount} of {totalItems} items ({progressPercent}%)
                 </span>
               </div>
-              <Progress value={progressPercent} className="h-2" />
+              {/*
+                US-778: a progressbar with no accessible name. Radix renders
+                role="progressbar", and a screen reader announced a percentage
+                attached to nothing. The visible "Shopping progress" text above
+                is a sibling, not a label, so it does not name the bar.
+              */}
+              <Progress
+                value={progressPercent}
+                className="h-2"
+                aria-label={`Shopping progress: ${purchasedCount} of ${totalItems} items purchased`}
+              />
               <div className="flex items-center justify-between mt-2">
                 {milestone && (
                   <p className={`text-sm font-medium ${progressPercent >= 100 ? "text-primary" : "text-muted-foreground"}`}>
@@ -1201,8 +1211,17 @@ export default function Grocery() {
             {purchasedItems.length > 0 && activeItems.length > 0 && (
               <Collapsible open={purchasedOpen} onOpenChange={setPurchasedOpen}>
                 <Card className="overflow-hidden border-dashed">
-                  <CollapsibleTrigger className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-2">
+                  {/*
+                    US-778: "Move to pantry" used to sit INSIDE
+                    CollapsibleTrigger, which renders a button -- so this was a
+                    button nested in a button. Invalid HTML, and axe rates it
+                    nested-interactive (serious). The e.stopPropagation() on its
+                    handler was the tell: it existed because clicking the action
+                    also toggled the section. As siblings neither problem
+                    exists, so the stopPropagation goes with the nesting.
+                  */}
+                  <div className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                    <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left">
                       {purchasedOpen ? (
                         <ChevronDown className="h-4 w-4 text-muted-foreground" />
                       ) : (
@@ -1217,20 +1236,17 @@ export default function Grocery() {
                       <span className="text-xs text-muted-foreground">
                         - added to pantry
                       </span>
-                    </div>
+                    </CollapsibleTrigger>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-7 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDoneShopping();
-                      }}
+                      onClick={handleDoneShopping}
                     >
-                      <Check className="h-3 w-3 mr-1" />
+                      <Check className="h-3 w-3 mr-1" aria-hidden="true" />
                       Move to pantry
                     </Button>
-                  </CollapsibleTrigger>
+                  </div>
 
                   <CollapsibleContent>
                     <div className="divide-y border-t">
