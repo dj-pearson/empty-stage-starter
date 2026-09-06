@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Gzipped size budgets for the built JavaScript (US-775).
  *
@@ -28,6 +27,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = process.cwd();
 const JS_DIR = path.join(ROOT, 'dist', 'assets', 'js');
@@ -98,72 +98,90 @@ function budgetedKeys(sizes) {
   return [...sizes.keys()].filter((k) => k === 'index' || k.startsWith('vendor-')).sort();
 }
 
-const { sizes, total, fileCount } = measure();
+/**
+ * The CLI body, behind a run-as-script guard.
+ *
+ * This used to run at module scope, so `import { chunkKey }` from a test
+ * EXECUTED the whole check -- measured a dist/ that is not there and called
+ * process.exit(1) during collection. src/lib/bundleBudget.test.ts therefore
+ * never ran a single assertion, and reported as a failing FILE rather than as
+ * a failing test, which is easy to read past (US-787).
+ */
+function main() {
+  const { sizes, total, fileCount } = measure();
 
-if (process.argv.includes('--update')) {
-  const budgets = {};
-  for (const key of budgetedKeys(sizes)) {
-    budgets[key] = budgetFor(sizes.get(key));
+  if (process.argv.includes('--update')) {
+    const budgets = {};
+    for (const key of budgetedKeys(sizes)) {
+      budgets[key] = budgetFor(sizes.get(key));
+    }
+    const payload = {
+      _comment:
+        'Gzipped byte budgets for dist/assets/js, enforced by scripts/ci/check-bundle-budget.mjs. Measured values and the reasoning are in .ci/bundle-budget.md. Regenerate with --update only for a deliberate, explained change.',
+      _measuredAt: new Date().toISOString().slice(0, 10),
+      _headroom: HEADROOM,
+      totalJs: budgetFor(total),
+      chunks: budgets,
+    };
+    writeFileSync(BUDGET_FILE, JSON.stringify(payload, null, 2) + '\n');
+    console.log(`check-bundle-budget: wrote ${BUDGET_FILE}`);
+    console.log(`  total js ${total} gz across ${fileCount} files -> budget ${payload.totalJs}`);
+    process.exit(0);
   }
-  const payload = {
-    _comment:
-      'Gzipped byte budgets for dist/assets/js, enforced by scripts/ci/check-bundle-budget.mjs. Measured values and the reasoning are in .ci/bundle-budget.md. Regenerate with --update only for a deliberate, explained change.',
-    _measuredAt: new Date().toISOString().slice(0, 10),
-    _headroom: HEADROOM,
-    totalJs: budgetFor(total),
-    chunks: budgets,
-  };
-  writeFileSync(BUDGET_FILE, JSON.stringify(payload, null, 2) + '\n');
-  console.log(`check-bundle-budget: wrote ${BUDGET_FILE}`);
-  console.log(`  total js ${total} gz across ${fileCount} files -> budget ${payload.totalJs}`);
-  process.exit(0);
-}
 
-if (!existsSync(BUDGET_FILE)) {
-  throw new Error(
-    `check-bundle-budget: ${BUDGET_FILE} missing. Generate it with --update after a build.`
-  );
-}
-
-const budget = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'));
-const failures = [];
-const missing = [];
-
-for (const [key, limit] of Object.entries(budget.chunks ?? {})) {
-  const actual = sizes.get(key);
-  if (actual === undefined) {
-    // A budgeted chunk that vanished is not a failure -- it usually means a
-    // dependency was removed, which is the outcome we want -- but it must be
-    // said out loud so the budget file gets cleaned up.
-    missing.push(key);
-    continue;
-  }
-  if (actual > limit) failures.push({ key, actual, limit });
-}
-
-if (total > budget.totalJs) {
-  failures.push({ key: 'TOTAL js', actual: total, limit: budget.totalJs });
-}
-
-const kb = (n) => `${(n / 1000).toFixed(1)} kB`;
-
-for (const key of missing) {
-  console.log(`check-bundle-budget: note -- budgeted chunk "${key}" is gone. Drop it from ${path.relative(ROOT, BUDGET_FILE)}.`);
-}
-
-if (failures.length > 0) {
-  console.error('\nBundle budget exceeded (gzipped):\n');
-  for (const f of failures) {
-    console.error(
-      `  ${f.key.padEnd(22)} ${kb(f.actual).padStart(10)}  >  ${kb(f.limit).padStart(10)}  (+${kb(f.actual - f.limit)})`
+  if (!existsSync(BUDGET_FILE)) {
+    throw new Error(
+      `check-bundle-budget: ${BUDGET_FILE} missing. Generate it with --update after a build.`
     );
   }
-  console.error(
-    '\nEither make it smaller, or re-measure deliberately with --update and say why in the commit.\n'
+
+  const budget = JSON.parse(readFileSync(BUDGET_FILE, 'utf8'));
+  const failures = [];
+  const missing = [];
+
+  for (const [key, limit] of Object.entries(budget.chunks ?? {})) {
+    const actual = sizes.get(key);
+    if (actual === undefined) {
+      // A budgeted chunk that vanished is not a failure -- it usually means a
+      // dependency was removed, which is the outcome we want -- but it must be
+      // said out loud so the budget file gets cleaned up.
+      missing.push(key);
+      continue;
+    }
+    if (actual > limit) failures.push({ key, actual, limit });
+  }
+
+  if (total > budget.totalJs) {
+    failures.push({ key: 'TOTAL js', actual: total, limit: budget.totalJs });
+  }
+
+  const kb = (n) => `${(n / 1000).toFixed(1)} kB`;
+
+  for (const key of missing) {
+    console.log(`check-bundle-budget: note -- budgeted chunk "${key}" is gone. Drop it from ${path.relative(ROOT, BUDGET_FILE)}.`);
+  }
+
+  if (failures.length > 0) {
+    console.error('\nBundle budget exceeded (gzipped):\n');
+    for (const f of failures) {
+      console.error(
+        `  ${f.key.padEnd(22)} ${kb(f.actual).padStart(10)}  >  ${kb(f.limit).padStart(10)}  (+${kb(f.actual - f.limit)})`
+      );
+    }
+    console.error(
+      '\nEither make it smaller, or re-measure deliberately with --update and say why in the commit.\n'
+    );
+    process.exit(1);
+  }
+
+  console.log(
+    `check-bundle-budget: ${fileCount} files, ${kb(total)} gz total (budget ${kb(budget.totalJs)}); ${Object.keys(budget.chunks ?? {}).length} chunk budgets met.`
   );
-  process.exit(1);
+
 }
 
-console.log(
-  `check-bundle-budget: ${fileCount} files, ${kb(total)} gz total (budget ${kb(budget.totalJs)}); ${Object.keys(budget.chunks ?? {}).length} chunk budgets met.`
-);
+// Only when invoked as a script. `process.argv[1]` is the entry path; a test
+// that imports this module has a different one.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}
