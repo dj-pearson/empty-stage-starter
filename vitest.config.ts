@@ -9,6 +9,25 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: true,
+    /**
+     * The 5s default was making this suite a coin toss.
+     *
+     * Measured over five consecutive full runs with no code change between
+     * some of them: 7, 10, 12, 13 and 15 failures, a different set each time.
+     * Of the 15 in the last one, 12 were "Test timed out in 5000ms" and every
+     * single one passed when its file was run alone. The suite has tests that
+     * legitimately take seconds -- walking src/, running real scripts in
+     * throwaway git repos, rendering a 1400-line settings page -- and on a
+     * loaded machine they cross 5s and fail for no reason a reader can act on.
+     *
+     * A gate that reports a different answer each run is worse than a slow
+     * one: it trains people to rerun until it is green. 20s is about 4x the
+     * slowest legitimate test observed (4.9s), so a genuine hang still fails.
+     * hookTimeout is separate and was also being hit -- rewriteHistory's
+     * beforeAll runs git filter-branch over synthetic repos.
+     */
+    testTimeout: 20_000,
+    hookTimeout: 30_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
