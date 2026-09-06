@@ -18,6 +18,7 @@ import {
   Trophy,
   Settings,
   Accessibility,
+  CreditCard,
 } from "lucide-react";
 import {
   Sidebar,
@@ -291,6 +292,28 @@ export function AppSidebar() {
                   >
                     <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
                     {!isCollapsed && <span>Account Settings</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {/*
+                US-769: /dashboard/billing was routed and rendered but reachable
+                from nothing -- its only in-app link lived in a component that
+                was itself never imported. A page somebody pays through should
+                not be a URL you have to know.
+              */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Billing">
+                  <NavLink
+                    to="/dashboard/billing"
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 ${isActive
+                        ? "bg-primary/10 text-primary font-medium no-underline visited:no-underline"
+                        : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground no-underline visited:no-underline"
+                      }`
+                    }
+                  >
+                    <CreditCard className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {!isCollapsed && <span>Billing</span>}
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

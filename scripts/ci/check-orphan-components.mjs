@@ -47,7 +47,6 @@ const ALLOWED = new Map([
   ['components/MealPlanningCalendar.tsx', 'US-727 deletes it: a third planner implementation'],
   ['components/MealSuggestionCard.tsx', 'US-727 deletes it'],
   ['components/MealVotingCard.tsx', 'KEPT 2026-09-03: the card half of the meal-voting feature above.'],
-  ['components/NotificationBell.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
   ['components/NotificationPreferencesDialog.tsx', 'KEPT 2026-09-03: reads notification_preferences and profiles -- wired to real tables, never mounted.'],
   ['components/QuickActionsMenu.tsx', 'US-741 replaces the four hand-maintained nav lists with one NAV array'],
   ['components/QuickSuggestionsPanel.tsx', 'US-727 deletes it'],
@@ -58,15 +57,7 @@ const ALLOWED = new Map([
   ['components/admin/AIModelManager.tsx', 'KEPT 2026-09-03: reads ai_environment_config and ai_model_configurations -- wired to real tables, never mounted.'],
   ['components/admin/AITicketAnalysis.tsx', 'KEPT 2026-09-03: reads support_tickets and support_ticket_ai_analysis -- wired to real tables, never mounted.'],
   ['components/admin/StorageManagement.tsx', 'KEPT 2026-09-03: built for US-643 and has a passing test; that story shipped its UI unreachable.'],
-  ['components/billing/AddPaymentMethodDialog.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/billing/InvoicesList.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/billing/PaymentMethods.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/billing/SubscriptionOverview.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/subscription/EnhancedSubscriptionDialog.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/subscription/NotificationBell.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/subscription/SubscriptionOnboarding.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/subscription/UsageDashboard.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
-  ['components/subscription/UsageMeter.tsx', 'US-769 decides: rebuild Billing.tsx from these or delete them'],
+  ['components/subscription/UsageMeter.tsx', 'US-780 gates features on the subscription and mounts this at the entry points; US-769 kept it deliberately when the rest of subscription/ went'],
 ]);
 
 const EXTS = ['.tsx', '.ts', '/index.tsx', '/index.ts'];

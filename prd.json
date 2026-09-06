@@ -3053,11 +3053,11 @@
         "A render test for the billing page with a mocked subscription asserts invoices and the payment method render"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "slice": 3,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md). /dashboard/billing is in no navigation component; its only in-app link is SubscriptionOverview.tsx:245, which is itself never imported. Billing.tsx (453 lines) does not use src/components/billing/* (1234 lines, all unreferenced)."
+      "notes": "Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md). /dashboard/billing is in no navigation component; its only in-app link is SubscriptionOverview.tsx:245, which is itself never imported. Billing.tsx (453 lines) does not use src/components/billing/* (1234 lines, all unreferenced). || DONE 2026-09-05 (loop). AC 1: /dashboard/billing is now linked from the Account group of AppSidebar and from a Billing & invoices button at the top of the Subscription tab in AccountSettings. The route and the page both existed; the only in-app link was in SubscriptionOverview.tsx, which was itself never imported, so a page people pay through was reachable only by typing the URL. AC 2 DECIDED: DELETE. src/pages/dashboard/Billing.tsx is the live page and it routes the card, invoices and receipts to Stripe customer portal through manage-payment-methods action get-portal-url. The four components under src/components/billing (1234 lines, zero importers, no tests, never rendered for a user) re-implement card management and invoice generation in-app, which would put this product in the path of card data Stripe already handles. Deleted with index.ts. AC 3: EnhancedSubscriptionDialog, NotificationBell, SubscriptionOnboarding and UsageDashboard deleted; UsageMeter stays and its ALLOWED entry in check-orphan-components.mjs now names US-780 as the story that mounts it. src/components/NotificationBell.tsx, the top-level duplicate the orphan gate had also assigned to this story, went with them. Nine ALLOWED entries removed; the gate passes on 327 components. AC 4 ADJUSTED TO THE BRANCH TAKEN and said so in the test: the AC assumed the rebuild, so instead of asserting a hand-rolled invoice table it asserts the route to the portal works -- the button asks manage-payment-methods for a URL and opens it -- plus the plan name, the no-subscription path to /pricing, the loading state, and that both links exist. src/pages/dashboard/Billing.test.tsx, 6 tests. SIDE EFFECT FOR US-774: the generate-invoice edge function now has no client caller anywhere. manage-payment-methods still does, from Billing.tsx."
     },
     {
       "id": "US-770",

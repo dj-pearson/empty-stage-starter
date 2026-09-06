@@ -658,6 +658,18 @@ export default function AccountSettings() {
 
           {/* ==================== SUBSCRIPTION TAB ==================== */}
           <TabsContent value="subscription" className="space-y-6">
+            {/*
+              US-769: this tab shows the plan and cancels it; /dashboard/billing
+              is where invoices, receipts and the card live, through Stripe's
+              portal. That page had no link anywhere in the app, so the two
+              halves of billing were reachable only one at a time.
+            */}
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => navigate("/dashboard/billing")}>
+                <CreditCard className="mr-2 h-4 w-4" aria-hidden="true" />
+                Billing &amp; invoices
+              </Button>
+            </div>
             {subLoading ? (
               <Card>
                 <CardHeader>
