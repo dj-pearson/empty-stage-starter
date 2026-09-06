@@ -97,6 +97,25 @@ test.describe('Accessibility - authenticated pages', () => {
       // exists to track, and an assertion message only appears when it breaks.
       console.log(`[a11y] ${name}: ${nodeCount} serious/critical -- ${summary || 'none'}`);
 
+      // And the selectors, because a rule name is not enough to fix anything.
+      //
+      // This scan only runs in CI (it needs the fake backend and a built
+      // artifact), so its output is the ONLY view anyone gets of what failed.
+      // Reporting "button-name (critical, 1)" and nothing else sent me hunting
+      // through the source for an unnamed button, and I fixed the wrong one --
+      // the count went 7 to 5 instead of 7 to 4. The target is one line of
+      // output and it turns a guess into a lookup.
+      for (const v of serious) {
+        for (const node of v.nodes) {
+          console.log(`[a11y]   ${name} ${v.id}: ${node.target.join(' ')}`);
+          const detail = [...node.any, ...node.all, ...node.none]
+            .map((c) => c.message)
+            .filter(Boolean)
+            .join(' | ');
+          if (detail) console.log(`[a11y]     ${detail}`);
+        }
+      }
+
       const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Record<string, number>;
 
       expect(
