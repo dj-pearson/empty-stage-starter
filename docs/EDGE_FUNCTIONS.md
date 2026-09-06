@@ -983,3 +983,56 @@ supabase functions serve function-name --env-file .env.local
 
 **Document Version**: 1.0.0
 **Maintained by**: Development Team
+
+---
+
+## Caller audit (US-774, 2026-09-06)
+
+Eighteen functions under `supabase/functions/` are never invoked from `src/`.
+That is not the same as dead, so each was checked against every caller this repo
+can have: the web client, `ios/EatPal/**.swift`, the Expo tree under `app/`,
+`cron.schedule` in `supabase/migrations/`, and the routing table in
+`edge-functions-server.ts`. What follows is what that found, with the evidence,
+so the next person can disagree with a specific line rather than redo the sweep.
+
+**A caveat that limits every "no caller" row below.** A schedule configured in
+the Supabase dashboard, an external cron, or a third-party webhook is invisible
+from here. The repo contains eight `cron.schedule` calls in total and none of
+them names an edge function. So "nothing in the repo calls this" is the claim;
+"nothing calls this" needs someone to check the dashboard.
+
+| Function | Caller | Evidence |
+| --- | --- | --- |
+| `identify-product` | iOS | `ProductPhotoIdentifier.swift:70` invokes it; a rate-limit row exists in `20260613000001_rate_limit_config_ai_endpoints.sql`. **Keep** (AC 4). |
+| `app-store-notifications` | Apple | App Store Server Notifications V2 endpoint; Apple POSTs the signed payload. Not routable through `edge-functions-server.ts`, which is correct — Apple is given the URL directly. **Keep.** |
+| `register-push-token` | none | AC 4 confirmed: `NotificationService.swift:97` upserts `push_tokens` directly (US-379 moved it there). The only other mentions are comments. **Delete candidate.** |
+| `process-notification-queue` | none | The one iOS hit is a comment at `NotificationService.swift:70` describing what reads the table. **Delete candidate**, unless a dashboard schedule runs it. |
+| `backup-scheduler` | none | The one hit is a commented-out line in `20260726000000_tighten_permissive_rls_policies.sql:15`. **Needs a schedule or deletion.** |
+| `analyze-blog-quality`, `check-core-web-vitals`, `check-keyword-positions`, `generate-schema-markup`, `publish-scheduled-posts`, `run-scheduled-audit`, `send-seo-notification`, `track-serp-positions` | none | SEO/content automation. No client call, no `cron.schedule`. **Need a schedule or deletion**; all eight are routable through `edge-functions-server.ts`, so they are reachable by URL today. |
+| `process-email-sequences`, `weekly-summary-generator`, `schedule-meal-reminders`, `schedule-weekly-reports` | none | Scheduling belongs to household-planner US-747, which owns `schedule-meal-reminders` and the weekly reports. Recorded here, not duplicated (AC 3). |
+| `join-waitlist` | none | No caller on any client. **Delete candidate.** |
+| `generate-invoice` | none | Lost its only caller in US-769, when `src/components/billing/InvoicesList.tsx` was deleted for re-implementing Stripe's customer portal in-app. **Delete candidate.** |
+
+### What the routing table says
+
+`edge-functions-server.ts` maps 82 names to `./functions/<name>/index.ts`, and
+that path resolves inside the deployed container, not against this repo's root
+`functions/` directory — all 82 exist under `supabase/functions/`. Two facts
+fall out of the comparison and both belong to US-773:
+
+- **Six mapped functions are missing from the committed deploy package.**
+  `coolify-migration/eatpal-functions-package/` holds 79 directories and lacks
+  `ai-coach-chat`, `generate-pseo-content`, `oauth-token-refresh`,
+  `process-pseo-queue`, `send-webhook` and `test-ai-configuration`. Either that
+  package is a stale snapshot or those six routes 500 in production.
+- **Eleven functions under `supabase/functions/` are not in the map at all**:
+  `app-store-notifications`, `bind-email-request`, `bind-email-verify`,
+  `common`, `delete-account`, `generate-image`, `identify-product`,
+  `parse-receipt-image`, `recognize-fridge-contents`, `schedule-trial-reminders`
+  and `tonight-mode`. Some are deliberate (Apple is handed a direct URL), but
+  `delete-account` and the two `bind-email-*` functions are user-facing flows
+  and are worth checking against a live deploy.
+
+Deletion (AC 2) is deliberately not done in the same pass as the audit. Removing
+a function from the repo changes what the next deploy serves, and three of the
+"no caller" rows above turn on a dashboard schedule this repo cannot see.
