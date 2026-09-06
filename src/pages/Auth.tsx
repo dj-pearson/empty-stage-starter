@@ -34,6 +34,12 @@ import {
 import { loginHistory, type LoginMethod } from "@/lib/login-history";
 import { trackSignup, trackPageView } from "@/lib/conversion-tracking";
 import { checkRateLimit, recordAttempt, clearRateLimit, formatRetryAfter } from "@/lib/rateLimiter";
+import {
+  classifyOtpError,
+  isUnconfirmedEmailError,
+  otpFailureMessageKey,
+} from "@/lib/authOtpErrors";
+import { allowedEmailRedirect } from "@/lib/authRedirect";
 
 // Password requirement checks for real-time validation feedback
 interface PasswordRequirements {
@@ -95,6 +101,12 @@ const Auth = () => {
   const [otpCode, setOtpCode] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  // US-702: what went wrong with the last code, kept on the screen rather than
+  // fired as a toast that is gone by the time the user looks back at the field.
+  const [otpError, setOtpError] = useState<string | null>(null);
+  // Set when the code screen was reached from a sign-in that failed only
+  // because the address was never verified, so the copy can say why.
+  const [otpFromUnconfirmedSignIn, setOtpFromUnconfirmedSignIn] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // Real-time email validation
@@ -271,7 +283,10 @@ const Auth = () => {
         // below verifies the code, so this only governs the link -- and without
         // it GoTrue falls back to SITE_URL, which Coolify pins to the Kong
         // gateway, so clicking the link landed on a 401 JSON body.
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // US-701 AC 4: a redirect GoTrue will not honour is replaced by that
+        // same fallback with no error anywhere, so it is checked against the
+        // allow list here rather than assumed.
+        emailRedirectTo: allowedEmailRedirect(`${window.location.origin}/auth/callback`),
         // Record a demonstrable consent trail on the user (GDPR Art. 7(1)):
         // acceptance flag, timestamp, policy version, and guardian/18+ attestation.
         data: {
@@ -292,6 +307,8 @@ const Auth = () => {
       // Show OTP verification screen
       setPendingEmail(email);
       setShowOtpVerification(true);
+      setOtpError(null);
+      setOtpFromUnconfirmedSignIn(false);
       setResendCooldown(60);
       toast("Check your email!", { description: "We've sent a 6-digit verification code to your email." });
     }
@@ -318,7 +335,19 @@ const Auth = () => {
     if (error) {
       // Log failed OTP verification
       loginHistory.logFailedLogin(pendingEmail, 'otp', error.message);
-      toast.error("Verification Failed", { description: error.message });
+      // US-702 AC 2: a wrong code and an expired one arrive with the same
+      // GoTrue string but need opposite remedies -- retype, or resend. Say
+      // which, on the screen, instead of forwarding the raw message.
+      const failure = classifyOtpError(error);
+      const description = t(otpFailureMessageKey(failure));
+      setOtpError(description);
+      if (failure === 'expired') {
+        // Nothing is gained by making someone wait to replace a code that is
+        // already dead; the cooldown exists to throttle mail, and no mail went
+        // out for a failed verify.
+        setResendCooldown(0);
+      }
+      toast.error(t('auth.otpVerifyFailed'), { description });
     } else {
       // Log successful OTP login
       if (data.user) {
@@ -344,8 +373,11 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
-      toast.error("Error", { description: error.message });
+      const description = t(otpFailureMessageKey(classifyOtpError(error)));
+      setOtpError(description);
+      toast.error("Error", { description });
     } else {
+      setOtpError(null);
       setResendCooldown(60);
       toast.success("Code Resent", { description: "A new verification code has been sent to your email." });
     }
@@ -355,6 +387,8 @@ const Auth = () => {
     setShowOtpVerification(false);
     setOtpCode("");
     setPendingEmail("");
+    setOtpError(null);
+    setOtpFromUnconfirmedSignIn(false);
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -395,6 +429,25 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
+      // US-702 AC 4: an account that was created but never verified fails here
+      // with "Email not confirmed" and nothing to do about it. That is not a
+      // credential failure, so it must not consume rate-limit budget either --
+      // route the user to the code screen and send a fresh code.
+      if (isUnconfirmedEmailError(error)) {
+        loginHistory.logFailedLogin(email, 'password', error.message);
+        setPendingEmail(email);
+        setOtpCode("");
+        setOtpError(null);
+        setOtpFromUnconfirmedSignIn(true);
+        setShowOtpVerification(true);
+        setResendCooldown(60);
+        void supabase.auth.resend({ type: "signup", email });
+        toast(t('auth.unconfirmedTitle'), {
+          description: t('auth.unconfirmedDescription', { email }),
+        });
+        return;
+      }
+
       // Record failed attempt for rate limiting (client-side, fast feedback)
       recordAttempt(email);
       // US-617: and server-side — only a genuine failure consumes budget, so a
@@ -605,10 +658,18 @@ const Auth = () => {
                         <Mail className="h-8 w-8 text-primary" />
                       </div>
                     </div>
-                    <CardTitle className="text-center">{t('auth.checkEmail')}</CardTitle>
+                    <CardTitle className="text-center">
+                      {otpFromUnconfirmedSignIn ? t('auth.unconfirmedTitle') : t('auth.checkEmail')}
+                    </CardTitle>
                     <CardDescription className="text-center">
-                      We sent a 6-digit code to<br />
-                      <span className="font-medium text-foreground">{pendingEmail}</span>
+                      {otpFromUnconfirmedSignIn
+                        ? t('auth.unconfirmedDescription', { email: pendingEmail })
+                        : (
+                          <>
+                            {t('auth.otpSentTo')}<br />
+                            <span className="font-medium text-foreground">{pendingEmail}</span>
+                          </>
+                        )}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -630,19 +691,34 @@ const Auth = () => {
                         </InputOTP>
                       </div>
 
+                      {/*
+                        US-702 AC 2: the outcome stays on the screen. A toast is
+                        gone by the time somebody looks back at the six boxes,
+                        and "expired" versus "wrong" is the whole information.
+                      */}
+                      {otpError && (
+                        <p
+                          role="alert"
+                          className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                        >
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span>{otpError}</span>
+                        </p>
+                      )}
+
                       <LoadingButton
                         type="submit"
                         className="w-full h-11"
                         isLoading={loading}
                         disabled={otpCode.length !== 6}
                       >
-                        Verify Email
+                        {t('auth.otpVerify')}
                       </LoadingButton>
 
                       <div className="text-center text-sm text-muted-foreground">
-                        Didn't receive the code?{" "}
+                        {t('auth.otpResendPrompt')}{" "}
                         {resendCooldown > 0 ? (
-                          <span>Resend in {resendCooldown}s</span>
+                          <span>{t('auth.otpResendIn', { seconds: resendCooldown })}</span>
                         ) : (
                           <Button
                             type="button"
@@ -651,9 +727,25 @@ const Auth = () => {
                             onClick={handleResendCode}
                             disabled={loading}
                           >
-                            Resend code
+                            {t('auth.otpResend')}
                           </Button>
                         )}
+                      </div>
+
+                      {/*
+                        US-702 AC 1: an empty field and a resend link is not a
+                        failure state. Name the three things that actually go
+                        wrong -- the mail is filtered, the address is wrong, or
+                        the user is hunting for a link this deployment cannot
+                        send (GOTRUE_SITE_URL is pinned to the Kong gateway).
+                      */}
+                      <div className="rounded-lg border bg-muted/40 p-4 text-left text-sm">
+                        <p className="mb-2 font-medium text-foreground">{t('auth.otpNoCodeTitle')}</p>
+                        <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                          <li>{t('auth.otpCheckSpam')}</li>
+                          <li>{t('auth.otpCheckAddress', { email: pendingEmail })}</li>
+                          <li>{t('auth.otpCodeOnly')}</li>
+                        </ul>
                       </div>
                     </form>
                   </CardContent>

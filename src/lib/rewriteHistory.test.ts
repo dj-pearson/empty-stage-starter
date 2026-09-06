@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { execFileSync } from 'child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, copyFileSync } from 'fs';
 import { randomBytes } from 'crypto';
@@ -25,6 +25,15 @@ import path from 'path';
  * that turn a sed s||| into a syntax error or a wrong match, and which are why
  * the script uses perl \Q..\E with the values passed through the environment.
  */
+
+/**
+ * This file is the slowest in the suite by an order of magnitude and earns it:
+ * every case runs git filter-branch over a real synthetic repository, twice in
+ * some cases. 11.8s alone, and it crossed even the raised 20s global timeout
+ * under a full parallel run. Its own budget, so the global one stays tight
+ * enough to catch a genuine hang everywhere else.
+ */
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 const IP = '203.0.113.10';
 const PW = 'p@ss|w0rd&with\\back$lash.and*star';
@@ -58,6 +67,11 @@ beforeAll(() => {
   git(['init', '-q', '.']);
   git(['config', 'user.email', 't@t']);
   git(['config', 'user.name', 't']);
+  // Windows sets core.autocrlf=true globally, so git checks the fixtures back
+  // out with CRLF and two byte-exact assertions failed on the line endings
+  // rather than on anything rewrite-history.sh did. The fixture repo should
+  // behave the same everywhere; the script's own handling is what is on trial.
+  git(['config', 'core.autocrlf', 'false']);
 
   writeFileSync(path.join(repo, 'NOTES.md'), `server ${IP}\npass ${PW}\n`);
   writeFileSync(path.join(repo, 'deploy.ps1'), `$env:PGPASSWORD = "${PW}"\n$ip = "${IP}"\n`);
@@ -219,6 +233,10 @@ describe('US-556: a credential inside a binary', () => {
     g(['init', '-q', '.']);
     g(['config', 'user.email', 't@t']);
     g(['config', 'user.name', 't']);
+    // See the note on the other fixture repo: Windows' global core.autocrlf
+    // rewrites NOTES.md on checkout and the byte-exact assertion below fails
+    // on line endings rather than on the script's behaviour.
+    g(['config', 'core.autocrlf', 'false']);
     writeFileSync(
       path.join(binRepo, 'keystore.bin'),
       Buffer.concat([randomBytes(64), Buffer.from(PW, 'latin1'), randomBytes(64)])

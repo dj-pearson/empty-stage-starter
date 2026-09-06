@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Static server over dist/ that resolves URLs the way Cloudflare Pages does.
  *

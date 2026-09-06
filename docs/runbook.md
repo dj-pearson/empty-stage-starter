@@ -14,12 +14,17 @@
 ### Setup
 - **DSN**: Set `VITE_SENTRY_DSN` in environment
 - **Org/Project**: Set `SENTRY_ORG` and `SENTRY_PROJECT` for sourcemap uploads
-- Session replay enabled in production for debugging
+- Session replay is **gated on analytics consent**, not on the environment.
+  `src/lib/sentry.tsx` adds `replayIntegration` only when `hasAnalyticsConsent()`
+  is true (compliance audit 2026-07). Error and performance monitoring run
+  regardless. So an issue from a visitor who declined analytics has a stack
+  trace and no replay, and that is expected rather than a Sentry fault.
 
 ### Triage Process
 1. Check Sentry dashboard for new unresolved issues
 2. Assess severity by impact (users affected, feature criticality)
-3. P0/P1: Immediately investigate stack trace and session replay
+3. P0/P1: Immediately investigate the stack trace, and the session replay when
+   one exists (see the consent gate above)
 4. P2: Create issue, schedule fix within sprint
 5. P3: Triage in weekly review
 

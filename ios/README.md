@@ -95,4 +95,14 @@ Each successful deploy creates a git tag `ios/v<version>+<build>`.
 ## Not yet included
 
 - Auto-submission for App Store review (the workflow uploads only; submit manually in App Store Connect).
-- Sentry DSN wiring on iOS (web is done, iOS uses console logging).
+
+## Sentry
+
+Wired (US-151). `EatPalApp.init()` calls `SentryService.configure()` before
+anything that can crash. The DSN comes from `SENTRY_DSN` in Info.plist, via the
+same env substitution as `SUPABASE_URL`, and `beforeSend` scrubs emails, names
+and tokens before an event leaves the device.
+
+It is **off in DEBUG** on purpose, so a developer build reports nothing and that
+is not a fault. It is also off in any build where `SENTRY_DSN` is empty or still
+the literal `$(SENTRY_DSN)` — check that first when a release seems silent.

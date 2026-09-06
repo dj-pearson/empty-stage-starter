@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Stamp a build id into dist/sw.js (US-765).
  *

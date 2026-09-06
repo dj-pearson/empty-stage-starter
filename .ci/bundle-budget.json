@@ -1,6 +1,6 @@
 {
-  "_comment": "Gzipped byte budgets for dist/assets/js, enforced by scripts/ci/check-bundle-budget.mjs. Measured values and the reasoning are in .ci/bundle-budget.md. Regenerate with --update only for a deliberate, explained change.",
-  "_measuredAt": "2026-09-05",
+  "_comment": "Gzipped byte budgets for dist/assets/js, enforced by scripts/ci/check-bundle-budget.mjs. Measured values and the reasoning are in .ci/bundle-budget.md. Regenerate with --update only for a deliberate, explained change. vendor-supabase was raised from 2932 to 42000 on 2026-09-06: see .ci/bundle-budget.md, the 0.9 kB measurement behind the old number is not reproducible.",
+  "_measuredAt": "2026-09-06",
   "_headroom": 1.05,
   "totalJs": 2510000,
   "chunks": {
@@ -13,7 +13,7 @@
     "vendor-react": 63000,
     "vendor-router": 10643,
     "vendor-sentry": 136000,
-    "vendor-supabase": 2932,
+    "vendor-supabase": 42000,
     "vendor-swagger": 306000,
     "vendor-swagger-deps": 36000,
     "vendor-tiptap": 149000,

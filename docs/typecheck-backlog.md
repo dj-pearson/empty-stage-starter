@@ -15,9 +15,16 @@ via [`scripts/ci/typecheck-ratchet.sh`](../scripts/ci/typecheck-ratchet.sh).
   ([`scripts/ci/no-new-any.sh`](../scripts/ci/no-new-any.sh)) fails on any newly
   ADDED explicit `any` in changed `src/` files.
 
-Current baseline: see `.ci/typecheck-baseline.txt` — **1257**, ratcheted down from the
-1537 measured at introduction (2026-08-06). The drop came from US-536/US-546 and the
-stories after them, not from excluding anything: the ratchet only ever moves down.
+Current baseline: **read it from [`.ci/typecheck-baseline.txt`](../.ci/typecheck-baseline.txt)**.
+This line used to carry the number as well, and it went stale twice (it said 1257 long
+after the file said otherwise), so the number now lives in exactly one place. It was 1537
+when the ratchet was introduced on 2026-08-06 and has only ever moved down — the drops came
+from US-536/US-546 and the stories after them, not from excluding anything.
+
+A caveat worth keeping in mind when reading any of these figures: `npm run typecheck`
+alone is not a reliable local signal, because `tsc -b` skips the project when
+`tsconfig.app.tsbuildinfo` looks current and exits 0 without checking. Delete the
+`*.tsbuildinfo` files first. The gate is `scripts/ci/typecheck-ratchet.sh`.
 
 ## Shrink plan
 
@@ -26,23 +33,29 @@ task. Prefer **narrow `// @ts-expect-error` on the exact offending line** over a
 blanket file/glob exclude, so type coverage self-heals: an `@ts-expect-error`
 that stops being needed becomes a lint error and forces its own removal.
 
-### `tsconfig-bypass.json` excludes to retire (highest-value first)
+### `tsconfig-bypass.json` excluded nothing (US-776, 2026-09-06)
 
-`src/components/admin/**/*.tsx` is the largest blanket exclude (SEOManager.tsx
-alone is ~281 errors — see US-553 for its decomposition). Replace the glob with
-per-file entries, then convert each file's errors to `@ts-expect-error` and
-delete it from the exclude list. Track progress here:
+**The file was inert and is deleted.** It listed a blanket
+`src/components/admin/**/*.tsx` plus nine per-file excludes, and this section
+used to describe retiring them one at a time. None of them was ever in effect.
 
-- [ ] `src/components/admin/**/*.tsx` → split into per-file entries
-- [ ] `src/components/AIMealCoach.tsx`
-- [ ] `src/components/FoodChainingRecommendations.tsx`
-- [ ] `src/components/ImportCsvDialog.tsx`
-- [ ] `src/components/ManageKidsDialog.tsx`
-- [ ] `src/components/OrderIngredientsDialog.tsx`
-- [ ] `src/components/RecipeExportActions.tsx`
-- [ ] `src/components/RecipeSchemaMarkup.tsx`
-- [ ] `src/components/SmartRestockSuggestions.tsx`
-- [ ] `src/components/SupportWidget.tsx`
+`npm run typecheck` is `tsc -b`, which builds the references in `tsconfig.json`:
+`tsconfig.app.json` and `tsconfig.node.json`. `tsconfig.app.json` is
+`"include": ["src"]` with **no `exclude` key at all**, and nothing in the repo --
+no tsconfig, no script, no workflow -- ever referenced `tsconfig-bypass.json`.
+Everything it named has been typechecked all along, and its errors were always
+inside the ratchet count.
+
+So the story that owned this expected removing the exclude to *raise* the
+baseline by the newly counted errors. There were none to count: the number did
+not move. `src/lib/tsconfigCoverage.test.ts` now asserts no tsconfig excludes
+anything under `src/`, so a real bypass cannot arrive quietly the way this
+imaginary one persisted.
+
+The admin errors this section worried about did fall, but from US-761 rather
+than from any exclude: regenerating `types.ts` against the migrated schema took
+the whole-repo count from 1152 to 814, and most of what it fixed was exactly the
+missing table types named below.
 
 ### Top non-excluded error hotspots (from the baseline run)
 

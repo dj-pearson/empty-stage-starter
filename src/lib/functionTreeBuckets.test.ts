@@ -30,7 +30,10 @@ function resolvedEntrypoint(name: string): string {
   const section = config.slice(config.indexOf(`[functions.${name}]`));
   const body = section.slice(0, section.indexOf('\n[', 1));
   const explicit = body.match(/entrypoint\s*=\s*"([^"]+)"/)?.[1];
-  if (explicit) return path.normalize(path.join('supabase', explicit));
+  // Every caller compares this against a POSIX-shaped literal ('functions/...')
+  // or calls startsWith('functions/') on it, and path.join hands back
+  // backslashes on Windows -- so both assertions failed there and only there.
+  if (explicit) return path.normalize(path.join('supabase', explicit)).replace(/\\/g, '/');
   return `supabase/functions/${name}/index.ts`;
 }
 

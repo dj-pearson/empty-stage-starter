@@ -103,7 +103,17 @@ export default function Home() {
   const needsMoreFoods = safeFoods < 5;
   const needsMealPlan = kidPlanEntries.length === 0 && safeFoods >= 3;
 
-  // Calculate streak from planEntries
+  // Calculate the streak for the ACTIVE KID.
+  //
+  // US-781: this read the unfiltered `planEntries` while `kidPlanEntries` sat
+  // one line above it, so a household with two children showed a streak counted
+  // across both of them -- a day where either child ate kept the other child's
+  // streak alive. Wrong under every candidate streak rule, so it is fixed here
+  // rather than waiting on which rule wins.
+  //
+  // The rule itself is still one of three in this codebase and they disagree;
+  // see PLATFORMS.md. This one counts any day carrying a result, breaks on the
+  // first gap, and forgives today.
   const streak = useMemo(() => {
     const today = new Date();
     let count = 0;
@@ -111,12 +121,12 @@ export default function Home() {
       const date = new Date(today);
       date.setDate(date.getDate() - d);
       const dateStr = date.toISOString().split("T")[0];
-      const hasResult = planEntries.some(e => e.date === dateStr && e.result);
+      const hasResult = kidPlanEntries.some(e => e.date === dateStr && e.result);
       if (hasResult) count++;
       else if (d > 0) break; // Break on first gap (but not today)
     }
     return count;
-  }, [planEntries]);
+  }, [kidPlanEntries]);
 
   const handleExport = () => {
     const data = exportData();

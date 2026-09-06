@@ -3,8 +3,15 @@
 ## Pre-Deploy
 
 - [ ] CI pipeline passes (all jobs green)
-- [ ] `npm run lint` - zero errors
-- [ ] `npx tsc --noEmit` - zero TypeScript errors
+- [ ] `bash scripts/ci/lint-ratchet.sh` - at or below `.ci/lint-baseline.txt`
+- [ ] `rm -f *.tsbuildinfo && bash scripts/ci/typecheck-ratchet.sh` - at or below
+      `.ci/typecheck-baseline.txt`
+
+  Neither gate is "zero errors", and asking for zero here made this checklist
+  unpassable rather than strict: both are ratchets against a committed baseline,
+  and there is a standing backlog. A green run means you added nothing new. The
+  `rm` matters — `tsc -b` skips the project when the buildinfo looks current and
+  exits 0 having checked nothing.
 - [ ] `npx vitest run` - all tests pass
 - [ ] `npx vite build` - production build succeeds
 - [ ] Review PR changes for security concerns (no exposed secrets, XSS, SQL injection)
@@ -18,19 +25,42 @@
 
 ## Deploy - Web (Cloudflare Pages)
 
-### Automatic (preferred)
+### THE DECISION (US-762): Pages deploys, CI does not
+
+**The Cloudflare Pages Git integration is the only deploy path.** It builds
+this repo itself, from the configuration in the Cloudflare dashboard. CI builds
+and tests the artifact and ships nothing.
+
+This was decided because the two paths already existed and only one worked. The
+`deploy-production` and `deploy-staging` jobs in `ci.yml` were skipped on every
+run for want of `CLOUDFLARE_API_TOKEN` -- and, worse, their credential check
+emitted a warning and passed, so a run where nothing shipped reported success.
+Reading the CI run list could not tell you whether main had reached
+tryeatpal.com. Both jobs are deleted.
+
+`wrangler.toml` stays, and stays entirely commented out. That is load-bearing:
+with no configuration in it, Pages falls back to the dashboard settings, which
+is how the site actually deploys. Uncommenting one line in August 2026 switched
+Pages into full config validation, which then demanded a `name` that is also
+commented out, and broke the deploy (reverted in 36ec2f3b). The file carries the
+whole story so the next person does not repeat it.
+
+### Automatic (the only path)
 ```bash
-# Push to main triggers auto-deploy via GitHub Actions
+# Pages watches the branch and builds it. Nothing in GitHub Actions deploys.
 git push origin main
 ```
 
-### Manual
+### Manual, for an emergency only
 ```bash
 # Build
 npx vite build
 
-# Deploy
-npx wrangler pages deploy dist
+# A direct push, bypassing the Git integration. Needs the project name the
+# DASHBOARD uses -- the repo does not know it, and the two candidates on record
+# ("eatpal-empty-stage" in wrangler.toml, "eatpal" in the deleted CI job)
+# disagree. Check the dashboard before running this.
+npx wrangler pages deploy dist --project-name=<from the dashboard>
 ```
 
 ### Verify Deployment
@@ -67,7 +97,13 @@ supabase functions deploy <function-name>
 supabase functions deploy
 ```
 
-**Available functions:** health-check, calculate-food-similarity, suggest-foods, suggest-recipe, ai-meal-plan, create-checkout, stripe-webhook, parse-recipe, generate-blog-content, generate-social-content, update-blog-image, ai-coach-chat
+**Available functions:** see [`docs/EDGE_FUNCTIONS.md`](EDGE_FUNCTIONS.md).
+
+This line used to name twelve of them. There are 95 under `supabase/functions/`
+and 50 under `functions/` (two trees — `scripts/ci/check-function-trees.sh` says
+which copy is live), so a hand-maintained list here was wrong within a release
+and read as authoritative. US-774 is auditing which of them any client still
+calls.
 
 ## Post-Deploy
 

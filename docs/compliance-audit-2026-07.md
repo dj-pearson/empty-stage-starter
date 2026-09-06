@@ -174,8 +174,33 @@ Implemented on branch `claude/compliance-audit-docs-accessibility-a780au`:
 | P3‑14 | security.txt + broaden export | ✅ Done | `/.well-known/security.txt`; export adds `quiz_responses`/`meal_voting` |
 
 **Still open (intentionally deferred):**
-- **AI no‑train/zero‑retention flags** on `ai-coach-chat` / `ai-meal-plan` requests (disclosure done; provider‑side flag not yet set).
-- **Retention auto‑purge** background job for inactive accounts (policy documented; no scheduled job yet).
+- **AI no-train / zero-retention (US-783, partly closed 2026-09-06).** The premise of this
+  row was wrong and that matters more than the fix: **neither provider has a per-request
+  no-train or zero-retention parameter**, so no code change can close it on its own.
+  - *Anthropic*: the Messages API request body has no retention field at all. Anthropic does
+    not train on API traffic, and zero data retention is configured for the **organisation**.
+    `supabase/functions/_shared/ai-service-v2.ts` therefore sends nothing here, deliberately.
+  - *OpenAI*: `store: false` is now sent explicitly on every request. It already defaulted to
+    false, but a default is not a guarantee. It is **not** a no-train flag: inputs and outputs
+    still sit in abuse-monitoring retention (published as up to 30 days) unless the
+    organisation is approved for Zero Data Retention, under which `store` is forced false
+    regardless of the request.
+  - **Operator action, and the only thing that actually closes this row**: request Zero Data
+    Retention for the EatPal organisation with both providers. Until that is granted, child
+    PII in these payloads is subject to each provider's standard abuse-monitoring retention.
+  - Asserted by `supabase/functions/_shared/ai-retention.test.ts` (in CI): the OpenAI body
+    carries `store: false`, and the Anthropic body carries none of `store`, `no_train`,
+    `zero_retention`, `retention` or `data_retention` -- an invented parameter reads as
+    compliance and is not.
+- **Retention auto-purge** background job for inactive accounts. **Blocked on a decision, not
+  on code (US-783).** This row says "policy documented", and the policy does not document what
+  this job needs: `src/pages/PrivacyPolicy.tsx` §7 says data is kept "as long as your account
+  is active" and is deleted on account deletion. It states **no inactivity window**, so there
+  is no documented threshold to purge against, and picking one is a decision about deleting
+  real children's records rather than an implementation detail. Row 91 of this audit is the
+  accurate version: no general retention or auto-purge exists (GDPR Art. 5(1)(e)).
+  - **Needed before any job is written**: an inactivity window, agreed and then published in
+    the privacy policy, plus whether the treatment is deletion or anonymisation.
 - **Hardcoded‑color → semantic‑token migration** (679 instances) — large mechanical sweep, deferred to avoid a noisy high‑risk diff.
 - **Authenticated‑page a11y scanning** — needs a Playwright auth fixture.
 - **Legal copy is DRAFT** — all new Privacy/Terms sections require counsel review before shipping; historical `accepts_marketing=true` rows are left as a marketing/legal decision.

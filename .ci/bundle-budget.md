@@ -47,7 +47,7 @@ re-measured until it means nothing.
 | `vendor-forms`        | ~12 kB        | 13 kB   |
 | `vendor-query`        | ~12 kB        | 13 kB   |
 | `vendor-router`       | ~9 kB         | 10 kB   |
-| `vendor-supabase`     | ~0.9 kB       | 2.9 kB  |
+| `vendor-supabase`     | 39.5 kB       | 42 kB   |
 | **Total JS**          | **2617.3 kB** | 2749 kB |
 
 ## What the numbers say
@@ -60,7 +60,9 @@ Four chunks are worth calling out, and all four have an open story:
   hero (`ThreeDHeroScene.tsx`), on a beta `@react-three/fiber`. US-772 drops it.
 - **`vendor-gsap` at 58 kB sits beside framer-motion**, which is already loaded.
   US-727 removes GSAP from the app routes and US-772 finishes the job.
-- `vendor-supabase` at ~1 kB is a re-export shim, not the client itself.
+- `vendor-supabase` was measured at ~1 kB when this was written and called a
+  re-export shim. It is 39.5 kB in every build reproducible today -- the client
+  itself. See the correction at the end of this file.
 
 Removing swagger, three and gsap would take roughly 570 kB gzipped off the
 total, a little over a fifth of it, without touching a line of product code.
@@ -110,3 +112,37 @@ rollup picked next. The split is what keeps it isolated, not what makes it big.
 could move to CSS today, and `GSAPCalendarMealPlanner`, which is the LIVE
 planner. Removing the dependency waits on household-planner US-727 taking GSAP
 out of the planner, exactly as US-772's own AC 2 says.
+
+## Correction, 2026-09-06: vendor-supabase 2.9 kB -> 42 kB
+
+The `vendor-supabase` budget was 2932 bytes, set from a measurement of "~0.9 kB,
+a re-export shim, not the client itself". **That measurement is not**
+**reproducible, and the gate had never run in CI to catch it.**
+
+It could not run: the Build job needs the Unit Tests job, Unit Tests was red on
+main, so Build was skipped on every run from the day this gate landed. Repairing
+the test suite made Build execute for the first time and it failed here at once
+(run 34038095165).
+
+Two independent real builds agree with each other and disagree with the budget:
+
+- the committed `dist/` from 2026-07-14, gzipped locally: **39,533 bytes**
+- a fresh CI build on 2026-09-06: **39.5 kB**
+
+Two months apart, same number. So the client itself lands in this chunk and the
+0.9 kB shim measurement describes some build that cannot be produced today.
+Budget raised to `budgetFor(39533)` = 42000, the script's own formula.
+
+**The total was never the problem.** A local run also reports TOTAL js over
+budget, but that is the July dist, which still contains `vendor-three-core` and
+`vendor-three-eco` — about 227 kB that US-772 removed. CI's fresh build does not
+flag the total at all.
+
+**What this leaves open.** A chunk-level budget is only meaningful if chunking is
+deterministic, and one chunk moving 40 kB between two generations of this file is
+evidence against that. The total passing in both builds says the bytes moved
+between chunks rather than appearing, so the next person to touch
+`vite.config.ts` manual chunking should re-measure every row here rather than
+trusting the table. The rows above `vendor-supabase` still list
+`vendor-three-core` and `vendor-three-eco`, which no longer ship; the JSON has
+already dropped them.
