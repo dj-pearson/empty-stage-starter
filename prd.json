@@ -3431,6 +3431,21 @@
       "priority": 2,
       "passes": false,
       "notes": "Found by the US-701 flow audit 2026-09-05. The Swift client in ios/EatPal has the same gap and it belongs to US-703, not here. Decide first whether the Expo tree ships at all: [[eatpal-deploy-model]] says it is being retired, in which case deleting the screen is the correct fix and cheaper than building a code entry nobody will see."
+    },
+    {
+      "id": "US-792",
+      "title": "prd-verify flips stories on a green gate, not on their acceptance criteria",
+      "description": "As someone reading prd.json to decide what to work on, I want passes:true to mean the story is done, so that the backlog is not confidently wrong.",
+      "acceptanceCriteria": [
+        "scripts/ralph/verify-stories.mjs no longer flips passes:true on (a commit mentions the id) AND (the platform gate job returned success). Those two facts together do not establish that any acceptance criterion is met",
+        "A gate whose result is masked by continue-on-error cannot count as green for a flip: the E2E job returns success while the a11y scan inside it fails, which is how US-778 was flipped to verified:web-green during a run where its own scan was red",
+        "A story a human or agent has explicitly set to passes:false with a reason in notes is not re-flipped automatically; the engine needs an opt-out it honours",
+        "The flip stamp records which gate ran and what it proves, rather than only that a job was green",
+        "A test covers the case: a story with an implementing commit, a green gate and a failing inner step must NOT flip"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Found 2026-09-06 while working US-778. THE FLIP CONDITION IS verify-stories.mjs:180-187: impl = hasImplementation(id), which is only \"some commit message references US-XXX\", AND isGreen(GATES[gate]), which is the whole platform job result. Acceptance criteria are never read. THIS IS THE SYSTEMIC CAUSE OF A PATTERN HIT THREE TIMES IN ONE SESSION. US-775 was recorded passing while its bundle-budget gate had never executed, because Build was skipped whenever Unit Tests was red. US-778 was recorded passing while its a11y scan had never executed, via the same chain. And in run 34045999299 the engine flipped US-767, US-772, US-778, US-782 and US-789 to verified:web-green -- including US-778, whose a11y scan was FAILING in that very run. E2E carries continue-on-error (US-764 AC 3, deliberately, for its first two weeks), so the web gate reports success regardless of what fails inside it. US-772 was flipped in the same batch and has acceptance criteria explicitly blocked on US-727. IMMEDIATE PRACTICAL CONSEQUENCE: a story an agent carefully reopens with passes:false and a written reason is silently re-flipped on the next PR run, so the reopen does not survive. That was masked this time only because the Commit flipped flags step itself failed. The engine is not wrong to exist -- a green gate is real evidence. It is wrong about what that evidence proves."
     }
   ]
 }
