@@ -499,17 +499,22 @@ jobs:
           supabase gen types typescript --local > artifacts/types.generated.ts
           echo "Generated $(wc -l < artifacts/types.generated.ts) lines."
 
-      - name: Report type drift (informational)
-        continue-on-error: true
+      # US-761: blocking. It was informational, and drifted to 113 missing
+      # tables -- funnel_events, apple_subscriptions, stripe_webhook_events
+      # and the rest -- because a warning nobody is forced to read is a
+      # warning nobody reads. The step could not even run until US-760 fixed
+      # the config path that killed `supabase start`.
+      - name: Report type drift
         run: |
           if diff -q src/integrations/supabase/types.ts artifacts/types.generated.ts >/dev/null 2>&1; then
             echo "types.ts is in sync with migrations."
           else
-            echo "::warning::src/integrations/supabase/types.ts differs from the migrated schema. Download the 'supabase-types' artifact and commit it (or run: supabase gen types typescript --local > src/integrations/supabase/types.ts)."
+            echo "::error::src/integrations/supabase/types.ts differs from the migrated schema. Download the 'supabase-types' artifact and commit it (or run: supabase gen types typescript --local > src/integrations/supabase/types.ts)."
             echo "----- tables present in regenerated types -----"
             grep -oE '^      [a-z_]+: \{' artifacts/types.generated.ts | sed -E 's/[ :{]//g' | sort | sed 's/^/  /'
             echo "----- unified diff (truncated to 400 lines) -----"
             diff -u src/integrations/supabase/types.ts artifacts/types.generated.ts | head -400 || true
+            exit 1
           fi
 
       - name: Upload regenerated types
