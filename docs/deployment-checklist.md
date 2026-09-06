@@ -3,8 +3,15 @@
 ## Pre-Deploy
 
 - [ ] CI pipeline passes (all jobs green)
-- [ ] `npm run lint` - zero errors
-- [ ] `npx tsc --noEmit` - zero TypeScript errors
+- [ ] `bash scripts/ci/lint-ratchet.sh` - at or below `.ci/lint-baseline.txt`
+- [ ] `rm -f *.tsbuildinfo && bash scripts/ci/typecheck-ratchet.sh` - at or below
+      `.ci/typecheck-baseline.txt`
+
+  Neither gate is "zero errors", and asking for zero here made this checklist
+  unpassable rather than strict: both are ratchets against a committed baseline,
+  and there is a standing backlog. A green run means you added nothing new. The
+  `rm` matters — `tsc -b` skips the project when the buildinfo looks current and
+  exits 0 having checked nothing.
 - [ ] `npx vitest run` - all tests pass
 - [ ] `npx vite build` - production build succeeds
 - [ ] Review PR changes for security concerns (no exposed secrets, XSS, SQL injection)
@@ -67,7 +74,13 @@ supabase functions deploy <function-name>
 supabase functions deploy
 ```
 
-**Available functions:** health-check, calculate-food-similarity, suggest-foods, suggest-recipe, ai-meal-plan, create-checkout, stripe-webhook, parse-recipe, generate-blog-content, generate-social-content, update-blog-image, ai-coach-chat
+**Available functions:** see [`docs/EDGE_FUNCTIONS.md`](EDGE_FUNCTIONS.md).
+
+This line used to name twelve of them. There are 95 under `supabase/functions/`
+and 50 under `functions/` (two trees — `scripts/ci/check-function-trees.sh` says
+which copy is live), so a hand-maintained list here was wrong within a release
+and read as authoritative. US-774 is auditing which of them any client still
+calls.
 
 ## Post-Deploy
 

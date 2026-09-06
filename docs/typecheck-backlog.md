@@ -15,9 +15,16 @@ via [`scripts/ci/typecheck-ratchet.sh`](../scripts/ci/typecheck-ratchet.sh).
   ([`scripts/ci/no-new-any.sh`](../scripts/ci/no-new-any.sh)) fails on any newly
   ADDED explicit `any` in changed `src/` files.
 
-Current baseline: see `.ci/typecheck-baseline.txt` — **1257**, ratcheted down from the
-1537 measured at introduction (2026-08-06). The drop came from US-536/US-546 and the
-stories after them, not from excluding anything: the ratchet only ever moves down.
+Current baseline: **read it from [`.ci/typecheck-baseline.txt`](../.ci/typecheck-baseline.txt)**.
+This line used to carry the number as well, and it went stale twice (it said 1257 long
+after the file said otherwise), so the number now lives in exactly one place. It was 1537
+when the ratchet was introduced on 2026-08-06 and has only ever moved down — the drops came
+from US-536/US-546 and the stories after them, not from excluding anything.
+
+A caveat worth keeping in mind when reading any of these figures: `npm run typecheck`
+alone is not a reliable local signal, because `tsc -b` skips the project when
+`tsconfig.app.tsbuildinfo` looks current and exits 0 without checking. Delete the
+`*.tsbuildinfo` files first. The gate is `scripts/ci/typecheck-ratchet.sh`.
 
 ## Shrink plan
 

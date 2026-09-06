@@ -1,15 +1,15 @@
 Priority,Section,Item,Status,Description,Effort,Dependencies
-P0-Critical,CI/CD,GitHub Actions test workflow,Not Started,Run tests on every PR to catch regressions early,Medium,None
-P0-Critical,CI/CD,GitHub Actions lint workflow,Not Started,ESLint and Prettier checks on every PR,Low,None
-P0-Critical,CI/CD,GitHub Actions build workflow,Not Started,Production build verification on main branch,Low,None
+P0-Critical,CI/CD,GitHub Actions test workflow,Done,Unit Tests job in .github/workflows/ci.yml runs vitest on every PR,Medium,None
+P0-Critical,CI/CD,GitHub Actions lint workflow,Done,Lint & Typecheck job in .github/workflows/ci.yml; both are ratchets against .ci/lint-baseline.txt and .ci/typecheck-baseline.txt,Low,None
+P0-Critical,CI/CD,GitHub Actions build workflow,Done,Build job in .github/workflows/ci.yml; also enforces .ci/bundle-budget.json,Low,None
 P0-Critical,CI/CD,GitHub Actions deploy workflow,Not Started,Automated deployment to Cloudflare Pages,Medium,Build workflow
-P0-Critical,CI/CD,Security scanning in CI,Not Started,OWASP ZAP or Snyk for vulnerability scanning,Medium,Build workflow
+P0-Critical,CI/CD,Security scanning in CI,Done,Security SAST Scan and Dependency Vulnerability Scan jobs in .github/workflows/ci.yml,Medium,Build workflow
 P0-Critical,API Documentation,OpenAPI 3.0 specification,Not Started,Generate API spec from Supabase types and Edge Functions,High,None
 P0-Critical,API Documentation,Swagger UI deployment,Not Started,Interactive API docs at /api/docs,Medium,OpenAPI spec
 P0-Critical,API Documentation,Edge Function documentation,Not Started,Document all 65+ Edge Function contracts,High,None
 P0-Critical,Testing,Expand E2E test coverage,Partial,Increase from 3 to 20+ test suites covering all critical flows,High,None
-P0-Critical,Disaster Recovery,Disaster recovery plan document,Not Started,Document RTO/RPO targets and recovery procedures,Medium,None
-P0-Critical,Disaster Recovery,Backup restoration testing,Not Started,Regular testing of backup restoration procedures,Medium,Backup system
+P0-Critical,Disaster Recovery,Disaster recovery plan document,Done,docs/DISASTER_RECOVERY.md,Medium,None
+P0-Critical,Disaster Recovery,Backup restoration testing,Done,docs/BACKUP_RESTORATION_TESTING.md,Medium,Backup system
 P1-High,Core Auth,Two-factor authentication (2FA/MFA),Not Started,Add TOTP or SMS-based 2FA for enhanced security,High,Auth system
 P1-High,Core Auth,API key management system,Not Started,Allow users to generate and manage API keys for integrations,Medium,None
 P1-High,Core Auth,OAuth refresh token rotation,Not Started,Implement secure token rotation strategy,Medium,Auth system
@@ -24,7 +24,7 @@ P1-High,GDPR/Compliance,Cookie consent banner,Not Started,GDPR-compliant cookie 
 P1-High,GDPR/Compliance,Data deletion workflow,Not Started,Automated workflow for processing deletion requests,Medium,User management
 P1-High,Mobile,GitHub Actions mobile build workflow,Not Started,Automated EAS builds for iOS and Android,High,CI/CD
 P1-High,Mobile,Push notification certificate management,Not Started,Automated cert renewal and management,Medium,Push notifications
-P1-High,Testing,Accessibility testing (axe-core),Not Started,Automated a11y testing in CI pipeline,Medium,CI/CD
+P1-High,Testing,Accessibility testing (axe-core),Done,tests/accessibility/authenticated-a11y.spec.ts runs in the E2E (Playwright) job of .github/workflows/ci.yml (US-778),Medium,CI/CD
 P1-High,Testing,Performance testing framework,Not Started,Load testing with k6 or Artillery,High,None
 P1-High,Monitoring,Uptime monitoring and status page,Not Started,External monitoring with public status page,Medium,None
 P1-High,Monitoring,Real-time alerts (Slack/email),Not Started,Alert team on critical errors and outages,Medium,Sentry integration

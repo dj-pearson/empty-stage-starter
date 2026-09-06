@@ -52,7 +52,7 @@ jobs:
       # (the check is clean across all 383 components as of this commit), and
       # nothing else catches it. ESLint's no-undef is off for TS, and tsc does
       # report it but the typecheck step is a count-based ratchet, so one more
-      # TS2304 hides inside a backlog of 1257.
+      # TS2304 hides inside the backlog counted in .ci/typecheck-baseline.txt.
       - name: Check components are imported
         run: node scripts/ci/check-jsx-imports.mjs
 
@@ -65,8 +65,9 @@ jobs:
 
       # US-553 split SEOManager (5593 lines) into 13 tab components and 8
       # hooks. The whole-file typecheck is a count-based ratchet, so a
-      # TS2304 introduced by that kind of move hides inside a backlog of
-      # 1257; this narrows to src/components/admin/seo/ and fails on
+      # TS2304 introduced by that kind of move hides inside the backlog
+      # counted in .ci/typecheck-baseline.txt; this narrows to
+      # src/components/admin/seo/ and fails on
       # undefined identifiers alone. It has existed since US-553 and was
       # only ever reachable as `npm run typecheck:seo` -- a gate nobody
       # runs gates nothing, which is the same failure as the tsconfig
