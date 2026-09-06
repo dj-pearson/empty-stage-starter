@@ -33,23 +33,29 @@ task. Prefer **narrow `// @ts-expect-error` on the exact offending line** over a
 blanket file/glob exclude, so type coverage self-heals: an `@ts-expect-error`
 that stops being needed becomes a lint error and forces its own removal.
 
-### `tsconfig-bypass.json` excludes to retire (highest-value first)
+### `tsconfig-bypass.json` excluded nothing (US-776, 2026-09-06)
 
-`src/components/admin/**/*.tsx` is the largest blanket exclude (SEOManager.tsx
-alone is ~281 errors — see US-553 for its decomposition). Replace the glob with
-per-file entries, then convert each file's errors to `@ts-expect-error` and
-delete it from the exclude list. Track progress here:
+**The file was inert and is deleted.** It listed a blanket
+`src/components/admin/**/*.tsx` plus nine per-file excludes, and this section
+used to describe retiring them one at a time. None of them was ever in effect.
 
-- [ ] `src/components/admin/**/*.tsx` → split into per-file entries
-- [ ] `src/components/AIMealCoach.tsx`
-- [ ] `src/components/FoodChainingRecommendations.tsx`
-- [ ] `src/components/ImportCsvDialog.tsx`
-- [ ] `src/components/ManageKidsDialog.tsx`
-- [ ] `src/components/OrderIngredientsDialog.tsx`
-- [ ] `src/components/RecipeExportActions.tsx`
-- [ ] `src/components/RecipeSchemaMarkup.tsx`
-- [ ] `src/components/SmartRestockSuggestions.tsx`
-- [ ] `src/components/SupportWidget.tsx`
+`npm run typecheck` is `tsc -b`, which builds the references in `tsconfig.json`:
+`tsconfig.app.json` and `tsconfig.node.json`. `tsconfig.app.json` is
+`"include": ["src"]` with **no `exclude` key at all**, and nothing in the repo --
+no tsconfig, no script, no workflow -- ever referenced `tsconfig-bypass.json`.
+Everything it named has been typechecked all along, and its errors were always
+inside the ratchet count.
+
+So the story that owned this expected removing the exclude to *raise* the
+baseline by the newly counted errors. There were none to count: the number did
+not move. `src/lib/tsconfigCoverage.test.ts` now asserts no tsconfig excludes
+anything under `src/`, so a real bypass cannot arrive quietly the way this
+imaginary one persisted.
+
+The admin errors this section worried about did fall, but from US-761 rather
+than from any exclude: regenerating `types.ts` against the migrated schema took
+the whole-repo count from 1152 to 814, and most of what it fixed was exactly the
+missing table types named below.
 
 ### Top non-excluded error hotspots (from the baseline run)
 

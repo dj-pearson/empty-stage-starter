@@ -3178,11 +3178,11 @@
         "docs/typecheck-backlog.md lists the remaining per-file counts after the exclude is gone"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "slice": 3,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md). Errors under src/components/admin are not in the 1165 baseline at all because tsconfig-bypass.json excludes the directory. Depends on US-761. Household-planner US-755 owns the tsconfig.node.json fix and the ratchet honesty; this story owns the exclude."
+      "notes": "Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md). Errors under src/components/admin are not in the 1165 baseline at all because tsconfig-bypass.json excludes the directory. Depends on US-761. Household-planner US-755 owns the tsconfig.node.json fix and the ratchet honesty; this story owns the exclude. || DONE 2026-09-06 (loop), AND THE PREMISE WAS FALSE. The story says errors under src/components/admin are not in the baseline at all because tsconfig-bypass.json excludes the directory. They were always in it. npm run typecheck is tsc -b, which builds the references in tsconfig.json - tsconfig.app.json and tsconfig.node.json - and tsconfig.app.json is include:[src] with NO exclude key at all. Nothing in the repo referenced tsconfig-bypass.json: not a tsconfig, not a script, not a workflow, only docs and comments describing it. So its blanket admin glob and its nine per-file entries excluded nothing, and everything they named has been typechecked all along. AC 1 satisfied by deleting the dead file. AC 2 was already handled by US-761 rather than by anything here: regenerating types.ts against the migrated schema dropped the whole-repo count from 1152 to 814, and the doc named missing table types as the source of most SEOManager errors. AC 3 IS A NO-OP AND THAT IS THE PROOF: raising the baseline by the newly counted errors was the plan, there were none to count, and CI reporting 814 again after the deletion is what demonstrates the exclude was inert. AC 4: docs/typecheck-backlog.md replaces its retire-the-excludes checklist with what is actually true. PINNED by src/lib/tsconfigCoverage.test.ts (4 tests): typecheck is tsc -b over the app project, tsconfig.app.json includes src with an empty exclude, no tsconfig anywhere excludes a src/ path, and no bypass config exists or is referenced - so a REAL exclude has to announce itself instead of arriving as a line in a file nobody reads. The harm was never the dead exclude; it was believing in it, which made the ratchet count look like partial coverage and invited add-it-to-the-bypass as a way past a red build."
     },
     {
       "id": "US-777",
