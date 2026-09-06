@@ -106,7 +106,16 @@ export function GroceryListSelector({
   return (
     <div className="flex items-center gap-2">
       <Select value={selectedListId || undefined} onValueChange={onListChange}>
-        <SelectTrigger className="w-64">
+        {/*
+          US-778: the trigger needs its own name, not one borrowed from its
+          contents. SelectValue renders the children below only when
+          `selectedList` resolves, and shows the placeholder only when no value
+          is set -- so a stored list id that is not in the fetched lists gives
+          both an empty value and no placeholder, and the button ends up with no
+          accessible name at all. axe rates that critical, and it is the state
+          CI scans in.
+        */}
+        <SelectTrigger className="w-64" aria-label="Grocery list">
           <SelectValue placeholder="Select a list">
             {selectedList && (
               <div className="flex items-center gap-2">
