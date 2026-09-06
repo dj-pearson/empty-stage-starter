@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -932,12 +931,51 @@ export default function Grocery() {
             {/* ─── Group Toggle ─── */}
             {activeItems.length > 0 && (
               <div className="mb-4">
-                <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as "category" | "aisle")}>
-                  <TabsList className="grid w-full max-w-xs grid-cols-2">
-                    <TabsTrigger value="aisle">By Aisle</TabsTrigger>
-                    <TabsTrigger value="category">By Category</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                {/*
+                  US-778: this was a Tabs with no TabsContent.
+
+                  Radix puts aria-controls on every TabsTrigger, pointing at the
+                  panel for that value. There were no panels -- the grouped list
+                  is rendered further down, outside the Tabs -- so both triggers
+                  advertised aria-controls="radix-...-content-aisle" for ids that
+                  do not exist. axe rates that critical (aria-valid-attr-value),
+                  and it is honest about the cause: this is a segmented control,
+                  not a set of tabs, because nothing here is a tab panel.
+
+                  So it is a group of toggle buttons now, which is what it always
+                  was. aria-pressed carries the state, no element claims to
+                  control a panel, and the classes are copied verbatim from
+                  TabsList and TabsTrigger (including the data-[state=active]
+                  styles, applied conditionally) so it renders identically.
+
+                  One deliberate difference: TabsList's `inline-flex` is gone.
+                  The page passed `grid`, and cn()'s tailwind-merge resolved
+                  that display conflict in favour of the later class. There is
+                  no cn() here, so keeping both would leave the winner to
+                  stylesheet order rather than to intent.
+                */}
+                <div
+                  role="group"
+                  aria-label="Group items by"
+                  className="grid h-10 w-full max-w-xs grid-cols-2 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground"
+                >
+                  {([
+                    ["aisle", "By Aisle"],
+                    ["category", "By Category"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={groupBy === value}
+                      onClick={() => setGroupBy(value)}
+                      className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+                        groupBy === value ? "bg-background text-foreground shadow-sm" : ""
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
