@@ -155,12 +155,27 @@ function renderAuth() {
   );
 }
 
+/**
+ * Enter a value in one keystroke.
+ *
+ * `user.type` fires a full event sequence per character, and this page
+ * re-renders its password-requirement indicators on every one of them: typing
+ * the three fields character by character took 4.9s under full-suite load and
+ * tripped vitest's 5s default, so these tests passed alone and failed in the
+ * suite. Paste is one input event and asserts the same thing.
+ */
+async function fill(user: ReturnType<typeof userEvent.setup>, label: string, value: string) {
+  const field = await screen.findByLabelText(label);
+  await user.click(field);
+  await user.paste(value);
+}
+
 /** Fill the signup form and submit it, landing on the code screen. */
 async function signUpToCodeScreen() {
   const user = userEvent.setup();
-  await user.type(await screen.findByLabelText('Email'), EMAIL);
-  await user.type(await screen.findByLabelText('Password'), PASSWORD);
-  await user.type(await screen.findByLabelText('Confirm Password'), PASSWORD);
+  await fill(user, 'Email', EMAIL);
+  await fill(user, 'Password', PASSWORD);
+  await fill(user, 'Confirm Password', PASSWORD);
   await user.click(await screen.findByRole('checkbox'));
   await user.click(await screen.findByRole('button', { name: /^sign up$/i }));
   await screen.findByRole('button', { name: /verify email/i });
@@ -281,8 +296,8 @@ describe('US-702 AC 4: a returning unconfirmed account', () => {
   async function signIn() {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('tab', { name: /sign ?in/i }));
-    await user.type(await screen.findByLabelText('Email'), EMAIL);
-    await user.type(await screen.findByLabelText('Password'), PASSWORD);
+    await fill(user, 'Email', EMAIL);
+    await fill(user, 'Password', PASSWORD);
     await user.click(screen.getByRole('button', { name: /^sign in$/i }));
     return user;
   }
