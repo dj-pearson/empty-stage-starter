@@ -456,6 +456,15 @@ jobs:
       - name: Deno meal-plan template transforms
         run: deno test supabase/functions/_shared/meal-plan-templates.test.ts
 
+      # US-783: these payloads carry child PII. The OpenAI request must send
+      # store:false, and the Anthropic one must NOT carry an invented
+      # retention field -- the Messages API has no per-request equivalent, so
+      # sending one would read as compliance without being any.
+      # --allow-net is for the supabase import the module pulls at check time;
+      # the test itself stubs fetch and reaches no provider.
+      - name: Deno AI retention flags
+        run: deno test --allow-env --allow-net supabase/functions/_shared/ai-retention.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           # US-760: pinned, not `latest`. Both Supabase jobs run the same

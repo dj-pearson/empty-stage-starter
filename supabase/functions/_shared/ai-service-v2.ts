@@ -225,6 +225,21 @@ export class AIServiceV2 {
     const timeout = setTimeout(() => controller.abort(), timeoutMs || this.config.timeoutMs);
 
     try {
+      // US-783: there is deliberately no retention parameter on this body.
+      //
+      // The Anthropic Messages API has no per-request no-train or
+      // zero-retention field -- the request surface is model, messages, system,
+      // max_tokens, thinking, output_config, tools and so on, and none of them
+      // controls retention. Anthropic does not train on API traffic, and zero
+      // data retention is configured for the ORGANISATION, not per call; a
+      // request from an org whose retention configuration does not meet a
+      // model's requirement is rejected with a 400, which is the only way this
+      // setting is visible from here at all.
+      //
+      // So the OpenAI branch below sets `store: false` and this one sets
+      // nothing, and that asymmetry is correct rather than an oversight. What
+      // actually closes this for both providers is the operator step in
+      // docs/compliance-audit-2026-07.md rows 177-178.
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -300,6 +315,20 @@ export class AIServiceV2 {
           messages: request.messages,
           max_tokens: request.maxTokens || 4000,
           temperature: request.temperature ?? this.config.temperature,
+          // US-783. These payloads carry child PII, so do not let OpenAI keep a
+          // retrievable copy of the completion. `store` already defaults to
+          // false, but a default is not a guarantee: sending it explicitly means
+          // a change on their side cannot quietly start storing our traffic.
+          //
+          // BE CLEAR ABOUT WHAT THIS DOES NOT DO. It is not a no-train flag and
+          // not zero retention. OpenAI does not train on API traffic for
+          // business accounts either way, and inputs and outputs still sit in
+          // abuse-monitoring retention (published as up to 30 days) unless the
+          // ORGANISATION is approved for Zero Data Retention, which is an
+          // arrangement with OpenAI, not a request field. Under ZDR this
+          // parameter is forced false regardless of what we send.
+          // docs/compliance-audit-2026-07.md rows 177-178 carry the operator step.
+          store: false,
         }),
         signal: controller.signal,
       });
