@@ -524,11 +524,20 @@ jobs:
       # provider secrets that don't exist in CI), so it is informational:
       # it never blocks the pipeline, but the JSON/HTML report is uploaded
       # so per-function pass/fail can drive the next iteration.
+      # US-760: bounded, and no dev server. This step had never run -- the
+      # Supabase jobs died before reaching it -- and the first run that got
+      # here sat in it for forty minutes. These specs hit Supabase on 54321
+      # through playwright's `request` fixture and none of them opens a page,
+      # so PW_NO_WEBSERVER stops the config starting `npm run dev` for them.
+      # timeout-minutes because continue-on-error does not bound a hang: an
+      # unbounded step runs to the 6-hour job limit and the run never ends.
       - name: Run critical edge-function tests
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_edge_tests }}
         continue-on-error: true
+        timeout-minutes: 10
         env:
           CI: 'true'
+          PW_NO_WEBSERVER: '1'
           VITE_SUPABASE_URL: http://localhost:54321
           VITE_FUNCTIONS_URL: http://localhost:54321
         run: |
@@ -537,7 +546,12 @@ jobs:
           eval "$(supabase status -o env | sed 's/^/export SB_/')"
           export VITE_SUPABASE_ANON_KEY="${SB_ANON_KEY:-$VITE_SUPABASE_ANON_KEY}"
           export SUPABASE_SERVICE_ROLE_KEY="${SB_SERVICE_ROLE_KEY:-}"
-          npm run test:functions:critical
+          # --project=chromium, not the default. These are `request`-fixture
+          # API tests, and without it playwright fans all six specs out over
+          # five browser projects (chromium, firefox, webkit and two mobile),
+          # with retries: 2 on each -- for tests that never open a browser, in
+          # a job where only chromium is installed.
+          npx playwright test --project=chromium tests/functions/critical/
 
       - name: Upload edge-function results
         if: always()

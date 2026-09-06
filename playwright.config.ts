@@ -118,12 +118,26 @@ export default defineConfig({
    * depend on a 4-minute build, and a stale dist/ is better caught by the
    * assertions than hidden by an implicit rebuild.
    */
-  webServer: {
-    command: TARGET_DIST
-      ? `node scripts/dev/serve-dist.mjs --port ${PORT} --dist ${DIST_DIR}`
-      : 'npm run dev',
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  /*
+   * US-760: PW_NO_WEBSERVER=1 skips it entirely.
+   *
+   * tests/functions/critical/ talks to Supabase on 54321 through the `request`
+   * fixture -- not one of its six specs uses `page`. Playwright started
+   * `npm run dev` for them anyway, because a webServer block applies to every
+   * invocation of this config. That step had never actually run in CI (the
+   * Supabase jobs died before reaching it), and the first run that got there
+   * sat in it for forty minutes with no timeout to stop it.
+   *
+   * A suite that needs no browser should not be starting a dev server.
+   */
+  webServer: process.env.PW_NO_WEBSERVER
+    ? undefined
+    : {
+        command: TARGET_DIST
+          ? `node scripts/dev/serve-dist.mjs --port ${PORT} --dist ${DIST_DIR}`
+          : 'npm run dev',
+        url: BASE_URL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120 * 1000,
+      },
 });
