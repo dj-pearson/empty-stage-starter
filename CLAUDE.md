@@ -150,6 +150,13 @@ const channel = supabase.channel('changes').on('postgres_changes',
 
 Migrations: `supabase migration new <name>` → edit SQL → `supabase db push` → `supabase gen types typescript --local > src/integrations/supabase/types.ts`.
 
+CLI version is **pinned to 2.116.0** in both Supabase jobs in `ci.yml` (US-760); use the
+same one locally or the generated `types.ts` will differ cosmetically from CI's. Paths
+inside `supabase/config.toml` are checked by `scripts/ci/check-supabase-config.mjs`, which
+runs before `supabase start` — `content_path` resolves from the **project root**, not from
+`supabase/`, and a leading `../` there climbs out of the repo and aborts the CLI in under
+two seconds. That is what kept Migration Test and Types Drift red for twenty runs.
+
 ### Migration Rules (Backward Compatibility)
 
 The DB is shared by every shipped iOS version still on users' phones. Min-supported version is whatever sits in `MIN_SUPPORTED_IOS_BUILD` (see app config) — any column/table that build reads is **load-bearing for production users** and cannot be removed.

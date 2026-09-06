@@ -391,7 +391,17 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # US-760: pinned, not `latest`. Both Supabase jobs run the same
+          # version, and a CLI release cannot red this pipeline without a
+          # commit in this repo. Bump deliberately.
+          version: 2.116.0
+
+      # US-760: `supabase start` aborts in under two seconds when a path in
+      # config.toml does not resolve, and from the run list that is
+      # indistinguishable from Docker failing to come up. Name the failure
+      # before spending a minute booting containers.
+      - name: Validate supabase config
+        run: node scripts/ci/check-supabase-config.mjs
 
       - name: Start local Supabase
         run: supabase start --exclude gotrue,storage-api,imgproxy,inbucket,postgrest,realtime,edge-runtime,logflare,vector,supavisor
@@ -447,10 +457,20 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # US-760: pinned, not `latest`. Both Supabase jobs run the same
+          # version, and a CLI release cannot red this pipeline without a
+          # commit in this repo. Bump deliberately.
+          version: 2.116.0
 
       # Full stack (db + auth + edge-runtime) so the edge-function suite
       # has live endpoints to hit. Heavier than migration-test on purpose.
+      # US-760: `supabase start` aborts in under two seconds when a path in
+      # config.toml does not resolve, and from the run list that is
+      # indistinguishable from Docker failing to come up. Name the failure
+      # before spending a minute booting containers.
+      - name: Validate supabase config
+        run: node scripts/ci/check-supabase-config.mjs
+
       - name: Start local Supabase
         run: supabase start --exclude imgproxy,logflare,vector,supavisor
 
