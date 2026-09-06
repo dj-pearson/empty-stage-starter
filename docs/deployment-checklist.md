@@ -25,19 +25,42 @@
 
 ## Deploy - Web (Cloudflare Pages)
 
-### Automatic (preferred)
+### THE DECISION (US-762): Pages deploys, CI does not
+
+**The Cloudflare Pages Git integration is the only deploy path.** It builds
+this repo itself, from the configuration in the Cloudflare dashboard. CI builds
+and tests the artifact and ships nothing.
+
+This was decided because the two paths already existed and only one worked. The
+`deploy-production` and `deploy-staging` jobs in `ci.yml` were skipped on every
+run for want of `CLOUDFLARE_API_TOKEN` -- and, worse, their credential check
+emitted a warning and passed, so a run where nothing shipped reported success.
+Reading the CI run list could not tell you whether main had reached
+tryeatpal.com. Both jobs are deleted.
+
+`wrangler.toml` stays, and stays entirely commented out. That is load-bearing:
+with no configuration in it, Pages falls back to the dashboard settings, which
+is how the site actually deploys. Uncommenting one line in August 2026 switched
+Pages into full config validation, which then demanded a `name` that is also
+commented out, and broke the deploy (reverted in 36ec2f3b). The file carries the
+whole story so the next person does not repeat it.
+
+### Automatic (the only path)
 ```bash
-# Push to main triggers auto-deploy via GitHub Actions
+# Pages watches the branch and builds it. Nothing in GitHub Actions deploys.
 git push origin main
 ```
 
-### Manual
+### Manual, for an emergency only
 ```bash
 # Build
 npx vite build
 
-# Deploy
-npx wrangler pages deploy dist
+# A direct push, bypassing the Git integration. Needs the project name the
+# DASHBOARD uses -- the repo does not know it, and the two candidates on record
+# ("eatpal-empty-stage" in wrangler.toml, "eatpal" in the deleted CI job)
+# disagree. Check the dashboard before running this.
+npx wrangler pages deploy dist --project-name=<from the dashboard>
 ```
 
 ### Verify Deployment

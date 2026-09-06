@@ -227,7 +227,9 @@ jobs:
       # prerender (see the header of scripts/ensure-chromium.mjs, which exists
       # because that step once failed there and took the deploy with it), so CI
       # was building a DIFFERENT artifact from the one the site is built from --
-      # and this job's artifact is what deploy-production/-staging upload.
+      # and this job's artifact is what the e2e job downloads. Nothing here
+      # deploys: Cloudflare Pages builds from its own Git integration.
+      # See docs/deployment-checklist.md.
       #
       # It also means every guardrail in scripts/prerender.mjs now runs on every
       # PR instead of only at deploy: the per-route canonical anchor, the body
@@ -239,7 +241,7 @@ jobs:
         run: npm run build
         env:
           # Vite INLINES these into the bundle at build time, and the same
-          # dist/ artifact is what deploy-production/-staging ship. So the
+          # dist/ artifact is what the e2e job tests. So the
           # build must use the REAL anon key — otherwise production serves a
           # client whose apikey is a placeholder and every request (including
           # sign-in) fails with 401 "Invalid API key". The anon key is public
@@ -272,7 +274,7 @@ jobs:
   # baseURL this job's server listens on.
   #
   # Runs against the SAME dist/ artifact the build job produced and
-  # deploy-production uploads, not a rebuild -- an e2e job that tests a
+  # the Build job uploads, not a rebuild -- an e2e job that tests a
   # different artifact from the one that ships is worse than none.
   #
   # Only tests/*.spec.ts. tests/functions/** drives DEPLOYED edge functions over
@@ -589,84 +591,3 @@ jobs:
 
       - name: Audit all dependencies (warnings only)
         run: npm audit --audit-level=high || true
-
-  deploy-production:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment:
-      name: production
-      url: https://tryeatpal.com
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      # wrangler-action fails with "In a non-interactive environment, it's
-      # necessary to set a CLOUDFLARE_API_TOKEN" when the secret is absent, which
-      # is indistinguishable from a broken deploy in the run list. Check first and
-      # skip with a loud annotation instead. The `secrets` context is not
-      # available in a job-level `if`, hence the step-output dance.
-      - name: Check Cloudflare credentials
-        id: cf
-        env:
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -n "$CF_API_TOKEN" ] && [ -n "$CF_ACCOUNT_ID" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Production deploy skipped::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are not set on this repository. dist/ was built and uploaded but nothing was published to tryeatpal.com. Add both repository secrets to re-enable the deploy."
-          fi
-
-      - name: Deploy to Cloudflare Pages
-        if: steps.cf.outputs.configured == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=eatpal
-
-  deploy-staging:
-    name: Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    environment:
-      name: staging
-      url: https://staging.tryeatpal.com
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Check Cloudflare credentials
-        id: cf
-        env:
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ -n "$CF_API_TOKEN" ] && [ -n "$CF_ACCOUNT_ID" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Staging deploy skipped::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are not set on this repository. Add both repository secrets to re-enable the deploy."
-          fi
-
-      - name: Deploy to Cloudflare Pages (Staging)
-        if: steps.cf.outputs.configured == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=eatpal-staging

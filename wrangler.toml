@@ -1,12 +1,43 @@
-# Cloudflare Pages Configuration
+# DO NOT UNCOMMENT ANYTHING IN THIS FILE. It is deliberately empty.
+#
+# tryeatpal.com is built and deployed by the Cloudflare Pages Git integration,
+# configured in the Cloudflare dashboard. It is the only deploy path. CI builds
+# and tests the artifact; it does not ship it (US-762).
+#
+# This file has to keep existing and keep saying nothing, and that is not a
+# tidiness preference -- it is load-bearing:
+#
+#   With every line commented out, Pages finds no build configuration and falls
+#   back to the dashboard settings, which is how the site actually deploys.
+#   Uncommenting `pages_build_output_dir` in August 2026 switched Pages into
+#   full configuration-file validation, which then demanded a top-level `name`
+#   that is also commented out:
+#
+#     ERROR Running configuration file validation for Pages:
+#       - Missing top-level field "name" in configuration file.
+#     Failed: unable to read the Wrangler configuration file with code: 1
+#
+#   That broke the deploy it was meant to fix. Reverted in 36ec2f3b.
+#
+# The commented `name` below reads "eatpal-empty-stage" while the CI job that
+# used to run here passed --project-name=eatpal. They disagree, and only the
+# dashboard settles which is right -- which is the second reason not to
+# uncomment either one from a guess.
+#
+# US-762 offered deleting this file instead. Keeping it is the safer half of
+# that choice: an absent file and an empty file should behave identically to
+# Pages, but "should" is doing real work in a sentence about the production
+# deploy, and an empty file with this comment stops the next person
+# re-creating a populated one. Delete it only with the dashboard open.
+#
 # name = "eatpal-empty-stage"
 # compatibility_date = "2024-12-19"
 # pages_build_output_dir = "dist"
 
 # ============================================================================
-# Environment Variables Setup
+# Environment variables live in the Cloudflare dashboard, not here
 # ============================================================================
-# Add these in Cloudflare Dashboard → Settings → Environment variables
+# Settings -> Environment variables, on the Pages project:
 #
 # VITE_SUPABASE_URL = https://api.tryeatpal.com
 # VITE_SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.XXXXXXXX
@@ -15,11 +46,4 @@
 # VITE_APP_NAME = EatPal
 # VITE_APP_VERSION = 1.0.0
 # VITE_APP_URL = https://tryeatpal.com
-# ============================================================================
-
-# ============================================================================
-# Staging Environment
-# ============================================================================
-# Deploy staging with: npx wrangler pages deploy dist --project-name=eatpal-staging
-# Set staging env vars in Cloudflare Dashboard for the eatpal-staging project
 # ============================================================================

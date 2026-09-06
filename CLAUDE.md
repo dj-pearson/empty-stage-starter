@@ -85,6 +85,17 @@ iOS is live, so branch choice is now a deploy decision. **Always confirm the tar
 | `web/v*` tag        | `main`        | —                     | Cloudflare Pages production (only when web ships with iOS)        |
 | `claude/*`          | `develop`     | `develop` via PR      | Nothing — feature work only                                       |
 
+**The web deploy path (US-762): Cloudflare Pages, and only Cloudflare Pages.**
+Pages builds this repo from its own Git integration, configured in the Cloudflare
+dashboard. **Nothing in GitHub Actions deploys the web app** — `ci.yml` builds and
+tests the artifact and ships nothing. The `deploy-production` and `deploy-staging`
+jobs used to sit there skipping on every run for a missing `CLOUDFLARE_API_TOKEN`
+while reporting success, so a green run told you nothing about whether main had
+reached tryeatpal.com; both are deleted. `wrangler.toml` must stay entirely
+commented out — an empty one makes Pages fall back to the dashboard settings, and
+uncommenting a single line broke the deploy in August 2026 (reverted in 36ec2f3b).
+Details and the emergency manual path: `docs/deployment-checklist.md`.
+
 **Rules of thumb:**
 
 - New feature → branch from `develop`, PR back to `develop`.
