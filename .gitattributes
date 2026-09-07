@@ -1,0 +1,6 @@
+# US-794: git core.autocrlf=true was rewriting these to CRLF on checkout, and
+# vitest cannot transform scripts/seed/build-food-seed.mjs with CRLF endings --
+# it fails with "SyntaxError: Invalid or unexpected token" on the import line
+# while node and esbuild both parse the same file fine. CI never saw it because
+# a Linux checkout yields LF; only Windows developers got the red test.
+*.mjs text eol=lf
