@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { planRegenerationFromPlan } from './groceryData';
 import { generateGroceryList } from './mealPlanner';
+import { resolveFood, type EffectiveFood } from './effectiveFood';
 import type { Food, GroceryItem, PlanEntry } from '@/types';
 
 /**
@@ -15,6 +16,16 @@ import type { Food, GroceryItem, PlanEntry } from '@/types';
 
 const food = (id: string, name: string, quantity = 0): Food =>
   ({ id, name, quantity, unit: 'servings', category: 'protein', aisle: 'Meat' }) as Food;
+
+/**
+ * US-795: generateGroceryList now takes the already-resolved EffectiveFood
+ * for each food (it has no hook, so it cannot resolve against a catalog
+ * itself). None of these fixtures link to a catalog row, so resolving
+ * against `null` just carries each food's own name/category/aisle through
+ * unchanged -- the same values these tests asserted before the resolver.
+ */
+const effectiveOf = (foods: Food[]): Record<string, EffectiveFood> =>
+  Object.fromEntries(foods.map((f) => [f.id, resolveFood(f, null)]));
 
 const entry = (id: string, date: string, foodId: string): PlanEntry =>
   ({ id, kid_id: 'k1', date, meal_slot: 'dinner', food_id: foodId, result: null }) as PlanEntry;
@@ -32,19 +43,20 @@ const WEEK = { from: '2026-09-07', to: '2026-09-13' };
 
 describe('generateGroceryList shopping window (US-713)', () => {
   const foods = [food('f1', 'Chicken'), food('f2', 'Rice')];
+  const effective = effectiveOf(foods);
 
   it('ignores plan entries outside the window', () => {
     const entries = [
       entry('e1', '2026-09-08', 'f1'), // inside
       entry('e2', '2026-11-20', 'f2'), // 10 weeks out, inside the 120-day context
     ];
-    const out = generateGroceryList(entries, foods, WEEK);
+    const out = generateGroceryList(entries, foods, effective, WEEK);
     expect(out.map((r) => r.name)).toEqual(['Chicken']);
   });
 
   it('still takes every entry when no window is given', () => {
     const entries = [entry('e1', '2026-09-08', 'f1'), entry('e2', '2026-11-20', 'f2')];
-    expect(generateGroceryList(entries, foods).map((r) => r.name).sort()).toEqual([
+    expect(generateGroceryList(entries, foods, effective).map((r) => r.name).sort()).toEqual([
       'Chicken',
       'Rice',
     ]);
@@ -52,12 +64,12 @@ describe('generateGroceryList shopping window (US-713)', () => {
 
   it('includes the first and last day of the window', () => {
     const entries = [entry('e1', WEEK.from, 'f1'), entry('e2', WEEK.to, 'f2')];
-    expect(generateGroceryList(entries, foods, WEEK)).toHaveLength(2);
+    expect(generateGroceryList(entries, foods, effective, WEEK)).toHaveLength(2);
   });
 
   it('tolerates a date that carries a time component', () => {
     const entries = [entry('e1', '2026-09-08T18:30:00Z', 'f1')];
-    expect(generateGroceryList(entries, foods, WEEK)).toHaveLength(1);
+    expect(generateGroceryList(entries, foods, effective, WEEK)).toHaveLength(1);
   });
 
   it('marks rows auto_generated and names the earliest contributing entry', () => {
@@ -65,7 +77,7 @@ describe('generateGroceryList shopping window (US-713)', () => {
       entry('e-late', '2026-09-11', 'f1'),
       entry('e-early', '2026-09-08', 'f1'),
     ];
-    const [out] = generateGroceryList(entries, foods, WEEK);
+    const [out] = generateGroceryList(entries, foods, effective, WEEK);
     expect(out.auto_generated).toBe(true);
     expect(out.source_plan_entry_id).toBe('e-early');
     expect(out.quantity).toBe(2); // two dinners, nothing in stock
@@ -73,7 +85,8 @@ describe('generateGroceryList shopping window (US-713)', () => {
 
   it('subtracts what is already in the pantry', () => {
     const entries = [entry('e1', '2026-09-08', 'f1'), entry('e2', '2026-09-09', 'f1')];
-    const [out] = generateGroceryList(entries, [food('f1', 'Chicken', 1)], WEEK);
+    const stockedFoods = [food('f1', 'Chicken', 1)];
+    const [out] = generateGroceryList(entries, stockedFoods, effectiveOf(stockedFoods), WEEK);
     expect(out.quantity).toBe(1);
   });
 });
@@ -195,9 +208,10 @@ describe('planRegenerationFromPlan (US-713)', () => {
 
   it('end to end: generate then plan twice is stable', () => {
     const foods = [food('f1', 'Chicken'), food('f2', 'Rice')];
+    const effective = effectiveOf(foods);
     const entries = [entry('e1', '2026-09-08', 'f1'), entry('e2', '2026-09-09', 'f2')];
 
-    const gen = generateGroceryList(entries, foods, WEEK);
+    const gen = generateGroceryList(entries, foods, effective, WEEK);
     const first = planRegenerationFromPlan({ existing: [], generated: gen, selectedListId: 'L1' });
     expect(first.additions).toHaveLength(2);
 
@@ -213,7 +227,7 @@ describe('planRegenerationFromPlan (US-713)', () => {
       }),
     );
 
-    const regen = generateGroceryList(entries, foods, WEEK);
+    const regen = generateGroceryList(entries, foods, effective, WEEK);
     const second = planRegenerationFromPlan({
       existing: persisted,
       generated: regen,

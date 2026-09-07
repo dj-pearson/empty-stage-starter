@@ -4,6 +4,7 @@ import { Helmet } from "react-helmet-async";
 // CSS animations used instead of framer-motion for list rendering performance
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useFoods, useGrocery, useKids, usePlan, useInventory } from "@/contexts/AppContext";
+import { resolveFood } from "@/lib/effectiveFood";
 import { FoodCard } from "@/components/FoodCard";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
 import { ImageFoodCapture, type FoodIdentification } from "@/components/ImageFoodCapture";
@@ -106,6 +107,7 @@ export default function Pantry() {
     updateFood,
     deleteFood,
     refreshFoods,
+    catalogById,
   } = useFoods();
   const { planEntries } = usePlan();
   const { kids, activeKidId } = useKids();
@@ -448,18 +450,23 @@ export default function Pantry() {
 
   const handleAddToGrocery = useCallback(
     (food: Food) => {
+      // US-795: read the effective (catalog-resolved) name/category/aisle so
+      // a food added to the grocery list here matches how the same
+      // catalog-linked product looks everywhere else it's added from.
+      const catalog = food.canonical_id ? catalogById[food.canonical_id] : null;
+      const effective = resolveFood(food, catalog);
       addGroceryItem({
-        name: food.name,
+        name: effective.name,
         quantity: 1,
         unit: food.unit || "",
-        category: food.category,
-        aisle: food.aisle,
+        category: effective.category,
+        aisle: effective.aisle,
       });
-      toast.success(`Added "${food.name}" to grocery list`, {
+      toast.success(`Added "${effective.name}" to grocery list`, {
         description: "Edit quantity on the Grocery page",
       });
     },
-    [addGroceryItem]
+    [addGroceryItem, catalogById]
   );
 
   const handleSave = useCallback(

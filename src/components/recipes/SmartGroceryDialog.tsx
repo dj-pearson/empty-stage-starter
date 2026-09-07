@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { Recipe, Food, GroceryItem } from "@/types";
 import { convert } from "@/lib/unitNormalize";
 import { formatQuantity } from "@/lib/groceryMerge";
+import { useFoods } from "@/contexts/AppContext";
+import { resolveFood } from "@/lib/effectiveFood";
 
 interface SmartGroceryDialogProps {
   recipe: Recipe | null;
@@ -55,6 +57,7 @@ export function SmartGroceryDialog({
   groceryItems,
   onAddGroceryItems,
 }: SmartGroceryDialogProps) {
+  const { catalogById } = useFoods();
   const baseServings = parseBaseServings(recipe?.servings);
   // Target servings the user wants to shop for — starts at the recipe's own.
   const [targetServings, setTargetServings] = useState(baseServings);
@@ -115,6 +118,14 @@ export function SmartGroceryDialog({
         (gi) => gi.name.toLowerCase() === r.name.toLowerCase() && !gi.checked
       );
 
+      // US-795: category/aisle come from the resolved (catalog-preferred)
+      // food, not the household row's raw columns, so an ingredient added
+      // from here matches how the same catalog-linked product looks on the
+      // grocery list, planner and pantry.
+      const effective = r.food
+        ? resolveFood(r.food, r.food.canonical_id ? catalogById[r.food.canonical_id] : null)
+        : null;
+
       return {
         key: r.key,
         name: r.name,
@@ -122,13 +133,13 @@ export function SmartGroceryDialog({
         unit: r.unit,
         inStock: Math.round(inStock * 100) / 100,
         toBuy,
-        category: r.food?.category ?? "snack",
-        aisle: r.food?.aisle,
+        category: effective?.category ?? "snack",
+        aisle: effective?.aisle,
         status,
         alreadyInGrocery,
       };
     });
-  }, [recipe, foods, groceryItems, scale]);
+  }, [recipe, foods, groceryItems, scale, catalogById]);
 
   // Default-check everything that needs buying and isn't already on the list.
   useEffect(() => {
