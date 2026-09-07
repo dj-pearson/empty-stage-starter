@@ -26,7 +26,7 @@ const IOS_GROCERY_AISLE_RAW_VALUES = new Set([
 describe('USDA category to aisle map', () => {
   it('accounts for every USDA category, either mapped or excluded', () => {
     for (const id of USDA_CATEGORY_IDS) {
-      const decided = Object.hasOwn(CATEGORY_AISLE, id) || EXCLUDED_CATEGORIES.has(id);
+      const decided = Object.prototype.hasOwnProperty.call(CATEGORY_AISLE, id) || EXCLUDED_CATEGORIES.has(id);
       expect(decided, `category ${id} is neither mapped nor excluded`).toBe(true);
     }
   });
@@ -50,7 +50,7 @@ describe('USDA category to aisle map', () => {
 
   it('gives every AISLE_OVERRIDES entry a valid iOS rawValue and a category id that is actually mapped', () => {
     for (const o of AISLE_OVERRIDES) {
-      expect(Object.hasOwn(CATEGORY_AISLE, o.categoryId), `override targets category ${o.categoryId}, which is not in CATEGORY_AISLE`).toBe(true);
+      expect(Object.prototype.hasOwnProperty.call(CATEGORY_AISLE, o.categoryId), `override targets category ${o.categoryId}, which is not in CATEGORY_AISLE`).toBe(true);
       expect(IOS_GROCERY_AISLE_RAW_VALUES.has(o.aisle), `override for category ${o.categoryId} has aisle "${o.aisle}", not a valid iOS GroceryAisle rawValue`).toBe(true);
     }
   });
