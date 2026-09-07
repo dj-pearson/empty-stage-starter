@@ -94,3 +94,37 @@ COMMENT ON COLUMN public.grocery_product_catalog.calories_kcal_100 IS
   'Per 100 g or ml, never per serving. See serving_size_g for display.';
 COMMENT ON COLUMN public.grocery_product_catalog.verification IS
   'Trust boundary. Anyone may create unverified; only an admin may set verified (see the guard trigger). Unverified rows are usable for shopping but excluded from ladder and nutrition totals.';
+
+
+-- The trust boundary is this column, NOT the RLS write policies.
+--
+-- The catalog's policies let any authenticated user INSERT and UPDATE, because
+-- the shipped iOS app creates catalog rows on first add. Tightening them to
+-- admin-only is exactly the policy change CLAUDE.md warns breaks older clients.
+-- So writes stay open and promotion to 'verified' is guarded here instead.
+CREATE OR REPLACE FUNCTION public.gpc_guard_verification()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.verification = 'verified'
+     AND (TG_OP = 'INSERT' OR OLD.verification IS DISTINCT FROM 'verified')
+     AND NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'only an admin may mark a catalog row verified'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF NEW.verification = 'verified' AND NEW.verified_at IS NULL THEN
+    NEW.verified_at := now();
+    NEW.verified_by := auth.uid();
+  END IF;
+
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS gpc_guard_verification ON public.grocery_product_catalog;
+CREATE TRIGGER gpc_guard_verification
+  BEFORE INSERT OR UPDATE OF verification ON public.grocery_product_catalog
+  FOR EACH ROW EXECUTE FUNCTION public.gpc_guard_verification();

@@ -64,4 +64,33 @@ WHERE schemaname = 'public'
   AND indexname = 'grocery_product_catalog_name_uq'
   AND indexdef LIKE '%UNIQUE%(name_normalized)%';
 
+-- 8. A non-admin cannot set verification='verified'.
+--    RLS is deliberately NOT tightened -- iOS creates catalog rows -- so the
+--    trust boundary is this column, not write access.
+--    NOTE: auth.uid() reads request.jwt.claim.sub (see us711/us780 tests); a
+--    bare SET LOCAL ROLE authenticated leaves it NULL, which the catalog's
+--    existing "auth.uid() IS NOT NULL" RLS policies then reject outright, so
+--    the non-admin identity is impersonated the same way those tests do.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '93930000-0000-0000-0000-000000000001', true);
+DO $$
+BEGIN
+  UPDATE public.grocery_product_catalog
+     SET verification = 'verified'
+   WHERE name_normalized = 'cheddar cheese';
+  RAISE EXCEPTION 'EXPECTED reject, GOT a non-admin promoted a row to verified';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'EXPECTED reject, GOT insufficient_privilege -- ok';
+END $$;
+RESET ROLE;
+
+-- 9. A non-admin may still INSERT, because the iOS flow depends on it.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '93930000-0000-0000-0000-000000000001', true);
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source)
+VALUES ('User Typed Thing', 'user typed thing', 'generic', 'user');
+RESET ROLE;
+SELECT 'EXPECTED unverified, GOT ' || verification AS non_admin_insert_lands_unverified
+FROM public.grocery_product_catalog WHERE name_normalized = 'user typed thing';
+
 ROLLBACK;
