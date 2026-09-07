@@ -85,6 +85,23 @@ Provenance: `source` (`usda|openfoodfacts|foodrepo|user|admin`), `source_ref`
 
 Search: a GIN trigram index on `name_normalized`.
 
+**Two corrections found while planning US-793, both of which would have broken
+the shipped iOS app:**
+
+1. The spec first said "unique index on `(name_normalized, kind)`". It cannot.
+   `grocery_product_catalog_name_uq` is already UNIQUE on `name_normalized`
+   alone, and iOS relies on `INSERT ... ON CONFLICT (name_normalized)` to bump
+   `times_added` instead of duplicating. Changing it to a composite breaks that
+   upsert. The existing index stays; one normalized name means one catalog row,
+   whatever its kind.
+2. The spec first said the catalog is "admin-writable". It is not, and must not
+   become so. Live policies allow any authenticated user to INSERT and UPDATE,
+   which is how the iOS "first user to add creates the row" flow works.
+   Tightening that is precisely the kind of policy change CLAUDE.md warns breaks
+   older clients. **The trust boundary is the `verification` column, not RLS**:
+   anyone may create an `unverified` row, only an admin may move one to
+   `verified`, enforced by a trigger rather than by taking write access away.
+
 ### No promotion counter
 
 The frequency rule wants "at least 3 separate households typed this". The existing
@@ -149,9 +166,12 @@ existing `merged_into_id` and `rpc_merge_items` for the rest.
 from it record `source` and need an attribution line wherever that data is shown.
 USDA is public domain and carries no such obligation.
 
-**RLS.** The catalog is world-readable and admin-writable. It holds no user data
-by construction, which is the reason the promotion path is gated. Household
-`foods` RLS is untouched.
+**RLS.** The catalog keeps its existing policies: readable, insertable and
+updatable by any authenticated user, because the shipped iOS app creates catalog
+rows and tightening that would break it. The trust boundary is the `verification`
+column, guarded by a trigger so only an admin can set `verified`. The catalog
+holds no user data by construction, which is what the promotion gate in US-798
+protects. Household `foods` RLS is untouched.
 
 ## Testing
 
@@ -161,7 +181,8 @@ by construction, which is the reason the promotion path is gated. Household
 - The matcher, on fixtures that must NOT match: "chicken" to "chicken nuggets",
   same word across different categories.
 - Distinct-household counting where one household adds the same food twice.
-- RLS: anonymous read succeeds, anonymous write fails.
+- RLS unchanged: an authenticated insert still succeeds, because iOS depends on
+  it. A non-admin attempt to set verification=verified is rejected by the trigger.
 - A migration test proving the added columns are additive and a client reading
   the old shape still works.
 
