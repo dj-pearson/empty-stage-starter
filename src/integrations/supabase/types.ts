@@ -19536,7 +19536,12 @@ export type Database = {
           title: string
         }[]
       }
+      match_foods_to_catalog: {
+        Args: { p_household_id?: string }
+        Returns: number
+      }
       normalize_chain_food_name: { Args: { p_name: string }; Returns: string }
+      normalize_product_name: { Args: { p_name: string }; Returns: string }
       normalize_title: { Args: { title_text: string }; Returns: string }
       parse_quantity: { Args: { quantity_str: string }; Returns: number }
       plan_name_for_apple_product: {
