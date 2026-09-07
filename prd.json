@@ -3474,7 +3474,7 @@
       "title": "Seed the generic backbone from USDA, with aisles assigned",
       "description": "As a parent, I want the foods I search for to already be there with correct nutrition, so that I am not typing everything from scratch.",
       "acceptanceCriteria": [
-        "A seed of roughly 1500-2000 generic foods from USDA Foundation Foods and SR Legacy, filtered to what families actually eat rather than all ~8000 lab entries (no \"beef, chuck, arm pot roast, separable lean only, raw\")",
+        "A seed of roughly 1500-2500 generic foods from USDA Foundation Foods and SR Legacy, filtered to what families actually eat rather than all ~8000 lab entries (no \"beef, chuck, arm pot roast, separable lean only, raw\")",
         "Every seeded row: kind=generic, source=usda, verification=verified, a category, an aisle, and per-100 nutrition",
         "AISLE IS NOT IN ANY NUTRITION DATASET and must be supplied here. Derive from category as a first pass, then correct by hand. This is the part of \"known correct\" only the operator can provide",
         "The seed is reproducible: a checked-in script that turns a downloaded USDA export into the seed file, so the data can be regenerated rather than hand-maintained",
@@ -3483,7 +3483,7 @@
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). USDA is public domain, so no attribution obligation. The aisle curation is the real cost in this story and it cannot be automated away."
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). USDA is public domain, so no attribution obligation. The aisle curation is the real cost in this story and it cannot be automated away. RANGE WIDENED 2026-09-07, from 1500-2000 to 1500-2500, after the seed landed at 2311. The extra rows are not noise: an early build treated \"dried\", \"canned\" and \"frozen\" as droppable preparation words like \"raw\", which merged fresh, frozen and canned variants of the same food into one row -- and shipped dried egg powder as \"Egg, whole\" at 592 kcal against a real egg at 143. Keeping those words in the name un-merges the variants, which is more correct and mechanically produces more rows. The number moved because the data got righter, so the AC moved rather than the filter."
     },
     {
       "id": "US-795",
