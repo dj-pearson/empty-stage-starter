@@ -338,4 +338,52 @@ describe('buildSeed', () => {
     const row = out.rows.find(r => r.source_ref === '51');
     expect(row?.default_aisle_section).toBe('produce');
   });
+
+  // Fix round 4: STAPLE_PATTERNS bypasses the qualifier-clause cap for a
+  // hand-curated list of real foods USDA happens to write with several
+  // genuinely-distinguishing clauses (white rice's "regular, raw,
+  // enriched"; french fries' cut/salt/heat-state clauses) -- none of them
+  // lab-speak, none of them a NON_COUNTING_QUALIFIER_PATTERNS packaging
+  // idiom, so without this bypass they're dropped as "too narrow" the
+  // same way canned tuna used to be.
+  it('a staple pattern bypasses the qualifier-clause cap', () => {
+    const out = buildSeed({
+      foods: [{
+        fdc_id: '60',
+        data_type: 'sr_legacy_food',
+        // Matches STAPLE_PATTERNS' white-rice entry by prefix; the extra
+        // trailing clauses prove the cap itself is bypassed, not just
+        // raised high enough for this one description.
+        description: 'Rice, white, long-grain, regular, raw, enriched, extra, clauses, here',
+        food_category_id: '9',
+      }],
+      nutrients: [{ fdc_id: '60', nutrient_id: '1008', amount: '365' }],
+      categoryAisle: CATEGORY_AISLE, excluded: EXCLUDED,
+    });
+    expect(out.dropped.find(d => d.fdc_id === '60')).toBeUndefined();
+    expect(out.rows.find(r => r.source_ref === '60')).toBeDefined();
+  });
+
+  // Fix round 4: a staple's categoryOverride (pizza only) bypasses BOTH
+  // the clause cap and category exclusion -- USDA files generic frozen
+  // supermarket pizza under category 21 (Fast Foods) alongside actual
+  // restaurant/branded rows, which is rightly excluded for those, but not
+  // for this specific, hand-picked description shape.
+  it('a staple with categoryOverride bypasses both the clause cap and category exclusion', () => {
+    const out = buildSeed({
+      foods: [{
+        fdc_id: '61',
+        data_type: 'sr_legacy_food',
+        description: 'Pizza, cheese topping, regular crust, frozen, cooked',
+        food_category_id: '21',
+      }],
+      nutrients: [{ fdc_id: '61', nutrient_id: '1008', amount: '260' }],
+      categoryAisle: CATEGORY_AISLE,
+      excluded: new Set(['21']), // proves this would normally be excluded
+    });
+    const row = out.rows.find(r => r.source_ref === '61');
+    expect(row).toBeDefined();
+    expect(row?.default_category).toBe('snack');
+    expect(row?.default_aisle_section).toBe('frozen_meals');
+  });
 });

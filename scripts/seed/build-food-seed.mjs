@@ -465,6 +465,77 @@ function countedClauses(name) {
     .filter((c) => c.length > 0 && !NON_COUNTING_QUALIFIER_PATTERNS.some((p) => p.test(c)));
 }
 
+/**
+ * FIX ROUND 4: `NON_COUNTING_QUALIFIER_PATTERNS` rescued canned tuna, but
+ * a staples check against the round-3 seed (querying for milk/egg/tuna/
+ * etc AND a second, picky-eater-focused list -- chicken nuggets, mac and
+ * cheese, pizza, ...) found more real foods still deleted by the clause
+ * cap for the same underlying reason: USDA wrote them with several
+ * genuinely-distinguishing clauses (a fry cut, a crust type, an
+ * enrichment note) that aren't lab-speak and aren't a packaging idiom
+ * either, so neither fix 1 nor the packaging exception helps. Widening
+ * `MAX_QUALIFIER_CLAUSES` itself was measured and rejected in fix round 3
+ * (cap 4 -> 3392 rows, cap 5 -> 4153, both mostly more lab-cut
+ * granularity, not more staples) and that measurement still holds.
+ *
+ * `STAPLE_PATTERNS` is the alternative: a hand-curated, hand-editable
+ * table -- same shape and philosophy as CATEGORY_AISLE and BRAND_NAMES --
+ * of foods a family actually buys, decided by a person, that bypass the
+ * qualifier-clause cap outright no matter how many real clauses USDA
+ * wrote. Every entry names the specific reason it's here. Most entries
+ * only need the cap bypass, because their USDA category is already
+ * correctly mapped; `categoryOverride` is for the one exception
+ * (pizza) whose blocker is category EXCLUSION, not the clause cap --
+ * USDA files generic frozen supermarket pizza under category 21 (Fast
+ * Foods) alongside actual restaurant/branded rows, and category 21 is
+ * correctly excluded for those; `categoryOverride` supplies the
+ * {category, aisle} an excluded category has none of, scoped to just
+ * this one description shape so it doesn't reopen category 21 broadly.
+ *
+ * @type {Array<{test: (description: string) => boolean, categoryOverride?: {category: string, aisle: string}}>}
+ */
+export const STAPLE_PATTERNS = [
+  {
+    // Near-universal safe food for picky eaters; missing entirely
+    // otherwise (only brown rice survived the cap). "regular, raw,
+    // enriched" are all real distinguishing info (grain length/processing/
+    // fortification), not lab-speak -- 6 displayName clauses, nowhere
+    // close to the cap without a bypass.
+    test: (d) => /^Rice, white, long-grain, regular, raw\b/i.test(d),
+  },
+  {
+    // Also a top-tier picky-eater safe food; missing entirely otherwise.
+    // Matches every real cut (steak, wedge, shoestring, crinkle,
+    // cottage-cut, ...) USDA publishes under this prefix -- multiple
+    // real grocery SKUs, not lab variants of one food.
+    test: (d) => /^Potatoes, french fried\b/i.test(d),
+  },
+  {
+    // The only two non-branded, non-restaurant chicken nugget rows in
+    // SR Legacy (fdc 172111, 172112) -- every other "nugget" match in the
+    // raw data is a restaurant chain (McDonald's, Wendy's, Denny's, all
+    // category 21, correctly excluded) or an unrelated food (salmon
+    // nuggets, an ice cream bar). Confirmed present in the source, not
+    // invented: without this entry the seed's only "nugget" matches are
+    // that ice cream bar and the salmon nuggets.
+    test: (d) => /^Chicken, nuggets\b/i.test(d),
+  },
+  {
+    // Generic frozen supermarket pizza -- "Pizza, cheese topping, regular
+    // crust, frozen, cooked" and its meat/pepperoni/meat-and-vegetable,
+    // thin/rising/thick-crust siblings. USDA files these under category
+    // 21 (Fast Foods) next to McDONALD'S/PIZZA HUT rows, but these
+    // specific ones are the generic supermarket-freezer-aisle product,
+    // not a restaurant purchase or a brand -- see categoryOverride above.
+    test: (d) => /^Pizza, [a-z ]+ topping, [a-z ]+ crust, frozen, cooked$/i.test(d),
+    categoryOverride: { category: 'snack', aisle: 'frozen_meals' },
+  },
+];
+
+function findStaplePattern(description) {
+  return STAPLE_PATTERNS.find((p) => p.test(description)) ?? null;
+}
+
 // FIX ROUND 3 (fix 3, CRITICAL): words that mean the food has been
 // concentrated or dehydrated, so its per-100g nutrition is not comparable
 // to the fresh/raw version -- dried whole egg is ~4x the calories of a
@@ -666,36 +737,58 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded, aisleOver
       continue;
     }
 
-    const clauseCount = countedClauses(name).length;
-    if (clauseCount > MAX_QUALIFIER_CLAUSES) {
-      dropped.push({ fdc_id, description, reason: `too many qualifier clauses (${clauseCount} > ${MAX_QUALIFIER_CLAUSES} on "${name}") -- too narrow a lab variant for a family catalog` });
-      continue;
-    }
+    // FIX ROUND 4: a hand-curated staple bypasses the qualifier-clause
+    // cap outright -- see STAPLE_PATTERNS for why (canned tuna's
+    // NON_COUNTING_QUALIFIER_PATTERNS trick doesn't generalize to every
+    // real multi-clause staple, and widening the cap costs far more
+    // lab-cut noise than it buys in staples, per fix round 3's own
+    // measurement).
+    const staplePattern = findStaplePattern(description);
 
-    if (excluded.has(categoryId)) {
-      dropped.push({ fdc_id, description, reason: `excluded category (food_category_id=${categoryId})` });
-      continue;
-    }
-
-    const categoryMapping = categoryAisle[categoryId];
-    if (!categoryMapping) {
-      dropped.push({ fdc_id, description, reason: `unmapped category (food_category_id=${categoryId})` });
-      continue;
-    }
-
-    // Fix 4: an override (matched on the raw description, since that's
-    // what carries the signal -- "Egg, whole, raw" -- displayName's output
-    // for the same row is just "Egg, whole") replaces the category's
-    // default aisle; `category` (the six-value FoodCategory union) is
-    // untouched either way, per the brief.
-    let aisle = categoryMapping.aisle;
-    for (const override of aisleOverrides) {
-      if (override.categoryId === categoryId && override.test(description)) {
-        aisle = override.aisle;
-        break;
+    if (!staplePattern) {
+      const clauseCount = countedClauses(name).length;
+      if (clauseCount > MAX_QUALIFIER_CLAUSES) {
+        dropped.push({ fdc_id, description, reason: `too many qualifier clauses (${clauseCount} > ${MAX_QUALIFIER_CLAUSES} on "${name}") -- too narrow a lab variant for a family catalog` });
+        continue;
       }
     }
-    const mapping = { category: categoryMapping.category, aisle };
+
+    // A staple's categoryOverride (pizza only, so far) also bypasses
+    // category exclusion -- USDA files it under an excluded category
+    // (Fast Foods) for reasons that don't apply to this specific,
+    // hand-picked description shape, and supplies the {category, aisle}
+    // an excluded category has none of. Every other staple has no
+    // categoryOverride and goes through the normal excluded/mapped checks
+    // below unchanged, since their USDA categories are already fine.
+    let mapping;
+    if (staplePattern?.categoryOverride) {
+      mapping = staplePattern.categoryOverride;
+    } else {
+      if (excluded.has(categoryId)) {
+        dropped.push({ fdc_id, description, reason: `excluded category (food_category_id=${categoryId})` });
+        continue;
+      }
+
+      const categoryMapping = categoryAisle[categoryId];
+      if (!categoryMapping) {
+        dropped.push({ fdc_id, description, reason: `unmapped category (food_category_id=${categoryId})` });
+        continue;
+      }
+
+      // Fix 4: an override (matched on the raw description, since that's
+      // what carries the signal -- "Egg, whole, raw" -- displayName's
+      // output for the same row is just "Egg, whole") replaces the
+      // category's default aisle; `category` (the six-value FoodCategory
+      // union) is untouched either way, per the brief.
+      let aisle = categoryMapping.aisle;
+      for (const override of aisleOverrides) {
+        if (override.categoryId === categoryId && override.test(description)) {
+          aisle = override.aisle;
+          break;
+        }
+      }
+      mapping = { category: categoryMapping.category, aisle };
+    }
 
     const nutrientMap = nutrientsByFdcId.get(fdc_id) || new Map();
     const nutrientValues = extractNutrients(nutrientMap);

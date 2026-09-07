@@ -123,19 +123,42 @@ export const CATEGORY_AISLE = {
 export const EXCLUDED_CATEGORIES = new Set(['21', '24', '25', '26', '27', '28']);
 
 /**
- * A description-prefix override that refines CATEGORY_AISLE's per-category
- * default for the two USDA categories that mix two food types the iOS
- * enum splits into different aisles -- see the header comment above for
- * the row counts behind each one. `buildSeed` (build-food-seed.mjs)
- * applies these, in order, to a food already resolved to a `categoryId`,
- * before falling back to `CATEGORY_AISLE[categoryId].aisle`. Deliberately
- * limited to these two categories: every other one of the 20 mapped
- * categories is a reasonable single aisle on its own (see the per-row
- * comments above for the ones that are still a compromise but not split),
- * and a name-prefix rule is only as good as how consistently USDA's
- * descriptions start -- "Egg" and the pasta-shape words below are
- * reliable; most other splits (e.g. bread vs. the rest of Baked Products)
- * are not.
+ * A description-match override that refines CATEGORY_AISLE's per-category
+ * default for a food whose USDA category default doesn't fit it
+ * specifically. `buildSeed` (build-food-seed.mjs) applies these, IN
+ * ORDER (first match wins), to a food already resolved to a `categoryId`,
+ * before falling back to `CATEGORY_AISLE[categoryId].aisle`. Two shapes
+ * live here:
+ *
+ * 1. A genuine two-food-types-in-one-category split (eggs/pasta, fix
+ *    round 3) -- the category default is right for MOST of the category,
+ *    wrong for a specific, reliably-identifiable minority.
+ * 2. FIX ROUND 4: a condiment or shelf-stable product that inherited a
+ *    fresh-food aisle because its USDA category is nominally about fresh
+ *    produce (Fruits and Fruit Juices, category 9; Vegetables and
+ *    Vegetable Products, category 11) or nuts as a snack (Nut and Seed
+ *    Products, category 12), even though the specific row is neither
+ *    fresh nor a snack -- "Peanut butter, smooth style, with salt" in
+ *    `canned` (it's actually category 16, Legumes -- peanuts are
+ *    botanically a legume; the review that flagged this said "category
+ *    12," which doesn't match the CSV, so the override below targets 16,
+ *    the category the row is actually in) and "Ketchup, restaurant" in
+ *    `produce` (category 11) are both wrong the same way: a shopper does
+ *    not look for either in the fresh aisle.
+ *
+ * A name-prefix/keyword rule is only as good as how consistently USDA's
+ * descriptions carry the signal -- specific enough entries (an exact
+ * product-name prefix, or a category-scoped keyword like "canned"/
+ * "frozen") are listed individually or as a scoped catch-all; a split
+ * this file does NOT attempt (e.g. bread vs. the rest of Baked Products)
+ * is one where no such reliable signal exists.
+ *
+ * "Dried" fruit/vegetables (28 rows in the seed) and bottled juice/nectar
+ * are deliberately NOT overridden here -- unlike canned or frozen, there
+ * is no single obviously-correct iOS aisle for either (dried fruit is
+ * sold as a snack in some stores, near baking supplies or produce in
+ * others; juice has no dedicated aisle in the 33-value enum at all), so
+ * they stay on the category default rather than guessing.
  *
  * @type {Array<{categoryId: string, test: (description: string) => boolean, aisle: string}>}
  */
@@ -149,5 +172,78 @@ export const AISLE_OVERRIDES = [
     categoryId: '20', // Cereal Grains and Pasta
     test: (d) => /^(Macaroni|Noodles?|Pasta|Spaghetti|Lasagna|Ravioli|Vermicelli|Couscous)\b/i.test(d),
     aisle: 'pasta',
+  },
+
+  // --- fix round 4: condiments/shelf-stable rows stuck on a fresh-food
+  // or snack-aisle category default. Specific product overrides are
+  // listed before the general canned/frozen catch-alls below them, so
+  // e.g. "Cranberry sauce, canned, sweetened" (category 9) lands on
+  // `condiments`, not the general canned-fruit rule's `canned`.
+
+  {
+    categoryId: '16', // Legumes and Legume Products -- peanuts are a legume
+    test: (d) => /^Peanut\s+Butter\b/i.test(d),
+    aisle: 'condiments',
+  },
+  {
+    categoryId: '12', // Nut and Seed Products
+    // "almond butter", "cashew butter", "sunflower seed butter", "sesame
+    // butter" -- word-boundaried so it does not also match "butternuts"
+    // (a nut, correctly left on the category default) or "butterscotch".
+    test: (d) => /\bbutter\b/i.test(d),
+    aisle: 'condiments',
+  },
+  {
+    categoryId: '11', // Vegetables and Vegetable Products
+    // Ketchup and its USDA-vocabulary synonym "Catsup" are the same
+    // product; both are condiments, not a vegetable a shopper picks from
+    // the produce case.
+    test: (d) => /^(Ketchup|Catsup)\b/i.test(d),
+    aisle: 'condiments',
+  },
+  {
+    categoryId: '11',
+    test: (d) => /^Pickle relish\b/i.test(d),
+    aisle: 'condiments',
+  },
+  {
+    categoryId: '11',
+    test: (d) => /^Yeast extract spread\b/i.test(d),
+    aisle: 'condiments',
+  },
+  {
+    categoryId: '9', // Fruits and Fruit Juices
+    // Cranberry sauce/relish function as a condiment (a Thanksgiving-meal
+    // accompaniment), not a fruit a shopper picks up in produce.
+    test: (d) => /^Cranberry (sauce|-orange relish)\b/i.test(d),
+    aisle: 'condiments',
+  },
+
+  // General catch-alls: any other canned or frozen row in a
+  // fresh-produce-default category is shelf-stable or freezer-case, not
+  // fresh -- checked after the specific condiment overrides above so
+  // those win first. iOS has no single "frozen fruit" value; `frozen_veg`
+  // is the closest real-world equivalent (most stores keep frozen fruit
+  // and frozen vegetables in the same case) and is used for both
+  // categories here.
+  {
+    categoryId: '9',
+    test: (d) => /\bcanned\b/i.test(d),
+    aisle: 'canned',
+  },
+  {
+    categoryId: '11',
+    test: (d) => /\bcanned\b/i.test(d),
+    aisle: 'canned',
+  },
+  {
+    categoryId: '9',
+    test: (d) => /\bfrozen\b/i.test(d),
+    aisle: 'frozen_veg',
+  },
+  {
+    categoryId: '11',
+    test: (d) => /\bfrozen\b/i.test(d),
+    aisle: 'frozen_veg',
   },
 ];
