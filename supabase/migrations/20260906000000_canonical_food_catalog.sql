@@ -98,7 +98,7 @@ CREATE INDEX IF NOT EXISTS grocery_product_catalog_verification_idx
 COMMENT ON COLUMN public.grocery_product_catalog.calories_kcal_100 IS
   'Per 100 g or ml, never per serving. See serving_size_g for display.';
 COMMENT ON COLUMN public.grocery_product_catalog.verification IS
-  'Trust boundary. Anyone may create unverified; only an admin may set verified (see the guard trigger). Unverified rows are usable for shopping but excluded from ladder and nutrition totals.';
+  'Trust boundary. Anyone may create unverified; only an admin (or a trusted null-auth.uid() context -- see the guard trigger) may change this column at all, in either direction. Unverified rows are usable for shopping but excluded from ladder and nutrition totals.';
 COMMENT ON COLUMN public.grocery_product_catalog.allergens IS
   'Authoritative allergen field. Any "allergens" key inside metadata (see 20260505000000_smart_product_catalog.sql) is legacy and not read.';
 
@@ -108,42 +108,67 @@ COMMENT ON COLUMN public.grocery_product_catalog.allergens IS
 -- The catalog's policies let any authenticated user INSERT and UPDATE, because
 -- the shipped iOS app creates catalog rows on first add. Tightening them to
 -- admin-only is exactly the policy change CLAUDE.md warns breaks older clients.
--- So writes stay open and promotion to 'verified' is guarded here instead.
+-- So writes stay open and every change to `verification` is guarded here
+-- instead -- not just the promotion to 'verified'. An earlier version of this
+-- trigger only ever asked "is someone setting this to verified?", which left
+-- two holes open to any authenticated user: demoting (or 'rejected'-ing) a
+-- verified row back down, since the guard never fired for that direction; and
+-- rewriting an already-verified row's verified_at/verified_by by touching
+-- only those columns, since the guard only looked at the transition into
+-- 'verified'. The right question is "is a non-admin changing this column at
+-- all?", so the guard below rejects any change to `verification` from a
+-- caller who isn't trusted, and the stamping logic separately refuses to
+-- honour a caller-supplied verified_at/verified_by whenever the row was
+-- already verified and stays verified -- closing the second hole even for a
+-- trusted caller who has no legitimate reason to backdate someone else's
+-- verification.
 --
--- Three cases:
---  1. auth.uid() IS NULL -- psql, a migration, or a service_role key that
---     bypasses RLS by design. Allowed. The catalog's own RLS makes this safe:
---     "Catalog insertable by authenticated users" is WITH CHECK (auth.uid() IS
---     NOT NULL) and the UPDATE policy is USING (auth.uid() IS NOT NULL), so
---     anon through PostgREST cannot reach this table at all -- a null
---     auth.uid() never happens for a public-API request. US-794 needs this to
---     seed USDA rows as already verified.
---  2. An admin (has_role(auth.uid(), 'admin')). Allowed.
---  3. Everyone else. Rejected when they try to reach 'verified'.
+-- Trust is auth.uid() IS NULL (psql, a migration, or a service_role key that
+-- bypasses RLS by design -- the catalog's own RLS makes this safe:
+-- "Catalog insertable by authenticated users" is WITH CHECK (auth.uid() IS
+-- NOT NULL) and the UPDATE policy is USING (auth.uid() IS NOT NULL), so anon
+-- through PostgREST cannot reach this table at all -- a null auth.uid() never
+-- happens for a public-API request. US-794 needs this to seed USDA rows as
+-- already verified) OR an admin (has_role(auth.uid(), 'admin')). Everyone
+-- else may INSERT only as 'unverified' (the shipped iOS INSERT never names
+-- the column, so it is unaffected) and may never change `verification` on an
+-- UPDATE, in either direction.
 CREATE OR REPLACE FUNCTION public.gpc_guard_verification()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_trusted BOOLEAN;
 BEGIN
-  IF NEW.verification = 'verified'
-     AND (TG_OP = 'INSERT' OR OLD.verification IS DISTINCT FROM 'verified')
-     AND auth.uid() IS NOT NULL
-     AND NOT public.has_role(auth.uid(), 'admin') THEN
-    RAISE EXCEPTION 'only an admin may mark a catalog row verified'
-      USING ERRCODE = 'insufficient_privilege';
+  v_trusted := auth.uid() IS NULL OR public.has_role(auth.uid(), 'admin');
+
+  IF NOT v_trusted THEN
+    IF (TG_OP = 'INSERT' AND NEW.verification <> 'unverified')
+       OR (TG_OP = 'UPDATE' AND NEW.verification IS DISTINCT FROM OLD.verification) THEN
+      RAISE EXCEPTION 'only an admin may change the verification state of a catalog row'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
   END IF;
 
-  -- verified_at/verified_by describe a verification that happened. Force them
-  -- to agree with NEW.verification rather than trusting whatever the caller
-  -- passed, on every INSERT/UPDATE this trigger sees (widened below to also
-  -- fire when only those two columns change) -- otherwise a non-admin could
-  -- forge a stamp on an unverified row and have it survive into a later
-  -- legitimate promotion.
+  -- verified_at/verified_by describe a verification that happened.
   IF NEW.verification = 'verified' THEN
-    NEW.verified_at := now();
-    NEW.verified_by := auth.uid();
+    IF TG_OP = 'INSERT' OR OLD.verification IS DISTINCT FROM 'verified' THEN
+      -- A fresh transition into 'verified': stamp from the actual actor,
+      -- never from whatever the caller passed.
+      NEW.verified_at := now();
+      NEW.verified_by := auth.uid();
+    ELSE
+      -- Already verified and staying verified: the stamp describes who
+      -- verified it and when, which does not change just because the row was
+      -- touched again. Carry the original through untouched, ignoring
+      -- whatever verified_at/verified_by the caller passed -- this is what
+      -- stops anyone (admin included) from rewriting another verifier's
+      -- credit or backdating the timestamp.
+      NEW.verified_at := OLD.verified_at;
+      NEW.verified_by := OLD.verified_by;
+    END IF;
   ELSE
     NEW.verified_at := NULL;
     NEW.verified_by := NULL;

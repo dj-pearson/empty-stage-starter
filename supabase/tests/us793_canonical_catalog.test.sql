@@ -129,7 +129,7 @@ BEGIN
    WHERE name_normalized = 'us793-test-cheddar-cheese';
   RAISE EXCEPTION 'assertion 8: expected reject, got a non-admin promoted a row to verified';
 EXCEPTION WHEN insufficient_privilege THEN
-  IF SQLERRM NOT LIKE '%only an admin may mark a catalog row verified%' THEN
+  IF SQLERRM NOT LIKE '%only an admin may change the verification state of a catalog row%' THEN
     RAISE EXCEPTION 'assertion 8: expected the guard trigger message, got %', SQLERRM;
   END IF;
   RAISE NOTICE 'assertion 8 ok (rejected with guard trigger message)';
@@ -289,21 +289,133 @@ BEGIN
   RAISE NOTICE 'assertion 14 ok (promotion overwrote the forged stamp)';
 END $a14$;
 
--- 15. foods.canonical_id exists, is NULLABLE, and points at the catalog.
+-- 15. HOLE B: a non-admin cannot demote a verified row back to 'unverified'.
+--     The earlier guard only ever fired when NEW.verification = 'verified',
+--     so it guarded promotion and nothing else -- demotion was wide open.
+--     Uses the cheddar row, which assertion 10 promoted to verified.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '93930000-0000-0000-0000-000000000001', true);
+DO $a15$
+BEGIN
+  UPDATE public.grocery_product_catalog
+     SET verification = 'unverified'
+   WHERE name_normalized = 'us793-test-cheddar-cheese';
+  RAISE EXCEPTION 'assertion 15: expected reject, got a non-admin demoted a verified row to unverified';
+EXCEPTION WHEN insufficient_privilege THEN
+  IF SQLERRM NOT LIKE '%only an admin may change the verification state of a catalog row%' THEN
+    RAISE EXCEPTION 'assertion 15: expected the guard trigger message, got %', SQLERRM;
+  END IF;
+  RAISE NOTICE 'assertion 15 ok (demotion rejected)';
+END $a15$;
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', true);
+
+-- 16. HOLE B (variant): a non-admin cannot set 'rejected' on a verified row
+--     either -- the guard rejects any change to `verification` it doesn't
+--     trust, not just a move toward 'unverified'.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '93930000-0000-0000-0000-000000000001', true);
+DO $a16$
+BEGIN
+  UPDATE public.grocery_product_catalog
+     SET verification = 'rejected'
+   WHERE name_normalized = 'us793-test-cheddar-cheese';
+  RAISE EXCEPTION 'assertion 16: expected reject, got a non-admin set a verified row to rejected';
+EXCEPTION WHEN insufficient_privilege THEN
+  IF SQLERRM NOT LIKE '%only an admin may change the verification state of a catalog row%' THEN
+    RAISE EXCEPTION 'assertion 16: expected the guard trigger message, got %', SQLERRM;
+  END IF;
+  RAISE NOTICE 'assertion 16 ok (rejected-state write rejected)';
+END $a16$;
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', true);
+
+-- 17. HOLE A: a non-admin cannot rewrite verified_by/verified_at on a row
+--     that is already verified and stays verified. The guard only checks
+--     `verification` itself, so this write is not rejected outright -- the
+--     stamping logic is what closes the hole, by carrying OLD.verified_at/
+--     OLD.verified_by through untouched whenever the row was already
+--     verified and stays verified. Assert both angles: the write does not
+--     raise (it is not the guard's job here), and the stored stamp is
+--     unchanged from before the attempt, not the forged values.
+DO $a17$
+DECLARE
+  v_before RECORD;
+  v_after RECORD;
+BEGIN
+  SELECT verified_at, verified_by INTO v_before
+    FROM public.grocery_product_catalog WHERE name_normalized = 'us793-test-cheddar-cheese';
+
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claim.sub', '93930000-0000-0000-0000-000000000001', true);
+  UPDATE public.grocery_product_catalog
+     SET verified_by = '93930000-0000-0000-0000-00000000fe33',
+         verified_at = '1999-01-01T00:00:00Z'
+   WHERE name_normalized = 'us793-test-cheddar-cheese';
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+
+  SELECT verified_at, verified_by INTO v_after
+    FROM public.grocery_product_catalog WHERE name_normalized = 'us793-test-cheddar-cheese';
+
+  IF v_after.verified_at IS DISTINCT FROM v_before.verified_at
+     OR v_after.verified_by IS DISTINCT FROM v_before.verified_by THEN
+    RAISE EXCEPTION 'assertion 17: expected a non-admin rewrite of verified_at/verified_by on a verified row to have no effect, got verified_at=%, verified_by=% (was verified_at=%, verified_by=%)',
+      v_after.verified_at, v_after.verified_by, v_before.verified_at, v_before.verified_by;
+  END IF;
+  RAISE NOTICE 'assertion 17 ok (non-admin rewrite of verified_at/verified_by on a verified row had no effect)';
+END $a17$;
+
+-- 18. An admin touching an already-verified row also preserves the ORIGINAL
+--     verified_at/verified_by rather than re-stamping them, even when the
+--     admin's own UPDATE explicitly (and legitimately) sets
+--     verification='verified' again alongside a forged stamp. The
+--     preservation is unconditional on the transition (not on who is
+--     writing), which is what makes assertion 17 hold for a non-admin too.
+DO $a18$
+DECLARE
+  v_before RECORD;
+  v_after RECORD;
+BEGIN
+  SELECT verified_at, verified_by INTO v_before
+    FROM public.grocery_product_catalog WHERE name_normalized = 'us793-test-cheddar-cheese';
+
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claim.sub', '93930000-0000-0000-0000-00000000ad33', true);
+  UPDATE public.grocery_product_catalog
+     SET verification = 'verified',
+         verified_by = '93930000-0000-0000-0000-00000000fe33',
+         verified_at = '1999-01-01T00:00:00Z'
+   WHERE name_normalized = 'us793-test-cheddar-cheese';
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+
+  SELECT verified_at, verified_by INTO v_after
+    FROM public.grocery_product_catalog WHERE name_normalized = 'us793-test-cheddar-cheese';
+
+  IF v_after.verified_at IS DISTINCT FROM v_before.verified_at
+     OR v_after.verified_by IS DISTINCT FROM v_before.verified_by THEN
+    RAISE EXCEPTION 'assertion 18: expected an admin re-touching an already-verified row to preserve the original stamp, got verified_at=%, verified_by=% (was verified_at=%, verified_by=%)',
+      v_after.verified_at, v_after.verified_by, v_before.verified_at, v_before.verified_by;
+  END IF;
+  RAISE NOTICE 'assertion 18 ok (admin re-touch of an already-verified row preserved the original stamp)';
+END $a18$;
+
+-- 19. foods.canonical_id exists, is NULLABLE, and points at the catalog.
 --     Nullable is load-bearing: an unmatched household row must keep working
 --     exactly as it does today.
-DO $a15$
+DO $a19$
 DECLARE nullable TEXT;
 BEGIN
   SELECT is_nullable INTO nullable FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'foods' AND column_name = 'canonical_id';
   IF nullable IS DISTINCT FROM 'YES' THEN
-    RAISE EXCEPTION 'assertion 15: expected foods.canonical_id to be nullable, got is_nullable=%', nullable;
+    RAISE EXCEPTION 'assertion 19: expected foods.canonical_id to be nullable, got is_nullable=%', nullable;
   END IF;
-  RAISE NOTICE 'assertion 15 ok (foods.canonical_id nullable)';
-END $a15$;
+  RAISE NOTICE 'assertion 19 ok (foods.canonical_id nullable)';
+END $a19$;
 
-DO $a16$
+DO $a20$
 DECLARE n INT;
 BEGIN
   SELECT count(*) INTO n FROM information_schema.table_constraints tc
@@ -311,9 +423,9 @@ BEGIN
   WHERE tc.table_name = 'foods' AND tc.constraint_type = 'FOREIGN KEY'
     AND ccu.table_name = 'grocery_product_catalog';
   IF n <> 1 THEN
-    RAISE EXCEPTION 'assertion 16: expected 1 FK from foods to grocery_product_catalog, got %', n;
+    RAISE EXCEPTION 'assertion 20: expected 1 FK from foods to grocery_product_catalog, got %', n;
   END IF;
-  RAISE NOTICE 'assertion 16 ok (foods.canonical_id FK to grocery_product_catalog)';
-END $a16$;
+  RAISE NOTICE 'assertion 20 ok (foods.canonical_id FK to grocery_product_catalog)';
+END $a20$;
 
 ROLLBACK;
