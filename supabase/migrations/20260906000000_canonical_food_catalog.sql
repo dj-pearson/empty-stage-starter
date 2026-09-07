@@ -128,3 +128,20 @@ DROP TRIGGER IF EXISTS gpc_guard_verification ON public.grocery_product_catalog;
 CREATE TRIGGER gpc_guard_verification
   BEFORE INSERT OR UPDATE OF verification ON public.grocery_product_catalog
   FOR EACH ROW EXECUTE FUNCTION public.gpc_guard_verification();
+
+-- US-793: the household row references the catalog.
+--
+-- NULLABLE ON PURPOSE. An unmatched row behaves exactly as it does today, which
+-- is what lets US-796's matcher fill this in gradually instead of requiring a
+-- big-bang rename of every household's food on day one. ON DELETE SET NULL for
+-- the same reason: losing a catalog row must never take a household's food with
+-- it.
+ALTER TABLE public.foods
+  ADD COLUMN IF NOT EXISTS canonical_id UUID
+    REFERENCES public.grocery_product_catalog(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS foods_canonical_id_idx
+  ON public.foods(canonical_id) WHERE canonical_id IS NOT NULL;
+
+COMMENT ON COLUMN public.foods.canonical_id IS
+  'Optional link to the shared catalog (US-793). NULL means unmatched, which is a valid steady state. Household-specific fields (is_safe, is_try_bite, quantity, expiry_date) are never read from the catalog.';

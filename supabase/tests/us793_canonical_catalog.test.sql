@@ -93,4 +93,17 @@ RESET ROLE;
 SELECT 'EXPECTED unverified, GOT ' || verification AS non_admin_insert_lands_unverified
 FROM public.grocery_product_catalog WHERE name_normalized = 'user typed thing';
 
+-- 10. foods.canonical_id exists, is NULLABLE, and points at the catalog.
+--     Nullable is load-bearing: an unmatched household row must keep working
+--     exactly as it does today.
+SELECT 'EXPECTED YES, GOT ' || is_nullable AS canonical_id_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'foods' AND column_name = 'canonical_id';
+
+SELECT 'EXPECTED 1, GOT ' || count(*)::text AS canonical_id_fk
+FROM information_schema.table_constraints tc
+JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+WHERE tc.table_name = 'foods' AND tc.constraint_type = 'FOREIGN KEY'
+  AND ccu.table_name = 'grocery_product_catalog';
+
 ROLLBACK;
