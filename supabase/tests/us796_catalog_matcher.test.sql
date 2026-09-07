@@ -629,4 +629,32 @@ BEGIN
   RAISE NOTICE 'assertion 25 ok (matcher prerequisite columns present: foods.canonical_id, grocery_product_catalog.name_normalized/barcode)';
 END $a25$;
 
+-- 26. anon genuinely cannot execute match_foods_to_catalog -- not "the
+-- REVOKE statement is present in the migration", which proves nothing (see
+-- 20260908000001_matcher_blank_barcode_and_grants.sql's header: a bare
+-- REVOKE ALL ... FROM PUBLIC compiled cleanly and changed nothing here,
+-- because this platform grants anon EXECUTE directly at CREATE FUNCTION
+-- time via a schema-level default ACL, not through PUBLIC). This is the
+-- assertion that actually tests the intent, using the same privilege check
+-- (has_function_privilege) that caught the gap in the first place. authenticated
+-- is checked too, as the positive control -- without it, a REVOKE ALL that
+-- accidentally also stripped authenticated's access would leave this
+-- assertion (and only this one) green while the function became
+-- unusable for every legitimate caller.
+DO $a26$
+DECLARE v_anon_can_execute BOOLEAN; v_authenticated_can_execute BOOLEAN;
+BEGIN
+  SELECT has_function_privilege('anon', 'public.match_foods_to_catalog(uuid)', 'EXECUTE')
+    INTO v_anon_can_execute;
+  SELECT has_function_privilege('authenticated', 'public.match_foods_to_catalog(uuid)', 'EXECUTE')
+    INTO v_authenticated_can_execute;
+  IF v_anon_can_execute THEN
+    RAISE EXCEPTION 'assertion 26: expected anon to NOT have EXECUTE on match_foods_to_catalog, got true';
+  END IF;
+  IF NOT v_authenticated_can_execute THEN
+    RAISE EXCEPTION 'assertion 26: expected authenticated to still have EXECUTE on match_foods_to_catalog, got false';
+  END IF;
+  RAISE NOTICE 'assertion 26 ok (anon cannot execute match_foods_to_catalog, authenticated still can)';
+END $a26$;
+
 ROLLBACK;

@@ -82,6 +82,18 @@ $$;
 COMMENT ON FUNCTION public.normalize_product_name(text) IS
   'US-796: reproduces ProductNameNormalizer.normalize in ios/EatPal/EatPal/Models/SmartProduct.swift (lowercase, trim, collapse whitespace runs). Punctuation is intentionally preserved -- do not add punctuation stripping here without changing the Swift side first, or the catalog matcher silently stops matching.';
 
+-- Deliberately no REVOKE/GRANT here, unlike match_foods_to_catalog below.
+-- This is a pure IMMUTABLE SQL string transform with no table access and
+-- no side effect -- there is no foods scan, no catalog join, nothing an
+-- anonymous caller could use as a compute-exhaustion vector the way
+-- match_foods_to_catalog's default anon grant (see that function's REVOKE
+-- comment) could. Revoking EXECUTE here would cost real things later: any
+-- future client-side or edge-function caller that wants to preview a
+-- normalized name before submitting it would need re-granting, for a
+-- function that does nothing worth restricting in the first place. Left at
+-- whatever this platform's default ACL already grants (anon,
+-- authenticated, service_role -- see pg_default_acl).
+--
 -- No expression index on public.normalize_product_name(name) here. An
 -- earlier draft added one (a partial index WHERE canonical_id IS NULL, on
 -- the theory the matcher's name join would want it), but two things rule
@@ -151,12 +163,18 @@ COMMENT ON FUNCTION public.normalize_product_name(text) IS
 -- as it would for a hand-written UPDATE against foods and
 -- grocery_product_catalog. A DEFINER function here would let any
 -- authenticated user relink every other household's foods. EXECUTE is
--- revoked from PUBLIC below and granted only to authenticated, both so
--- anon can never drive a full-table scan over RPC and so the RLS scoping
--- this paragraph claims is actually exercised by a real non-superuser
--- caller rather than only by the migration/operator role, which bypasses
--- RLS and so proves nothing about it. See assertions 20-21 (two households,
--- an authenticated caller who is a member of only one of them).
+-- revoked from PUBLIC and anon and granted only to authenticated and
+-- service_role below, both so anon can never drive a scan of foods joined
+-- against the whole catalog over RPC and so the RLS scoping this paragraph
+-- claims is actually exercised by a real non-superuser caller rather than
+-- only by the migration/operator role, which bypasses RLS and so proves
+-- nothing about it. See assertions 20-21 (two households, an authenticated
+-- caller who is a member of only one of them) and assertion 26 (anon
+-- genuinely cannot execute, not just "the REVOKE statement is present").
+--
+-- anon is named EXPLICITLY in the REVOKE, not just PUBLIC -- see the
+-- comment on the REVOKE/GRANT below for why that's load-bearing rather
+-- than redundant.
 --
 -- One more side effect worth naming rather than hiding: the pre-existing
 -- update_foods_updated_at trigger fires on every UPDATE this function
@@ -212,10 +230,34 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.match_foods_to_catalog(uuid) IS
-  'US-796: links household foods rows (canonical_id IS NULL) to grocery_product_catalog by exact non-blank barcode, or by normalized name AND matching category. SECURITY INVOKER so RLS scopes every call to the caller''s own household -- EXECUTE is granted only to authenticated, not PUBLIC. Returns the number of rows linked. p_household_id NULL means every household the caller''s RLS allows. Also bumps updated_at on every matched row via the pre-existing update_foods_updated_at trigger. Not called by this migration -- run the operator script at supabase/diagnostics/us-796-backfill-match-foods.sql to backfill, in committed per-household batches rather than inside one migration transaction.';
+  'US-796: links household foods rows (canonical_id IS NULL) to grocery_product_catalog by exact non-blank barcode, or by normalized name AND matching category. SECURITY INVOKER so RLS scopes every call to the caller''s own household -- EXECUTE is granted only to authenticated and service_role, not PUBLIC or anon. Returns the number of rows linked. p_household_id NULL means every household the caller''s RLS allows. Also bumps updated_at on every matched row via the pre-existing update_foods_updated_at trigger. Not called by this migration -- run the operator script at supabase/diagnostics/us-796-backfill-match-foods.sql to backfill, in committed per-household batches rather than inside one migration transaction.';
 
-REVOKE ALL ON FUNCTION public.match_foods_to_catalog(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.match_foods_to_catalog(uuid) TO authenticated;
+-- anon is named explicitly, not just PUBLIC. On this platform, CREATE
+-- FUNCTION in the public schema grants EXECUTE to anon, authenticated, and
+-- service_role DIRECTLY at creation time, via a schema-level default ACL
+-- (pg_default_acl) Supabase sets up outside any migration in this repo --
+-- see `SELECT defaclacl FROM pg_default_acl WHERE defaclobjtype = 'f' AND
+-- defaclnamespace = 'public'::regnamespace`. That grant does not come from
+-- PUBLIC, so `REVOKE ALL ... FROM PUBLIC` alone does not touch it --
+-- has_function_privilege('anon', ...) stays true after it runs. This was
+-- caught only by testing the actual privilege (assertion 26), not by
+-- reading the REVOKE statement -- a REVOKE that compiles proves nothing
+-- about what it revoked. Naming anon here closes the real grant, not a
+-- hypothetical one. Measured exposure before this fix: an unauthenticated
+-- caller could execute this function repeatedly over PostgREST RPC and
+-- always got back 0 (RLS on foods requires household_id =
+-- get_user_household_id(auth.uid()), which auth.uid() IS NULL never
+-- satisfies) -- a compute-exhaustion vector, not a data leak or privilege
+-- escalation, but worth closing outright rather than accepting. If a
+-- future edit "simplifies" this back to `FROM PUBLIC`, it silently reopens
+-- exactly this.
+--
+-- service_role is granted EXECUTE (in addition to authenticated) so a
+-- trusted backend caller -- an edge function, the operator script's own
+-- session if it ever ran as service_role instead of the migration role --
+-- isn't left needing superuser bypass for something this ordinary.
+REVOKE ALL ON FUNCTION public.match_foods_to_catalog(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.match_foods_to_catalog(uuid) TO authenticated, service_role;
 
 -- No backfill call here. Deliberately -- see
 -- supabase/diagnostics/us-796-backfill-match-foods.sql. Supabase applies a

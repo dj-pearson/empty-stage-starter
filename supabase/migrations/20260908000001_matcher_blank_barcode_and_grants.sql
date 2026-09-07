@@ -27,9 +27,22 @@
 --   2. An unused expression index (foods_name_normalized_expr_idx) that
 --      EXPLAIN showed the planner never used, and that made every
 --      canonical_id write non-HOT for no benefit. Dropped.
---   3. match_foods_to_catalog was executable by PUBLIC (so anon could
---      drive a full-table scan over RPC). EXECUTE is now revoked from
---      PUBLIC and granted only to authenticated.
+--   3. match_foods_to_catalog was executable by anon. REVOKE ... FROM
+--      PUBLIC alone does not fix this: this platform grants EXECUTE to
+--      anon/authenticated/service_role DIRECTLY at CREATE FUNCTION time,
+--      via a schema-level default ACL, not through PUBLIC -- so a bare
+--      PUBLIC revoke compiles cleanly and changes nothing anon can do.
+--      Confirmed with has_function_privilege('anon', ...) before and after;
+--      see the REVOKE/GRANT comment below and assertion 26 in the test
+--      file, which is what actually caught this (a REVOKE statement
+--      existing in a migration proves nothing about what it revoked).
+--      Measured exposure while this was open: anon could execute the
+--      function repeatedly over PostgREST RPC and always got back 0 (RLS
+--      on foods requires household_id = get_user_household_id(auth.uid()),
+--      which no anonymous caller satisfies) -- a compute-exhaustion vector
+--      against a table joined against a 2,337-row catalog, not a data leak
+--      or privilege escalation. EXECUTE is now revoked from PUBLIC AND
+--      anon explicitly, and granted to authenticated and service_role.
 --   4. A comment on the function claimed Postgres raises "more than one
 --      row returned" if UPDATE ... FROM joins a target row to more than
 --      one source row. It doesn't -- it silently picks one arbitrarily.
@@ -106,6 +119,14 @@ $$;
 COMMENT ON FUNCTION public.normalize_product_name(text) IS
   'US-796: reproduces ProductNameNormalizer.normalize in ios/EatPal/EatPal/Models/SmartProduct.swift (lowercase, trim, collapse whitespace runs). Punctuation is intentionally preserved -- do not add punctuation stripping here without changing the Swift side first, or the catalog matcher silently stops matching.';
 
+-- Deliberately no REVOKE/GRANT here, matching 20260908000000.sql. This is a
+-- pure IMMUTABLE SQL string transform with no table access -- nothing an
+-- anonymous caller could use as a compute-exhaustion vector the way
+-- match_foods_to_catalog's default anon grant could (see below), and
+-- revoking it would cost a real future caller (a client-side or
+-- edge-function preview of a normalized name) for no security benefit.
+-- Left at whatever this platform's default ACL already grants.
+
 -- Correction 2: drop the expression index. Production has it (the applied
 -- 20260908000000 created it); a fresh database never created it (the
 -- corrected 20260908000000 no longer does). IF EXISTS makes this the same
@@ -162,10 +183,28 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.match_foods_to_catalog(uuid) IS
-  'US-796: links household foods rows (canonical_id IS NULL) to grocery_product_catalog by exact non-blank barcode, or by normalized name AND matching category. SECURITY INVOKER so RLS scopes every call to the caller''s own household -- EXECUTE is granted only to authenticated, not PUBLIC. Returns the number of rows linked. p_household_id NULL means every household the caller''s RLS allows. Also bumps updated_at on every matched row via the pre-existing update_foods_updated_at trigger. Not called by this migration -- run the operator script at supabase/diagnostics/us-796-backfill-match-foods.sql to backfill, in committed per-household batches rather than inside one migration transaction.';
+  'US-796: links household foods rows (canonical_id IS NULL) to grocery_product_catalog by exact non-blank barcode, or by normalized name AND matching category. SECURITY INVOKER so RLS scopes every call to the caller''s own household -- EXECUTE is granted only to authenticated and service_role, not PUBLIC or anon. Returns the number of rows linked. p_household_id NULL means every household the caller''s RLS allows. Also bumps updated_at on every matched row via the pre-existing update_foods_updated_at trigger. Not called by this migration -- run the operator script at supabase/diagnostics/us-796-backfill-match-foods.sql to backfill, in committed per-household batches rather than inside one migration transaction.';
 
--- Correction 3: close PUBLIC execute. Idempotent regardless of the
--- database's starting state -- REVOKE on a privilege already absent, and
--- GRANT on a privilege already present, are each no-ops.
-REVOKE ALL ON FUNCTION public.match_foods_to_catalog(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.match_foods_to_catalog(uuid) TO authenticated;
+-- Correction 3: close anon execute, named explicitly rather than relying on
+-- PUBLIC. On this platform, CREATE FUNCTION in the public schema grants
+-- EXECUTE to anon, authenticated, and service_role DIRECTLY at creation
+-- time, via a schema-level default ACL (pg_default_acl) set up outside any
+-- migration in this repo -- see `SELECT defaclacl FROM pg_default_acl
+-- WHERE defaclobjtype = 'f' AND defaclnamespace = 'public'::regnamespace`.
+-- That grant does not come from PUBLIC, so a bare `REVOKE ALL ... FROM
+-- PUBLIC` compiles cleanly and does nothing to it --
+-- has_function_privilege('anon', 'public.match_foods_to_catalog(uuid)',
+-- 'EXECUTE') stayed true in local testing even after that revoke ran
+-- (production's out-of-band 20260908000000 predates any REVOKE at all --
+-- the version that first added one, PUBLIC-only, was caught here before it
+-- ever shipped anywhere). This is what this correction exists to fix, and
+-- why 'anon' appears by name below rather than trusting PUBLIC to cover
+-- it. If a future edit "simplifies" this back to `FROM PUBLIC` alone, it
+-- silently reopens exactly this. service_role is
+-- granted alongside authenticated so a trusted backend caller isn't left
+-- needing superuser bypass for something this ordinary. Idempotent
+-- regardless of the database's starting state -- REVOKE on a privilege
+-- already absent, and GRANT on a privilege already present, are each
+-- no-ops.
+REVOKE ALL ON FUNCTION public.match_foods_to_catalog(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.match_foods_to_catalog(uuid) TO authenticated, service_role;
