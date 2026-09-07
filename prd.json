@@ -3604,6 +3604,21 @@
       "priority": 3,
       "passes": false,
       "notes": "Found 2026-09-07 while fixing US-794 CI. The ratchet reported \"Typecheck errors: 845 (baseline: 814)\" and then printed 40 error lines, every one of them in src/pages/pseo/* or src/pages/dashboard/ProfessionalSettings.tsx and every one pre-existing inside the 814 - PseoPageContent genuinely does not exist in src/types/pseo.ts, and PR #264 measured exactly 814 on the same files. The 31 errors the branch actually added were earlier in the walk and never printed. Cost two round trips: the full ratchet was OOM-killed twice on the dev box, and the causes were finally located by running a scoped `npx tsc` over just the two changed files with the project strict and lib settings copied by hand out of tsconfig.app.json. Both causes were invisible in CI output - .mjs imports resolving as unknown, then Object.hasOwn against lib ES2020. A merge-base diff is what the step is already trying to approximate and would have named both in the first run."
+    },
+    {
+      "id": "US-804",
+      "title": "REVOKE ... FROM PUBLIC does not actually revoke anything on Supabase",
+      "description": "As someone locking down an RPC, I want the revoke I wrote to be the revoke that happens, so that a function I believe is private is not callable by anon.",
+      "acceptanceCriteria": [
+        "Every function whose migration says REVOKE ALL ... FROM PUBLIC is audited: has_function_privilege('anon', <fn>, 'EXECUTE') must be false where that was the intent",
+        "The revokes name anon explicitly (REVOKE ... FROM PUBLIC, anon), because the grant to anon comes from pg_default_acl and not from PUBLIC",
+        "Each fixed function gets an assertion on has_function_privilege rather than on the presence of a REVOKE statement - the statement existing is what gave the false confidence in the first place",
+        "A decision is recorded per function: genuinely private, authenticated-only, or deliberately public. Not every one of these needs locking down",
+        "A note in CLAUDE.md or the migration conventions so the next REVOKE is written correctly the first time"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found 2026-09-07 by the US-796 implementer while verifying its own REVOKE, and confirmed against the live database. Supabase sets a schema-level default ACL: pg_default_acl for functions in public is {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}, so every new function gets EXECUTE granted DIRECTLY to anon, authenticated and service_role at creation. REVOKE ALL ON FUNCTION ... FROM PUBLIC removes only the PUBLIC grant and leaves those direct role grants in place, so has_function_privilege('anon', fn, 'EXECUTE') stays true and the function remains callable over PostgREST RPC. The pattern appears in at least five migrations: 20260410000000_disposable_email_domains, 20260512000000_chain_network, 20260709000026_auth_anomaly_agent, 20260709000027_rls_audit_agent, 20260808000001_harden_auth_rate_limit. Severity depends entirely on the function: for match_foods_to_catalog it is bounded, because SECURITY INVOKER plus RLS on foods means an anon call links zero rows and only burns a scan, but a SECURITY DEFINER function with the same pattern would be a real hole. Audit each one rather than assuming. US-796 fixes only its own function, naming anon explicitly."
     }
   ]
 }
