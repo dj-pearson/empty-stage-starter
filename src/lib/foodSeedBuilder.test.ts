@@ -37,25 +37,55 @@ const nutrients = [
 ];
 
 describe('normalizeName', () => {
-  it('produces the actual expected key, not just a case-insensitive match', () => {
-    // A function that always returns "" would also pass a bare
-    // toBe(normalizeName(other)) comparison -- assert the real value.
-    expect(normalizeName('Lemons, raw, without peel')).toBe('lemons raw without peel');
-    expect(normalizeName('LEMONS, RAW, WITHOUT PEEL')).toBe('lemons raw without peel');
+  // US-794 fix: normalizeName now matches exactly what the shipped iOS
+  // client writes to the UNIQUE name_normalized column --
+  // ProductNameNormalizer.normalize in
+  // ios/EatPal/EatPal/Models/SmartProduct.swift:
+  //   let lower = raw.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+  //   let parts = lower.split(whereSeparator: { $0.isWhitespace })
+  //   return parts.joined(separator: " ")
+  // i.e. lowercase, trim, collapse whitespace -- nothing else. The old
+  // behavior (accent-stripping, apostrophe deletion, punctuation stripped
+  // to spaces) wrote a key the app itself never produces, so a household
+  // typing "Hummus, commercial" on iOS could never collide with a seeded
+  // "hummus commercial" row and PostgREST inserted a duplicate.
+  it('lowercases and trims, preserving punctuation', () => {
+    expect(normalizeName('Lemons, raw, without peel')).toBe('lemons, raw, without peel');
+    expect(normalizeName('LEMONS, RAW, WITHOUT PEEL')).toBe('lemons, raw, without peel');
   });
-  it('strips diacritics, using a description that actually carries one', () => {
-    // The original fixture ("Creme fraiche") was plain ASCII, so the
-    // NFD-normalize-and-strip-combining-marks path was never exercised.
-    expect(normalizeName('Crème fraîche')).toBe('creme fraiche');
+  it('collapses internal whitespace runs to a single space', () => {
+    expect(normalizeName('Hummus,   commercial')).toBe('hummus, commercial');
+    expect(normalizeName('  Fish, tuna  ')).toBe('fish, tuna');
   });
-  it('strips characters a SQL literal should never carry', () => {
-    expect(normalizeName('Creme fraiche')).toMatch(/^[a-z0-9 -]+$/);
+  it('does NOT strip diacritics -- iOS does not either', () => {
+    expect(normalizeName('Crème fraîche')).toBe('crème fraîche');
   });
-  it('deletes an apostrophe rather than treating it as a word break (fix 7)', () => {
-    // "mother's" -> "mothers", not "mother s" -- see the comment on
-    // normalizeName for why a household typing without an apostrophe
-    // needs to land on the same key.
-    expect(normalizeName("Mother's loaf, pork")).toBe('mothers loaf pork');
+  it('does NOT delete an apostrophe', () => {
+    expect(normalizeName("Mother's loaf, pork")).toBe("mother's loaf, pork");
+  });
+  it('matches the Swift algorithm exactly: lowercase, trim, split on whitespace, rejoin with single spaces', () => {
+    // A JS transliteration of ProductNameNormalizer.normalize's three
+    // lines, kept deliberately separate from the implementation under
+    // test so this asserts behavioral equivalence, not identical source.
+    const iosNormalize = (raw: string) =>
+      raw
+        .toLowerCase()
+        .trim()
+        .split(/\s+/)
+        .filter((p) => p.length > 0)
+        .join(' ');
+
+    const samples = [
+      'Lemons, raw, without peel',
+      '  Hummus,   Commercial  ',
+      "Mother's loaf, pork",
+      'Fish, tuna, light, canned in water, drained solids',
+      'Crème fraîche',
+      "Egg, whole, dried",
+    ];
+    for (const s of samples) {
+      expect(normalizeName(s)).toBe(iosNormalize(s));
+    }
   });
 });
 
@@ -173,7 +203,7 @@ describe('buildSeed', () => {
     // reduce to the identical displayName "Pears, raw, bartlett", and
     // exactly one survives the resulting collision.
     expect(out.rows).toHaveLength(1);
-    expect(out.rows[0].name_normalized).toBe('pears raw bartlett');
+    expect(out.rows[0].name_normalized).toBe('pears, raw, bartlett');
     expect(out.dropped.some(d => /collision|duplicate/i.test(d.reason))).toBe(true);
   });
   it('drops an alcoholic beverage by USDA description prefix, regardless of category, and keeps cocktail/wine-named groceries', () => {

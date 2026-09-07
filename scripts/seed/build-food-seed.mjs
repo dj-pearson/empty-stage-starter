@@ -29,31 +29,68 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // =====================================================================
 
 /**
- * Lowercased, diacritic-stripped, punctuation-stripped key for exact-match
- * lookup and for detecting when two USDA descriptions name the same food.
- * Only [a-z0-9 ] survives, which is also why it's safe to drop straight
- * into a SQL string literal.
+ * The `name_normalized` key exactly as the shipped iOS client computes it.
+ * grocery_product_catalog.name_normalized is UNIQUE, and it's the column
+ * `SmartProductService.swift` upserts on (`INSERT ... ON CONFLICT
+ * (name_normalized)`), writing whatever `ProductNameNormalizer.normalize`
+ * produces (ios/EatPal/EatPal/Models/SmartProduct.swift):
  *
- * Apostrophes are DELETED, not turned into a space like every other
- * punctuation character -- "Mother's" becomes "mothers", not "mother s".
- * This is a deliberate choice, not an oversight: US-796's matcher links a
- * household's free-text food name to this catalog by exact
- * `name_normalized` match, and a household typing "Mothers" (no
- * apostrophe, which is how most people actually type on a phone keyboard)
- * would otherwise never match "mother s" -- two normalized forms for one
- * food is exactly the kind of drift US-796 exists to close, not
- * reintroduce.
+ *   let lower = raw.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+ *   let parts = lower.split(whereSeparator: { $0.isWhitespace })
+ *   return parts.joined(separator: " ")
+ *
+ * i.e. lowercase, trim, collapse runs of whitespace to one space --
+ * punctuation, diacritics and apostrophes are all left exactly as typed.
+ * This function used to do far more (NFD accent-stripping, apostrophe
+ * deletion, every run of non-alphanumerics collapsed to a space), which
+ * made the seed write forms the app itself never produces -- "hummus
+ * commercial" where iOS computes "hummus, commercial" for the same food.
+ * 90.7% of the 2,337 seeded rows carried a mismatched key before this fix.
+ * Because the column is a UNIQUE upsert target, a mismatch isn't cosmetic:
+ * a parent adding "Hummus, commercial" on iOS can never collide with the
+ * seeded row, so PostgREST inserts a second catalog row for the same food,
+ * `times_added` never accumulates on the canonical one, and US-796's
+ * matcher can't match on this column either. The column's meaning is
+ * defined by the client that has been writing it for months -- the seed
+ * conforms to that convention, not the other way around, and iOS can't be
+ * changed retroactively since older builds keep writing the old form.
+ *
+ * This is deliberately NOT the string used for lab-speak / processed-state
+ * word matching internal to this file -- see `normalizedWords` below for
+ * that punctuation-stripped, word-tokenized form, which is a different job
+ * (exact-word membership tests) with a different, unrelated correctness
+ * requirement.
  *
  * @param {string} description
  * @returns {string}
  */
 export function normalizeName(description) {
+  return description
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Diacritic-stripped, punctuation-stripped, apostrophe-deleted word list --
+ * NOT the public `name_normalized` key (see normalizeName above for why
+ * those diverged). Used only internally, for exact-word membership tests
+ * (PREPARED_STATE_TOKENS in baseSignature, PROCESSED_STATE_WORDS in
+ * hasProcessedStateWord) where a trailing comma or period stuck to a word
+ * by normalizeName's now-punctuation-preserving output would otherwise
+ * make "dried," fail to match the bare word "dried".
+ *
+ * @param {string} description
+ * @returns {string[]}
+ */
+function normalizedWords(description) {
   return stripCombiningMarks(description.normalize('NFD'))
     .toLowerCase()
     .replace(/'/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-    .replace(/\s+/g, ' ');
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
 // Combining Diacritical Marks block is code points 768-879 (0x0300-0x036F),
@@ -178,8 +215,7 @@ export function displayName(description) {
 const PREPARED_STATE_TOKENS = new Set(['unprepared', 'prepared', 'cooked', 'raw']);
 
 function baseSignature(description) {
-  return normalizeName(description)
-    .split(' ')
+  return normalizedWords(description)
     .filter((w) => !PREPARED_STATE_TOKENS.has(w))
     .join(' ');
 }
@@ -549,8 +585,7 @@ function findStaplePattern(description) {
 const PROCESSED_STATE_WORDS = new Set(['dried', 'dehydrated', 'powder', 'canned', 'frozen', 'condensed', 'evaporated', 'concentrate']);
 
 function hasProcessedStateWord(description) {
-  const words = normalizeName(description).split(' ');
-  return words.some((w) => PROCESSED_STATE_WORDS.has(w));
+  return normalizedWords(description).some((w) => PROCESSED_STATE_WORDS.has(w));
 }
 
 const NUTRIENT_IDS = {
