@@ -3604,6 +3604,21 @@
       "priority": 3,
       "passes": false,
       "notes": "Found 2026-09-07 while fixing US-794 CI. The ratchet reported \"Typecheck errors: 845 (baseline: 814)\" and then printed 40 error lines, every one of them in src/pages/pseo/* or src/pages/dashboard/ProfessionalSettings.tsx and every one pre-existing inside the 814 - PseoPageContent genuinely does not exist in src/types/pseo.ts, and PR #264 measured exactly 814 on the same files. The 31 errors the branch actually added were earlier in the walk and never printed. Cost two round trips: the full ratchet was OOM-killed twice on the dev box, and the causes were finally located by running a scoped `npx tsc` over just the two changed files with the project strict and lib settings copied by hand out of tsconfig.app.json. Both causes were invisible in CI output - .mjs imports resolving as unknown, then Object.hasOwn against lib ES2020. A merge-base diff is what the step is already trying to approximate and would have named both in the first run."
+    },
+    {
+      "id": "US-805",
+      "title": "A barcode provider returning 200 with an unexpected shape is not treated as a miss",
+      "description": "As a parent scanning a product, I want a provider that answers with something we do not understand to count as \"not found\", so that I get the normal add-it-yourself path instead of a wrong or empty food.",
+      "acceptanceCriteria": [
+        "Each provider lookup in supabase/functions/lookup-barcode/index.ts validates the SHAPE of a 200 response, not only response.ok, and returns null when the payload is not what it expects",
+        "Open Food Facts, USDA FoodData Central and FoodRepo are each covered - they have different envelopes and different failure shapes",
+        "A 200 carrying an error body, an empty product, or a product with no name degrades to null and the chain moves on to the next provider",
+        "Tests with a stubbed fetch cover: a 200 with an error body, a 200 with an empty object, and a 200 with a product missing its name",
+        "No provider failure of any shape can change the response the client receives - the existing not-found shape is returned"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-09-07 by the US-797 implementer while wiring catalog promotion, and pre-existing rather than introduced by it. lookupFoodRepo checks response.ok and then reads the body optimistically, so a 200 carrying a valid-but-unexpected JSON shape flows onward instead of degrading to null. Currently harmless for the catalog specifically, because toCatalogRow in supabase/functions/_shared/catalogPromotion.ts returns null when there is no name or no usable nutrition, so nothing bad gets promoted - but the client-facing food object is a separate path and the same optimism there is what would surface a nameless or empty food to a parent mid-shop. Worth fixing at the provider boundary where the knowledge of each envelope lives, rather than relying on a downstream consumer to be defensive."
     }
   ]
 }
