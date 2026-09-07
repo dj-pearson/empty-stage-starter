@@ -3590,6 +3590,20 @@
       "priority": 1,
       "passes": false,
       "notes": "Found 2026-09-07 while an agent was fixturing auth.users rows for the US-793 catalog tests. Verified by execution, not inspection: on a fresh supabase db reset, INSERT INTO auth.users (id, email) VALUES (...) aborts with 42703 record \"new\" has no field \"user_id\". Chain is on_auth_user_created -> handle_new_user() -> INSERT public.profiles -> create_notification_preferences_on_profile -> create_default_notification_preferences(), which selects NEW.user_id and NEW.household_id from a trigger row that has neither. handle_new_user() re-raises via WHEN OTHERS, so the auth.users insert fails outright. Introduced in 20251110000002_push_notifications.sql:298-316, where the function was written against a profiles shape that has never existed. Unknown whether production is affected - the prod DB is behind migrations and may hold an older definition or lack the trigger; establish that first. US-793 works around it inside its own test file with a transaction-scoped session_replication_role = replica and touches nothing else."
+    },
+    {
+      "id": "US-802",
+      "title": "The typecheck ratchet hides the errors a PR actually added",
+      "description": "As a developer whose PR just failed the typecheck ratchet, I want to see which errors I added, so that I can fix them without re-deriving the whole build locally.",
+      "acceptanceCriteria": [
+        "On a regression the step prints the errors NEW to this branch, diffed against the same tsc run on the merge base, rather than a tail of the full list",
+        "scripts/ci/typecheck-ratchet.sh stops using `grep -E \"error TS\" | tail -40`. Errors sort by path and the backlog lives in src/pages/*, so that tail is a constant and never contains the new ones",
+        "The full tsc log is uploaded as a workflow artifact, so a developer can read it without reproducing the build",
+        "The lint ratchet gets the same treatment - it has the identical shape"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-09-07 while fixing US-794 CI. The ratchet reported \"Typecheck errors: 845 (baseline: 814)\" and then printed 40 error lines, every one of them in src/pages/pseo/* or src/pages/dashboard/ProfessionalSettings.tsx and every one pre-existing inside the 814 - PseoPageContent genuinely does not exist in src/types/pseo.ts, and PR #264 measured exactly 814 on the same files. The 31 errors the branch actually added were earlier in the walk and never printed. Cost two round trips: the full ratchet was OOM-killed twice on the dev box, and the causes were finally located by running a scoped `npx tsc` over just the two changed files with the project strict and lib settings copied by hand out of tsconfig.app.json. Both causes were invisible in CI output - .mjs imports resolving as unknown, then Object.hasOwn against lib ES2020. A merge-base diff is what the step is already trying to approximate and would have named both in the first run."
     }
   ]
 }
