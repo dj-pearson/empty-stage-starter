@@ -77,8 +77,25 @@ describe('client-supplied AI config (US-709)', () => {
     expect(src).toMatch(/aiService\.generateContent\(/);
   });
 
-  it.each(['parse-recipe', 'suggest-recipe'])('%s stays gated to signed-in callers', (fn) => {
-    expect(readFn(fn)).toMatch(/await requireUser\(req\)/);
+  it('suggest-recipe stays gated to signed-in callers', () => {
+    expect(readFn('suggest-recipe')).toMatch(/await requireUser\(req\)/);
+  });
+
+  /**
+   * US-806: parse-recipe is the one exception, and a deliberate one. Every
+   * shipped iOS build calls it with the anon key, so gating it to signed-in
+   * callers alone 401'd the share extension, the recipe deep link and the
+   * Shortcuts intent. It still identifies the caller with requireUser; what
+   * changed is that an unidentified one gets a budgeted allowance instead of a
+   * closed door. Both halves have to stay: requireUser so a real session is
+   * still recognised, resolveAccess so the anon path stays capped rather than
+   * becoming an open endpoint that pays for a Claude call.
+   */
+  it('parse-recipe identifies its caller and caps the anonymous fallback', () => {
+    const src = readFn('parse-recipe');
+    expect(src).toMatch(/requireUser\(req\)/);
+    expect(src).toMatch(/resolveAccess\(/);
+    expect(src).toMatch(/parse-recipe-access\.ts/);
   });
 
   it('leaves no function reading api_key_env_var off caller input', () => {
