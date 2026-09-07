@@ -1,5 +1,5 @@
 import { Food, PlanEntry, MealSlot } from "@/types";
-import type { EffectiveFood } from "./effectiveFood";
+import { resolveFood, type EffectiveFood } from "./effectiveFood";
 import { generateId } from "./utils";
 
 const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack2"];
@@ -173,7 +173,16 @@ export function generateGroceryList(
   return Object.values(foodCount)
     .filter(({ count, inStock }) => count > inStock)
     .map(({ food, count, inStock, sourcePlanEntryId }) => {
-      const effective = effectiveFoodById[food.id];
+      // Guards a caller that built the map from a different array than
+      // `foods` (or an out-of-date one): `Record<string, T>` indexes as `T`,
+      // not `T | undefined`, so a missing entry would otherwise throw
+      // reading `.name` off `undefined` with no compile-time warning.
+      // Falling back to `resolveFood(food, null)` -- the household's own
+      // values, exactly what an unlinked food already resolves to -- is not
+      // "resolving inside this file" as a design choice; it is a defensive
+      // guard for a bug that should never happen if the caller built the map
+      // correctly.
+      const effective = effectiveFoodById[food.id] ?? resolveFood(food, null);
       return {
         id: generateId(),
         name: effective.name,

@@ -63,6 +63,14 @@ describe('resolveFood', () => {
     expect(r.aisleRaw).toBe('Produce');
   });
 
+  it('falls back to the household name when the catalog name is empty', () => {
+    // Nothing constrains catalog.name to be non-empty either -- an empty
+    // string is effectively no value, same treatment as aisle and category.
+    const blankName: CatalogEntry = { ...catalog, name: '' };
+    const r = resolveFood(householdFood, blankName);
+    expect(r.name).toBe('cheddar cheese');
+  });
+
   it('reports verification so unverified rows can be marked', () => {
     expect(resolveFood(householdFood, { ...catalog, verification: 'unverified' }).isVerified).toBe(false);
     expect(resolveFood(householdFood, catalog).isVerified).toBe(true);

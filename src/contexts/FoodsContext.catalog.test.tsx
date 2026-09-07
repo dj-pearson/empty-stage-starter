@@ -13,8 +13,9 @@
 import { render, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { useEffect } from 'react';
-import { FoodsProvider, useFoods } from './FoodsContext';
+import { FoodsProvider, useFoods, useEffectiveFood } from './FoodsContext';
 import { parseFoodRow } from '@/lib/normalizeEntities';
+import type { EffectiveFood } from '@/lib/effectiveFood';
 import type { Food } from '@/types';
 
 // ---- supabase mock: records every `.from(table)` call and, for
@@ -78,6 +79,15 @@ function Probe({ onReady }: { onReady: (ctx: FoodsCtx) => void }) {
   useEffect(() => {
     onReady(ctx);
   }, [ctx, onReady]);
+  return null;
+}
+
+/** Reports every value `useEffectiveFood(food)` produces as `food` prop / context re-renders. */
+function EffectiveProbe({ food, onReady }: { food: Food; onReady: (e: EffectiveFood) => void }) {
+  const effective = useEffectiveFood(food);
+  useEffect(() => {
+    onReady(effective);
+  }, [effective, onReady]);
   return null;
 }
 
@@ -153,8 +163,19 @@ describe('US-795: FoodsContext catalog load', () => {
     expect(latest!.catalogById['cat-1'].name).toBe('Whole Milk');
   });
 
-  it('a failed catalog fetch leaves catalogById empty and foods untouched', async () => {
-    catalogResponse = { data: null, error: { message: 'network error' } };
+  it('a failed catalog fetch leaves the previously loaded rows in place and foods untouched', async () => {
+    // Review fix (US-795): the original version of this test seeded no prior
+    // state, so it asserted catalogById === {} after a failure -- which is
+    // also true of the untouched initial state and would pass even if the
+    // error branch were changed to `setCatalogById({})`, wiping out whatever
+    // had loaded before. Seed a REAL successful fetch first so the assertion
+    // actually exercises "the failure branch does not touch catalogById".
+    catalogResponse = {
+      data: [
+        { id: 'cat-1', name: 'Whole Milk', default_category: 'dairy', default_aisle_section: 'dairy', verification: 'verified' },
+      ],
+      error: null,
+    };
 
     let latest: FoodsCtx | undefined;
     render(
@@ -164,17 +185,34 @@ describe('US-795: FoodsContext catalog load', () => {
     );
 
     await waitFor(() => expect(latest).toBeDefined());
-    const seeded = [food({ id: 'f1', canonical_id: 'cat-missing' })];
+    act(() => {
+      latest!.setFoods([food({ id: 'f1', canonical_id: 'cat-1' })]);
+    });
+    await waitFor(() => expect(latest!.catalogById['cat-1']).toBeDefined());
+    expect(latest!.catalogById['cat-1'].name).toBe('Whole Milk');
+
+    // Now change the linked set (a different canonical_id key re-triggers
+    // the fetch effect) and make the next fetch fail outright.
+    catalogResponse = { data: null, error: { message: 'network error' } };
+    const seeded = [
+      food({ id: 'f1', canonical_id: 'cat-1' }),
+      food({ id: 'f2', canonical_id: 'cat-missing' }),
+    ];
     act(() => {
       latest!.setFoods(seeded);
     });
 
-    await waitFor(() => expect(fromCalls.some((c) => c.table === 'grocery_product_catalog')).toBe(true));
+    await waitFor(() =>
+      expect(fromCalls.filter((c) => c.table === 'grocery_product_catalog')).toHaveLength(2)
+    );
     // Let the failed fetch resolve.
     await new Promise((r) => setTimeout(r, 20));
 
-    expect(latest!.catalogById).toEqual({});
-    // The unlinked-looking food is still there, untouched by the failure.
+    // The row loaded before the failure is still there -- a failed refetch
+    // must not blank an already-rendering pantry's catalog data.
+    expect(latest!.catalogById['cat-1']).toBeDefined();
+    expect(latest!.catalogById['cat-1'].name).toBe('Whole Milk');
+    // The failure never touched foods either.
     expect(latest!.foods).toEqual(seeded);
   });
 
@@ -190,5 +228,48 @@ describe('US-795: FoodsContext catalog load', () => {
 
     expect(parsed).not.toBeNull();
     expect(parsed!.canonical_id).toBe('cat-9');
+  });
+
+  // Review fix (US-795): useEffectiveFood had no caller and no test. Covered
+  // here rather than used at a call site -- every rewired site resolves a
+  // dynamic, per-item food (a click handler argument, an array element),
+  // which is not a place a hook can be called; useEffectiveFood only fits a
+  // component that renders exactly one fixed food, which none of Task 3's
+  // sites are.
+  it('useEffectiveFood resolves against catalogById once the linked row loads', async () => {
+    catalogResponse = {
+      data: [
+        { id: 'cat-1', name: 'Whole Milk', default_category: 'dairy', default_aisle_section: 'dairy', verification: 'verified' },
+      ],
+      error: null,
+    };
+
+    let latestCtx: FoodsCtx | undefined;
+    let latestEffective: EffectiveFood | undefined;
+    const linkedFood = food({ id: 'f1', name: 'milk', canonical_id: 'cat-1' });
+
+    render(
+      <FoodsProvider>
+        <Probe onReady={(c) => { latestCtx = c; }} />
+        <EffectiveProbe food={linkedFood} onReady={(e) => { latestEffective = e; }} />
+      </FoodsProvider>
+    );
+
+    await waitFor(() => expect(latestCtx).toBeDefined());
+    // Before the food is linked in context (or the catalog hasn't loaded
+    // yet), it resolves to the household's own values -- same as an
+    // unmatched food does today.
+    expect(latestEffective?.isCanonical).toBe(false);
+    expect(latestEffective?.name).toBe('milk');
+
+    act(() => {
+      latestCtx!.setFoods([linkedFood]);
+    });
+
+    await waitFor(() => expect(latestEffective?.isCanonical).toBe(true));
+    expect(latestEffective?.name).toBe('Whole Milk');
+    // Household-only state never leaks through -- same guarantee resolveFood
+    // itself carries, exercised here through the hook.
+    expect((latestEffective as unknown as Record<string, unknown>).is_safe).toBeUndefined();
   });
 });

@@ -149,9 +149,15 @@ export function resolveFood(food: Food, catalog?: CatalogEntry | null): Effectiv
   const mapped = aisleDisplayName(aisleRaw);
   const aisle = mapped ?? food.aisle;
 
+  // An empty `catalog.name` is, like an unmapped aisle or an invalid
+  // category above, effectively no value -- fall back to the household's own
+  // name rather than blanking it. Nothing constrains this column to be
+  // non-empty either.
+  const name = catalog.name || food.name;
+
   return {
     id: food.id,
-    name: catalog.name,
+    name,
     category,
     aisle,
     aisleRaw,
