@@ -53,6 +53,16 @@ describe('resolveFood', () => {
     expect(r.category).toBe('dairy');
   });
 
+  it('falls back to the household aisle when the catalog aisle is not a known rawValue', () => {
+    // 'Produce' is a web display string, not a GroceryAisle rawValue -- exactly
+    // the shape a wrong writer would produce. Unmappable is treated like null:
+    // a linked food must not show a blanker aisle than it did before linking.
+    const unmappable: CatalogEntry = { ...catalog, default_aisle_section: 'Produce' };
+    const r = resolveFood(householdFood, unmappable);
+    expect(r.aisle).toBe('Whatever the parent typed');
+    expect(r.aisleRaw).toBe('Produce');
+  });
+
   it('reports verification so unverified rows can be marked', () => {
     expect(resolveFood(householdFood, { ...catalog, verification: 'unverified' }).isVerified).toBe(false);
     expect(resolveFood(householdFood, catalog).isVerified).toBe(true);

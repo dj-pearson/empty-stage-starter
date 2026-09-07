@@ -134,7 +134,15 @@ export function resolveFood(food: Food, catalog?: CatalogEntry | null): Effectiv
 
   const category = isFoodCategory(catalog.default_category) ? catalog.default_category : food.category;
   const aisleRaw = catalog.default_aisle_section;
-  const aisle = aisleRaw !== null ? aisleDisplayName(aisleRaw) : food.aisle;
+  // `default_aisle_section` is a plain, unconstrained string all the way down
+  // (no CHECK in the DB, no enum on the write path — see
+  // ios/EatPal/EatPal/Models/GroceryItem.swift, where aisleSection is a bare
+  // String? and only aisleSectionEnum does the enum conversion). A value that
+  // doesn't map to a known aisle is effectively no value, so it falls back to
+  // the household's own aisle exactly like a null does — a linked food must
+  // never show a blanker aisle than it did before it was linked.
+  const mapped = aisleDisplayName(aisleRaw);
+  const aisle = mapped ?? food.aisle;
 
   return {
     id: food.id,
