@@ -10,6 +10,11 @@ export interface Food {
   category: FoodCategory;
   is_safe: boolean;
   is_try_bite: boolean;
+  /** US-793/US-795: nullable link to the shared `grocery_product_catalog` row
+   * this food resolves against (see `src/lib/effectiveFood.ts`). Absent for a
+   * food that hasn't been matched yet — most households, until US-796's
+   * matcher runs. */
+  canonical_id?: string | null;
   allergens?: string[];
   aisle?: string;
   quantity?: number;

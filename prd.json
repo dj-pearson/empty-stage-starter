@@ -3604,6 +3604,21 @@
       "priority": 3,
       "passes": false,
       "notes": "Found 2026-09-07 while fixing US-794 CI. The ratchet reported \"Typecheck errors: 845 (baseline: 814)\" and then printed 40 error lines, every one of them in src/pages/pseo/* or src/pages/dashboard/ProfessionalSettings.tsx and every one pre-existing inside the 814 - PseoPageContent genuinely does not exist in src/types/pseo.ts, and PR #264 measured exactly 814 on the same files. The 31 errors the branch actually added were earlier in the walk and never printed. Cost two round trips: the full ratchet was OOM-killed twice on the dev box, and the causes were finally located by running a scoped `npx tsc` over just the two changed files with the project strict and lib settings copied by hand out of tsconfig.app.json. Both causes were invisible in CI output - .mjs imports resolving as unknown, then Object.hasOwn against lib ES2020. A merge-base diff is what the step is already trying to approximate and would have named both in the first run."
+    },
+    {
+      "id": "US-803",
+      "title": "Checking off a grocery item creates the pantry food as is_safe",
+      "description": "As a parent of a child with food aversions, I want a food I buy to arrive in my pantry unmarked, so that the app never tells me a food is safe when I have not said so.",
+      "acceptanceCriteria": [
+        "Checking off a grocery item whose name matches no pantry food creates that food with is_safe false, not true",
+        "A food the parent has explicitly marked is_safe false can never be flipped to true by any automatic path - only by the parent",
+        "Existing pantry rows are not rewritten by this change; it governs newly created ones",
+        "A test covers the full path: item checked off, no matching food, new food created, is_safe is false",
+        "The safe-food ladder and any is_safe-driven suggestion are checked for an assumption that a pantry food is safe by default"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found 2026-09-07 during the US-795 review. src/pages/Grocery.tsx:329 creates the pantry food with is_safe: true hardcoded when a checked-off item matches no existing food by name. This is pre-existing behaviour on the unlinked path and was deliberately NOT changed inside US-795, which only had to stop the catalog name causing that path to be reached spuriously - changing the default there would have altered behaviour that story never touched. But the default itself is wrong for this app. EatPal is built for ARFID and picky eating, where is_safe is the flag a parent sets deliberately and the whole safe-food ladder reads. Buying a food is not the same as a child accepting it, and a food silently marked safe is exactly the error that matters most here. Worth checking whether any other automatic creation path does the same."
     }
   ]
 }

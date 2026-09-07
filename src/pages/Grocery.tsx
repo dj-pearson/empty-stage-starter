@@ -26,6 +26,7 @@ import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
 import { ScanReceiptDialog } from "@/components/ScanReceiptDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
+import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
 import { startOfWeek, endOfWeek, toISODate } from "@/lib/date-utils";
 import {
   ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
@@ -33,7 +34,7 @@ import {
   X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
-import { GroceryItem } from "@/types";
+import { Food, GroceryItem } from "@/types";
 import {
   categoryLabel,
   filterItemsByList,
@@ -43,6 +44,7 @@ import {
   groupItems,
   flattenGroupedRows,
   planRegenerationFromPlan,
+  buildFoodByDisplayNameIndex,
 } from "@/lib/groceryData";
 import { supabase } from "@/integrations/supabase/client";
 import { parseGroceryItemRows } from "@/lib/normalizeEntities";
@@ -86,7 +88,7 @@ const GROCERY_CHECKBOX_CLASS = "shrink-0 h-11 w-11 sm:h-6 sm:w-6";
 
 export default function Grocery() {
   const { t } = useTranslation();
-  const { foods, addFood, updateFood } = useFoods();
+  const { foods, addFood, updateFood, catalogById } = useFoods();
   // US-672: with writes on, checkout appends purchase movements and the pantry
   // is credited by the ledger rather than by the per-item toggle.
   const { ledgerWritesEnabled, recordPurchases, recordPurchaseReversal } = useInventory();
@@ -199,6 +201,35 @@ export default function Grocery() {
     return { from: toISODate(startOfWeek(now)), to: toISODate(endOfWeek(now)) };
   }, []);
 
+  // US-795: mealPlanner.ts has no hook, so it cannot read catalogById itself
+  // -- resolve every food here and pass the map in, keyed by food id, so a
+  // regenerated grocery row shows the same catalog name/category/aisle as
+  // every other linked screen instead of this household's own spelling.
+  const effectiveFoodById = useMemo(() => {
+    const map: Record<string, EffectiveFood> = {};
+    for (const food of foods) {
+      const catalog = food.canonical_id ? catalogById[food.canonical_id] : null;
+      map[food.id] = resolveFood(food, catalog);
+    }
+    return map;
+  }, [foods, catalogById]);
+
+  // US-795 fix round: matches a grocery item's name back to a pantry food by
+  // either its resolved (catalog) name or its raw household name -- see the
+  // doc comment on buildFoodByDisplayNameIndex in src/lib/groceryData.ts for
+  // why the household-name arm has to stay. Kept as a Map (via useMemo)
+  // rather than a per-call `.find`, so repeated lookups (e.g. once per row in
+  // handleDoneShopping) stay O(1) each.
+  const foodByDisplayName = useMemo(
+    () => buildFoodByDisplayNameIndex(foods, catalogById),
+    [foods, catalogById]
+  );
+
+  const findFoodByDisplayName = useCallback(
+    (name: string): Food | undefined => foodByDisplayName.get(name.toLowerCase()),
+    [foodByDisplayName]
+  );
+
   // US-713: sync from the meal plan, persisted.
   //
   // This used to end in setGroceryItems, which is local state only: the list
@@ -219,7 +250,7 @@ export default function Grocery() {
       : planEntries.filter(e => e.kid_id === activeKidId);
 
     // Shop for the week on screen, not for the whole 120-day context window.
-    const generated = generateGroceryList(filteredEntries, foods, shoppingWindow);
+    const generated = generateGroceryList(filteredEntries, foods, effectiveFoodById, shoppingWindow);
     if (generated.length === 0) {
       toast.info("Nothing to add", {
         description: "Every meal planned for this week is already covered by your pantry and list",
@@ -252,7 +283,7 @@ export default function Grocery() {
         : `Kept ${plan.preservedCount} existing item${plan.preservedCount === 1 ? '' : 's'}`,
     });
   }, [
-    planEntries, isFamilyMode, activeKidId, foods, shoppingWindow, groceryItems,
+    planEntries, isFamilyMode, activeKidId, foods, effectiveFoodById, shoppingWindow, groceryItems,
     selectedListId, defaultListId, deleteGroceryItems, addGroceryItemsMerged,
   ]);
 
@@ -303,7 +334,7 @@ export default function Grocery() {
       if (ledgerWritesEnabled) return;
 
       // Add/update pantry inventory
-      const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+      const existingFood = findFoodByDisplayName(item.name);
       let pantryUpdated = true;
       if (existingFood) {
         updateFood(existingFood.id, {
@@ -331,7 +362,7 @@ export default function Grocery() {
             onClick: () => {
               toggleGroceryItem(itemId);
               // Reverse pantry update
-              const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+              const food = findFoodByDisplayName(item.name);
               if (food && food.quantity) {
                 updateFood(food.id, {
                   ...food,
@@ -349,7 +380,7 @@ export default function Grocery() {
       // Unchecking. Nothing to take back when nothing was credited yet.
       if (ledgerWritesEnabled) return;
       // Unchecking - remove from pantry
-      const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+      const existingFood = findFoodByDisplayName(item.name);
       if (existingFood && existingFood.quantity) {
         updateFood(existingFood.id, {
           ...existingFood,
@@ -358,7 +389,7 @@ export default function Grocery() {
         toast.info(`${item.name} moved back to shopping list`);
       }
     }
-  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, updateFood, addFood, ledgerWritesEnabled]);
+  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, findFoodByDisplayName, updateFood, addFood, ledgerWritesEnabled]);
 
   const handleDeleteItem = useCallback((itemId: string) => {
     const item = groceryItems.find(i => i.id === itemId);
@@ -422,7 +453,7 @@ export default function Grocery() {
       // The legacy credit, for exactly the rows the ledger declined.
       const skippedItemIds = new Set(skipped.map((f) => f.itemId).filter(Boolean));
       for (const item of purchasedItems) {
-        const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+        const existingFood = findFoodByDisplayName(item.name);
         const wasSkipped = !existingFood || skippedItemIds.has(existingFood.id);
         if (!wasSkipped) continue;
         if (existingFood) {
@@ -476,10 +507,9 @@ export default function Grocery() {
     // the "pre" state is what we have right now; we reconstruct a hypothetical
     // pre-state by subtracting the moved items from each matched food.
     const reconstructPreFoods = () => {
-      const lookup = new Map(foods.map(f => [f.name.toLowerCase(), f]));
       const adjusted = foods.map(f => ({ ...f }));
       for (const item of moved) {
-        const food = lookup.get(item.name.toLowerCase());
+        const food = findFoodByDisplayName(item.name);
         if (!food) continue;
         const target = adjusted.find(f => f.id === food.id);
         if (target) {
@@ -560,7 +590,7 @@ export default function Grocery() {
           // skip the decrement and just restore the grocery row.
           restoreGroceryRows();
           moved.forEach(item => {
-            const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+            const food = findFoodByDisplayName(item.name);
             if (food && food.quantity) {
               updateFood(food.id, {
                 ...food,
@@ -571,7 +601,7 @@ export default function Grocery() {
         },
       },
     });
-  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, updateFood, addFood, recipes, planEntries, ledgerWritesEnabled, recordPurchases, recordPurchaseReversal]);
+  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, findFoodByDisplayName, updateFood, addFood, recipes, planEntries, ledgerWritesEnabled, recordPurchases, recordPurchaseReversal]);
 
   const handleSmartRestock = async () => {
     setIsGeneratingRestock(true);
