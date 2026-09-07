@@ -34,12 +34,23 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  * Only [a-z0-9 ] survives, which is also why it's safe to drop straight
  * into a SQL string literal.
  *
+ * Apostrophes are DELETED, not turned into a space like every other
+ * punctuation character -- "Mother's" becomes "mothers", not "mother s".
+ * This is a deliberate choice, not an oversight: US-796's matcher links a
+ * household's free-text food name to this catalog by exact
+ * `name_normalized` match, and a household typing "Mothers" (no
+ * apostrophe, which is how most people actually type on a phone keyboard)
+ * would otherwise never match "mother s" -- two normalized forms for one
+ * food is exactly the kind of drift US-796 exists to close, not
+ * reintroduce.
+ *
  * @param {string} description
  * @returns {string}
  */
 export function normalizeName(description) {
   return stripCombiningMarks(description.normalize('NFD'))
     .toLowerCase()
+    .replace(/'/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
@@ -68,6 +79,19 @@ function stripCombiningMarks(s) {
  * for "Lemons". A clause earlier in the description, or one that isn't in
  * this list (e.g. "80% lean"), is left alone: it's doing real work
  * distinguishing the food from its siblings.
+ *
+ * FIX ROUND 3 (fix 1, CRITICAL): this list used to also drop `dried`,
+ * `canned`, `frozen`, `drained` and `unsalted` -- words that change what
+ * the food IS, not how it was prepared. That shipped "Egg, whole" at
+ * 592 kcal/100g (fdc 172188, dried whole egg powder) and "Milk,
+ * buttermilk" at 387 kcal/100g (dried buttermilk) as `verification:
+ * 'verified'` rows in a child-nutrition app's shared catalog, both roughly
+ * 4x a real fresh value. Those five words are gone from this set; a
+ * trailing "dried"/"canned"/"frozen"/"drained"/"unsalted" clause now stays
+ * in the displayed name ("Egg, whole, dried"), which is also the honest
+ * outcome -- the row IS dried egg, and the name should say so. The
+ * PROCESSED_STATE_WORDS set below (fix 3) documents the same distinction
+ * for the collision tie-break, which had the matching half of this bug.
  */
 const DROPPABLE_TRAILING_CLAUSE_WORDS = new Set([
   'raw',
@@ -79,23 +103,20 @@ const DROPPABLE_TRAILING_CLAUSE_WORDS = new Set([
   'fried',
   'grilled',
   'broiled',
-  'canned',
-  'frozen',
   'fresh',
-  'dried',
-  'drained',
   'unprepared',
   'prepared',
   'unheated',
-  'unsalted',
+  'with skin', // a present part, not a distinguishing feature -- see "without skin" below
 ]);
 
 function isDroppableTrailingClause(clause) {
   const c = clause.trim().toLowerCase();
   if (DROPPABLE_TRAILING_CLAUSE_WORDS.has(c)) return true;
-  // "without peel", "without skin", "without shell" -- a missing part, not
-  // a distinguishing feature the family shops by.
-  if (/^without\s+\S+/.test(c)) return true;
+  // "without peel", "without skin", "without added salt" -- a missing
+  // part, not a distinguishing feature the family shops by. `.+` rather
+  // than a single word, so a multi-word missing part is caught too.
+  if (/^without\s+.+/.test(c)) return true;
   return false;
 }
 
@@ -111,16 +132,25 @@ const USDA_PROGRAM_NOTE_RE = /\s*\(Includes foods for[^)]*\)\s*$/i;
 
 /**
  * Human display name for a USDA description: strips a trailing USDA
- * distribution-program note, strips a run of trailing preparation clauses
- * ("raw", "without peel", ...), and title-cases a shouted ("HUMMUS,
- * CLASSIC") description. Never returns an empty string -- at least one
- * clause (the base food name) always survives.
+ * distribution-program note, trims a trailing sentence period ("Yogurt,
+ * vanilla, low fat." -> "Yogurt, vanilla, low fat" -- USDA is inconsistent
+ * about adding one and a food name shouldn't carry one), strips a run of
+ * trailing preparation clauses ("raw", "without peel", ...), and
+ * title-cases a shouted ("HUMMUS, CLASSIC") description.
+ *
+ * Usually returns a non-empty string -- ordinarily at least one clause
+ * (the base food name) survives -- but CAN return "" for a description
+ * that is empty or entirely punctuation once trimmed. No real USDA row
+ * hits that today; buildSeed drops any row whose name comes back empty
+ * rather than seeding a blank name, since nothing downstream guards
+ * against one.
  *
  * @param {string} description
  * @returns {string}
  */
 export function displayName(description) {
   let s = description.trim().replace(USDA_PROGRAM_NOTE_RE, '').trim();
+  s = s.replace(/\.+\s*$/, '').trim();
 
   // "Shouted" = every letter is uppercase (and there is at least one
   // letter, so a name with no cased characters at all doesn't count).
@@ -251,12 +281,33 @@ function matchLabSpeak(description, cookedSignatures) {
 // MEAD JOHNSON, ENFAMIL, ..." or "Candies, ALMOND JOY Candy Bar". This
 // catalog is `kind: 'generic'` (see toRow) -- a specific product like
 // Cheerios or Enfamil belongs in a *branded* row keyed by barcode (a later
-// story), not here as if "Cheerios" were a food category. A run of two or
-// more letters-only, all-uppercase words is that signature; a handful of
-// legitimate generic abbreviations are exempted below because they show up
-// in real, non-branded descriptions ("BBQ" flavor, "NFS" is already caught
-// by lab-speak so isn't needed here, vitamin names like "B12" are excluded
+// story), not here as if "Cheerios" were a food category.
+//
+// FIX ROUND 3 (fix 5): the behaviour IS "a single all-caps word of three
+// or more letters" -- the code below, unchanged. An earlier version of
+// this comment said "a run of two or more," which never matched what the
+// code did; that's fixed by rewriting the comment to match the code
+// (single-word), not the other way around. A handful of legitimate
+// generic abbreviations are exempted below because they show up in real,
+// non-branded descriptions ("BBQ" flavor, "NFS" is already caught by
+// lab-speak so isn't needed here, vitamin names like "B12" are excluded
 // automatically since the token-match requires letters only, no digits).
+//
+// This runs on the RAW description, before displayName ever sees it --
+// deliberately, not incidentally. displayName title-cases a shouted
+// description ("HUMMUS, CLASSIC" -> "Hummus, Classic"); if that ran
+// first, every ALL-CAPS brand clause would already be title-cased by the
+// time this check saw it, and a token-match that specifically looks for
+// ALL-CAPS would never fire on a single one of them -- the brand filter
+// would go blind on exactly the rows it exists to catch. The trade-off is
+// real and worth naming: a genuinely shouted description that is NOT a
+// brand (no such row exists in the current USDA exports, which is how
+// this filter was tuned) would be misread as one, and displayName's own
+// shout-handling branch is consequently unreachable for anything that
+// makes it into the seed today. That branch stays -- it's still exercised
+// directly by displayName's own unit tests, and it's the correct
+// fallback if a future USDA release ever adds a shouted row that isn't a
+// brand name.
 const BRAND_TOKEN_EXEMPTIONS = new Set(['BBQ']);
 
 function findBrandToken(description) {
@@ -364,7 +415,72 @@ function isAlcoholicBeverage(description) {
 // the brief's 1500-2000 target; a description that needs a comment this
 // oddly specific to justify a number is exactly the kind of thing to
 // revisit once real usage shows what's missing.
+//
+// FIX ROUND 3 (fix 2, CRITICAL): this cap is applied to displayName's
+// OUTPUT, not the raw USDA description -- counting the raw description's
+// commas deleted staples outright: no tuna, no plain milk, no
+// black/kidney/green beans, no salmon except "Salmon nuggets". See
+// buildSeed for where `name` is computed before this check runs,
+// specifically so it can be counted instead of `description`.
+//
+// That alone was not enough to bring tuna back, though, which is why this
+// comment has a second half. "Fish, tuna, light, canned in water, drained
+// solids" reduces to itself under fix 1 -- "canned in water" and "drained
+// solids" are real distinguishing clauses (packed in water vs. oil,
+// drained vs. not), not lab-speak, so fix 1 correctly keeps them, and that
+// leaves 5 clauses in the displayName output alone, still over any cap
+// narrow enough to keep genuine lab variants like the rotisserie-chicken
+// example above out. Raising the cap itself to fit (tried 4: 3392 rows;
+// tried 5: 4153 rows, both against a 1500-2000 target) let in far more
+// noise than staples, because most of what a wider cap admits is more
+// lab-cut granularity, not more tuna. NON_COUNTING_QUALIFIER_PATTERNS
+// below is the alternative: a short, specific list of clause SHAPES that
+// are packaging or standardized-cut information rather than a lab
+// narrowing, excluded from the cap's count (but never from the displayed
+// name -- fix 1's "keep what changes the product" rule still applies to
+// them in full). "Fish, tuna, light, canned in water, drained solids"
+// counts as 3 (Fish / tuna / light) once its packing-medium and
+// drained-state clauses are excluded from the count -- under the cap,
+// name intact.
 const MAX_QUALIFIER_CLAUSES = 3;
+
+// See the second half of the MAX_QUALIFIER_CLAUSES comment above for why
+// this exists. Each pattern matches a WHOLE clause (after displayName has
+// already run), not a word within one, so it can't accidentally swallow
+// something else that happens to contain one of these words.
+const NON_COUNTING_QUALIFIER_PATTERNS = [
+  /^canned in (water|oil|juice|syrup)$/i, // "Fish, tuna, light, canned in water, ..."
+  /^packed in (water|oil|juice|syrup)$/i,
+  /^drained solids$/i, // "..., drained solids" -- canned-goods measurement convention
+  /^solids and liquids?$/i, // the undrained counterpart of the above
+  /^meat and skin$/i, // poultry cut standardization, not a lab variant
+  /^meat only$/i,
+  /^mature seeds$/i, // "Beans, kidney, red, mature seeds" -- legume-database convention, not a lab cut
+];
+
+function countedClauses(name) {
+  return name
+    .split(',')
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0 && !NON_COUNTING_QUALIFIER_PATTERNS.some((p) => p.test(c)));
+}
+
+// FIX ROUND 3 (fix 3, CRITICAL): words that mean the food has been
+// concentrated or dehydrated, so its per-100g nutrition is not comparable
+// to the fresh/raw version -- dried whole egg is ~4x the calories of a
+// fresh egg by weight, because most of the weight (water) is gone. This is
+// the deliberately NARROWER list from fix 1's NOT-droppable set: fix 1 also
+// treats drained/undrained/unsalted/salted/(un)sweetened/"low sodium"/
+// "reduced fat"/"fat free"/light/lite as not-droppable (they change the
+// name, correctly), but none of those multiply the per-100g macros the way
+// drying or concentrating does, so they don't need a say in which
+// collision candidate wins -- only these do.
+const PROCESSED_STATE_WORDS = new Set(['dried', 'dehydrated', 'powder', 'canned', 'frozen', 'condensed', 'evaporated', 'concentrate']);
+
+function hasProcessedStateWord(description) {
+  const words = normalizeName(description).split(' ');
+  return words.some((w) => PROCESSED_STATE_WORDS.has(w));
+}
 
 const NUTRIENT_IDS = {
   calories_kcal_100: '1008', // Energy, KCAL. NOT 1062 (kJ).
@@ -454,9 +570,16 @@ function toRow(candidate) {
  * @param {Array<{fdc_id: string, nutrient_id: string, amount: string|number}>} args.nutrients
  * @param {Record<string, {category: string, aisle: string}>} args.categoryAisle
  * @param {Set<string>} args.excluded
+ * @param {Array<{categoryId: string, test: (description: string) => boolean, aisle: string}>} [args.aisleOverrides]
+ *   Fix 4: refines categoryAisle's per-category aisle for a food whose
+ *   description matches an override's test, e.g. routing "Egg, whole, raw"
+ *   to the `eggs` iOS aisle instead of category 1's default `dairy`. See
+ *   AISLE_OVERRIDES in food-aisle-map.mjs for the real ones and why only
+ *   two categories get one. Optional and defaults to none, so existing
+ *   callers/tests that don't pass it see no change in behavior.
  * @returns {{rows: object[], dropped: Array<{fdc_id: string, description: string, reason: string}>}}
  */
-export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
+export function buildSeed({ foods, nutrients, categoryAisle, excluded, aisleOverrides = [] }) {
   const dropped = [];
 
   const nutrientsByFdcId = new Map();
@@ -528,9 +651,24 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
       continue;
     }
 
-    const clauseCount = description.split(',').length;
+    // Fix 2: name is computed here, before the clause-count check, so the
+    // cap counts displayName's OUTPUT rather than the raw description's
+    // commas -- see MAX_QUALIFIER_CLAUSES above for why that distinction
+    // is what put tuna, milk, beans and salmon back in the catalog.
+    const name = displayName(description);
+
+    // Fix 7: displayName can return "" for a description that is empty or
+    // entirely punctuation once trimmed. No real USDA row does this today,
+    // but nothing downstream is prepared to handle a blank name, so drop
+    // it with a reason rather than let one through.
+    if (name === '') {
+      dropped.push({ fdc_id, description, reason: 'empty display name after stripping punctuation-only description' });
+      continue;
+    }
+
+    const clauseCount = countedClauses(name).length;
     if (clauseCount > MAX_QUALIFIER_CLAUSES) {
-      dropped.push({ fdc_id, description, reason: `too many qualifier clauses (${clauseCount} > ${MAX_QUALIFIER_CLAUSES}) -- too narrow a lab variant for a family catalog` });
+      dropped.push({ fdc_id, description, reason: `too many qualifier clauses (${clauseCount} > ${MAX_QUALIFIER_CLAUSES} on "${name}") -- too narrow a lab variant for a family catalog` });
       continue;
     }
 
@@ -539,11 +677,25 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
       continue;
     }
 
-    const mapping = categoryAisle[categoryId];
-    if (!mapping) {
+    const categoryMapping = categoryAisle[categoryId];
+    if (!categoryMapping) {
       dropped.push({ fdc_id, description, reason: `unmapped category (food_category_id=${categoryId})` });
       continue;
     }
+
+    // Fix 4: an override (matched on the raw description, since that's
+    // what carries the signal -- "Egg, whole, raw" -- displayName's output
+    // for the same row is just "Egg, whole") replaces the category's
+    // default aisle; `category` (the six-value FoodCategory union) is
+    // untouched either way, per the brief.
+    let aisle = categoryMapping.aisle;
+    for (const override of aisleOverrides) {
+      if (override.categoryId === categoryId && override.test(description)) {
+        aisle = override.aisle;
+        break;
+      }
+    }
+    const mapping = { category: categoryMapping.category, aisle };
 
     const nutrientMap = nutrientsByFdcId.get(fdc_id) || new Map();
     const nutrientValues = extractNutrients(nutrientMap);
@@ -559,7 +711,6 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
       continue;
     }
 
-    const name = displayName(description);
     const name_normalized = normalizeName(name);
     const richness = Object.values(nutrientValues).filter((v) => typeof v === 'number').length;
 
@@ -570,23 +721,35 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
   // UNIQUE on name_normalized alone (see US-793's migration), so this has
   // to happen here, before anything is ever inserted.
   //
-  // Primary tie-break: keep whichever candidate has the more complete
-  // nutrient profile -- a catalog is more useful with more filled in, and a
-  // sparser duplicate is usually the lower-quality sample of the pair.
-  // Secondary tie-break, only when nutrient completeness is equal: keep the
-  // shorter original description (the plainer food).
+  // Three-rank tie-break, in order:
+  //   1. Nutrient completeness (richness) -- keep whichever candidate has
+  //      the more complete nutrient profile; a catalog is more useful with
+  //      more filled in, and a sparser duplicate is usually the
+  //      lower-quality sample of the pair.
+  //   2. FIX ROUND 3 (fix 3, CRITICAL): processed state -- among
+  //      equally-rich candidates, a description with no PROCESSED_STATE_WORDS
+  //      match (or an explicitly raw/fresh one) beats one that does. Without
+  //      this rank, richness alone left the seed shipping "Egg, whole" at
+  //      592 kcal/100g: "Egg, whole, dried" (17 chars) and "Egg, whole,
+  //      raw, fresh" (22 chars) have essentially the same nutrient
+  //      completeness (both are well-sampled USDA rows), so the OLD
+  //      richness-then-length order fell straight to length and the
+  //      shorter, dried row won every time. This rank sits between
+  //      richness and length specifically to catch that case before length
+  //      ever gets a vote.
+  //   3. Description length -- keep the shorter original description (the
+  //      plainer food), only once richness and processed-state both tie.
   //
-  // DO NOT "fix" this back to shorter-description-only. This exact
-  // question came up during review: the task brief's prose said "keep the
-  // shorter description," but its own verbatim fixture requires keeping
-  // fdc 1 ("Lemons, raw, without peel", 25 chars, 2 nutrient facts) over
-  // fdc 5 ("Lemons, raw", 11 chars, 1 nutrient fact) once both reduce to
-  // displayName "Lemons" -- the shorter one loses. Nutrient-completeness-
+  // DO NOT "fix" rank 1 back to shorter-description-only. This exact
+  // question came up during an earlier review: the task brief's prose said
+  // "keep the shorter description," but its own verbatim fixture requires
+  // keeping fdc 1 ("Lemons, raw, without peel", 25 chars, 2 nutrient facts)
+  // over fdc 5 ("Lemons, raw", 11 chars, 1 nutrient fact) once both reduce
+  // to displayName "Lemons" -- the shorter one loses. Nutrient-completeness-
   // first is not a workaround to pass that test; it's the better rule on
   // its own terms (a row with full macros is worth more to the catalog
   // than a row with a shorter name) and it happens to resolve the brief's
-  // internal contradiction correctly. Length remains the tie-break only
-  // when nutrient completeness ties.
+  // internal contradiction correctly.
   const byKey = new Map();
   for (const c of candidates) {
     let group = byKey.get(c.name_normalized);
@@ -605,6 +768,9 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
     }
     const sorted = [...group].sort((a, b) => {
       if (b.richness !== a.richness) return b.richness - a.richness;
+      const aProcessed = hasProcessedStateWord(a.description) ? 1 : 0;
+      const bProcessed = hasProcessedStateWord(b.description) ? 1 : 0;
+      if (aProcessed !== bProcessed) return aProcessed - bProcessed; // not-processed (0) beats processed (1)
       return a.description.length - b.description.length;
     });
     const [winner, ...losers] = sorted;
@@ -804,13 +970,19 @@ async function main() {
   // Import lazily so the pure functions above stay importable (by the test
   // file) without requiring this module's CLI-only import graph to touch
   // the filesystem.
-  const { CATEGORY_AISLE, EXCLUDED_CATEGORIES } = await import('./food-aisle-map.mjs');
+  const { CATEGORY_AISLE, EXCLUDED_CATEGORIES, AISLE_OVERRIDES } = await import('./food-aisle-map.mjs');
 
   console.log(`Reading USDA CSVs from ${usdaDir} ...`);
   const { foods, nutrients } = loadFoodsAndNutrients(usdaDir);
   console.log(`Loaded ${foods.length} food.csv rows and ${nutrients.length} food_nutrient.csv rows.`);
 
-  const { rows, dropped } = buildSeed({ foods, nutrients, categoryAisle: CATEGORY_AISLE, excluded: EXCLUDED_CATEGORIES });
+  const { rows, dropped } = buildSeed({
+    foods,
+    nutrients,
+    categoryAisle: CATEGORY_AISLE,
+    excluded: EXCLUDED_CATEGORIES,
+    aisleOverrides: AISLE_OVERRIDES,
+  });
 
   const resolvedOut = path.resolve(outPath);
   fs.mkdirSync(path.dirname(resolvedOut), { recursive: true });
