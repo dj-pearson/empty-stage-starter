@@ -3447,6 +3447,118 @@
       "priority": 1,
       "passes": false,
       "notes": "Found 2026-09-06 while working US-778. THE FLIP CONDITION IS verify-stories.mjs:180-187: impl = hasImplementation(id), which is only \"some commit message references US-XXX\", AND isGreen(GATES[gate]), which is the whole platform job result. Acceptance criteria are never read. THIS IS THE SYSTEMIC CAUSE OF A PATTERN HIT THREE TIMES IN ONE SESSION. US-775 was recorded passing while its bundle-budget gate had never executed, because Build was skipped whenever Unit Tests was red. US-778 was recorded passing while its a11y scan had never executed, via the same chain. And in run 34045999299 the engine flipped US-767, US-772, US-778, US-782 and US-789 to verified:web-green -- including US-778, whose a11y scan was FAILING in that very run. E2E carries continue-on-error (US-764 AC 3, deliberately, for its first two weeks), so the web gate reports success regardless of what fails inside it. US-772 was flipped in the same batch and has acceptance criteria explicitly blocked on US-727. IMMEDIATE PRACTICAL CONSEQUENCE: a story an agent carefully reopens with passes:false and a written reason is silently re-flipped on the next PR run, so the reopen does not survive. That was masked this time only because the Commit flipped flags step itself failed. The engine is not wrong to exist -- a green gate is real evidence. It is wrong about what that evidence proves. || THE ENGINE FLIPPED THIS STORY, run 34058943232. US-792 is the story that says the flip engine marks things done without checking their acceptance criteria, and the engine marked it done -- on a commit whose only content is the story being filed. Flipped alongside it: US-767, US-772, US-782 and US-789, all four of which were left open on purpose with their residual work named. That is the defect demonstrating itself, and it is better evidence than the argument in the notes above. SECOND DEFECT FOUND, IN THE SAME JOB, AND THE ORDER OF FIXES MATTERS. The Commit flipped flags step has failed on every run. The cause is its own git add: `git add prd.json prd-*.json progress.txt`. That glob matches three GITIGNORED files -- prd-verify-report.json, prd-household-planner-verify-report.json and prd-kitchen-loop-verify-report.json -- git add refuses an ignored path, the step runs under `shell: bash -e`, and it exits 1 before reaching git commit. Use `git ls-files` to enumerate the tracked PRD files instead of a shell glob. DO NOT FIX THE COMMIT STEP FIRST. It is the only reason none of these wrong flips has ever persisted: the engine has been computing bad flips for as long as it has existed and failing to push them. Repairing the git add while the flip criteria are still (a commit mentions the id) AND (the platform job was green) would start writing those flips into prd.json on every PR run. Fix the criteria, then the commit step."
+    },
+    {
+      "id": "US-793",
+      "title": "Canonical food catalog schema, additive to grocery_product_catalog",
+      "description": "As a developer, I want one table that can describe both a generic food and a branded product, so that recipes, planner and grocery can agree on what a food is.",
+      "acceptanceCriteria": [
+        "Additive migration on public.grocery_product_catalog: kind text check in (generic, branded) default generic not null, parent_food_id uuid null self-FK, and a partial FK/check so only a branded row may carry a parent",
+        "Nutrition columns stored PER 100 g/ml, not per serving: calories_kcal_100, protein_g_100, carbs_g_100, fat_g_100, fiber_g_100, sugar_g_100, sodium_mg_100 numeric null, plus serving_size_g numeric null and allergens text[] null",
+        "Provenance columns: source text check in (usda, openfoodfacts, foodrepo, user, admin), source_ref text null, verification text check in (verified, unverified, rejected) default unverified not null, verified_at timestamptz null, verified_by uuid null",
+        "CHECK constraints reject impossible nutrition on write: calories_kcal_100 between 0 and 900 (pure fat is the physical maximum, so anything above is a unit error or a bad scrape) and each macro between 0 and 100",
+        "Unique index on barcode where barcode is not null; unique index on (name_normalized, kind)",
+        "GIN trigram index on name_normalized so search by type and search by brand are both fast; pg_trgm enabled if it is not already",
+        "foods.canonical_id uuid null referencing the catalog, with an index. Nullable is load-bearing: an unmatched household row must behave exactly as it does today",
+        "RLS: catalog is readable by anon and authenticated, writable only by the admin role, matching the pattern admin_alerts uses. foods RLS is untouched",
+        "ADDITIVE ONLY. No column on grocery_product_catalog or foods is renamed, dropped or retyped, because a shipped iOS build reads both. A test asserts a SELECT of only the pre-existing columns still succeeds",
+        "Types regenerated and committed; the drift step in ci.yml is blocking now so a stale types.ts fails the build"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). FIRST STORY IN THE EPIC, everything else depends on it. The per-100 basis is the deliberate break from the existing nutrition table, which stores per-serving against a free-text serving_size -- that text field is exactly why those numbers cannot be summed today."
+    },
+    {
+      "id": "US-794",
+      "title": "Seed the generic backbone from USDA, with aisles assigned",
+      "description": "As a parent, I want the foods I search for to already be there with correct nutrition, so that I am not typing everything from scratch.",
+      "acceptanceCriteria": [
+        "A seed of roughly 1500-2000 generic foods from USDA Foundation Foods and SR Legacy, filtered to what families actually eat rather than all ~8000 lab entries (no \"beef, chuck, arm pot roast, separable lean only, raw\")",
+        "Every seeded row: kind=generic, source=usda, verification=verified, a category, an aisle, and per-100 nutrition",
+        "AISLE IS NOT IN ANY NUTRITION DATASET and must be supplied here. Derive from category as a first pass, then correct by hand. This is the part of \"known correct\" only the operator can provide",
+        "The seed is reproducible: a checked-in script that turns a downloaded USDA export into the seed file, so the data can be regenerated rather than hand-maintained",
+        "Seed integrity test: every row has category, aisle and calories, and every value is inside its CHECK bounds",
+        "The seed does not overwrite rows an operator has since edited; re-running it is idempotent on source_ref"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). USDA is public domain, so no attribution obligation. The aisle curation is the real cost in this story and it cannot be automated away."
+    },
+    {
+      "id": "US-795",
+      "title": "One resolver for the effective food, used by every consumer",
+      "description": "As a developer, I want a single place that decides whether a food name or aisle comes from the catalog or the household row, so that screens cannot drift apart.",
+      "acceptanceCriteria": [
+        "One exported resolver returns the effective food for a household row: catalog values when canonical_id is set, the household row when it is not",
+        "Every current reader of foods.name, foods.aisle and foods.category goes through it -- grocery, planner, recipes, pantry",
+        "A test asserts both branches, and a repo scan test fails if a new direct read of foods.aisle appears outside the resolver",
+        "Household-specific state (is_safe, is_try_bite, quantity, expiry_date) always comes from the household row and is never read from the catalog"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). THIS IS WHERE THE UNIFORMITY ACTUALLY LANDS, and the part most likely to rot. If each screen implements the coalesce itself they drift within a release. That is what US-777 fixed for grocery inserts with a single buildGroceryRow, and what the three disagreeing streak rules in US-781 show happens when nobody does it."
+    },
+    {
+      "id": "US-796",
+      "title": "Timid matcher fills canonical_id on existing household foods",
+      "description": "As a parent with foods already in the app, I want them linked to the catalog without anything changing under me, so that I get consistent aisles without losing my own data.",
+      "acceptanceCriteria": [
+        "A matcher sets foods.canonical_id by EXACT normalized-name or barcode match only. Never fuzzy, never across categories",
+        "It writes canonical_id and nothing else. It never touches name, is_safe, is_try_bite, quantity or any household state",
+        "The link is reversible: clearing canonical_id returns the row to exactly its previous behaviour",
+        "Unmatched rows are left alone and keep working",
+        "Tests on fixtures that must NOT match: \"chicken\" to \"chicken nuggets\", the same word in different categories, a barcode that differs by one digit"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). THE DANGEROUS STORY IN THIS EPIC, and the reason the matcher is deliberately timid. A wrong link is not cosmetic in an ARFID app: if a child's is_safe \"chicken\" binds to the wrong canonical food, the ladder and safe-food logic inherit the mistake and a parent can be shown a food as safe that is not. Prefer leaving a row unmatched over matching it wrongly."
+    },
+    {
+      "id": "US-797",
+      "title": "A scanned barcode promotes itself into the catalog, unverified",
+      "description": "As a parent, I want a product I scan to be recognised next time, and by other families too, so that the catalog grows where it is used.",
+      "acceptanceCriteria": [
+        "A barcode miss triggers lookup-barcode (which already queries USDA, Open Food Facts and FoodRepo) and upserts a branded catalog row",
+        "Promoted rows land verification=unverified with source and source_ref recorded, and are linked to a generic parent where the name resolves",
+        "Unverified rows are usable for shopping and are visibly marked in the UI, but are excluded from the ladder and from nutrition totals",
+        "A lookup failure or rate-limit degrades to \"not found\" and never fails the add; the household row is created unlinked",
+        "Open Food Facts is ODbL: an attribution line appears wherever data sourced from it is displayed",
+        "A test asserts an out-of-range payload is rejected by the CHECK constraints rather than stored"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). A barcode is a public fact about a manufactured product, which is why this path needs no privacy gate and the frequency path does. USDA needs an API key and has rate limits; Open Food Facts is free but slow."
+    },
+    {
+      "id": "US-798",
+      "title": "Generic foods promote on three households plus a human",
+      "description": "As the operator, I want to add foods to the shared catalog once several families have independently typed them, without ever publishing anyone private data.",
+      "acceptanceCriteria": [
+        "A candidate query lists normalized names typed by at least 3 SEPARATE households that have no catalog match, computed as count(distinct household_id) over foods when the queue is opened",
+        "NO DENORMALISED COUNTER. times_added counts adds, so one household adding a food five times must not trip a threshold of three",
+        "The threshold lives in one named constant so it can be raised without a migration",
+        "Candidates surface in the existing NutritionManager admin screen with accept and reject, and nothing reaches the catalog without a human",
+        "Promoted rows land source=user, verification=verified, with the promoting admin in verified_by",
+        "A test covers one household adding the same food three times: it must NOT become a candidate"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). PRIVACY IS THE POINT OF THE GATE. A household food row is private data: \"Grandma's casserole\" or a row with a child's name in it must never reach a public catalog. Requiring several unrelated households to have independently typed the same name is itself a decent privacy filter, and the human review is the backstop. No denormalised counter, because US-784 and US-785 exist in this repo precisely because a stored count drifted from the rows it summarised."
+    },
+    {
+      "id": "US-799",
+      "title": "Retire the dead catalogs and fold nutrition into the canonical one",
+      "description": "As a developer, I want one catalog rather than four, so that the next person does not wire something to the wrong table.",
+      "acceptanceCriteria": [
+        "nutrition rows are backfilled into the catalog, converting per-serving values to per-100 where serving_size can be parsed and leaving the rest unconverted and flagged rather than guessed",
+        "New writes go to the catalog; the 18 edge functions reading nutrition are migrated across",
+        "nutrition is retired only after a release where both are populated, following the deprecation flow in CLAUDE.md. It is NOT dropped in the same migration that stops writing to it",
+        "canonical_products and item_aliases are dropped: neither client reads them",
+        "check-function-trees.sh style guard or a test asserts no new code references the retired tables"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Shared food catalog epic, design agreed 2026-09-06 in docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md. Read the spec first; it records why grocery_product_catalog is canonical rather than nutrition (the shipped iOS SmartProductService queries it by barcode and name_normalized, and the nutrition hit in the Swift tree is a lowered.contains string test at AICoachService.swift:188, not a query). LAST IN THE EPIC and the only story here with a drop in it. The per-serving to per-100 conversion is the risky part: nutrition.serving_size is free text, so a row whose serving cannot be parsed must be flagged for review rather than converted on a guess. Dropping nutrition early would break 18 edge functions."
     }
   ]
 }
