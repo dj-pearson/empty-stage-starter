@@ -118,3 +118,19 @@ describe('the Build job runs the prerendering build', () => {
     expect(pkg.scripts.build).toContain('scripts/prerender.mjs');
   });
 });
+
+describe('the migration job runs the SQL tests', () => {
+  const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  // supabase/tests/ has held .test.sql files for months with nothing executing
+  // them -- US-780's own notes record its 11 cases as never run, blocked on
+  // "no Postgres in the container". US-760 fixed `supabase start`, so the
+  // Migration Test job can now afford to run them.
+  it('executes every supabase/tests/*.test.sql', () => {
+    expect(ci).toContain('supabase/tests/*.test.sql');
+  });
+
+  it('runs them after migrations are applied', () => {
+    expect(ci.indexOf('Apply migrations')).toBeLessThan(ci.indexOf('supabase/tests/*.test.sql'));
+  });
+});

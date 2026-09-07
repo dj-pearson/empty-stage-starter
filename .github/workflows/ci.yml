@@ -412,6 +412,20 @@ jobs:
       - name: Apply migrations
         run: supabase db push --local
 
+      # US-793: supabase/tests/*.test.sql existed for months with nothing
+      # running them (US-780's notes record its 11 cases as never executed,
+      # blocked on "no Postgres in the container"). US-760 fixed
+      # `supabase start`, so they can run here now. \set ON_ERROR_STOP makes
+      # each file fail the step rather than print and continue.
+      - name: Run SQL tests
+        run: |
+          DB_URL="$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')"
+          shopt -s nullglob
+          for f in supabase/tests/*.test.sql; do
+            echo "--- $f"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+
       - name: Stop local Supabase
         if: always()
         run: supabase stop
