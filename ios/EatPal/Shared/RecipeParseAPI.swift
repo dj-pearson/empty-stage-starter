@@ -9,10 +9,14 @@ import Foundation
 /// `ImportRecipeFromURLIntent` AppIntent — same code path, two callers, no
 /// duplication.
 ///
-/// The edge function is public (no JWT) per US-014, so this client only needs
-/// the anon key surfaced from each target's Info.plist. The share extension's
-/// tight memory budget rules out pulling in supabase-swift — pure URLSession is
-/// the right tool for both call sites.
+/// US-807: the caller is identified by the access token the main app publishes
+/// to the App Group (`SharedAuthTokenStore`), falling back to the anon key from
+/// each target's Info.plist when there is no session or the token has gone
+/// stale. It used to send the anon key unconditionally, on the strength of a
+/// US-014 note saying the function was public; `parse-recipe` began requiring a
+/// real user in July 2026 and every caller here answered 401 from then until
+/// US-806. The share extension's tight memory budget still rules out pulling in
+/// supabase-swift — pure URLSession is the right tool for all three call sites.
 public struct ParsedRecipe: Codable, Equatable {
     public let name: String
     public let description: String?
@@ -54,6 +58,8 @@ public struct ParsedRecipe: Codable, Equatable {
 public enum RecipeParseAPI {
     public enum ImportError: Error, LocalizedError {
         case missingConfig
+        case notSignedIn
+        case busy
         case badResponse(Int)
         case network(String)
         case decode(String)
@@ -62,6 +68,10 @@ public enum RecipeParseAPI {
             switch self {
             case .missingConfig:
                 return "Recipe import isn't configured yet. Reinstall EatPal."
+            case .notSignedIn:
+                return "Open EatPal and sign in, then share this recipe again."
+            case .busy:
+                return "Recipe import is busy. Open EatPal and sign in, or try again in a few minutes."
             case .badResponse(let status):
                 return "The recipe service returned an error (\(status))."
             case .network(let detail):
@@ -69,6 +79,17 @@ public enum RecipeParseAPI {
             case .decode(let detail):
                 return "Couldn't read the recipe: \(detail)"
             }
+        }
+    }
+
+    /// Maps the statuses this endpoint uses to say "who are you" and "not right
+    /// now" onto messages that tell the user what to do about it. A bare
+    /// "error (401)" told them nothing.
+    static func importError(forStatus status: Int) -> ImportError {
+        switch status {
+        case 401, 403: return .notSignedIn
+        case 429: return .busy
+        default: return .badResponse(status)
         }
     }
 
@@ -90,7 +111,11 @@ public enum RecipeParseAPI {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        // US-807: spend the user's own token when the app has published a live
+        // one. `apikey` stays the anon key either way — that header identifies
+        // the project, not the caller.
+        let bearer = SharedAuthTokenStore.load()?.accessToken ?? anonKey
+        request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
 
         let body = ["url": url.absoluteString]
@@ -106,7 +131,7 @@ public enum RecipeParseAPI {
         }
 
         guard (200..<300).contains(http.statusCode) else {
-            throw ImportError.badResponse(http.statusCode)
+            throw importError(forStatus: http.statusCode)
         }
 
         do {

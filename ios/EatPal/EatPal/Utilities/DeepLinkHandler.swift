@@ -238,6 +238,8 @@ final class DeepLinkHandler: ObservableObject {
         if let importError = error as? RecipeParseAPI.ImportError {
             switch importError {
             case .missingConfig:      return "missing_config"
+            case .notSignedIn:        return "not_signed_in"
+            case .busy:               return "rate_limited"
             case .badResponse:        return "bad_response"
             case .network:            return "network"
             case .decode:             return "decode"
