@@ -337,6 +337,25 @@ function findKnownBrandName(description) {
   return null;
 }
 
+// EatPal is a child-nutrition app; this seed is the shared catalog every
+// family searches. USDA category 28 (Alcoholic Beverages) is already in
+// EXCLUDED_CATEGORIES (Task 1), but round 1 review found 15 rows -- sake,
+// tequila sunrise, daiquiri, whiskey sour, etc. -- filed by USDA under
+// category 14 (plain Beverages) instead, so the category exclusion never
+// saw them. Rather than a keyword scan (tried: matching wine/beer/
+// cocktail/whiskey anywhere in the name pulls in 31 rows, 15 of them
+// legitimate groceries -- "Vegetable juice cocktail", "Vinegar, red wine",
+// "Beerwurst, beer salami, pork", "Beverages, Wine, non-alcoholic"), this
+// matches USDA's own description convention: every alcoholic-beverage row
+// in both exports starts its description with exactly this prefix.
+// "Malt beverage, includes non-alcoholic beer" does not start with it and
+// correctly survives.
+const ALCOHOLIC_BEVERAGE_PREFIX_RE = /^Alcoholic beverages?\b/i;
+
+function isAlcoholicBeverage(description) {
+  return ALCOHOLIC_BEVERAGE_PREFIX_RE.test(description);
+}
+
 // Cap on how many comma-separated qualifier clauses a description may
 // carry before it's judged too narrow a lab variant for a family catalog
 // ("Chicken, broiler, rotisserie, BBQ, drumstick, meat and skin" is a real
@@ -475,6 +494,15 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
 
     if (!ACCEPTED_DATA_TYPES.has(data_type)) {
       dropped.push({ fdc_id, description, reason: `not a food row (data_type=${data_type})` });
+      continue;
+    }
+
+    // Checked by description prefix, independent of category id -- see
+    // ALCOHOLIC_BEVERAGE_PREFIX_RE above for why category alone can't
+    // catch these (USDA files some alcoholic beverages under plain
+    // Beverages, category 14, not Alcoholic Beverages, category 28).
+    if (isAlcoholicBeverage(description)) {
+      dropped.push({ fdc_id, description, reason: 'alcoholic-beverage: not appropriate for a child-nutrition catalog regardless of category id' });
       continue;
     }
 

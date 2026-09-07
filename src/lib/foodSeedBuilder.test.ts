@@ -105,6 +105,29 @@ describe('buildSeed', () => {
     expect(out.rows[0].name_normalized).toBe('carrots');
     expect(out.dropped.some(d => /collision|duplicate/i.test(d.reason))).toBe(true);
   });
+  it('drops an alcoholic beverage by USDA description prefix, regardless of category, and keeps cocktail/wine-named groceries', () => {
+    const out = buildSeed({
+      foods: [
+        // category '14' is deliberately NOT in this test's CATEGORY_AISLE
+        // (only '9' is), so if the prefix check didn't fire before the
+        // category-mapping check, this would be dropped as "unmapped
+        // category" instead of "alcoholic-beverage" -- the reason
+        // assertion below pins the right one.
+        { fdc_id: '14', data_type: 'sr_legacy_food', description: 'Alcoholic beverage, wine, light', food_category_id: '14' },
+        { fdc_id: '15', data_type: 'sr_legacy_food', description: 'Cranberry juice cocktail, bottled', food_category_id: '9' },
+        { fdc_id: '16', data_type: 'sr_legacy_food', description: 'Beverages, carbonated, root beer', food_category_id: '9' },
+      ],
+      nutrients: [
+        { fdc_id: '14', nutrient_id: '1008', amount: '85' },
+        { fdc_id: '15', nutrient_id: '1008', amount: '58' },
+        { fdc_id: '16', nutrient_id: '1008', amount: '41' },
+      ],
+      categoryAisle: CATEGORY_AISLE, excluded: EXCLUDED,
+    });
+    expect(out.dropped.find(d => d.fdc_id === '14')?.reason).toMatch(/alcoholic-beverage/);
+    expect(out.rows.some(r => r.source_ref === '15')).toBe(true);
+    expect(out.rows.some(r => r.source_ref === '16')).toBe(true);
+  });
   it('drops a Title-Case (not ALLCAPS) curated brand name as generic', () => {
     const out = buildSeed({
       foods: [{ fdc_id: '12', data_type: 'sr_legacy_food', description: 'Pillsbury, Cinnamon Rolls with Icing, refrigerated dough', food_category_id: '9' }],
