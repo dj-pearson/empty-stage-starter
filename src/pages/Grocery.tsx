@@ -34,7 +34,7 @@ import {
   X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
-import { GroceryItem } from "@/types";
+import { Food, GroceryItem } from "@/types";
 import {
   categoryLabel,
   filterItemsByList,
@@ -44,6 +44,7 @@ import {
   groupItems,
   flattenGroupedRows,
   planRegenerationFromPlan,
+  buildFoodByDisplayNameIndex,
 } from "@/lib/groceryData";
 import { supabase } from "@/integrations/supabase/client";
 import { parseGroceryItemRows } from "@/lib/normalizeEntities";
@@ -213,6 +214,22 @@ export default function Grocery() {
     return map;
   }, [foods, catalogById]);
 
+  // US-795 fix round: matches a grocery item's name back to a pantry food by
+  // either its resolved (catalog) name or its raw household name -- see the
+  // doc comment on buildFoodByDisplayNameIndex in src/lib/groceryData.ts for
+  // why the household-name arm has to stay. Kept as a Map (via useMemo)
+  // rather than a per-call `.find`, so repeated lookups (e.g. once per row in
+  // handleDoneShopping) stay O(1) each.
+  const foodByDisplayName = useMemo(
+    () => buildFoodByDisplayNameIndex(foods, catalogById),
+    [foods, catalogById]
+  );
+
+  const findFoodByDisplayName = useCallback(
+    (name: string): Food | undefined => foodByDisplayName.get(name.toLowerCase()),
+    [foodByDisplayName]
+  );
+
   // US-713: sync from the meal plan, persisted.
   //
   // This used to end in setGroceryItems, which is local state only: the list
@@ -317,7 +334,7 @@ export default function Grocery() {
       if (ledgerWritesEnabled) return;
 
       // Add/update pantry inventory
-      const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+      const existingFood = findFoodByDisplayName(item.name);
       let pantryUpdated = true;
       if (existingFood) {
         updateFood(existingFood.id, {
@@ -345,7 +362,7 @@ export default function Grocery() {
             onClick: () => {
               toggleGroceryItem(itemId);
               // Reverse pantry update
-              const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+              const food = findFoodByDisplayName(item.name);
               if (food && food.quantity) {
                 updateFood(food.id, {
                   ...food,
@@ -363,7 +380,7 @@ export default function Grocery() {
       // Unchecking. Nothing to take back when nothing was credited yet.
       if (ledgerWritesEnabled) return;
       // Unchecking - remove from pantry
-      const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+      const existingFood = findFoodByDisplayName(item.name);
       if (existingFood && existingFood.quantity) {
         updateFood(existingFood.id, {
           ...existingFood,
@@ -372,7 +389,7 @@ export default function Grocery() {
         toast.info(`${item.name} moved back to shopping list`);
       }
     }
-  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, updateFood, addFood, ledgerWritesEnabled]);
+  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, findFoodByDisplayName, updateFood, addFood, ledgerWritesEnabled]);
 
   const handleDeleteItem = useCallback((itemId: string) => {
     const item = groceryItems.find(i => i.id === itemId);
@@ -436,7 +453,7 @@ export default function Grocery() {
       // The legacy credit, for exactly the rows the ledger declined.
       const skippedItemIds = new Set(skipped.map((f) => f.itemId).filter(Boolean));
       for (const item of purchasedItems) {
-        const existingFood = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+        const existingFood = findFoodByDisplayName(item.name);
         const wasSkipped = !existingFood || skippedItemIds.has(existingFood.id);
         if (!wasSkipped) continue;
         if (existingFood) {
@@ -490,10 +507,9 @@ export default function Grocery() {
     // the "pre" state is what we have right now; we reconstruct a hypothetical
     // pre-state by subtracting the moved items from each matched food.
     const reconstructPreFoods = () => {
-      const lookup = new Map(foods.map(f => [f.name.toLowerCase(), f]));
       const adjusted = foods.map(f => ({ ...f }));
       for (const item of moved) {
-        const food = lookup.get(item.name.toLowerCase());
+        const food = findFoodByDisplayName(item.name);
         if (!food) continue;
         const target = adjusted.find(f => f.id === food.id);
         if (target) {
@@ -574,7 +590,7 @@ export default function Grocery() {
           // skip the decrement and just restore the grocery row.
           restoreGroceryRows();
           moved.forEach(item => {
-            const food = foods.find(f => f.name.toLowerCase() === item.name.toLowerCase());
+            const food = findFoodByDisplayName(item.name);
             if (food && food.quantity) {
               updateFood(food.id, {
                 ...food,
@@ -585,7 +601,7 @@ export default function Grocery() {
         },
       },
     });
-  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, updateFood, addFood, recipes, planEntries, ledgerWritesEnabled, recordPurchases, recordPurchaseReversal]);
+  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, findFoodByDisplayName, updateFood, addFood, recipes, planEntries, ledgerWritesEnabled, recordPurchases, recordPurchaseReversal]);
 
   const handleSmartRestock = async () => {
     setIsGeneratingRestock(true);
