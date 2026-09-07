@@ -5693,6 +5693,7 @@ export type Database = {
           aisle: string | null
           allergens: string[] | null
           barcode: string | null
+          canonical_id: string | null
           canonical_unit: string | null
           category: string
           created_at: string | null
@@ -5718,6 +5719,7 @@ export type Database = {
           aisle?: string | null
           allergens?: string[] | null
           barcode?: string | null
+          canonical_id?: string | null
           canonical_unit?: string | null
           category: string
           created_at?: string | null
@@ -5743,6 +5745,7 @@ export type Database = {
           aisle?: string | null
           allergens?: string[] | null
           barcode?: string | null
+          canonical_id?: string | null
           canonical_unit?: string | null
           category?: string
           created_at?: string | null
@@ -5765,6 +5768,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "foods_canonical_id_fkey"
+            columns: ["canonical_id"]
+            isOneToOne: false
+            referencedRelation: "grocery_product_catalog"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "foods_household_id_fkey"
             columns: ["household_id"]
@@ -6332,63 +6342,119 @@ export type Database = {
       }
       grocery_product_catalog: {
         Row: {
+          allergens: string[] | null
           barcode: string | null
           brand: string | null
+          calories_kcal_100: number | null
+          carbs_g_100: number | null
           created_at: string
           created_by_user_id: string | null
           default_aisle_section: string | null
           default_category: string | null
           default_quantity: number | null
           default_unit: string | null
+          fat_g_100: number | null
+          fiber_g_100: number | null
           id: string
+          kind: string
           last_added_at: string
           metadata: Json | null
           name: string
           name_normalized: string
           package_size: number | null
           package_unit: string | null
+          parent_food_id: string | null
+          protein_g_100: number | null
+          serving_size_g: number | null
+          sodium_mg_100: number | null
+          source: string | null
+          source_ref: string | null
+          sugar_g_100: number | null
           times_added: number
           updated_at: string
+          verification: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
+          allergens?: string[] | null
           barcode?: string | null
           brand?: string | null
+          calories_kcal_100?: number | null
+          carbs_g_100?: number | null
           created_at?: string
           created_by_user_id?: string | null
           default_aisle_section?: string | null
           default_category?: string | null
           default_quantity?: number | null
           default_unit?: string | null
+          fat_g_100?: number | null
+          fiber_g_100?: number | null
           id?: string
+          kind?: string
           last_added_at?: string
           metadata?: Json | null
           name: string
           name_normalized: string
           package_size?: number | null
           package_unit?: string | null
+          parent_food_id?: string | null
+          protein_g_100?: number | null
+          serving_size_g?: number | null
+          sodium_mg_100?: number | null
+          source?: string | null
+          source_ref?: string | null
+          sugar_g_100?: number | null
           times_added?: number
           updated_at?: string
+          verification?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
+          allergens?: string[] | null
           barcode?: string | null
           brand?: string | null
+          calories_kcal_100?: number | null
+          carbs_g_100?: number | null
           created_at?: string
           created_by_user_id?: string | null
           default_aisle_section?: string | null
           default_category?: string | null
           default_quantity?: number | null
           default_unit?: string | null
+          fat_g_100?: number | null
+          fiber_g_100?: number | null
           id?: string
+          kind?: string
           last_added_at?: string
           metadata?: Json | null
           name?: string
           name_normalized?: string
           package_size?: number | null
           package_unit?: string | null
+          parent_food_id?: string | null
+          protein_g_100?: number | null
+          serving_size_g?: number | null
+          sodium_mg_100?: number | null
+          source?: string | null
+          source_ref?: string | null
+          sugar_g_100?: number | null
           times_added?: number
           updated_at?: string
+          verification?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "grocery_product_catalog_parent_food_id_fkey"
+            columns: ["parent_food_id"]
+            isOneToOne: false
+            referencedRelation: "grocery_product_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       grocery_purchase_history: {
         Row: {
