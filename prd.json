@@ -3573,6 +3573,21 @@
       "priority": 3,
       "passes": false,
       "notes": "Found 2026-09-06 while wiring the SQL tests into CI under US-793 Task 4. These files have existed for months with nothing running them - US-780's own notes record its 11 cases as never executed, blocked on \"no Postgres in the container\". US-760 removed that blocker, and the first time they ran, four of five failed. Measured on a fresh supabase db reset, not stale local state: us793 passes, the other four fail, and running each .bootstrap.sql first does not help because the bootstraps themselves fail with permission denied for schema auth. Turning the step blocking now would red the Migration Test job that was only repaired today, on failures owned by other stories."
+    },
+    {
+      "id": "US-801",
+      "title": "Signup fails on a database built from migrations",
+      "description": "As a new parent signing up, I want my account to be created, so that I can use the app at all.",
+      "acceptanceCriteria": [
+        "create_default_notification_preferences() reads columns that exist on public.profiles - the table has id, not user_id, and has no household_id at all",
+        "INSERT INTO auth.users succeeds on a database built only from migrations via supabase db reset",
+        "A row lands in notification_preferences for the new user, scoped to the household handle_new_user() just created",
+        "A SQL test in supabase/tests/ covers the whole signup chain and fails if any link in it breaks",
+        "Production is checked against this before the fix ships - prod is behind migrations, so its copy of the function may differ and the blast radius must be established first"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Found 2026-09-07 while an agent was fixturing auth.users rows for the US-793 catalog tests. Verified by execution, not inspection: on a fresh supabase db reset, INSERT INTO auth.users (id, email) VALUES (...) aborts with 42703 record \"new\" has no field \"user_id\". Chain is on_auth_user_created -> handle_new_user() -> INSERT public.profiles -> create_notification_preferences_on_profile -> create_default_notification_preferences(), which selects NEW.user_id and NEW.household_id from a trigger row that has neither. handle_new_user() re-raises via WHEN OTHERS, so the auth.users insert fails outright. Introduced in 20251110000002_push_notifications.sql:298-316, where the function was written against a profiles shape that has never existed. Unknown whether production is affected - the prod DB is behind migrations and may hold an older definition or lack the trigger; establish that first. US-793 works around it inside its own test file with a transaction-scoped session_replication_role = replica and touches nothing else."
     }
   ]
 }
