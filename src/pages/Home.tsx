@@ -1,7 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target, ArrowRight, Plus, Flame } from "lucide-react";
 import { toast } from "sonner";
@@ -320,10 +320,22 @@ export default function Home() {
                         }
                       </p>
                     </div>
+                      {/*
+                        US-778: this looks like a button and must not BE one.
+                        The whole step card is role="button" with tabIndex and a
+                        key handler, so a real <button> in here made a button
+                        inside a button -- axe nested-interactive, "element has
+                        focusable descendants". It never had an onClick of its
+                        own; it worked purely by click bubbling to the card, so
+                        it was already a visual affordance rather than a
+                        control. Same classes, no longer focusable, and hidden
+                        from assistive tech because the card already announces
+                        the action.
+                      */}
                     {safeFoods < 3 && (
-                      <Button size="sm" className="gap-1">
+                      <span aria-hidden="true" className={buttonVariants({ size: "sm", className: "gap-1 pointer-events-none" })}>
                         <Plus className="h-4 w-4" /> Add Foods
-                      </Button>
+                      </span>
                     )}
                   </div>
 
@@ -362,9 +374,9 @@ export default function Home() {
                       </p>
                     </div>
                     {kidPlanEntries.length === 0 && safeFoods >= 3 && (
-                      <Button size="sm" className="gap-1">
+                      <span aria-hidden="true" className={buttonVariants({ size: "sm", className: "gap-1 pointer-events-none" })}>
                         <Calendar className="h-4 w-4" /> Plan Meals
-                      </Button>
+                      </span>
                     )}
                   </div>
 
@@ -403,9 +415,9 @@ export default function Home() {
                       </p>
                     </div>
                     {groceryItems.length === 0 && kidPlanEntries.length > 0 && (
-                      <Button size="sm" className="gap-1">
+                      <span aria-hidden="true" className={buttonVariants({ size: "sm", className: "gap-1 pointer-events-none" })}>
                         <ShoppingCart className="h-4 w-4" /> Create List
-                      </Button>
+                      </span>
                     )}
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { logger } from "@/lib/logger";
 
 /**
@@ -33,15 +34,19 @@ export interface HouseholdMember {
   profiles: { full_name: string | null } | null;
 }
 
-/** Mirrors supabase/migrations/20260426000001_household_invite_codes.sql. */
-export interface HouseholdInviteCode {
-  id: string;
-  code: string;
-  role: string;
-  created_at: string;
-  expires_at: string;
-  used_at: string | null;
-}
+/**
+ * US-789 AC 4: the generated row, not a hand-written mirror of the migration.
+ *
+ * This was an interface copied from 20260426000001_household_invite_codes.sql
+ * because the table was missing from types.ts, which also forced the two
+ * `.from("household_invite_codes")` casts below -- telling the
+ * compiler the query hit a different table entirely so it would type-check.
+ * US-761 regenerated types.ts against the migrated schema, so the real row is
+ * available and the lie can go. It carries created_by, household_id and
+ * used_by as well, which the hand-written copy had dropped.
+ */
+export type HouseholdInviteCode =
+  Database["public"]["Tables"]["household_invite_codes"]["Row"];
 
 export interface HouseholdState {
   householdId: string | null;
@@ -96,7 +101,7 @@ export function useHousehold() {
           .select("id, user_id, role, joined_at, profiles ( full_name )")
           .eq("household_id", householdId),
         supabase
-          .from("household_invite_codes" as "households")
+          .from("household_invite_codes")
           .select("*")
           .eq("household_id", householdId)
           .is("used_at", null)
@@ -107,7 +112,11 @@ export function useHousehold() {
         householdId,
         householdName: (household as { name?: string } | null)?.name ?? "",
         members: (members ?? []) as unknown as HouseholdMember[],
-        inviteCodes: (codes ?? []) as unknown as HouseholdInviteCode[],
+        // No `as unknown` on this one any more: with the table in types.ts the
+        // client infers the row itself. HouseholdMember still needs the escape
+        // because its select embeds a joined `profiles ( full_name )`, which
+        // the generated types do not describe as a nested object.
+        inviteCodes: codes ?? [],
         loading: false,
         error: null,
       });
@@ -148,7 +157,7 @@ export function useHousehold() {
   const revokeInviteCode = useCallback(
     async (id: string): Promise<boolean> => {
       const { error } = await supabase
-        .from("household_invite_codes" as "households")
+        .from("household_invite_codes")
         .delete()
         .eq("id", id);
       if (error) {

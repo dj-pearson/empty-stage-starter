@@ -426,13 +426,21 @@ export function SmartRestockSuggestions({
                   Have: {suggestion.current_quantity}
                 </p>
               </div>
+              {/*
+                US-778: this had no accessible name at all -- its only child is
+                an icon, and axe rates a nameless control critical. A screen
+                reader announced "button" once per suggestion with nothing to
+                distinguish them, on the control that adds the item. The "Not
+                quite" button a few lines up was already labelled this way.
+              */}
               <Button
                 onClick={() => addSingleItem(suggestion)}
                 variant="outline"
                 size="sm"
                 className="shrink-0"
+                aria-label={`Add ${suggestion.food_name} to the grocery list`}
               >
-                <ShoppingCart className="h-3 w-3" />
+                <ShoppingCart className="h-3 w-3" aria-hidden="true" />
               </Button>
             </div>
           </div>
