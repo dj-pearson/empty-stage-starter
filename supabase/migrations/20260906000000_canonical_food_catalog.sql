@@ -87,13 +87,20 @@ CREATE INDEX IF NOT EXISTS grocery_product_catalog_name_trgm
 CREATE INDEX IF NOT EXISTS grocery_product_catalog_parent_idx
   ON public.grocery_product_catalog(parent_food_id) WHERE parent_food_id IS NOT NULL;
 
+-- Was WHERE verification <> 'verified' -- that indexes the majority value and
+-- cannot serve the only filter the spec names (excluding unverified rows from
+-- ladder and nutrition totals, i.e. WHERE verification = 'verified'). Dropped
+-- and recreated with the correct polarity; the name is unchanged.
+DROP INDEX IF EXISTS grocery_product_catalog_verification_idx;
 CREATE INDEX IF NOT EXISTS grocery_product_catalog_verification_idx
-  ON public.grocery_product_catalog(verification) WHERE verification <> 'verified';
+  ON public.grocery_product_catalog(verification) WHERE verification = 'verified';
 
 COMMENT ON COLUMN public.grocery_product_catalog.calories_kcal_100 IS
   'Per 100 g or ml, never per serving. See serving_size_g for display.';
 COMMENT ON COLUMN public.grocery_product_catalog.verification IS
   'Trust boundary. Anyone may create unverified; only an admin may set verified (see the guard trigger). Unverified rows are usable for shopping but excluded from ladder and nutrition totals.';
+COMMENT ON COLUMN public.grocery_product_catalog.allergens IS
+  'Authoritative allergen field. Any "allergens" key inside metadata (see 20260505000000_smart_product_catalog.sql) is legacy and not read.';
 
 
 -- The trust boundary is this column, NOT the RLS write policies.
@@ -102,6 +109,17 @@ COMMENT ON COLUMN public.grocery_product_catalog.verification IS
 -- the shipped iOS app creates catalog rows on first add. Tightening them to
 -- admin-only is exactly the policy change CLAUDE.md warns breaks older clients.
 -- So writes stay open and promotion to 'verified' is guarded here instead.
+--
+-- Three cases:
+--  1. auth.uid() IS NULL -- psql, a migration, or a service_role key that
+--     bypasses RLS by design. Allowed. The catalog's own RLS makes this safe:
+--     "Catalog insertable by authenticated users" is WITH CHECK (auth.uid() IS
+--     NOT NULL) and the UPDATE policy is USING (auth.uid() IS NOT NULL), so
+--     anon through PostgREST cannot reach this table at all -- a null
+--     auth.uid() never happens for a public-API request. US-794 needs this to
+--     seed USDA rows as already verified.
+--  2. An admin (has_role(auth.uid(), 'admin')). Allowed.
+--  3. Everyone else. Rejected when they try to reach 'verified'.
 CREATE OR REPLACE FUNCTION public.gpc_guard_verification()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -111,14 +129,24 @@ AS $$
 BEGIN
   IF NEW.verification = 'verified'
      AND (TG_OP = 'INSERT' OR OLD.verification IS DISTINCT FROM 'verified')
+     AND auth.uid() IS NOT NULL
      AND NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'only an admin may mark a catalog row verified'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  IF NEW.verification = 'verified' AND NEW.verified_at IS NULL THEN
+  -- verified_at/verified_by describe a verification that happened. Force them
+  -- to agree with NEW.verification rather than trusting whatever the caller
+  -- passed, on every INSERT/UPDATE this trigger sees (widened below to also
+  -- fire when only those two columns change) -- otherwise a non-admin could
+  -- forge a stamp on an unverified row and have it survive into a later
+  -- legitimate promotion.
+  IF NEW.verification = 'verified' THEN
     NEW.verified_at := now();
     NEW.verified_by := auth.uid();
+  ELSE
+    NEW.verified_at := NULL;
+    NEW.verified_by := NULL;
   END IF;
 
   RETURN NEW;
@@ -126,7 +154,8 @@ END $$;
 
 DROP TRIGGER IF EXISTS gpc_guard_verification ON public.grocery_product_catalog;
 CREATE TRIGGER gpc_guard_verification
-  BEFORE INSERT OR UPDATE OF verification ON public.grocery_product_catalog
+  BEFORE INSERT OR UPDATE OF verification, verified_at, verified_by
+  ON public.grocery_product_catalog
   FOR EACH ROW EXECUTE FUNCTION public.gpc_guard_verification();
 
 -- US-793: the household row references the catalog.
