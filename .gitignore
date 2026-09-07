@@ -173,3 +173,4 @@ scripts/ralph/.last-branch*
 test-results/
 playwright-report/
 a11y-results/
+supabase/.branches/
