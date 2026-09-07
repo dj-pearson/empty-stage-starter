@@ -85,22 +85,25 @@ Deno.test('normalizeProductName preserves punctuation the iOS normalizer would n
 Deno.test('calories that are not confirmed kcal/100g never reach the row', () => {
   // This payload models the exact bug at lookup-barcode/index.ts:118:
   // nutriments.energy_value || nutriments['energy-kcal_100g']. A product that
-  // declared its energy in kJ (or per-serving) puts a value like 2100 into
+  // declared its energy in kJ (or per-serving) puts a value like 800 into
   // energy_value; caloriesKcal100 (the confirmed field) is absent. toCatalogRow
   // must never read energyValueUnconfirmedUnit as a calorie fallback.
+  //
+  // 800, not 2100: 2100 falls outside the 0-900 sanity range on its own, so
+  // asserting null for it would pass even if this function's fallback guard
+  // were deleted entirely -- the range check would still catch it, and the
+  // test would keep passing for the wrong reason. 800 is squarely in-range,
+  // so the only thing that can be making this assertion pass is the guard
+  // this test claims to cover.
   const row = toCatalogRow(
     offResult({
       caloriesKcal100: undefined,
-      energyValueUnconfirmedUnit: 2100,
+      energyValueUnconfirmedUnit: 800,
     }),
     BARCODE
   );
 
   assert(row !== null);
-  // The value the CHECK constraint (gpc_nutrition_sane) would also reject if
-  // it ever reached the database -- but that constraint is the second line
-  // of defence, not the first. This function is the first: it must not even
-  // attempt to write 2100.
   assertEquals(row.calories_kcal_100, null);
   // The row is still produced with the macros it does have.
   assertEquals(row.protein_g_100, 10);
@@ -126,8 +129,20 @@ Deno.test('a macro above 100 g per 100 g is dropped, row still produced', () => 
   assertEquals(row.calories_kcal_100, 380);
 });
 
-Deno.test('sodium above 100000 mg per 100 g is dropped', () => {
+Deno.test('sodium above 40000 mg per 100 g is dropped', () => {
   const row = toCatalogRow(offResult({ sodiumMg100: 200000 }), BARCODE);
+  assert(row !== null);
+  assertEquals(row.sodium_mg_100, null);
+});
+
+Deno.test('sodium between 40000 and the database CHECK ceiling is still dropped', () => {
+  // The column's own CHECK constraint (gpc_nutrition_sane) allows up to
+  // 100000 for back-compat, but this function applies a tighter bound: past
+  // roughly 40000 mg/100g is past pure table salt, so it is not food. A
+  // value inside the DB's range but outside this function's must still be
+  // dropped -- proving the function's bound is the one actually enforced
+  // here, not the database's wider one.
+  const row = toCatalogRow(offResult({ sodiumMg100: 60000 }), BARCODE);
   assert(row !== null);
   assertEquals(row.sodium_mg_100, null);
 });
@@ -136,6 +151,40 @@ Deno.test('a negative macro is dropped, not clamped to zero', () => {
   const row = toCatalogRow(offResult({ proteinG100: -5 }), BARCODE);
   assert(row !== null);
   assertEquals(row.protein_g_100, null);
+});
+
+// --- 4b. default_category / default_aisle_section: known values kept, ------
+//         unknown values dropped rather than stored blind.
+
+Deno.test('a known category and aisle survive onto the row', () => {
+  const row = toCatalogRow(
+    offResult({ category: 'protein', aisleSection: 'meat_deli' }),
+    BARCODE
+  );
+  assert(row !== null);
+  assertEquals(row.default_category, 'protein');
+  assertEquals(row.default_aisle_section, 'meat_deli');
+});
+
+Deno.test('an unknown category is dropped, not stored as-is', () => {
+  // e.g. a Title Case bucket ('Protein') handed in without being mapped to
+  // the app's own lowercase FoodCategory rawValue first.
+  const row = toCatalogRow(offResult({ category: 'Protein' }), BARCODE);
+  assert(row !== null);
+  assertEquals(row.default_category, null);
+});
+
+Deno.test('an unknown aisle is dropped, not stored as-is', () => {
+  const row = toCatalogRow(offResult({ aisleSection: 'meat-deli' }), BARCODE);
+  assert(row !== null);
+  assertEquals(row.default_aisle_section, null);
+});
+
+Deno.test('no category or aisle guess means both columns are null, not omitted', () => {
+  const row = toCatalogRow(offResult(), BARCODE);
+  assert(row !== null);
+  assertEquals(row.default_category, null);
+  assertEquals(row.default_aisle_section, null);
 });
 
 // --- 5. no name means no row -------------------------------------------------

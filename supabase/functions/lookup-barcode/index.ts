@@ -1,6 +1,10 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10';
 import {
+  createClient,
+  type SupabaseClient,
+} from 'https://esm.sh/@supabase/supabase-js@2.47.10';
+import {
+  normalizeProductName,
   toCatalogRow,
   type BarcodeLookupResult,
 } from '../_shared/catalogPromotion.ts';
@@ -41,6 +45,31 @@ interface LookupResult {
   food: FoodNutrition;
   catalogInput: BarcodeLookupResult;
 }
+
+/**
+ * Maps the coarse Title Case category bucket this module already derives
+ * (from OFF's category tags, or FoodRepo's hardcoded default) onto the
+ * app's real taxonomies: FoodCategory
+ * (ios/EatPal/EatPal/Models/Food.swift, lowercase rawValues) and
+ * GroceryAisle (ios/EatPal/EatPal/Models/GroceryAisle.swift, snake_case
+ * rawValues). SmartProductService.swift reads exactly these two columns
+ * to prefill the iOS quick-add flow -- a promoted row that leaves them
+ * null prefills nothing.
+ *
+ * This is a coarse first guess on scraped data, not a claim that e.g.
+ * every "Protein"-bucketed product belongs in the meat/deli aisle -- part
+ * of why a promoted row stays 'unverified'. toCatalogRow independently
+ * validates both values against the app's known sets before writing
+ * either column, so a typo here is dropped, not stored.
+ */
+const CATEGORY_TO_CATALOG_DEFAULTS: Record<string, { category: string; aisleSection: string }> = {
+  Protein: { category: 'protein', aisleSection: 'meat_deli' },
+  Carb: { category: 'carb', aisleSection: 'pasta' },
+  Dairy: { category: 'dairy', aisleSection: 'dairy' },
+  Fruit: { category: 'fruit', aisleSection: 'produce' },
+  Veg: { category: 'vegetable', aisleSection: 'produce' },
+  Snack: { category: 'snack', aisleSection: 'snacks' },
+};
 
 // Common allergens to detect in ingredients
 const COMMON_ALLERGENS = [
@@ -135,6 +164,8 @@ async function lookupOpenFoodFacts(barcode: string): Promise<LookupResult | null
       const numberOrNull = (value: unknown): number | null =>
         typeof value === 'number' && Number.isFinite(value) ? value : null;
 
+      const catalogDefaults = CATEGORY_TO_CATALOG_DEFAULTS[category] ?? null;
+
       return {
         food: {
           name: displayName || "Unknown Product",
@@ -168,6 +199,13 @@ async function lookupOpenFoodFacts(barcode: string): Promise<LookupResult | null
             numberOrNull(nutriments.sodium_100g) !== null
               ? (nutriments.sodium_100g as number) * 1000
               : null,
+          // Semantically generic form of the name ("macaroni and cheese"),
+          // NOT the branded display name above -- see the field comment on
+          // BarcodeLookupResult for why the promotion's parent match must
+          // use this and never the row's own name.
+          genericName: product.generic_name || null,
+          category: catalogDefaults?.category ?? null,
+          aisleSection: catalogDefaults?.aisleSection ?? null,
         },
       };
     }
@@ -248,6 +286,15 @@ async function lookupUSDA(barcode: string): Promise<LookupResult | null> {
           fiberG100: getNumericNutrient('fiber'),
           sugarG100: getNumericNutrient('sugars'),
           sodiumMg100: getNumericNutrient('sodium'),
+          // USDA has no field equivalent to OFF's `generic_name`, and
+          // `food.foodCategory` is USDA's own much larger taxonomy (hundreds
+          // of raw strings), not the app's six-bucket scheme -- mapping it
+          // would mean guessing, which this module does not do. Left null;
+          // a promoted USDA row gets no parent link and no category/aisle
+          // guess rather than a fabricated one.
+          genericName: null,
+          category: null,
+          aisleSection: null,
         },
       };
     }
@@ -297,10 +344,24 @@ async function lookupFoodRepo(barcode: string): Promise<LookupResult | null> {
           fatG100: numberOrNull(data.nutrients?.fat),
           fiberG100: numberOrNull(data.nutrients?.fibers),
           sugarG100: numberOrNull(data.nutrients?.sugars),
+          // UNLIKE `energy_kcal` above, `sodium` is not named for its unit --
+          // the FoodRepo API doc this was written against did not pin it
+          // down, and this endpoint has never been exercised against live
+          // data (see the pre-existing "may need adjustment" note above).
+          // Assumed grams, converted to the catalog's milligrams the same
+          // way OFF's sodium_100g is. If FoodRepo actually reports mg, this
+          // is 1000x wrong -- but toCatalogRow's sodium sanity bound
+          // (0-40000 mg/100g) catches a value that far off and drops it
+          // rather than storing it, so a wrong assumption here cannot write
+          // a bad number, only a missing one.
           sodiumMg100:
             numberOrNull(data.nutrients?.sodium) !== null
               ? (data.nutrients.sodium as number) * 1000
               : null,
+          // FoodRepo has no generic-name equivalent surfaced here.
+          genericName: null,
+          category: CATEGORY_TO_CATALOG_DEFAULTS.Snack.category,
+          aisleSection: CATEGORY_TO_CATALOG_DEFAULTS.Snack.aisleSection,
         },
       };
     }
@@ -310,6 +371,111 @@ async function lookupFoodRepo(barcode: string): Promise<LookupResult | null> {
 
   return null;
 }
+
+/**
+ * US-797: best-effort promotion to the shared catalog. THE RULE THAT
+ * OUTRANKS EVERYTHING ELSE HERE -- the caller is a parent standing in a shop
+ * adding a food, and this function must never change the response they get,
+ * however it fails. Every branch below is inside the try/catch; nothing
+ * this function does is returned or thrown back to its caller -- it always
+ * resolves, never rejects, which matters because it may run detached from
+ * the request via EdgeRuntime.waitUntil (see below).
+ */
+async function promoteToCatalog(
+  supabaseClient: SupabaseClient,
+  catalogInput: BarcodeLookupResult,
+  barcode: string
+): Promise<void> {
+  try {
+    const catalogRow = toCatalogRow(catalogInput, barcode);
+    if (!catalogRow) return;
+
+    // Link to a generic parent when the provider's GENERIC name normalizes
+    // to an exact match against an existing `kind = 'generic'` row -- never
+    // the branded row's own name. grocery_product_catalog_name_uq is a
+    // UNIQUE index on name_normalized with NO partial WHERE clause (every
+    // row in the table, generic or branded, competes for the same
+    // normalized name -- the US-794 seed relies on this same index for its
+    // own `ON CONFLICT (name_normalized) DO NOTHING`). Matching on the
+    // branded row's own name_normalized would mean: whenever the match
+    // succeeds, inserting this row under that same name_normalized is
+    // guaranteed to violate that index, so the promotion the match just
+    // found would always destroy itself. See the field comment on
+    // BarcodeLookupResult.genericName. No generic name, or no exact match,
+    // means no parent -- a fine outcome, never resolved by fuzzy matching.
+    let parentId: string | null = null;
+    const parentMatchKey = catalogInput.genericName
+      ? normalizeProductName(catalogInput.genericName)
+      : null;
+
+    if (parentMatchKey) {
+      const { data: parentRow } = await supabaseClient
+        .from('grocery_product_catalog')
+        .select('id')
+        .eq('kind', 'generic')
+        .eq('name_normalized', parentMatchKey)
+        .limit(1)
+        .maybeSingle();
+      parentId = (parentRow?.id as string | undefined) ?? null;
+    }
+
+    // Plain insert, not an upsert targeting ON CONFLICT (barcode).
+    // grocery_product_catalog_barcode_uq is a PARTIAL unique index (WHERE
+    // barcode IS NOT NULL) -- PostgREST's on_conflict target has no way to
+    // carry that predicate, so `ON CONFLICT (barcode)` through the client
+    // would fail to infer an arbiter index and error on every insert, not
+    // just real duplicates. A concurrent second promotion of the same
+    // barcode instead hits the barcode unique index as an ordinary 23505 on
+    // this plain insert.
+    const { error: insertError } = await supabaseClient
+      .from('grocery_product_catalog')
+      .insert({
+        ...catalogRow,
+        parent_food_id: parentId,
+      });
+
+    if (insertError) {
+      // Two different unique indexes can raise 23505 here and they mean
+      // different things. A barcode collision is benign: another family's
+      // request promoted this exact product a moment earlier, which is the
+      // whole point of a plain insert instead of an ON-CONFLICT upsert. A
+      // name collision means this promotion itself was lost -- worth
+      // logging as a real failure, not swallowed as if it were the benign
+      // case. Postgres names the violated constraint in the error message,
+      // so that is what discriminates the two rather than the shared code.
+      const isBenignBarcodeConflict =
+        insertError.code === '23505' &&
+        insertError.message?.includes('grocery_product_catalog_barcode_uq');
+
+      if (isBenignBarcodeConflict) {
+        console.log('Catalog promotion skipped: barcode already promoted by another family');
+      } else {
+        console.error('Catalog promotion insert failed (non-fatal):', insertError);
+      }
+    }
+  } catch (promotionError) {
+    console.error('Catalog promotion failed (non-fatal):', promotionError);
+  }
+}
+
+/**
+ * EdgeRuntime.waitUntil is a global the Supabase-hosted Deno edge runtime
+ * injects specifically for "keep running this after the response is sent"
+ * background work:
+ * https://supabase.com/docs/guides/functions/background-tasks
+ *
+ * It is feature-detected, never assumed: confirmed by hand that it is
+ * undefined under plain `deno run`/`deno test` (this repo's own tooling,
+ * including the hand-verification in this task's report), which is not
+ * proof either way for the deployed Supabase edge runtime this function
+ * actually runs under in production. When present, the promotion runs
+ * detached so the parent standing in the shop is not waiting on two extra
+ * database round trips. When absent, it is simply awaited in-line instead
+ * -- still non-blocking for correctness (still inside its own try/catch,
+ * still never affects the response), just not latency-free.
+ */
+const edgeRuntime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } })
+  .EdgeRuntime;
 
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -364,43 +530,14 @@ export default async (req: Request) => {
       );
     }
 
-    // STEP 2: Check the shared catalog (US-797) - a product any family
-    // already promoted from a provider lookup is found here without a third
-    // party call. Checked before the legacy `nutrition` table because it is
-    // the table iOS actually reads (see 20260906000000_canonical_food_catalog.sql).
-    console.log('Checking shared catalog for barcode...');
-    const { data: catalogFood, error: catalogError } = await supabaseClient
-      .from('grocery_product_catalog')
-      .select('*')
-      .eq('barcode', barcode)
-      .limit(1)
-      .single();
-
-    if (catalogFood && !catalogError) {
-      console.log('Found in shared catalog:', catalogFood.name);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          food: {
-            name: catalogFood.name,
-            category: catalogFood.default_category || 'Snack',
-            package_quantity: catalogFood.package_size
-              ? `${catalogFood.package_size}${catalogFood.package_unit || ''}`
-              : undefined,
-            calories: catalogFood.calories_kcal_100 ?? undefined,
-            protein_g: catalogFood.protein_g_100 ?? undefined,
-            carbs_g: catalogFood.carbs_g_100 ?? undefined,
-            fat_g: catalogFood.fat_g_100 ?? undefined,
-            allergens: catalogFood.allergens ?? undefined,
-            source: 'Community Catalog',
-            in_pantry: false,
-          }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // STEP 3: Check community nutrition database - second fastest
+    // STEP 2: Check community nutrition database - second fastest. Checked
+    // BEFORE the shared catalog (STEP 3): the legacy `nutrition` table can
+    // hold serving_size/ingredients/servings_per_container that the catalog
+    // schema does not carry, and on the very next scan of a barcode this
+    // function just looked up externally, both tables get written in the
+    // same request (see STEP 4) -- nutrition's richer row must win, not lose
+    // to the catalog step running first. `nutrition` is being retired by
+    // US-799; until then it wins when both have a row.
     console.log('Checking nutrition database for barcode...');
     const { data: nutritionFood, error: nutritionError } = await supabaseClient
       .from('nutrition')
@@ -427,6 +564,47 @@ export default async (req: Request) => {
             fat_g: nutritionFood.fat_g,
             allergens: nutritionFood.allergens,
             source: 'Nutrition Database',
+            in_pantry: false,
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // STEP 3: Check the shared catalog (US-797) - a product any family
+    // already promoted from a provider lookup is found here without a third
+    // party call.
+    console.log('Checking shared catalog for barcode...');
+    const { data: catalogFood, error: catalogError } = await supabaseClient
+      .from('grocery_product_catalog')
+      .select('*')
+      .eq('barcode', barcode)
+      .limit(1)
+      .single();
+
+    if (catalogFood && !catalogError) {
+      console.log('Found in shared catalog:', catalogFood.name);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          food: {
+            name: catalogFood.name,
+            category: catalogFood.default_category || 'Snack',
+            package_quantity: catalogFood.package_size
+              ? `${catalogFood.package_size}${catalogFood.package_unit || ''}`
+              : undefined,
+            calories: catalogFood.calories_kcal_100 ?? undefined,
+            protein_g: catalogFood.protein_g_100 ?? undefined,
+            carbs_g: catalogFood.carbs_g_100 ?? undefined,
+            fat_g: catalogFood.fat_g_100 ?? undefined,
+            allergens: catalogFood.allergens ?? undefined,
+            // The spec's rule (US-793) that unverified rows are excluded
+            // from ladder/nutrition totals is only enforceable by a client
+            // that knows a row's verification -- without this, a promoted-
+            // but-unverified row's calories/macros look exactly as trusted
+            // as a verified one.
+            verification: catalogFood.verification,
+            source: 'Community Catalog',
             in_pantry: false,
           }
         }),
@@ -474,49 +652,15 @@ export default async (req: Request) => {
         // Continue anyway - the lookup succeeded
       }
 
-      // US-797: best-effort promotion to the shared catalog. THE RULE THAT
-      // OUTRANKS EVERYTHING ELSE HERE -- the caller is a parent standing in
-      // a shop adding a food, and this whole block must never change the
-      // response they get, however it fails. Everything below is
-      // try/caught and its result is logged, never returned or thrown.
-      try {
-        const catalogRow = toCatalogRow(catalogInput, barcode);
-
-        if (catalogRow) {
-          // Link to a generic parent when the normalized name matches one
-          // exactly -- no fuzzy matching. No match is a fine outcome; the
-          // row is inserted with parent_food_id left null.
-          const { data: parentRow } = await supabaseClient
-            .from('grocery_product_catalog')
-            .select('id')
-            .eq('kind', 'generic')
-            .eq('name_normalized', catalogRow.name_normalized)
-            .limit(1)
-            .maybeSingle();
-
-          // Plain insert, not an upsert targeting ON CONFLICT (barcode).
-          // grocery_product_catalog_barcode_uq is a PARTIAL unique index
-          // (WHERE barcode IS NOT NULL) -- PostgREST's on_conflict target
-          // has no way to carry that predicate, so `ON CONFLICT (barcode)`
-          // through the client would fail to infer an arbiter index and
-          // error on every insert, not just real duplicates. A concurrent
-          // second promotion of the same barcode instead hits the unique
-          // index as an ordinary 23505 error on this plain insert, which is
-          // treated below as "another family already promoted it" rather
-          // than a failure worth logging as one.
-          const { error: insertError } = await supabaseClient
-            .from('grocery_product_catalog')
-            .insert({
-              ...catalogRow,
-              parent_food_id: parentRow?.id ?? null,
-            });
-
-          if (insertError && insertError.code !== '23505') {
-            console.error('Catalog promotion insert failed (non-fatal):', insertError);
-          }
-        }
-      } catch (promotionError) {
-        console.error('Catalog promotion failed (non-fatal):', promotionError);
+      // US-797: fire the catalog promotion and, where the runtime allows,
+      // do not make the parent standing in the shop wait on it. See
+      // promoteToCatalog's own doc comment for why this can never affect
+      // the response below regardless of which path runs.
+      const promotionPromise = promoteToCatalog(supabaseClient, catalogInput, barcode);
+      if (edgeRuntime?.waitUntil) {
+        edgeRuntime.waitUntil(promotionPromise);
+      } else {
+        await promotionPromise;
       }
 
       return new Response(

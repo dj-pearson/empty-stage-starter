@@ -21,12 +21,16 @@
 //
 // 2. Range sanity. The catalog's calories_kcal_100 column has a CHECK of
 //    0-900 (900 kcal/100g is pure fat, the physical maximum), and the macro
-//    columns are bounded 0-100 g/100g (sodium 0-100000 mg/100g). A value
-//    outside that range is a unit error or a bad scrape, never a food, so it
-//    is DROPPED here -- never clamped, and never used as a reason to discard
-//    the rest of the row. The database CHECK constraint
-//    (gpc_nutrition_sane, 20260906000000_canonical_food_catalog.sql) is the
-//    second line of defence for this, not the first; this function is.
+//    columns are bounded 0-100 g/100g. A value outside that range is a unit
+//    error or a bad scrape, never a food, so it is DROPPED here -- never
+//    clamped, and never used as a reason to discard the rest of the row.
+//    The database CHECK constraint (gpc_nutrition_sane,
+//    20260906000000_canonical_food_catalog.sql) is the second line of
+//    defence for this, not the first; this function is. Sodium is bounded
+//    tighter here (0-40000 mg/100g) than the database CHECK allows
+//    (0-100000): ~40000 mg/100g is roughly pure table salt, the physical
+//    ceiling for a food, while 100000 is the column's own back-compat
+//    limit and is not itself evidence anything up to it is plausible.
 //
 // name_normalized must match the shipped iOS normalizer,
 // ProductNameNormalizer.normalize in
@@ -83,6 +87,44 @@ export interface BarcodeLookupResult {
   fiberG100?: number | null;
   sugarG100?: number | null;
   sodiumMg100?: number | null;
+  /**
+   * The semantically GENERIC form of the product name -- Open Food Facts'
+   * `generic_name` ("macaroni and cheese" for "Kraft Macaroni & Cheese
+   * Dinner"), when the provider supplies one. This is the ONLY field
+   * toCatalogRow uses to look for a `kind = 'generic'` parent row.
+   *
+   * It is deliberately NOT `name`. `grocery_product_catalog_name_uq` is a
+   * UNIQUE index on name_normalized with no WHERE clause -- every row in
+   * the table, generic or branded, competes for the same normalized name.
+   * A branded product's own name is usually specific enough
+   * ("kraft mac & cheese dinner") that it will never collide with a
+   * generic row's name_normalized ("macaroni and cheese"). Matching a
+   * parent on the branded row's OWN name_normalized instead would mean:
+   * whenever that exact match succeeds, inserting this row with the same
+   * name_normalized is guaranteed to violate that unique index -- the
+   * promotion the match just found would always destroy itself. No
+   * generic name, or no exact match against one, means no parent -- a
+   * fine outcome, never resolved by fuzzy matching.
+   */
+  genericName?: string | null;
+  /**
+   * Best-guess FoodCategory rawValue (ios/EatPal/EatPal/Models/Food.swift:
+   * 'protein' | 'carb' | 'dairy' | 'fruit' | 'vegetable' | 'snack'), coarse
+   * and derived from scraped provider data -- part of why the row stays
+   * 'unverified'. A value outside that set is dropped, not guessed at
+   * further; see toCatalogRow.
+   */
+  category?: string | null;
+  /**
+   * Best-guess GroceryAisle rawValue
+   * (ios/EatPal/EatPal/Models/GroceryAisle.swift), e.g. 'meat_deli'. Same
+   * validation rule as category: unknown values are dropped. A bad guess
+   * here does not crash the shipped app (SmartProductService falls back to
+   * GroceryAisle.classify(name) when this column is null), but a value
+   * outside the app's known set is silently ignored, not a safe pass-
+   * through, so it is worth dropping explicitly rather than trusting it.
+   */
+  aisleSection?: string | null;
 }
 
 /**
@@ -108,7 +150,63 @@ export interface CatalogInsert {
   fiber_g_100: number | null;
   sugar_g_100: number | null;
   sodium_mg_100: number | null;
+  default_category: string | null;
+  default_aisle_section: string | null;
 }
+
+/**
+ * FoodCategory rawValues (ios/EatPal/EatPal/Models/Food.swift). Lowercase --
+ * NOT the Title Case buckets lookup-barcode/index.ts derives internally
+ * ('Protein', 'Carb', ...) while building the client-facing response;
+ * callers must map to this set before calling toCatalogRow.
+ */
+const KNOWN_FOOD_CATEGORIES = new Set([
+  'protein',
+  'carb',
+  'dairy',
+  'fruit',
+  'vegetable',
+  'snack',
+]);
+
+/**
+ * GroceryAisle rawValues (ios/EatPal/EatPal/Models/GroceryAisle.swift).
+ */
+const KNOWN_GROCERY_AISLES = new Set([
+  'produce',
+  'bakery',
+  'bread',
+  'meat_deli',
+  'seafood',
+  'dairy',
+  'eggs',
+  'refrigerated',
+  'frozen_meals',
+  'frozen_veg',
+  'frozen_treats',
+  'canned',
+  'dry_soups',
+  'pasta',
+  'rice_grains',
+  'condiments',
+  'baking',
+  'breakfast',
+  'snacks',
+  'crackers',
+  'candy',
+  'beverages',
+  'alcohol',
+  'ethnic_mexican',
+  'ethnic_asian',
+  'ethnic_european',
+  'household',
+  'paper_goods',
+  'cleaning',
+  'personal_care',
+  'baby',
+  'pet',
+  'other',
+]);
 
 /**
  * Matches the shipped iOS ProductNameNormalizer.normalize
@@ -174,7 +272,8 @@ export function toCatalogRow(
   const fatG100 = sanitizeInRange(input.fatG100, 0, 100);
   const fiberG100 = sanitizeInRange(input.fiberG100, 0, 100);
   const sugarG100 = sanitizeInRange(input.sugarG100, 0, 100);
-  const sodiumMg100 = sanitizeInRange(input.sodiumMg100, 0, 100000);
+  // 40000, not the column's 0-100000 CHECK -- see the module comment.
+  const sodiumMg100 = sanitizeInRange(input.sodiumMg100, 0, 40000);
 
   const hasUsableNutrition = [
     caloriesKcal100,
@@ -192,6 +291,19 @@ export function toCatalogRow(
   const allergens =
     input.allergens && input.allergens.length > 0 ? [...input.allergens] : null;
 
+  // Coarse first guesses, dropped rather than trusted if they are not one
+  // of the app's own known values -- see the field comments on
+  // BarcodeLookupResult. Every other row already in the catalog (the
+  // US-794 generic seed) carries both columns; leaving them null on every
+  // promoted row would make branded promotions the one shape in the table
+  // the shipped quick-add can't prefill from.
+  const defaultCategory =
+    input.category && KNOWN_FOOD_CATEGORIES.has(input.category) ? input.category : null;
+  const defaultAisleSection =
+    input.aisleSection && KNOWN_GROCERY_AISLES.has(input.aisleSection)
+      ? input.aisleSection
+      : null;
+
   return {
     name: rawName,
     name_normalized: nameNormalized,
@@ -199,6 +311,8 @@ export function toCatalogRow(
     kind: 'branded',
     source: input.source,
     source_ref: trimmedBarcode,
+    default_category: defaultCategory,
+    default_aisle_section: defaultAisleSection,
     // Hard-coded, not derived from input -- see the module comment. Only an
     // admin (via the gpc_guard_verification trigger) may ever move a row off
     // 'unverified'; a promotion must never try.
