@@ -189,12 +189,18 @@ VALUES
 UPDATE public.foods SET canonical_id = '79600000-1000-0000-0000-000000000160'
  WHERE id = '79600000-0000-0000-0000-000000000016';
 
--- Snapshot fixture 8's full row, minus canonical_id and updated_at, before
--- matching runs -- assertions 17/18 compare against this.
+-- Snapshot fixtures 8 (name-matched) and 10 (barcode-matched) full rows,
+-- minus only updated_at, before matching runs. canonical_id is deliberately
+-- KEPT in this snapshot (unlike an earlier draft) -- assertion 18 needs the
+-- original NULL value to compare against, not a stripped copy of it.
+-- Assertions 17/18 both read from here.
 CREATE TEMP TABLE _us796_snapshot (key TEXT PRIMARY KEY, row_json JSONB);
 INSERT INTO _us796_snapshot (key, row_json)
-SELECT 'f8_before', to_jsonb(f) - 'canonical_id' - 'updated_at'
-  FROM public.foods f WHERE f.id = '79600000-0000-0000-0000-000000000008';
+SELECT 'f8_before', to_jsonb(f) - 'updated_at'
+  FROM public.foods f WHERE f.id = '79600000-0000-0000-0000-000000000008'
+UNION ALL
+SELECT 'f10_before', to_jsonb(f) - 'updated_at'
+  FROM public.foods f WHERE f.id = '79600000-0000-0000-0000-000000000010';
 
 -- First run: link everything that qualifies.
 CREATE TEMP TABLE _us796_counts (key TEXT PRIMARY KEY, n INT);
@@ -312,37 +318,62 @@ BEGIN
   RAISE NOTICE 'assertion 16 ok (pre-existing link untouched despite a better match existing)';
 END $a16$;
 
--- 17. Only canonical_id changes. Compare the whole row minus canonical_id
---     and updated_at, so a column added later is covered without editing
---     this test.
+-- 17. Only canonical_id changes (updated_at is the one other column that
+--     legitimately changes -- see the function's header comment -- so it's
+--     stripped before comparing here, same as it's stripped from the
+--     snapshot itself). Compare the whole row minus canonical_id and
+--     updated_at, so a column added later is covered without editing this
+--     test. Covers BOTH match paths: fixture 8 (name+category) and fixture
+--     10 (barcode) -- an earlier draft only checked the name-matched row.
 DO $a17$
 DECLARE v_before JSONB; v_after JSONB;
 BEGIN
+  -- Name-matched (fixture 8).
   SELECT row_json INTO v_before FROM _us796_snapshot WHERE key = 'f8_before';
-  SELECT to_jsonb(f) - 'canonical_id' - 'updated_at' INTO v_after
+  SELECT to_jsonb(f) - 'updated_at' INTO v_after
     FROM public.foods f WHERE f.id = '79600000-0000-0000-0000-000000000008';
-  IF v_before IS DISTINCT FROM v_after THEN
-    RAISE EXCEPTION 'assertion 17: expected the row (minus canonical_id/updated_at) unchanged by matching, before=%, after=%', v_before, v_after;
+  IF (v_before - 'canonical_id') IS DISTINCT FROM (v_after - 'canonical_id') THEN
+    RAISE EXCEPTION 'assertion 17: expected the name-matched row (minus canonical_id/updated_at) unchanged by matching, before=%, after=%', v_before, v_after;
   END IF;
-  RAISE NOTICE 'assertion 17 ok (row unchanged aside from canonical_id/updated_at)';
+
+  -- Barcode-matched (fixture 10).
+  SELECT row_json INTO v_before FROM _us796_snapshot WHERE key = 'f10_before';
+  SELECT to_jsonb(f) - 'updated_at' INTO v_after
+    FROM public.foods f WHERE f.id = '79600000-0000-0000-0000-000000000010';
+  IF (v_before - 'canonical_id') IS DISTINCT FROM (v_after - 'canonical_id') THEN
+    RAISE EXCEPTION 'assertion 17: expected the barcode-matched row (minus canonical_id/updated_at) unchanged by matching, before=%, after=%', v_before, v_after;
+  END IF;
+
+  RAISE NOTICE 'assertion 17 ok (both name- and barcode-matched rows unchanged aside from canonical_id/updated_at)';
 END $a17$;
 
 -- 18. Reversible: setting canonical_id back to NULL leaves the row exactly
---     as it was before matching ran, including is_safe.
+--     as it was before matching ran, including is_safe. Unlike an earlier
+--     draft, this does NOT strip canonical_id from the comparison -- the
+--     snapshot's canonical_id is NULL (fixture 8's state before the
+--     matcher ever ran), and after reverting it must be NULL again too.
+--     Stripping canonical_id from both sides (as the earlier draft did)
+--     made this a tautology: it would pass even if the matcher had never
+--     run, because it only proved an UPDATE doesn't touch columns it
+--     wasn't told to. Comparing the full row (minus only updated_at, which
+--     legitimately changes on any UPDATE -- see assertion 17) actually
+--     proves the round trip: link, then unlink, leaves canonical_id itself
+--     back at its true original value, not just "unchanged since a moment
+--     ago".
 UPDATE public.foods SET canonical_id = NULL WHERE id = '79600000-0000-0000-0000-000000000008';
 DO $a18$
 DECLARE v_before JSONB; v_after JSONB; v_is_safe BOOLEAN;
 BEGIN
   SELECT row_json INTO v_before FROM _us796_snapshot WHERE key = 'f8_before';
-  SELECT (to_jsonb(f) - 'canonical_id' - 'updated_at'), f.is_safe INTO v_after, v_is_safe
+  SELECT (to_jsonb(f) - 'updated_at'), f.is_safe INTO v_after, v_is_safe
     FROM public.foods f WHERE f.id = '79600000-0000-0000-0000-000000000008';
   IF v_before IS DISTINCT FROM v_after THEN
-    RAISE EXCEPTION 'assertion 18: expected reverting canonical_id to NULL to restore the pre-match row exactly, before=%, after=%', v_before, v_after;
+    RAISE EXCEPTION 'assertion 18: expected reverting canonical_id to NULL to restore the pre-match row exactly (canonical_id included), before=%, after=%', v_before, v_after;
   END IF;
   IF v_is_safe IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'assertion 18: expected is_safe = true preserved after revert, got %', v_is_safe;
   END IF;
-  RAISE NOTICE 'assertion 18 ok (reverting canonical_id restores the row exactly, is_safe intact)';
+  RAISE NOTICE 'assertion 18 ok (reverting canonical_id restores the row exactly, including canonical_id itself; is_safe intact)';
 END $a18$;
 
 -- 19. An unmatched food keeps canonical_id NULL and is still selectable --
@@ -364,5 +395,238 @@ BEGIN
   END IF;
   RAISE NOTICE 'assertion 19 ok (unmatched food stays NULL and selectable)';
 END $a19$;
+
+-- =====================================================================
+-- Household scoping (20-21). Every fixture above uses household_id NULL
+-- and every call above uses the NULL default, so neither p_household_id
+-- nor the RLS-scoping claim in the migration's SECURITY INVOKER comment
+-- was exercised by anything above. These two assertions fix that:
+--   20 proves p_household_id itself filters the UPDATE, run unimpersonated
+--      (as the table owner, so RLS is not what's restricting it -- the
+--      WHERE clause is).
+--   21 proves RLS independently scopes an ordinary authenticated caller to
+--      their own household even when p_household_id is left at its NULL
+--      ("every household") default -- the actual claim the migration's
+--      comment makes about SECURITY INVOKER, tested against a real
+--      non-superuser identity rather than only by the RLS-bypassing role
+--      every assertion above runs as.
+-- =====================================================================
+
+SET LOCAL session_replication_role = replica;
+INSERT INTO auth.users (id) VALUES
+  ('79600000-3000-0000-0000-00000000000a'),
+  ('79600000-3000-0000-0000-00000000000b')
+ON CONFLICT (id) DO NOTHING;
+SET LOCAL session_replication_role = DEFAULT;
+
+INSERT INTO public.households (id, name) VALUES
+  ('79600000-2000-0000-0000-00000000000a', 'US796 Test Household A'),
+  ('79600000-2000-0000-0000-00000000000b', 'US796 Test Household B');
+
+INSERT INTO public.household_members (household_id, user_id) VALUES
+  ('79600000-2000-0000-0000-00000000000a', '79600000-3000-0000-0000-00000000000a'),
+  ('79600000-2000-0000-0000-00000000000b', '79600000-3000-0000-0000-00000000000b');
+
+-- 20 fixtures: one qualifying (name+category) pair per household.
+INSERT INTO public.grocery_product_catalog (id, name, name_normalized, default_category, default_unit, default_quantity, times_added, last_added_at)
+VALUES
+  ('79600000-1000-0000-0000-000000000020', 'US796 Test Household Scope A', 'us796 test household scope a', 'protein', 'each', 1, 1, now()),
+  ('79600000-1000-0000-0000-000000000021', 'US796 Test Household Scope B', 'us796 test household scope b', 'protein', 'each', 1, 1, now());
+
+INSERT INTO public.foods (id, user_id, household_id, name, category, is_safe, is_try_bite, quantity, unit)
+VALUES
+  ('79600000-0000-0000-0000-000000000020', '79600000-3000-0000-0000-00000000000a', '79600000-2000-0000-0000-00000000000a', 'US796 Test Household Scope A', 'protein', false, false, 1, 'each'),
+  ('79600000-0000-0000-0000-000000000021', '79600000-3000-0000-0000-00000000000b', '79600000-2000-0000-0000-00000000000b', 'US796 Test Household Scope B', 'protein', false, false, 1, 'each');
+
+-- Scope to household A only.
+SELECT public.match_foods_to_catalog('79600000-2000-0000-0000-00000000000a');
+
+DO $a20$
+DECLARE v_a UUID; v_b UUID;
+BEGIN
+  SELECT canonical_id INTO v_a FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000020';
+  SELECT canonical_id INTO v_b FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000021';
+  IF v_a IS DISTINCT FROM '79600000-1000-0000-0000-000000000020'::uuid THEN
+    RAISE EXCEPTION 'assertion 20: expected household A''s food linked when scoped to household A, got %', v_a;
+  END IF;
+  IF v_b IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 20: expected household B''s food untouched when scoped to household A, got %', v_b;
+  END IF;
+  RAISE NOTICE 'assertion 20 ok (p_household_id scoped the update to household A, household B untouched)';
+END $a20$;
+
+-- Now scope to household B -- proves the parameter isn't just "household A
+-- always wins" by coincidence of fixture order.
+SELECT public.match_foods_to_catalog('79600000-2000-0000-0000-00000000000b');
+
+DO $a20b$
+DECLARE v_b UUID;
+BEGIN
+  SELECT canonical_id INTO v_b FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000021';
+  IF v_b IS DISTINCT FROM '79600000-1000-0000-0000-000000000021'::uuid THEN
+    RAISE EXCEPTION 'assertion 20: expected household B''s food linked once scoped to household B, got %', v_b;
+  END IF;
+  RAISE NOTICE 'assertion 20 ok (p_household_id also scoped correctly to household B on a second call)';
+END $a20b$;
+
+-- 21 fixtures: fresh, still-unmatched pair (20's are already linked).
+INSERT INTO public.grocery_product_catalog (id, name, name_normalized, default_category, default_unit, default_quantity, times_added, last_added_at)
+VALUES
+  ('79600000-1000-0000-0000-000000000022', 'US796 Test RLS Scope C', 'us796 test rls scope c', 'protein', 'each', 1, 1, now()),
+  ('79600000-1000-0000-0000-000000000023', 'US796 Test RLS Scope D', 'us796 test rls scope d', 'protein', 'each', 1, 1, now());
+
+INSERT INTO public.foods (id, user_id, household_id, name, category, is_safe, is_try_bite, quantity, unit)
+VALUES
+  ('79600000-0000-0000-0000-000000000022', '79600000-3000-0000-0000-00000000000a', '79600000-2000-0000-0000-00000000000a', 'US796 Test RLS Scope C', 'protein', false, false, 1, 'each'),
+  ('79600000-0000-0000-0000-000000000023', '79600000-3000-0000-0000-00000000000b', '79600000-2000-0000-0000-00000000000b', 'US796 Test RLS Scope D', 'protein', false, false, 1, 'each');
+
+-- Impersonate household A's member and call with NO household filter --
+-- the function's own logic treats NULL as "every household", so if this
+-- only touches household A's food, it's RLS doing the scoping, not the
+-- parameter. Same impersonation pattern as us793_canonical_catalog.test.sql
+-- assertion 8 (SET LOCAL ROLE authenticated + request.jwt.claim.sub).
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '79600000-3000-0000-0000-00000000000a', true);
+SELECT public.match_foods_to_catalog();
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', true);
+
+DO $a21$
+DECLARE v_c UUID; v_d UUID;
+BEGIN
+  SELECT canonical_id INTO v_c FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000022';
+  SELECT canonical_id INTO v_d FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000023';
+  IF v_c IS DISTINCT FROM '79600000-1000-0000-0000-000000000022'::uuid THEN
+    RAISE EXCEPTION 'assertion 21: expected household A''s member to link household A''s own food even with no household filter passed, got %', v_c;
+  END IF;
+  IF v_d IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 21: expected RLS to block household A''s member from linking household B''s food, got %', v_d;
+  END IF;
+  RAISE NOTICE 'assertion 21 ok (RLS scoped a real authenticated non-admin caller to their own household despite p_household_id defaulting to every household)';
+END $a21$;
+
+-- =====================================================================
+-- Empty/whitespace barcode guard (22-24). The reported defect: the
+-- barcode pass originally guarded only f.barcode IS NOT NULL, not
+-- emptiness. A single catalog row planted with barcode = '' -- which any
+-- authenticated user can INSERT, and the partial unique index on barcode
+-- permits exactly one of -- matched EVERY empty-barcode food in EVERY
+-- household on the next run, regardless of category: Grilled Chicken
+-- Breast (protein) and Whole Milk (dairy) both linked to one planted
+-- 'Planted Snack Row' (snack). Fixed with btrim(...) <> '' on both sides
+-- of the barcode comparison. See the migration's WHY TIMID rule 2.
+-- =====================================================================
+
+-- One planted row per blank-ish barcode value. Only one row may ever carry
+-- barcode = '' (grocery_product_catalog_barcode_uq is a partial UNIQUE
+-- index on barcode WHERE barcode IS NOT NULL, and '' satisfies NOT NULL),
+-- so every "food with a blank barcode" fixture below necessarily contends
+-- for the SAME planted row -- which is exactly the real-world shape of the
+-- reported defect (one planted row captures every victim).
+INSERT INTO public.grocery_product_catalog (id, name, name_normalized, default_category, default_unit, default_quantity, barcode, times_added, last_added_at)
+VALUES
+  ('79600000-1000-0000-0000-000000000030', 'US796 Test Planted Blank Barcode Row', 'us796 test planted blank barcode row', 'snack', 'each', 1, '', 1, now()),
+  ('79600000-1000-0000-0000-000000000031', 'US796 Test Planted Whitespace Barcode Row', 'us796 test planted whitespace barcode row', 'snack', 'each', 1, '   ', 1, now());
+
+INSERT INTO public.foods (id, user_id, name, category, is_safe, is_try_bite, quantity, unit, barcode)
+VALUES
+  -- 22: blank barcode, category 'protein' -- crosses category against the
+  -- planted row's 'snack', reproducing the "Grilled Chicken Breast" victim
+  -- from the reported probe.
+  ('79600000-0000-0000-0000-000000000026', '79600000-0000-0000-0000-000000000001', 'US796 Test Blank Barcode Chicken', 'protein', false, false, 1, 'each', ''),
+  -- 23: blank barcode, category 'dairy' -- a SECOND victim of the SAME
+  -- planted row, reproducing "Whole Milk": one planted row, multiple
+  -- unrelated categories, all must stay excluded.
+  ('79600000-0000-0000-0000-000000000027', '79600000-0000-0000-0000-000000000001', 'US796 Test Blank Barcode Milk', 'dairy', true, false, 1, 'each', ''),
+  -- 24: whitespace-only barcode (not literally empty) against the SEPARATE
+  -- planted whitespace row -- proves btrim generalizes the guard beyond
+  -- the empty string specifically ('   ' = '   ' would satisfy the raw
+  -- equality f.barcode = c.barcode with no guard at all, same as '' = '').
+  ('79600000-0000-0000-0000-000000000028', '79600000-0000-0000-0000-000000000001', 'US796 Test Whitespace Barcode Apple', 'fruit', true, false, 1, 'each', '   ');
+
+-- This call also happens to pick up two rows that are NOT about the
+-- barcode guard: fixture 8 (deliberately unlinked back to NULL by
+-- assertion 18's revert, and never re-matched since) and fixture 23 (household
+-- B's RLS-scoped food, left unmatched on purpose by assertion 21's
+-- RLS-restricted impersonated call, now reachable because this call runs
+-- unimpersonated). Both are legitimate re-matches of already-proven
+-- fixtures, not something this section is testing -- assertions 22-24
+-- below check the NEW blank/whitespace fixtures by id, so the extra count
+-- is harmless noise, not a hidden assertion on this return value.
+SELECT public.match_foods_to_catalog();
+
+DO $a22$
+DECLARE v_id UUID;
+BEGIN
+  SELECT canonical_id INTO v_id FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000026';
+  IF v_id IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 22: expected NULL (blank barcode must never match, even cross-category), got %', v_id;
+  END IF;
+  RAISE NOTICE 'assertion 22 ok (blank-barcode food, category protein, left unmatched against the planted blank-barcode snack row)';
+END $a22$;
+
+DO $a23$
+DECLARE v_id UUID;
+BEGIN
+  SELECT canonical_id INTO v_id FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000027';
+  IF v_id IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 23: expected NULL (a second blank-barcode victim of the same planted row must also stay unmatched), got %', v_id;
+  END IF;
+  RAISE NOTICE 'assertion 23 ok (second blank-barcode food, category dairy, also left unmatched against the same planted row)';
+END $a23$;
+
+DO $a24$
+DECLARE v_id UUID;
+BEGIN
+  SELECT canonical_id INTO v_id FROM public.foods WHERE id = '79600000-0000-0000-0000-000000000028';
+  IF v_id IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 24: expected NULL (whitespace-only barcode must never match either), got %', v_id;
+  END IF;
+  RAISE NOTICE 'assertion 24 ok (whitespace-only-barcode food left unmatched against the planted whitespace-barcode row)';
+END $a24$;
+
+-- =====================================================================
+-- 25. Matcher prerequisite columns (migration precondition guard).
+--
+-- 20260908000000_match_foods_to_catalog.sql opens with a DO block that
+-- RAISEs a named, specific error if foods.canonical_id or
+-- grocery_product_catalog.name_normalized/barcode are missing, rather than
+-- letting a database missing one of those (e.g. one that hasn't applied
+-- 20260906000000_canonical_food_catalog.sql yet) apply this migration
+-- cleanly and fail later, four stack frames down inside
+-- match_foods_to_catalog, with a raw "column does not exist".
+--
+-- This assertion covers the happy path: on this (fully migrated) test
+-- database, all three columns are present, which both documents the
+-- contract and proves the guard doesn't false-positive reject a normal,
+-- up-to-date schema (everything above this line already depended on that
+-- being true, but nothing said so explicitly).
+--
+-- The negative path -- the guard actually raising on a database that IS
+-- missing one of these columns -- is deliberately NOT exercised here. The
+-- guard itself is a DO block that already ran once, at migration-apply
+-- time; it is not re-checked inside match_foods_to_catalog on every call,
+-- so reproducing its raise here would mean physically dropping
+-- foods.canonical_id (or one of the catalog columns) inside this
+-- transaction. That cascades through the canonical_id FK constraint and
+-- the foods_canonical_id_idx partial index, and would break every
+-- assertion above that depends on canonical_id existing -- for a
+-- ROLLBACK-wrapped transaction, that risk buys nothing a direct read of
+-- the guard's SQL (top of 20260908000000_match_foods_to_catalog.sql)
+-- doesn't already show by inspection.
+DO $a25$
+DECLARE n INT;
+BEGIN
+  SELECT count(*) INTO n FROM information_schema.columns
+   WHERE (table_schema, table_name, column_name) IN (
+     ('public', 'foods', 'canonical_id'),
+     ('public', 'grocery_product_catalog', 'name_normalized'),
+     ('public', 'grocery_product_catalog', 'barcode')
+   );
+  IF n <> 3 THEN
+    RAISE EXCEPTION 'assertion 25: expected all 3 matcher prerequisite columns present on this migrated database, got %', n;
+  END IF;
+  RAISE NOTICE 'assertion 25 ok (matcher prerequisite columns present: foods.canonical_id, grocery_product_catalog.name_normalized/barcode)';
+END $a25$;
 
 ROLLBACK;

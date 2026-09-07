@@ -1,3 +1,42 @@
+-- US-796 precondition: fail loudly, by name, if this database is missing a
+-- column this file depends on, rather than applying cleanly and leaving
+-- match_foods_to_catalog (below) to fail later with a raw "column does not
+-- exist" four stack frames down inside a plpgsql body -- which is what
+-- happens otherwise: CREATE FUNCTION never resolves the column references
+-- in its body, so a database missing a prerequisite migration accepts this
+-- file with no error and only breaks the first time anyone actually calls
+-- the function (typically the backfill script, well after the fact, far
+-- from whichever migration was actually skipped).
+DO $precondition$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'foods' AND column_name = 'canonical_id'
+  ) THEN
+    RAISE EXCEPTION
+      'public.foods.canonical_id is missing. Apply 20260906000000_canonical_food_catalog.sql (US-793) first: this matcher writes that column and cannot work without it.'
+      USING ERRCODE = 'undefined_column';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'grocery_product_catalog' AND column_name = 'name_normalized'
+  ) THEN
+    RAISE EXCEPTION
+      'public.grocery_product_catalog.name_normalized is missing. Apply 20260505000000_smart_product_catalog.sql first: this matcher joins on that column and cannot work without it.'
+      USING ERRCODE = 'undefined_column';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'grocery_product_catalog' AND column_name = 'barcode'
+  ) THEN
+    RAISE EXCEPTION
+      'public.grocery_product_catalog.barcode is missing. Apply 20260505000000_smart_product_catalog.sql first: this matcher joins on that column and cannot work without it.'
+      USING ERRCODE = 'undefined_column';
+  END IF;
+END $precondition$;
+
 -- US-796: normalize_product_name -- the shared normalization key that lets
 -- a household's own foods be matched against the shared product catalog.
 --
@@ -43,14 +82,19 @@ $$;
 COMMENT ON FUNCTION public.normalize_product_name(text) IS
   'US-796: reproduces ProductNameNormalizer.normalize in ios/EatPal/EatPal/Models/SmartProduct.swift (lowercase, trim, collapse whitespace runs). Punctuation is intentionally preserved -- do not add punctuation stripping here without changing the Swift side first, or the catalog matcher silently stops matching.';
 
--- Expression index the catalog matcher (Task 2) needs to look up a
--- household's own unlinked foods by their normalized name. Partial on
--- canonical_id IS NULL because the matcher only ever looks at foods rows
--- that have not yet been linked to a catalog entry.
-CREATE INDEX IF NOT EXISTS foods_name_normalized_expr_idx
-  ON public.foods (public.normalize_product_name(name))
-  WHERE canonical_id IS NULL;
-
+-- No expression index on public.normalize_product_name(name) here. An
+-- earlier draft added one (a partial index WHERE canonical_id IS NULL, on
+-- the theory the matcher's name join would want it), but two things rule
+-- it out: EXPLAIN on the matcher's actual UPDATE shows the planner drives
+-- from grocery_product_catalog into foods via grocery_product_catalog's
+-- own name_normalized unique index and never touches this one, so it earns
+-- nothing; and building it would run inside this migration's single
+-- transaction, which -- see the backfill note below -- is exactly the kind
+-- of lock a live App Store client must never wait behind. It also makes
+-- every canonical_id write non-HOT and every plain foods write evaluate a
+-- non-inlinable function for no benefit. If a future profiling pass finds
+-- a real case for it, add it CONCURRENTLY, outside a migration transaction.
+--
 -- US-796 Task 2: match_foods_to_catalog -- links a household's own foods
 -- rows to the shared catalog by exact identity, and only by exact identity.
 --
@@ -66,7 +110,20 @@ CREATE INDEX IF NOT EXISTS foods_name_normalized_expr_idx
 --      see assertion 16 in the test file.
 --   2. Barcode match requires no category agreement. A barcode is the
 --      product's identity; two rows sharing one are the same product by
---      definition.
+--      definition. But BOTH sides of that comparison must be a real,
+--      non-blank barcode: an empty string (or a string that is only
+--      whitespace) is not an identity, it is the absence of one, and
+--      grocery_product_catalog's barcode column has no CHECK stopping one
+--      from being inserted (nor should it -- older rows and other paths may
+--      legitimately carry ''). Without this, a single catalog row planted
+--      with barcode = '' -- which any authenticated user can INSERT, and
+--      the partial unique index on barcode permits exactly one of --
+--      matches *every* empty-barcode food in *every* household on the next
+--      run, regardless of category: exactly the cross-category mislink
+--      rule 3 exists to prevent, walked straight around it. Empty barcodes
+--      are not hypothetical here -- src/lib/itemMergeProposals.ts
+--      defensively nulls '' and whitespace-only barcodes for this exact
+--      reason. See assertions 22-24.
 --   3. Name match additionally requires f.category = c.default_category.
 --      A name alone is not an identity -- "cheddar" as a dairy and
 --      "cheddar" as a snack are different foods, and crossing that line is
@@ -76,20 +133,40 @@ CREATE INDEX IF NOT EXISTS foods_name_normalized_expr_idx
 -- partial UNIQUE index on barcode WHERE barcode IS NOT NULL, and
 -- grocery_product_catalog_name_uq is a UNIQUE index on name_normalized (see
 -- 20260505000000_smart_product_catalog.sql). At most one catalog row can
--- ever satisfy either join condition, so ambiguity is structurally
--- impossible rather than resolved by picking one arbitrarily. A LIMIT 1
--- here would silently paper over a future violation of that invariant
--- (e.g. a unique index dropped by mistake) instead of letting the UPDATE
--- ... FROM raise "more than one row returned" the way a plain join would if
--- it tried to set the same target row from two source rows.
+-- ever satisfy either join condition, so the safety here comes from those
+-- two indexes, not from anything in this function. A LIMIT 1 would suggest
+-- there's an ambiguity being resolved, and there isn't one to resolve --
+-- worse, it would silently paper over a future violation of that invariant
+-- (e.g. one of those indexes dropped by mistake). Postgres does NOT raise
+-- "more than one row returned" for an UPDATE ... FROM that joins to more
+-- than one source row -- it silently picks one of the matches arbitrarily
+-- and proceeds. So if either unique index is ever dropped, this function's
+-- behavior doesn't change from "safe" to "loudly broken"; it changes from
+-- "safe" to "links to a random one of the duplicates, with no error, no
+-- log, nothing" -- which is the real reason those two indexes matter and
+-- why this function has no test coverage of its own for that case (there
+-- is nothing to assert against once it's silent).
 --
 -- SECURITY INVOKER, NOT DEFINER. RLS applies to whoever calls this, exactly
 -- as it would for a hand-written UPDATE against foods and
 -- grocery_product_catalog. A DEFINER function here would let any
--- authenticated user relink every other household's foods. The one-time
--- backfill below runs as the migration role, which bypasses RLS
--- legitimately (it is not a public API caller), so it can still cover every
--- household in one call.
+-- authenticated user relink every other household's foods. EXECUTE is
+-- revoked from PUBLIC below and granted only to authenticated, both so
+-- anon can never drive a full-table scan over RPC and so the RLS scoping
+-- this paragraph claims is actually exercised by a real non-superuser
+-- caller rather than only by the migration/operator role, which bypasses
+-- RLS and so proves nothing about it. See assertions 20-21 (two households,
+-- an authenticated caller who is a member of only one of them).
+--
+-- One more side effect worth naming rather than hiding: the pre-existing
+-- update_foods_updated_at trigger fires on every UPDATE this function
+-- issues, so a matched row's updated_at also changes -- the one column
+-- besides canonical_id this function does touch, and the one user-visible
+-- effect assertion 17's row-diff cannot see because it deliberately strips
+-- updated_at before comparing. That's correct for a table with a generic
+-- updated-at trigger (this function has no way to suppress it, and
+-- shouldn't try to), just documented so the next reader isn't left
+-- wondering whether it was considered.
 CREATE OR REPLACE FUNCTION public.match_foods_to_catalog(p_household_id uuid DEFAULT NULL)
 RETURNS integer
 LANGUAGE plpgsql
@@ -100,12 +177,20 @@ DECLARE
   v_barcode_matched INTEGER;
   v_name_matched INTEGER;
 BEGIN
-  -- Barcode: identity match, no category requirement.
+  -- Barcode: identity match, no category requirement -- but only a real
+  -- barcode counts as an identity. btrim(...) <> '' on BOTH sides excludes
+  -- NULL (already excluded by IS NOT NULL), '', and whitespace-only values
+  -- from ever satisfying the join, on either side of it. See the "WHY
+  -- TIMID" comment above (rule 2) for why this is load-bearing rather than
+  -- decorative.
   UPDATE public.foods f
      SET canonical_id = c.id
     FROM public.grocery_product_catalog c
    WHERE f.canonical_id IS NULL
      AND f.barcode IS NOT NULL
+     AND btrim(f.barcode) <> ''
+     AND c.barcode IS NOT NULL
+     AND btrim(c.barcode) <> ''
      AND f.barcode = c.barcode
      AND (p_household_id IS NULL OR f.household_id = p_household_id);
   GET DIAGNOSTICS v_barcode_matched = ROW_COUNT;
@@ -127,16 +212,19 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.match_foods_to_catalog(uuid) IS
-  'US-796: links household foods rows (canonical_id IS NULL) to grocery_product_catalog by exact barcode, or by normalized name AND matching category. SECURITY INVOKER so RLS scopes every call to the caller''s own household. Returns the number of rows linked. p_household_id NULL means every household.';
+  'US-796: links household foods rows (canonical_id IS NULL) to grocery_product_catalog by exact non-blank barcode, or by normalized name AND matching category. SECURITY INVOKER so RLS scopes every call to the caller''s own household -- EXECUTE is granted only to authenticated, not PUBLIC. Returns the number of rows linked. p_household_id NULL means every household the caller''s RLS allows. Also bumps updated_at on every matched row via the pre-existing update_foods_updated_at trigger. Not called by this migration -- run the operator script at supabase/diagnostics/us-796-backfill-match-foods.sql to backfill, in committed per-household batches rather than inside one migration transaction.';
 
--- One-time backfill: link whatever already qualifies under today's rules.
--- Runs as the migration role (bypasses RLS, which is legitimate here -- see
--- the function comment above), so a single NULL call covers every
--- household in one pass.
-DO $$
-DECLARE
-  v_matched INTEGER;
-BEGIN
-  SELECT public.match_foods_to_catalog() INTO v_matched;
-  RAISE NOTICE 'US-796 backfill: matched % household foods row(s) to the shared catalog', v_matched;
-END $$;
+REVOKE ALL ON FUNCTION public.match_foods_to_catalog(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.match_foods_to_catalog(uuid) TO authenticated;
+
+-- No backfill call here. Deliberately -- see
+-- supabase/diagnostics/us-796-backfill-match-foods.sql. Supabase applies a
+-- migration file as one transaction, so a backfill call (or several,
+-- batched, inside this same file) would hold row locks on every matched
+-- foods row, and the write lock the barcode/name UPDATEs need on
+-- grocery_product_catalog's indexes, from wherever it started through
+-- COMMIT at the very end of the whole migration -- blocking a live App
+-- Store client's writes to foods for the entire span. The functions above
+-- are the deliverable; when and how existing rows get backfilled is an
+-- operator decision made outside migration transactions, in commits small
+-- enough that a live write never waits behind more than one household.
