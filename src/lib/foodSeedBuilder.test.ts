@@ -9,7 +9,11 @@ const CATEGORY_AISLE = {
   // here and be admitted, rather than accidentally landing on
   // "unmapped category" for an unrelated reason.
   '11': { category: 'vegetable', aisle: 'produce' },
-};
+  // `as const` so the literals stay literals: buildSeed's categoryAisle is
+  // Record<string, AisleMapping>, whose category and aisle are unions, and a
+  // widened `string` is not assignable to either. It also means a typo in a
+  // fixture aisle is a compile error rather than a silently unmatched row.
+} as const;
 const EXCLUDED = new Set(['11']);
 
 /** Minimal shapes matching the USDA CSV columns we read. */
