@@ -492,6 +492,14 @@ jobs:
       - name: Deno AI retention flags
         run: deno test --allow-env --allow-net supabase/functions/_shared/ai-retention.test.ts
 
+      # US-797: barcode-to-catalog promotion decision (unit + range sanity,
+      # name normalization matching the shipped iOS normalizer, verification
+      # always 'unverified'). Pure, no network, no DB. This step is the fix
+      # for US-792: the test file existed for a full commit with nothing
+      # here running it.
+      - name: Deno barcode catalog promotion
+        run: deno test supabase/functions/_shared/catalogPromotion.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           # US-760: pinned, not `latest`. Both Supabase jobs run the same

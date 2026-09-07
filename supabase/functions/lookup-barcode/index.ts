@@ -1,5 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10';
+import {
+  toCatalogRow,
+  type BarcodeLookupResult,
+} from '../_shared/catalogPromotion.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +26,20 @@ interface FoodNutrition {
   fat_g?: number;
   allergens?: string[];
   source: string;
+}
+
+/**
+ * What a provider lookup returns: the client-facing shape (unchanged from
+ * before US-797, bug-for-bug -- `food.calories` still conflates kJ and kcal
+ * where it always did, see the module-level note on lookupOpenFoodFacts)
+ * alongside a separate, deliberately stricter shape for catalog promotion.
+ * catalogInput is never spread into a response; it exists only so
+ * toCatalogRow (supabase/functions/_shared/catalogPromotion.ts) can make a
+ * sound decision without inheriting the client shape's unit ambiguity.
+ */
+interface LookupResult {
+  food: FoodNutrition;
+  catalogInput: BarcodeLookupResult;
 }
 
 // Common allergens to detect in ingredients
@@ -55,7 +73,7 @@ function detectAllergensFromText(text: string): string[] {
   return Array.from(foundAllergens);
 }
 
-async function lookupOpenFoodFacts(barcode: string): Promise<FoodNutrition | null> {
+async function lookupOpenFoodFacts(barcode: string): Promise<LookupResult | null> {
   console.log(`Looking up barcode ${barcode} in Open Food Facts...`);
   
   try {
@@ -107,30 +125,60 @@ async function lookupOpenFoodFacts(barcode: string): Promise<FoodNutrition | nul
       
       const brand = (product.brands || product.brand_owner || "").split(",")[0]?.trim();
       const displayName = [brand, product.product_name || product.generic_name].filter(Boolean).join(" ");
-      
+
+      // catalog promotion (US-797) reads the same nutriments object but keeps
+      // the confirmed-kcal field (`energy-kcal_100g`) separate from the
+      // unconfirmed-unit one (`energy_value`, frequently kJ) -- see
+      // catalogPromotion.ts's module comment. The client-facing `calories`
+      // field above is left exactly as it was; this is deliberately not a
+      // fix for that field.
+      const numberOrNull = (value: unknown): number | null =>
+        typeof value === 'number' && Number.isFinite(value) ? value : null;
+
       return {
-        name: displayName || "Unknown Product",
-        category,
-        serving_size: product.serving_size || product.quantity || undefined,
-        package_quantity: product.quantity || product.product_quantity_unit || undefined,
-        servings_per_container: servingsPerContainer,
-        ingredients: product.ingredients_text || undefined,
-        calories: nutriments.energy_value || nutriments['energy-kcal_100g'] || undefined,
-        protein_g: nutriments.proteins_100g || nutriments.proteins || undefined,
-        carbs_g: nutriments.carbohydrates_100g || nutriments.carbohydrates || undefined,
-        fat_g: nutriments.fat_100g || nutriments.fat || undefined,
-        allergens: allergens.length > 0 ? allergens : undefined,
-        source: "Open Food Facts"
+        food: {
+          name: displayName || "Unknown Product",
+          category,
+          serving_size: product.serving_size || product.quantity || undefined,
+          package_quantity: product.quantity || product.product_quantity_unit || undefined,
+          servings_per_container: servingsPerContainer,
+          ingredients: product.ingredients_text || undefined,
+          calories: nutriments.energy_value || nutriments['energy-kcal_100g'] || undefined,
+          protein_g: nutriments.proteins_100g || nutriments.proteins || undefined,
+          carbs_g: nutriments.carbohydrates_100g || nutriments.carbohydrates || undefined,
+          fat_g: nutriments.fat_100g || nutriments.fat || undefined,
+          allergens: allergens.length > 0 ? allergens : undefined,
+          source: "Open Food Facts"
+        },
+        catalogInput: {
+          source: 'openfoodfacts',
+          name: displayName || null,
+          brand: brand || null,
+          allergens: allergens.length > 0 ? allergens : null,
+          caloriesKcal100: numberOrNull(nutriments['energy-kcal_100g']),
+          energyValueUnconfirmedUnit: numberOrNull(nutriments.energy_value),
+          proteinG100: numberOrNull(nutriments.proteins_100g),
+          carbsG100: numberOrNull(nutriments.carbohydrates_100g),
+          fatG100: numberOrNull(nutriments.fat_100g),
+          fiberG100: numberOrNull(nutriments.fiber_100g),
+          sugarG100: numberOrNull(nutriments.sugars_100g),
+          // OFF reports sodium_100g in grams per 100g; the catalog column is
+          // milligrams per 100g.
+          sodiumMg100:
+            numberOrNull(nutriments.sodium_100g) !== null
+              ? (nutriments.sodium_100g as number) * 1000
+              : null,
+        },
       };
     }
   } catch (error) {
     console.error("Open Food Facts lookup error:", error);
   }
-  
+
   return null;
 }
 
-async function lookupUSDA(barcode: string): Promise<FoodNutrition | null> {
+async function lookupUSDA(barcode: string): Promise<LookupResult | null> {
   if (!USDA_API_KEY) {
     console.log("USDA API key not configured, skipping...");
     return null;
@@ -152,54 +200,114 @@ async function lookupUSDA(barcode: string): Promise<FoodNutrition | null> {
         const nutrient = nutrients.find((n: any) => n.nutrientName.toLowerCase().includes(name));
         return nutrient?.value;
       };
-      
+
+      // catalog promotion (US-797): only trust a value as confirmed kcal
+      // when USDA itself labels the unit KCAL -- `getNutrient('energy')`
+      // above matches the first nutrient whose name merely contains
+      // "energy", which can be a kJ variant. The client-facing `calories`
+      // field is left exactly as it was.
+      const getKcalNutrient = (name: string): number | null => {
+        const nutrient = nutrients.find(
+          (n: any) =>
+            n.nutrientName?.toLowerCase().includes(name) &&
+            n.unitName?.toUpperCase() === 'KCAL'
+        );
+        return typeof nutrient?.value === 'number' ? nutrient.value : null;
+      };
+      // USDA's per-100g nutrients are already in the unit the catalog wants
+      // (g for macros, mg for sodium) -- unlike energy, there is no
+      // kcal-vs-kJ-style ambiguity to guard against here.
+      const getNumericNutrient = (name: string): number | null => {
+        const value = getNutrient(name);
+        return typeof value === 'number' ? value : null;
+      };
+
       return {
-        name: food.description || "Unknown Product",
-        category: food.foodCategory || "Snack",
-        serving_size: food.servingSize ? `${food.servingSize}${food.servingSizeUnit || ''}` : undefined,
-        ingredients: food.ingredients || undefined,
-        calories: getNutrient('energy'),
-        protein_g: getNutrient('protein'),
-        carbs_g: getNutrient('carbohydrate'),
-        fat_g: getNutrient('fat'),
-        allergens: undefined,
-        source: "USDA FoodData Central"
+        food: {
+          name: food.description || "Unknown Product",
+          category: food.foodCategory || "Snack",
+          serving_size: food.servingSize ? `${food.servingSize}${food.servingSizeUnit || ''}` : undefined,
+          ingredients: food.ingredients || undefined,
+          calories: getNutrient('energy'),
+          protein_g: getNutrient('protein'),
+          carbs_g: getNutrient('carbohydrate'),
+          fat_g: getNutrient('fat'),
+          allergens: undefined,
+          source: "USDA FoodData Central"
+        },
+        catalogInput: {
+          source: 'usda',
+          name: food.description || null,
+          brand: food.brandOwner || food.brandName || null,
+          allergens: null,
+          caloriesKcal100: getKcalNutrient('energy'),
+          energyValueUnconfirmedUnit: null,
+          proteinG100: getNumericNutrient('protein'),
+          carbsG100: getNumericNutrient('carbohydrate'),
+          fatG100: getNumericNutrient('fat'),
+          fiberG100: getNumericNutrient('fiber'),
+          sugarG100: getNumericNutrient('sugars'),
+          sodiumMg100: getNumericNutrient('sodium'),
+        },
       };
     }
   } catch (error) {
     console.error("USDA lookup error:", error);
   }
-  
+
   return null;
 }
 
-async function lookupFoodRepo(barcode: string): Promise<FoodNutrition | null> {
+async function lookupFoodRepo(barcode: string): Promise<LookupResult | null> {
   console.log(`Looking up barcode ${barcode} in FoodRepo...`);
-  
+
   try {
     // FoodRepo API endpoint (may need adjustment based on actual API)
     const response = await fetch(`https://www.foodrepo.org/api/v3/products/${barcode}`);
-    
+
     if (response.ok) {
       const data = await response.json();
-      
+
+      const numberOrNull = (value: unknown): number | null =>
+        typeof value === 'number' && Number.isFinite(value) ? value : null;
+
       return {
-        name: data.display_name || "Unknown Product",
-        category: "Snack",
-        serving_size: data.portion_quantity ? `${data.portion_quantity}${data.portion_unit || ''}` : undefined,
-        ingredients: undefined,
-        calories: data.nutrients?.energy_kcal || undefined,
-        protein_g: data.nutrients?.proteins || undefined,
-        carbs_g: data.nutrients?.carbohydrates || undefined,
-        fat_g: data.nutrients?.fat || undefined,
-        allergens: undefined,
-        source: "FoodRepo"
+        food: {
+          name: data.display_name || "Unknown Product",
+          category: "Snack",
+          serving_size: data.portion_quantity ? `${data.portion_quantity}${data.portion_unit || ''}` : undefined,
+          ingredients: undefined,
+          calories: data.nutrients?.energy_kcal || undefined,
+          protein_g: data.nutrients?.proteins || undefined,
+          carbs_g: data.nutrients?.carbohydrates || undefined,
+          fat_g: data.nutrients?.fat || undefined,
+          allergens: undefined,
+          source: "FoodRepo"
+        },
+        catalogInput: {
+          source: 'foodrepo',
+          name: data.display_name || null,
+          brand: data.brand || null,
+          allergens: null,
+          // FoodRepo names this field for the unit -- already confirmed kcal.
+          caloriesKcal100: numberOrNull(data.nutrients?.energy_kcal),
+          energyValueUnconfirmedUnit: null,
+          proteinG100: numberOrNull(data.nutrients?.proteins),
+          carbsG100: numberOrNull(data.nutrients?.carbohydrates),
+          fatG100: numberOrNull(data.nutrients?.fat),
+          fiberG100: numberOrNull(data.nutrients?.fibers),
+          sugarG100: numberOrNull(data.nutrients?.sugars),
+          sodiumMg100:
+            numberOrNull(data.nutrients?.sodium) !== null
+              ? (data.nutrients.sodium as number) * 1000
+              : null,
+        },
       };
     }
   } catch (error) {
     console.error("FoodRepo lookup error:", error);
   }
-  
+
   return null;
 }
 
@@ -256,7 +364,43 @@ export default async (req: Request) => {
       );
     }
 
-    // STEP 2: Check community nutrition database - second fastest
+    // STEP 2: Check the shared catalog (US-797) - a product any family
+    // already promoted from a provider lookup is found here without a third
+    // party call. Checked before the legacy `nutrition` table because it is
+    // the table iOS actually reads (see 20260906000000_canonical_food_catalog.sql).
+    console.log('Checking shared catalog for barcode...');
+    const { data: catalogFood, error: catalogError } = await supabaseClient
+      .from('grocery_product_catalog')
+      .select('*')
+      .eq('barcode', barcode)
+      .limit(1)
+      .single();
+
+    if (catalogFood && !catalogError) {
+      console.log('Found in shared catalog:', catalogFood.name);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          food: {
+            name: catalogFood.name,
+            category: catalogFood.default_category || 'Snack',
+            package_quantity: catalogFood.package_size
+              ? `${catalogFood.package_size}${catalogFood.package_unit || ''}`
+              : undefined,
+            calories: catalogFood.calories_kcal_100 ?? undefined,
+            protein_g: catalogFood.protein_g_100 ?? undefined,
+            carbs_g: catalogFood.carbs_g_100 ?? undefined,
+            fat_g: catalogFood.fat_g_100 ?? undefined,
+            allergens: catalogFood.allergens ?? undefined,
+            source: 'Community Catalog',
+            in_pantry: false,
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // STEP 3: Check community nutrition database - second fastest
     console.log('Checking nutrition database for barcode...');
     const { data: nutritionFood, error: nutritionError } = await supabaseClient
       .from('nutrition')
@@ -290,21 +434,22 @@ export default async (req: Request) => {
       );
     }
 
-    // STEP 3: Search external APIs (Open Food Facts -> USDA -> FoodRepo)
+    // STEP 4: Search external APIs (Open Food Facts -> USDA -> FoodRepo)
     console.log('Searching external APIs...');
-    let food = await lookupOpenFoodFacts(barcode);
-    
-    if (!food) {
-      food = await lookupUSDA(barcode);
-    }
-    
-    if (!food) {
-      food = await lookupFoodRepo(barcode);
+    let result = await lookupOpenFoodFacts(barcode);
+
+    if (!result) {
+      result = await lookupUSDA(barcode);
     }
 
-    if (food) {
+    if (!result) {
+      result = await lookupFoodRepo(barcode);
+    }
+
+    if (result) {
+      const { food, catalogInput } = result;
       console.log(`Found food: ${food.name} from ${food.source}`);
-      
+
       // Store in nutrition database for future quick lookups
       try {
         await supabaseClient
@@ -329,9 +474,54 @@ export default async (req: Request) => {
         // Continue anyway - the lookup succeeded
       }
 
+      // US-797: best-effort promotion to the shared catalog. THE RULE THAT
+      // OUTRANKS EVERYTHING ELSE HERE -- the caller is a parent standing in
+      // a shop adding a food, and this whole block must never change the
+      // response they get, however it fails. Everything below is
+      // try/caught and its result is logged, never returned or thrown.
+      try {
+        const catalogRow = toCatalogRow(catalogInput, barcode);
+
+        if (catalogRow) {
+          // Link to a generic parent when the normalized name matches one
+          // exactly -- no fuzzy matching. No match is a fine outcome; the
+          // row is inserted with parent_food_id left null.
+          const { data: parentRow } = await supabaseClient
+            .from('grocery_product_catalog')
+            .select('id')
+            .eq('kind', 'generic')
+            .eq('name_normalized', catalogRow.name_normalized)
+            .limit(1)
+            .maybeSingle();
+
+          // Plain insert, not an upsert targeting ON CONFLICT (barcode).
+          // grocery_product_catalog_barcode_uq is a PARTIAL unique index
+          // (WHERE barcode IS NOT NULL) -- PostgREST's on_conflict target
+          // has no way to carry that predicate, so `ON CONFLICT (barcode)`
+          // through the client would fail to infer an arbiter index and
+          // error on every insert, not just real duplicates. A concurrent
+          // second promotion of the same barcode instead hits the unique
+          // index as an ordinary 23505 error on this plain insert, which is
+          // treated below as "another family already promoted it" rather
+          // than a failure worth logging as one.
+          const { error: insertError } = await supabaseClient
+            .from('grocery_product_catalog')
+            .insert({
+              ...catalogRow,
+              parent_food_id: parentRow?.id ?? null,
+            });
+
+          if (insertError && insertError.code !== '23505') {
+            console.error('Catalog promotion insert failed (non-fatal):', insertError);
+          }
+        }
+      } catch (promotionError) {
+        console.error('Catalog promotion failed (non-fatal):', promotionError);
+      }
+
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           food: { ...food, in_pantry: false }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

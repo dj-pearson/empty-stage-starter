@@ -119,6 +119,23 @@ describe('the Build job runs the prerendering build', () => {
   });
 });
 
+/**
+ * The catalog promotion decision (US-797) actually runs in CI.
+ *
+ * catalogPromotion.test.ts landed with 15 passing cases and no workflow step
+ * running it -- exactly the failure this repo filed as US-792, where a story
+ * was recorded as passing while its own gate had never executed. A test file
+ * that exists but is never invoked is worse than no test: it reads as
+ * coverage on every PR that touches this code.
+ */
+describe('the barcode catalog promotion test runs in CI', () => {
+  const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
+
+  it('runs supabase/functions/_shared/catalogPromotion.test.ts', () => {
+    expect(ci).toContain('deno test supabase/functions/_shared/catalogPromotion.test.ts');
+  });
+});
+
 describe('the migration job runs the SQL tests', () => {
   const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
 
