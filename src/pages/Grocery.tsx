@@ -26,6 +26,7 @@ import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
 import { ScanReceiptDialog } from "@/components/ScanReceiptDialog";
 import { generateGroceryList } from "@/lib/mealPlanner";
+import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
 import { startOfWeek, endOfWeek, toISODate } from "@/lib/date-utils";
 import {
   ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
@@ -86,7 +87,7 @@ const GROCERY_CHECKBOX_CLASS = "shrink-0 h-11 w-11 sm:h-6 sm:w-6";
 
 export default function Grocery() {
   const { t } = useTranslation();
-  const { foods, addFood, updateFood } = useFoods();
+  const { foods, addFood, updateFood, catalogById } = useFoods();
   // US-672: with writes on, checkout appends purchase movements and the pantry
   // is credited by the ledger rather than by the per-item toggle.
   const { ledgerWritesEnabled, recordPurchases, recordPurchaseReversal } = useInventory();
@@ -199,6 +200,19 @@ export default function Grocery() {
     return { from: toISODate(startOfWeek(now)), to: toISODate(endOfWeek(now)) };
   }, []);
 
+  // US-795: mealPlanner.ts has no hook, so it cannot read catalogById itself
+  // -- resolve every food here and pass the map in, keyed by food id, so a
+  // regenerated grocery row shows the same catalog name/category/aisle as
+  // every other linked screen instead of this household's own spelling.
+  const effectiveFoodById = useMemo(() => {
+    const map: Record<string, EffectiveFood> = {};
+    for (const food of foods) {
+      const catalog = food.canonical_id ? catalogById[food.canonical_id] : null;
+      map[food.id] = resolveFood(food, catalog);
+    }
+    return map;
+  }, [foods, catalogById]);
+
   // US-713: sync from the meal plan, persisted.
   //
   // This used to end in setGroceryItems, which is local state only: the list
@@ -219,7 +233,7 @@ export default function Grocery() {
       : planEntries.filter(e => e.kid_id === activeKidId);
 
     // Shop for the week on screen, not for the whole 120-day context window.
-    const generated = generateGroceryList(filteredEntries, foods, shoppingWindow);
+    const generated = generateGroceryList(filteredEntries, foods, effectiveFoodById, shoppingWindow);
     if (generated.length === 0) {
       toast.info("Nothing to add", {
         description: "Every meal planned for this week is already covered by your pantry and list",
@@ -252,7 +266,7 @@ export default function Grocery() {
         : `Kept ${plan.preservedCount} existing item${plan.preservedCount === 1 ? '' : 's'}`,
     });
   }, [
-    planEntries, isFamilyMode, activeKidId, foods, shoppingWindow, groceryItems,
+    planEntries, isFamilyMode, activeKidId, foods, effectiveFoodById, shoppingWindow, groceryItems,
     selectedListId, defaultListId, deleteGroceryItems, addGroceryItemsMerged,
   ]);
 

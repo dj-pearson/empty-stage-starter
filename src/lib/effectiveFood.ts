@@ -52,8 +52,13 @@ function isFoodCategory(value: string | null): value is FoodCategory {
  * the same words for the same aisle. Do not add wording here without also
  * checking that file — a plausible-sounding guess defeats the whole point of
  * this mapping.
+ *
+ * Exported (visibility only, not a behavior change) so
+ * `effectiveFoodUsage.test.ts` can diff it against the Swift enum directly
+ * instead of carrying its own hand-copied 33-entry list that could drift the
+ * same way this map could.
  */
-const AISLE_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+export const AISLE_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   produce: 'Produce',
   bakery: 'Bakery',
   bread: 'Bread',
