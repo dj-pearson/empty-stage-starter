@@ -37,6 +37,16 @@ describe('displayName', () => {
   it('title-cases a shouted description', () => {
     expect(displayName('HUMMUS, CLASSIC')).toBe('Hummus, Classic');
   });
+  it('strips a trailing USDA distribution-program note', () => {
+    expect(displayName('Carrots, frozen, unprepared (Includes foods for USDA\'s Food Distribution Program)')).toBe('Carrots');
+    expect(displayName('Pears, raw, bartlett (Includes foods for USDA\'s Food Distribution Program)')).toBe('Pears, raw, bartlett');
+  });
+  it('does not strip a parenthetical that is part of the food name', () => {
+    expect(displayName('Bread, salvadoran sweet cheese (quesadilla salvadorena)')).toBe(
+      'Bread, salvadoran sweet cheese (quesadilla salvadorena)'
+    );
+    expect(displayName('Alcoholic beverage, rice (sake)')).toBe('Alcoholic beverage, rice (sake)');
+  });
 });
 
 describe('buildSeed', () => {
@@ -76,5 +86,41 @@ describe('buildSeed', () => {
     });
     expect(out.rows).toHaveLength(0);
     expect(out.dropped[0].reason).toMatch(/bounds|range/i);
+  });
+  it('strips the USDA program note before resolving collisions, and reports the resulting collision', () => {
+    const out = buildSeed({
+      foods: [
+        { fdc_id: '10', data_type: 'sr_legacy_food', description: 'Carrots, raw', food_category_id: '9' },
+        { fdc_id: '11', data_type: 'sr_legacy_food', description: "Carrots, frozen, unprepared (Includes foods for USDA's Food Distribution Program)", food_category_id: '9' },
+      ],
+      nutrients: [
+        { fdc_id: '10', nutrient_id: '1008', amount: '41' },
+        { fdc_id: '11', nutrient_id: '1008', amount: '41' },
+      ],
+      categoryAisle: CATEGORY_AISLE, excluded: EXCLUDED,
+    });
+    // Both reduce to displayName "Carrots" once the program note and the
+    // trailing prep clauses are stripped, so exactly one survives.
+    expect(out.rows).toHaveLength(1);
+    expect(out.rows[0].name_normalized).toBe('carrots');
+    expect(out.dropped.some(d => /collision|duplicate/i.test(d.reason))).toBe(true);
+  });
+  it('drops a Title-Case (not ALLCAPS) curated brand name as generic', () => {
+    const out = buildSeed({
+      foods: [{ fdc_id: '12', data_type: 'sr_legacy_food', description: 'Pillsbury, Cinnamon Rolls with Icing, refrigerated dough', food_category_id: '9' }],
+      nutrients: [{ fdc_id: '12', nutrient_id: '1008', amount: '350' }],
+      categoryAisle: CATEGORY_AISLE, excluded: EXCLUDED,
+    });
+    expect(out.rows).toHaveLength(0);
+    expect(out.dropped[0].reason).toMatch(/brand/i);
+  });
+  it('does not drop a legitimate two-word Title-Case food name as a brand', () => {
+    const out = buildSeed({
+      foods: [{ fdc_id: '13', data_type: 'sr_legacy_food', description: 'Turkey Pot Pie, frozen entree', food_category_id: '9' }],
+      nutrients: [{ fdc_id: '13', nutrient_id: '1008', amount: '210' }],
+      categoryAisle: CATEGORY_AISLE, excluded: EXCLUDED,
+    });
+    expect(out.rows).toHaveLength(1);
+    expect(out.dropped).toHaveLength(0);
   });
 });

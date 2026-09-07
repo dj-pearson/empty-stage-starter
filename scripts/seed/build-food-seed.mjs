@@ -99,17 +99,28 @@ function isDroppableTrailingClause(clause) {
   return false;
 }
 
+// USDA appends this exact parenthetical to ~57 rows across both exports,
+// always as the last thing in the description ("Pears, raw, bartlett
+// (Includes foods for USDA's Food Distribution Program)"). It's a
+// commodity-distribution-program annotation, not part of what the food is
+// called -- deliberately narrow (matches only this clause) rather than
+// stripping parentheses generally, because real food names use them too
+// ("Bread, salvadoran sweet cheese (quesadilla salvadorena)", "Alcoholic
+// beverage, rice (sake)").
+const USDA_PROGRAM_NOTE_RE = /\s*\(Includes foods for[^)]*\)\s*$/i;
+
 /**
- * Human display name for a USDA description: strips a run of trailing
- * preparation clauses ("raw", "without peel", ...) and title-cases a
- * shouted ("HUMMUS, CLASSIC") description. Never returns an empty string --
- * at least one clause (the base food name) always survives.
+ * Human display name for a USDA description: strips a trailing USDA
+ * distribution-program note, strips a run of trailing preparation clauses
+ * ("raw", "without peel", ...), and title-cases a shouted ("HUMMUS,
+ * CLASSIC") description. Never returns an empty string -- at least one
+ * clause (the base food name) always survives.
  *
  * @param {string} description
  * @returns {string}
  */
 export function displayName(description) {
-  let s = description.trim();
+  let s = description.trim().replace(USDA_PROGRAM_NOTE_RE, '').trim();
 
   // "Shouted" = every letter is uppercase (and there is at least one
   // letter, so a name with no cased characters at all doesn't count).
@@ -255,6 +266,73 @@ function findBrandToken(description) {
     if (w !== w.toUpperCase() || w === w.toLowerCase()) continue; // not all-caps (or no letters)
     if (BRAND_TOKEN_EXEMPTIONS.has(w)) continue;
     return w;
+  }
+  return null;
+}
+
+/**
+ * Manufacturer/brand names that lead a description in Title Case rather
+ * than ALL-CAPS, so findBrandToken misses them entirely -- "Pillsbury,
+ * Cinnamon Rolls with Icing, refrigerated dough" reads as a perfectly
+ * plausible generic food to that filter. Round 1 review caught 36 of these
+ * seeded as kind='generic', source='usda', verification='verified', which
+ * is exactly the confusion US-793's generic/branded split exists to
+ * prevent (a specific Pillsbury product is not a food category; it belongs
+ * in a *branded* catalog row with a barcode, per US-797).
+ *
+ * DERIVATION, not memory: built from a frequency scan of all ~8,200 real
+ * (foundation_food / sr_legacy_food) rows' leading, pre-first-comma clause
+ * (scripts/seed/_brand_scan.mjs and _brand_scan2.mjs, not committed --
+ * see task-2-report.md for the full candidate output). The obvious
+ * structural heuristic -- two or more consecutive Title-Case words at the
+ * start of a name -- was tried and rejected: tested against this file's
+ * own output it was ~78% precision, throwing away real foods like "New
+ * Zealand spinach", "Turkey Pot Pie, frozen entree", "Sweet Potato
+ * puffs", and "Margarine Spread, 40-49% fat, tub". A hand-curated,
+ * hand-editable table is the correct answer for something only a person
+ * can adjudicate -- same shape as Task 1's CATEGORY_AISLE.
+ *
+ * Each entry is matched as a prefix of the raw description (case-sensitive,
+ * word-boundary-anchored -- see findKnownBrandName), so the shortest string
+ * that's unique to the brand is enough; no need to enumerate every product
+ * line ("Pillsbury" alone also catches "Pillsbury Grands, ..." and
+ * "Pillsbury Golden Layer Buttermilk Biscuits, ...").
+ */
+export const BRAND_NAMES = [
+  'Archway', // cookies, category 18 (Baked Products)
+  'Oscar Mayer', // lunch meats, category 7
+  'Pillsbury', // refrigerated dough/baked goods, category 18
+  'George Weston Bakeries', // English muffins, stuffing mix, category 18
+  'Martha White Foods', // baking mixes, category 18
+  'Nabisco', // crackers/cookies, category 18
+  'Kraft', // Stove Top, Shake N Bake, etc, category 18
+  'Hormel', // sliced meats, category 7
+  'Lean Pockets', // frozen entrees, category 22
+  'Reddi Wip', // whipped topping, category 1
+  'Interstate Brands Corp', // hamburger rolls, category 18
+  'Sage Valley', // gluten-free cookies, category 18
+  'Glutino', // gluten-free cookies/wafers, category 18
+  "Udi's", // gluten-free bread, category 18
+  'Schar', // gluten-free bread, category 18
+  "Van's", // gluten-free pancakes/waffles/crackers, category 18
+  'Pepperidge Farm', // Goldfish crackers, category 18
+  "Mary's Gone Crackers", // gluten-free crackers, category 18
+  'Mckee Baking', // Little Debbie, category 18 (capitalization as USDA has it)
+  'Continental Mills', // Krusteaz muffin mix, category 18
+  'Mission Foods', // flour tortillas, category 18
+  'Clif', // Clif Kid Zbar, category 3 (Baby Foods) -- "Clif Z bar"
+  "Andrea's", // gluten-free dinner roll, category 18
+  "Rudi's", // gluten-free bakery bread, category 18
+];
+
+function escapeRegExpLiteral(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findKnownBrandName(description) {
+  for (const brand of BRAND_NAMES) {
+    const re = new RegExp('^' + escapeRegExpLiteral(brand) + "(?![A-Za-z0-9'])");
+    if (re.test(description)) return brand;
   }
   return null;
 }
@@ -416,6 +494,12 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
       continue;
     }
 
+    const knownBrand = findKnownBrandName(description);
+    if (knownBrand) {
+      dropped.push({ fdc_id, description, reason: `brand name (curated list: "${knownBrand}") -- belongs in a branded catalog row, not generic` });
+      continue;
+    }
+
     const clauseCount = description.split(',').length;
     if (clauseCount > MAX_QUALIFIER_CLAUSES) {
       dropped.push({ fdc_id, description, reason: `too many qualifier clauses (${clauseCount} > ${MAX_QUALIFIER_CLAUSES}) -- too narrow a lab variant for a family catalog` });
@@ -463,6 +547,18 @@ export function buildSeed({ foods, nutrients, categoryAisle, excluded }) {
   // sparser duplicate is usually the lower-quality sample of the pair.
   // Secondary tie-break, only when nutrient completeness is equal: keep the
   // shorter original description (the plainer food).
+  //
+  // DO NOT "fix" this back to shorter-description-only. This exact
+  // question came up during review: the task brief's prose said "keep the
+  // shorter description," but its own verbatim fixture requires keeping
+  // fdc 1 ("Lemons, raw, without peel", 25 chars, 2 nutrient facts) over
+  // fdc 5 ("Lemons, raw", 11 chars, 1 nutrient fact) once both reduce to
+  // displayName "Lemons" -- the shorter one loses. Nutrient-completeness-
+  // first is not a workaround to pass that test; it's the better rule on
+  // its own terms (a row with full macros is worth more to the catalog
+  // than a row with a shorter name) and it happens to resolve the brief's
+  // internal contradiction correctly. Length remains the tie-break only
+  // when nutrient completeness ties.
   const byKey = new Map();
   for (const c of candidates) {
     let group = byKey.get(c.name_normalized);
