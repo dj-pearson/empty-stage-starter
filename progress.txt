@@ -2095,3 +2095,15 @@ Seven stories in one pass.
     Assert the fixture rendered before believing any result derived from it.
   - An assertion that passes against the broken build is not a test. Run every
     new gate against the code it is supposed to catch, before the fix.
+
+## prd-verify — CI verification pass (prd.json, ref 8b964ab6165c286632d032115eceb8ac81be50fd)
+- Gates: web=success, ios=success, android=success.
+- Flipped passes=true (gate green + implementation present): US-767, US-772, US-782, US-792, US-793, US-794, US-795, US-796, US-797, US-806, US-807, US-808.
+- Held false: 32 (breakdown {"manual-signoff-required":15,"awaiting-implementation":17,"verified":12}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
+
+## prd-verify — CI verification pass (prd-kitchen-loop.json, ref 8b964ab6165c286632d032115eceb8ac81be50fd)
+- Gates: web=success, ios=success, android=success.
+- Flipped passes=true (gate green + implementation present): US-662, US-672.
+- Held false: 19 (breakdown {"awaiting-implementation":19,"verified":2}). Manual/ops stories never auto-flip; net-new stories await implementation; gate-red stories await a green CI run.
+---
