@@ -120,19 +120,27 @@ describe('the Build job runs the prerendering build', () => {
 });
 
 /**
- * The catalog promotion decision (US-797) actually runs in CI.
+ * Every Deno test in the deployed edge-function tree actually runs in CI.
  *
- * catalogPromotion.test.ts landed with 15 passing cases and no workflow step
- * running it -- exactly the failure this repo filed as US-792, where a story
- * was recorded as passing while its own gate had never executed. A test file
- * that exists but is never invoked is worse than no test: it reads as
- * coverage on every PR that touches this code.
+ * catalogPromotion.test.ts (US-797) landed with 15 passing cases and no
+ * workflow step running it -- exactly the failure this repo filed as US-792,
+ * where a story was recorded as passing while its own gate had never executed.
+ * A test file that exists but is never invoked is worse than no test: it reads
+ * as coverage on every PR that touches this code.
+ *
+ * Enumerated rather than named one file at a time, so the next test added to
+ * _shared/ cannot repeat it by simply not being listed here.
  */
-describe('the barcode catalog promotion test runs in CI', () => {
+describe('the edge-function Deno tests run in CI', () => {
   const ci = readFileSync(path.join(process.cwd(), '.github', 'workflows', 'ci.yml'), 'utf8');
+  const sharedDir = path.join(process.cwd(), 'supabase', 'functions', '_shared');
 
-  it('runs supabase/functions/_shared/catalogPromotion.test.ts', () => {
-    expect(ci).toContain('deno test supabase/functions/_shared/catalogPromotion.test.ts');
+  it('invokes every supabase/functions/_shared/*.test.ts', () => {
+    const unwired = readdirSync(sharedDir)
+      .filter((f) => f.endsWith('.test.ts'))
+      .filter((f) => !ci.includes(`supabase/functions/_shared/${f}`));
+
+    expect(unwired).toEqual([]);
   });
 });
 
