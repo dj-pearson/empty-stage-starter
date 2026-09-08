@@ -12,7 +12,7 @@ import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
 import { QuickLogModal } from "@/components/QuickLogModal";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, LogOut, Menu, Trophy } from "lucide-react";
+import { Moon, Sun, LogOut, Menu } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
@@ -29,45 +29,26 @@ import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { User } from "@supabase/supabase-js";
 import {
-  Home,
   Utensils,
   Calendar,
   ShoppingCart,
-  Users,
-  BarChart3,
-  ChefHat,
-  Target,
-  Bot,
   Sparkles,
-  TrendingUp,
-  Shield,
   MoreHorizontal,
   ClipboardList,
-  Plus,
-  Settings,
-  Accessibility,
 } from "lucide-react";
-
-const mobileNavItems = [
-  { to: "/dashboard", icon: Home, label: "Home" },
-  { to: "/dashboard/kids", icon: Users, label: "Kids" },
-  { to: "/dashboard/pantry", icon: Utensils, label: "Pantry" },
-  { to: "/dashboard/recipes", icon: ChefHat, label: "Recipes" },
-  { to: "/dashboard/planner", icon: Calendar, label: "Planner" },
-  { to: "/dashboard/grocery", icon: ShoppingCart, label: "Grocery" },
-  { to: "/dashboard/food-tracker", icon: Target, label: "Food Tracker" },
-  { to: "/dashboard/ai-coach", icon: Bot, label: "AI Coach" },
-  { to: "/dashboard/meal-builder", icon: Sparkles, label: "Meal Builder" },
-  { to: "/dashboard/food-chaining", icon: TrendingUp, label: "Food Chaining" },
-  { to: "/dashboard/insights", icon: TrendingUp, label: "Insights" },
-  { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
-  { to: "/dashboard/progress", icon: Trophy, label: "Progress" },
-  { to: "/dashboard/settings", icon: Settings, label: "Account Settings" },
-];
+import { useNavEntitlements } from "@/hooks/useNavEntitlements";
+import {
+  NAV_GROUP_LABELS,
+  NAV_GROUP_ORDER,
+  isIndexRoute,
+  navItemsInGroup,
+  primaryNavItems,
+  secondaryNavItems,
+} from "@/lib/navigation";
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const entitlements = useNavEntitlements();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickLogOpen, setQuickLogOpen] = useState(false);
@@ -121,39 +102,18 @@ const Dashboard = () => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        setUser(session.user);
-        // Defer admin check to avoid deadlock
-        setTimeout(() => {
-          checkAdminStatus(session.user.id);
-        }, 0);
-      } else {
-        setUser(null);
-        setIsAdmin(false);
-      }
+      setUser(session ? session.user : null);
     });
 
     // Get current session for initial render
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setUser(session.user);
-        checkAdminStatus(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const checkAdminStatus = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    setIsAdmin(!!data);
-  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -162,10 +122,6 @@ const Dashboard = () => {
   };
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
-
-  const navItemsWithAdmin = isAdmin
-    ? [...mobileNavItems, { to: "/admin", icon: Shield, label: "Admin" }]
-    : mobileNavItems;
 
   const quickActions = [
     {
@@ -330,110 +286,45 @@ const Dashboard = () => {
                       <KidSelector />
                     </div>
 
-                    {/* Main Navigation Section */}
-                    <div className="mb-2">
-                      <p className="text-xs font-medium text-muted-foreground mb-2 px-2">MAIN</p>
-                      {navItemsWithAdmin.slice(0, 5).map(({ to, icon: Icon, label }) => (
-                        <NavLink
-                          key={to}
-                          to={to}
-                          end={to === "/dashboard"}
-                          onClick={closeMobileMenu}
-                          className={({ isActive }) =>
-                            cn(
-                              "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
-                              isActive
-                                ? "bg-primary/10 text-primary font-medium shadow-sm"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )
-                          }
-                        >
-                          <Icon className="h-5 w-5 shrink-0" />
-                          <span className="text-base">{label}</span>
-                        </NavLink>
-                      ))}
-                    </div>
+                    {/*
+                      Every section from the one registry (US-811). The old
+                      slices put Grocery under TOOLS and rendered Account
+                      Settings twice, once from the tools slice and once from
+                      the settings block below it.
+                    */}
+                    {NAV_GROUP_ORDER.map((group) => {
+                      const items = navItemsInGroup(group, entitlements);
+                      if (items.length === 0) return null;
 
-                    {/* Tools Section */}
-                    {navItemsWithAdmin.length > 5 && (
-                      <div className="mb-2">
-                        <p className="text-xs font-medium text-muted-foreground mb-2 px-2 mt-4">TOOLS</p>
-                        {navItemsWithAdmin.slice(5, navItemsWithAdmin.length - (isAdmin ? 1 : 0)).map(({ to, icon: Icon, label }) => (
-                          <NavLink
-                            key={to}
-                            to={to}
-                            onClick={closeMobileMenu}
-                            className={({ isActive }) =>
-                              cn(
-                                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
-                                isActive
-                                  ? "bg-primary/10 text-primary font-medium shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                              )
-                            }
-                          >
-                            <Icon className="h-5 w-5 shrink-0" />
-                            <span className="text-base">{label}</span>
-                          </NavLink>
-                        ))}
-                      </div>
-                    )}
+                      return (
+                        <div key={group} className="mb-2">
+                          <p className="text-xs font-medium text-muted-foreground mb-2 px-2 mt-4">
+                            {NAV_GROUP_LABELS[group].toUpperCase()}
+                          </p>
+                          {items.map(({ to, icon: Icon, label }) => (
+                            <NavLink
+                              key={to}
+                              to={to}
+                              end={isIndexRoute(to)}
+                              onClick={closeMobileMenu}
+                              className={({ isActive }) =>
+                                cn(
+                                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
+                                  isActive
+                                    ? "bg-primary/10 text-primary font-medium shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                )
+                              }
+                            >
+                              <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                              <span className="text-base">{label}</span>
+                            </NavLink>
+                          ))}
+                        </div>
+                      );
+                    })}
 
-                    {/* Admin Section */}
-                    {isAdmin && (
-                      <div className="mb-2">
-                        <p className="text-xs font-medium text-muted-foreground mb-2 px-2 mt-4">ADMIN</p>
-                        <NavLink
-                          to="/admin"
-                          onClick={closeMobileMenu}
-                          className={({ isActive }) =>
-                            cn(
-                              "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
-                              isActive
-                                ? "bg-primary/10 text-primary font-medium shadow-sm"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )
-                          }
-                        >
-                          <Shield className="h-5 w-5 shrink-0" />
-                          <span className="text-base">Admin</span>
-                        </NavLink>
-                      </div>
-                    )}
-
-                    {/* Settings Section */}
                     <div className="mt-6 pt-6 border-t space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground mb-2 px-2">SETTINGS</p>
-                      <NavLink
-                        to="/dashboard/settings"
-                        onClick={closeMobileMenu}
-                        className={({ isActive }) =>
-                          cn(
-                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
-                            isActive
-                              ? "bg-primary/10 text-primary font-medium shadow-sm"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                          )
-                        }
-                      >
-                        <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
-                        <span className="text-base">Account Settings</span>
-                      </NavLink>
-                      <NavLink
-                        to="/dashboard/accessibility-settings"
-                        onClick={closeMobileMenu}
-                        className={({ isActive }) =>
-                          cn(
-                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
-                            isActive
-                              ? "bg-primary/10 text-primary font-medium shadow-sm"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                          )
-                        }
-                      >
-                        <Accessibility className="h-5 w-5 shrink-0" aria-hidden="true" />
-                        <span className="text-base">Accessibility</span>
-                      </NavLink>
                       <Button
                         variant="outline"
                         size="lg"
@@ -484,11 +375,11 @@ const Dashboard = () => {
         {/* Mobile Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom" aria-label="Primary mobile navigation">
           <div className="flex justify-around items-center h-16 pb-[env(safe-area-inset-bottom)]">
-            {mobileNavItems.slice(0, 4).map(({ to, icon: Icon, label }) => (
+            {primaryNavItems(entitlements).map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
-                end={to === "/dashboard"}
+                end={isIndexRoute(to)}
                 className={({ isActive }) =>
                   cn(
                     "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors active:scale-95 min-w-[64px]",
@@ -498,7 +389,7 @@ const Dashboard = () => {
                   )
                 }
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5" aria-hidden="true" />
                 <span className="text-[11px] sm:text-xs leading-tight text-center">{label}</span>
               </NavLink>
             ))}
@@ -528,7 +419,13 @@ const Dashboard = () => {
                 </SheetHeader>
                 <div className="flex-1 overflow-y-auto py-4">
                   <div className="grid grid-cols-2 gap-3 pb-safe">
-                    {mobileNavItems.slice(4).map(({ to, icon: Icon, label }) => (
+                    {/*
+                      The complement of the bottom bar, so a destination can
+                      never be missing from both (US-811). Admin and the
+                      Professional Portal come through the same filter rather
+                      than as appended special cases.
+                    */}
+                    {secondaryNavItems(entitlements).map(({ to, icon: Icon, label }) => (
                       <NavLink
                         key={to}
                         to={to}
@@ -543,31 +440,11 @@ const Dashboard = () => {
                         }
                       >
                         <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                          <Icon className="h-6 w-6" />
+                          <Icon className="h-6 w-6" aria-hidden="true" />
                         </div>
                         <span className="text-sm text-center leading-tight">{label}</span>
                       </NavLink>
                     ))}
-
-                    {isAdmin && (
-                      <NavLink
-                        to="/admin"
-                        onClick={() => setMoreMenuOpen(false)}
-                        className={({ isActive }) =>
-                          cn(
-                            "flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all active:scale-95",
-                            isActive
-                              ? "bg-primary/10 border-primary text-primary font-medium shadow-sm"
-                              : "border-border hover:border-primary/50 hover:bg-muted"
-                          )
-                        }
-                      >
-                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                          <Shield className="h-6 w-6" />
-                        </div>
-                        <span className="text-sm text-center leading-tight">Admin</span>
-                      </NavLink>
-                    )}
                   </div>
                 </div>
               </SheetContent>

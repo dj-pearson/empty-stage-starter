@@ -3748,6 +3748,28 @@
       "platform": "ios",
       "loopVerifiable": false,
       "notes": "Audit 2026-09-08 (iOS first-run brainstorm): iOS emits no onboarding events at all; MainTabView only calls AnalyticsService.screen on tab switches. Web fires all three from src/pages/Onboarding.tsx:80. Routing them into funnel_events is US-707 and stays web-scoped. Independent of US-704 only in review order; the events fire from the flow US-704 builds."
+    },
+    {
+      "id": "US-811",
+      "title": "One navigation list, consumed by every renderer",
+      "description": "As someone using EatPal on a phone, I want the things I open daily on the bottom bar and everything else somewhere findable, so that planning a meal is not three taps behind a More menu.",
+      "acceptanceCriteria": [
+        "A single src/lib/navigation.ts holds every in-app destination with its group, icon and entitlement; the four hand-maintained arrays (mainNavItems, toolsNavItems, insightsNavItems in AppSidebar.tsx and mobileNavItems in Dashboard.tsx) are deleted",
+        "The mobile bottom bar is Home, Planner, Pantry, Grocery, matching the iOS tab bar in MainTabView.swift so the two platforms agree on what is primary; Recipes previously held a slot while Planner and Grocery sat behind More",
+        "The More sheet is defined as the complement of the bottom bar, so a new destination is either primary or in More and can never be missing from both",
+        "The hamburger sheet renders the same groups as the desktop sidebar; Grocery is no longer filed under Tools and Account Settings no longer appears twice on one sheet",
+        "/dashboard/insights (previously in the mobile list and no desktop group) and /dashboard/household (previously in neither, reachable only from a dialog and the /join page) are both in the nav",
+        "Admin and Professional Portal come through one entitlement filter rather than being appended as special cases; a shared useNavEntitlements hook replaces the duplicated queries, so the Professional Portal exists on mobile as well as desktop",
+        "The kid selector renders once; it was in both the sidebar header and the dashboard top header, visible twice whenever the sidebar was expanded",
+        "A test pins the contract the way routeAliases.test.ts does: no duplicate routes or labels, exactly four primary items in iOS order, primary and secondary partitioning every item, and every relative child route in App.tsx having a nav entry",
+        "No new test failures against the branch point"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-07 (UX deep dive): three renderers sliced one array three ways. Bottom bar was mobileNavItems.slice(0, 4) = Home, Kids, Pantry, Recipes; the hamburger's MAIN was slice(0, 5) and its TOOLS ran slice(5, length - (isAdmin ? 1 : 0)), which both filed Grocery under Tools and duplicated Account Settings. None of it is visible in a single-file diff, which is why the fix ships with a test that reads App.tsx for orphan routes. CommandPalette.tsx keeps its own destination list with custom labels and keywords; folding it into the registry is follow-up, not this story."
     }
   ]
 }
