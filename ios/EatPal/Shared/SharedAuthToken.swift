@@ -31,8 +31,9 @@ public struct SharedAuthToken: Codable, Equatable {
         self.expiresAt = expiresAt
     }
 
-    /// Tokens are treated as expired slightly early: a token with four seconds
-    /// left will not survive the request it is about to be attached to.
+    /// Tokens are treated as expired half a minute early: a token with seconds
+    /// left will not survive the request it is about to be attached to, which
+    /// runs a page fetch and a Claude call and can take 30 to 45 seconds.
     public static let expiryLeeway: TimeInterval = 30
 
     public func isUsable(at now: Date = Date()) -> Bool {

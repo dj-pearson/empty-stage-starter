@@ -234,8 +234,21 @@ async function lookupUSDA(barcode: string): Promise<LookupResult | null> {
       const food = data.foods[0];
       const nutrients = food.foodNutrients || [];
       
+      // Only the three fields we read. These are USDA's claims about its own
+      // payload, not verified facts -- every field is optional because a
+      // provider can answer 200 with anything, and the catalog callers below
+      // re-check the value with `typeof` before storing it. Validating the
+      // whole envelope is US-805's job, not this type's.
+      interface UsdaNutrient {
+        nutrientName?: string;
+        unitName?: string;
+        value?: number;
+      }
+
       const getNutrient = (name: string) => {
-        const nutrient = nutrients.find((n: any) => n.nutrientName.toLowerCase().includes(name));
+        const nutrient = (nutrients as UsdaNutrient[]).find((n) =>
+          n.nutrientName?.toLowerCase().includes(name)
+        );
         return nutrient?.value;
       };
 
@@ -245,8 +258,8 @@ async function lookupUSDA(barcode: string): Promise<LookupResult | null> {
       // "energy", which can be a kJ variant. The client-facing `calories`
       // field is left exactly as it was.
       const getKcalNutrient = (name: string): number | null => {
-        const nutrient = nutrients.find(
-          (n: any) =>
+        const nutrient = (nutrients as UsdaNutrient[]).find(
+          (n) =>
             n.nutrientName?.toLowerCase().includes(name) &&
             n.unitName?.toUpperCase() === 'KCAL'
         );
