@@ -5,7 +5,9 @@ import {
   assertEquals,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+  catalogSourceLabel,
   normalizeProductName,
+  OWN_CATALOG_LABEL,
   toCatalogRow,
   type BarcodeLookupResult,
 } from './catalogPromotion.ts';
@@ -266,4 +268,45 @@ Deno.test('verification stays unverified even for a fully well-formed, high-conf
   assertEquals(row.verification, 'unverified');
   assert(!('verified_at' in row));
   assert(!('verified_by' in row));
+});
+
+// US-808: the licence travels with the data. A row promoted out of Open Food
+// Facts is still ODbL data once it is in our catalog, and lookup-barcode
+// resolves the client's attribution notice from the string these return -- so
+// naming a promoted row after the table rather than the provider erased the
+// notice entirely.
+
+Deno.test('a promoted row is named after the provider it came from', () => {
+  assertEquals(catalogSourceLabel('openfoodfacts'), 'Open Food Facts');
+  assertEquals(catalogSourceLabel('usda'), 'USDA FoodData Central');
+  assertEquals(catalogSourceLabel('foodrepo'), 'FoodRepo');
+});
+
+Deno.test('a row we own keeps the catalog name and needs no attribution', () => {
+  for (const source of ['user', 'admin']) {
+    assertEquals(catalogSourceLabel(source), OWN_CATALOG_LABEL);
+  }
+});
+
+Deno.test('a missing or unrecognized source falls back to the catalog name', () => {
+  // Rows predate the source column, and a future migration could widen the
+  // CHECK constraint. Neither should produce an empty or undefined source
+  // string on the client.
+  assertEquals(catalogSourceLabel(null), OWN_CATALOG_LABEL);
+  assertEquals(catalogSourceLabel(undefined), OWN_CATALOG_LABEL);
+  assertEquals(catalogSourceLabel(''), OWN_CATALOG_LABEL);
+  assertEquals(catalogSourceLabel('some-provider-added-later'), OWN_CATALOG_LABEL);
+});
+
+Deno.test('every LookupSource a promotion can carry resolves to a named provider', () => {
+  // toCatalogRow only ever writes a LookupSource, so each one must be a
+  // provider we credit -- never the fallback.
+  for (const source of ['openfoodfacts', 'usda', 'foodrepo'] as const) {
+    const row = toCatalogRow(offResult({ source }), BARCODE);
+    assert(row !== null);
+    assert(
+      catalogSourceLabel(row.source) !== OWN_CATALOG_LABEL,
+      `${source} promoted a row that would render with no attribution`,
+    );
+  }
 });

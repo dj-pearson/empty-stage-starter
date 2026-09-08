@@ -3656,6 +3656,24 @@
       "platform": "ios",
       "notes": "Second half of the US-806 fix. Needs an App Store release, which is why the server change went first. Token TTL is about an hour, so a share attempt made long after the app was last opened still lands on the anon path - acceptable while US-806's budget exists, and the reason that budget cannot be retired until this has shipped and aged past the min supported build.",
       "loopVerifiable": false
+    },
+    {
+      "id": "US-808",
+      "title": "A catalog row keeps the licence of the data it was promoted from",
+      "description": "As a parent looking at a scanned product, I want to see where its numbers came from, so that the sources we rely on are credited as their licences require.",
+      "acceptanceCriteria": [
+        "A shared-catalog hit in lookup-barcode reports the provider the row was promoted from, not the table it now lives in",
+        "grocery_product_catalog.source values 'openfoodfacts' and 'foodrepo' resolve to an ODbL attribution; 'usda' resolves to a public-domain credit with no licence line",
+        "'user', 'admin', a missing source and an unrecognized one all fall back to the catalog's own name and need no notice",
+        "getDataSourceAttribution accepts both vocabularies - the display name and the lowercase provenance key - so a surface holding only the raw column can still attribute correctly",
+        "The two copies of the map (edge and web) are pinned in agreement by a test, since neither tree can import the other",
+        "A test reads gpc_source_check and asserts every value the column can legally hold either names a credited third party or names our own catalog"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "backend",
+      "notes": "Found 2026-09-08 by dispatching Web CI at claude/food-catalog-barcode by hand; ci.yml runs on main and develop only, so the branch had never measured itself. src/lib/dataSources.test.ts was already red: US-797 introduced a second source vocabulary and the scrape-based guard picked up both out of one file. The real defect underneath was not the test - lookup-barcode answered a catalog hit with a flat source: 'Community Catalog' (index.ts:620), and the client resolves its attribution notice from that string, so a row promoted out of Open Food Facts rendered with no ODbL line at all while its provenance sat unused in the column. Same shape as the aisle vocabulary split recorded on US-795: an iOS/DB vocabulary and a web display vocabulary meeting in one file.",
+      "loopVerifiable": true
     }
   ]
 }

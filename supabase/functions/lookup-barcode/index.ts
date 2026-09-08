@@ -4,6 +4,7 @@ import {
   type SupabaseClient,
 } from 'https://esm.sh/@supabase/supabase-js@2.47.10';
 import {
+  catalogSourceLabel,
   normalizeProductName,
   toCatalogRow,
   type BarcodeLookupResult,
@@ -617,7 +618,14 @@ export default async (req: Request) => {
             // but-unverified row's calories/macros look exactly as trusted
             // as a verified one.
             verification: catalogFood.verification,
-            source: 'Community Catalog',
+            // US-808: name the third party the row was promoted from, not the
+            // table it now lives in. Open Food Facts and FoodRepo data is
+            // ODbL, and the licence follows the data into the catalog -- a
+            // row returned as 'Community Catalog' rendered with no
+            // attribution at all, because the client resolves the notice from
+            // this string. Rows we own ('user', 'admin', or no source) keep
+            // the catalog's own name and need no notice.
+            source: catalogSourceLabel(catalogFood.source),
             in_pantry: false,
           }
         }),

@@ -52,6 +52,35 @@
 export type LookupSource = 'openfoodfacts' | 'usda' | 'foodrepo';
 
 /**
+ * US-808: how a catalog row's provenance is named to a user.
+ *
+ * The licence travels with the data. Open Food Facts and FoodRepo are ODbL,
+ * which obliges attribution wherever the data is shown, and a row promoted
+ * into `grocery_product_catalog` is still their data. Returning such a row as
+ * "Community Catalog" erased that: the client resolves its attribution notice
+ * from this string (src/lib/dataSources.ts), so an erased source rendered no
+ * notice at all.
+ *
+ * Keys are the values gpc_source_check allows on the column. 'user' and
+ * 'admin' are ours and are absent deliberately -- they fall through to the
+ * catalog's own name. src/lib/dataSources.ts holds the web's copy of this map;
+ * src/lib/dataSources.test.ts pins the two in agreement.
+ */
+const CATALOG_SOURCE_LABELS: Record<string, string> = {
+  openfoodfacts: 'Open Food Facts',
+  usda: 'USDA FoodData Central',
+  foodrepo: 'FoodRepo',
+};
+
+export const OWN_CATALOG_LABEL = 'Community Catalog';
+
+/** The display name for a `grocery_product_catalog.source` value. */
+export function catalogSourceLabel(source?: string | null): string {
+  if (!source) return OWN_CATALOG_LABEL;
+  return CATALOG_SOURCE_LABELS[source] ?? OWN_CATALOG_LABEL;
+}
+
+/**
  * The input to toCatalogRow. Deliberately flat rather than mirroring each
  * provider's raw response shape (Open Food Facts' `nutriments`, USDA's
  * `foodNutrients` array, FoodRepo's `nutrients`) -- Task 2 is responsible for
