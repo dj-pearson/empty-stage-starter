@@ -2,25 +2,35 @@ name: PRD Verify
 
 # Verifies prd.json user stories that can't be checked in a local Linux/web
 # sandbox by running the REAL CI gates (web build+test, iOS build+test, Android
-# build+test) and flipping `passes: true` ONLY for stories whose gate goes green
-# AND that already have an implementation in history. Nothing is blind-flipped:
-# manual/ops stories never auto-flip, net-new stories without an implementation
-# stay false, and any story whose gate is red stays false until a green run.
+# build+test), then setting `passes: true` on a story ONLY when the story NAMES
+# the checks that prove it and every one of them ran and passed in this run.
 #
-# THAT DESCRIPTION IS THE INTENT, NOT THE BEHAVIOUR. The engine reads no
-# acceptance criteria: verify-stories.mjs flips on "a commit message mentions
-# US-XXX" AND "the platform job was green", so a green gate on an unrelated PR
-# marks unrelated stories done. US-792 is the story to fix that, and until it
-# lands this workflow REPORTS ONLY and writes nothing -- see the flip job.
+# US-792 replaced the old rule, which was "a commit message mentions US-XXX"
+# AND "the platform job returned success". Neither fact says an acceptance
+# criterion was met: it flipped a Postgres-migration story on a green iOS gate,
+# flipped a story during a run where that story's own a11y scan was failing
+# inside a continue-on-error job, and on a PR containing two YAML files it
+# flipped fourteen stories including US-792 itself. The rule now lives in
+# scripts/ralph/verify-criteria.mjs with that history attached.
+#
+# A story opts in by declaring what proves it:
+#
+#   "verifiedBy": { "checks": ["Web gate (strict) / Unit tests", "Migration Test"] }
+#
+# Names address this run's jobs ("Migration Test") and steps ("Job / Step").
+# Naming a STEP is what defeats continue-on-error masking, because the job can
+# be green while the step is red. `"autoVerify": false` holds a story open
+# regardless. No declaration means no flip, so this writes nothing until
+# stories opt in -- the report says what each one needs.
 #
 # Entry points:
 #  - pull_request -> main: a PR touching a verification surface (iOS, Android,
-#    web src, prd.json, or these workflows) runs the gates and publishes the
-#    flips it WOULD make to the step summary and the report artifact.
-#  - workflow_dispatch: same pipeline on demand; `apply` can turn writing back
-#    on deliberately, and defaults off.
-# When writing is on, the flip commit carries [skip ci] and is pushed by
-# GITHUB_TOKEN, so it can't loop back and re-trigger CI.
+#    web src, prd.json, or these workflows) runs the gates and commits any
+#    resulting flips ONTO THE PR BRANCH, so flags only change through review,
+#    never a direct push to protected main.
+#  - workflow_dispatch: same pipeline on demand, with a dry-run option.
+# The flip commit carries [skip ci] and is pushed by GITHUB_TOKEN, so it can't
+# loop back and re-trigger CI.
 
 on:
   pull_request:
@@ -38,9 +48,9 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: 'Write flips back to prd.json/progress.txt. Leave OFF until US-792 fixes the flip criteria — the engine currently marks a story done because a commit mentions its id and some platform gate was green.'
+        description: 'Write flips back to prd.json/progress.txt (false = dry-run report only)'
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -104,50 +114,69 @@ jobs:
     runs-on: ubuntu-latest
     needs: [web-gate, ios-gate, android-gate]
     if: ${{ always() }}
-    # DRY-RUN ONLY, until US-792 lands.
+    # US-792: a story is flipped only when it NAMES the checks that prove it
+    # and every one of them passed in this run. The old rule -- "a commit
+    # mentions the id" AND "the platform job was green" -- flipped fourteen
+    # stories on a PR whose entire content was two YAML files, US-792 itself
+    # among them. See scripts/ralph/verify-criteria.mjs for the rule and the
+    # rest of that history.
     #
-    # The engine's flip condition is "some commit message mentions US-XXX" AND
-    # "the platform job was green". It never reads a story's acceptance
-    # criteria, so a green gate on an unrelated PR marks unrelated stories
-    # done. The `git add` bug fixed in this same commit was the only thing
-    # stopping those flips from persisting -- US-792's notes say so explicitly,
-    # and say to fix the criteria BEFORE the commit step.
-    #
-    # Fixing the commit step first proved the point in one run: on a PR whose
-    # entire content is two YAML files, it flipped 14 stories, among them
-    # US-792 itself, and US-806/US-807 whose own criteria are waiting on an
-    # edge-function redeploy and an App Store release that have not happened.
-    #
-    # So the step keeps running and keeps reporting, and writes nothing. A
-    # dispatch can still opt in with apply=true once the criteria are
-    # trustworthy; PRs cannot.
+    # Writing is on again because the rule is now falsifiable. A story with no
+    # verifiedBy.checks is never flipped, so this writes nothing until stories
+    # opt in; the report says what each one needs.
     env:
-      APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply == true) && 'true' || 'false' }}
+      APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply == false) && 'false' || 'true' }}
       TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           # Check out the PR head branch (not the detached merge ref) so flips
-          # can be pushed back onto it. Full history so the engine can detect
-          # "an implementation commit references US-XXX" for each story.
+          # can be pushed back onto it.
           ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
+      # The evidence. Job results alone cannot answer US-792 AC2: the E2E job
+      # carries continue-on-error, so it reports success while a scan inside it
+      # fails. STEP conclusions still say failure, so the engine is handed both
+      # and a story names whichever one actually proves it.
+      - name: Collect this run's check results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # No --paginate: with a --jq filter that builds an object, each page
+          # is emitted as its own object and the concatenation is not valid
+          # JSON. per_page=100 covers a run of this size several times over.
+          gh api "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100" --jq '{jobs: [.jobs[] | {name, conclusion, steps: [(.steps // [])[] | {name, conclusion}]}]}' > prd-verify-checks.json
+          echo "### Checks visible to prd-verify" >> "$GITHUB_STEP_SUMMARY"
+          node -e '
+            const run = require("./prd-verify-checks.json");
+            for (const job of run.jobs) {
+              console.log(`${job.name}: ${job.conclusion}`);
+              for (const step of job.steps) console.log(`  ${job.name} / ${step.name}: ${step.conclusion}`);
+            }
+          ' | tee -a "$GITHUB_STEP_SUMMARY"
+
       # One engine run per PRD at the repo root: the main prd.json plus every
       # epic file (prd-kitchen-loop.json, prd-household-planner.json, ...).
       # Epics are separate files so a loop can target one without touching the
       # main backlog; the flip step still verifies all of them on each run.
+      #
+      # The glob is expanded ONCE, before the loop body runs, so the
+      # *-verify-report.json files written inside the loop cannot be picked up
+      # as PRDs on a later iteration. It is guarded anyway.
       - name: Run verification engine
         env:
-          GATE_WEB: ${{ needs.web-gate.result }}
-          GATE_IOS: ${{ needs.ios-gate.result }}
-          GATE_ANDROID: ${{ needs.android-gate.result }}
           VERIFY_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          CHECKS_FILE: prd-verify-checks.json
         run: |
           for prd in prd.json prd-*.json; do
+            case "$prd" in *-verify-report.json|prd-verify-checks.json) continue ;; esac
             [ -f "$prd" ] || continue
             if [ "$APPLY" = "false" ]; then
               PRD_FILE="$prd" node scripts/ralph/verify-stories.mjs | tee -a "$GITHUB_STEP_SUMMARY"
@@ -163,15 +192,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # The globs are QUOTED so git expands them, not the shell. The
-          # previous step writes prd-verify-report.json and its two siblings
-          # into the working directory, and those are gitignored -- an
-          # unquoted prd-*.json expanded to include them, and `git add` on an
-          # explicitly named ignored path exits 1, which under `set -e` failed
-          # this step on every run that actually had a story to flip. A
-          # wildcard pathspec skips ignored files silently; the exclude below
-          # says so out loud rather than leaving it to that subtlety.
-          PRD_PATHS=(prd.json 'prd-*.json' ':(exclude)prd-*verify-report.json' progress.txt)
+          # US-792 AC7: enumerate TRACKED files rather than globbing. The
+          # step before this one writes prd-verify-report.json, its two
+          # siblings and prd-verify-checks.json into the working directory,
+          # and all of them are gitignored. The old line let the SHELL expand
+          # `prd-*.json`, which named those ignored files explicitly, and
+          # `git add` exits 1 on an explicitly named ignored path -- under
+          # `set -e` that failed the step on every run that had a story to
+          # flip. git ls-files cannot name an untracked file at all.
+          mapfile -t PRD_PATHS < <(git ls-files -- 'prd.json' 'prd-*.json' 'progress.txt')
+          if [ ${#PRD_PATHS[@]} -eq 0 ]; then
+            echo "::error title=No PRD files tracked::git ls-files matched nothing; refusing to guess"
+            exit 1
+          fi
+          echo "tracked PRD files: ${PRD_PATHS[*]}"
 
           if git diff --quiet -- "${PRD_PATHS[@]}"; then
             echo "No stories flipped — nothing to commit."
