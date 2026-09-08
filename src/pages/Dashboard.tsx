@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, Outlet, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useApp } from "@/contexts/AppContext";
 import { fetchOnboardingCompleted, readLocalOnboardingFlag } from "@/lib/onboardingStatus";
 import { SupportWidget } from "@/components/SupportWidget";
 import { AppInstallPrompt } from "@/components/AppInstallPrompt";
@@ -49,6 +50,7 @@ import {
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
   const entitlements = useNavEntitlements();
+  const { planEntries, foods, activeKidId, updatePlanEntry } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickLogOpen, setQuickLogOpen] = useState(false);
@@ -123,6 +125,28 @@ const Dashboard = () => {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
+  /**
+   * Today's plan entries for the active child, labelled for the picker
+   * (US-812). Already-logged meals stay in the list so a mistaken tap can be
+   * corrected without going to the planner.
+   */
+  const todaysMeals = useMemo(() => {
+    if (!activeKidId) return [];
+    const today = new Date().toISOString().split("T")[0];
+
+    return planEntries
+      .filter((entry) => entry.kid_id === activeKidId && entry.date === today)
+      .map((entry) => {
+        const food = foods.find((f) => f.id === entry.food_id);
+        const slot = entry.meal_slot.replace("_", " ");
+        return {
+          id: entry.id,
+          notes: entry.notes,
+          label: food ? `${slot} - ${food.name}` : slot,
+        };
+      });
+  }, [planEntries, foods, activeKidId]);
+
   const quickActions = [
     {
       icon: ClipboardList,
@@ -150,8 +174,36 @@ const Dashboard = () => {
     },
   ];
 
-  const handleQuickLog = async (result: 'ate' | 'tasted' | 'refused', notes?: string) => {
-    toast("Meal logged!", { description: `Meal marked as ${result}` });
+  /**
+   * Log a result against a real plan entry (US-812).
+   *
+   * This used to call toast("Meal logged!") and return, writing nothing. The
+   * floating action is on every dashboard page, so the most reachable way to
+   * record a meal result was also the only one that discarded it.
+   */
+  const handleQuickLog = async (
+    result: 'ate' | 'tasted' | 'refused',
+    notes?: string,
+    mealId?: string
+  ) => {
+    // An explicit id has to match. Falling back to the first meal when the
+    // named one is missing would log a result against the wrong dinner.
+    const entry = mealId ? todaysMeals.find((meal) => meal.id === mealId) : todaysMeals[0];
+    if (!entry) {
+      toast.error("Nothing planned for today", {
+        description: "Add a meal to today's plan first.",
+      });
+      return;
+    }
+
+    try {
+      await updatePlanEntry(entry.id, { result, notes: notes ?? entry.notes });
+      toast.success(`Logged as ${result}`, { description: entry.label });
+    } catch {
+      // The write is optimistic locally, so a failure here means it did not
+      // reach Supabase. Saying so beats a success toast over a lost result.
+      toast.error("Couldn't log that meal", { description: "Please try again." });
+    }
   };
 
   return (
@@ -460,6 +512,7 @@ const Dashboard = () => {
       <QuickLogModal
         open={quickLogOpen}
         onOpenChange={setQuickLogOpen}
+        meals={todaysMeals}
         onLog={handleQuickLog}
       />
 

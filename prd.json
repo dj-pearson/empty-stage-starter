@@ -3770,6 +3770,46 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Audit 2026-09-07 (UX deep dive): three renderers sliced one array three ways. Bottom bar was mobileNavItems.slice(0, 4) = Home, Kids, Pantry, Recipes; the hamburger's MAIN was slice(0, 5) and its TOOLS ran slice(5, length - (isAdmin ? 1 : 0)), which both filed Grocery under Tools and duplicated Account Settings. None of it is visible in a single-file diff, which is why the fix ships with a test that reads App.tsx for orphan routes. CommandPalette.tsx keeps its own destination list with custom labels and keywords; folding it into the registry is follow-up, not this story."
+    },
+    {
+      "id": "US-812",
+      "title": "The quick-log action records the meal instead of announcing it",
+      "description": "As a parent tapping the floating Log Meal Result button, I want the result saved against a real meal, so that what I logged is still there tomorrow.",
+      "acceptanceCriteria": [
+        "Dashboard.tsx's handleQuickLog writes through updatePlanEntry rather than only firing a toast; the old body was a single toast(\"Meal logged!\") call and no write at all",
+        "The modal asks which meal when the caller cannot say, since the floating action is available on every dashboard page with no meal in context",
+        "One planned meal is selected without asking; more than one disables the result buttons until a choice is made, so a result cannot land on whichever meal happened to be first",
+        "An explicit meal id that no longer matches an entry is an error, not a silent fallback to the first meal of the day",
+        "With nothing planned, the user is told so and pointed at the planner instead of being shown a picker with no rows",
+        "A failed write reports the failure; the previous behaviour reported success unconditionally",
+        "The Home page path, which opens the modal from a specific meal row, is unchanged",
+        "The decision the picker encodes lives in pure functions in src/lib/quickLog.ts and is unit tested without rendering (see US-813)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-07 (UX deep dive): Dashboard.tsx mounted QuickLogModal with a handler that toasted 'Meal logged!' and returned. QuickLogModal itself is presentational and only calls props.onLog, so nothing downstream saved either. Home.tsx has a real handler but it needs a selectedMeal, so the FAB path -- the most reachable one, present on every dashboard page -- was the only one that discarded the result. The unused `notes` argument was the lint error that gave it away."
+    },
+    {
+      "id": "US-813",
+      "title": "Component tests can render again: one React in the test environment",
+      "description": "As anyone changing the UI, I want to be able to write a test that renders a component, so that front-end behaviour is verifiable rather than asserted against source text.",
+      "acceptanceCriteria": [
+        "A test that renders any component with @testing-library/react runs instead of throwing \"Cannot read properties of null (reading 'useState')\"",
+        "The root cause is fixed at the dependency layout, not papered over: there are two physical React copies, node_modules/react and a nested one under node_modules/.deno/react-dom@19.1.0/node_modules, and @testing-library/react resolves its own nested react-dom on top of that",
+        "resolve.dedupe plus react/react-dom aliases in vitest.config.ts were tried and are NOT sufficient; the fix has to reach the nested copies",
+        "The ~42 currently-failing test files are re-run and the ones failing only for this reason pass; any still failing for real reasons are listed in the commit",
+        "The typecheck and lint baselines in .ci/ are updated only if the fix legitimately changes their counts",
+        "src/components/QuickLogModal.test.ts and any other source-text assertions written while this was broken are converted to real render tests"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-08 (UX loop): the full suite is 272 failed / 2839 passed on main, and the failures cluster on anything that renders -- every context test, the admin components, several pages. All share the null hook dispatcher, which is the classic two-React-instances symptom: the component's own import of useState resolves one copy while the renderer set the dispatcher on the other. node_modules holds a mixed npm and deno layout (extraneous Expo packages, .deno/* nested duplicates), so the likely fix is reinstalling cleanly rather than another resolver alias. Until it is fixed, no UI change in this repo can be verified by rendering it, which is a tax on every front-end story."
     }
   ]
 }
