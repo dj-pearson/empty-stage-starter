@@ -1,4 +1,5 @@
-import type { FoodCategory, GroceryItem } from '@/types';
+import type { Food, FoodCategory, GroceryItem } from '@/types';
+import { resolveFood, type CatalogEntry } from '@/lib/effectiveFood';
 
 /**
  * Pure derivations for the Grocery page (US-553 AC2) — extracted out of the JSX
@@ -7,6 +8,40 @@ import type { FoodCategory, GroceryItem } from '@/types';
  */
 
 export type GroupBy = 'category' | 'aisle';
+
+/**
+ * US-795 fix round: an index that matches a grocery item's name back to a
+ * pantry food by EITHER its resolved (catalog) name or its raw household
+ * name.
+ *
+ * US-796's matcher links a food to a catalog row on an exact normalized name
+ * OR a barcode match; the barcode arm puts no constraint on the name at all,
+ * so a linked food's catalog name can differ from what the household typed.
+ * A grocery row can now show the catalog name (that's the visible point of
+ * the resolver in `src/lib/effectiveFood.ts`) -- matching on the household
+ * name alone would then miss the food entirely when a shopper checks that
+ * row off, create a SECOND pantry row under the catalog name with `is_safe:
+ * true` hardcoded (the unlinked-food default in `handleToggleItem`), and
+ * orphan the parent's original row, which might be `is_safe: false`. A food
+ * a parent marked unsafe must never reappear as safe because its catalog
+ * spelling didn't match. Indexing both names is what keeps a row written
+ * before this fix (or an unlinked food) matching exactly as before.
+ */
+export function buildFoodByDisplayNameIndex(
+  foods: Food[],
+  catalogById: Record<string, CatalogEntry>,
+): Map<string, Food> {
+  const map = new Map<string, Food>();
+  for (const food of foods) {
+    map.set(food.name.toLowerCase(), food);
+    const catalog = food.canonical_id ? catalogById[food.canonical_id] : undefined;
+    if (catalog) {
+      const effectiveName = resolveFood(food, catalog).name;
+      map.set(effectiveName.toLowerCase(), food);
+    }
+  }
+  return map;
+}
 
 export const CATEGORY_LABELS: Record<FoodCategory, string> = {
   protein: 'Protein',

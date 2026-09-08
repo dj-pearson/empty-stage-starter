@@ -10,6 +10,7 @@ import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { parseFoodRow, parseFoodRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
+import { resolveFood, type CatalogEntry, type EffectiveFood } from "@/lib/effectiveFood";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -49,13 +50,74 @@ interface FoodsContextType {
   updateFoods: (updates: { id: string; updates: Partial<Food> }[]) => Promise<void>;
   deleteFoods: (ids: string[]) => Promise<void>;
   refreshFoods: () => Promise<void>;
+  /**
+   * US-795: `grocery_product_catalog` rows keyed by id, for every distinct
+   * `canonical_id` currently referenced by `foods`. Loaded separately from
+   * `foods` (see the effect below) so `resolveFood` has a second argument.
+   * An enrichment layer, not a source of truth — a failed fetch leaves this
+   * empty rather than disturbing `foods`.
+   */
+  catalogById: Record<string, CatalogEntry>;
 }
 
 const FoodsContext = createContext<FoodsContextType | undefined>(undefined);
 
 export function FoodsProvider({ children }: { children: React.ReactNode }) {
   const [foods, setFoods] = useState<Food[]>([]);
+  const [catalogById, setCatalogById] = useState<Record<string, CatalogEntry>>({});
   const { userId, householdId } = useAuth();
+
+  // US-795: the deduped, sorted set of canonical_ids `foods` currently points
+  // at, as a stable string key. Deriving the fetch effect's dependency from
+  // this (rather than from `foods` itself) is what keeps a household with no
+  // linked foods — most of them, until US-796's matcher runs — from issuing a
+  // catalog query on every render: `foods` gets a new array identity on every
+  // realtime/optimistic update even when the set of linked ids hasn't moved.
+  const canonicalIdsKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (const food of foods) {
+      if (typeof food.canonical_id === 'string' && food.canonical_id.length > 0) {
+        ids.add(food.canonical_id);
+      }
+    }
+    return Array.from(ids).sort().join(',');
+  }, [foods]);
+
+  // Fetch the catalog rows a household's foods link to. Runs after foods load
+  // (it derives its ids from `foods`) and is a pure enrichment: a failed
+  // fetch is logged and leaves `catalogById` exactly as it was — it must
+  // never be able to blank an already-rendering pantry.
+  useEffect(() => {
+    const ids = canonicalIdsKey ? canonicalIdsKey.split(',') : [];
+    if (ids.length === 0) {
+      setCatalogById({});
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('grocery_product_catalog')
+        .select('id, name, default_category, default_aisle_section, verification')
+        .in('id', ids);
+
+      if (cancelled) return;
+      if (error || !data) {
+        logger.error('Supabase catalog fetch error:', error);
+        return;
+      }
+
+      const next: Record<string, CatalogEntry> = {};
+      for (const row of data as CatalogEntry[]) {
+        next[row.id] = row;
+      }
+      setCatalogById(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canonicalIdsKey]);
 
   // Real-time subscription for foods so a food added on one device appears on
   // another without a reload (US-534) — parity with Grocery/Plan/Kids/Recipes.
@@ -256,8 +318,8 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
   }, [userId, householdId]);
 
   const value = useMemo(() => ({
-    foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods
-  }), [foods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods]);
+    foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, catalogById
+  }), [foods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, catalogById]);
 
   return (
     <FoodsContext.Provider value={value}>
@@ -270,4 +332,16 @@ export function useFoods() {
   const context = useContext(FoodsContext);
   if (!context) throw new Error("useFoods must be used within FoodsProvider");
   return context;
+}
+
+/**
+ * US-795: the effective (merged) view of a single food, resolved against its
+ * linked catalog entry if it has one. Task 3 wires screens to this instead of
+ * reading `Food` fields directly; this hook is the only thing that has to
+ * know `catalogById` exists.
+ */
+export function useEffectiveFood(food: Food): EffectiveFood {
+  const { catalogById } = useFoods();
+  const catalog = food.canonical_id ? catalogById[food.canonical_id] ?? null : null;
+  return resolveFood(food, catalog);
 }

@@ -7,8 +7,10 @@ import {
   milestoneMessage,
   groupItems,
   flattenGroupedRows,
+  buildFoodByDisplayNameIndex,
 } from './groceryData';
-import type { GroceryItem } from '@/types';
+import type { CatalogEntry } from '@/lib/effectiveFood';
+import type { Food, GroceryItem } from '@/types';
 
 const item = (id: string, over: Partial<GroceryItem> = {}): GroceryItem =>
   ({
@@ -82,5 +84,63 @@ describe('groceryData (US-553 AC2)', () => {
       { type: 'header', group: 'Produce', count: 1 },
       { type: 'item', item: grouped.Produce[0], group: 'Produce' },
     ]);
+  });
+});
+
+describe('buildFoodByDisplayNameIndex (US-795 fix round)', () => {
+  const pantryFood = (over: Partial<Food> & { id: string }): Food =>
+    ({
+      name: over.id,
+      category: 'protein',
+      is_safe: true,
+      is_try_bite: false,
+      canonical_id: null,
+      ...over,
+    }) as Food;
+
+  const catalog = (over: Partial<CatalogEntry> & { id: string; name: string }): CatalogEntry => ({
+    default_category: null,
+    default_aisle_section: null,
+    verification: 'verified',
+    ...over,
+  });
+
+  it(
+    'finds a catalog-linked food by its CATALOG name, not just its household name',
+    () => {
+      // Reproduces the round-trip bug the review found: US-796 can link a food
+      // to a catalog row by barcode, which puts no constraint on the name at
+      // all -- "ground beef" (household) can link to "Beef, ground, 80% lean"
+      // (catalog). A grocery row built from the resolver shows the catalog
+      // name (that IS the visible point of the story). Checking that row off
+      // has to find the SAME pantry food that spelling came from, or the
+      // toggle handler creates a second food with `is_safe: true` hardcoded
+      // and orphans the original -- which might be `is_safe: false`.
+      const linked = pantryFood({ id: 'f1', name: 'ground beef', is_safe: false, canonical_id: 'cat-1' });
+      const catalogById = {
+        'cat-1': catalog({ id: 'cat-1', name: 'Beef, ground, 80% lean' }),
+      };
+      const index = buildFoodByDisplayNameIndex([linked], catalogById);
+
+      // The grocery item was written under the catalog name (what the
+      // resolver now puts on the row).
+      const found = index.get('beef, ground, 80% lean');
+      expect(found).toBe(linked);
+      expect(found?.is_safe).toBe(false); // still the household's own flag
+    },
+  );
+
+  it('still finds an unlinked (or old-row) food by its household name', () => {
+    const unlinked = pantryFood({ id: 'f2', name: 'rice' });
+    const index = buildFoodByDisplayNameIndex([unlinked], {});
+    expect(index.get('rice')).toBe(unlinked);
+  });
+
+  it('still finds a linked food by its household name too (rows written before linking)', () => {
+    const linked = pantryFood({ id: 'f3', name: 'milk', canonical_id: 'cat-2' });
+    const catalogById = { 'cat-2': catalog({ id: 'cat-2', name: 'Whole Milk' }) };
+    const index = buildFoodByDisplayNameIndex([linked], catalogById);
+    expect(index.get('milk')).toBe(linked);
+    expect(index.get('whole milk')).toBe(linked);
   });
 });

@@ -1,4 +1,5 @@
 import { Food, PlanEntry, MealSlot } from "@/types";
+import { resolveFood, type EffectiveFood } from "./effectiveFood";
 import { generateId } from "./utils";
 
 const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack2"];
@@ -113,9 +114,20 @@ export interface GeneratedGroceryRow {
   source_plan_entry_id?: string;
 }
 
+/**
+ * US-795: name/category/aisle come from the caller's already-resolved
+ * `EffectiveFood` for each food, keyed by `Food.id`. This file is a plain
+ * library with no React context, so it cannot call `useEffectiveFood` itself
+ * -- the caller (which has `catalogById`) resolves each food and passes the
+ * result in rather than this function reading a food's raw columns. Every
+ * food in `foods` must have an entry; a food with no linked catalog row still
+ * needs one (`resolveFood(food, null)`), since it carries the household's own
+ * values in that case.
+ */
 export function generateGroceryList(
   planEntries: PlanEntry[],
   foods: Food[],
+  effectiveFoodById: Record<string, EffectiveFood>,
   window?: ShoppingWindow,
 ): GeneratedGroceryRow[] {
   const entries = window
@@ -160,15 +172,27 @@ export function generateGroceryList(
   // Only include items that are needed (count > stock)
   return Object.values(foodCount)
     .filter(({ count, inStock }) => count > inStock)
-    .map(({ food, count, inStock, sourcePlanEntryId }) => ({
-      id: generateId(),
-      name: food.name,
-      quantity: count - inStock, // Only need the difference
-      unit: food.unit || "servings",
-      checked: false,
-      category: food.category,
-      aisle: food.aisle,
-      auto_generated: true as const,
-      source_plan_entry_id: sourcePlanEntryId,
-    }));
+    .map(({ food, count, inStock, sourcePlanEntryId }) => {
+      // Guards a caller that built the map from a different array than
+      // `foods` (or an out-of-date one): `Record<string, T>` indexes as `T`,
+      // not `T | undefined`, so a missing entry would otherwise throw
+      // reading `.name` off `undefined` with no compile-time warning.
+      // Falling back to `resolveFood(food, null)` -- the household's own
+      // values, exactly what an unlinked food already resolves to -- is not
+      // "resolving inside this file" as a design choice; it is a defensive
+      // guard for a bug that should never happen if the caller built the map
+      // correctly.
+      const effective = effectiveFoodById[food.id] ?? resolveFood(food, null);
+      return {
+        id: generateId(),
+        name: effective.name,
+        quantity: count - inStock, // Only need the difference
+        unit: food.unit || "servings", // household state -- never on EffectiveFood
+        checked: false,
+        category: effective.category,
+        aisle: effective.aisle,
+        auto_generated: true as const,
+        source_plan_entry_id: sourcePlanEntryId,
+      };
+    });
 }
