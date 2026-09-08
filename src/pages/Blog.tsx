@@ -198,7 +198,7 @@ const Blog = () => {
           </h1>
 
           {/* TL;DR for GEO */}
-          <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
+          <div className="max-w-3xl mx-auto bg-primary/5 border border-primary/25 p-6 rounded-lg mb-6 text-left">
             <p className="text-sm font-semibold text-primary mb-2">TL;DR - Blog Overview</p>
             <p className="text-muted-foreground leading-relaxed">
               Expert articles on <strong>picky eating</strong>, <strong>ARFID management</strong>, <strong>selective eating</strong>, <strong>try bite techniques</strong>,

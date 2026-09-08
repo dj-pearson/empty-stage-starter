@@ -333,7 +333,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
             duration: shouldReduceMotion ? 0 : 0.6,
             delay: shouldReduceMotion ? 0 : 0.1,
           }}
-          className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
+          className="text-4xl md:text-5xl font-bold mb-4 text-foreground"
         >
           Welcome, {name}!
         </m.h1>

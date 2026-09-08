@@ -172,7 +172,7 @@ const FAQ = () => {
           </h1>
 
           {/* TL;DR section for AI extraction (GEO optimization) */}
-          <div className="bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6">
+          <div className="bg-primary/5 border border-primary/25 p-6 rounded-lg mb-6">
             <p className="text-sm font-semibold text-primary mb-2">TL;DR - Quick Summary</p>
             <p className="text-muted-foreground leading-relaxed">
               <strong>EatPal</strong> is an AI-powered meal planning app for <strong>picky eaters</strong>, <strong>ARFID</strong>, and <strong>selective eating</strong>.

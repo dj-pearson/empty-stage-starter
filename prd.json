@@ -3810,6 +3810,28 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Audit 2026-09-08 (UX loop): the full suite is 272 failed / 2839 passed on main, and the failures cluster on anything that renders -- every context test, the admin components, several pages. All share the null hook dispatcher, which is the classic two-React-instances symptom: the component's own import of useState resolves one copy while the renderer set the dispatcher on the other. node_modules holds a mixed npm and deno layout (extraneous Expo packages, .deno/* nested duplicates), so the likely fix is reinstalling cleanly rather than another resolver alias. Until it is fixed, no UI change in this repo can be verified by rendering it, which is a tax on every front-end story."
+    },
+    {
+      "id": "US-814",
+      "title": "Clear the UI tells that are actually tells",
+      "description": "As someone using EatPal, I want the interface to look designed rather than generated, so that the app reads as something built for this job.",
+      "acceptanceCriteria": [
+        "FoodCard no longer carries a 4px coloured left stripe; the category is shown by its icon plus a 1px tint of the same hue, which also fixes category being encoded in colour alone",
+        "The Pantry loading skeleton follows the card it stands in for",
+        "The four byte-identical TL;DR callouts (Blog, Contact, FAQ, Pricing) lose the side tab and round on all four corners rather than only the right two",
+        "Gradient text is gone from the three headings that used it; emphasis is carried by size and weight, and the hero's emphasised phrase keeps a solid colour it can pass contrast with",
+        "The purple-to-blue subscription banner and the purple-to-pink achievements card are tinted from the brand instead",
+        "The two form progress bars animate transform rather than width, so the bar no longer relayouts every frame; the track already clips, so the rounded ends are unchanged",
+        "Categorical colour is left alone: purple in ProgressDashboard and WeeklyProgressReport is one of four stat colours, not decoration",
+        "False positives are documented rather than 'fixed': all 35 border-accent-on-rounded hits are the Tailwind spinner idiom, the remaining side-tabs are prose-blockquote rules and an exported HTML document, and animate-bounce-dynamic is a gentle transform float already gated behind prefers-reduced-motion",
+        "npx impeccable detect src drops from 82 to 67 with no new test failures and no change to the lint count"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-08 (UX loop): impeccable reported 82 anti-patterns. Triage matters more than the number: 43 of the 82 are false positives on two idioms (35 spinners, 5 on a class whose name contains 'bounce' but whose keyframes are a transform float), and 8 more are XSS test fixtures. What remains after that is the real list, and most of it was fixed here. Deliberately NOT done: the body font. index.css sets Inter, which the house style calls out as a non-choice, but swapping the typeface of a shipped app is a design decision for Dj, not a lint fix. The Arial hits are inside emailed and exported HTML, where a web font would not load anyway."
     }
   ]
 }

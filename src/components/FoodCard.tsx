@@ -43,6 +43,7 @@ export const FoodCard = memo(function FoodCard({
   const [showZeroQuantityDialog, setShowZeroQuantityDialog] = useState(false);
 
   const config = CATEGORY_CONFIG[food.category];
+  const CategoryIcon = config.icon;
   const stockStatus = getStockStatus(food.quantity);
 
   const relevantAllergens =
@@ -88,9 +89,18 @@ export const FoodCard = memo(function FoodCard({
 
   return (
     <Card
+      /*
+        The category used to be a 4px coloured left stripe (US-814). Two
+        problems with that: it was the only thing on the card saying what
+        category the food was, so the information was carried by colour alone
+        and vanished for anyone who cannot separate red from amber; and a thick
+        coloured border on one side of a card is the most recognisable tell of
+        a generated interface. The icon below now carries the category, and the
+        border is a 1px tint of the same hue.
+      */
       className={cn(
-        "border-l-4 transition-all duration-200 hover:shadow-md group relative overflow-hidden",
-        config.borderLeft,
+        "transition-all duration-200 hover:shadow-md group relative overflow-hidden",
+        config.border,
         hasAllergen && "ring-2 ring-destructive/50",
         stockStatus === "out" && "opacity-70",
         stockStatus === "low" && "bg-amber-50/50 dark:bg-amber-950/10"
@@ -99,10 +109,16 @@ export const FoodCard = memo(function FoodCard({
       <div className="p-3.5">
         {/* Top row: Name + Actions */}
         <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <CategoryIcon
+              className={cn("h-4 w-4 shrink-0", config.text)}
+              aria-hidden="true"
+            />
             <h3 className="font-semibold text-[15px] leading-tight truncate">
               {food.name}
             </h3>
+            {/* The icon is the category; say so for anyone not seeing it. */}
+            <span className="sr-only">{config.label}</span>
           </div>
           <div className="flex gap-0.5 shrink-0 transition-opacity md:opacity-40 md:group-hover:opacity-100">
             <Button

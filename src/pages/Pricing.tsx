@@ -516,12 +516,12 @@ export default function Pricing() {
         />
 
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold mb-4 text-foreground">
             {t('pricing.title')}
           </h1>
 
           {/* TL;DR for GEO */}
-          <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
+          <div className="max-w-3xl mx-auto bg-primary/5 border border-primary/25 p-6 rounded-lg mb-6 text-left">
             <p className="text-sm font-semibold text-primary mb-2">TL;DR - Quick Pricing Summary</p>
             <p className="text-muted-foreground leading-relaxed">
               <strong>For Families:</strong> Free Plan (1 child) or Pro Plan ({priceLabel("pro")}/mo) with AI food chaining, unlimited children, and progress tracking.

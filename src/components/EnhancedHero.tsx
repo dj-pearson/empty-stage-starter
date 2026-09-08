@@ -138,7 +138,7 @@ export function EnhancedHero() {
             Meal Planning for Picky Eaters &amp; ARFID
           </span>
           <br />
-          <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent drop-shadow-sm">
+          <span className="text-primary drop-shadow-sm">
             Steady Progress, One Safe Bite at a Time
           </span>
         </h1>
