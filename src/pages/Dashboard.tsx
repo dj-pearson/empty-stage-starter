@@ -13,7 +13,7 @@ import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
 import { QuickLogModal } from "@/components/QuickLogModal";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, LogOut, Menu } from "lucide-react";
+import { Moon, Sun, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
@@ -30,7 +30,6 @@ import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { User } from "@supabase/supabase-js";
 import {
-  Utensils,
   Calendar,
   ShoppingCart,
   Sparkles,
@@ -42,16 +41,14 @@ import {
   NAV_GROUP_LABELS,
   NAV_GROUP_ORDER,
   isIndexRoute,
-  navItemsInGroup,
   primaryNavItems,
-  secondaryNavItems,
+  secondaryNavItemsInGroup,
 } from "@/lib/navigation";
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
   const entitlements = useNavEntitlements();
   const { planEntries, foods, activeKidId, updatePlanEntry } = useApp();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickLogOpen, setQuickLogOpen] = useState(false);
   const navigate = useNavigate();
@@ -122,8 +119,6 @@ const Dashboard = () => {
     toast("Signed out", { description: "You have been signed out successfully." });
     navigate("/");
   };
-
-  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   /**
    * Today's plan entries for the active child, labelled for the picker
@@ -314,107 +309,17 @@ const Dashboard = () => {
               />
             </div>
 
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="touch-target">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Open menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[85vw] max-w-[360px] flex flex-col">
-                <SheetHeader className="pb-4 border-b">
-                  <SheetTitle className="flex items-center gap-2 text-lg">
-                    <Utensils className="h-5 w-5 text-primary" />
-                    <span className="font-heading font-bold text-primary">
-                      Navigation
-                    </span>
-                  </SheetTitle>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto">
-                  <div className="flex flex-col gap-1 mt-6 pb-safe">
-                    {/* Kid Selector Section */}
-                    <div className="mb-4 pb-4 border-b">
-                      <p className="text-xs font-medium text-muted-foreground mb-2 px-2">ACTIVE PROFILE</p>
-                      <KidSelector />
-                    </div>
-
-                    {/*
-                      Every section from the one registry (US-811). The old
-                      slices put Grocery under TOOLS and rendered Account
-                      Settings twice, once from the tools slice and once from
-                      the settings block below it.
-                    */}
-                    {NAV_GROUP_ORDER.map((group) => {
-                      const items = navItemsInGroup(group, entitlements);
-                      if (items.length === 0) return null;
-
-                      return (
-                        <div key={group} className="mb-2">
-                          <p className="text-xs font-medium text-muted-foreground mb-2 px-2 mt-4">
-                            {NAV_GROUP_LABELS[group].toUpperCase()}
-                          </p>
-                          {items.map(({ to, icon: Icon, label }) => (
-                            <NavLink
-                              key={to}
-                              to={to}
-                              end={isIndexRoute(to)}
-                              onClick={closeMobileMenu}
-                              className={({ isActive }) =>
-                                cn(
-                                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-[0.98]",
-                                  isActive
-                                    ? "bg-primary/10 text-primary font-medium shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                )
-                              }
-                            >
-                              <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                              <span className="text-base">{label}</span>
-                            </NavLink>
-                          ))}
-                        </div>
-                      );
-                    })}
-
-                    <div className="mt-6 pt-6 border-t space-y-2">
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        className="w-full justify-start gap-3 h-12 active:scale-[0.98]"
-                        onClick={() => {
-                          setTheme(theme === "dark" ? "light" : "dark");
-                          closeMobileMenu();
-                        }}
-                      >
-                        {theme === "dark" ? (
-                          <>
-                            <Sun className="h-5 w-5 shrink-0" />
-                            <span className="text-base">Light Mode</span>
-                          </>
-                        ) : (
-                          <>
-                            <Moon className="h-5 w-5 shrink-0" />
-                            <span className="text-base">Dark Mode</span>
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        className="w-full justify-start gap-3 h-12 text-destructive hover:text-destructive active:scale-[0.98]"
-                        onClick={() => {
-                          handleLogout();
-                          closeMobileMenu();
-                        }}
-                      >
-                        <LogOut className="h-5 w-5 shrink-0" />
-                        <span className="text-base">Sign Out</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+            {/*
+              The hamburger is gone (US-815). Once every nav group rendered in
+              the bottom "More" sheet, this was a third menu listing the same
+              links a second time, on the opposite corner of the screen. What
+              only lived here -- the kid selector, theme and sign out -- moved:
+              the selector to this header, where it is one tap instead of two,
+              and the other two into More.
+            */}
+            <div className="min-w-0 max-w-[60%]">
+              <KidSelector />
+            </div>
           </div>
         </nav>
 
@@ -470,33 +375,87 @@ const Dashboard = () => {
                   </SheetTitle>
                 </SheetHeader>
                 <div className="flex-1 overflow-y-auto py-4">
-                  <div className="grid grid-cols-2 gap-3 pb-safe">
-                    {/*
-                      The complement of the bottom bar, so a destination can
-                      never be missing from both (US-811). Admin and the
-                      Professional Portal come through the same filter rather
-                      than as appended special cases.
-                    */}
-                    {secondaryNavItems(entitlements).map(({ to, icon: Icon, label }) => (
-                      <NavLink
-                        key={to}
-                        to={to}
-                        onClick={() => setMoreMenuOpen(false)}
-                        className={({ isActive }) =>
-                          cn(
-                            "flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all active:scale-95",
-                            isActive
-                              ? "bg-primary/10 border-primary text-primary font-medium shadow-sm"
-                              : "border-border hover:border-primary/50 hover:bg-muted"
-                          )
-                        }
-                      >
-                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-                          <Icon className="h-6 w-6" aria-hidden="true" />
+                  {/*
+                    The complement of the bottom bar, so a destination can never
+                    be missing from both (US-811), grouped into the same
+                    sections as the desktop sidebar (US-815). Admin and the
+                    Professional Portal come through the same entitlement filter
+                    rather than as appended special cases.
+                  */}
+                  {NAV_GROUP_ORDER.map((group) => {
+                    const items = secondaryNavItemsInGroup(group, entitlements);
+                    if (items.length === 0) return null;
+
+                    return (
+                      <section key={group} className="mb-6">
+                        <h3 className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                          {NAV_GROUP_LABELS[group].toUpperCase()}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          {items.map(({ to, icon: Icon, label }) => (
+                            <NavLink
+                              key={to}
+                              to={to}
+                              onClick={() => setMoreMenuOpen(false)}
+                              className={({ isActive }) =>
+                                cn(
+                                  "flex flex-col items-center gap-3 p-4 rounded-xl border transition-all active:scale-95",
+                                  isActive
+                                    ? "bg-primary/10 border-primary text-primary font-medium"
+                                    : "border-border hover:border-primary/50 hover:bg-muted"
+                                )
+                              }
+                            >
+                              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
+                                <Icon className="h-6 w-6" aria-hidden="true" />
+                              </div>
+                              <span className="text-sm text-center leading-tight">{label}</span>
+                            </NavLink>
+                          ))}
                         </div>
-                        <span className="text-sm text-center leading-tight">{label}</span>
-                      </NavLink>
-                    ))}
+                      </section>
+                    );
+                  })}
+
+                  {/*
+                    Theme and sign out (US-815). These were the only controls
+                    the removed hamburger owned outright, so they land here
+                    rather than disappearing.
+                  */}
+                  <div className="mt-6 pt-6 border-t space-y-2 pb-safe">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="w-full justify-start gap-3 h-12 active:scale-[0.98]"
+                      onClick={() => {
+                        setTheme(theme === "dark" ? "light" : "dark");
+                        setMoreMenuOpen(false);
+                      }}
+                    >
+                      {theme === "dark" ? (
+                        <>
+                          <Sun className="h-5 w-5 shrink-0" aria-hidden="true" />
+                          <span className="text-base">Light Mode</span>
+                        </>
+                      ) : (
+                        <>
+                          <Moon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                          <span className="text-base">Dark Mode</span>
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="w-full justify-start gap-3 h-12 text-destructive hover:text-destructive active:scale-[0.98]"
+                      onClick={() => {
+                        handleLogout();
+                        setMoreMenuOpen(false);
+                      }}
+                    >
+                      <LogOut className="h-5 w-5 shrink-0" aria-hidden="true" />
+                      <span className="text-base">Sign Out</span>
+                    </Button>
                   </div>
                 </div>
               </SheetContent>

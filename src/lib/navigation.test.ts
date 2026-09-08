@@ -8,6 +8,7 @@ import {
   primaryNavItems,
   secondaryNavItems,
   navItemsInGroup,
+  secondaryNavItemsInGroup,
 } from './navigation';
 
 /**
@@ -146,6 +147,56 @@ describe('every routed dashboard page is reachable from the nav', () => {
     });
 
     expect(dangling.map((item) => item.to)).toEqual([]);
+  });
+});
+
+describe('the More sheet is grouped, and is still the whole complement', () => {
+  it('accounts for every secondary item across the groups', () => {
+    // The sheet renders per group; if a group filter dropped something it
+    // would vanish from mobile entirely, since the bar does not show it either.
+    const entitlements = { isAdmin: true, isProfessional: true };
+    const grouped = NAV_GROUP_ORDER.flatMap((group) =>
+      secondaryNavItemsInGroup(group, entitlements)
+    );
+
+    expect(grouped.map((item) => item.to).sort()).toEqual(
+      secondaryNavItems(entitlements).map((item) => item.to).sort()
+    );
+  });
+
+  it('never repeats a bottom-bar destination inside More', () => {
+    const entitlements = { isAdmin: true, isProfessional: true };
+    const inMore = new Set(
+      NAV_GROUP_ORDER.flatMap((group) => secondaryNavItemsInGroup(group, entitlements)).map(
+        (item) => item.to
+      )
+    );
+
+    for (const item of primaryNavItems(entitlements)) {
+      expect(inMore.has(item.to)).toBe(false);
+    }
+  });
+});
+
+describe('mobile has one menu, not three', () => {
+  const dashboard = readFileSync(
+    path.join(process.cwd(), 'src', 'pages', 'Dashboard.tsx'),
+    'utf8'
+  );
+
+  it('has no hamburger sheet left', () => {
+    // Top-right hamburger, bottom bar and bottom "More" all listed overlapping
+    // links at once, in two different groupings, on opposite corners.
+    expect(dashboard).not.toContain('mobileMenuOpen');
+    expect(dashboard).not.toContain('closeMobileMenu');
+  });
+
+  it('keeps the controls the hamburger owned outright', () => {
+    // Theme and sign out were only reachable from it; they moved into More
+    // rather than being dropped.
+    expect(dashboard).toContain('Sign Out');
+    expect(dashboard).toContain('Light Mode');
+    expect(dashboard).toContain('Dark Mode');
   });
 });
 

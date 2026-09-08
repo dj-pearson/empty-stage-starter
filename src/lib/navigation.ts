@@ -157,6 +157,21 @@ export function navItemsInGroup(group: NavGroup, entitlements: NavEntitlements =
 }
 
 /**
+ * One group's items minus the ones already on the mobile bottom bar.
+ *
+ * The "More" sheet is the complement of the bar, but a flat grid of fourteen
+ * tiles is its own kind of unfindable, so it renders the same sections the
+ * sidebar does. Listing Planner again inside More would just be the duplication
+ * this registry exists to end.
+ */
+export function secondaryNavItemsInGroup(
+  group: NavGroup,
+  entitlements: NavEntitlements = {}
+): NavItem[] {
+  return navItemsInGroup(group, entitlements).filter((item) => item.primary !== true);
+}
+
+/**
  * `end` for NavLink. Only the dashboard index needs it; without it every
  * /dashboard/* route also marks Home active.
  */

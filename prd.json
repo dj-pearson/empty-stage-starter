@@ -3832,6 +3832,26 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Audit 2026-09-08 (UX loop): impeccable reported 82 anti-patterns. Triage matters more than the number: 43 of the 82 are false positives on two idioms (35 spinners, 5 on a class whose name contains 'bounce' but whose keyframes are a transform float), and 8 more are XSS test fixtures. What remains after that is the real list, and most of it was fixed here. Deliberately NOT done: the body font. index.css sets Inter, which the house style calls out as a non-choice, but swapping the typeface of a shipped app is a design decision for Dj, not a lint fix. The Arial hits are inside emailed and exported HTML, where a web font would not load anyway."
+    },
+    {
+      "id": "US-815",
+      "title": "One mobile menu, not three",
+      "description": "As someone using EatPal on a phone, I want one place to find things, so that I am not guessing which of two menus in opposite corners has the link I want.",
+      "acceptanceCriteria": [
+        "The top-right hamburger sheet is deleted; once US-811 put every nav group in the bottom More sheet it was a second menu listing the same links in a different grouping",
+        "The kid selector moves into the mobile top header where the hamburger was, so switching child is one tap rather than two",
+        "Theme toggle and Sign Out, the only controls the hamburger owned outright, move into the More sheet rather than disappearing",
+        "The More sheet renders the same sections as the desktop sidebar instead of a flat grid of fourteen tiles",
+        "A new secondaryNavItemsInGroup helper backs that, and a test asserts the union of the groups equals the full complement of the bottom bar, so nothing can go missing from mobile entirely",
+        "No bottom-bar destination is repeated inside More",
+        "Tests assert the hamburger state is gone and the controls it owned survive"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-07 (UX deep dive), item 7: mobile carried a top-right hamburger, a bottom bar, a bottom More sheet and a floating action button pinned over the bottom bar. The hamburger and More overlapped almost completely, and disagreed about grouping. Follows US-811, which is what made the hamburger redundant rather than merely duplicative. The FAB still overlaps the bottom bar's right edge; that is not addressed here."
     }
   ]
 }
