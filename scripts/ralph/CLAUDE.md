@@ -113,23 +113,38 @@ If there are still stories with `passes: false`, end your response normally (ano
 Stories that can't be verified in a Linux/web sandbox (iOS-native Swift,
 Android-native Kotlin, prod-deploy ops) are NOT flipped by hand. Instead:
 
-- `scripts/ralph/verify-stories.mjs` flips `passes: true` for a `passes: false`
-  story only when (a) a **dedicated implementation commit** tags its id in the
-  `(US-XXX)` convention AND (b) the CI gate that can verify it is green. A bare
-  id mention is deliberately NOT enough — it false-positives on range/docs/bulk
-  commits (e.g. "add stories US-248..US-261") that reference a story without
-  implementing it. Run `node scripts/ralph/verify-stories.mjs`
-  for a dry-run report; `--apply` to write. Gate results come from env
-  `GATE_WEB` / `GATE_IOS` / `GATE_ANDROID` (GitHub job-result vocabulary).
+- A story is flipped ONLY when it names the CI checks that prove it and every
+  one of them ran and passed in that run:
+
+  ```json
+  { "id": "US-123", "verifiedBy": { "checks": ["Web gate (strict) / Unit tests", "Migration Test"] } }
+  ```
+
+  Names address the run's jobs (`Migration Test`) and steps (`Job / Step`).
+  Name a STEP when the job around it can be green while the step is red --
+  E2E carries `continue-on-error`, and that is how US-778 was once marked
+  verified during a run where its own a11y scan was failing.
+- `"autoVerify": false` holds a story open no matter how green the run is, for
+  when a person has looked and decided it is not done.
+- **No declaration means no flip.** Most of the backlog has no `verifiedBy`
+  yet, so the engine flips nothing and reports `awaiting-evidence` with what
+  each story needs. That is the intended state, not a bug: US-792 replaced a
+  rule that flipped on "a commit mentions the id" AND "the platform job was
+  green", which marked a Postgres-migration story done off a green iOS gate and
+  once flipped fourteen stories on a PR containing two YAML files.
+- Run `node scripts/ralph/verify-stories.mjs` for a dry-run report, `--apply`
+  to write. It reads this run's check results from `CHECKS_FILE`
+  (default `prd-verify-checks.json`, written by the workflow from the GitHub
+  jobs API); with no such file nothing can be verified, which fails closed.
   `PRD_FILE=prd-household-planner.json` evaluates an epic file instead of
   `prd.json`; the workflow runs the engine once per `prd*.json` at the repo root.
-- `.github/workflows/prd-verify.yml` (workflow_dispatch) runs the real gates —
-  web (strict typecheck/lint/test/build), iOS (reuses `ios-ci.yml`), Android
-  (reuses `android-native-ci.yml`) — then commits the flips with `[skip ci]`.
-- Classification lives in `verify-stories.mjs`: `MANUAL` (never auto-flip — prod
-  deploys, device tests, owner-gated removals), `ANDROID`, `WEB`; everything
-  else defaults to the `ios` gate. Net-new stories with no commit stay
-  `awaiting-implementation` until built.
+- `.github/workflows/prd-verify.yml` runs the real gates — web (strict
+  typecheck/lint/test/build), iOS (reuses `ios-ci.yml`), Android (reuses
+  `android-native-ci.yml`) — collects every job and step conclusion, then
+  commits any flips with `[skip ci]`.
+- `MANUAL_SIGNOFF` in `verify-criteria.mjs` still holds the prod-deploy,
+  device-test and owner-gated stories closed. It can only ever hold a story
+  false.
 
 So the loop is: implement a story → push → run **PRD Verify** → green gate flips
 it. Don't set `passes: true` by hand for anything you can't build locally.
