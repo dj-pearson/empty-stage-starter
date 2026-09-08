@@ -128,6 +128,7 @@ final class AuthViewModel: ObservableObject {
     private func applySession(_ session: Session?) {
         sessionEmail = session?.user.email
         sessionProviders = (session?.user.identities ?? []).map { $0.provider }
+        publishSharedToken(session)
         guard session != nil else {
             hasPassword = false
             return
@@ -136,6 +137,23 @@ final class AuthViewModel: ObservableObject {
             guard let self else { return }
             self.hasPassword = await self.authService.hasPassword()
         }
+    }
+
+    /// US-807: mirror the access token into the App Group so the share
+    /// extension can call `parse-recipe` as the signed-in user. `applySession`
+    /// is the single funnel for every session change (restore on launch, sign
+    /// in, token refresh, sign out), so the shared copy never lags the one the
+    /// app is using, and sign-out clears it rather than leaving a live bearer
+    /// readable by an extension.
+    private func publishSharedToken(_ session: Session?) {
+        guard let session else {
+            SharedAuthTokenStore.clear()
+            return
+        }
+        SharedAuthTokenStore.save(
+            accessToken: session.accessToken,
+            expiresAt: Date(timeIntervalSince1970: session.expiresAt)
+        )
     }
 
     var isAppleAccount: Bool {

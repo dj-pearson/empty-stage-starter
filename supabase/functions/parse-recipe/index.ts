@@ -1,5 +1,6 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { requireUser } from '../_shared/require-admin.ts';
+import { resolveAccess } from '../_shared/parse-recipe-access.ts';
 import { fetchRecipePage } from '../_shared/url-validator.ts';
 
 const corsHeaders = {
@@ -30,12 +31,18 @@ export default async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Authenticated users only: paid AI call + fetches arbitrary user URLs (SSRF surface).
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(JSON.stringify({ error: gate.error ?? 'Unauthorized' }), {
-      status: gate.status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  // Paid AI call + fetches arbitrary user URLs (SSRF surface), so a signed-in
+  // caller is preferred. US-806: anonymous callers are allowed again under a
+  // hard budget, because every shipped iOS build sends the anon key from the
+  // share extension, the recipe deep link and the Shortcuts intent — see
+  // _shared/parse-recipe-access.ts for why, and for when to delete this.
+  const access = await resolveAccess(req, () => requireUser(req));
+  if (!access.allowed) {
+    const headers: Record<string, string> = { ...corsHeaders, 'Content-Type': 'application/json' };
+    if (access.retryAfterSeconds) headers['Retry-After'] = String(access.retryAfterSeconds);
+    return new Response(JSON.stringify({ error: access.error }), {
+      status: access.status,
+      headers,
     });
   }
 

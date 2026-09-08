@@ -3634,6 +3634,76 @@
       "priority": 2,
       "passes": false,
       "notes": "Found 2026-09-07 by the US-796 implementer while verifying its own REVOKE, and confirmed against the live database. Supabase sets a schema-level default ACL: pg_default_acl for functions in public is {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}, so every new function gets EXECUTE granted DIRECTLY to anon, authenticated and service_role at creation. REVOKE ALL ON FUNCTION ... FROM PUBLIC removes only the PUBLIC grant and leaves those direct role grants in place, so has_function_privilege('anon', fn, 'EXECUTE') stays true and the function remains callable over PostgREST RPC. The pattern appears in at least five migrations: 20260410000000_disposable_email_domains, 20260512000000_chain_network, 20260709000026_auth_anomaly_agent, 20260709000027_rls_audit_agent, 20260808000001_harden_auth_rate_limit. Severity depends entirely on the function: for match_foods_to_catalog it is bounded, because SECURITY INVOKER plus RLS on foods means an anon call links zero rows and only burns a scan, but a SECURITY DEFINER function with the same pattern would be a real hole. Audit each one rather than assuming. US-796 fixes only its own function, naming anon explicitly."
+    },
+    {
+      "id": "US-805",
+      "title": "A barcode provider returning 200 with an unexpected shape is not treated as a miss",
+      "description": "As a parent scanning a product, I want a provider that answers with something we do not understand to count as \"not found\", so that I get the normal add-it-yourself path instead of a wrong or empty food.",
+      "acceptanceCriteria": [
+        "Each provider lookup in supabase/functions/lookup-barcode/index.ts validates the SHAPE of a 200 response, not only response.ok, and returns null when the payload is not what it expects",
+        "Open Food Facts, USDA FoodData Central and FoodRepo are each covered - they have different envelopes and different failure shapes",
+        "A 200 carrying an error body, an empty product, or a product with no name degrades to null and the chain moves on to the next provider",
+        "Tests with a stubbed fetch cover: a 200 with an error body, a 200 with an empty object, and a 200 with a product missing its name",
+        "No provider failure of any shape can change the response the client receives - the existing not-found shape is returned"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Found 2026-09-07 by the US-797 implementer while wiring catalog promotion, and pre-existing rather than introduced by it. lookupFoodRepo checks response.ok and then reads the body optimistically, so a 200 carrying a valid-but-unexpected JSON shape flows onward instead of degrading to null. Currently harmless for the catalog specifically, because toCatalogRow in supabase/functions/_shared/catalogPromotion.ts returns null when there is no name or no usable nutrition, so nothing bad gets promoted - but the client-facing food object is a separate path and the same optimism there is what would surface a nameless or empty food to a parent mid-shop. Worth fixing at the provider boundary where the knowledge of each envelope lives, rather than relying on a downstream consumer to be defensive."
+    },
+    {
+      "id": "US-806",
+      "title": "Sharing a recipe into EatPal stops failing with 401",
+      "description": "As a parent who found a recipe in Safari, I want Share -> EatPal to actually import it, so that I can save a recipe without retyping it.",
+      "acceptanceCriteria": [
+        "A caller presenting the Supabase anon key is served by supabase/functions/parse-recipe rather than answered 401 - that is what every shipped iOS build sends",
+        "The anon allowance is capped per client address and capped globally per window, so the paid Claude call behind the endpoint cannot be farmed",
+        "An exhausted budget answers 429 with Retry-After, not 401, so the client can say something true about why",
+        "A signed-in caller is unaffected and spends none of the anon budget",
+        "A gate failure that is not 401 (a misconfigured server) is never read as anonymous",
+        "The US-710 SSRF, redirect and body-size guards on the fetched URL still run for anon callers",
+        "Tests cover: anon key allowed, expired token allowed, per-address cap, global cap, window rollover, unattributable caller, and 500 not treated as anon"
+      ],
+      "priority": 1,
+      "passes": false,
+      "platform": "backend",
+      "notes": "Live production bug reported 2026-09-07. Root cause: b9d0427b (2026-07-26) put requireUser in front of parse-recipe; ios/EatPal/Shared/RecipeParseAPI.swift sends the anon key as the bearer, and an anon key is not a user JWT, so auth.getUser() returns nothing. Reproduced against prod: POST https://functions.tryeatpal.com/parse-recipe with Bearer <anon key> answers 401 {\"error\":\"Unauthorized\"}. Three call sites broke, not one - the share extension (ShareImportView.swift:368), the eatpal://recipe/import deep link (DeepLinkHandler.swift:197) and the Shortcuts intent (RecipeAppIntents.swift:48). In-app paste survived because RecipeImportService goes through EdgeFunctions.invokeRaw, which substitutes a real access token. Fixed server-side first on purpose: an edge deploy reaches every phone already in the field, where a client fix waits on App Store review. The anon branch is temporary and is retired by US-807.",
+      "loopVerifiable": true
+    },
+    {
+      "id": "US-807",
+      "title": "The share extension calls the recipe parser as the signed-in user",
+      "description": "As a parent, I want a recipe I share to be imported under my own account, so that import is charged to me and the endpoint does not have to stay open to anonymous callers.",
+      "acceptanceCriteria": [
+        "The main app publishes its current access token and expiry to the group.com.eatpal.app App Group whenever the session changes - restore, sign-in, token refresh - and clears it on sign-out",
+        "Only the short-lived access token is shared; the refresh token never leaves the app's keychain",
+        "RecipeParseAPI sends that token when it is present and unexpired, and falls back to the anon key otherwise",
+        "A 401 surfaces as a message telling the user to open EatPal and sign in, not a bare status code",
+        "The deep-link handler and the Shortcuts intent get the same behaviour, since they share RecipeParseAPI",
+        "Once the release carrying this is past MIN_SUPPORTED_IOS_BUILD, the anon branch and budget added by US-806 are deleted and requireUser stands alone again"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "ios",
+      "notes": "Second half of the US-806 fix. Needs an App Store release, which is why the server change went first. Token TTL is about an hour, so a share attempt made long after the app was last opened still lands on the anon path - acceptable while US-806's budget exists, and the reason that budget cannot be retired until this has shipped and aged past the min supported build.",
+      "loopVerifiable": false
+    },
+    {
+      "id": "US-808",
+      "title": "A catalog row keeps the licence of the data it was promoted from",
+      "description": "As a parent looking at a scanned product, I want to see where its numbers came from, so that the sources we rely on are credited as their licences require.",
+      "acceptanceCriteria": [
+        "A shared-catalog hit in lookup-barcode reports the provider the row was promoted from, not the table it now lives in",
+        "grocery_product_catalog.source values 'openfoodfacts' and 'foodrepo' resolve to an ODbL attribution; 'usda' resolves to a public-domain credit with no licence line",
+        "'user', 'admin', a missing source and an unrecognized one all fall back to the catalog's own name and need no notice",
+        "getDataSourceAttribution accepts both vocabularies - the display name and the lowercase provenance key - so a surface holding only the raw column can still attribute correctly",
+        "The two copies of the map (edge and web) are pinned in agreement by a test, since neither tree can import the other",
+        "A test reads gpc_source_check and asserts every value the column can legally hold either names a credited third party or names our own catalog"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "backend",
+      "notes": "Found 2026-09-08 by dispatching Web CI at claude/food-catalog-barcode by hand; ci.yml runs on main and develop only, so the branch had never measured itself. src/lib/dataSources.test.ts was already red: US-797 introduced a second source vocabulary and the scrape-based guard picked up both out of one file. The real defect underneath was not the test - lookup-barcode answered a catalog hit with a flat source: 'Community Catalog' (index.ts:620), and the client resolves its attribution notice from that string, so a row promoted out of Open Food Facts rendered with no ODbL line at all while its provenance sat unused in the column. Same shape as the aisle vocabulary split recorded on US-795: an iOS/DB vocabulary and a web display vocabulary meeting in one file.",
+      "loopVerifiable": true
     }
   ]
 }

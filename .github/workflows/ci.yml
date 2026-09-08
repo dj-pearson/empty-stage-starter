@@ -492,6 +492,30 @@ jobs:
       - name: Deno AI retention flags
         run: deno test --allow-env --allow-net supabase/functions/_shared/ai-retention.test.ts
 
+      # US-797: barcode-to-catalog promotion decision (unit + range sanity,
+      # name normalization matching the shipped iOS normalizer, verification
+      # always 'unverified'). Pure, no network, no DB. This step is the fix
+      # for US-792: the test file existed for a full commit with nothing
+      # here running it.
+      - name: Deno barcode catalog promotion
+        run: deno test supabase/functions/_shared/catalogPromotion.test.ts
+
+      # US-806: who parse-recipe lets in. Pins that an anon-key caller (every
+      # shipped iOS share extension, deep link and Shortcuts intent) is served
+      # rather than 401'd, and that the anon allowance stays capped per-address
+      # and globally. Pure, no network, no DB.
+      - name: Deno parse-recipe access budget
+        run: deno test supabase/functions/_shared/parse-recipe-access.test.ts
+
+      # The image-generation helper: prompt construction, b64 decode-and-store,
+      # and provider errors surfacing as throws. Five passing cases that no
+      # workflow had ever invoked -- found by generalizing the US-792 wiring
+      # gate in src/lib/ciGatesWired.test.ts to enumerate _shared/ rather than
+      # naming one file. --allow-net is for the supabase import resolved at
+      # check time; the test stubs fetch and reaches no provider.
+      - name: Deno image generation helper
+        run: deno test --allow-env --allow-net supabase/functions/_shared/image-gen.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           # US-760: pinned, not `latest`. Both Supabase jobs run the same
