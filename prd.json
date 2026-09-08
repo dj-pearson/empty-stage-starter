@@ -3619,6 +3619,21 @@
       "priority": 2,
       "passes": false,
       "notes": "Found 2026-09-07 during the US-795 review. src/pages/Grocery.tsx:329 creates the pantry food with is_safe: true hardcoded when a checked-off item matches no existing food by name. This is pre-existing behaviour on the unlinked path and was deliberately NOT changed inside US-795, which only had to stop the catalog name causing that path to be reached spuriously - changing the default there would have altered behaviour that story never touched. But the default itself is wrong for this app. EatPal is built for ARFID and picky eating, where is_safe is the flag a parent sets deliberately and the whole safe-food ladder reads. Buying a food is not the same as a child accepting it, and a food silently marked safe is exactly the error that matters most here. Worth checking whether any other automatic creation path does the same."
+    },
+    {
+      "id": "US-804",
+      "title": "REVOKE ... FROM PUBLIC does not actually revoke anything on Supabase",
+      "description": "As someone locking down an RPC, I want the revoke I wrote to be the revoke that happens, so that a function I believe is private is not callable by anon.",
+      "acceptanceCriteria": [
+        "Every function whose migration says REVOKE ALL ... FROM PUBLIC is audited: has_function_privilege('anon', <fn>, 'EXECUTE') must be false where that was the intent",
+        "The revokes name anon explicitly (REVOKE ... FROM PUBLIC, anon), because the grant to anon comes from pg_default_acl and not from PUBLIC",
+        "Each fixed function gets an assertion on has_function_privilege rather than on the presence of a REVOKE statement - the statement existing is what gave the false confidence in the first place",
+        "A decision is recorded per function: genuinely private, authenticated-only, or deliberately public. Not every one of these needs locking down",
+        "A note in CLAUDE.md or the migration conventions so the next REVOKE is written correctly the first time"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Found 2026-09-07 by the US-796 implementer while verifying its own REVOKE, and confirmed against the live database. Supabase sets a schema-level default ACL: pg_default_acl for functions in public is {postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}, so every new function gets EXECUTE granted DIRECTLY to anon, authenticated and service_role at creation. REVOKE ALL ON FUNCTION ... FROM PUBLIC removes only the PUBLIC grant and leaves those direct role grants in place, so has_function_privilege('anon', fn, 'EXECUTE') stays true and the function remains callable over PostgREST RPC. The pattern appears in at least five migrations: 20260410000000_disposable_email_domains, 20260512000000_chain_network, 20260709000026_auth_anomaly_agent, 20260709000027_rls_audit_agent, 20260808000001_harden_auth_rate_limit. Severity depends entirely on the function: for match_foods_to_catalog it is bounded, because SECURITY INVOKER plus RLS on foods means an anon call links zero rows and only burns a scan, but a SECURITY DEFINER function with the same pattern would be a real hole. Audit each one rather than assuming. US-796 fixes only its own function, naming anon explicitly."
     }
   ]
 }
