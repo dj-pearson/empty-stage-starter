@@ -355,11 +355,18 @@ export default function BudgetCalculator() {
                   aria-valuemax={100}
                   aria-label="Form completion progress"
                 >
+                  {/*
+                    scaleX rather than width: animating width relayouts the bar
+                    on every frame, transform does not. The track above is
+                    rounded-full and overflow-hidden, so it clips the fill and
+                    the fill needs no radius of its own -- the rounded ends look
+                    identical either way.
+                  */}
                   <div
-                    className="h-full bg-primary rounded-full"
+                    className="h-full w-full bg-primary origin-left"
                     style={{
-                      width: `${progressInfo.percentage}%`,
-                      transition: prefersReducedMotion ? 'none' : 'width 0.4s ease-in-out',
+                      transform: `scaleX(${progressInfo.percentage / 100})`,
+                      transition: prefersReducedMotion ? 'none' : 'transform 0.4s ease-in-out',
                     }}
                   />
                 </div>

@@ -131,7 +131,7 @@ const Contact = () => {
           </h1>
 
           {/* TL;DR for GEO */}
-          <div className="max-w-3xl mx-auto bg-primary/5 border-l-4 border-primary p-6 rounded-r-lg mb-6 text-left">
+          <div className="max-w-3xl mx-auto bg-primary/5 border border-primary/25 p-6 rounded-lg mb-6 text-left">
             <p className="text-sm font-semibold text-primary mb-2">TL;DR - Contact Information</p>
             <p className="text-muted-foreground leading-relaxed">
               <strong>Email:</strong> Support@TryEatPal.com | <strong>Response Time:</strong> 24-48 hours (business days) |

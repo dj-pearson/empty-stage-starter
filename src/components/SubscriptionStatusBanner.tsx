@@ -142,7 +142,7 @@ export function SubscriptionStatusBanner() {
   // Complementary subscription banner
   if (complementaryInfo.isComplementary) {
     return (
-      <Card className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border-purple-200 dark:border-purple-800">
+      <Card className="mb-6 bg-primary/5 border-primary/20">
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-start gap-3">

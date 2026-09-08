@@ -2786,41 +2786,47 @@
     },
     {
       "id": "US-704",
-      "title": "iOS onboarding creates a child instead of only describing the app",
-      "description": "As a parent opening EatPal for the first time on iPhone, I want setup to actually create my child's profile, so that the app is usable when I reach the home screen.",
+      "title": "iOS onboarding asks who you are planning for and creates the child",
+      "description": "As a parent opening EatPal for the first time on iPhone, I want setup to ask who I am planning for and create my child's profile, so that the app is usable when I reach the home screen and my answer matches the one the web asks.",
       "acceptanceCriteria": [
-        "OnboardingView collects the child's name (required) and optionally date of birth, allergens and favourite foods, mirroring the four steps in src/components/OnboardingDialog.tsx",
-        "Completing onboarding calls the same create path the Kids screen uses, so the child, the allergens and the seeded pantry foods land in Supabase",
-        "Skip remains available on every step and still sets hasCompletedOnboarding, so nobody is trapped",
-        "Hitting the plan limit surfaces the existing upgrade path rather than failing silently, matching OnboardingDialog.handleComplete",
-        "The marketing slides are cut to at most two and placed after the child is created rather than before",
-        "Unit tests in EatPalTests cover the create path and the skip path"
+        "The five marketing slides in ios/EatPal/EatPal/Views/Auth/OnboardingView.swift are deleted, not reordered; the flow opens on the setup question",
+        "Step one is Who are you planning for, with the same three choices and the same copy as src/pages/Onboarding.tsx: just me, me and a partner, my family",
+        "Only the my_family branch asks for a child, and a first name is the only required field, matching the web route and AddKidView's own name-only gate at KidsView.swift:262",
+        "The two adult branches finish at step one and create nothing, so a couple planning for themselves is not made to invent a child",
+        "The child is created through appState.addKid, the same path the Kids screen uses, so the offline queue and realtime behaviour are unchanged",
+        "Skip is available on both steps, creates nothing, and still finishes onboarding, because a skip is an answer and re-asking is how a setup flow becomes something people learn to dismiss",
+        "The step indicator reads 1 of 1 for the adult branches and 1 of 2 then 2 of 2 for family, matching the web route's totalSteps",
+        "planning_for is not persisted to any new column; household-planner US-740 owns storing it as household_eaters rows, and inventing a column here is how the eater model diverges before it is built",
+        "Presented as a full-screen gate from RootView rather than a sheet, so it cannot be swipe-dismissed",
+        "Tests in EatPalTests cover all three branches and the skip path"
       ],
       "priority": 2,
       "passes": false,
       "slice": 2,
       "platform": "ios",
       "loopVerifiable": false,
-      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/Views/Auth/OnboardingView.swift is five static marketing pages that create nothing. The web equivalent creates a kid (OnboardingDialog.tsx:210) and seeds the pantry (:225). Measured gap: 53% of email users add a child against 37% of Apple users; 11% plan a meal against 5%."
+      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/Views/Auth/OnboardingView.swift is five static marketing pages that create nothing. The web equivalent creates a kid (OnboardingDialog.tsx:210) and seeds the pantry (:225). Measured gap: 53% of email users add a child against 37% of Apple users; 11% plan a meal against 5%. || Design 2026-09-08 (iOS first-run brainstorm): mirror the shipped web route src/pages/Onboarding.tsx, not the deleted OnboardingDialog.tsx. Order: US-809 -> US-708 -> US-704, with US-705 and US-810 independent. loopVerifiable stays false: nothing on the Windows dev machine compiles Swift, so verification is the ios-ci.yml PR gate, not a local loop iteration. AC rewritten 2026-09-08: the old AC1 pointed at src/components/OnboardingDialog.tsx, which US-770 DELETED on 2026-09-05, and asked for DOB, allergens, favourite foods and a seeded pantry that the shipped web route no longer collects. Old AC3 kept the hasCompletedOnboarding AppStorage flag that US-708 removes, and old AC5 kept two marketing slides. Depends on US-708 for the completion write."
     },
     {
       "id": "US-705",
-      "title": "First-run empty state on the iOS home tab",
-      "description": "As a parent with a brand-new account, I want the home screen to tell me what to do first, so that I am not looking at a grid of zeros.",
+      "title": "Every zero-kid iOS empty state can add a child",
+      "description": "As a parent with a brand-new account, I want any screen that asks me for a child to let me add one right there, so that I am not sent hunting through tabs for a button.",
       "acceptanceCriteria": [
-        "When appState.kids is empty, DashboardHomeView renders a single empty state instead of the zeroed QuickStatsGrid and the three quick actions",
-        "The empty state has one primary action that opens the add-child flow directly, not the More tab",
-        "The zero-value stats grid and any card that cannot act without an activeKidId are hidden rather than shown empty",
+        "One shared view (Views/Components/AddFirstChildCard.swift) presents the existing AddKidView as a sheet, and all four zero-kid surfaces use it rather than each rolling their own",
+        "DashboardHomeView.swift:38 renders it as the else branch of the existing kids-empty check, in place of the zeroed QuickStatsGrid and the three quick actions",
+        "MealPlanView.swift:176, AIMealPlanView.swift:41 and ProgressDashboardView.swift:231 pass it as the actions closure of their existing ContentUnavailableView",
+        "AIMealPlanView's copy 'Add a child profile from the Dashboard' is rewritten: it is false today because the Dashboard has no such control, and the fixed empty state names no screen the user has to go find",
+        "The zero-value stats grid and any card that cannot act without an activeKidId stay hidden rather than rendered empty",
         "The state disappears as soon as one child exists, with no lingering dismissal flag",
-        "Quick actions that require an activeKidId are explained rather than merely disabled",
-        "Snapshot or unit coverage for the zero-kid and one-kid renders"
+        "Quick actions that require an activeKidId explain why rather than sitting silently disabled",
+        "Coverage for the zero-kid and one-kid renders"
       ],
       "priority": 2,
       "passes": false,
       "slice": 2,
       "platform": "ios",
       "loopVerifiable": false,
-      "notes": "Audit 2026-09-01: DashboardHomeView.swift:40 hides the kid selector, meal summary, quiz nudge and expiring card when there are no kids, leaving zeros and three actions, none of which is 'add a child'. Adding food is disabled at :762 while activeKidId is nil. Kids lives under More per MainTabView.swift:20."
+      "notes": "Audit 2026-09-01: DashboardHomeView.swift:40 hides the kid selector, meal summary, quiz nudge and expiring card when there are no kids, leaving zeros and three actions, none of which is 'add a child'. Adding food is disabled at :762 while activeKidId is nil. Kids lives under More per MainTabView.swift:20. || Scope broadened 2026-09-08 (iOS first-run brainstorm): was Dashboard-only. An empty state that cannot perform the action it is asking for is the actual bug, so the fix is one component at four call sites instead of picking a winner. Independent of US-704 and US-708; ships the soft landing that makes the fail-open gate decision in US-708 safe."
     },
     {
       "id": "US-706",
@@ -2866,18 +2872,22 @@
       "title": "iOS writes onboarding completion to profiles",
       "description": "As the operator of EatPal, I want onboarding_completed to mean the same thing on both platforms, so that re-engagement targeting is not aimed at the wrong people.",
       "acceptanceCriteria": [
-        "Completing or skipping onboarding on iOS writes profiles.onboarding_completed = true in addition to the local AppStorage flag",
-        "The local flag is seeded from the server value on first load, so a reinstall or a second device does not replay onboarding",
-        "A failed write is retried through the existing offline queue rather than silently dropped",
-        "Any dashboard or re-engagement query reading the column is checked and noted in the commit, since it has been reading false for 174 of 200 accounts",
-        "Unit tests cover the seed-from-server and the write-on-complete paths"
+        "A new Services/OnboardingService.swift owns the gate, shaped like ForceUpdateService: MainActor ObservableObject singleton, @Published private(set) needsOnboarding, async refresh() and markCompleted()",
+        "RootView switches the .authenticated case on needsOnboarding and the @AppStorage hasCompletedOnboarding flag at RootView.swift:6 is deleted",
+        "Completing or skipping writes profiles.onboarding_completed = true; on failure the write goes through OfflineStore (US-809) and the local cache still flips, because the queue will deliver it",
+        "needsOnboarding initialises synchronously from a UserDefaults cache so launch never waits on the network; refresh() seeds it from the server and is called from RootView's existing .task and its existing scenePhase == .active block",
+        "A read that cannot resolve fails open to the app, matching ForceUpdateService.swift:122, and the retry is the next foreground rather than a launch-time stall",
+        "On upgrade, OnboardingService seeds its cache once from the legacy hasCompletedOnboarding key when the new cache is unset, so the 174 of 200 accounts the column reads false for are not sent through setup again",
+        "A Models/Profile.swift decodes the row rather than returning a bare Bool, since a service whose return type is Bool gets rewritten the first time anyone needs a second column",
+        "Any dashboard or re-engagement query reading the column is checked and noted in the commit; web's OnboardingProgressBar and OnboardingReengagement read it per US-770 AC4 and will stop nudging those users",
+        "Unit tests cover seed-from-server for true, false and a throwing read, the upgrade seed, and the write on both the complete and the skip path"
       ],
       "priority": 3,
       "passes": false,
       "slice": 3,
       "platform": "ios",
       "loopVerifiable": false,
-      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/App/RootView.swift:6 stores completion in AppStorage hasCompletedOnboarding, device-local, never written to profiles. The column reads false for 174 of 200 accounts including every Apple user who finished the slides. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): the web half is US-770 (onboarding route writes the same profiles.onboarding_completed column and seeds from it). Ship the two in the same release so the column means one thing."
+      "notes": "Audit 2026-09-01: ios/EatPal/EatPal/App/RootView.swift:6 stores completion in AppStorage hasCompletedOnboarding, device-local, never written to profiles. The column reads false for 174 of 200 accounts including every Apple user who finished the slides. || Roadmap survey 2026-09-03 (docs/web-platform-roadmap-2026-09.md): the web half is US-770 (onboarding route writes the same profiles.onboarding_completed column and seeds from it). Ship the two in the same release so the column means one thing. || Design 2026-09-08 (iOS first-run brainstorm): mirror the shipped web route src/pages/Onboarding.tsx, not the deleted OnboardingDialog.tsx. Order: US-809 -> US-708 -> US-704, with US-705 and US-810 independent. loopVerifiable stays false: nothing on the Windows dev machine compiles Swift, so verification is the ios-ci.yml PR gate, not a local loop iteration. Gate structure chosen 2026-09-08: OnboardingService over folding into AppState, because loadAllData() is called from MainTabView's .task, so AppState cannot hold a value the gate needs before MainTabView exists. Blocked by US-809: OfflineStore.Table has no profiles case and its replay switch ends in default: break, so queueing a profile write today drains to nothing."
     },
     {
       "id": "US-760",
@@ -3704,6 +3714,144 @@
       "platform": "backend",
       "notes": "Found 2026-09-08 by dispatching Web CI at claude/food-catalog-barcode by hand; ci.yml runs on main and develop only, so the branch had never measured itself. src/lib/dataSources.test.ts was already red: US-797 introduced a second source vocabulary and the scrape-based guard picked up both out of one file. The real defect underneath was not the test - lookup-barcode answered a catalog hit with a flat source: 'Community Catalog' (index.ts:620), and the client resolves its attribution notice from that string, so a row promoted out of Open Food Facts rendered with no ODbL line at all while its provenance sat unused in the column. Same shape as the aisle vocabulary split recorded on US-795: an iOS/DB vocabulary and a web display vocabulary meeting in one file.",
       "loopVerifiable": true
+    },
+    {
+      "id": "US-809",
+      "title": "OfflineStore replays profile updates instead of dropping them",
+      "description": "As an iOS user who finishes setup with no signal, I want that completion to reach Supabase when I reconnect, so that my other devices do not ask me to set up all over again.",
+      "acceptanceCriteria": [
+        "OfflineStore.Table gains a profiles case and the update branch decodes a ProfileUpdate, so a queued profile write replays instead of falling through the default: break at OfflineStore.swift:545",
+        "The same update switch gains the missing kids case; today every kid edit made offline is silently dropped at OfflineStore.swift:530-544 while the insert switch handles kids correctly",
+        "An unhandled table no longer counts as a successful replay: the default branch throws (or quarantines) rather than breaking, so the next table someone adds cannot fail this way in silence",
+        "Unit tests cover replay of a profiles update, replay of a kids update, and the unhandled-table path"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 3,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-08 (iOS first-run brainstorm): OfflineStore.Table is a closed enum of foods, kids, recipes, plan_entries, grocery_items. Both the insert and update replay switches end in default: break, so a mutation for any other table is marked done and discarded. The kids gap is pre-existing and unrelated to onboarding; it is here because it is the same switch and the same fix. Prerequisite for US-708 AC3."
+    },
+    {
+      "id": "US-810",
+      "title": "iOS onboarding emits the same activation events as web",
+      "description": "As the operator of EatPal, I want the iOS and web setup funnels to aggregate, so that activation can be compared across platforms rather than guessed at.",
+      "acceptanceCriteria": [
+        "AnalyticsEvent gains onboardingPlanningForSelected, onboardingCompleted and onboardingSkipped cases; the enum is closed by design and Services/Analytics.swift:126 says adding a case is the only way in",
+        "Event names and property keys match src/pages/Onboarding.tsx exactly: onboarding_planning_for_selected, onboarding_completed and onboarding_skipped, carrying planning_for and added_child, so the two platforms land in the same buckets",
+        "kidAdded keeps firing from appState.addKid and the onboarding flow does not emit a second one",
+        "Unit tests assert the emitted names and property keys, since a typo here is invisible until someone reads a funnel"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 3,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Audit 2026-09-08 (iOS first-run brainstorm): iOS emits no onboarding events at all; MainTabView only calls AnalyticsService.screen on tab switches. Web fires all three from src/pages/Onboarding.tsx:80. Routing them into funnel_events is US-707 and stays web-scoped. Independent of US-704 only in review order; the events fire from the flow US-704 builds."
+    },
+    {
+      "id": "US-811",
+      "title": "One navigation list, consumed by every renderer",
+      "description": "As someone using EatPal on a phone, I want the things I open daily on the bottom bar and everything else somewhere findable, so that planning a meal is not three taps behind a More menu.",
+      "acceptanceCriteria": [
+        "A single src/lib/navigation.ts holds every in-app destination with its group, icon and entitlement; the four hand-maintained arrays (mainNavItems, toolsNavItems, insightsNavItems in AppSidebar.tsx and mobileNavItems in Dashboard.tsx) are deleted",
+        "The mobile bottom bar is Home, Planner, Pantry, Grocery, matching the iOS tab bar in MainTabView.swift so the two platforms agree on what is primary; Recipes previously held a slot while Planner and Grocery sat behind More",
+        "The More sheet is defined as the complement of the bottom bar, so a new destination is either primary or in More and can never be missing from both",
+        "The hamburger sheet renders the same groups as the desktop sidebar; Grocery is no longer filed under Tools and Account Settings no longer appears twice on one sheet",
+        "/dashboard/insights (previously in the mobile list and no desktop group) and /dashboard/household (previously in neither, reachable only from a dialog and the /join page) are both in the nav",
+        "Admin and Professional Portal come through one entitlement filter rather than being appended as special cases; a shared useNavEntitlements hook replaces the duplicated queries, so the Professional Portal exists on mobile as well as desktop",
+        "The kid selector renders once; it was in both the sidebar header and the dashboard top header, visible twice whenever the sidebar was expanded",
+        "A test pins the contract the way routeAliases.test.ts does: no duplicate routes or labels, exactly four primary items in iOS order, primary and secondary partitioning every item, and every relative child route in App.tsx having a nav entry",
+        "No new test failures against the branch point"
+      ],
+      "priority": 2,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-07 (UX deep dive): three renderers sliced one array three ways. Bottom bar was mobileNavItems.slice(0, 4) = Home, Kids, Pantry, Recipes; the hamburger's MAIN was slice(0, 5) and its TOOLS ran slice(5, length - (isAdmin ? 1 : 0)), which both filed Grocery under Tools and duplicated Account Settings. None of it is visible in a single-file diff, which is why the fix ships with a test that reads App.tsx for orphan routes. CommandPalette.tsx keeps its own destination list with custom labels and keywords; folding it into the registry is follow-up, not this story."
+    },
+    {
+      "id": "US-812",
+      "title": "The quick-log action records the meal instead of announcing it",
+      "description": "As a parent tapping the floating Log Meal Result button, I want the result saved against a real meal, so that what I logged is still there tomorrow.",
+      "acceptanceCriteria": [
+        "Dashboard.tsx's handleQuickLog writes through updatePlanEntry rather than only firing a toast; the old body was a single toast(\"Meal logged!\") call and no write at all",
+        "The modal asks which meal when the caller cannot say, since the floating action is available on every dashboard page with no meal in context",
+        "One planned meal is selected without asking; more than one disables the result buttons until a choice is made, so a result cannot land on whichever meal happened to be first",
+        "An explicit meal id that no longer matches an entry is an error, not a silent fallback to the first meal of the day",
+        "With nothing planned, the user is told so and pointed at the planner instead of being shown a picker with no rows",
+        "A failed write reports the failure; the previous behaviour reported success unconditionally",
+        "The Home page path, which opens the modal from a specific meal row, is unchanged",
+        "The decision the picker encodes lives in pure functions in src/lib/quickLog.ts and is unit tested without rendering (see US-813)"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-07 (UX deep dive): Dashboard.tsx mounted QuickLogModal with a handler that toasted 'Meal logged!' and returned. QuickLogModal itself is presentational and only calls props.onLog, so nothing downstream saved either. Home.tsx has a real handler but it needs a selectedMeal, so the FAB path -- the most reachable one, present on every dashboard page -- was the only one that discarded the result. The unused `notes` argument was the lint error that gave it away."
+    },
+    {
+      "id": "US-813",
+      "title": "Component tests can render again: one React in the test environment",
+      "description": "As anyone changing the UI, I want to be able to write a test that renders a component, so that front-end behaviour is verifiable rather than asserted against source text.",
+      "acceptanceCriteria": [
+        "A test that renders any component with @testing-library/react runs instead of throwing \"Cannot read properties of null (reading 'useState')\"",
+        "The root cause is fixed at the dependency layout, not papered over: there are two physical React copies, node_modules/react and a nested one under node_modules/.deno/react-dom@19.1.0/node_modules, and @testing-library/react resolves its own nested react-dom on top of that",
+        "resolve.dedupe plus react/react-dom aliases in vitest.config.ts were tried and are NOT sufficient; the fix has to reach the nested copies",
+        "The ~42 currently-failing test files are re-run and the ones failing only for this reason pass; any still failing for real reasons are listed in the commit",
+        "The typecheck and lint baselines in .ci/ are updated only if the fix legitimately changes their counts",
+        "src/components/QuickLogModal.test.ts and any other source-text assertions written while this was broken are converted to real render tests"
+      ],
+      "priority": 1,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-08 (UX loop): the full suite is 272 failed / 2839 passed on main, and the failures cluster on anything that renders -- every context test, the admin components, several pages. All share the null hook dispatcher, which is the classic two-React-instances symptom: the component's own import of useState resolves one copy while the renderer set the dispatcher on the other. node_modules holds a mixed npm and deno layout (extraneous Expo packages, .deno/* nested duplicates), so the likely fix is reinstalling cleanly rather than another resolver alias. Until it is fixed, no UI change in this repo can be verified by rendering it, which is a tax on every front-end story."
+    },
+    {
+      "id": "US-814",
+      "title": "Clear the UI tells that are actually tells",
+      "description": "As someone using EatPal, I want the interface to look designed rather than generated, so that the app reads as something built for this job.",
+      "acceptanceCriteria": [
+        "FoodCard no longer carries a 4px coloured left stripe; the category is shown by its icon plus a 1px tint of the same hue, which also fixes category being encoded in colour alone",
+        "The Pantry loading skeleton follows the card it stands in for",
+        "The four byte-identical TL;DR callouts (Blog, Contact, FAQ, Pricing) lose the side tab and round on all four corners rather than only the right two",
+        "Gradient text is gone from the three headings that used it; emphasis is carried by size and weight, and the hero's emphasised phrase keeps a solid colour it can pass contrast with",
+        "The purple-to-blue subscription banner and the purple-to-pink achievements card are tinted from the brand instead",
+        "The two form progress bars animate transform rather than width, so the bar no longer relayouts every frame; the track already clips, so the rounded ends are unchanged",
+        "Categorical colour is left alone: purple in ProgressDashboard and WeeklyProgressReport is one of four stat colours, not decoration",
+        "False positives are documented rather than 'fixed': all 35 border-accent-on-rounded hits are the Tailwind spinner idiom, the remaining side-tabs are prose-blockquote rules and an exported HTML document, and animate-bounce-dynamic is a gentle transform float already gated behind prefers-reduced-motion",
+        "npx impeccable detect src drops from 82 to 67 with no new test failures and no change to the lint count"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-08 (UX loop): impeccable reported 82 anti-patterns. Triage matters more than the number: 43 of the 82 are false positives on two idioms (35 spinners, 5 on a class whose name contains 'bounce' but whose keyframes are a transform float), and 8 more are XSS test fixtures. What remains after that is the real list, and most of it was fixed here. Deliberately NOT done: the body font. index.css sets Inter, which the house style calls out as a non-choice, but swapping the typeface of a shipped app is a design decision for Dj, not a lint fix. The Arial hits are inside emailed and exported HTML, where a web font would not load anyway."
+    },
+    {
+      "id": "US-815",
+      "title": "One mobile menu, not three",
+      "description": "As someone using EatPal on a phone, I want one place to find things, so that I am not guessing which of two menus in opposite corners has the link I want.",
+      "acceptanceCriteria": [
+        "The top-right hamburger sheet is deleted; once US-811 put every nav group in the bottom More sheet it was a second menu listing the same links in a different grouping",
+        "The kid selector moves into the mobile top header where the hamburger was, so switching child is one tap rather than two",
+        "Theme toggle and Sign Out, the only controls the hamburger owned outright, move into the More sheet rather than disappearing",
+        "The More sheet renders the same sections as the desktop sidebar instead of a flat grid of fourteen tiles",
+        "A new secondaryNavItemsInGroup helper backs that, and a test asserts the union of the groups equals the full complement of the bottom bar, so nothing can go missing from mobile entirely",
+        "No bottom-bar destination is repeated inside More",
+        "Tests assert the hamburger state is gone and the controls it owned survive"
+      ],
+      "priority": 3,
+      "passes": false,
+      "slice": 3,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Audit 2026-09-07 (UX deep dive), item 7: mobile carried a top-right hamburger, a bottom bar, a bottom More sheet and a floating action button pinned over the bottom bar. The hamburger and More overlapped almost completely, and disagreed about grouping. Follows US-811, which is what made the hamburger redundant rather than merely duplicative. The FAB still overlaps the bottom bar's right edge; that is not addressed here."
     }
   ]
 }

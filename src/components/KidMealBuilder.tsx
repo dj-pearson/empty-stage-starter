@@ -290,7 +290,7 @@ export function KidMealBuilder() {
 
       {/* Recent Achievements */}
       {recentAchievements.length > 0 && (
-        <Card className="border-purple-300 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900 dark:to-pink-900">
+        <Card className="border-primary/20 bg-primary/5">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Trophy className="h-5 w-5 text-yellow-500" />
