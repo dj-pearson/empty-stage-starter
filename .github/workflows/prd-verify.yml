@@ -141,20 +141,37 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- prd.json prd-*.json progress.txt; then
+
+          # The globs are QUOTED so git expands them, not the shell. The
+          # previous step writes prd-verify-report.json and its two siblings
+          # into the working directory, and those are gitignored -- an
+          # unquoted prd-*.json expanded to include them, and `git add` on an
+          # explicitly named ignored path exits 1, which under `set -e` failed
+          # this step on every run that actually had a story to flip. A
+          # wildcard pathspec skips ignored files silently; the exclude below
+          # says so out loud rather than leaving it to that subtlety.
+          PRD_PATHS=(prd.json 'prd-*.json' ':(exclude)prd-*verify-report.json' progress.txt)
+
+          if git diff --quiet -- "${PRD_PATHS[@]}"; then
             echo "No stories flipped — nothing to commit."
             exit 0
           fi
-          git add prd.json prd-*.json progress.txt
+          git add -- "${PRD_PATHS[@]}"
           git commit -m "chore(prd): flip CI-verified stories to passes=true [skip ci]"
-          # Retry push a few times for transient network/ref races.
+
+          # Retry a few times for transient network/ref races. The loop used to
+          # fall out after four failures and let the step report success, so a
+          # push that never landed read as a green run with flipped flags that
+          # existed only on the runner.
           n=0
           until [ $n -ge 4 ]; do
-            git push origin "HEAD:${TARGET_BRANCH}" && break
+            git push origin "HEAD:${TARGET_BRANCH}" && exit 0
             n=$((n+1))
             echo "push failed, retry $n…"; sleep $((2 ** n))
             git pull --rebase origin "${TARGET_BRANCH}" || true
           done
+          echo "::error title=PRD flip not pushed::could not push the flipped flags to ${TARGET_BRANCH} after 4 attempts"
+          exit 1
 
       - name: Upload verification report
         if: ${{ always() }}
