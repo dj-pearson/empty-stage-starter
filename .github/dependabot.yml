@@ -62,19 +62,10 @@ updates:
     commit-message:
       prefix: "chore(ci)"
 
-  # Supabase Edge Functions (Deno)
-  - package-ecosystem: "npm"
-    directory: "/supabase/functions"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "America/New_York"
-    open-pull-requests-limit: 3
-    reviewers:
-      - "dj-pearson"
-    labels:
-      - "dependencies"
-      - "edge-functions"
-    commit-message:
-      prefix: "chore(deps-edge)"
+  # No entry for supabase/functions. It is a Deno tree: its dependencies are
+  # URL imports pinned in the source (esm.sh, deno.land), and Dependabot has no
+  # Deno ecosystem to read them with. The entry that used to sit here declared
+  # `package-ecosystem: "npm"` against `/supabase/functions` and failed every
+  # scheduled run with `dependency_file_not_found: package.json` -- there has
+  # never been a package.json in that directory. Bump those pins by hand, or
+  # with a checker that understands URL imports.

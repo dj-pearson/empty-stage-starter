@@ -7,15 +7,20 @@ name: PRD Verify
 # manual/ops stories never auto-flip, net-new stories without an implementation
 # stay false, and any story whose gate is red stays false until a green run.
 #
+# THAT DESCRIPTION IS THE INTENT, NOT THE BEHAVIOUR. The engine reads no
+# acceptance criteria: verify-stories.mjs flips on "a commit message mentions
+# US-XXX" AND "the platform job was green", so a green gate on an unrelated PR
+# marks unrelated stories done. US-792 is the story to fix that, and until it
+# lands this workflow REPORTS ONLY and writes nothing -- see the flip job.
+#
 # Entry points:
 #  - pull_request -> main: a PR touching a verification surface (iOS, Android,
-#    web src, prd.json, or these workflows) runs the gates and, when a gate is
-#    green, commits the resulting passes=true flips ONTO THE PR BRANCH. Merging
-#    the PR carries the flips into main — so flags only change through review,
-#    never a direct push to protected main.
-#  - workflow_dispatch: same pipeline on demand (dry-run option via `apply`).
-# The flip commit carries [skip ci] and is pushed by GITHUB_TOKEN, so it can't
-# loop back and re-trigger CI.
+#    web src, prd.json, or these workflows) runs the gates and publishes the
+#    flips it WOULD make to the step summary and the report artifact.
+#  - workflow_dispatch: same pipeline on demand; `apply` can turn writing back
+#    on deliberately, and defaults off.
+# When writing is on, the flip commit carries [skip ci] and is pushed by
+# GITHUB_TOKEN, so it can't loop back and re-trigger CI.
 
 on:
   pull_request:
@@ -33,9 +38,9 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: 'Write flips back to prd.json/progress.txt (false = dry-run report only)'
+        description: 'Write flips back to prd.json/progress.txt. Leave OFF until US-792 fixes the flip criteria — the engine currently marks a story done because a commit mentions its id and some platform gate was green.'
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write
@@ -99,9 +104,25 @@ jobs:
     runs-on: ubuntu-latest
     needs: [web-gate, ios-gate, android-gate]
     if: ${{ always() }}
-    # apply=false only when a dispatch explicitly asks for a dry-run; PRs always apply.
+    # DRY-RUN ONLY, until US-792 lands.
+    #
+    # The engine's flip condition is "some commit message mentions US-XXX" AND
+    # "the platform job was green". It never reads a story's acceptance
+    # criteria, so a green gate on an unrelated PR marks unrelated stories
+    # done. The `git add` bug fixed in this same commit was the only thing
+    # stopping those flips from persisting -- US-792's notes say so explicitly,
+    # and say to fix the criteria BEFORE the commit step.
+    #
+    # Fixing the commit step first proved the point in one run: on a PR whose
+    # entire content is two YAML files, it flipped 14 stories, among them
+    # US-792 itself, and US-806/US-807 whose own criteria are waiting on an
+    # edge-function redeploy and an App Store release that have not happened.
+    #
+    # So the step keeps running and keeps reporting, and writes nothing. A
+    # dispatch can still opt in with apply=true once the criteria are
+    # trustworthy; PRs cannot.
     env:
-      APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply == false) && 'false' || 'true' }}
+      APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply == true) && 'true' || 'false' }}
       TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
@@ -141,20 +162,37 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- prd.json prd-*.json progress.txt; then
+
+          # The globs are QUOTED so git expands them, not the shell. The
+          # previous step writes prd-verify-report.json and its two siblings
+          # into the working directory, and those are gitignored -- an
+          # unquoted prd-*.json expanded to include them, and `git add` on an
+          # explicitly named ignored path exits 1, which under `set -e` failed
+          # this step on every run that actually had a story to flip. A
+          # wildcard pathspec skips ignored files silently; the exclude below
+          # says so out loud rather than leaving it to that subtlety.
+          PRD_PATHS=(prd.json 'prd-*.json' ':(exclude)prd-*verify-report.json' progress.txt)
+
+          if git diff --quiet -- "${PRD_PATHS[@]}"; then
             echo "No stories flipped — nothing to commit."
             exit 0
           fi
-          git add prd.json prd-*.json progress.txt
+          git add -- "${PRD_PATHS[@]}"
           git commit -m "chore(prd): flip CI-verified stories to passes=true [skip ci]"
-          # Retry push a few times for transient network/ref races.
+
+          # Retry a few times for transient network/ref races. The loop used to
+          # fall out after four failures and let the step report success, so a
+          # push that never landed read as a green run with flipped flags that
+          # existed only on the runner.
           n=0
           until [ $n -ge 4 ]; do
-            git push origin "HEAD:${TARGET_BRANCH}" && break
+            git push origin "HEAD:${TARGET_BRANCH}" && exit 0
             n=$((n+1))
             echo "push failed, retry $n…"; sleep $((2 ** n))
             git pull --rebase origin "${TARGET_BRANCH}" || true
           done
+          echo "::error title=PRD flip not pushed::could not push the flipped flags to ${TARGET_BRANCH} after 4 attempts"
+          exit 1
 
       - name: Upload verification report
         if: ${{ always() }}
