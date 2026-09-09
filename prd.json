@@ -4116,6 +4116,22 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 11) by sweeping toasts that forward a caught error's .message where the enclosing function does a fetch or a supabase call: 12 user-facing sites.\n\nTHE WORST TWO ARE Auth.tsx:305 and :464 -- sign-up and sign-in. `toast.error(\"Error\", { description: error.message })`. With no connection, fetch throws TypeError: Failed to fetch, so the entire description a locked-out user reads is \"Failed to fetch\". That is the one moment they cannot get past, and the app said nothing actionable.\n\nTHE FIX HAS THREE CASES AND THE MIDDLE ONE IS THE POINT. userFacingError(error, fallback): offline -> say so; PostgREST internals ('new row violates row-level security policy for table \"plan_entries\"', 'duplicate key value violates unique constraint ...', 'column ... does not exist') -> the caller's fallback; everything else -> THROUGH UNCHANGED. GoTrue's messages are written for the user, and replacing 'Invalid login credentials' with a generic apology would make the sign-in form worse, not safer. A blanket sanitiser would have done exactly that -- mutant C, which swallows every message, fails four tests.\n\nApplied to all 12 sites (Auth x2, BindEmailFlow x3, ProfessionalSettings x5, SaveMealPlanTemplateDialog, ApplyTemplateDialog, SupportWidget, backup). Sweep now returns 0.\n\nSecondary benefit: constraint and RLS text no longer reaches a screen someone else might be looking at."
+    },
+    {
+      "id": "US-832",
+      "title": "robots.txt blocked /authors, a page the sitemap advertises and the build prerenders",
+      "description": "As the site's owner, I want every page we publish to be fetchable by the crawlers we invite, so that a page we spend build time on is not one we also tell Google to ignore.",
+      "acceptanceCriteria": [
+        "/authors is reachable by every indexing crawler, while /auth and everything under it stays blocked.",
+        "Every prerendered route appears in the fallback sitemap and vice versa.",
+        "Neither list contains a URL that is not a real route in App.tsx.",
+        "The robots parser has one implementation, not one per test file."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 13) by writing a gate that ties the four SEO route lists together and running it: scripts/prerender-routes.json (29 static), functions/sitemap.xml.ts (29 fallback URLs), public/robots.txt, and src/App.tsx.\n\nTHE BUG: `Disallow: /auth` is a PREFIX match under RFC 9309, so it also matches /authors. That page is public, prerendered, listed in the sitemap, and its author bios are an E-E-A-T signal for nutrition content -- and every one of the 16 indexing groups told every crawler not to fetch it. A URL in the sitemap that robots blocks is a Search Console error, and it had been sitting in all 16 groups.\n\nWHAT MAKES IT A GOOD EXAMPLE: robots.txt's own header already reasons about prefix matching -- '\"/admin\" covers /admin, /admin/agents and /admin-dashboard' -- but only in the permissive direction, where one rule usefully covers more private paths. Nobody asked what else /auth covers. Fixed as a pair, `/auth$` plus `/auth/`, in all 16 groups, with the reasoning written next to the existing note.\n\nTHE PARSER MOVED RATHER THAN BEING COPIED. A full RFC 9309 implementation (group resolution, longest-match-wins, Allow ties) lived inside src/lib/robots-txt.test.ts, so anything else needing to ask 'would Googlebot fetch this?' had to write a second one. It is src/lib/robotsTxt.ts now; the original test imports it and its 76 assertions still pass, so there is one implementation instead of two that can drift.\n\nThe prerender and sitemap lists were already in exact agreement (29 = 29, nothing missing either way, no phantom routes). Nothing enforced it; now something does. Mutation-checked four ways: restore the bare /auth rule (7 fail), add a sitemap URL nobody prerenders (1), prerender a route that does not exist (1), delete every Disallow so the block check passes by being permissive (30)."
     }
   ]
 }

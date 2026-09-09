@@ -2972,3 +2972,64 @@ stacked on the bottom edge. src/lib/overlayStacking.test.ts.
   - When deleting a file, run the whole suite rather than the tests you think
     are related. Two gates referenced it by path, and one of them was only
     pretending to check anything.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 13. US-832: robots.txt blocked
+/authors, a page the sitemap advertises and the build prerenders.
+================================================================================
+
+- THE GATE FOUND THE BUG, which is the point of writing gates for things that
+  look fine. I set out to enforce agreement between four lists that are kept in
+  step by hand -- scripts/prerender-routes.json (29 static routes),
+  functions/sitemap.xml.ts (29 fallback URLs), public/robots.txt and
+  src/App.tsx. The prerender and sitemap halves were already in exact
+  agreement: 29 = 29, nothing missing in either direction, no phantom routes.
+  The robots leg failed on the first run.
+
+- `Disallow: /auth` IS A PREFIX MATCH, so it also matches /authors. That page
+  is public, prerendered, listed in the sitemap, and its author bios are an
+  E-E-A-T signal for nutrition content. All 16 indexing groups told every
+  crawler not to fetch it. A URL advertised in a sitemap and blocked by
+  robots.txt is a Search Console error, and it was sitting in every group.
+
+- THE FILE ALREADY REASONED ABOUT PREFIX MATCHING, in one direction only. Its
+  header says: '"/admin" covers /admin, /admin/agents and /admin-dashboard' --
+  correct, and useful, because one rule covers more private paths. Nobody asked
+  the reverse question: what ELSE does /auth cover? Fixed as a pair, `/auth$`
+  and `/auth/`, in all 16 groups, with the reasoning written beside the
+  existing note.
+
+- THE PARSER MOVED RATHER THAN BEING COPIED. A full RFC 9309 implementation --
+  group resolution where a named group REPLACES the wildcard, longest-match
+  wins, Allow wins a tie -- lived inside src/lib/robots-txt.test.ts. Anything
+  else needing to ask "would Googlebot fetch this URL?" had to write a second
+  one, and I was about to. It is src/lib/robotsTxt.ts now; the original test
+  imports it and all 76 of its assertions still pass. This repo has paid four
+  times for a second copy of a working thing (US-616, US-626, US-777, US-780);
+  a parser in a test file is one waiting to happen.
+
+- MUTATION-CHECKED FOUR WAYS, including the one that matters most: deleting
+  every Disallow line makes "no prerendered route is blocked" pass trivially.
+  That is why the suite also asserts /admin, /dashboard, /seo-dashboard and
+  /join are STILL blocked -- 30 tests fail on that mutant. A permissive
+  robots.txt would otherwise sail through a test whose only job is to check
+  reachability.
+      restore the bare /auth rule           -> 7 fail
+      sitemap URL nobody prerenders         -> 1 fail
+      prerender a route that does not exist -> 1 fail
+      delete every Disallow                 -> 30 fail
+
+- Measured: 3340 tests pass (221 files). Typecheck 814 against baseline 814;
+  lint 1148 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A prefix rule is a claim about every string that starts that way, not about
+    the path you had in mind. /auth catches /authors, /api catches /apiary,
+    /share catches /shared. Worth listing the public routes and asking which
+    ones each Disallow swallows.
+  - Four hand-maintained lists in four formats WILL drift; the surprise is that
+    three of them had not. Writing the gate while they agree costs nothing and
+    is the only time you get to add one without also doing a repair.
+  - When a comment reasons about a mechanism, check whether the reasoning is
+    complete or just complete enough for the case that prompted it. This one
+    was right about prefix matching and had only asked half the question.

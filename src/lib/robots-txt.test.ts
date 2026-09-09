@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import {
+  parseRobots,
+  groupForAgent,
+  isAllowedByGroup,
+} from './robotsTxt';
 
 /**
  * public/robots.txt is the only thing standing between a crawler and the app's
@@ -19,74 +24,9 @@ import path from 'node:path';
  */
 const robots = readFileSync(path.resolve(__dirname, '../../public/robots.txt'), 'utf8');
 
-interface Group {
-  agents: string[];
-  rules: Array<{ allow: boolean; pattern: string }>;
-}
-
-/** Parse into groups. Consecutive User-agent lines share one rule set. */
-function parse(source: string): Group[] {
-  const groups: Group[] = [];
-  let current: Group | null = null;
-  let acceptingAgents = false;
-
-  for (const raw of source.split('\n')) {
-    const line = raw.replace(/#.*$/, '').trim();
-    if (!line) continue;
-    const [rawKey, ...rest] = line.split(':');
-    const key = rawKey.trim().toLowerCase();
-    const value = rest.join(':').trim();
-
-    if (key === 'user-agent') {
-      if (!current || !acceptingAgents) {
-        current = { agents: [], rules: [] };
-        groups.push(current);
-        acceptingAgents = true;
-      }
-      current.agents.push(value.toLowerCase());
-    } else if (key === 'allow' || key === 'disallow') {
-      if (!current) continue;
-      acceptingAgents = false;
-      // An empty Disallow means "nothing is disallowed" and carries no pattern.
-      if (key === 'disallow' && value === '') continue;
-      current.rules.push({ allow: key === 'allow', pattern: value });
-    }
-  }
-  return groups;
-}
-
-const groups = parse(robots);
-
-/** The single group a crawler calling itself `agent` would obey. */
-function groupFor(agent: string): Group {
-  const needle = agent.toLowerCase();
-  const named = groups.find((g) => g.agents.includes(needle));
-  if (named) return named;
-  const wildcard = groups.find((g) => g.agents.includes('*'));
-  if (!wildcard) throw new Error('robots.txt has no wildcard group');
-  return wildcard;
-}
-
-/** Turn a robots pattern into a regex: `*` is any run, `$` anchors the end. */
-function toRegExp(pattern: string): RegExp {
-  const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*')
-    .replace(/\\\$$/, '$');
-  return new RegExp('^' + escaped);
-}
-
-/** Longest matching pattern wins; Allow wins an exact-length tie (RFC 9309). */
-function isAllowed(group: Group, url: string): boolean {
-  let best: { allow: boolean; length: number } | null = null;
-  for (const { allow, pattern } of group.rules) {
-    if (!toRegExp(pattern).test(url)) continue;
-    if (!best || pattern.length > best.length || (pattern.length === best.length && allow)) {
-      best = { allow, length: pattern.length };
-    }
-  }
-  return best ? best.allow : true;
-}
+const groups = parseRobots(robots);
+const groupFor = (agent: string) => groupForAgent(groups, agent);
+const isAllowed = isAllowedByGroup;
 
 /**
  * Every crawler that indexes. Each must resolve to a group that blocks the
