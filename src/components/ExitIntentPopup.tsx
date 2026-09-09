@@ -118,7 +118,7 @@ export function ExitIntentPopup({
 
         <div className="grid md:grid-cols-5">
           {/* Left side - Image/illustration */}
-          <div className="hidden md:flex md:col-span-2 bg-gradient-to-br from-primary to-primary/80 p-6 flex-col justify-center items-center text-white">
+          <div className="hidden md:flex md:col-span-2 bg-primary bg-gradient-to-br from-primary to-primary/80 p-6 flex-col justify-center items-center text-white">
             <div className="text-6xl mb-4">🍽️</div>
             <p className="text-center text-sm opacity-90">
               A calmer way through mealtime battles

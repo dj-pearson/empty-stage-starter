@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { chunkKey } from '../../scripts/ci/check-bundle-budget.mjs';
+import { chunkKey, staticImportsOf } from '../../scripts/ci/check-bundle-budget.mjs';
 
 /**
  * chunkKey, pinned against real Vite filenames (US-775).
@@ -91,5 +91,46 @@ describe('the Build job enforces the budget', () => {
     expect(ci.indexOf('run: npm run build')).toBeLessThan(
       ci.indexOf('scripts/ci/check-bundle-budget.mjs')
     );
+  });
+});
+
+describe('staticImportsOf', () => {
+  it('finds a named static import', () => {
+    expect(staticImportsOf('import{a as b}from"./vendor-react-Etq-L_65.js";')).toEqual([
+      'vendor-react-Etq-L_65.js',
+    ]);
+  });
+
+  it('finds a bare side-effect import', () => {
+    expect(staticImportsOf('import"./polyfill-abc12345.js";')).toEqual(['polyfill-abc12345.js']);
+  });
+
+  it('ignores a dynamic import, which is the whole point of splitting', () => {
+    // If this ever matched, every lazily-loaded route would count as eager and
+    // the eager budget would be the total -- a check that fails on everything
+    // says nothing.
+    expect(staticImportsOf('const p=import("./BlogPost-9tNACYzE.js");')).toEqual([]);
+  });
+
+  it('separates the two when they sit in the same chunk', () => {
+    const source = 'import{x}from"./vendor-utils-BuPz.js";const p=import("./Admin-gB34r5Cj.js");';
+    expect(staticImportsOf(source)).toEqual(['vendor-utils-BuPz.js']);
+  });
+
+  it('deduplicates a chunk imported twice', () => {
+    const source = 'import{a}from"./vendor-react-A.js";import{b}from"./vendor-react-A.js";';
+    expect(staticImportsOf(source)).toEqual(['vendor-react-A.js']);
+  });
+});
+
+describe('the eager budget', () => {
+  it('is recorded, because the per-chunk budgets could not see it', () => {
+    // vendor-markdown sat inside its 148 kB budget the entire time the entry
+    // chunk was statically importing it on every route (US-816).
+    const budget = JSON.parse(
+      readFileSync(path.join(process.cwd(), '.ci', 'bundle-budget.json'), 'utf8')
+    );
+    expect(typeof budget.eagerJs).toBe('number');
+    expect(budget.eagerJs).toBeLessThan(budget.totalJs);
   });
 });

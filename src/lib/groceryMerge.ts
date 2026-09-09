@@ -197,6 +197,63 @@ export function sumQuantities(parts: { quantity: number; unit?: string | null }[
   return { quantity: round2(rawTotal), unit: target };
 }
 
+/**
+ * True when a set of parts spans two or more RECOGNISED unit families
+ * (US-820).
+ *
+ * sumQuantities falls back to a raw numeric sum when the families disagree,
+ * which is fine for "1 lb" + "2" -- a bare number next to a unit almost always
+ * means two more of the same -- and wrong for "2 lb" + "3 cups", which it
+ * reported as 5 lb. Mass and volume of the same ingredient is not an unusual
+ * pairing: flour, milk and butter all get written both ways, one recipe in
+ * pounds and the next in cups. The shopper was handed a confident number that
+ * matched neither recipe.
+ *
+ * Only RECOGNISED families count. An unrecognised token (a bare count, "bag",
+ * anything the normaliser does not know) stays compatible with everything, so
+ * the loose-number case keeps merging as it always has.
+ */
+export function conflictingUnitFamilies(parts: { quantity: number; unit?: string | null }[]): boolean {
+  const families = new Set(
+    parts
+      .map((p) => normalize(p.quantity, p.unit))
+      .filter((n) => n.recognised)
+      .map((n) => n.family)
+  );
+  return families.size > 1;
+}
+
+/**
+ * Split one ingredient's parts so that incompatible families do not sum.
+ *
+ * Parts whose unit is not recognised join the first recognised bucket rather
+ * than forming their own row, because "2 lb flour" plus a bare "1" is the
+ * sloppy-entry case, not a second measurement.
+ */
+function splitByUnitFamily<T extends { quantity: number; unit?: string | null }>(
+  parts: T[]
+): T[][] {
+  if (!conflictingUnitFamilies(parts)) return [parts];
+  const buckets = new Map<string, T[]>();
+  const order: string[] = [];
+  const loose: T[] = [];
+  for (const part of parts) {
+    const n = normalize(part.quantity, part.unit);
+    if (!n.recognised) {
+      loose.push(part);
+      continue;
+    }
+    if (!buckets.has(n.family)) {
+      buckets.set(n.family, []);
+      order.push(n.family);
+    }
+    buckets.get(n.family)!.push(part);
+  }
+  if (order.length > 0) buckets.get(order[0])!.push(...loose);
+  else return [parts];
+  return order.map((f) => buckets.get(f)!);
+}
+
 /** Pick the most generic display name in a group (fewest significant tokens). */
 function pickDisplayName(names: string[]): string {
   let best = names[0];
@@ -316,14 +373,30 @@ export function planGroceryMerge(
   const inserts: GroceryAddInput[] = [];
   const updates: GroceryMergePlan['updates'] = [];
 
+  // US-820: one row per ingredient PER RECOGNISED UNIT FAMILY. Summing 2 lb
+  // and 3 cups of the same flour produced "5 lb", a number that matched
+  // neither recipe.
+  const consumedMatches = new Set<string>();
   for (const key of order) {
-    const group = groups.get(key)!;
+    for (const group of splitByUnitFamily(groups.get(key)!)) {
     const summed = sumQuantities(group.map((g) => ({ quantity: g.quantity, unit: g.unit })));
     const displayName = pickDisplayName(group.map((g) => g.name));
     const meta = group.find((g) => g.category) ?? group[0];
 
-    const match = existingByKey.get(key);
+    const candidate = existingByKey.get(key);
+    // Only bump the existing row when it measures the same way, and only once
+    // per row -- a second family has to become its own insert.
+    const match =
+      candidate &&
+      !consumedMatches.has(candidate.id) &&
+      !conflictingUnitFamilies([
+        { quantity: candidate.quantity ?? 0, unit: candidate.unit },
+        { quantity: summed.quantity, unit: summed.unit },
+      ])
+        ? candidate
+        : undefined;
     if (match) {
+      consumedMatches.add(match.id);
       const merged = sumQuantities([
         { quantity: match.quantity ?? 0, unit: match.unit },
         { quantity: summed.quantity, unit: summed.unit },
@@ -344,6 +417,7 @@ export function planGroceryMerge(
         quantity: summed.quantity,
         unit: summed.unit,
       });
+    }
     }
   }
 

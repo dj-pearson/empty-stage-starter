@@ -47,17 +47,50 @@ function migrationFiles(): string[] {
     .sort();
 }
 
-/** Drops `--` line comments so quoted example SQL in a comment isn't parsed. */
+/**
+ * Drops `--` line comments so quoted example SQL in a comment isn't parsed.
+ *
+ * The \r handling is load-bearing. This used to split on \n and then run
+ * `line.replace(/--.*$/, '')`, and on a CRLF checkout every line still ended
+ * in a carriage return. JavaScript's `.` does not match \r -- it is a line
+ * terminator -- so `.*` stopped one character short and `$`, with no `m`
+ * flag, wanted the end of the string. Nothing matched: stripComments handed
+ * back the file unchanged, on Windows, silently.
+ *
+ * That is worse than the false failure it produced in US-635. These
+ * migrations discuss policy SQL in their comments at length, so an unstripped
+ * file feeds prose into livePolicies() below, and the assertion this suite
+ * exists for -- that no migration leaves an unrestricted SELECT on
+ * storage.objects in force -- gets computed over sentences about policies
+ * rather than over policies.
+ */
 function stripComments(sql: string): string {
   return sql
-    .split('\n')
-    .map((line) => line.replace(/--.*$/, ''))
+    .split(/\r?\n/)
+    .map((line) => line.replace(/--.*/, ''))
     .join('\n');
 }
 
 function statements(sql: string): string[] {
   return stripComments(sql).split(';');
 }
+
+describe('the migration parser', () => {
+  it('strips comments from a CRLF file, not just an LF one', () => {
+    // Every assertion below this line is only as good as this. A Windows
+    // checkout hands readFileSync CRLF, and a stripComments that quietly
+    // no-ops there turns the security tests into a grep over prose.
+    const crlf = '-- CREATE POLICY "example" ON storage.objects;\r\n\r\nSELECT 1;';
+    expect(stripComments(crlf)).not.toMatch(/CREATE\s+POLICY/i);
+    expect(stripComments(crlf)).toContain('SELECT 1');
+  });
+
+  it('leaves code that follows a comment on the next line alone', () => {
+    const sql = 'CREATE POLICY "a" -- trailing note\r\nON storage.objects;';
+    expect(stripComments(sql)).toContain('ON storage.objects');
+    expect(stripComments(sql)).not.toContain('trailing note');
+  });
+});
 
 /**
  * The net policy set on storage.objects after every migration has run, grouped

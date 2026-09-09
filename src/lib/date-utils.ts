@@ -156,6 +156,26 @@ export function toISODate(date: Date | string | number): string {
 }
 
 /**
+ * Add whole days to a 'YYYY-MM-DD' string and get a 'YYYY-MM-DD' string back.
+ *
+ * The arithmetic runs in UTC on purpose. The obvious version -- parse, call
+ * setDate(getDate() + n), format with toISOString -- reads the day through
+ * LOCAL getters while writing it back through a UTC formatter, and the two
+ * disagree by a day whenever a DST transition falls inside the span.
+ * Copying the week of 2026-03-01 to 2026-03-08 in America/Los_Angeles put
+ * Saturday's meals on Friday the 13th, and every entry from the transition
+ * onward landed on the wrong weekday (US-818).
+ *
+ * exposureLadder.addDays already does this correctly for cooldowns. This is
+ * the same idea with a home the rest of the app can import.
+ */
+export function addIsoDays(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.slice(0, 10).split('-').map(Number);
+  const ms = Date.UTC(year, (month ?? 1) - 1, day ?? 1) + days * 86_400_000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
  * Get start of day
  */
 export function startOfDay(date: Date | string | number): Date {

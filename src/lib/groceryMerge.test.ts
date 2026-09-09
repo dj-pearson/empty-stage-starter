@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ingredientMatchKey,
   sumQuantities,
+  conflictingUnitFamilies,
   splitIngredientBlock,
   planGroceryMerge,
   formatQuantity,
@@ -224,5 +225,89 @@ describe('requiredAfterStock', () => {
 
   it('guards against a non-finite requirement', () => {
     expect(requiredAfterStock(Number.NaN, 'lb', 1, 'lb')).toBe(0);
+  });
+});
+
+describe('US-820: incompatible units do not sum into one number', () => {
+  it('flags mass against volume', () => {
+    expect(
+      conflictingUnitFamilies([
+        { quantity: 2, unit: 'lb' },
+        { quantity: 3, unit: 'cups' },
+      ])
+    ).toBe(true);
+  });
+
+  it('does not flag a bare count beside a unit', () => {
+    // "1 lb ground beef" plus a loose "2" is sloppy entry meaning two more,
+    // not a second measurement. This is the case the raw-sum fallback exists
+    // for and it keeps working.
+    expect(
+      conflictingUnitFamilies([
+        { quantity: 1, unit: 'lb' },
+        { quantity: 2, unit: '' },
+      ])
+    ).toBe(false);
+  });
+
+  it('does not flag units inside one family', () => {
+    expect(
+      conflictingUnitFamilies([
+        { quantity: 1, unit: 'lb' },
+        { quantity: 8, unit: 'oz' },
+      ])
+    ).toBe(false);
+  });
+
+  it('keeps pounds and cups of the same ingredient as separate rows', () => {
+    // Before this, the plan produced one row reading "5 lb flour" -- a
+    // quantity matching neither of the two recipes that asked for it.
+    const plan = planGroceryMerge(
+      [
+        { name: 'flour', quantity: 2, unit: 'lb' },
+        { name: 'flour', quantity: 3, unit: 'cups' },
+      ],
+      []
+    );
+    expect(plan.inserts).toHaveLength(2);
+    expect(plan.inserts.map((i) => `${i.quantity} ${i.unit}`).sort()).toEqual(['2 lb', '3 cups']);
+  });
+
+  it('still stacks compatible units into one row', () => {
+    const plan = planGroceryMerge(
+      [
+        { name: 'flour', quantity: 1, unit: 'lb' },
+        { name: 'flour', quantity: 8, unit: 'oz' },
+      ],
+      []
+    );
+    expect(plan.inserts).toHaveLength(1);
+    expect(plan.inserts[0]).toMatchObject({ quantity: 1.5, unit: 'lb' });
+  });
+
+  it('does not bump an existing row measured a different way', () => {
+    const existing = [
+      { id: 'g1', name: 'flour', quantity: 2, unit: 'lb', checked: false },
+    ];
+    const plan = planGroceryMerge([{ name: 'flour', quantity: 3, unit: 'cups' }], existing);
+    expect(plan.updates).toEqual([]);
+    expect(plan.inserts).toHaveLength(1);
+    expect(plan.inserts[0]).toMatchObject({ quantity: 3, unit: 'cups' });
+  });
+
+  it('bumps the existing row once and inserts the other family', () => {
+    const existing = [
+      { id: 'g1', name: 'flour', quantity: 2, unit: 'lb', checked: false },
+    ];
+    const plan = planGroceryMerge(
+      [
+        { name: 'flour', quantity: 1, unit: 'lb' },
+        { name: 'flour', quantity: 3, unit: 'cups' },
+      ],
+      existing
+    );
+    expect(plan.updates).toEqual([{ id: 'g1', quantity: 3, unit: 'lb', name: 'flour' }]);
+    expect(plan.inserts).toHaveLength(1);
+    expect(plan.inserts[0]).toMatchObject({ quantity: 3, unit: 'cups' });
   });
 });

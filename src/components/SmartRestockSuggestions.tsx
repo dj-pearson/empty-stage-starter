@@ -17,6 +17,7 @@ import {
 } from "@/lib/depletionForecast";
 import { forecastForFood } from "@/lib/depletionForecastWiring";
 import { analytics } from "@/lib/analytics";
+import { toISODate } from "@/lib/date-utils";
 
 interface RestockSuggestion {
   food_id: string;
@@ -59,16 +60,37 @@ interface AutoAddLog {
   count: number;
 }
 
-function readAutoAddLog(): AutoAddLog {
+/**
+ * The stored log if it belongs to `today`, otherwise a fresh one (US-818).
+ *
+ * Pure so the rollover is testable without a clock or a localStorage stub.
+ * A malformed or absent entry is the same answer as an expired one: start
+ * today at zero.
+ */
+export function autoAddLogForToday(raw: string | null, today: string): AutoAddLog {
+  if (!raw) return { date: today, count: 0 };
   try {
-    const raw = localStorage.getItem(AUTO_ADDED_TODAY_KEY);
-    if (!raw) return { date: new Date().toISOString().slice(0, 10), count: 0 };
     const parsed = JSON.parse(raw) as AutoAddLog;
-    const today = new Date().toISOString().slice(0, 10);
-    if (parsed.date !== today) return { date: today, count: 0 };
+    if (parsed?.date !== today || typeof parsed.count !== 'number') {
+      return { date: today, count: 0 };
+    }
     return parsed;
   } catch {
-    return { date: new Date().toISOString().slice(0, 10), count: 0 };
+    return { date: today, count: 0 };
+  }
+}
+
+function readAutoAddLog(): AutoAddLog {
+  // toISODate, not toISOString().slice(0, 10). The cap is "per day" as the
+  // parent experiences a day, and toISOString converts to UTC first -- so on
+  // the US west coast the twenty-a-day budget reset at 5pm and a household
+  // could take another twenty before bedtime.
+  const today = toISODate(new Date());
+  try {
+    return autoAddLogForToday(localStorage.getItem(AUTO_ADDED_TODAY_KEY), today);
+  } catch {
+    // localStorage disabled or throwing: no memory, so today starts at zero.
+    return { date: today, count: 0 };
   }
 }
 

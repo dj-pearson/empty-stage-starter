@@ -542,7 +542,7 @@ const Auth = () => {
 
       <main id="main-content" className="min-h-screen flex flex-col lg:flex-row" role="main" aria-label="Authentication">
         {/* Left side - Value Props (hidden on mobile) */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary to-primary/80 p-12 flex-col justify-center relative overflow-hidden">
+        <div className="hidden lg:flex lg:w-1/2 bg-primary bg-gradient-to-br from-primary to-primary/80 p-12 flex-col justify-center relative overflow-hidden">
           {/* Background decoration */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none" />
           <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />

@@ -127,12 +127,27 @@ describe('US-769: the billing page', () => {
 });
 
 describe('US-769: billing is reachable', () => {
-  it('is linked from the sidebar and from the Subscription tab', async () => {
+  it('is in the nav registry every renderer reads, for every signed-in user', async () => {
+    const { navItemsFor } = await import('@/lib/navigation');
+    // The whole defect was a page nothing pointed at. Assert the pointer.
+    //
+    // This used to grep AppSidebar.tsx for the literal path, which went stale
+    // the moment US-811 moved the four hand-maintained nav arrays into
+    // src/lib/navigation.ts -- the link was still there, the string was not,
+    // and main went red for a page that had never stopped working. The
+    // registry is the fact now: the sidebar, the mobile bar and the More sheet
+    // all render from it, so an entry here is a link in all three.
+    const billing = navItemsFor().find((item) => item.to === '/dashboard/billing');
+    expect(billing, 'billing is missing from NAV_ITEMS').toBeDefined();
+    expect(billing?.group).toBe('account');
+    // No `requires`: paying customers are not admins, and this is where they
+    // go to stop paying.
+    expect(billing?.requires).toBeUndefined();
+  });
+
+  it('is linked from the Subscription tab', async () => {
     const fs = await import('fs');
-    const sidebar = fs.readFileSync('src/components/AppSidebar.tsx', 'utf8');
     const settings = fs.readFileSync('src/pages/dashboard/AccountSettings.tsx', 'utf8');
-    // The whole defect was a page nothing pointed at. Assert the pointers.
-    expect(sidebar).toContain('/dashboard/billing');
     expect(settings).toContain('/dashboard/billing');
   });
 

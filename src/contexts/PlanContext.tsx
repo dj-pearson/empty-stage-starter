@@ -6,6 +6,7 @@ import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtim
 import { runOptimisticInsert, runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { parsePlanEntryRow, parsePlanEntryRows } from "@/lib/normalizeEntities";
+import { addIsoDays } from "@/lib/date-utils";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -168,8 +169,11 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const copyWeekPlan = useCallback(async (fromDate: string, toDate: string, kidId: string) => {
+    // Parsed only to measure the offset of each entry from the week start.
+    // The destination date is built from the toDate STRING (addIsoDays), never
+    // from a parsed Date, because reading a day through local getters and
+    // writing it back through toISOString shifts it across a DST boundary.
     const fromDateObj = new Date(fromDate);
-    const toDateObj = new Date(toDate);
 
     const currentEntries = planEntriesRef.current;
 
@@ -182,15 +186,13 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     const newEntries = weekEntries.map(entry => {
       const entryDate = new Date(entry.date);
       const daysDiff = Math.floor((entryDate.getTime() - fromDateObj.getTime()) / (1000 * 60 * 60 * 24));
-      const newDate = new Date(toDateObj);
-      newDate.setDate(newDate.getDate() + daysDiff);
 
       return {
         kid_id: entry.kid_id,
         food_id: entry.food_id,
         recipe_id: entry.recipe_id,
         meal_slot: entry.meal_slot,
-        date: newDate.toISOString().split('T')[0],
+        date: addIsoDays(toDate, daysDiff),
         // @ts-expect-error - outcome field type mismatch
         outcome: undefined,
         notes: entry.notes,

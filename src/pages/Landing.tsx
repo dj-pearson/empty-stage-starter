@@ -744,7 +744,7 @@ const Landing = () => {
                 <div key={index} className="animate-item">
                   <Card className="hover:border-primary/30 transition-colors">
                     <CardHeader>
-                      <CardTitle className="text-xl text-primary/90">{faq.question}</CardTitle>
+                      <CardTitle className="text-xl text-primary">{faq.question}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
@@ -1026,7 +1026,7 @@ const Landing = () => {
         </section>
 
         {/* Final CTA Section - Get Started */}
-        <section id="get-started" className="cv-auto py-24 px-4 bg-gradient-to-br from-primary to-primary/80 relative overflow-hidden">
+        <section id="get-started" className="cv-auto py-24 px-4 bg-primary bg-gradient-to-br from-primary to-primary/80 relative overflow-hidden">
           {/* Background decoration */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none" />
           <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-white/5 rounded-full blur-3xl" />

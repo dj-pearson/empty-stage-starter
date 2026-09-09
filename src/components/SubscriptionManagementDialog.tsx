@@ -148,7 +148,7 @@ export function SubscriptionManagementDialog({
                           <Badge variant="secondary">Current Plan</Badge>
                         )}
                         {showUpgradeBadge && (
-                          <Badge className="bg-gradient-to-r from-primary to-accent">
+                          <Badge className="bg-primary bg-gradient-to-r from-primary to-accent">
                             <ArrowUp className="w-3 h-3 mr-1" />
                             Upgrade
                           </Badge>

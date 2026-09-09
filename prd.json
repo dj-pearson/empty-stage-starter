@@ -3809,7 +3809,7 @@
       "slice": 3,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Audit 2026-09-08 (UX loop): the full suite is 272 failed / 2839 passed on main, and the failures cluster on anything that renders -- every context test, the admin components, several pages. All share the null hook dispatcher, which is the classic two-React-instances symptom: the component's own import of useState resolves one copy while the renderer set the dispatcher on the other. node_modules holds a mixed npm and deno layout (extraneous Expo packages, .deno/* nested duplicates), so the likely fix is reinstalling cleanly rather than another resolver alias. Until it is fixed, no UI change in this repo can be verified by rendering it, which is a tax on every front-end story."
+      "notes": "Audit 2026-09-08 (UX loop): the full suite is 272 failed / 2839 passed on main, and the failures cluster on anything that renders -- every context test, the admin components, several pages. All share the null hook dispatcher, which is the classic two-React-instances symptom: the component's own import of useState resolves one copy while the renderer set the dispatcher on the other. node_modules holds a mixed npm and deno layout (extraneous Expo packages, .deno/* nested duplicates), so the likely fix is reinstalling cleanly rather than another resolver alias. Until it is fixed, no UI change in this repo can be verified by rendering it, which is a tax on every front-end story. | 2026-09-08 (web loop, iteration 1): root cause identified and cleared locally. node_modules held 82 packages symlinked into a Deno store (node_modules/.deno), created by a `deno install` on 2026-05-30 layered under the npm tree from 2026-06-13. Vite resolves a symlinked package to its realpath, so @testing-library/react resolved inside .deno and its own react-dom/client import found .deno/react-dom@19.1.0 -- the second React. resolve.dedupe, explicit react/react-dom aliases and server.deps.inline were each tried and none reach it, because the duplicate is loaded by Node from the realpath before Vite sees it. `npm ci` removes the .deno store and the suite goes from 272 failed to 3 failed (2 of those 3 are 20s timeouts that pass in isolation). CI was never affected: it runs npm ci on a fresh checkout. Remaining work for this story: a guard in src/test/setup.ts that fails loudly when a second React copy is present, so the next stray `deno install` is a clear error rather than 272 mystery failures, and converting the source-text tests written while this was broken (src/components/QuickLogModal.test.ts) into real render tests. | Iteration 3: guard landed as src/test/reactEnvironment.test.tsx -- renders a useState component and, when that throws, says `npm ci` instead of leaving a null dispatcher; also fails if node_modules/.deno exists or @testing-library/react is a symlink out of the npm tree. Still open: converting src/components/QuickLogModal.test.ts and the other source-text assertions written while rendering was broken into real render tests."
     },
     {
       "id": "US-814",
@@ -3852,6 +3852,124 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Audit 2026-09-07 (UX deep dive), item 7: mobile carried a top-right hamburger, a bottom bar, a bottom More sheet and a floating action button pinned over the bottom bar. The hamburger and More overlapped almost completely, and disagreed about grouping. Follows US-811, which is what made the hamburger redundant rather than merely duplicative. The FAB still overlaps the bottom bar's right edge; that is not addressed here."
+    },
+    {
+      "id": "US-816",
+      "title": "The prerendered HTML preloads chunks the page cannot use",
+      "description": "As a first-time visitor on a phone, I want the landing page to download only what it needs, so that it paints before I lose interest.",
+      "acceptanceCriteria": [
+        "dist/index.html carries no modulepreload link that dist/app-shell.html does not, unless the chunk is genuinely on the route's critical path",
+        "vendor-tiptap (137 kB gzipped, the blog CMS rich-text editor) is not preloaded on /",
+        "The eager preload budget for / is asserted in CI, in kilobytes gzipped, so the next regression fails a check rather than a Lighthouse run nobody reads",
+        "The budget check covers app-shell.html and the prerendered per-route HTML separately, because they drift",
+        "Prerendered routes still render their content -- the prerender output is unchanged apart from the link tags"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 4) while fixing the tslib/vendor-markdown leak. Vite emits 8 modulepreload links into app-shell.html, 308 kB gzipped. The prerendered dist/index.html has 62, 670 kB gzipped. The extra 54 are runtime-injected: __vitePreload adds <link rel=modulepreload> to the live DOM as chunks load, and the prerenderer serialises document.documentElement.outerHTML, freezing them into the static HTML. So chunks the runtime would have fetched on demand, or not at all, become eager downloads for every visitor. vendor-tiptap is the clearest case: 137 kB gzipped of rich-text editor, reachable only from the admin blog CMS, preloaded on the marketing home page. Likely fix is a strip step in scripts/prerender.mjs that keeps only the link tags present in app-shell.html, plus a budget assertion so it stays fixed. | Iteration 5: the tiptap half is fixed at the cause rather than by stripping link tags. avatar-*.js statically imported vendor-tiptap for one symbol -- use-sync-external-store, which Radix's Avatar reads useSyncExternalStore through, and which no manualChunks rule claimed. It now goes to vendor-react. The prerendered / went 670 -> 534 kB gzipped, and 805 -> 534 across iterations 4 and 5. What remains for this story: the prerenderer still serialises runtime-injected modulepreload links (61 in dist/index.html against 8 in app-shell.html), and there is still no budget check, which is why the same class of bug was found twice by hand. The budget check is the part worth building -- assert the eager kB gzipped per route, and assert no lazy vendor chunk (tiptap, swagger, markdown, jspdf, html5-qrcode) is reachable by static import from the entry. | Iteration 6: the budget half is done. scripts/ci/check-bundle-budget.mjs now walks the entry chunk's static import closure, budgets it as eagerJs (431.7 kB gz measured, 454 kB budget), and fails outright when a route-only chunk (tiptap, swagger, swagger-deps, markdown) appears in that closure. Verified by removing the tslib rule, rebuilding, and watching it fail with 'vendor-markdown is downloaded on every route'. Still open: the prerenderer freezing runtime-injected modulepreload links into per-route HTML (61 links in dist/index.html against 8 in app-shell.html). The eager check covers the entry graph, not the per-route prerendered HTML, so that part is still unmeasured."
+    },
+    {
+      "id": "US-817",
+      "title": "The last four colour-contrast failures, which are not the brand token",
+      "description": "As a low-vision visitor, I want every control and label on the public pages to be legible, so that the VPAT's 1.4.3 claim is true of the whole site rather than most of it.",
+      "acceptanceCriteria": [
+        "tests/accessibility/a11y.spec.ts passes in full against a built site (npm run build, then PW_NO_WEBSERVER=1 E2E_BASE_URL=<preview> npx playwright test tests/accessibility/a11y.spec.ts --project=chromium)",
+        "The Badge carrying text-primary-foreground on bg-primary computes white text in light rendering, not #0f1729",
+        "The 'View EatPal pricing' button at 375px has a painted background rather than white text on the page background",
+        "Secondary text on the green 'For Therapists & Clinics' card meets 4.5:1",
+        "Whatever the badge cause turns out to be, it is fixed at the token or the call site -- src/components/ui/ is not modified"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 7). Darkening --primary from 38% to 35% took the a11y spec from 9 failing tests to 4; these are what is left, and none of them are the brand token.\n\n1. Badge, 3.17:1. On /pricing the 'Best Value' badge (Pricing.tsx:1150) carries 'bg-primary text-primary-foreground', and axe computes color #0f1729 on background #ae4804 under Playwright's light rendering. #ae4804 is the light --primary, so the background is right; #0f1729 is the light --foreground, and --primary-foreground in that block is 0 0% 100%. The .text-primary-foreground utility is generated and its stylesheet is linked on the route, so something later in the cascade wins. Note when reproducing by hand: the browser's own colour-scheme preference confuses this. Removing the 'dark' class from <html> in a dark-mode Chrome did NOT restore light values, and index.css has no @media (prefers-color-scheme: dark) block at all -- so where the dark values came from is itself part of the question. Use Playwright, which renders light by default.\n\n2. Invisible button, 1.06:1. At 375px, the button labelled 'View EatPal pricing' renders white text on #faf8f5, the page background. Not low contrast -- no contrast; the background did not paint.\n\n3. Muted text on the green card, 3.34:1. The 'For Therapists & Clinics' card on /pricing uses text-muted-foreground (#4d6280) on #88cd9f. muted-foreground is tuned against --background and nothing reads it against a saturated surface.\n\nIteration 8 worked on (2) and did NOT clear it. Two causes ruled out, recorded so the next attempt starts further along:\n  - Not the missing background-colour. The section carried its colour entirely in a background-image gradient (computed background-color was rgba(0,0,0,0)). Adding a solid bg-primary under the gradient was worth doing on its own account and is committed, and the computed background-color is now the brand orange -- axe still reports 1.06:1 against #faf8f5.\n  - Not content-visibility. cv-auto was removed from the section, rebuilt, rescanned: the same 1.06:1 with the same background.\nNext thing to try: the two absolutely-positioned decoration divs inside the section (Landing.tsx around 1030, 'absolute inset-0' with a radial-gradient, and two blurred circles). They overlap the button and carry a background-image with no background-color, so axe may be resolving the stack down to them, failing on the gradient, and falling through to the page background. Test by removing them temporarily and rescanning. If that is it, the fix is theirs, not the button's."
+    },
+    {
+      "id": "US-818",
+      "title": "Date keys built through local getters and a UTC formatter",
+      "description": "As a parent planning meals, I want a copied week to land on the same weekdays, so that Saturday's dinner is not scheduled for Friday.",
+      "acceptanceCriteria": [
+        "No product code builds a 'YYYY-MM-DD' key by calling setDate/getDate on a parsed Date and then formatting with toISOString",
+        "Date-keyed reads and writes go through one helper, and that helper has tests that run under a non-UTC timezone",
+        "The remaining call sites listed in the notes are each either converted or annotated with why UTC is correct there",
+        "toISODate in src/lib/date-utils.ts is used where a LOCAL calendar day is meant (what 'today' is for the parent), and addIsoDays where offsets are added to an ISO key"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 9). copyWeekPlan in PlanContext is fixed and tested; the rest of this story is the other call sites.\n\nThe pattern: 31 places build a date key with toISOString().split('T')[0] or .slice(0,10). Two correct helpers already exist and are barely used -- toISODate in src/lib/date-utils.ts (local calendar day, imported by exactly two files) and addDays in src/lib/exposureLadder.ts (UTC arithmetic on ISO strings, correct and tested). Both carry comments explaining the trap; the rest of the codebase does it by hand anyway.\n\nChecked and CORRECT, do not touch: exposureLadder.addDays, useFoodLadder.todayIsoDate (compensates for the offset deliberately), deleteWeekPlan (measures a difference between two UTC-midnight dates and never writes one back).\n\nStill to review, roughly in order of how much a wrong day costs: SmartRestockSuggestions.tsx 65-71 (a once-per-day cap keyed on 'today' -- a user west of UTC gets their new day in the evening), seasonalRecall.ts 240 (projected date written into a row), SeasonalRecallCard.tsx 91-92 (query range), AppContext.tsx 282-283 and 401-402 (the -30/+90 day plan-entry query window; a one-day shift at the edges is mild but it is the same mistake), conversion-tracking.ts 278, login-history.ts 503, runsDashboard.ts 43 (analytics windows). The download filenames in pdfGenerator.ts and shareImageGenerator.ts and the SEO lastmod dates are fine as UTC and should be annotated rather than changed.\n\nIteration 14: SmartRestockSuggestions is done. The twenty-a-day auto-restock budget was keyed on the UTC calendar day, so on the US west coast it reset at 5pm local and a household could take another twenty before bedtime. It now keys on toISODate. The rollover decision is extracted as autoAddLogForToday, a pure function with tests, including one that pins the local-vs-UTC difference under America/Los_Angeles. Writing those tests turned up a second fault in the same function: a stored count that was not a number made the budget arithmetic NaN, and NaN < 20 is false, so a corrupted entry silently blocked every auto-add instead of resetting. Guarded now.\n\nStill open in this story: seasonalRecall.ts 240 and SeasonalRecallCard.tsx 91-92 were checked and are UTC-CONSISTENT (they anchor at T12:00:00Z and use getUTC* setters throughout) -- they need an annotation saying so, not a change. AppContext.tsx 282-283 and 401-402 use the same expression for the query window and the merge window, so they agree with each other; a one-day skew at the edge is the only effect. conversion-tracking.ts 278, login-history.ts 503 and runsDashboard.ts 43 are analytics windows. The download filenames in pdfGenerator.ts and shareImageGenerator.ts and the SEO lastmod dates are correct as UTC and want a comment rather than an edit."
+    },
+    {
+      "id": "US-819",
+      "title": "The initial load silently stops at 500 foods, 200 recipes, 500 grocery items",
+      "description": "As a household that has been using EatPal for a while, I want to see everything I have saved, so that the app does not quietly stop showing me my own data.",
+      "acceptanceCriteria": [
+        "A household with more than 500 foods can reach all of them from the web app",
+        "grocery_items no longer loads oldest-first with a cap, which drops the items the household just added",
+        "Either the load pages through the remaining rows, or the UI pages/searches server-side; the choice is recorded in the story before implementation",
+        "The write-through cache never persists a truncated slice over a fuller cached one",
+        "The toast added in iteration 10 is removed once the data is actually reachable, since it exists only to make the truncation visible"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 10). AppContext's initial load caps foods at 500 (ordered by name), recipes at 200 (created_at asc) and grocery_items at 500 (created_at asc), then writes each slice into state wholesale. Nothing detects or reports the truncation, so the app shows a partial catalogue that looks complete.\n\nThe ordering is what turns this from 'some rows missing' into a bug people would report. grocery_items ascending by created_at means the 500 shown are the OLDEST -- a household over the cap stops seeing the items it just added. foods ordered by name means the catalogue stops partway through the alphabet.\n\nIteration 10 did NOT fix this. It named the caps (FOODS_ROW_CAP, RECIPES_ROW_CAP, GROCERY_ROW_CAP), added reachedRowCap with tests, and made the app say 'Showing your first 500 foods' instead of saying nothing. That is a stopgap so the failure is visible, not a fix.\n\nWorth deciding before implementing: plan_entries already solved a related problem with a windowed fetch plus mergeWindowedPlanEntries (US-538), which is a precedent for keeping out-of-window cached rows rather than truncating state. Whether foods wants the same shape or real pagination depends on whether the UI needs the whole catalogue in memory to search it.\n\nNoticed while reading the same function, unrelated and unfixed: the post-migration recipe re-fetch around AppContext.tsx:410 selects with no household_id filter and no limit, unlike every other query in the load. RLS scopes it, so it is not a leak, but it is inconsistent and it is unbounded."
+    },
+    {
+      "id": "US-820",
+      "title": "Grocery quantities that mix mass and volume",
+      "description": "As a parent shopping from the list, I want the quantity next to an ingredient to be one I can act on, so that I do not buy five pounds of flour when two recipes asked for two pounds and three cups.",
+      "acceptanceCriteria": [
+        "Two recipes contributing the same ingredient in different unit families produce two rows, each with its own quantity",
+        "Adding to a list that already holds that ingredient in a different family inserts rather than bumping",
+        "Units inside one family still stack (1 lb + 8 oz = 1.5 lb)",
+        "A bare number beside a unit still merges, since that is sloppy entry rather than a second measurement",
+        "The Grocery UI shows the two rows in a way that reads as deliberate rather than as a duplicate"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 11). The planner half is done and tested; the UI half is not.\n\nsumQuantities fell back to a raw numeric sum whenever unit families disagreed, so 2 lb + 3 cups came back as 5 lb and 500 g + 2 cups as 502 g. planGroceryMerge now splits an ingredient's parts by recognised unit family and refuses to bump an existing row measured a different way, so those stay as two rows. Unrecognised units (bare counts, 'bag') remain compatible with everything, which keeps the pinned 1 lb + 2 case merging.\n\nWhat is left is presentation. Two rows both reading 'Flour' look like a duplicate the shopper should clean up, and the natural reaction is to delete one -- which loses a real requirement. Worth deciding how Grocery.tsx renders them: grouped under one heading with two measures, or a note on the second. Check the mobile row layout too, where the name and quantity sit on one line.\n\nAlso unresolved, and cosmetic rather than wrong: sumQuantities still raw-sums a bare count into a unit'd row, so 1 lb + 2 reads as 3 lb rather than '1 lb plus 2'. That is the pinned behaviour and probably right for entry sloppiness, but it is a guess about intent worth revisiting if anyone complains."
+    },
+    {
+      "id": "US-821",
+      "title": "The dashboard entrance animation, and the a11y baseline that cannot be reproduced",
+      "description": "As someone who has asked their system for reduced motion, I want the dashboard to appear rather than arrive, and as anyone changing the UI, I want the authenticated a11y gate to measure a settled page.",
+      "acceptanceCriteria": [
+        "With prefers-reduced-motion set, no element on /dashboard carries an inline opacity below 1 after load",
+        "The authenticated a11y scan reports the same node count on repeat runs of the same build",
+        "tests/accessibility/authenticated-baseline.json matches what the scan actually measures, with the measurement recorded",
+        "The four quick-action cards on Home report real contrast, not contrast through a half-faded ancestor",
+        "The remaining genuine violations after that are listed and either fixed or carried explicitly"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 12). Two fixes landed, one problem is still open, and the measurements below are the useful part.\n\nFIXED: useReducedMotion started at useState(false) and corrected itself in an effect, so every consumer rendered once believing there was no preference. One render is enough -- framer-motion reads variants at mount -- so the entrance animation the hook exists to suppress ran anyway. It now reads matchMedia synchronously, guarded for the prerender pass. AnimatedDashboard's four hidden variants also had an unconditional opacity: 0, so reduced motion neutralised y and scale and left the fade; they are conditional now.\n\nSTILL OPEN: with reduced motion emulated in Playwright AND both fixes in, the dashboard scan still measures washed-out text (#a9b1be on #fcfbfa at 2.09:1 for the quick-action descriptions), so something is still fading those four cards. AnimatedActionCard may not be the component in AnimatedDashboard.tsx that I edited -- check which file actually exports what Home.tsx:548 renders before going further.\n\nTHE BASELINE IS WRONG, and not because of anything in this loop. tests/accessibility/authenticated-baseline.json says dashboard: 3. Measured on this machine against the fake backend: 11 nodes with --primary at 38% (the pre-loop value) and 14-15 at 35%, varying run to run because the scan catches the animation at different points. The other six routes pass. Do not raise the baseline to make it green -- the number moves because the page is measured mid-animation, and fixing that is what makes the number mean something.\n\nGenuine violations visible underneath the artefact, worth fixing on their own: white on #ef4343 at 3.78:1 (a destructive/alert button), and the tooltip-trigger spans in the stat cards which compute #728299 at 3.85:1.\n\nIteration 13 closed the second layer and found a third. AnimatedDashboard had four MORE entrance fades set inline rather than through variants -- initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }} and friends, movement gated, fade not. All four are gated now and the test covers inline initials as well as variants, with the hover overlay at line 242 as the one deliberate exception (it starts invisible by design).\n\nIt still does not fix the scan. Measured again with reducedMotion: 'reduce' emulated and every fade gated: 15 nodes, the welcome-banner subtitle STILL carrying an inline opacity, the quick-action descriptions down at 1.54:1. The built bundle does contain the gated code (Home-*.js has `opacity:a?1:0`), so the flag itself is evaluating false at runtime under Playwright's emulation.\n\nThat is where to start next: check what window.matchMedia('(prefers-reduced-motion: reduce)').matches actually returns inside the built app under Playwright, before changing any more component code. If it returns true and the fade still runs, the problem is not this hook at all -- there may be a second useReducedMotion in play (framer-motion exports one with the same name) or an app-level motion setting that overrides the media query. Three components have now been edited on the assumption that the flag works; verify the flag first."
+    },
+    {
+      "id": "US-822",
+      "title": "--secondary and --accent do not carry their own foreground",
+      "description": "As a low-vision user, I want the text on a green or pink brand surface to be readable, so that the buttons and badges built from them are usable rather than decorative.",
+      "acceptanceCriteria": [
+        "White on --secondary meets 4.5:1 (measured 3.35:1)",
+        "White on --accent meets 4.5:1 (measured 4.33:1)",
+        "Both are checked against the surfaces they render as TEXT on, not only as fills, the way primary and destructive now are",
+        "The KNOWN_BELOW_AA entries in src/lib/themeContrast.test.ts are removed as each is fixed; the test fails if the list outlives the exception",
+        "Dark-theme counterparts are measured too -- this loop only ever checked the light block"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 15) by the contrast test written in the same commit, which is the point: the same defect had been found three times by hand before anyone did the arithmetic.\n\n--secondary is 142 76% 36% with a white foreground: 3.35:1. --accent is 340 82% 52% with white: 4.33:1. Both are used as button fills and badges. Not changed here because they are brand colours with a wide blast radius and this was the last iteration of the loop -- picking new greens and pinks is a design decision, not a mechanical darkening, and it wants a look at the result rather than only a ratio.\n\nFor reference, --secondary needs roughly 30% lightness and --accent roughly 47% to clear 4.5:1 with white, but check them as text on the tinted surfaces too before settling: that is the step that was missed when --primary was set to 38% and still failed on every callout.\n\nAlso untested so far: the .dark block. themeContrast.test.ts slices the CSS at the first '.dark' and only measures the light theme. The dark tokens have their own foregrounds and have never been checked by anything but an axe run in light mode."
     }
   ]
 }

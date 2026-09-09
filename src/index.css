@@ -31,7 +31,8 @@ All colors MUST be HSL.
     --popover-foreground: 222 47% 11%;
 
     /*
-      Carrot orange, darkened from 53% to 38% lightness for WCAG AA (US-778).
+      Carrot orange, darkened from 53% to 38% for WCAG AA (US-778), and from
+      38% to 35% because 38% only ever cleared one background.
 
       At 53% it measured 2.68:1 as text on --background and 2.85:1 for white
       text on top of it, against a 4.5:1 requirement -- and since it is the
@@ -39,11 +40,23 @@ All colors MUST be HSL.
       serious violation the first authenticated axe scan found. It also made
       the published VPAT's 1.4.3 claim untrue.
 
-      38% is the threshold, not a round number: 39% still measures 4.44:1
-      against this exact background. Both directions clear it now -- 4.64:1 as
-      text, 4.92:1 for white on top.
+      38% was then chosen as the threshold against --background, where it
+      measures 4.65:1. But almost nothing renders on --background alone. The
+      tinted callout surfaces this app is built out of are a shade darker, and
+      against those 38% sits just under the line every time: 4.46:1 on the
+      neutral card, 4.37:1 on the warm callout, 4.29:1 on the auth panel,
+      4.17:1 on the green tint, 4.07:1 on the contact card. An axe run over the
+      built site found thirteen of them across five pages -- including the
+      accessibility page itself, and the link to the VPAT that claims 1.4.3
+      conformance.
+
+      35% is the threshold against the WORST of those surfaces, not the best:
+      4.63:1 on the contact card, and 4.65 to 5.62 everywhere else. 36% still
+      measures 4.44:1 there. Darkening also helps the other direction rather
+      than trading against it -- white on primary goes 4.93 to 5.62 -- because
+      both readings are against light.
     */
-    --primary: 24 95% 38%;
+    --primary: 24 95% 35%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 142 76% 36%;
@@ -58,7 +71,21 @@ All colors MUST be HSL.
     /* Berry Pink (HSL 340, 82%, 52%) */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    /*
+      Darkened from 60% for WCAG AA (US-822), the same problem --primary had.
+
+      At 60% (#ef4343) white text on it measured 3.78:1, and it is the
+      destructive button -- delete a kid, delete a list, cancel a
+      subscription. The confirmations that most want reading were the least
+      readable thing on the page. As TEXT it was no better: 3.57:1 on
+      --background, 3.12:1 on the warm callout tint.
+
+      42% clears both directions against the worst surface rather than the
+      best: 6.06:1 for white on it, and 5.00 to 6.06 as text. 45% still leaves
+      the warm tint at 4.47:1, which is the kind of "probably nothing renders
+      there" assumption that put --primary a hair under the line twice.
+    */
+    --destructive: 0 84% 42%;
     --destructive-foreground: 0 0% 100%;
 
     /* Semantic status tokens (audit US-577). Tuned to the app's existing

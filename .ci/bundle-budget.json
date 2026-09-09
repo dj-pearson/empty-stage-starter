@@ -1,8 +1,9 @@
 {
-  "_comment": "Gzipped byte budgets for dist/assets/js, enforced by scripts/ci/check-bundle-budget.mjs. Measured values and the reasoning are in .ci/bundle-budget.md. Regenerate with --update only for a deliberate, explained change. vendor-supabase was raised from 2932 to 42000 on 2026-09-06: see .ci/bundle-budget.md, the 0.9 kB measurement behind the old number is not reproducible.",
+  "_comment": "Gzipped byte budgets for dist/assets/js, enforced by scripts/ci/check-bundle-budget.mjs. eagerJs is what the browser downloads before the entry can run (the entry chunk plus its static import closure), measured at 431.7 kB on 2026-09-08; it is the number the per-chunk budgets could not see. Measured values and the reasoning are in .ci/bundle-budget.md. Regenerate with --update only for a deliberate, explained change. vendor-supabase was raised from 2932 to 42000 on 2026-09-06: see .ci/bundle-budget.md, the 0.9 kB measurement behind the old number is not reproducible.",
   "_measuredAt": "2026-09-06",
   "_headroom": 1.05,
   "totalJs": 2510000,
+  "eagerJs": 454000,
   "chunks": {
     "index": 124000,
     "vendor-animation": 41000,
