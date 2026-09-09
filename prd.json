@@ -4196,6 +4196,23 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 2). loginHistory.logLogin runs on every successful web sign-in (three call sites in Auth.tsx, one in AuthCallback.tsx) and called fetch('https://ipapi.co/json/'). That host is absent from the connect-src in public/_headers, so in production the request never left the page: a CSP violation on every login and null in all eight geo columns. It only worked in `vite dev`, where no CSP is applied. Allowing the origin was rejected as the fix -- it would START handing a third party the IP of every person signing in to a product holding children's data, and put a 3s third-party round-trip on the login path. Instead the network call is gone and timezone is read locally from Intl.DateTimeFormat().resolvedOptions(), which is the signal the suspicious-login check actually wants and which was null on every row until now. Gate: src/lib/cspConnectSrc.test.ts parses the CSP out of public/_headers, implements browser-accurate wildcard source matching (with its own assertions, including that *.sentry.io does not match sentry.io), and checks every literal fetch/WebSocket origin in src/ plus the VITE_SUPABASE_URL and VITE_FUNCTIONS_URL origins from env.example.txt. Also deleted src/lib/url-utils.ts and its test (741 + 425 lines), which the gate surfaced: it fetched api-ssl.bitly.com and tinyurl.com, both CSP-blocked, and read a VITE_BITLY_API_KEY that a VITE_ prefix would have published in the client bundle. Nothing in src/, app/, tests/, scripts/ or functions/ imported it. Four mutants caught: restoring the ipapi fetch (3 fail), dropping functions.tryeatpal.com from connect-src (1), removing the CSP line entirely (collection error, exit 1), dropping the wss source (1)."
+    },
+    {
+      "id": "US-837",
+      "title": "The skip link scrolled but never moved focus, and half the pages had nothing to skip to",
+      "description": "As a keyboard user, I want the skip link to put me in the page content, so that I do not have to tab through the whole navigation on every page.",
+      "acceptanceCriteria": [
+        "Activating the skip link moves keyboard focus into the main content, not just the scroll position.",
+        "The focused target is reachable by script but stays out of the tab order (tabindex=-1), and an existing tabindex is left alone.",
+        "A page with no #main-content falls back to its first <main> or [role=\"main\"] landmark instead of being a dead anchor.",
+        "Every page a visitor can land on directly declares a landmark, including all the programmatic guide templates; anything exempt says why.",
+        "The gate proves it can tell a landmark from its absence, so it cannot pass by recognising nothing."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 3) by checking the VPAT's own claim. src/pages/VPAT.tsx asserts WCAG 2.4.1 Bypass Blocks 'Supports' with the remark 'Skip to main content link implemented on all pages'. Both halves of that were false. (1) SkipToContent rendered a bare <a href=\"#main-content\">. Chrome, Safari and Edge scroll to a non-focusable target without moving focus -- only Firefox moves it -- so the next Tab went straight back into the navigation the link exists to bypass. (2) Only 32 of 63 page files declared id=\"main-content\"; on the rest the link was a dead anchor, including every programmatic guide (5 of 6 pseo files), which is the highest-traffic public surface. Fix: SkipToContent now resolves the target (#id, then the first <main>, then [role=\"main\"]), sets tabindex=-1 when the element is not already focusable, focuses it and scrolls it in, preventing the browser's own anchor jump so the two do not fight. Doing it in the component meant the 32 pages that already had the id needed no change. Landmarks added to Onboarding, NotFound, Join, AdminDashboard, ShareTarget and all four pSEO templates plus PseoPage's loading and soft-404 states. AuthCallback and OAuthCallback are exempt with a written reason (transient redirect screens with no navigation to skip). Gate: src/components/skipToContent.test.tsx drives the real click through userEvent and asserts document.activeElement, then parses App.tsx for lazy imports and absolute-path routes and requires a landmark per routed page, with the nested /dashboard and /admin children checked via their layouts. Five mutants caught: remove the onClick (2 fail), drop the tabindex assignment (2), drop the <main> fallback (2), strip the id from one routed page (1), strip it from one pSEO template (1)."
     }
   ]
 }

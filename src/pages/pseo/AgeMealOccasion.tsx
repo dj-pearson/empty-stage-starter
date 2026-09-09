@@ -212,7 +212,7 @@ interface AgeMealOccasionProps {
 
 export function AgeMealOccasion({ content, relatedPages }: AgeMealOccasionProps) {
   return (
-    <article className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
+    <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
       {/* 1. Hero */}
       <PseoHero
         headline={content.headline}
@@ -313,7 +313,7 @@ export function AgeMealOccasion({ content, relatedPages }: AgeMealOccasionProps)
         heading="Plan age-appropriate meals in minutes"
         body="EatPal builds personalized meal plans based on your child's age, preferences, and nutritional needs."
       />
-    </article>
+    </main>
   );
 }
 

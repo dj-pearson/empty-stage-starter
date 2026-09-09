@@ -174,7 +174,7 @@ export default function ShareTarget() {
 
   if (needsAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <main id="main-content" className="min-h-screen flex items-center justify-center p-4 bg-background">
         <Helmet>
           <title>Sign In Required - EatPal</title>
           <meta name="robots" content="noindex" />
@@ -189,12 +189,12 @@ export default function ShareTarget() {
             Sign In
           </Button>
         </Card>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <main id="main-content" className="min-h-screen flex items-center justify-center p-4 bg-background">
       <Helmet>
         <title>Add to Grocery List - EatPal</title>
         <meta name="robots" content="noindex" />
@@ -276,6 +276,6 @@ export default function ShareTarget() {
           </div>
         )}
       </Card>
-    </div>
+    </main>
   );
 }

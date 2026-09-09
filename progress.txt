@@ -3348,3 +3348,77 @@ fetched an origin the CSP blocks. src/lib/cspConnectSrc.test.ts.
     make it say no.
   - A VITE_-prefixed env var is public. `VITE_BITLY_API_KEY` in a module nobody
     imports is a key waiting to be published by the first person who wires it up.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 3. US-837: the skip link
+scrolled but never moved focus. src/components/skipToContent.test.tsx.
+================================================================================
+
+- TWO NEGATIVES FIRST, both in the edge-function layer. CORS: functions/_shared/
+  cors.ts pins Access-Control-Allow-Origin to the production origin and the only
+  wildcard in the tree is generate-sitemap, which is a public sitemap. The 27
+  functions that do not import cors.ts are cron- or webhook-invoked and never
+  touched by a browser. Auth on verify_jwt=false functions: my first sweep
+  flagged agent-ci-triage, agent-migration-check, agent-sentry-triage and
+  agent-knowledge-ingest as unguarded service-role endpoints. All four are
+  authenticated -- GitHub HMAC over the raw body, Sentry HMAC, and an admin JWT
+  respectively. My grep just did not know those spellings. Instrument wrong
+  before the code, again.
+
+- THE FIND CAME FROM READING THE PRODUCT'S OWN CLAIM. src/pages/VPAT.tsx states
+  WCAG 2.4.1 Bypass Blocks: "Supports -- Skip to main content link implemented
+  on all pages." A published VPAT is a compliance document, so it is worth
+  checking rather than assuming. Both halves were false.
+
+  (a) SkipToContent rendered a bare `<a href="#main-content">`. When the target
+      is a plain <main> or <div>, Chrome, Safari and Edge scroll to it and
+      LEAVE FOCUS WHERE IT WAS -- only Firefox moves focus. So the very next
+      Tab went back into the navigation the link exists to bypass. The link
+      looked right, read right in a review, and did nothing for the user it was
+      written for.
+
+  (b) 32 of 63 page files declared id="main-content". On the other 31 the link
+      was a dead anchor. Among them: 5 of the 6 pSEO files, which are the
+      highest-traffic public surface and the likeliest first contact for a
+      keyboard visitor arriving from search.
+
+- FIXED IN THE COMPONENT, NOT IN 32 FILES. The click handler resolves the
+  target (#id, then the first <main>, then [role="main"]), sets tabindex="-1"
+  if it is not already focusable, focuses it, scrolls it in, and calls
+  preventDefault so the browser's own anchor jump does not fight the scroll.
+  The pages that already had the id needed no change at all; the fallback means
+  any page with a landmark works whether or not somebody remembered the id.
+
+- LANDMARKS ADDED where a routed page had none: Onboarding, NotFound, Join,
+  AdminDashboard, ShareTarget, all four pSEO templates, and PseoPage's loading
+  and soft-404 states. AuthCallback and OAuthCallback are exempt with a written
+  reason -- they are transient redirect screens with no navigation to skip past.
+
+- THE GATE FOUND ONE I HAD MISSED. My hand survey of routed pages missed
+  /onboarding, because the regex window I used to pair a <Route> with its
+  element was too short for that block. The test, which walks the lazy imports
+  and every absolute-path route in App.tsx, failed on it immediately.
+
+- NESTING WAS THE ONE DESIGN TRAP. PseoPage's NotFoundState renders BOTH
+  standalone (as the whole page) and as the default case inside <Suspense>. If
+  I had wrapped the Suspense block in <main> as well, the 404 case would have
+  nested a main inside a main. Giving each of the six components its own
+  landmark and wrapping nothing at the call site keeps exactly one per render.
+
+- Measured: 3395 tests pass (225 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught: remove the onClick (2 fail), drop the tabindex assignment (2),
+  drop the <main> fallback (2), strip the id from a routed page (1), strip it
+  from a pSEO template (1).
+
+- **Learnings for future iterations:**
+  - The product's own compliance documents are a list of falsifiable claims. A
+    VPAT row saying "Supports" is a test waiting to be written, and this one was
+    wrong in two independent ways.
+  - An accessibility feature that renders is not an accessibility feature that
+    works. The skip link existed, was mounted app-wide, and passed every review
+    it ever had, because reading `<a href="#main-content">` does not tell you
+    that three of the four major browsers ignore it.
+  - Fix at the one place, not at the 32. The same defect could have been closed
+    by adding tabIndex={-1} to every landmark; putting it in the click handler
+    meant one file changed and pages that do not exist yet are covered too.

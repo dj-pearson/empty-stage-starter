@@ -166,7 +166,7 @@ interface LandingPageProps {
 
 export function LandingPage({ content, relatedPages }: LandingPageProps) {
   return (
-    <article className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
+    <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
       {/* 1. Hero */}
       <PseoHero
         headline={content.headline}
@@ -219,7 +219,7 @@ export function LandingPage({ content, relatedPages }: LandingPageProps) {
         heading="Start planning better meals today"
         body="EatPal gives you personalized meal plans, nutrition tracking, and expert guidance for every stage of childhood."
       />
-    </article>
+    </main>
   );
 }
 

@@ -151,7 +151,7 @@ export default function AdminDashboard() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <main id="main-content" className="container mx-auto p-6 space-y-6">
       <Helmet>
         <title>Admin Analytics - EatPal</title>
         <meta name="description" content="Platform analytics, monitoring, and system health dashboard for EatPal administrators" />
@@ -560,6 +560,6 @@ export default function AdminDashboard() {
           <AdminIntegrationManager />
         </TabsContent>
       </Tabs>
-    </div>
+    </main>
   );
 }
