@@ -80,7 +80,11 @@ export function OfflineIndicator() {
       role="alert"
       aria-live="assertive"
       className={cn(
-        "fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all",
+        // US-824: top-centre, not bottom. Three overlays shared the bottom edge on
+        // every dashboard route -- this banner, the install prompt and the support
+        // FAB -- and the cookie bar (bottom-0, z-[100]) covered all of them for a
+        // first-time visitor. A connectivity banner belongs at the top anyway.
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all",
         isReconnecting
           ? "bg-amber-500 text-white"
           : "bg-destructive text-destructive-foreground",

@@ -2897,3 +2897,78 @@ connection showed the user "Failed to fetch". src/lib/networkFailure.ts.
     toast copy, now this). A PWA that advertises offline support should treat
     "no connection" as a first-class result everywhere, not as an exception
     string that happens to reach a toast.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 12. US-824 AC 4: four overlays were
+stacked on the bottom edge. src/lib/overlayStacking.test.ts.
+================================================================================
+
+- TWO NEGATIVES FIRST. A sweep for spinners that never stop (setLoading(true)
+  with no reset on the failure path) returned 22 candidates and the user-facing
+  ones were all fine: BlogPost sets isLoading(false) unconditionally after the
+  if/else, and PseoPage has a cancellation guard, an error branch that renders
+  NotFound, and an unconditional reset. My "catch does not reset loading"
+  heuristic was reading functions that have no try/catch at all.
+
+- THE REAL FIND, closing an AC I OPENED IN ITERATION 6. Promoting the install
+  prompt to an app-wide mount put it in a lane that was already occupied, so
+  finishing this was my own mess to clear. Four overlays render together on
+  every /dashboard route:
+
+      CookieConsentBanner  inset-x-0 bottom-0  z-[100]   full-width bar
+      AppInstallPrompt     bottom-4 left-4 right-4       full width on a phone
+      OfflineIndicator     bottom-4 left-1/2             centred pill
+      SupportWidget        bottom-6 right-6              56px FAB
+
+  Measured on a 390px phone: the offline pill (x 95-295, y 16-56) and the FAB
+  (x 310-366, y 24-80) both sit INSIDE the install card (x 16-374, y 16-136),
+  and the consent bar covers all three from y 0 to ~120.
+
+- FIXED: install prompt to bottom-24, which clears the FAB's 80px envelope;
+  offline banner to top-4, which is where a connectivity banner belongs and
+  takes it out of the consent bar's zone entirely.
+
+- THE GATE COMPUTES GEOMETRY, NOT STRINGS. It parses the Tailwind positioning
+  classes into boxes and fails on an actual overlap, so a future reshuffle is
+  judged on whether things collide rather than on matching today's wording.
+
+- TWO INSTRUMENT BUGS IN ONE TEST, both caught by running it:
+  (a) The class extractor matched anywhere in the file and picked up MY OWN
+      COMMENT in AppInstallPrompt describing the old broken layout ("rendered
+      `fixed bottom-4 ... md:right-4`"). It measured prose and reported the bug
+      as still present after it was fixed. Comment lines are skipped now.
+  (b) Checking only 390px was not enough. Putting the offline banner back on
+      the bottom edge still PASSED, because at 390 the centred pill and the
+      right-hand FAB happen to miss each other. The collision needs a narrow
+      viewport, so the test runs at 320 and 390; the mutant fails at 320.
+
+- DELETED, verified unreferenced across src/, app/, tests/ and scripts/:
+  QuickActionsMenu.tsx (a FIFTH bottom-edge overlay that was never mounted) and
+  MealPlanningCalendar.tsx. Both US-771 survivors.
+
+- MY OWN GATE FROM ITERATION 6 CAUGHT THE DELETION, which is the best thing
+  that happened this iteration. hoverRevealControls.test.ts exempted
+  QuickActionsMenu with a machine-checked reason; deleting the file failed the
+  "exemption list stays honest" block on the next run. An allowlist that
+  verifies its own entries is worth the extra twenty lines.
+
+- AND IT EXPOSED A WEAK TEST. routeAliases.test.ts checked for in-app links to
+  alias routes across a HARDCODED LIST OF THREE FILES, one of which I had just
+  deleted. It broke on the missing path -- and the real problem was that it had
+  only ever looked at three of about three hundred files. It scans the tree
+  now, with a floor assertion (>100 files) so it cannot silently look at
+  nothing.
+
+- Measured: 3327 tests pass (220 files). Typecheck 814 against baseline 814;
+  lint 1148 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A comment quoting the buggy code will be found by a grep looking for the
+    buggy code. Writing "this used to say `fixed bottom-4`" in the fix made my
+    own detector report the bug as unfixed.
+  - One viewport is not a layout test. Two overlays that miss each other at
+    390px can collide at 320px, and the assertion that passes at the wide size
+    is worth nothing.
+  - When deleting a file, run the whole suite rather than the tests you think
+    are related. Two gates referenced it by path, and one of them was only
+    pretending to check anything.

@@ -37,10 +37,9 @@ const EXEMPT: Record<string, { reason: string; proof: RegExp }> = {
     reason: "decorative label, and hidden below md where touch lives",
     proof: /hidden md:flex/,
   },
-  "src/components/QuickActionsMenu.tsx": {
-    reason: "decorative label hint; pointer-events-none, so not hit-testable",
-    proof: /pointer-events-none/,
-  },
+  // src/components/QuickActionsMenu.tsx was exempt here until US-824 deleted it
+  // as unreferenced. This gate caught the stale entry on the next run, which is
+  // what the "stays honest" block is for.
 };
 
 interface Finding {

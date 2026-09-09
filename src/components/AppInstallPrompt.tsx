@@ -105,7 +105,7 @@ export function AppInstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed bottom-24 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm animate-in slide-in-from-bottom-4 duration-300">
       <Card className="shadow-2xl border-2 border-primary/20 bg-background/95 backdrop-blur-sm">
         <CardContent className="pt-4 pb-4">
           <button

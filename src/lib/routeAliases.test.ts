@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { ROUTE_ALIASES, ROUTE_ALIAS_ENTRIES } from './routeAliases';
 
 /**
@@ -69,15 +70,24 @@ describe('App.tsx renders the aliases as redirects', () => {
   it('has no in-app link pointing at an alias', () => {
     // Every internal link should go straight to the canonical URL; the aliases
     // exist for bookmarks and inbound links, not for us to keep using.
+    // Scans the whole tree rather than a hardcoded trio. The list used to name
+    // three files, one of which (QuickActionsMenu) was later deleted -- so the
+    // check both broke on a missing path and, more importantly, had only ever
+    // looked at three of some three hundred files.
     const srcDir = path.join(process.cwd(), 'src');
+    const files = execSync("find src -name '*.tsx' -o -name '*.ts'", { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter((f) => f && !/\.test\.|routeAliases/.test(f));
+
     const offenders: string[] = [];
     for (const [from] of ROUTE_ALIAS_ENTRIES) {
       const pattern = new RegExp(`(to|href)=["'\`]${from}["'\`]|navigate\\(["'\`]${from}["'\`]\\)`);
-      for (const file of ['pages/Recipes.tsx', 'pages/Kids.tsx', 'components/QuickActionsMenu.tsx']) {
-        const contents = readFileSync(path.join(srcDir, file), 'utf8');
-        if (pattern.test(contents)) offenders.push(`${file} -> ${from}`);
+      for (const file of files) {
+        if (pattern.test(readFileSync(file, 'utf8'))) offenders.push(`${file} -> ${from}`);
       }
     }
+    expect(files.length).toBeGreaterThan(100);
     expect(offenders).toEqual([]);
   });
 });
