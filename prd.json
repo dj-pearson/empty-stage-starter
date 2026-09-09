@@ -4132,6 +4132,21 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 13) by writing a gate that ties the four SEO route lists together and running it: scripts/prerender-routes.json (29 static), functions/sitemap.xml.ts (29 fallback URLs), public/robots.txt, and src/App.tsx.\n\nTHE BUG: `Disallow: /auth` is a PREFIX match under RFC 9309, so it also matches /authors. That page is public, prerendered, listed in the sitemap, and its author bios are an E-E-A-T signal for nutrition content -- and every one of the 16 indexing groups told every crawler not to fetch it. A URL in the sitemap that robots blocks is a Search Console error, and it had been sitting in all 16 groups.\n\nWHAT MAKES IT A GOOD EXAMPLE: robots.txt's own header already reasons about prefix matching -- '\"/admin\" covers /admin, /admin/agents and /admin-dashboard' -- but only in the permissive direction, where one rule usefully covers more private paths. Nobody asked what else /auth covers. Fixed as a pair, `/auth$` plus `/auth/`, in all 16 groups, with the reasoning written next to the existing note.\n\nTHE PARSER MOVED RATHER THAN BEING COPIED. A full RFC 9309 implementation (group resolution, longest-match-wins, Allow ties) lived inside src/lib/robots-txt.test.ts, so anything else needing to ask 'would Googlebot fetch this?' had to write a second one. It is src/lib/robotsTxt.ts now; the original test imports it and its 76 assertions still pass, so there is one implementation instead of two that can drift.\n\nThe prerender and sitemap lists were already in exact agreement (29 = 29, nothing missing either way, no phantom routes). Nothing enforced it; now something does. Mutation-checked four ways: restore the bare /auth rule (7 fail), add a sitemap URL nobody prerenders (1), prerender a route that does not exist (1), delete every Disallow so the block check passes by being permissive (30)."
+    },
+    {
+      "id": "US-833",
+      "title": "Four exposure-ladder buttons rendered their translation key as the label",
+      "description": "As a parent using the exposure ladder, I want the row menu to say Pause and Remove, so that the app does not show me internal identifiers.",
+      "acceptanceCriteria": [
+        "Every translation key the app passes to t() resolves to English copy.",
+        "Pluralised keys count as defined via their _one/_other forms, so correct code does not fail the check.",
+        "A gate fails when a key is referenced without an entry."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 14) by diffing the keys code passes to t() against src/i18n/locales/en.json.\n\nfoodLadder had no `actions` namespace at all, so the row dropdown in FoodLadderBoard.tsx rendered four menu items labelled 'foodLadder.actions.pause', '...resume', '...stepDown' and '...remove'. Confirmed against the live i18n instance rather than inferred: each returned its own key, while control keys resolved normally. src/i18n/i18n.test.ts already pins that an unknown key returns the key -- nothing had checked which keys the app uses.\n\nFIVE OF MY NINE INITIAL HITS WERE WRONG. i18next resolves t('x.count', { count }) against x.count_one / x.count_other, so a naive flatten reports every pluralised key as missing. The five foodLadder.weekly.* entries were correct all along. The gate strips CLDR plural suffixes, and has a test asserting those five DO resolve -- so the false-positive half is guarded too, and dropping the suffix stripping fails two tests.\n\nAlso lowered .ci/lint-baseline.txt from 1156 to 1148. The ratchet had been printing 'Lower .ci/lint-baseline.txt to 1148 to lock in the win' on every run this loop; until it is lowered those eight fixed errors can come back silently.\n\nNOT A DEFECT, measured and left alone: i18n covers 44 of 377 component and page files with 451 keys. That is partial adoption of an in-progress convention (US-347), not a bug, and converting the rest is a product decision rather than a loop iteration."
     }
   ]
 }

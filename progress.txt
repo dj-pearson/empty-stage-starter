@@ -3033,3 +3033,59 @@ stacked on the bottom edge. src/lib/overlayStacking.test.ts.
   - When a comment reasons about a mechanism, check whether the reasoning is
     complete or just complete enough for the case that prompted it. This one
     was right about prefix matching and had only asked half the question.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 14. US-833: four exposure-ladder
+buttons rendered their translation key as the label. src/i18n/keyCoverage.test.ts
+================================================================================
+
+- A NEGATIVE FIRST, and it confirms iteration 13. Generalising the /auth ->
+  /authors prefix bug: resolved all 45 App.tsx routes against Googlebot's group.
+  14 blocked, and the list is exactly the intended private surface (auth, oauth,
+  checkout, share, admin x3, seo-dashboard, search-traffic, join, dashboard)
+  plus /api/docs. Nothing else is accidentally caught, so /authors was the only
+  one. /api/docs is blocked by `Disallow: /api` and is also absent from the
+  sitemap and prerender list -- consistently excluded, so it is an owner's call
+  rather than a defect, and I left it.
+
+- THE FIND: `foodLadder` had no `actions` namespace at all, so the row dropdown
+  in FoodLadderBoard.tsx rendered four menu items labelled
+  "foodLadder.actions.pause", "...resume", "...stepDown" and "...remove".
+  Proven against the live i18n instance rather than inferred:
+
+      foodLadder.actions.pause  ->  "foodLadder.actions.pause"
+      control foodLadder.title  ->  "Exposure ladder"
+
+  src/i18n/i18n.test.ts already pins that an unknown key returns the key. What
+  nothing checked was which keys the app actually passes to t().
+
+- FIVE OF MY NINE INITIAL HITS WERE WRONG, which is the part worth recording.
+  i18next resolves t('x.count', { count }) against `x.count_one` /
+  `x.count_other`, so a naive flatten reports every pluralised key as missing.
+  The five foodLadder.weekly.* entries were correct all along. I checked the
+  namespace before reporting instead of filing nine bugs.
+
+  The gate strips CLDR plural suffixes AND has a test asserting those five DO
+  resolve, so the false-positive half is guarded too: dropping the suffix
+  stripping fails two tests, meaning the suite would catch a future version of
+  my own mistake.
+
+- ALSO: lowered .ci/lint-baseline.txt from 1156 to 1148. The ratchet has printed
+  "Lower .ci/lint-baseline.txt to 1148 to lock in the win" on every run this
+  loop. Until it is lowered, those eight fixed errors can come back with the
+  gate still green -- a ratchet that is not tightened is just a ceiling.
+
+- Measured: 3343 tests pass (222 files). Typecheck 814 against baseline 814;
+  lint 1148 against a baseline now also 1148; invisible chars clean. Mutants:
+  removing the actions block fails 1, dropping plural handling fails 2.
+
+- **Learnings for future iterations:**
+  - A missing translation key is silent by design -- i18next returns the key so
+    the app keeps running. That makes "it renders" worth nothing as evidence,
+    and makes a coverage gate the only way to see it.
+  - When a sweep produces a list, check whether the framework resolves the
+    thing differently before believing any of it. Nine "missing keys" was five
+    wrong; the plural suffixes are a documented i18next feature I had simply
+    not modelled.
+  - A ratchet baseline that CI keeps telling you to lower is a standing
+    invitation to regress. Lowering it costs one line.
