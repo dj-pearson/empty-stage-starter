@@ -4147,6 +4147,22 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 14) by diffing the keys code passes to t() against src/i18n/locales/en.json.\n\nfoodLadder had no `actions` namespace at all, so the row dropdown in FoodLadderBoard.tsx rendered four menu items labelled 'foodLadder.actions.pause', '...resume', '...stepDown' and '...remove'. Confirmed against the live i18n instance rather than inferred: each returned its own key, while control keys resolved normally. src/i18n/i18n.test.ts already pins that an unknown key returns the key -- nothing had checked which keys the app uses.\n\nFIVE OF MY NINE INITIAL HITS WERE WRONG. i18next resolves t('x.count', { count }) against x.count_one / x.count_other, so a naive flatten reports every pluralised key as missing. The five foodLadder.weekly.* entries were correct all along. The gate strips CLDR plural suffixes, and has a test asserting those five DO resolve -- so the false-positive half is guarded too, and dropping the suffix stripping fails two tests.\n\nAlso lowered .ci/lint-baseline.txt from 1156 to 1148. The ratchet had been printing 'Lower .ci/lint-baseline.txt to 1148 to lock in the win' on every run this loop; until it is lowered those eight fixed errors can come back silently.\n\nNOT A DEFECT, measured and left alone: i18n covers 44 of 377 component and page files with 451 keys. That is partial adoption of an in-progress convention (US-347), not a bug, and converting the rest is a product decision rather than a loop iteration."
+    },
+    {
+      "id": "US-834",
+      "title": "The service worker cached authenticated Supabase responses to disk",
+      "description": "As a parent sharing a tablet with my family, I want my children's data to stay mine, so that whoever signs in next cannot be shown my rows when their connection drops.",
+      "acceptanceCriteria": [
+        "No response from /rest/v1/, /auth/v1/ or /functions/v1/ is written to Cache Storage.",
+        "A failed network request for an authenticated endpoint does not fall back to a cached response.",
+        "Activation removes anything an earlier worker already stored from those endpoints.",
+        "Static assets are still cached, so the check is not passing by caching nothing."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 15) while auditing public/sw.js, which has only been registered at all since US-765.\n\nTHE DEFECT: API_PATTERNS (/rest/v1/, /auth/v1/, /functions/v1/) routed to networkFirstStrategy, which does `cache.put(request, response.clone())` on every 200. So per-user Supabase rows -- and /auth/v1/ session payloads -- were written to Cache Storage on the device, and read back whenever fetch() failed.\n\nWHY IT LEAKS ACROSS USERS: Cache Storage matches on URL. Authorization is a request HEADER, and cache.match() ignores headers unless the stored response carries a matching Vary, which PostgREST does not send for it. The entry for GET /rest/v1/kids?select=* therefore matches ANY user's request for that URL. Shared family tablet, user A signs in and loads their children, user B signs in later and loses connection: the worker serves user B user A's rows. CACHE_NAME carries the build id, so a deploy that changes asset hashes clears it -- but between deploys it persists, and a deploy that does not change hashes keeps the name and the data.\n\nFIXED: authenticated endpoints go through networkOnlyForPrivateApi, which fetches and keeps nothing. Nothing is lost -- the app already keeps its own per-user offline copy in localStorage via AppContext, and CLAUDE.md's load precedence treats the server as authoritative. Activation also purges any entries an older worker left behind, since changing the strategy does not clear what is already on disk.\n\nTESTED BY EVALUATING THE SHIPPED FILE. public/sw.js is a browser artefact outside the bundle, so the test runs it in a vm with stubbed service-worker globals and drives its real fetch and activate handlers, rather than asserting the source contains particular words. Mutants: routing API requests back through networkFirstStrategy fails 4 tests; dropping the activation purge fails 1. One test asserts a static asset IS still cached, so the suite cannot pass by caching nothing at all."
     }
   ]
 }

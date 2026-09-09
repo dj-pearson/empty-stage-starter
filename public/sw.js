@@ -31,6 +31,9 @@ const STATIC_ASSETS = [
 ];
 
 // API endpoints that should use network-first strategy
+// Supabase endpoints. Every response here is scoped to whoever's JWT was on the
+// request, so NONE of it may be written to Cache Storage -- see
+// networkOnlyForPrivateApi below for why that is a leak and not just untidy.
 const API_PATTERNS = [
   /\/functions\/v1\//,
   /\/rest\/v1\//,
@@ -86,6 +89,10 @@ self.addEventListener('activate', (event) => {
             return caches.delete(cacheName);
           })
       );
+
+      // Drop anything an earlier version of this worker cached from an
+      // authenticated endpoint, before taking over any client.
+      await purgeCachedApiResponses();
 
       // Take control of all clients immediately
       await self.clients.claim();
@@ -164,9 +171,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     (async () => {
       try {
-        // API requests: Network-first strategy
+        // Authenticated API requests: network only, never cached.
         if (API_PATTERNS.some((pattern) => pattern.test(url.pathname))) {
-          return await networkFirstStrategy(request);
+          return await networkOnlyForPrivateApi(request);
         }
 
         // Static assets: Cache-first strategy
@@ -188,6 +195,56 @@ self.addEventListener('fetch', (event) => {
     })()
   );
 });
+
+/**
+ * Authenticated API requests: go to the network, and keep nothing.
+ *
+ * These used to run through networkFirstStrategy, which caches every 200. That
+ * wrote per-user Supabase rows -- and /auth/v1/ session payloads -- into Cache
+ * Storage on the device, and read them back whenever fetch() failed.
+ *
+ * The leak is that Cache Storage matches on URL. `Authorization` is a request
+ * HEADER, and cache.match() ignores headers unless the stored response carries
+ * a matching `Vary`, which PostgREST does not send for it. So the entry for
+ * GET /rest/v1/kids?... matches ANY user's request for the same URL. On a
+ * shared family tablet: user A signs in and loads their children, user B signs
+ * in later and loses connection, and the worker serves them user A's rows.
+ *
+ * Nothing is lost by not caching here. The app keeps its own offline copy in
+ * localStorage via AppContext, scoped to the signed-in user, and the load
+ * precedence in CLAUDE.md already treats the server as authoritative.
+ */
+async function networkOnlyForPrivateApi(request) {
+  return fetch(request);
+}
+
+/**
+ * Remove anything a previous worker cached from an authenticated endpoint.
+ *
+ * CACHE_NAME carries the build id, so a deploy that changes asset hashes drops
+ * the old cache wholesale. A deploy that does NOT change them keeps the name --
+ * and with it any rows an earlier version of this file had already stored. This
+ * clears them on activation regardless.
+ */
+async function purgeCachedApiResponses() {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const requests = await cache.keys();
+    await Promise.all(
+      requests
+        .filter((cached) => {
+          try {
+            return API_PATTERNS.some((p) => p.test(new URL(cached.url).pathname));
+          } catch {
+            return false;
+          }
+        })
+        .map((cached) => cache.delete(cached))
+    );
+  } catch (error) {
+    console.warn('[SW] Could not purge cached API responses:', error);
+  }
+}
 
 // Network-first strategy: Try network, fallback to cache
 async function networkFirstStrategy(request) {

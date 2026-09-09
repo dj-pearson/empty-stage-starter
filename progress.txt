@@ -3089,3 +3089,98 @@ buttons rendered their translation key as the label. src/i18n/keyCoverage.test.t
     not modelled.
   - A ratchet baseline that CI keeps telling you to lower is a standing
     invitation to regress. Lowering it costs one line.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 15 (last). US-834: the service worker
+cached authenticated Supabase responses to disk. public/sw.js.
+================================================================================
+
+- THE DEFECT. API_PATTERNS -- /rest/v1/, /auth/v1/, /functions/v1/ -- routed to
+  networkFirstStrategy, whose whole job is `cache.put(request, response.clone())`
+  on every 200. So per-user Supabase rows, and /auth/v1/ session payloads, were
+  written to Cache Storage on the device and read back whenever fetch() failed.
+
+- WHY IT CROSSES USERS, which is what makes it more than untidy. Cache Storage
+  matches on URL. `Authorization` is a request HEADER, and cache.match() ignores
+  headers unless the stored response carries a matching `Vary` -- which
+  PostgREST does not send for it. The entry for
+  GET /rest/v1/kids?select=* therefore matches ANY user's request for that URL.
+  Shared family tablet, which is an ordinary setup for this product: user A
+  signs in and loads their children; user B signs in later, loses connection,
+  and the worker hands them user A's rows.
+
+  CACHE_NAME carries the build id, so a deploy that changes asset hashes clears
+  it. Between deploys it persists, and a deploy that does not change the hashes
+  keeps the name and everything in it.
+
+- FIXED: authenticated endpoints go through networkOnlyForPrivateApi, which
+  fetches and keeps nothing. Nothing is lost by that -- the app already keeps a
+  per-user offline copy in localStorage via AppContext, and CLAUDE.md's load
+  precedence treats the server as authoritative anyway. Activation also purges
+  entries an older worker left behind, because changing the strategy does not
+  remove what is already on disk.
+
+- TESTED BY RUNNING THE SHIPPED FILE, not by reading it. public/sw.js is a
+  browser artefact outside the bundle, so the test evaluates it in a vm with
+  stubbed service-worker globals and drives its real fetch and activate
+  handlers. A source-guard test would have passed on a file that had stopped
+  doing the thing.
+
+- ONE ASSERTION EXISTS ONLY TO STOP THE SUITE PASSING VACUOUSLY: a static asset
+  must STILL be cached. Without it, a worker that cached nothing at all would
+  satisfy every other assertion in the file.
+
+      route API back through networkFirstStrategy  -> 4 fail
+      drop the activation purge                    -> 1 fail
+
+- Measured: 3350 tests pass (223 files). Typecheck 814 against baseline 814;
+  lint 1148 against baseline 1148; invisible chars clean. The __SW_BUILD_ID__
+  placeholder is intact, so scripts/build/stamp-sw.mjs still has what it needs.
+
+================================================================================
+LOOP CLOSED -- 15 iterations, 2026-09-09, branch
+claude/web-platform-improvements-loop-99nkyv
+================================================================================
+
+Shipped: US-823 (offline write queue, 3 iterations), US-824 (duplicate install
+prompts + overlay stacking), US-825 (breakpoints vs Tailwind), US-826
+(hover-reveal controls on touch), US-827 (credential autocomplete), US-828
+(date-only parsing + TZ pin), US-829 (stale query races), US-830 (plan-entry
+date bucketing), US-831 (raw error text), US-832 (robots blocking /authors),
+US-833 (missing translation keys), US-834 (service worker caching private data).
+
+Tests 3229 -> 3350. Lint baseline 1156 -> 1148. Typecheck held at 814.
+
+WHAT THIS LOOP KEPT RE-LEARNING, in rough order of how often it mattered:
+
+1. THE INSTRUMENT IS WRONG BEFORE THE CODE IS. Seven sweeps produced plausible
+   numbers that were artefacts of my own regex: 82 "unchecked Supabase errors"
+   (really 0), 9 "missing translation keys" (really 4), 11 "images without alt"
+   (really 0), a guarded-division check fooled by a trailing paren, a JSX parser
+   broken by `=>` inside a prop, an overlay detector that read a COMMENT
+   quoting the old buggy class string, and a layout check that only proved
+   anything at one viewport width. Every one of those would have been a
+   confident, checkable, wrong report.
+
+2. ASSERT THE INSTRUMENT FIRST. Nearly every gate written this loop opens with
+   a test that the scan found something -- at least 15 hover-reveal classes, 5
+   Tailwind screens, 400 translation keys, a registered fetch handler. Without
+   it, a format change turns the whole file into a tautology that passes.
+
+3. A MUTANT THAT SURVIVES IS THE TEST TELLING YOU SOMETHING. It happened four
+   times, and the honest response differed each time: delete the code (the NaN
+   guard that guarded nothing), write the discriminating test (the spinner
+   guard), add the missing viewport (the overlay geometry), or replace a
+   reimplementation test with source guards (the date bucketing, where 18 green
+   assertions never touched a single call site).
+
+4. THE CORRECT VERSION IS USUALLY ALREADY IN THE REPO, NEXT TO THE BROKEN ONES.
+   Auth.tsx had autocomplete and the settings page did not. parseDate handled
+   date-only strings and its 22 siblings did not. ResultHistoryCard forced local
+   parsing and five other files did not. Grocery.a11y.test.ts enforced touch
+   reveals for one file out of eight. Finding the file that got it right is
+   faster than deciding what right looks like.
+
+5. SAY WHAT YOU DID NOT FIND. Four iterations produced clean negatives --
+   index keys, division by zero, infinite spinners, prefix-blocked routes -- and
+   recording them is what stops the next pass re-running the same sweep.
