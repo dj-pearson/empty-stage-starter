@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AlertCircle, CheckCircle2, Clock, Globe, Palette, Copy, ExternalLink, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { userFacingError } from "@/lib/networkFailure";
 
 interface CustomDomain {
   id: string;
@@ -88,7 +89,7 @@ export default function ProfessionalSettings() {
       if (domainRes.data) setCustomDomain(domainRes.data as CustomDomain);
       if (brandRes.data) setBrandSettings(brandRes.data as BrandSettings);
     } catch (error: any) {
-      toast.error("Error loading settings", { description: error.message || "Failed to load your professional settings" });
+      toast.error("Error loading settings", { description: userFacingError(error, "Failed to load your professional settings") });
     } finally {
       setLoading(false);
     }
@@ -126,7 +127,7 @@ export default function ProfessionalSettings() {
       setNewDomain("");
       toast.success("Domain added", { description: "Please verify your domain ownership by updating DNS records" });
     } catch (error: any) {
-      toast.error("Error adding domain", { description: error.message || "Failed to add custom domain" });
+      toast.error("Error adding domain", { description: userFacingError(error, "Failed to add custom domain") });
     } finally {
       setActionLoading(false);
     }
@@ -152,7 +153,7 @@ export default function ProfessionalSettings() {
       await loadSettings();
       toast.success("Domain verified", { description: "Your custom domain has been successfully verified!" });
     } catch (error: any) {
-      toast.error("Verification failed", { description: error.message || "DNS records not found. Please ensure you've added the records correctly." });
+      toast.error("Verification failed", { description: userFacingError(error, "DNS records not found. Please ensure you've added the records correctly.") });
     } finally {
       setActionLoading(false);
     }
@@ -179,7 +180,7 @@ export default function ProfessionalSettings() {
       setCustomDomain(null);
       toast.success("Domain removed", { description: "Your custom domain has been removed" });
     } catch (error: any) {
-      toast.error("Error removing domain", { description: error.message });
+      toast.error("Error removing domain", { description: userFacingError(error, "Could not remove that domain. Please try again.") });
     } finally {
       setActionLoading(false);
     }
@@ -604,7 +605,7 @@ function BrandCustomizationForm({
 
       toast.success("Brand settings saved", { description: "Your customizations have been applied successfully" });
     } catch (error: any) {
-      toast.error("Error saving settings", { description: error.message || "Failed to save brand settings" });
+      toast.error("Error saving settings", { description: userFacingError(error, "Failed to save brand settings") });
     } finally {
       setLoading(false);
     }
@@ -636,6 +637,7 @@ function BrandCustomizationForm({
               <label className="text-sm font-medium">Contact Email</label>
               <Input
                 type="email"
+                autoComplete="email"
                 value={formData.contact_email || ""}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                 placeholder="support@example.com"

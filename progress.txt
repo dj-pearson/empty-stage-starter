@@ -2095,3 +2095,1092 @@ Seven stories in one pass.
     Assert the fixture rendered before believing any result derived from it.
   - An assertion that passes against the broken build is not a test. Run every
     new gate against the code it is supposed to catch, before the fix.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 1. An offline write failure now names
+the connection. src/lib/networkFailure.ts. US-823 filed for the queue itself.
+================================================================================
+
+- THREE HYPOTHESES DIED BEFORE THE REAL FIND, and each is worth recording
+  because each looked like a certainty:
+  (a) "functions/ at the repo root is the Cloudflare Pages Functions directory
+      and holds 47 Deno edge functions, so Pages is publishing /stripe-webhook
+      and /agent-dispatcher on tryeatpal.com." Measured instead of asserted:
+      `npx wrangler pages functions build` compiles clean and the built worker
+      declares exactly three routePaths -- /sitemap.xml, /rss.xml, /feed.xml.
+      Wrangler skips a file with no onRequest export. No bug.
+  (b) "no public/_routes.json means Pages runs the worker on every request."
+      wrangler's convertRoutesToRoutesJSONSpec generates include[] from the
+      discovered routes when the file is absent, and only falls back to /* past
+      MAX_FUNCTIONS_ROUTES_RULES. Three routes. No bug.
+  (c) "82 Supabase calls destructure `error` and never check it." That count
+      came from a 12-line lookahead that could not see past a multi-line query
+      chain. Scanning to the end of the statement instead: ZERO unchecked. The
+      contexts are disciplined; the scan was not.
+
+- THE REAL FIND, in a file that reads as working code. OfflineIndicator.tsx
+  ships a QueuedMutation type, a localStorage key 'eatpal_offline_mutations',
+  queueMutation(), clearMutationQueue(), a pendingCount and a "<n> pending
+  changes" badge. grep across src/, app/, functions/ and supabase/ returns three
+  hits: the three declarations. Nothing calls them and nothing drains the key,
+  so the badge can never render and anything ever queued would sit there
+  forever. Same shape as US-765's service worker that nothing registered.
+
+- WHAT A USER GETS TODAY, checked at the write path rather than assumed.
+  addGroceryItem is server-first since US-717 (no phantom local row), so an add
+  with no connection does nothing at all. toggle/update/delete run through
+  runOptimisticMutation, so they flicker on and roll back. In every case the
+  toast said "Please try again." -- advice that cannot succeed, once per tap,
+  which is what makes the app read as broken rather than as offline.
+
+- SHIPPED: src/lib/networkFailure.ts, wired into the two toast sites in
+  optimisticMutation.ts (which every context funnels through) and the two direct
+  ones in GroceryContext. Offline now reads "You're offline, so that change
+  wasn't saved. Reconnect and try again." The wording says NOT SAVED rather than
+  pending on purpose -- there is no queue, and a "pending" that never lands is
+  the worse lie.
+
+- TWO SIGNALS, not one. navigator.onLine is definitive when false but reports
+  true for a captive portal, a dead uplink and a DNS failure, where every fetch
+  still throws. So the error shape is checked too: Failed to fetch, NetworkError,
+  Safari's "Load failed", net::ERR_*, GoTrue's AuthRetryableFetchError. The
+  guard that matters is the negative -- an error carrying an HTTP status means
+  the request ARRIVED, so it is never reported as offline however fetch-ish the
+  message reads. Blaming the connection for a 500 would hide a real defect.
+
+- MUTATION-CHECKED. Collapsing writeFailureMessage to `return fallback` fails 4
+  of the new tests and leaves all 9 pre-existing optimisticMutation tests green,
+  so the new ones pin the new behaviour and disturb nothing. One assertion I
+  wrote was wrong and the run caught it: I asserted the offline copy does not
+  end in "try again", when "Reconnect and try again" is the correct advice. The
+  assertion now checks what actually matters (it names the connection).
+
+- Measured: 146 context + helper tests pass; typecheck ratchet 814 against a
+  baseline of 814; lint 1151 against 1156 (unchanged by this diff, already below
+  baseline before it); check-invisible-chars clean.
+
+- NOT DONE, and filed rather than half-built: the queue. US-823. The temptation
+  was to wire queueMutation into the grocery toggle and call it offline support.
+  That is the second-parallel-system failure this repo has paid for three times
+  (US-777, US-780, US-784) -- app/mobile/lib/syncQueue.ts already does FIFO
+  replay with retry and is covered by src/lib/syncQueue.test.ts. The web queue
+  should be that module or a shared extraction of it, and it does not fit in one
+  iteration honestly.
+
+- **Learnings for future iterations:**
+  - A grep with a fixed lookahead window measures the window, not the code. The
+    "82 unchecked errors" and the real answer (zero) came from the same corpus.
+  - Build the thing and read its output before claiming what a build does. Two
+    infra "findings" evaporated against one wrangler invocation each.
+  - The dead code that matters is not the unreferenced component -- US-771
+    already deleted those. It is the exported function with zero callers sitting
+    inside a component that IS mounted, because everything around it works.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 2. US-823 AC 2. The mobile write
+queue's replay path had no test coverage at all. src/lib/offlineQueue.ts.
+================================================================================
+
+- A TEST FILE THAT MEASURED NOTHING, and said so in its own comments.
+  src/lib/syncQueue.test.ts called drainQueue and then did this:
+
+      if (result.succeeded === 0 && result.failed === 0 && result.dropped === 0) {
+        // Web path -- drain is a no-op. Ensure entries persist instead.
+        expect(await peekQueue()).toHaveLength(2);
+        return;
+      }
+
+  Both tests took that branch, every run. The second one asserted literally
+  nothing past it. PROVEN rather than argued: replacing drainQueue's entire body
+  with `return {succeeded:0,failed:0,dropped:0}` left the file GREEN.
+
+- WHY IT TOOK THAT BRANCH. drainQueue opened with
+  `if (platformOS() === 'web') return zeros`, and platformOS() is:
+
+      try { return require('react-native').Platform.OS } catch { return 'web' }
+
+  Under vitest the require throws, so 'web' is not a platform detection here, it
+  is a "react-native isn't installed" detection. The guard fired in every test.
+  The comment above it even says "The contract test runs on native" -- it never
+  ran anywhere. So FIFO replay, the retry counter and the poison-pill drop, the
+  three things US-823 was told to reuse, had zero coverage.
+
+- THE FIX IS THE LIFT US-823 ASKED FOR. src/lib/offlineQueue.ts holds the
+  mechanism with storage injected and NO platform check -- whether a platform
+  drains is the caller's policy, and useOfflineSyncDriver already decides it
+  with a real `Platform.OS === 'web'` test at its own top. app/mobile/lib/
+  syncQueue.ts is now a thin adapter: same export names, same signatures, same
+  storage key 'eatpal.mobile.syncQueue'. No mobile caller changed.
+
+- MUTATION-CHECKED, FOUR WAYS, because a test suite written against code you
+  just moved is exactly where a vacuous assertion hides:
+      gut drain entirely            -> 7 tests fail
+      never drop the poison pill    -> 1 fails
+      trim newest instead of oldest -> 1 fails
+      stop validating stored entries-> 1 fails
+  A test pins the key too: renaming 'eatpal.mobile.syncQueue' would orphan every
+  op queued by an installed build, and nothing would have caught that.
+
+- A SECOND BUG, FOUND BY READING THE DRIVER WHILE LIFTING IT, and it is live
+  data loss rather than a coverage gap. useOfflineSyncDriver drained only on a
+  false -> true transition:
+
+      const wasOffline = useRef(false);        // starts false
+      if (!online) { wasOffline.current = true; return; }
+      if (wasOffline.current) { ...drain... }
+
+  and useNetworkStatus initialises to {isConnected: true, isInternetReachable:
+  true} -- optimistic, not unknown. So: queue writes offline, close or get
+  killed, reopen on wifi. `online` is true, `wasOffline` is false, nothing
+  drains. The ops wait for the device to happen to drop its connection and
+  regain it, and MAX_QUEUE's slice(-200) eventually trims the oldest away
+  unsent. Now drains once per mount as well. I wrote AC 3 of US-823 ("replay on
+  the online event AND on next mount") from first principles in iteration 1; it
+  turned out to name the exact gap in the code I had not read yet.
+
+- Measured: 3229 tests pass (211 files, 1 skipped); typecheck ratchet 814
+  against baseline 814; lint 1151 against 1156; check-invisible-chars clean.
+
+- NOT DONE, deliberately: the web half. Nothing in src/ enqueues anything yet,
+  the OfflineIndicator stub is still dead, and there is no web driver. That is
+  AC 1 and AC 3-7 of US-823 and it is the next iteration's work. Lifting the
+  mechanism first was the point -- writing the web queue before the shared one
+  had a single passing drain test is how the third copy gets built.
+
+- RECORDED, NOT FIXED: QueuedOpKind declares 'ladder.attempt' and
+  'ladder.patch'; the driver's switch handles neither and sends both to
+  `default: return false`, so they retry five times and are dropped. Nothing
+  enqueues them today (ladderSyncOps.ts is spec with no runtime caller), so it
+  is a trap, not a loss. Wiring an enqueue without the replay arm creates it.
+
+- **Learnings for future iterations:**
+  - `try { require(x) } catch { return DEFAULT }` is not feature detection in a
+    test runner, it is a guarantee that DEFAULT is what every test sees. Any
+    early return keyed off it disables the test rather than the feature.
+  - A test that branches on its own subject's output ("if the result is all
+    zeros, assert something else instead") has already given up. The give-up
+    was written in a comment and shipped, and nobody read the comment as the
+    admission it was.
+  - An optimistic initial state (isConnected: true) plus a transition-only
+    trigger equals a trigger that never fires on the happy path. Worth checking
+    wherever a useRef(false) gates work that a cold start also needs.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 3. US-823 web half: the grocery list
+now survives a shop with no signal. src/lib/webSyncQueue.ts.
+================================================================================
+
+- WHAT A SHOPPER GOT BEFORE THIS. Tap an item to check it off in a shop with no
+  signal: the row ticks, the server call fails, runOptimisticMutation rolls it
+  back, and a toast says it wasn't saved. Every tap. The app has shipped a full
+  PWA since US-765 -- service worker, offline.html, installable manifest -- and
+  held nothing at all for a failed write.
+
+- THE ONE DECISION THIS TURNS ON. A queued write is the single failure where
+  rolling back is WRONG. Every other rollback in this codebase tells the truth:
+  the change did not save, so take it off the screen. Rolling back a QUEUED op
+  would say "lost" about a change we have just promised to send. So the new
+  `offlineQueue` option on runOptimisticMutation, when it returns true, KEEPS
+  the optimistic row and toasts "Saved on this device and will sync when you
+  reconnect".
+
+  The inverse matters just as much and is where I nearly shipped a bug: if the
+  queue could NOT store the op (private window, quota, storage blocked), it must
+  return false and get the old rollback. queueWrite therefore does not trust
+  enqueue -- offlineQueue.save() deliberately swallows a storage failure so a
+  caller's write is not taken down with it, which means "enqueue didn't throw"
+  is NOT "the op is stored". It peeks and confirms. A mutation that replaces
+  that read with `return true` fails a test.
+
+- QUEUED ONLY FOR THE FAILURES THAT ARE ACTUALLY OFFLINE. The guard is
+  isOfflineFailure from iteration 1, so a 403 from RLS is never queued: it would
+  replay, fail, replay, and be dropped after five attempts, having told the user
+  it was saved the whole time. Mutation-checked -- dropping the guard fails a
+  test.
+
+- INSERTS ARE NOT QUEUED, AND THAT IS THE HONEST ANSWER, NOT AN OVERSIGHT.
+  groceryRow.ts states that the database owns `id`. A queued insert would
+  therefore replay under an id the optimistic row does not carry, arrive back
+  over realtime as a SECOND row, and leave a ghost until the next server load.
+  The real fix is client-generated ids on insert, which changes the insert
+  contract repo-wide. Adding an item offline still fails cleanly with the
+  iteration-1 message. Recorded in US-823 rather than half-built.
+
+- THE DEAD STUB IS GONE. OfflineIndicator's queueMutation/clearMutationQueue,
+  its QueuedMutation type and the 'eatpal_offline_mutations' key -- three
+  declarations with zero callers, found in iteration 1 -- are deleted. The
+  "<n> pending changes" badge now reads the real queue, which is the first time
+  it can render a number other than zero.
+
+- SCOPED PER USER, by key: 'eatpal.web.syncQueue.<userId>'. Signing in as
+  somebody else cannot drain the previous account's writes into the new one's
+  household. No shared-key fallback: an op with no owner is an op we cannot
+  place, so a signed-out visitor queues nothing at all. Mutation-checked.
+
+- TWO DRAIN TRIGGERS, and the second is the bug iteration 2 found on native:
+  the browser 'online' event, and once per mount. A shopper who closed the tab
+  in the aisle and opened it at home has no offline->online edge to catch.
+  Concurrent drains are refused -- 'online' can fire while a mount drain is in
+  flight, and replaying one op twice is two writes for one tap.
+
+- MY TEST INSTRUMENT WAS WRONG BEFORE THE CODE WAS. Two of the first thirteen
+  webSyncQueue tests failed, and both were the test's fault: src/test/setup.ts
+  replaces global.localStorage with an in-memory mock, so `localStorage.length`
+  is a vi.fn (it asserted against [Function spy]) and a spy on
+  Storage.prototype.setItem never applies. Fixed by making queueWrite,
+  queueWrites and pendingWriteCount take an injectable storage -- which is a
+  better seam anyway -- rather than by fighting the global. This is the fourth
+  time in this loop that an odd result indicted the instrument, not the subject.
+
+- Measured: 29 tests across the two helper suites, checked against four mutants
+  (ignore offlineQueue, queue a server rejection, trust enqueue blindly, drop
+  per-user scoping); each is caught. Typecheck ratchet 814 against baseline 814;
+  lint 1151 against 1156; check-invisible-chars clean.
+
+- **Learnings for future iterations:**
+  - "Did the write succeed" and "did the call throw" are different questions
+    whenever the callee swallows errors on purpose. offlineQueue.save() swallows
+    by design; trusting it would have shipped rows that look saved forever.
+  - Before asserting against a global in this repo, read src/test/setup.ts. Four
+    of the globals are replaced with mocks, and a spy on the real prototype is a
+    no-op that fails in a way that looks like a product bug.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 4. US-824: two install prompts, both
+mounted, stacked at the same coordinates on every dashboard route.
+================================================================================
+
+- HOW IT WAS FOUND, which is worth more than the bug. A mechanical sweep for
+  unbalanced addEventListener/removeEventListener, supabase.channel/removeChannel
+  and setInterval/clearInterval across src/ returned FOUR files. Three were
+  module-level listeners that legitimately live for the page's lifetime
+  (pwa.ts, performance.ts, apiRetry.ts). The fourth, PWAInstallPrompt, leaked
+  its 'appinstalled' listener -- a small thing that turned out to be the thread
+  worth pulling. Realtime channels were all balanced, which is its own result:
+  CLAUDE.md's "remember channel.unsubscribe()" warning is being honoured.
+
+- THE ACTUAL DEFECT. Two install prompts existed and BOTH were mounted:
+      src/components/PWAInstallPrompt.tsx   lazy, app-wide, App.tsx:144
+      src/components/AppInstallPrompt.tsx   Dashboard.tsx:482
+  Both listen for beforeinstallprompt (every listener gets the event), both
+  render `fixed bottom-4 ... md:right-4 z-50`. So on any /dashboard route in
+  Chrome, Edge or Android, two cards appear at the SAME coordinates, on
+  different timers -- 3 seconds and 30 seconds, so the second slides in under
+  the first almost half a minute later.
+
+  And the dismissal keys differ: 'pwa-install-dismissed' against
+  'app_install_dismissed'. Tapping Not Now on the visible card leaves the other
+  one sitting underneath, undismissed. This is the duplicate-implementation
+  shape this repo has already paid for at least four times (three shortfall
+  functions, three grocery insert allowlists, two calendars, two entitlement
+  systems narrowly avoided in US-780).
+
+- WHICH ONE SURVIVED, decided on merit rather than on which was mounted where.
+  AppInstallPrompt handles iOS (where beforeinstallprompt never fires at all,
+  so PWAInstallPrompt could never show on the platform that is the live
+  product), expires its dismissal after a week instead of never re-asking, and
+  removes its listener correctly. PWAInstallPrompt is deleted; AppInstallPrompt
+  took over the single app-wide mount and Dashboard's copy is gone.
+
+- THE MIGRATION THAT KEEPS IT HONEST. AppInstallPrompt now READS
+  'pwa-install-dismissed' as well as its own key. Without that, deleting the old
+  component silently re-prompts everyone who had already dismissed it -- a
+  regression a user experiences as the app forgetting what they said.
+
+- A SECOND BUG FIXED WHILE IN THERE. handleInstall only hid the card when the
+  outcome was 'accepted', but cleared deferredPrompt either way. Decline the
+  browser's own dialog and you were left with a card whose Install button did
+  nothing, forever, because a browser will not re-issue the prompt event for the
+  same page load. Now hides on either outcome, in a finally.
+
+- A MUTANT SURVIVED AND I DELETED THE CODE RATHER THAN THE EVIDENCE. I had
+  changed `dismissedTime &&` to `dismissedTime > 0 &&` as a NaN guard and
+  written a test for it. Mutating it back left all 7 tests green -- because
+  parseInt('not-a-timestamp') is NaN, NaN is falsy, and the two forms are
+  identical for every reachable input. The guard fixed nothing. Reverted it,
+  and kept the test after checking it discriminates against a mutation that IS
+  plausible: reading the key as a boolean (`if (dismissed)`) instead of parsing
+  it, which would hide the prompt forever on any unparseable value. That mutant
+  fails 2 tests.
+
+- Measured: 3253 tests pass (213 files); the 7 new ones are checked against
+  three mutants (drop the legacy key, never expire the dismissal, read the key
+  as a boolean) and each is caught. Typecheck 814 against baseline 814; lint
+  1150 against 1156 (one fewer, the deleted file's `any`); invisible chars
+  clean.
+
+- LEFT OPEN AS AC 4 OF US-824: three fixed overlays now share the bottom edge --
+  the install prompt, OfflineIndicator and SupportWidget. Offline plus an
+  install prompt is an ordinary state on a phone and they will overlap. That
+  wants one stacking policy, not a fourth component choosing its own offset.
+
+- **Learnings for future iterations:**
+  - A cheap mechanical imbalance sweep is worth running even when it returns
+    almost nothing. Four hits, three benign, and the fourth was the door to a
+    user-visible duplicate that no amount of reading feature code would have
+    surfaced.
+  - When deleting one of two competing components, the dismissal/preference key
+    is the part that silently regresses. Whatever the dead one persisted, the
+    survivor has to read.
+  - If a mutation of your own new defensive code doesn't fail a test, the code
+    probably guards nothing. Delete the guard, not the test -- and then check
+    the test still catches something real.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 5. US-825: three definitions of
+"mobile", and the documented one disagreed with the stylesheet at 768px.
+================================================================================
+
+- THE SWEEP. Every `export function X` / `export const X = (` across src/,
+  grouped by name: 33 names defined in more than one file. Most are benign
+  namespace overlap (two ShareButtons under quiz/ and budget/, two
+  EmailCaptureModal, escapeHtml in string-utils.ts and sanitize.ts -- checked,
+  functionally identical, `&#039;` vs `&#39;` are the same entity). One had a
+  real divergence.
+
+- THE DIVERGENCE, at 768px, which is iPad portrait:
+
+      useMediaQuery.ts  useIsMobile  (max-width: 768px)   -> MOBILE at 768
+      use-mobile.tsx    useIsMobile  width < 768          -> desktop at 768
+      Tailwind          md:          (min-width: 768px)   -> desktop at 768
+
+  The first is what `import { useIsMobile } from '@/hooks'` resolves to, and it
+  is what CLAUDE.md's hook list names. So the documented hook and every `md:`
+  class on the page give opposite answers at one of the most common device
+  widths there is. Same shape one breakpoint up: useIsDesktop was
+  `min-width: 1025px` against Tailwind's `lg:` at 1024. useIsLargeDesktop was
+  1440px, which is not a Tailwind breakpoint at all.
+
+- NOT A LIVE BUG, AND I SAID SO RATHER THAN DRESSING IT UP. The four
+  convenience hooks in useMediaQuery.ts have ZERO importers. The two files that
+  use useMediaQuery directly hand-write their own queries and both are correct:
+  Recipes.tsx uses 1280/1536 (xl/2xl exactly), Planner.tsx uses
+  `max-width: 1023px`, the proper complement of `lg:`. So this was a trap set
+  for the next feature that followed the documentation, not a defect a user has
+  hit. Worth fixing precisely because the next thing to use it would inherit it.
+
+- ONE SOURCE NOW: src/lib/breakpoints.ts, with atLeast/below/between. The
+  0.02px step in `below` is load-bearing rather than cosmetic -- `max-width:
+  767px` beside `min-width: 768px` leaves a hole at the fractional widths
+  browsers really report under page zoom, where both queries are false and a
+  layout keyed off the pair renders neither branch.
+
+- THE GATE IS THE POINT. src/lib/breakpoints.test.ts reads the numbers back out
+  of `tailwindcss/resolveConfig`, so the module cannot drift from the
+  stylesheet: adding `theme.extend.screens` fails here instead of quietly
+  reintroducing the off-by-one. It also asserts the instrument first (that
+  resolveConfig returned at least 5 screens), because every comparison below it
+  would pass vacuously against an empty object -- the same "assert the fixture
+  landed" lesson US-784 wrote down.
+
+- A TRAP IN THE CONFIG, pinned explicitly: tailwind.config.ts sets
+  `container.screens['2xl'] = 1400px`. That applies to the `container` class
+  ONLY, not to the `2xl:` variant, which is still 1536. Reading it as the
+  variant would put the module 136px out, and it is exactly the kind of thing
+  someone "fixes" later. There is a test whose only job is to fail if that
+  happens.
+
+- Measured: 3266 tests pass (214 files). The 13 new ones are checked against
+  four mutants -- restore the max-width off-by-one, take 1400 as 2xl, drop a
+  breakpoint, restore lg:1025 -- and each is caught, including both of the
+  original bugs. Typecheck 814 against baseline 814; lint 1150 against 1156;
+  invisible chars clean.
+
+- DELETED: src/hooks/useIsDesktop.ts, a third definition (>= 1024, resize-event
+  based) with no importers outside the barrel.
+
+- DELIBERATELY LEFT ALONE: src/hooks/use-mobile.tsx still exports its own
+  useIsMobile. It is shadcn-generated and imported by
+  src/components/ui/sidebar.tsx, which CLAUDE.md forbids modifying, and it is
+  already Tailwind-aligned. Two symbols still exist; they no longer disagree,
+  which is the property that actually mattered.
+
+- **Learnings for future iterations:**
+  - "Defined in two files" is cheap to compute and mostly noise -- 33 hits, one
+    real. The signal is not duplication, it is duplication that DISAGREES. Diff
+    the implementations before believing either is a finding.
+  - A breakpoint constant in JS is a copy of a number that lives in CSS. Any
+    such copy wants a test that reads the original, not a comment saying they
+    match.
+  - A `container.screens` entry is not a breakpoint. Tailwind scopes it to one
+    class, and it sits three lines from the real `screens` key in the config.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 6. US-826: hover-reveal controls are
+invisible on a phone and still tappable. src/lib/hoverRevealControls.test.ts.
+================================================================================
+
+- THE SWEEP CAME FROM AN EXISTING TEST. src/pages/Grocery.a11y.test.ts (US-576)
+  already enforces that a hover-revealed control also reveals on touch and on
+  keyboard focus -- for Grocery.tsx, and only Grocery.tsx. Running the same rule
+  over every .tsx: 19 hover-reveal classNames, 11 incomplete.
+
+- WHY THIS IS WORSE THAN "INVISIBLE ON MOBILE". opacity-0 does not remove
+  hit-testing. The control is fully transparent on a touch device AND still
+  tappable. So a parent on a phone cannot see the Remove button on a recipe
+  ingredient, an instruction step or a planned meal -- but can hit it by
+  accident. A missing button is a limitation; an invisible live one is a trap.
+
+- FIXED, 8 sites in 7 files: recipes/IngredientRow, recipes/InstructionStepBuilder
+  (x2), recipes/RecipeListItem, pantry/PantryListItem, GSAPCalendarMealPlanner
+  (live -- Planner.tsx lazy-loads it), MealPlanningCalendar,
+  admin/EmailTemplateBuilder. Each now carries group-focus-within,
+  focus-visible and pointer-coarse, matching what US-576 settled on.
+
+- TWO WERE TABLET-ONLY HOLES, which is exactly the kind a phone-based check
+  misses. PantryListItem used `md:opacity-0 md:group-hover:opacity-100` and
+  RecipeListItem used `max-sm:opacity-100`: both show the control on a phone and
+  hide it from md/sm upwards. A tablet is touch, has no hover, and is above that
+  breakpoint. Checking on a phone would have shown both as fine.
+
+- I VERIFIED WHAT WAS ACTUALLY A CONTROL rather than fixing all 11. Three of the
+  remainder are decorative: ui/toast.tsx and ui/QuickActionMenu.tsx are shadcn
+  (CLAUDE.md forbids editing src/components/ui/), and QuickActionsMenu's element
+  is a `<div>` label hint carrying pointer-events-none -- read the JSX, not just
+  the className. They are exempt by an explicit list.
+
+- THE EXEMPTION LIST IS ITSELF TESTED, which is the part I would want in six
+  months. Each entry states a reason and carries a regex proving it
+  (`ToastPrimitives`, `hidden md:flex`, `pointer-events-none`); the test fails
+  if a file stops matching its own justification, and fails if an entry no
+  longer has a hover-reveal class at all. An allowlist nobody re-checks becomes
+  a dumping ground, and this one cannot.
+
+- INSTRUMENT ASSERTED FIRST: the gate requires at least 15 hover-reveal
+  classNames before believing any result. If the className regex stops matching
+  -- someone refactors to clsx, say -- the "all clear" would otherwise be an
+  empty scan reporting success. Fifth time this loop that mattered.
+
+- Measured: 19 -> 3 incomplete (all three exempt with reasons). 3272 tests pass
+  (215 files). The gate is checked against two mutants: reverting one control to
+  the broken form fails it, and breaking an exemption's stated reason fails it.
+  Typecheck 814 against baseline 814; lint 1150 against 1156; invisible chars
+  clean.
+
+- RECORDED, NOT ACTED ON: src/components/MealPlanningCalendar.tsx has ZERO
+  references anywhere in the repo -- a survivor of the US-771 unreferenced
+  sweep. Patched here because the change is one className, but it is a deletion
+  candidate and the story says so.
+
+- **Learnings for future iterations:**
+  - A good single-file test is a sweep waiting to be written. Grocery.a11y.test.ts
+    encoded the right rule and applied it to 1 of 8 affected files; generalising
+    an existing gate found more than writing a new check would have.
+  - Responsive-prefixed hover reveals hide the bug from the obvious test device.
+    `md:opacity-0` looks safe on a phone and fails on an iPad.
+  - When an allowlist is the honest answer, make each entry prove itself. A
+    reason in a comment rots; a reason as a regex fails loudly.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 7. US-827: the change-password form
+was illegible to a password manager. src/lib/formAutocomplete.test.ts.
+================================================================================
+
+- THE CONSEQUENCE IS A LOCKOUT, not a missing convenience. AccountSettings has
+  three password boxes -- current, new, confirm -- and none declared
+  autoComplete. A password manager cannot tell them apart without it, so it
+  will not offer the saved password, will not generate a new one, and will not
+  prompt to UPDATE the stored credential once the change succeeds. The user
+  changes their password, the manager keeps the old one, and the next sign-in
+  fails with a password they no longer have.
+
+- WHAT MAKES IT A CLEAN FINDING RATHER THAN A STYLE OPINION: Auth.tsx already
+  does it correctly on all five of its fields -- email, new-password twice,
+  email, current-password. Somebody knew the rule. It just never reached the
+  page where a password is actually changed.
+
+- MY FIRST SWEEP WAS WRONG AND I CAUGHT IT BEFORE REPORTING IT. I matched tags
+  with `<Input[^>]*>`. JSX handlers contain a `>`: `onChange={(e) => ...}`. So
+  every tag was truncated mid-handler and attributes below the arrow were
+  invisible -- which flagged Auth.tsx's sign-in email as missing an
+  autoComplete that sits three lines lower. Rewrote it to walk brace depth with
+  quote tracking. That reasoning is now a comment in the gate, because the next
+  person to touch it will reach for the regex.
+
+- FIXED, 8 fields: AccountSettings currentPassword / newPassword /
+  confirmPassword, ProfessionalSettings contact_email, RecipeExportActions
+  email and phone, quiz/EmailCaptureModal email. Plus `rel="noopener
+  noreferrer"` on the one `target="_blank"` anchor missing it.
+
+- ONE FIELD DELIBERATELY OPTS OUT. The delete-account confirmation gets
+  `autoComplete="off"`: typing your own address IS the confirmation, and a
+  browser filling it in for you removes the entire safeguard. The gate asserts
+  that specifically, so a later "fix all the missing autocompletes" pass cannot
+  helpfully turn it back on.
+
+- NOT FINDINGS, CHECKED RATHER THAN COUNTED: 11 apparent missing-alt hits were
+  all false. Nine are lucide-react's `<Image>` ICON, which has no business
+  carrying alt, and two are KidPhoto, which takes `alt: string` as a required
+  typed prop and spreads it. Reporting "11 images without alt text" would have
+  been a confident, checkable, wrong number.
+
+- Measured: 3278 tests pass (216 files). The 6 new ones are checked against
+  three mutants -- drop an autoComplete, mislabel current-password as
+  new-password, let the delete-account field autofill -- and each is caught.
+  Typecheck 814 against baseline 814; lint 1150 against 1156; invisible chars
+  clean.
+
+- **Learnings for future iterations:**
+  - Do not parse JSX with `<[^>]*>`. Arrow functions in props put a `>` inside
+    every handler, so the match ends early and the sweep silently under-reads
+    the tag. This is the second instrument bug this loop; both produced
+    plausible numbers.
+  - A rule applied correctly in one file and nowhere else is a stronger signal
+    than a rule applied nowhere. Auth.tsx being right is what made this
+    unambiguous rather than a matter of taste.
+  - When a sweep's fix is "add the attribute everywhere", look for the field
+    that needs the opposite. There is usually one, and a later cleanup pass
+    will break it unless a test says why.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 8. US-828: a stored date key read
+back through new Date() showed the previous day. src/lib/date-utils.ts.
+================================================================================
+
+- THE MEASUREMENT, run rather than reasoned about:
+
+      TZ=America/Los_Angeles
+      toISODate(new Date())        -> '2026-09-09'   (today, local parts)
+      new Date('2026-09-09')       -> 2026-09-09T00:00:00Z
+        .toLocaleDateString()      -> '9/8/2026'     YESTERDAY
+
+  Every date key in this app is a LOCAL calendar day: toISODate builds it from
+  getFullYear/getMonth/getDate on purpose, and says so. So the app wrote local
+  and read UTC, and the round trip lost a day for every user in the Americas.
+
+- THE FILE ALREADY KNEW, WHICH IS THE INTERESTING PART. parseDate() at the
+  bottom of date-utils.ts special-cases the date-only shape and its comment
+  explains this exact trap -- including that the branch had once been
+  unreachable and produced the off-by-one. The other TWENTY-TWO `new Date(date)`
+  calls in the SAME FILE never got the same treatment. formatDate, isToday,
+  startOfDay, startOfWeek, endOfWeek, getDayName, addDays and the rest all
+  carried the bug the function directly below them had been fixed for.
+
+- USER-VISIBLE SITES FIXED. SaveMealPlanTemplateDialog renders the week it is
+  about to save; Planner passes weekStart as format(currentWeekStart,
+  'yyyy-MM-dd'), so the dialog told a Californian parent it would save
+  "Mar 1 to Mar 7" for the week of Mar 2 to Mar 8. MealVotingCard showed each
+  meal's date a day early the same way.
+
+- THE DURABLE HALF IS THE TIMEZONE PIN. vitest.config.ts now sets
+  TZ=America/Los_Angeles. Under the runner's default UTC the local and UTC
+  calendar days are IDENTICAL, so this entire class of bug is invisible to the
+  suite -- US-818's DST bug and this one both shipped past a green run. LA also
+  observes DST, so transition bugs surface too.
+
+  I ran the whole suite under that TZ BEFORE pinning it: 3289 tests, all green.
+  Pinning a timezone that hides a new failure would be worse than not pinning
+  one, and "it probably passes" is not a measurement.
+
+- MY FIRST VERSION OF THE TEST WOULD HAVE BEEN RED IN CI. It asserted a
+  negative UTC offset and passed only because I had typed TZ= on the command
+  line; nothing in vitest.config.ts or setup.ts pinned it. Running it without
+  the env var failed exactly as it should. That guard is the reason the gap got
+  found instead of shipped -- a test that silently passes under UTC would have
+  proved nothing about the bug it was written for.
+
+- Guarded against three mutants: revert toDate to plain `new Date` (8 of 11
+  fail), widen the date-only regex so real timestamps get shifted too (1 fails
+  -- the instant-preservation case), and unpin the TZ (1 fails, the suite
+  noticing it can no longer see the bug at all).
+
+- Measured: 3289 tests pass (217 files). Typecheck 814 against baseline 814;
+  lint 1150 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A bug fixed in one function is a bug present in its neighbours. parseDate
+    carried a careful comment about this trap while 22 siblings in the same
+    file reproduced it. Grep the FILE for the pattern the comment describes.
+  - A test suite running in UTC cannot see date bugs. That is not a small gap
+    for a product whose users are entirely west of Greenwich; it makes the
+    green run meaningless for a whole category. Pin the zone, and run the suite
+    under it first to prove the pin is honest.
+  - Write the instrument guard even when you are sure. Asserting "we are really
+    in a negative-offset zone" is what turned an accidental command-line env
+    var into a config change instead of a CI failure next week.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 9. US-829: a slower earlier query
+could overwrite a newer one. AddFoodDialog, FoodChainingRecommendations.
+================================================================================
+
+- THE SWEEP: useEffect bodies that await a fetch, call a setter, and have
+  reactive deps, minus any carrying a cancellation guard. 26 candidates. Most
+  have deps that change rarely (navigate, t) or run once. Two are real.
+
+- ADDFOODDIALOG, and the reason it is not a 50/50 coin flip. The 300ms debounce
+  cleanup cancels the TIMER, not a query already in flight. Type "ch", pause,
+  type "chicken": both queries run. `ilike '%ch%'` matches far MORE rows than
+  `'%chicken%'`, so the broader, staler query is the one more likely to finish
+  last. The ordering is biased toward the wrong answer winning, which is why
+  this shows up in real use rather than only under load.
+
+- FOODCHAININGRECOMMENDATIONS re-runs on activeKidId, and nothing stopped one
+  child's query resolving after the next child's. The panel is explicitly
+  per-child, so the failure renders one sibling's successful foods under the
+  other's name.
+
+- BOTH ALSO CLEARED THE SPINNER from the stale request. With results still
+  empty the list falls through to "No foods found." while the current query is
+  still running -- a flash of "nothing here" over a search about to return.
+
+- CHECKED AND NOT A BUG: AppContext's load effect was flagged by the sweep and
+  is fine. loadedScopeRef (US-538/US-550) already gates it per user:household
+  and clears state on an account switch; my regex looked for
+  cancel/ignore/mounted and could not see a scope ref. Read it before claiming.
+
+- THE TEST DOES NOT RELY ON TIMING. The supabase mock hands out deferred
+  promises, so the test resolves them in the damaging order deliberately:
+  newest first, then the stale broad query. A race reproduced by hoping is a
+  race that will pass on a fast machine.
+
+- I SHIPPED AN UNPINNED GUARD AND THE MUTANTS CAUGHT IT. Removing the whole
+  guard failed the ordering test, but un-guarding ONLY the spinner still passed
+  all three -- so the `if (!superseded) setIsSearching(false)` line was
+  unmeasured code. Rather than delete it (it prevents a real flicker), I wrote
+  the test that discriminates: resolve the STALE request first and assert
+  "No foods found." is not shown. Same lesson as iteration 4, opposite
+  resolution, because this time the guard was load-bearing.
+
+  I also dropped a test I had written for "does not write after the dialog
+  closes": with open={false} the DialogContent never renders, so the assertion
+  was true whatever the code did. It survived mutant A, which is how I noticed.
+
+- Measured: 3292 tests pass (218 files). Typecheck 814 against baseline 814;
+  lint 1150 against 1156; invisible chars clean.
+
+- LEFT ALONE DELIBERATELY: the other 24 unguarded effects. Pattern-patching all
+  of them would be 24 changes with no evidence any is reachable. Recorded in
+  US-829 that AuditTab and RunsTab are the same shape (paginated, filtered) if
+  a wrong-data report ever arrives from the admin tables.
+
+- **Learnings for future iterations:**
+  - When two requests race, ask which one is SLOWER, not which started first. A
+    broader LIKE pattern scans more rows, so the stale query systematically
+    wins. "Rare timing bug" was the wrong model.
+  - Test a race by constructing the ordering, not by triggering it. Deferred
+    promises in the mock turn a flaky reproduction into an assertion.
+  - A mutant that survives is the test telling you which line nobody measured.
+    Then choose honestly: delete the line, or write the test that pins it.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 10. US-830: today's meals and both
+streaks were bucketed to the previous day. The call sites US-828 never reached.
+================================================================================
+
+- TWO CLEAN NEGATIVES FIRST, reported because they cost real time and the
+  answer is worth recording:
+  (a) `key={index}` -- 163 in src/, but only ONE file pairs an index key with
+      reorder controls, and there the rows are static <li> text with no input
+      state. Not a bug.
+  (b) Percentage divisions -- 30 candidates outside admin after fixing my own
+      regex (it captured a trailing paren, so `totalSent > 0 ? (a/totalSent)`
+      looked unguarded). Every one I checked is guarded: by early return
+      (VoteResultsDisplay returns before render at totalVotes === 0), by
+      `if (length >= 15)` / `>= 5` (SmartInsights), by a truthy check
+      (AchievementBadge), or by construction (achievements is a fixed
+      catalogue; macro targets are never below 1000 calories). No NaN reachable.
+
+- THE REAL FIND CAME OUT OF READING, NOT SWEEPING. While checking
+  AchievementsView's denominator I noticed `new Date(entry.date)` followed by
+  `setHours(0,0,0,0)` -- the US-828 bug, in files that never import date-utils.
+  Measured under TZ=America/Los_Angeles:
+
+      entry.date               = 2026-09-09        (today)
+      new Date(key)+setHours   = Tue Sep 08        <-- bucketed day
+      today bucketed           = Wed Sep 09        same day? false
+
+  So TodayMeals did not recognise today's planned meals as today's, and both
+  streak implementations bucketed every entry a day early -- a streak that
+  includes today could never count today.
+
+- TWO OPPOSITE RULES, AND I GOT ONE WRONG BEFORE CATCHING IT. Bucketing against
+  "today" must be LOCAL. Day ARITHMETIC between two keys must be UTC, because
+  UTC days are always exactly 24h. I converted PlanContext's copy-week and
+  delete-week arithmetic to local parsing along with everything else, then
+  measured it:
+
+      local midnight 2026-03-09 - local midnight 2026-03-08 = 23h
+      Math.floor(23h / 24h) = 0        <-- two consecutive dates read as one
+
+  That is US-818 coming back through a different door. Reverted, with a comment
+  at the site saying why it stays UTC, and a source guard so a later
+  "consistency" pass cannot convert it.
+
+- A THIRD BUG FOUND ON THE WAY: both streaks used Math.floor on a difference
+  between two LOCAL midnights, so the spring-forward day collapsed and the
+  streak silently broke every March. Math.round now -- verified against
+  spring-forward, fall-back and ordinary days.
+
+- ONE SITE ALREADY DID IT RIGHT: ResultHistoryCard appended 'T00:00:00' to
+  force local parsing. Third time this loop the correct version was sitting
+  next to the incorrect ones (US-827 Auth vs settings, US-828 parseDate vs 22
+  siblings, now this).
+
+- MY FIRST TEST FILE MEASURED NOTHING, and the mutants said so. It pinned the
+  arithmetic using a `bucket()` helper defined IN THE TEST, so reverting every
+  call site left all 18 assertions green -- it never touched the components.
+  This is the reimplementation trap I have been calling out for nine
+  iterations, and I walked into it. Source guards were added (the
+  Grocery.a11y.test.ts pattern) asserting the components use parseIsoDate and
+  Math.round, and that PlanContext keeps new Date on both sides. All four
+  mutants now fail.
+
+- Measured: 3305 tests pass (219 files). Typecheck 814 against baseline 814;
+  lint 1150 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A rules test and a call-site test are different artefacts. Demonstrating
+    that Math.round beats Math.floor proves nothing about the file that still
+    says floor. If the assertion does not import or read the subject, it cannot
+    fail when the subject regresses.
+  - When a fix has an opposite case, find it before shipping. "Parse date keys
+    locally" is right for display and wrong for day arithmetic, and applying it
+    uniformly would have reintroduced a bug this repo had already paid for.
+  - Two negatives in a row is a result, not a wasted iteration -- provided the
+    instrument was checked. My division sweep's first output was noise from my
+    own regex; the second was trustworthy and said "nothing here".
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 11. US-831: signing in with no
+connection showed the user "Failed to fetch". src/lib/networkFailure.ts.
+================================================================================
+
+- THE SWEEP: toasts that forward a caught error's `.message` where the
+  enclosing function does a `fetch` or a `supabase` call. 12 user-facing sites
+  after excluding admin surfaces (admin has ~40 more; a developer reading a
+  constraint violation is fine).
+
+- THE WORST TWO ARE THE SIGN-UP AND SIGN-IN PATHS. Auth.tsx:305 and :464 both
+  read `toast.error("Error", { description: error.message })`. With no
+  connection, `fetch` throws `TypeError: Failed to fetch`, so the ENTIRE
+  description a locked-out user reads is "Failed to fetch". That is the one
+  moment they cannot get past, and the app told them nothing to act on.
+
+- THE FIX HAS THREE CASES AND THE MIDDLE ONE IS THE WHOLE POINT.
+  userFacingError(error, fallback):
+      offline                -> say so
+      PostgREST internals    -> the caller's fallback
+      anything else          -> THROUGH, unchanged
+
+  The third case is the one a careless "sanitise all errors" pass would get
+  wrong. GoTrue writes its messages FOR the user: "Invalid login credentials",
+  "Email not confirmed", "User already registered", "Password should be at
+  least 6 characters". Replacing those with a generic apology makes the sign-in
+  form worse, not safer. Mutant C -- swallow every message and always use the
+  fallback -- fails four tests for exactly that reason, which is why those
+  tests exist.
+
+- WHAT IS TREATED AS NOISE, and it is specific rather than a catch-all: RLS
+  policy text, unique/foreign-key/check/not-null constraint violations,
+  duplicate key, "column ... does not exist", "permission denied for",
+  "invalid input syntax for", PGRST codes. `new row violates row-level security
+  policy for table "plan_entries"` tells a parent nothing and tells anyone
+  reading over their shoulder a table name.
+
+- Applied to all 12: Auth x2, BindEmailFlow x3, ProfessionalSettings x5,
+  SaveMealPlanTemplateDialog, ApplyTemplateDialog, SupportWidget, backup. The
+  sweep now returns 0.
+
+- Measured: 3317 tests pass (219 files). 12 new tests, checked against three
+  mutants (skip the offline check, let database noise through, swallow every
+  message); each is caught. Typecheck 814 against baseline 814; lint 1150
+  against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - "Never show users raw error text" is wrong as stated. Some raw error text
+    is the most useful thing you can show them. The rule is about WHO WROTE the
+    message: the auth service writes for the user, the database writes for the
+    developer.
+  - This is the fourth thing in this loop that reduced to "the app had no idea
+    it was offline" (US-823's queue, US-827's lockout is adjacent, iteration 1's
+    toast copy, now this). A PWA that advertises offline support should treat
+    "no connection" as a first-class result everywhere, not as an exception
+    string that happens to reach a toast.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 12. US-824 AC 4: four overlays were
+stacked on the bottom edge. src/lib/overlayStacking.test.ts.
+================================================================================
+
+- TWO NEGATIVES FIRST. A sweep for spinners that never stop (setLoading(true)
+  with no reset on the failure path) returned 22 candidates and the user-facing
+  ones were all fine: BlogPost sets isLoading(false) unconditionally after the
+  if/else, and PseoPage has a cancellation guard, an error branch that renders
+  NotFound, and an unconditional reset. My "catch does not reset loading"
+  heuristic was reading functions that have no try/catch at all.
+
+- THE REAL FIND, closing an AC I OPENED IN ITERATION 6. Promoting the install
+  prompt to an app-wide mount put it in a lane that was already occupied, so
+  finishing this was my own mess to clear. Four overlays render together on
+  every /dashboard route:
+
+      CookieConsentBanner  inset-x-0 bottom-0  z-[100]   full-width bar
+      AppInstallPrompt     bottom-4 left-4 right-4       full width on a phone
+      OfflineIndicator     bottom-4 left-1/2             centred pill
+      SupportWidget        bottom-6 right-6              56px FAB
+
+  Measured on a 390px phone: the offline pill (x 95-295, y 16-56) and the FAB
+  (x 310-366, y 24-80) both sit INSIDE the install card (x 16-374, y 16-136),
+  and the consent bar covers all three from y 0 to ~120.
+
+- FIXED: install prompt to bottom-24, which clears the FAB's 80px envelope;
+  offline banner to top-4, which is where a connectivity banner belongs and
+  takes it out of the consent bar's zone entirely.
+
+- THE GATE COMPUTES GEOMETRY, NOT STRINGS. It parses the Tailwind positioning
+  classes into boxes and fails on an actual overlap, so a future reshuffle is
+  judged on whether things collide rather than on matching today's wording.
+
+- TWO INSTRUMENT BUGS IN ONE TEST, both caught by running it:
+  (a) The class extractor matched anywhere in the file and picked up MY OWN
+      COMMENT in AppInstallPrompt describing the old broken layout ("rendered
+      `fixed bottom-4 ... md:right-4`"). It measured prose and reported the bug
+      as still present after it was fixed. Comment lines are skipped now.
+  (b) Checking only 390px was not enough. Putting the offline banner back on
+      the bottom edge still PASSED, because at 390 the centred pill and the
+      right-hand FAB happen to miss each other. The collision needs a narrow
+      viewport, so the test runs at 320 and 390; the mutant fails at 320.
+
+- DELETED, verified unreferenced across src/, app/, tests/ and scripts/:
+  QuickActionsMenu.tsx (a FIFTH bottom-edge overlay that was never mounted) and
+  MealPlanningCalendar.tsx. Both US-771 survivors.
+
+- MY OWN GATE FROM ITERATION 6 CAUGHT THE DELETION, which is the best thing
+  that happened this iteration. hoverRevealControls.test.ts exempted
+  QuickActionsMenu with a machine-checked reason; deleting the file failed the
+  "exemption list stays honest" block on the next run. An allowlist that
+  verifies its own entries is worth the extra twenty lines.
+
+- AND IT EXPOSED A WEAK TEST. routeAliases.test.ts checked for in-app links to
+  alias routes across a HARDCODED LIST OF THREE FILES, one of which I had just
+  deleted. It broke on the missing path -- and the real problem was that it had
+  only ever looked at three of about three hundred files. It scans the tree
+  now, with a floor assertion (>100 files) so it cannot silently look at
+  nothing.
+
+- Measured: 3327 tests pass (220 files). Typecheck 814 against baseline 814;
+  lint 1148 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A comment quoting the buggy code will be found by a grep looking for the
+    buggy code. Writing "this used to say `fixed bottom-4`" in the fix made my
+    own detector report the bug as unfixed.
+  - One viewport is not a layout test. Two overlays that miss each other at
+    390px can collide at 320px, and the assertion that passes at the wide size
+    is worth nothing.
+  - When deleting a file, run the whole suite rather than the tests you think
+    are related. Two gates referenced it by path, and one of them was only
+    pretending to check anything.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 13. US-832: robots.txt blocked
+/authors, a page the sitemap advertises and the build prerenders.
+================================================================================
+
+- THE GATE FOUND THE BUG, which is the point of writing gates for things that
+  look fine. I set out to enforce agreement between four lists that are kept in
+  step by hand -- scripts/prerender-routes.json (29 static routes),
+  functions/sitemap.xml.ts (29 fallback URLs), public/robots.txt and
+  src/App.tsx. The prerender and sitemap halves were already in exact
+  agreement: 29 = 29, nothing missing in either direction, no phantom routes.
+  The robots leg failed on the first run.
+
+- `Disallow: /auth` IS A PREFIX MATCH, so it also matches /authors. That page
+  is public, prerendered, listed in the sitemap, and its author bios are an
+  E-E-A-T signal for nutrition content. All 16 indexing groups told every
+  crawler not to fetch it. A URL advertised in a sitemap and blocked by
+  robots.txt is a Search Console error, and it was sitting in every group.
+
+- THE FILE ALREADY REASONED ABOUT PREFIX MATCHING, in one direction only. Its
+  header says: '"/admin" covers /admin, /admin/agents and /admin-dashboard' --
+  correct, and useful, because one rule covers more private paths. Nobody asked
+  the reverse question: what ELSE does /auth cover? Fixed as a pair, `/auth$`
+  and `/auth/`, in all 16 groups, with the reasoning written beside the
+  existing note.
+
+- THE PARSER MOVED RATHER THAN BEING COPIED. A full RFC 9309 implementation --
+  group resolution where a named group REPLACES the wildcard, longest-match
+  wins, Allow wins a tie -- lived inside src/lib/robots-txt.test.ts. Anything
+  else needing to ask "would Googlebot fetch this URL?" had to write a second
+  one, and I was about to. It is src/lib/robotsTxt.ts now; the original test
+  imports it and all 76 of its assertions still pass. This repo has paid four
+  times for a second copy of a working thing (US-616, US-626, US-777, US-780);
+  a parser in a test file is one waiting to happen.
+
+- MUTATION-CHECKED FOUR WAYS, including the one that matters most: deleting
+  every Disallow line makes "no prerendered route is blocked" pass trivially.
+  That is why the suite also asserts /admin, /dashboard, /seo-dashboard and
+  /join are STILL blocked -- 30 tests fail on that mutant. A permissive
+  robots.txt would otherwise sail through a test whose only job is to check
+  reachability.
+      restore the bare /auth rule           -> 7 fail
+      sitemap URL nobody prerenders         -> 1 fail
+      prerender a route that does not exist -> 1 fail
+      delete every Disallow                 -> 30 fail
+
+- Measured: 3340 tests pass (221 files). Typecheck 814 against baseline 814;
+  lint 1148 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A prefix rule is a claim about every string that starts that way, not about
+    the path you had in mind. /auth catches /authors, /api catches /apiary,
+    /share catches /shared. Worth listing the public routes and asking which
+    ones each Disallow swallows.
+  - Four hand-maintained lists in four formats WILL drift; the surprise is that
+    three of them had not. Writing the gate while they agree costs nothing and
+    is the only time you get to add one without also doing a repair.
+  - When a comment reasons about a mechanism, check whether the reasoning is
+    complete or just complete enough for the case that prompted it. This one
+    was right about prefix matching and had only asked half the question.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 14. US-833: four exposure-ladder
+buttons rendered their translation key as the label. src/i18n/keyCoverage.test.ts
+================================================================================
+
+- A NEGATIVE FIRST, and it confirms iteration 13. Generalising the /auth ->
+  /authors prefix bug: resolved all 45 App.tsx routes against Googlebot's group.
+  14 blocked, and the list is exactly the intended private surface (auth, oauth,
+  checkout, share, admin x3, seo-dashboard, search-traffic, join, dashboard)
+  plus /api/docs. Nothing else is accidentally caught, so /authors was the only
+  one. /api/docs is blocked by `Disallow: /api` and is also absent from the
+  sitemap and prerender list -- consistently excluded, so it is an owner's call
+  rather than a defect, and I left it.
+
+- THE FIND: `foodLadder` had no `actions` namespace at all, so the row dropdown
+  in FoodLadderBoard.tsx rendered four menu items labelled
+  "foodLadder.actions.pause", "...resume", "...stepDown" and "...remove".
+  Proven against the live i18n instance rather than inferred:
+
+      foodLadder.actions.pause  ->  "foodLadder.actions.pause"
+      control foodLadder.title  ->  "Exposure ladder"
+
+  src/i18n/i18n.test.ts already pins that an unknown key returns the key. What
+  nothing checked was which keys the app actually passes to t().
+
+- FIVE OF MY NINE INITIAL HITS WERE WRONG, which is the part worth recording.
+  i18next resolves t('x.count', { count }) against `x.count_one` /
+  `x.count_other`, so a naive flatten reports every pluralised key as missing.
+  The five foodLadder.weekly.* entries were correct all along. I checked the
+  namespace before reporting instead of filing nine bugs.
+
+  The gate strips CLDR plural suffixes AND has a test asserting those five DO
+  resolve, so the false-positive half is guarded too: dropping the suffix
+  stripping fails two tests, meaning the suite would catch a future version of
+  my own mistake.
+
+- ALSO: lowered .ci/lint-baseline.txt from 1156 to 1148. The ratchet has printed
+  "Lower .ci/lint-baseline.txt to 1148 to lock in the win" on every run this
+  loop. Until it is lowered, those eight fixed errors can come back with the
+  gate still green -- a ratchet that is not tightened is just a ceiling.
+
+- Measured: 3343 tests pass (222 files). Typecheck 814 against baseline 814;
+  lint 1148 against a baseline now also 1148; invisible chars clean. Mutants:
+  removing the actions block fails 1, dropping plural handling fails 2.
+
+- **Learnings for future iterations:**
+  - A missing translation key is silent by design -- i18next returns the key so
+    the app keeps running. That makes "it renders" worth nothing as evidence,
+    and makes a coverage gate the only way to see it.
+  - When a sweep produces a list, check whether the framework resolves the
+    thing differently before believing any of it. Nine "missing keys" was five
+    wrong; the plural suffixes are a documented i18next feature I had simply
+    not modelled.
+  - A ratchet baseline that CI keeps telling you to lower is a standing
+    invitation to regress. Lowering it costs one line.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 15 (last). US-834: the service worker
+cached authenticated Supabase responses to disk. public/sw.js.
+================================================================================
+
+- THE DEFECT. API_PATTERNS -- /rest/v1/, /auth/v1/, /functions/v1/ -- routed to
+  networkFirstStrategy, whose whole job is `cache.put(request, response.clone())`
+  on every 200. So per-user Supabase rows, and /auth/v1/ session payloads, were
+  written to Cache Storage on the device and read back whenever fetch() failed.
+
+- WHY IT CROSSES USERS, which is what makes it more than untidy. Cache Storage
+  matches on URL. `Authorization` is a request HEADER, and cache.match() ignores
+  headers unless the stored response carries a matching `Vary` -- which
+  PostgREST does not send for it. The entry for
+  GET /rest/v1/kids?select=* therefore matches ANY user's request for that URL.
+  Shared family tablet, which is an ordinary setup for this product: user A
+  signs in and loads their children; user B signs in later, loses connection,
+  and the worker hands them user A's rows.
+
+  CACHE_NAME carries the build id, so a deploy that changes asset hashes clears
+  it. Between deploys it persists, and a deploy that does not change the hashes
+  keeps the name and everything in it.
+
+- FIXED: authenticated endpoints go through networkOnlyForPrivateApi, which
+  fetches and keeps nothing. Nothing is lost by that -- the app already keeps a
+  per-user offline copy in localStorage via AppContext, and CLAUDE.md's load
+  precedence treats the server as authoritative anyway. Activation also purges
+  entries an older worker left behind, because changing the strategy does not
+  remove what is already on disk.
+
+- TESTED BY RUNNING THE SHIPPED FILE, not by reading it. public/sw.js is a
+  browser artefact outside the bundle, so the test evaluates it in a vm with
+  stubbed service-worker globals and drives its real fetch and activate
+  handlers. A source-guard test would have passed on a file that had stopped
+  doing the thing.
+
+- ONE ASSERTION EXISTS ONLY TO STOP THE SUITE PASSING VACUOUSLY: a static asset
+  must STILL be cached. Without it, a worker that cached nothing at all would
+  satisfy every other assertion in the file.
+
+      route API back through networkFirstStrategy  -> 4 fail
+      drop the activation purge                    -> 1 fail
+
+- Measured: 3350 tests pass (223 files). Typecheck 814 against baseline 814;
+  lint 1148 against baseline 1148; invisible chars clean. The __SW_BUILD_ID__
+  placeholder is intact, so scripts/build/stamp-sw.mjs still has what it needs.
+
+================================================================================
+LOOP CLOSED -- 15 iterations, 2026-09-09, branch
+claude/web-platform-improvements-loop-99nkyv
+================================================================================
+
+Shipped: US-823 (offline write queue, 3 iterations), US-824 (duplicate install
+prompts + overlay stacking), US-825 (breakpoints vs Tailwind), US-826
+(hover-reveal controls on touch), US-827 (credential autocomplete), US-828
+(date-only parsing + TZ pin), US-829 (stale query races), US-830 (plan-entry
+date bucketing), US-831 (raw error text), US-832 (robots blocking /authors),
+US-833 (missing translation keys), US-834 (service worker caching private data).
+
+Tests 3229 -> 3350. Lint baseline 1156 -> 1148. Typecheck held at 814.
+
+WHAT THIS LOOP KEPT RE-LEARNING, in rough order of how often it mattered:
+
+1. THE INSTRUMENT IS WRONG BEFORE THE CODE IS. Seven sweeps produced plausible
+   numbers that were artefacts of my own regex: 82 "unchecked Supabase errors"
+   (really 0), 9 "missing translation keys" (really 4), 11 "images without alt"
+   (really 0), a guarded-division check fooled by a trailing paren, a JSX parser
+   broken by `=>` inside a prop, an overlay detector that read a COMMENT
+   quoting the old buggy class string, and a layout check that only proved
+   anything at one viewport width. Every one of those would have been a
+   confident, checkable, wrong report.
+
+2. ASSERT THE INSTRUMENT FIRST. Nearly every gate written this loop opens with
+   a test that the scan found something -- at least 15 hover-reveal classes, 5
+   Tailwind screens, 400 translation keys, a registered fetch handler. Without
+   it, a format change turns the whole file into a tautology that passes.
+
+3. A MUTANT THAT SURVIVES IS THE TEST TELLING YOU SOMETHING. It happened four
+   times, and the honest response differed each time: delete the code (the NaN
+   guard that guarded nothing), write the discriminating test (the spinner
+   guard), add the missing viewport (the overlay geometry), or replace a
+   reimplementation test with source guards (the date bucketing, where 18 green
+   assertions never touched a single call site).
+
+4. THE CORRECT VERSION IS USUALLY ALREADY IN THE REPO, NEXT TO THE BROKEN ONES.
+   Auth.tsx had autocomplete and the settings page did not. parseDate handled
+   date-only strings and its 22 siblings did not. ResultHistoryCard forced local
+   parsing and five other files did not. Grocery.a11y.test.ts enforced touch
+   reveals for one file out of eight. Finding the file that got it right is
+   faster than deciding what right looks like.
+
+5. SAY WHAT YOU DID NOT FIND. Four iterations produced clean negatives --
+   index keys, division by zero, infinite spinners, prefix-blocked routes -- and
+   recording them is what stops the next pass re-running the same sweep.

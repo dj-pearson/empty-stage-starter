@@ -3,9 +3,11 @@ import { GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { toast } from "sonner";
+import { writeFailureMessage } from "@/lib/networkFailure";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
+import { queueWrite, queueWrites } from "@/lib/webSyncQueue";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 import { planGroceryMerge, splitIngredientBlock, type GroceryAddInput } from "@/lib/groceryMerge";
@@ -124,7 +126,9 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
             // anyway, so the item looked added, reached the localStorage
             // backup, and existed nowhere else.
             logger.error('Supabase addGroceryItem error:', error);
-            toast.error("Couldn't add that item. Please try again.");
+            toast.error(
+              writeFailureMessage(error, "Couldn't add that item. Please try again."),
+            );
           } else if (data) {
             const inserted = parseGroceryItemRow(data as Record<string, unknown>);
             if (inserted) setGroceryItemsRaw(prev => upsertById(prev, inserted));
@@ -149,7 +153,12 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         setGroceryItemsRaw,
         prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i),
         () => supabase.from('grocery_items').update({ checked: newChecked }).eq('id', id),
-        { logLabel: 'Supabase toggleGroceryItem error:' }
+        {
+          logLabel: 'Supabase toggleGroceryItem error:',
+          // US-823: checking items off in a shop with no signal is the whole
+          // reason this queue exists.
+          offlineQueue: () => queueWrite(userId, 'grocery.toggle', { id, checked: newChecked }),
+        }
       );
     } else {
       setGroceryItemsRaw(prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i));
@@ -162,7 +171,10 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         setGroceryItemsRaw,
         prev => prev.map(item => item.id === id ? { ...item, ...updates } : item),
         () => supabase.from('grocery_items').update(updates).eq('id', id),
-        { logLabel: 'Supabase updateGroceryItem error:' }
+        {
+          logLabel: 'Supabase updateGroceryItem error:',
+          offlineQueue: () => queueWrite(userId, 'grocery.update', { id, updates }),
+        }
       );
     } else {
       setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
@@ -259,7 +271,9 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
             if (error) {
               // US-717: no phantom rows for a rejected bulk insert.
               logger.error('Supabase addGroceryItemsMerged error:', error);
-              toast.error("Couldn't add those items. Please try again.");
+              toast.error(
+                writeFailureMessage(error, "Couldn't add those items. Please try again."),
+              );
             } else if (data) {
               setGroceryItemsRaw(prev => upsertManyById(prev, parseGroceryItemRows(data as unknown[])));
             }
@@ -281,7 +295,11 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         setGroceryItemsRaw,
         prev => prev.filter(item => item.id !== id),
         () => supabase.from('grocery_items').delete().eq('id', id),
-        { logLabel: 'Supabase deleteGroceryItem error:', toastMessage: "Couldn't delete that item — restored. Please try again." }
+        {
+          logLabel: 'Supabase deleteGroceryItem error:',
+          toastMessage: "Couldn't delete that item — restored. Please try again.",
+          offlineQueue: () => queueWrite(userId, 'grocery.delete', { id }),
+        }
       );
     } else {
       setGroceryItemsRaw(prev => prev.filter(item => item.id !== id));
@@ -296,7 +314,11 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         setGroceryItemsRaw,
         prev => prev.filter(item => !idSet.has(item.id)),
         () => supabase.from('grocery_items').delete().in('id', ids),
-        { logLabel: 'Supabase deleteGroceryItems error:', toastMessage: "Couldn't delete those items — restored." }
+        {
+          logLabel: 'Supabase deleteGroceryItems error:',
+          toastMessage: "Couldn't delete those items — restored.",
+          offlineQueue: () => queueWrites(userId, 'grocery.delete', ids.map((rowId) => ({ id: rowId }))),
+        }
       );
     } else {
       setGroceryItemsRaw(prev => prev.filter(item => !idSet.has(item.id)));
@@ -317,7 +339,11 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         setGroceryItemsRaw,
         prev => prev.filter(item => !idSet.has(item.id)),
         () => supabase.from('grocery_items').delete().in('id', checkedIds),
-        { logLabel: 'Supabase clearCheckedGroceryItems error:', toastMessage: "Couldn't clear checked items — restored." }
+        {
+          logLabel: 'Supabase clearCheckedGroceryItems error:',
+          toastMessage: "Couldn't clear checked items — restored.",
+          offlineQueue: () => queueWrites(userId, 'grocery.delete', checkedIds.map((rowId) => ({ id: rowId }))),
+        }
       );
     } else {
       setGroceryItemsRaw(prev => prev.filter(item => !idSet.has(item.id)));

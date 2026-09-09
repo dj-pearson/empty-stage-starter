@@ -1,79 +1,77 @@
 import { useState, useEffect, useCallback } from "react";
 import { WifiOff, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { logger } from "@/lib/logger";
+import { useAuth } from "@/contexts/AuthContext";
+import { useOfflineSyncDriver } from "@/hooks/useOfflineSyncDriver";
+import { pendingWriteCount } from "@/lib/webSyncQueue";
 
-const MUTATION_QUEUE_KEY = "eatpal_offline_mutations";
-
-interface QueuedMutation {
-  id: string;
-  table: string;
-  operation: "insert" | "update" | "delete";
-  data: unknown;
-  timestamp: number;
-}
-
-function getQueuedMutations(): QueuedMutation[] {
-  try {
-    const raw = localStorage.getItem(MUTATION_QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as QueuedMutation[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function queueMutation(mutation: Omit<QueuedMutation, "id" | "timestamp">): void {
-  try {
-    const queue = getQueuedMutations();
-    queue.push({
-      ...mutation,
-      id: crypto.randomUUID(),
-      timestamp: Date.now(),
-    });
-    localStorage.setItem(MUTATION_QUEUE_KEY, JSON.stringify(queue));
-  } catch {
-    logger.warn("Failed to queue offline mutation");
-  }
-}
-
-export function clearMutationQueue(): void {
-  localStorage.removeItem(MUTATION_QUEUE_KEY);
-}
-
+/**
+ * The offline banner, and the mount point for the queue that makes it true.
+ *
+ * US-823: this file used to export queueMutation() and clearMutationQueue()
+ * over a localStorage key 'eatpal_offline_mutations', with a QueuedMutation
+ * type and a "<n> pending changes" badge. A grep across src/, app/, functions/
+ * and supabase/ returned exactly three hits: the three declarations. Nothing
+ * called them and nothing drained the key, so pendingCount was permanently 0,
+ * the badge could never render, and anything ever queued would have sat there
+ * for good. All of it is gone; the count below reads the real queue in
+ * src/lib/webSyncQueue.ts, and useOfflineSyncDriver actually replays it.
+ */
 export function OfflineIndicator() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const { userId } = useAuth();
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine !== false,
+  );
   const [pendingCount, setPendingCount] = useState(0);
   const [isReconnecting, setIsReconnecting] = useState(false);
 
-  const updatePendingCount = useCallback(() => {
-    setPendingCount(getQueuedMutations().length);
-  }, []);
+  useOfflineSyncDriver(userId);
+
+  const refreshPendingCount = useCallback(() => {
+    let stale = false;
+    void pendingWriteCount(userId).then((n) => {
+      if (!stale) setPendingCount(n);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
       setIsReconnecting(true);
-      // Give a moment for connections to re-establish
+      // The drain runs off the same `online` event. Re-read after it has had a
+      // moment so the badge reflects what is left, not what was there.
       setTimeout(() => {
         setIsReconnecting(false);
-        updatePendingCount();
+        refreshPendingCount();
       }, 2000);
     };
 
     const handleOffline = () => {
       setIsOnline(false);
-      updatePendingCount();
+      refreshPendingCount();
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-    updatePendingCount();
+    const cancel = refreshPendingCount();
 
     return () => {
+      cancel();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [updatePendingCount]);
+  }, [refreshPendingCount]);
+
+  // While offline the count changes with every tap, and nothing else is going
+  // to tell us. Poll only in the state where the banner is on screen anyway.
+  useEffect(() => {
+    if (isOnline) return;
+    const id = setInterval(refreshPendingCount, 2000);
+    return () => clearInterval(id);
+  }, [isOnline, refreshPendingCount]);
 
   if (isOnline && !isReconnecting) return null;
 
@@ -82,10 +80,14 @@ export function OfflineIndicator() {
       role="alert"
       aria-live="assertive"
       className={cn(
-        "fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all",
+        // US-824: top-centre, not bottom. Three overlays shared the bottom edge on
+        // every dashboard route -- this banner, the install prompt and the support
+        // FAB -- and the cookie bar (bottom-0, z-[100]) covered all of them for a
+        // first-time visitor. A connectivity banner belongs at the top anyway.
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all",
         isReconnecting
           ? "bg-amber-500 text-white"
-          : "bg-destructive text-destructive-foreground"
+          : "bg-destructive text-destructive-foreground",
       )}
     >
       {isReconnecting ? (

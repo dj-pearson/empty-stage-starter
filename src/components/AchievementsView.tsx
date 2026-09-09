@@ -7,6 +7,7 @@ import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { AchievementBadge, type Achievement } from './AchievementBadge';
 import { Trophy, Lock, Star, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseIsoDate } from "@/lib/date-utils";
 
 export function AchievementsView() {
   const { planEntries } = usePlan();
@@ -27,20 +28,23 @@ export function AchievementsView() {
     // Calculate streak
     const sortedEntries = [...kidEntries]
       .filter(e => e.result)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => parseIsoDate(b.date).getTime() - parseIsoDate(a.date).getTime());
 
     let currentStreak = 0;
     let lastDate: Date | null = null;
 
     for (const entry of sortedEntries) {
-      const entryDate = new Date(entry.date);
+      const entryDate = parseIsoDate(entry.date);
       entryDate.setHours(0, 0, 0, 0);
 
       if (!lastDate) {
         lastDate = entryDate;
         currentStreak = 1;
       } else {
-        const dayDiff = Math.floor(
+        // Math.round, not floor: these are LOCAL midnights, and a DST day is
+        // 23 or 25 hours. floor(23h / 24h) is 0, which reads two consecutive
+        // days as the same day and silently breaks the streak every spring.
+        const dayDiff = Math.round(
           (lastDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         if (dayDiff === 1) {

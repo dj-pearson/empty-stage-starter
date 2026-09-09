@@ -439,6 +439,12 @@
     "restingAfterUpset": "resting after a hard meal",
     "rungTrackLabel": "{{rung}} — step {{step}} of {{total}}",
     "rowActionsLabel": "Options for {{food}}",
+    "actions": {
+      "pause": "Pause this food",
+      "resume": "Resume this food",
+      "stepDown": "Step down a rung",
+      "remove": "Remove from ladder"
+    },
     "disclaimer": "EatPal helps you keep track and keep things steady. It is not medical advice or treatment. If mealtimes are affecting your child's growth or wellbeing, a feeding therapist or your pediatrician is the right next step.",
     "rungs": {
       "looking": "Looking",

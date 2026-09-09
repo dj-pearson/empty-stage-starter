@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import { userFacingError } from "@/lib/networkFailure";
 
 export interface BackupLog {
   id: string;
@@ -76,7 +77,7 @@ export async function createBackup(download: boolean = true): Promise<{
 
     if (error) {
       logger.error("Backup error:", error);
-      toast.error("Backup failed", { description: error.message });
+      toast.error("Backup failed", { description: userFacingError(error, "Please try again.") });
       return { success: false, error: error.message };
     }
 

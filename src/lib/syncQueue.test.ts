@@ -1,25 +1,47 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**
- * US-127: behavioural test for the offline write-queue.
+ * US-127 / US-823: the mobile adapter over the shared queue.
  *
- * The module reads from `safeStorage` which on web maps to `localStorage`.
- * vitest's jsdom env provides one for free, so the queue persists across
- * the assertions below without a mock.
+ * WHAT THIS FILE USED TO DO. It imported app/mobile/lib/syncQueue and called
+ * drainQueue, which opened with `if (platformOS() === 'web') return zeros`.
+ * platformOS() reads Platform.OS through a require('react-native') whose throw
+ * is caught into 'web' -- which is what happens under vitest. So the drain
+ * never ran, and both tests took an `if (all zeros) return` branch. Replacing
+ * the entire drain body with `return {succeeded:0,failed:0,dropped:0}` left the
+ * file green. It asserted nothing about replay, retry or drop.
  *
- * On native (RN) the same module talks to expo-secure-store via the same
- * `safeStorage` interface; the contract under test (FIFO replay, retry
- * counter, drop after 5 failures) is platform-agnostic.
+ * The replay contract now lives in src/lib/offlineQueue.test.ts, against the
+ * shared mechanism, with no platform in the way. What is left here is what is
+ * genuinely mobile: that the adapter binds the right storage under the right
+ * key, and that its exports still behave for the callers that use them
+ * (app/(tabs)/lists.tsx enqueues, useOfflineSyncDriver drains).
  */
 
-beforeEach(async () => {
-  // Reset module state + localStorage between tests.
+const STORAGE_KEY = 'eatpal.mobile.syncQueue';
+
+// The adapter binds safeStorage from @/lib/platform. Back it with a plain
+// in-memory map so the assertions are about the queue, not about jsdom.
+const store: Record<string, string> = {};
+vi.mock('@/lib/platform', () => ({
+  safeStorage: {
+    getItem: async (k: string) => (k in store ? store[k] : null),
+    setItem: async (k: string, v: string) => {
+      store[k] = v;
+    },
+    removeItem: async (k: string) => {
+      delete store[k];
+    },
+  },
+}));
+
+beforeEach(() => {
+  for (const k of Object.keys(store)) delete store[k];
   vi.resetModules();
-  if (typeof localStorage !== 'undefined') localStorage.clear();
 });
 
-describe('syncQueue', () => {
-  it('enqueues and drains in FIFO order on success', async () => {
+describe('mobile syncQueue adapter', () => {
+  it('enqueues and drains through the shared queue', async () => {
     const { enqueueOp, drainQueue, peekQueue } = await import('../../app/mobile/lib/syncQueue');
 
     await enqueueOp('grocery.toggle', { id: 'a', checked: true });
@@ -32,30 +54,38 @@ describe('syncQueue', () => {
       return true;
     });
 
-    // Drain skips on web (returns zeros). The contract test runs on native;
-    // on web we still want to verify that peekQueue stays consistent.
-    if (result.succeeded === 0 && result.failed === 0 && result.dropped === 0) {
-      // Web path — drain is a no-op. Ensure entries persist instead.
-      expect(await peekQueue()).toHaveLength(2);
-      return;
-    }
-
-    expect(result).toEqual({ succeeded: 2, failed: 0, dropped: 0 });
+    // The assertions the old file could not reach.
     expect(seen).toEqual(['a', 'b']);
+    expect(result).toEqual({ succeeded: 2, failed: 0, dropped: 0 });
     expect(await peekQueue()).toHaveLength(0);
   });
 
-  it('retains failed ops with bumped attempts counter', async () => {
+  it('retains a failed op with a bumped attempts counter', async () => {
     const { enqueueOp, drainQueue, peekQueue } = await import('../../app/mobile/lib/syncQueue');
 
     await enqueueOp('plan.insert', { id: 'p1' });
-
     const result = await drainQueue(async () => false);
 
-    if (result.succeeded === 0 && result.failed === 0 && result.dropped === 0) return; // web no-op
     expect(result.failed).toBe(1);
     const queue = await peekQueue();
     expect(queue).toHaveLength(1);
     expect(queue[0].attempts).toBe(1);
+  });
+
+  it('writes under the key the shipped app already reads', async () => {
+    const { enqueueOp } = await import('../../app/mobile/lib/syncQueue');
+    await enqueueOp('grocery.toggle', { id: 'a', checked: true });
+
+    // A rename here would silently orphan every op queued by an installed
+    // build, so the key is pinned rather than inferred.
+    expect(Object.keys(store)).toEqual([STORAGE_KEY]);
+    expect(JSON.parse(store[STORAGE_KEY])).toHaveLength(1);
+  });
+
+  it('clears the queue', async () => {
+    const { enqueueOp, clearQueue, peekQueue } = await import('../../app/mobile/lib/syncQueue');
+    await enqueueOp('grocery.toggle', { id: 'a', checked: true });
+    await clearQueue();
+    expect(await peekQueue()).toEqual([]);
   });
 });

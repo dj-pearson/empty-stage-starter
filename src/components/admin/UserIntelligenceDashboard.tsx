@@ -727,7 +727,7 @@ const QuickActions = ({ userId, onActionComplete }: { userId: string; onActionCo
         </Dialog>
 
         <Button variant="outline" className="w-full justify-start" asChild>
-          <a href={`/admin-dashboard?tab=tickets`} target="_blank">
+          <a href={`/admin-dashboard?tab=tickets`} target="_blank" rel="noopener noreferrer">
             <MessageSquare className="h-4 w-4 mr-2" />
             Create Ticket
           </a>

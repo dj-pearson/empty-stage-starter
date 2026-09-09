@@ -1,3 +1,4 @@
+import { atLeast, below, between } from '@/lib/breakpoints';
 import { useState, useEffect } from 'react';
 
 /**
@@ -58,10 +59,15 @@ export function useMediaQuery(query: string): boolean {
 /**
  * Pre-configured breakpoint hooks
  */
-export const useIsMobile = () => useMediaQuery('(max-width: 768px)');
-export const useIsTablet = () => useMediaQuery('(min-width: 769px) and (max-width: 1024px)');
-export const useIsDesktop = () => useMediaQuery('(min-width: 1025px)');
-export const useIsLargeDesktop = () => useMediaQuery('(min-width: 1440px)');
+// Derived from src/lib/breakpoints.ts so each one flips on the same pixel as
+// the Tailwind prefix it corresponds to. They used to be hand-written and each
+// was off by one against the stylesheet: mobile included 768px where `md:` had
+// already gone desktop, desktop started at 1025px where `lg:` starts at 1024,
+// and "large desktop" was 1440px, which is not a Tailwind breakpoint at all.
+export const useIsMobile = () => useMediaQuery(below('md'));
+export const useIsTablet = () => useMediaQuery(between('md', 'lg'));
+export const useIsDesktop = () => useMediaQuery(atLeast('lg'));
+export const useIsLargeDesktop = () => useMediaQuery(atLeast('xl'));
 
 /**
  * Accessibility preference hooks

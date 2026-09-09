@@ -21,8 +21,8 @@ import { LoadingFallback } from '@/components/LoadingFallback';
 import { UpgradePromptHost } from '@/components/UpgradePromptHost';
 
 // Lazy load non-critical components to improve initial bundle size and LCP
-const PWAInstallPrompt = lazy(() =>
-  import('@/components/PWAInstallPrompt').then((m) => ({ default: m.PWAInstallPrompt }))
+const AppInstallPrompt = lazy(() =>
+  import('@/components/AppInstallPrompt').then((m) => ({ default: m.AppInstallPrompt }))
 );
 const CommandPalette = lazy(() =>
   import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette }))
@@ -141,7 +141,7 @@ function DeferredComponents() {
 
   return (
     <Suspense fallback={null}>
-      <PWAInstallPrompt />
+      <AppInstallPrompt />
       <CommandPalette />
       <AccessibilityWidget />
     </Suspense>

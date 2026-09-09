@@ -51,6 +51,7 @@ import { computeVarietyScore } from "@/lib/tonightModeRanking";
 import { TwistMealSheet } from "@/components/TwistMealSheet";
 import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { analytics } from "@/lib/analytics";
+import { parseIsoDate } from "@/lib/date-utils";
 
 /// US-298: threshold for surfacing the amber "try a twist?" chip. Tuned
 /// to match the AC: a recipe scoring >= 0.4 is far enough above the
@@ -753,7 +754,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
     const recent = planEntries
       .filter((e) => !!e.recipe_id)
       .map((e) => {
-        const ageMs = now - new Date(e.date).getTime();
+        const ageMs = now - parseIsoDate(e.date).getTime();
         const daysAgo = Math.max(0, Math.floor(ageMs / oneDay));
         return { recipeId: e.recipe_id as string, daysAgo };
       })
@@ -1049,7 +1050,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                           className="flex items-center justify-center h-full w-full text-muted-foreground/60 hover:text-primary transition-colors cursor-pointer"
                         >
                           <div className="flex flex-col items-center gap-1">
-                            <Plus className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <Plus className="h-5 w-5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity" />
                             <span className="text-xs font-medium">Add meal</span>
                           </div>
                         </button>

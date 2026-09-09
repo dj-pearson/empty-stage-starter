@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
 import { Mail, Lock, ArrowLeft, ShieldCheck } from "lucide-react";
+import { userFacingError } from "@/lib/networkFailure";
 
 type Step = "email" | "code" | "password" | "done";
 
@@ -53,7 +54,7 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
     setLoading(false);
 
     if (error || !data?.ok) {
-      toast.error(error?.message ?? "Could not send code");
+      toast.error(userFacingError(error, "Could not send code"));
       return false;
     }
     setResendCooldown(RESEND_SECONDS);
@@ -92,7 +93,7 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
     setLoading(false);
 
     if (error || !data?.ok) {
-      toast.error(error?.message ?? "Invalid code");
+      toast.error(userFacingError(error, "Invalid code"));
       setCode("");
       return;
     }
@@ -116,7 +117,7 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(userFacingError(error, "Could not update your email. Please try again."));
       return;
     }
     toast.success("Password set", { description: "You can now sign in with email and password." });

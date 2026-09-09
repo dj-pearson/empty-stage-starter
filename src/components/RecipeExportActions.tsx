@@ -351,6 +351,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -385,6 +386,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
               <Input
                 id="phone"
                 type="tel"
+                autoComplete="tel"
                 placeholder="(555) 123-4567"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}

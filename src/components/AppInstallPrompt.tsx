@@ -18,6 +18,10 @@ declare global {
   }
 }
 
+const DISMISSED_KEY = 'app_install_dismissed';
+/** Written by the removed PWAInstallPrompt. Read-only, never written. */
+const LEGACY_DISMISSED_KEY = 'pwa-install-dismissed';
+
 export function AppInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -34,8 +38,18 @@ export function AppInstallPrompt() {
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     setIsIOS(iOS);
 
-    // Check if user has dismissed the prompt before
-    const dismissed = localStorage.getItem('app_install_dismissed');
+    // Check if user has dismissed the prompt before.
+    //
+    // LEGACY_DISMISSED_KEY is read because a second install prompt used to
+    // exist: PWAInstallPrompt was mounted app-wide in App.tsx while this one
+    // was mounted in Dashboard, so on any /dashboard route BOTH listened for
+    // beforeinstallprompt and both rendered `fixed bottom-4 ... md:right-4` --
+    // two cards stacked at the same coordinates, with separate dismissal keys,
+    // so saying "Not Now" to the visible one left the other underneath. That
+    // component is gone. Anyone who dismissed it must not be asked again just
+    // because the survivor writes a different key.
+    const dismissed =
+      localStorage.getItem(DISMISSED_KEY) ?? localStorage.getItem(LEGACY_DISMISSED_KEY);
     const dismissedTime = dismissed ? parseInt(dismissed, 10) : 0;
     const oneWeek = 7 * 24 * 60 * 60 * 1000;
 
@@ -65,20 +79,24 @@ export function AppInstallPrompt() {
   }, []);
 
   const handleInstall = async () => {
-    if (deferredPrompt) {
+    if (!deferredPrompt) return;
+    try {
       await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-
-      if (outcome === 'accepted') {
-        setShowPrompt(false);
-      }
+      await deferredPrompt.userChoice;
+    } finally {
+      // Hide on EITHER outcome. The card used to stay up when the user
+      // declined the browser's own dialog, while deferredPrompt was cleared
+      // regardless -- so the Install button was still there and no longer did
+      // anything. A browser will not hand out a second prompt event for the
+      // same page load, so there is nothing left for this card to offer.
+      setShowPrompt(false);
       setDeferredPrompt(null);
     }
   };
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    localStorage.setItem('app_install_dismissed', Date.now().toString());
+    localStorage.setItem(DISMISSED_KEY, Date.now().toString());
   };
 
   // Don't render if already installed or shouldn't show
@@ -87,7 +105,7 @@ export function AppInstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed bottom-24 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm animate-in slide-in-from-bottom-4 duration-300">
       <Card className="shadow-2xl border-2 border-primary/20 bg-background/95 backdrop-blur-sm">
         <CardContent className="pt-4 pb-4">
           <button

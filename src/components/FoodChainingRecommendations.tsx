@@ -42,6 +42,11 @@ export function FoodChainingRecommendations() {
   const activeKid = kids.find(k => k.id === activeKidId);
 
   useEffect(() => {
+    // US-829: switching child re-runs this, and nothing stopped an earlier
+    // child's query from resolving last. This panel is explicitly per-child, so
+    // a stale win showed one sibling's successful foods under the other's name.
+    let superseded = false;
+
     const loadSuccessfulFoods = async () => {
       if (!activeKidId) {
         setSuccessfulFoods([]);
@@ -102,6 +107,7 @@ export function FoodChainingRecommendations() {
           .filter((f) => f.success_rate >= 50) // Only show foods with 50%+ success
           .sort((a, b) => b.success_rate - a.success_rate);
 
+        if (superseded) return;
         setSuccessfulFoods(foodArray);
 
         // Auto-select first food if available
@@ -109,16 +115,20 @@ export function FoodChainingRecommendations() {
           handleSelectFood(foodArray[0]);
         }
         } catch (error: unknown) {
+          if (superseded) return;
           logger.error("Error loading successful foods:", error);
           toast.error("Failed to load food success data");
       } finally {
-        setLoading(false);
+        if (!superseded) setLoading(false);
       }
     };
 
     if (activeKidId || kids.length > 0) {
       loadSuccessfulFoods();
     }
+    return () => {
+      superseded = true;
+    };
   }, [activeKidId, kids, selectedFood]);
 
   const handleSelectFood = async (food: FoodWithSuccess) => {

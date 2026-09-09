@@ -7,6 +7,15 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    // US-828: run in a real, negative-offset zone rather than the runner's UTC.
+    //
+    // Every date key in this app is a local 'YYYY-MM-DD'. Under TZ=UTC the
+    // local and UTC calendar days are identical, so the entire class of bug
+    // that hurts every user in the Americas -- a date-only string parsed as UTC
+    // midnight and rendered as the previous day -- is invisible to the suite.
+    // US-818's DST bug and US-828's off-by-one both shipped past a green run.
+    // America/Los_Angeles also observes DST, so transition bugs surface too.
+    env: { TZ: 'America/Los_Angeles' },
     setupFiles: ['./src/test/setup.ts'],
     css: true,
     /**

@@ -17,6 +17,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Save, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { parseIsoDate } from "@/lib/date-utils";
+import { userFacingError } from "@/lib/networkFailure";
 
 interface SaveMealPlanTemplateDialogProps {
   open: boolean;
@@ -112,7 +114,7 @@ export function SaveMealPlanTemplateDialog({
       }
     } catch (error) {
       logger.error('Error saving template:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to save template');
+      toast.error(userFacingError(error, 'Failed to save template'));
     } finally {
       setIsLoading(false);
     }
@@ -204,8 +206,8 @@ export function SaveMealPlanTemplateDialog({
           <div className="bg-muted/50 border rounded-lg p-3">
             <p className="text-sm text-muted-foreground">
               <strong>What gets saved:</strong> All meals from{" "}
-              {new Date(startDate).toLocaleDateString()} to{" "}
-              {new Date(endDate).toLocaleDateString()} will be saved as a reusable
+              {parseIsoDate(startDate).toLocaleDateString()} to{" "}
+              {parseIsoDate(endDate).toLocaleDateString()} will be saved as a reusable
               template.
             </p>
           </div>

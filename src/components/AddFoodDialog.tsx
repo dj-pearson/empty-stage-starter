@@ -92,6 +92,14 @@ export function AddFoodDialog({
 
   // Search nutrition database as user types
   useEffect(() => {
+    // US-829: the debounce cleanup cancels the TIMER, not a query already in
+    // flight. Typing "ch" then "chicken" fires both; `%ch%` matches far more
+    // rows than `%chicken%`, so the broader, staler query is the one more
+    // likely to finish last -- and it used to win, leaving results for "ch"
+    // under a box reading "chicken". This flag makes the newest request the
+    // only one that can write, and stops a setState after the dialog closes.
+    let superseded = false;
+
     const searchNutrition = async () => {
       if (searchQuery.length < 2) {
         setSearchResults([]);
@@ -107,16 +115,23 @@ export function AddFoodDialog({
           .limit(10);
 
         if (error) throw error;
+        if (superseded) return;
         setSearchResults(data || []);
       } catch (error) {
+        if (superseded) return;
         logger.error('Search error:', error);
       } finally {
-        setIsSearching(false);
+        // Guarded too: a stale request finishing would otherwise clear the
+        // spinner while the current search is still running.
+        if (!superseded) setIsSearching(false);
       }
     };
 
     const debounce = setTimeout(searchNutrition, 300);
-    return () => clearTimeout(debounce);
+    return () => {
+      superseded = true;
+      clearTimeout(debounce);
+    };
   }, [searchQuery]);
 
   useEffect(() => {
