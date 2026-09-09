@@ -74,11 +74,29 @@ export interface SuspiciousLoginResult {
 }
 
 /**
- * Get IP-based geolocation using a free API
- * Uses ip-api.com which allows 45 requests per minute for free
+ * Best-effort location context for a login, taken from the browser itself.
+ *
+ * US-836: this used to `fetch('https://ipapi.co/json/')` on every sign-in.
+ * That host is not in the `connect-src` of the CSP in public/_headers, so in
+ * production the request was blocked before it left the page: every web login
+ * logged a CSP violation and wrote null into all eight geo columns. It only
+ * ever "worked" in dev, where no CSP is applied.
+ *
+ * Allowing the origin instead was the other option and is a worse one. It
+ * would start doing something the app has never actually done: hand a third
+ * party the IP address of every person who signs in, at the moment they sign
+ * in, on a product holding children's data -- and put a 3s third-party
+ * round-trip on the login path.
+ *
+ * So the fields that need a network call stay null (they are the server's to
+ * fill; Cloudflare already attaches request geo to Pages Functions if we ever
+ * want them), and the one signal the browser can give for free is taken
+ * locally. Timezone is genuinely useful here: it is what the suspicious-login
+ * check needs to notice an account being used from somewhere new, and until
+ * now it was null on every row.
  */
 async function getGeoLocation(): Promise<GeoLocation> {
-  const defaultGeo: GeoLocation = {
+  const geo: GeoLocation = {
     country: null,
     country_code: null,
     region: null,
@@ -90,35 +108,12 @@ async function getGeoLocation(): Promise<GeoLocation> {
   };
 
   try {
-    // Using ipapi.co - free tier with HTTPS support, 1000 req/day
-    const response = await fetch('https://ipapi.co/json/', {
-      signal: AbortSignal.timeout(3000), // 3 second timeout
-    });
-
-    if (!response.ok) {
-      return defaultGeo;
-    }
-
-    const data = await response.json();
-
-    if (data.error) {
-      return defaultGeo;
-    }
-
-    return {
-      country: data.country_name || null,
-      country_code: data.country_code || null,
-      region: data.region || null,
-      city: data.city || null,
-      latitude: data.latitude || null,
-      longitude: data.longitude || null,
-      timezone: data.timezone || null,
-      ip: data.ip || null,
-    };
+    geo.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
   } catch (error) {
-    logger.warn('Failed to get geolocation', error);
-    return defaultGeo;
+    logger.warn('Failed to read the browser timezone', error);
   }
+
+  return geo;
 }
 
 /**

@@ -3261,3 +3261,90 @@ one storage key out of twenty-nine. src/lib/signOutScrub.ts.
   - A test double is a claim about the platform, and this one was wrong in a way
     that made correct code look broken. When a passing implementation fails only
     under test, suspect the mock before the code.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 2. US-836: the login path
+fetched an origin the CSP blocks. src/lib/cspConnectSrc.test.ts.
+================================================================================
+
+- FOUR NEGATIVES FIRST, all in areas that looked promising and are done.
+  dangerouslySetInnerHTML: 3 real uses, all DOMPurify'd, and US-530 already
+  moved JSON-LD to textContent and added a global afterSanitizeAttributes hook
+  that stamps rel="noopener noreferrer" on any sanitized anchor with a target.
+  target="_blank" in JSX: 0 without rel. Optimistic writes: all five entity
+  contexts route through runOptimisticMutation/runOptimisticInsert, whose
+  rollback (US-535) inverts only the optimistic diff so a concurrent realtime
+  event survives -- there is nothing left to find there. Realtime channels,
+  intervals and listeners: balanced everywhere.
+
+- THE FIND, and it is the shape this repo keeps producing: code that works in
+  every environment where anyone looks at it, and fails in the one where nobody
+  does. loginHistory.logLogin runs on every successful web sign-in (three call
+  sites in Auth.tsx, one in AuthCallback.tsx) and called
+
+      fetch('https://ipapi.co/json/')
+
+  ipapi.co is not in the connect-src of the CSP in public/_headers. In
+  production the request is blocked before it leaves the page. `vite dev`
+  applies no CSP, so it works perfectly on every developer's machine. The
+  visible symptom is eight null geo columns on every login_history row and a
+  console violation nobody reads.
+
+- THE FIX WAS A CHOICE, and "add the origin to the CSP" is the wrong half of
+  it. That would START doing something the app has never actually done in
+  production: hand a third party the IP address of every person at the moment
+  they authenticate, on a product holding children's data, with a 3s
+  third-party round-trip on the login path. The call is gone. Timezone comes
+  from Intl.DateTimeFormat().resolvedOptions() -- no network, and it is the
+  signal the suspicious-login check wants; it was null on every row until now.
+
+- A SWEEP THAT FINDS NOTHING PROVES NOTHING, which is the interesting part of
+  the gate. After the fix and the deletion below, src/ contains ZERO hardcoded
+  external fetch targets: everything goes through the Supabase client or
+  invokeEdgeFunction, both built from env. My first version asserted "at least
+  3 call sites found" and went red -- correctly. Replaced with a positive and a
+  negative control: the checker is handed a synthetic `fetch('https://ipapi.co/
+  json/')` and must reject it, and a synthetic `fetch('https://api.stripe.com/
+  v1/x')` and must accept it. Plus the configured origins from env.example.txt
+  (VITE_SUPABASE_URL, VITE_FUNCTIONS_URL) are checked against the policy, which
+  is real cross-file material rather than a count.
+
+- THE WILDCARD MATCHER HAS ITS OWN TESTS, because `https://*.sentry.io` does
+  NOT match `sentry.io` and a naive endsWith says it does. Also asserted:
+  `evil-api.tryeatpal.com.attacker.net` is not matched by
+  `https://api.tryeatpal.com`.
+
+- DELETED src/lib/url-utils.ts and its test, 1166 lines, which the gate found
+  on its first run. It fetched api-ssl.bitly.com and tinyurl.com -- both
+  CSP-blocked -- and read `VITE_BITLY_API_KEY`, which a VITE_ prefix would have
+  shipped into the client bundle for anyone to read. Nothing in src/, app/,
+  tests/, scripts/ or functions/ imported it; all 40 exports were referenced
+  only by the module's own test. Another US-771 survivor.
+
+- ALSO CONFIRMED NOT A BUG: world.openfoodfacts.org is reached only from
+  src/lib/database-prioritization.ts, which nothing in the web bundle imports,
+  and from app/(tabs)/scan.tsx, which is native and has no CSP. So the barcode
+  path is not broken on web -- it is not on web at all.
+
+- Lowered .ci/lint-baseline.txt 1148 -> 1144; deleting url-utils.ts took four
+  lint errors with it and the ratchet asked.
+
+- Measured: 3353 tests pass (224 files, 1 skipped; down 52 from 3405 because
+  url-utils.test.ts went with the module, up 8 from the new gate). Typecheck 814
+  against baseline 814; lint 1144 against a baseline now also 1144; invisible
+  chars clean. Four mutants, four caught: restore the ipapi fetch (3 fail), drop
+  functions.tryeatpal.com from connect-src (1), delete the CSP line (collection
+  error, exit 1), drop the wss source (1).
+
+- **Learnings for future iterations:**
+  - A CSP is a second, invisible copy of the app's dependency list, and nothing
+    in the build checks it against the first. Dev has no CSP, so the only place
+    the disagreement shows up is a production browser.
+  - "Add it to the allowlist" and "stop doing it" are different products, not
+    two spellings of one fix. Ask which one the change actually is before
+    picking the one-line version.
+  - When a sweep legitimately returns zero, the floor assertion has to be
+    replaced by a control, not deleted. Feed the checker a known-bad input and
+    make it say no.
+  - A VITE_-prefixed env var is public. `VITE_BITLY_API_KEY` in a module nobody
+    imports is a key waiting to be published by the first person who wires it up.
