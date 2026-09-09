@@ -3919,6 +3919,23 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-08 (web loop, iteration 10). AppContext's initial load caps foods at 500 (ordered by name), recipes at 200 (created_at asc) and grocery_items at 500 (created_at asc), then writes each slice into state wholesale. Nothing detects or reports the truncation, so the app shows a partial catalogue that looks complete.\n\nThe ordering is what turns this from 'some rows missing' into a bug people would report. grocery_items ascending by created_at means the 500 shown are the OLDEST -- a household over the cap stops seeing the items it just added. foods ordered by name means the catalogue stops partway through the alphabet.\n\nIteration 10 did NOT fix this. It named the caps (FOODS_ROW_CAP, RECIPES_ROW_CAP, GROCERY_ROW_CAP), added reachedRowCap with tests, and made the app say 'Showing your first 500 foods' instead of saying nothing. That is a stopgap so the failure is visible, not a fix.\n\nWorth deciding before implementing: plan_entries already solved a related problem with a windowed fetch plus mergeWindowedPlanEntries (US-538), which is a precedent for keeping out-of-window cached rows rather than truncating state. Whether foods wants the same shape or real pagination depends on whether the UI needs the whole catalogue in memory to search it.\n\nNoticed while reading the same function, unrelated and unfixed: the post-migration recipe re-fetch around AppContext.tsx:410 selects with no household_id filter and no limit, unlike every other query in the load. RLS scopes it, so it is not a leak, but it is inconsistent and it is unbounded."
+    },
+    {
+      "id": "US-820",
+      "title": "Grocery quantities that mix mass and volume",
+      "description": "As a parent shopping from the list, I want the quantity next to an ingredient to be one I can act on, so that I do not buy five pounds of flour when two recipes asked for two pounds and three cups.",
+      "acceptanceCriteria": [
+        "Two recipes contributing the same ingredient in different unit families produce two rows, each with its own quantity",
+        "Adding to a list that already holds that ingredient in a different family inserts rather than bumping",
+        "Units inside one family still stack (1 lb + 8 oz = 1.5 lb)",
+        "A bare number beside a unit still merges, since that is sloppy entry rather than a second measurement",
+        "The Grocery UI shows the two rows in a way that reads as deliberate rather than as a duplicate"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 11). The planner half is done and tested; the UI half is not.\n\nsumQuantities fell back to a raw numeric sum whenever unit families disagreed, so 2 lb + 3 cups came back as 5 lb and 500 g + 2 cups as 502 g. planGroceryMerge now splits an ingredient's parts by recognised unit family and refuses to bump an existing row measured a different way, so those stay as two rows. Unrecognised units (bare counts, 'bag') remain compatible with everything, which keeps the pinned 1 lb + 2 case merging.\n\nWhat is left is presentation. Two rows both reading 'Flour' look like a duplicate the shopper should clean up, and the natural reaction is to delete one -- which loses a real requirement. Worth deciding how Grocery.tsx renders them: grouped under one heading with two measures, or a note on the second. Check the mobile row layout too, where the name and quantity sit on one line.\n\nAlso unresolved, and cosmetic rather than wrong: sumQuantities still raw-sums a bare count into a unit'd row, so 1 lb + 2 reads as 3 lb rather than '1 lb plus 2'. That is the pinned behaviour and probably right for entry sloppiness, but it is a guess about intent worth revisiting if anyone complains."
     }
   ]
 }
