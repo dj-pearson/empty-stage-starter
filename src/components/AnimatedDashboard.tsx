@@ -18,7 +18,12 @@ export function AnimatedDashboard({ children, className = '' }: AnimatedDashboar
   const shouldReduceMotion = useReducedMotion();
 
   const containerVariants = {
-    hidden: { opacity: 0 },
+    // opacity honours the preference too (US-821). Neutralising y and scale
+    // while still starting at 0 leaves a fade, and a fade is motion -- someone
+    // who asked for less of it gets the dashboard materialising anyway. It
+    // also means content sits at opacity 0 until framer-motion runs, so
+    // anything reading the page before then sees invisible text.
+    hidden: { opacity: shouldReduceMotion ? 1 : 0 },
     visible: {
       opacity: 1,
       transition: {
@@ -56,7 +61,7 @@ export function AnimatedPanel({ children, className = '', delay = 0 }: AnimatedP
 
   const itemVariants = {
     hidden: {
-      opacity: 0,
+      opacity: shouldReduceMotion ? 1 : 0,
       y: shouldReduceMotion ? 0 : 20,
       scale: shouldReduceMotion ? 1 : 0.98,
     },
@@ -102,7 +107,7 @@ export function AnimatedStatCard({
 
   const itemVariants = {
     hidden: {
-      opacity: 0,
+      opacity: shouldReduceMotion ? 1 : 0,
       y: shouldReduceMotion ? 0 : 15,
       scale: shouldReduceMotion ? 1 : 0.95,
     },
@@ -196,7 +201,7 @@ export function AnimatedActionCard({
 
   const itemVariants = {
     hidden: {
-      opacity: 0,
+      opacity: shouldReduceMotion ? 1 : 0,
       y: shouldReduceMotion ? 0 : 20,
     },
     visible: {
