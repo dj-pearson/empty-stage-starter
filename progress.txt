@@ -3807,3 +3807,83 @@ cache had a TTL any unrelated write renewed. src/lib/featureFlagCache.ts
   - A test that writes another module's storage format by hand is a copy of
     that format. It will go red for the right reason eventually, which is the
     good case; the bad case is that it goes green while the format drifts.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 9. US-843: unsubscribing
+stopped two of the three emails we send. functions/_shared/email-suppression.ts
+================================================================================
+
+- TWO NEGATIVES ON THE WAY IN, both in the place I expected the bug to be. The
+  weekly digest's "Manage preferences" link resolves: EmailPreferences IS
+  mounted on the settings page and writes automation_email_subscriptions, so
+  the door exists. And the nurture engine's own unsubscribe is properly signed
+  (HMAC, timing-safe compare, fail-closed when the secret is absent) and is
+  suppression-checked before every send.
+
+- THE FIND IS THE THIRD SENDER. nurture-unsubscribe writes to
+  email_suppressions. agent-nurture-engine reads it. agent-weekly-digest reads
+  it. weekly-nutrition-email did not -- it checked only its own
+  automation_email_subscriptions row. So a parent who clicked unsubscribe in a
+  nurture email was suppressed from two mailings and went on receiving the
+  weekly nutrition summary indefinitely.
+
+  An unsubscribe that stops two of three mailings is not an unsubscribe, and
+  the person on the other end has exactly one remaining lever: report spam.
+
+- SECOND HALF, AND IT AFFECTS THE MAIL THAT MATTERS MOST. No sender set
+  List-Unsubscribe or List-Unsubscribe-Post. Gmail and Yahoo have required
+  those of bulk senders since February 2024. Without them the mail client shows
+  no unsubscribe affordance of its own, the complaint rate goes up, and that
+  rate is measured against the whole sending domain -- the same reputation that
+  decides whether a password-reset email lands in the inbox or the spam folder.
+
+- BOTH HEADERS OR NEITHER, which is why they are built by one function rather
+  than by two call sites. List-Unsubscribe alone advertises a link; the Post
+  header is what promises a bare POST will act without a confirmation step. A
+  client that sees only the first falls back to the old behaviour. Setting the
+  Post header to '' fails two tests.
+
+- FAIL CLOSED ON THE SUPPRESSION CHECK. A query error returns "suppressed". A
+  skipped send is recoverable on the next run; an email to somebody who asked
+  us to stop is not. The mutant that flips it to fail-open is caught.
+
+- AND TRANSACTIONAL MAIL DELIBERATELY GETS NEITHER HEADER. approval-executor
+  sets them only when the payload carries an unsubscribe URL, because a support
+  reply is not a mailing anyone can leave and advertising one there would be a
+  lie. Adding them unconditionally fails three tests.
+
+- A THIRD COPY, CAUGHT BEFORE IT LANDED. agent-csat and agent-nurture-engine
+  each carried an identical four-line functionsBase(), and I was about to paste
+  a third into weekly-nutrition-email. It is functions/_shared/functions-url.ts
+  now, and all three import it -- with a test that none of them declares its own.
+
+- DEAD CODE FOUND, LEFT ALONE ON PURPOSE. src/lib/email.ts exports
+  unsubscribeAll(token). It has no caller, there is no /unsubscribe route, and
+  it could not work if wired: it is a client-side UPDATE filtered by
+  unsubscribe_token against a table whose only RLS policy is
+  auth.uid() = user_id, so a signed-out click from a mail client would update
+  zero rows and report success-ish. Noted in prd.json for a deletion pass
+  rather than swept into this change.
+
+- THE LINT RATCHET CAUGHT THE HOUSE PATTERN. 1145 against 1144: the shared
+  module copied `// deno-lint-ignore no-explicit-any` + `type SupabaseClient =
+  any` from its neighbours, and that comment means nothing to ESLint. Replaced
+  with a structural interface naming only the from/select/eq chain the module
+  uses -- narrower than the neighbours and one lint error cheaper.
+
+- Measured: 3479 tests pass (233 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught.
+
+- **Learnings for future iterations:**
+  - When N places implement the same policy, check all N. Two of three is the
+    hardest ratio to notice, because every test you write against either of the
+    first two passes.
+  - "Fails closed" is a decision worth writing a test for, not just a comment.
+    The whole difference between the two versions is one boolean in an error
+    branch nobody exercises by hand.
+  - `deno-lint-ignore` does not suppress ESLint, and this repo runs both over
+    functions/. Copying a suppression comment from a neighbour copies the
+    error too.
+  - Dead code that CANNOT work is worth recording even when you do not delete
+    it. unsubscribeAll looks like a working unsubscribe to the next reader.

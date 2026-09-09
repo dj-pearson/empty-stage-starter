@@ -27,6 +27,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { listUnsubscribeHeaders } from '../_shared/email-headers.ts';
 import { authenticateRequest } from '../_shared/auth.ts';
 import { isAdmin } from '../_shared/admin.ts';
 import { validateExternalUrl, fetchWithTimeout } from '../_shared/url-validator.ts';
@@ -85,6 +86,15 @@ async function executeSendEmail(payload: Record<string, unknown>): Promise<unkno
     subject = withTicketToken(subject, payload.ticket_id);
   }
 
+  // US-843: bulk mail carries the one-click unsubscribe headers Gmail and
+  // Yahoo have required since February 2024. Only messages that supply an
+  // unsubscribe URL get them -- a transactional reply to a support ticket is
+  // not a mailing anyone can leave, and advertising one there would be a lie.
+  const unsubscribeUrl =
+    typeof payload.unsubscribe_url === 'string' && payload.unsubscribe_url.length > 0
+      ? payload.unsubscribe_url
+      : null;
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -93,6 +103,7 @@ async function executeSendEmail(payload: Record<string, unknown>): Promise<unkno
       to,
       subject,
       html,
+      ...(unsubscribeUrl ? { headers: listUnsubscribeHeaders(unsubscribeUrl) } : {}),
     }),
   });
   const data = await res.json().catch(() => ({}));

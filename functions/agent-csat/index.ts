@@ -13,6 +13,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
+import { functionsBase } from '../_shared/functions-url.ts';
 import { signCsatToken, ratingLinks, buildCsatEmail, resolveCsatTokenSecret } from '../_shared/csat-logic.ts';
 
 const AGENT_NAME = 'csat';
@@ -24,10 +25,6 @@ const json = (body: unknown, status: number) =>
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
 
-function functionsBase(): string {
-  const url = Deno.env.get('SUPABASE_URL');
-  return url ? `${url}/functions/v1` : (Deno.env.get('FUNCTIONS_URL') ?? '');
-}
 
 serve(async (req) => {
   const expected = Deno.env.get('AGENT_DISPATCH_SECRET');

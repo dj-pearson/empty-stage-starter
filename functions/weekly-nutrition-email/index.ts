@@ -1,5 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders, handleCorsPreFlight } from "../_shared/cors.ts";
+import { isSuppressed } from "../_shared/email-suppression.ts";
+import { listUnsubscribeHeaders } from "../_shared/email-headers.ts";
+import { signEmailToken } from "../_shared/nurture-logic.ts";
+import { resolveCsatTokenSecret } from "../_shared/csat-logic.ts";
+import { functionsBase } from "../_shared/functions-url.ts";
 
 /**
  * Weekly Nutrition Email
@@ -60,7 +65,12 @@ export default async (req: Request) => {
     const weekStartDate = weekStart.toISOString().split("T")[0];
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    const results = { total: subscribers.length, sent: 0, failed: 0 };
+    // Fail closed the same way nurture-unsubscribe does (US-521): without the
+    // secret we cannot mint a verifiable unsubscribe link, so the email goes
+    // out with the preferences link alone rather than with a link that 404s.
+    const unsubscribeSecret = resolveCsatTokenSecret(Deno.env.get("CSAT_TOKEN_SECRET"));
+
+    const results = { total: subscribers.length, sent: 0, failed: 0, skipped: 0 };
 
     for (const { user_id } of subscribers) {
       try {
@@ -111,8 +121,29 @@ export default async (req: Request) => {
           })
         );
 
+        // US-843: honour the one suppression list.
+        //
+        // This sender checked only its own automation_email_subscriptions row,
+        // while nurture-unsubscribe writes to email_suppressions and the other
+        // two senders read it. So somebody who clicked unsubscribe in a nurture
+        // email kept receiving this one, forever. An unsubscribe that stops two
+        // of three mailings is not an unsubscribe.
+        if (await isSuppressed(supabase, userData.user.email)) {
+          results.skipped++;
+          continue;
+        }
+
+        // US-843: a one-click unsubscribe of its own, signed the same way the
+        // nurture links are. "Manage preferences" pointed at a page behind a
+        // sign-in, which is neither one click nor reachable from a mail client.
+        const unsubscribeUrl = unsubscribeSecret
+          ? `${functionsBase()}/nurture-unsubscribe?t=${encodeURIComponent(
+              await signEmailToken(userData.user.email, unsubscribeSecret),
+            )}`
+          : null;
+
         // Generate and send email
-        const html = generateEmailHtml(childSummaries);
+        const html = generateEmailHtml(childSummaries, unsubscribeUrl);
 
         if (resendKey) {
           await fetch("https://api.resend.com/emails", {
@@ -126,6 +157,10 @@ export default async (req: Request) => {
               to: userData.user.email,
               subject: "Your Weekly Nutrition Summary - EatPal",
               html,
+              // Both headers or neither: the Post header is what promises a
+              // bare POST will act without a confirmation step, and a client
+              // that sees only the first falls back to the old behaviour.
+              ...(unsubscribeUrl ? { headers: listUnsubscribeHeaders(unsubscribeUrl) } : {}),
             }),
           });
         }
@@ -173,7 +208,7 @@ interface ChildSummary {
   coveragePct: number;
 }
 
-function generateEmailHtml(children: ChildSummary[]): string {
+function generateEmailHtml(children: ChildSummary[], unsubscribeUrl: string | null): string {
   const childrenHtml = children
     .map(
       (child) => `
@@ -214,7 +249,11 @@ function generateEmailHtml(children: ChildSummary[]): string {
     </div>
     <p style="text-align:center;color:#9ca3af;font-size:12px;margin-top:32px;">
       You're receiving this because you subscribed to weekly summaries.<br>
-      <a href="https://tryeatpal.com/dashboard/settings" style="color:#667eea;">Manage preferences</a>
+      <a href="https://tryeatpal.com/dashboard/settings" style="color:#667eea;">Manage preferences</a>${
+        unsubscribeUrl
+          ? ` &middot; <a href="${unsubscribeUrl}" style="color:#667eea;">Unsubscribe</a>`
+          : ""
+      }
     </p>
   </div>
 </body></html>`;
