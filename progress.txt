@@ -2175,3 +2175,92 @@ the connection. src/lib/networkFailure.ts. US-823 filed for the queue itself.
   - The dead code that matters is not the unreferenced component -- US-771
     already deleted those. It is the exported function with zero callers sitting
     inside a component that IS mounted, because everything around it works.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 2. US-823 AC 2. The mobile write
+queue's replay path had no test coverage at all. src/lib/offlineQueue.ts.
+================================================================================
+
+- A TEST FILE THAT MEASURED NOTHING, and said so in its own comments.
+  src/lib/syncQueue.test.ts called drainQueue and then did this:
+
+      if (result.succeeded === 0 && result.failed === 0 && result.dropped === 0) {
+        // Web path -- drain is a no-op. Ensure entries persist instead.
+        expect(await peekQueue()).toHaveLength(2);
+        return;
+      }
+
+  Both tests took that branch, every run. The second one asserted literally
+  nothing past it. PROVEN rather than argued: replacing drainQueue's entire body
+  with `return {succeeded:0,failed:0,dropped:0}` left the file GREEN.
+
+- WHY IT TOOK THAT BRANCH. drainQueue opened with
+  `if (platformOS() === 'web') return zeros`, and platformOS() is:
+
+      try { return require('react-native').Platform.OS } catch { return 'web' }
+
+  Under vitest the require throws, so 'web' is not a platform detection here, it
+  is a "react-native isn't installed" detection. The guard fired in every test.
+  The comment above it even says "The contract test runs on native" -- it never
+  ran anywhere. So FIFO replay, the retry counter and the poison-pill drop, the
+  three things US-823 was told to reuse, had zero coverage.
+
+- THE FIX IS THE LIFT US-823 ASKED FOR. src/lib/offlineQueue.ts holds the
+  mechanism with storage injected and NO platform check -- whether a platform
+  drains is the caller's policy, and useOfflineSyncDriver already decides it
+  with a real `Platform.OS === 'web'` test at its own top. app/mobile/lib/
+  syncQueue.ts is now a thin adapter: same export names, same signatures, same
+  storage key 'eatpal.mobile.syncQueue'. No mobile caller changed.
+
+- MUTATION-CHECKED, FOUR WAYS, because a test suite written against code you
+  just moved is exactly where a vacuous assertion hides:
+      gut drain entirely            -> 7 tests fail
+      never drop the poison pill    -> 1 fails
+      trim newest instead of oldest -> 1 fails
+      stop validating stored entries-> 1 fails
+  A test pins the key too: renaming 'eatpal.mobile.syncQueue' would orphan every
+  op queued by an installed build, and nothing would have caught that.
+
+- A SECOND BUG, FOUND BY READING THE DRIVER WHILE LIFTING IT, and it is live
+  data loss rather than a coverage gap. useOfflineSyncDriver drained only on a
+  false -> true transition:
+
+      const wasOffline = useRef(false);        // starts false
+      if (!online) { wasOffline.current = true; return; }
+      if (wasOffline.current) { ...drain... }
+
+  and useNetworkStatus initialises to {isConnected: true, isInternetReachable:
+  true} -- optimistic, not unknown. So: queue writes offline, close or get
+  killed, reopen on wifi. `online` is true, `wasOffline` is false, nothing
+  drains. The ops wait for the device to happen to drop its connection and
+  regain it, and MAX_QUEUE's slice(-200) eventually trims the oldest away
+  unsent. Now drains once per mount as well. I wrote AC 3 of US-823 ("replay on
+  the online event AND on next mount") from first principles in iteration 1; it
+  turned out to name the exact gap in the code I had not read yet.
+
+- Measured: 3229 tests pass (211 files, 1 skipped); typecheck ratchet 814
+  against baseline 814; lint 1151 against 1156; check-invisible-chars clean.
+
+- NOT DONE, deliberately: the web half. Nothing in src/ enqueues anything yet,
+  the OfflineIndicator stub is still dead, and there is no web driver. That is
+  AC 1 and AC 3-7 of US-823 and it is the next iteration's work. Lifting the
+  mechanism first was the point -- writing the web queue before the shared one
+  had a single passing drain test is how the third copy gets built.
+
+- RECORDED, NOT FIXED: QueuedOpKind declares 'ladder.attempt' and
+  'ladder.patch'; the driver's switch handles neither and sends both to
+  `default: return false`, so they retry five times and are dropped. Nothing
+  enqueues them today (ladderSyncOps.ts is spec with no runtime caller), so it
+  is a trap, not a loss. Wiring an enqueue without the replay arm creates it.
+
+- **Learnings for future iterations:**
+  - `try { require(x) } catch { return DEFAULT }` is not feature detection in a
+    test runner, it is a guarantee that DEFAULT is what every test sees. Any
+    early return keyed off it disables the test rather than the feature.
+  - A test that branches on its own subject's output ("if the result is all
+    zeros, assert something else instead") has already given up. The give-up
+    was written in a comment and shipped, and nobody read the comment as the
+    admission it was.
+  - An optimistic initial state (isConnected: true) plus a transition-only
+    trigger equals a trigger that never fires on the happy path. Worth checking
+    wherever a useRef(false) gates work that a cold start also needs.

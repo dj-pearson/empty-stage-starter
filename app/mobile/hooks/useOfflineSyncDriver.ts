@@ -77,6 +77,16 @@ async function executeOp(op: QueuedOp): Promise<boolean> {
 export function useOfflineSyncDriver(): void {
   const { isConnected, isInternetReachable } = useNetworkStatus();
   const wasOffline = useRef(false);
+  // US-823: whether this mount has drained yet.
+  //
+  // The driver used to fire only on a false -> true transition, and
+  // useNetworkStatus starts optimistic ({isConnected: true, isInternetReachable:
+  // true}) rather than unknown. So a cold start with ops already on disk --
+  // queued offline, then the app closed or killed before it reconnected --
+  // found `online` true and `wasOffline` false and never drained. Those writes
+  // sat there until the device happened to drop its connection and regain it,
+  // and MAX_QUEUE eventually trimmed the oldest away unsent.
+  const drainedThisMount = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -87,10 +97,13 @@ export function useOfflineSyncDriver(): void {
       return;
     }
 
-    if (wasOffline.current) {
+    const reconnected = wasOffline.current;
+    if (reconnected || !drainedThisMount.current) {
       wasOffline.current = false;
-      // Drain on reconnection. Don't await — fire-and-forget so React's
-      // effect lifecycle stays cheap.
+      drainedThisMount.current = true;
+      // Drain on reconnection, and once on a mount that starts online to pick
+      // up anything a previous session left behind. Don't await -- fire-and-
+      // forget so React's effect lifecycle stays cheap.
       drainQueue(executeOp)
         .then((res) => {
           if (res.succeeded > 0 || res.dropped > 0) {
