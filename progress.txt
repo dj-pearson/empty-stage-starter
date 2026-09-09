@@ -3422,3 +3422,78 @@ scrolled but never moved focus. src/components/skipToContent.test.tsx.
   - Fix at the one place, not at the 32. The same defect could have been closed
     by adding tabIndex={-1} to every landmark; putting it in the click handler
     meant one file changed and pages that do not exist yet are covered too.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 4. US-838: 38 icon-only
+buttons announced as just "button". src/lib/iconButtonNames.test.ts.
+US-839 opened for the next iteration.
+================================================================================
+
+- THE VPAT IS STILL PAYING OUT. Iteration 3 found one false row by reading it;
+  this iteration went through the rows it marks "remediation in progress",
+  which are the product telling you where its own bodies are buried. Three such
+  rows: 2.1.2 keyboard trap, 2.2.2 reduced motion, and 2.5.3/4.1.2 accessible
+  names. The third was true.
+
+- MY FIRST DETECTOR FOUND 8. The real number is 38. The regex was
+
+      <(Button|button)\b([^>]*)>
+
+  and `onClick={() => handleDelete(id)}` contains a `>`, so `[^>]*` stopped
+  inside the handler and every button with an inline arrow function was
+  invisible. The progress log has warned about exactly this ("a JSX parser
+  broken by `=>` inside a prop") and I wrote it again anyway. The shipped
+  detector walks the tag one character at a time, tracking brace depth and
+  skipping quoted strings, to find where the attribute list really ends.
+
+  I only noticed because I read a file the sweep had reported on -- and saw a
+  SECOND unlabelled button four lines below the one it found. A sweep that
+  reports 8 hits in a file with 3 is easier to trust than one that reports
+  nothing.
+
+- WHAT WAS UNNAMED, and it is not only admin screens: the button that stops the
+  camera on the food-capture screen, the one that starts a new conversation in
+  the AI coach, the tag-remove buttons in the recipe builder, the clear-filter
+  chip in the pantry, and the drag handle in the instruction-step builder. A
+  screen reader announced each of those as "button".
+
+- FIXED ALL 38 across 24 files, labels written from the handler each one calls
+  ("Stop the camera", "Delete this collection", "Copy the CNAME record value").
+  None of those files use i18n, so plain strings match their surroundings.
+
+- THE GATE'S CONTROLS ARE THE POINT, given that the tree is now clean and the
+  main assertion is `expect(unnamed).toEqual([])`. Five synthetic inputs it has
+  to classify: a button with an arrow handler (must be FOUND), the same one
+  labelled (must not), one with visible text beside the icon (must not), one
+  whose className template literal contains `a>b` (must not), and a
+  commented-out button (must not). Reverting the brace-aware scan to the naive
+  regex fails the first.
+
+- TWO NEGATIVES, both now US-839 rather than claims. I probed the accessibility
+  panel's focus trap by driving the real widget with userEvent: opening focuses
+  the close button, Tab wraps last->first, Shift+Tab wraps first->last, and
+  Escape and a backdrop click both restore focus to the trigger. 2.1.2's remark
+  is stale. And 2.2.2's "some Framer Motion animations are not gated" is
+  answered by App.tsx wrapping everything in MotionConfig -- six components
+  import framer-motion without a reduced-motion hook and are covered anyway.
+  I did NOT flip either row: there is no test pinning them, and raising a
+  conformance level on a document with legal weight without landing the test in
+  the same change is how a stale VPAT becomes an overstated one. US-839.
+
+- Measured: 3402 tests pass (226 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Three mutants,
+  three caught: strip one aria-label (1 fail), disable brace awareness (1),
+  disable comment stripping (1).
+
+- **Learnings for future iterations:**
+  - A document's "in progress" items are a to-do list somebody already wrote
+    for you, and they are the rows most likely to be either true and unfinished
+    or finished and unrecorded. Both are worth knowing.
+  - `[^>]*` is not an attribute list. JSX puts `>` inside arrow functions,
+    template literals and comparisons; a sweep that uses it under-reports
+    silently and by a lot -- here by 79%.
+  - Read one file the sweep reported on before believing its count. The
+    discrepancy between what the tool said and what the file contained is what
+    exposed the parser bug.
+  - Correcting a claim in a compliance document needs a test in the same
+    commit, or it is just a different unverified claim.

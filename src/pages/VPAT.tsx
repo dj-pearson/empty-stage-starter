@@ -45,7 +45,7 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "2.4.4", name: "Link Purpose (In Context)", level: "A", conformance: "Supports", remarks: "Link text describes destination. Generic links have aria-label." },
   { criterion: "2.5.1", name: "Pointer Gestures", level: "A", conformance: "Supports", remarks: "No multipoint or path-based gestures required. Single pointer alternatives available." },
   { criterion: "2.5.2", name: "Pointer Cancellation", level: "A", conformance: "Supports", remarks: "Actions trigger on up-event. Abort mechanism available for drag operations." },
-  { criterion: "2.5.3", name: "Label in Name", level: "A", conformance: "Partially Supports", remarks: "Text controls include their visible label in the accessible name. A number of icon-only controls are being updated to expose accessible names; remediation in progress." },
+  { criterion: "2.5.3", name: "Label in Name", level: "A", conformance: "Partially Supports", remarks: "Text controls include their visible label in the accessible name. Icon-only buttons all expose an accessible name, enforced in CI by src/lib/iconButtonNames.test.ts; icon-only controls built on other elements are still being reviewed." },
   { criterion: "2.5.4", name: "Motion Actuation", level: "A", conformance: "Supports", remarks: "No motion-activated functionality. All features have standard input alternatives." },
   { criterion: "3.1.1", name: "Language of Page", level: "A", conformance: "Supports", remarks: "HTML lang=\"en\" attribute set on root element." },
   { criterion: "3.2.1", name: "On Focus", level: "A", conformance: "Supports", remarks: "Focus does not trigger unexpected context changes." },
@@ -53,7 +53,7 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "3.3.1", name: "Error Identification", level: "A", conformance: "Supports", remarks: "Form errors clearly identified with text and ARIA. Error messages linked to fields." },
   { criterion: "3.3.2", name: "Labels or Instructions", level: "A", conformance: "Supports", remarks: "All form fields have visible labels. Instructions provided for complex inputs." },
   { criterion: "4.1.1", name: "Parsing", level: "A", conformance: "Supports", remarks: "Valid HTML5. No duplicate IDs. Proper nesting maintained." },
-  { criterion: "4.1.2", name: "Name, Role, Value", level: "A", conformance: "Partially Supports", remarks: "Custom components use appropriate ARIA roles, states, and properties. Some icon-only buttons do not yet expose an accessible name; an accessible-name remediation pass is in progress." },
+  { criterion: "4.1.2", name: "Name, Role, Value", level: "A", conformance: "Partially Supports", remarks: "Custom components use appropriate ARIA roles, states, and properties. The 38 icon-only buttons that announced as just \"button\" were named in September 2026 and a CI gate keeps them named." },
 
   // Level AA Criteria
   { criterion: "1.2.4", name: "Captions (Live)", level: "AA", conformance: "Not Applicable", remarks: "No live audio content." },

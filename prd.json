@@ -4213,6 +4213,38 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 3) by checking the VPAT's own claim. src/pages/VPAT.tsx asserts WCAG 2.4.1 Bypass Blocks 'Supports' with the remark 'Skip to main content link implemented on all pages'. Both halves of that were false. (1) SkipToContent rendered a bare <a href=\"#main-content\">. Chrome, Safari and Edge scroll to a non-focusable target without moving focus -- only Firefox moves it -- so the next Tab went straight back into the navigation the link exists to bypass. (2) Only 32 of 63 page files declared id=\"main-content\"; on the rest the link was a dead anchor, including every programmatic guide (5 of 6 pseo files), which is the highest-traffic public surface. Fix: SkipToContent now resolves the target (#id, then the first <main>, then [role=\"main\"]), sets tabindex=-1 when the element is not already focusable, focuses it and scrolls it in, preventing the browser's own anchor jump so the two do not fight. Doing it in the component meant the 32 pages that already had the id needed no change. Landmarks added to Onboarding, NotFound, Join, AdminDashboard, ShareTarget and all four pSEO templates plus PseoPage's loading and soft-404 states. AuthCallback and OAuthCallback are exempt with a written reason (transient redirect screens with no navigation to skip). Gate: src/components/skipToContent.test.tsx drives the real click through userEvent and asserts document.activeElement, then parses App.tsx for lazy imports and absolute-path routes and requires a landmark per routed page, with the nested /dashboard and /admin children checked via their layouts. Five mutants caught: remove the onClick (2 fail), drop the tabindex assignment (2), drop the <main> fallback (2), strip the id from one routed page (1), strip it from one pSEO template (1)."
+    },
+    {
+      "id": "US-838",
+      "title": "38 icon-only buttons announced as just \"button\"",
+      "description": "As someone using a screen reader, I want every icon button to say what it does, so that I am not guessing which unlabelled button stops the camera.",
+      "acceptanceCriteria": [
+        "No button whose only child is an icon is left without an accessible name.",
+        "The detector reads JSX attributes past a fat arrow in an inline handler, past a > inside a template string, and skips comments.",
+        "The detector proves it can tell a labelled button from an unlabelled one, so a green run is not a broken regex.",
+        "The VPAT remarks for 2.5.3 and 4.1.2 say what is now enforced instead of describing a remediation as in progress."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 4) by checking the VPAT's declared open items. Rows 2.5.3 and 4.1.2 said 'some icon-only buttons do not yet expose an accessible name; remediation in progress'. True, and worse than 'some': 38 of them, across 24 files. User-facing ones included the control that stops the camera on the food-capture screen, the one that starts a new conversation in the AI coach, and the tag-remove buttons in the recipe builder. THE FIRST DETECTOR FOUND 8. It used /<Button([^>]*)>/, which stops at the first > it meets -- and `onClick={() => ...}` contains one, so every button with an inline arrow handler was invisible. The shipped detector walks the tag character by character, tracking brace depth and skipping quoted strings, to find the real end of the attribute list. Gate: src/lib/iconButtonNames.test.ts, with controls for the arrow handler, a labelled button, a button with visible text, a > inside a template literal, and a commented-out button."
+    },
+    {
+      "id": "US-839",
+      "title": "The VPAT declares two remediations still in progress that appear to have shipped",
+      "description": "As the owner of a published accessibility conformance report, I want every row to match the code, so that the document is evidence rather than a snapshot of whenever it was last edited.",
+      "acceptanceCriteria": [
+        "2.1.2 No Keyboard Trap: pin the accessibility panel's focus behaviour in a test -- forward wrap, backward wrap, focus restored to the trigger on Escape and on backdrop close -- and correct the row if it passes.",
+        "2.2.2 Pause, Stop, Hide: establish what MotionConfig reducedMotion actually gates (framer-motion suppresses transform and layout animations but deliberately keeps opacity and colour), check for repeat: Infinity animations that survive it, and correct or keep the row on that evidence.",
+        "Every VPAT row whose claim is machine-checkable names the test that checks it.",
+        "No row is flipped to a stronger conformance level without a test landing in the same change."
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Opened 2026-09-09 (web platform loop, iteration 4) — NEXT ITERATION. While chasing US-838 I probed the two other rows the VPAT marks 'remediation in progress' and both look stale, but neither has a test, so I did not flip them. (1) 2.1.2 says the accessibility-settings panel 'supports Escape-to-close but does not yet fully trap/restore focus'. A throwaway probe driving the real AccessibilityWidget through userEvent showed the opposite: opening it focuses the close button, Tab wraps from the last control back to the first, Shift+Tab wraps backwards, and Escape AND a backdrop click both return focus to the trigger. useFocusTrap is wired and works. (2) 2.2.2 says 'some Framer Motion animations are not yet fully gated on prefers-reduced-motion'. Six components import framer-motion without touching a reduced-motion hook, but App.tsx wraps the whole tree in <MotionConfig reducedMotion={preferences.reducedMotion ? 'always' : 'user'}>, which covers them. The open question is what that setting does NOT cover: framer-motion's 'user' mode suppresses transform and layout animations and deliberately leaves opacity and colour alone, so a repeat: Infinity opacity pulse would still run, and that -- not the entrance animations -- is what 2.2.2 is actually about. Sweep for infinite animations before deciding. Do not raise a conformance level without landing the test in the same change; an overstated VPAT is worse than a stale one."
     }
   ]
 }

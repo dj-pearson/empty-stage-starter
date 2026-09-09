@@ -231,7 +231,8 @@ export function TicketQueue() {
           <Ticket className="h-5 w-5" />
           <h2 className="text-2xl font-bold">Support Tickets</h2>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchTickets} disabled={loading}>
+        <Button
+          aria-label="Refresh tickets" variant="outline" size="sm" onClick={fetchTickets} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>

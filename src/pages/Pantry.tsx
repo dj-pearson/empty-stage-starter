@@ -999,6 +999,7 @@ export default function Pantry() {
                   ? "Showing low stock items"
                   : "Showing out of stock items"}
                 <button
+                  aria-label="Clear the stock filter"
                   type="button"
                   onClick={() => setStockFilter("all")}
                   className="ml-1 hover:text-foreground"

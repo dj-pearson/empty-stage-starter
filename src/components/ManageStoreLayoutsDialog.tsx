@@ -241,6 +241,7 @@ export function ManageStoreLayoutsDialog({
                             </Button>
                             <div className="flex gap-1">
                               <Button
+                                aria-label="Edit this store layout"
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleEdit(store)}
@@ -249,6 +250,7 @@ export function ManageStoreLayoutsDialog({
                                 <Edit className="h-4 w-4" />
                               </Button>
                               <Button
+                                aria-label="Delete this store layout"
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => confirmDelete(store)}

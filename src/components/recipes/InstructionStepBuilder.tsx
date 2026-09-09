@@ -82,6 +82,7 @@ export function InstructionStepBuilder({
           {/* Drag + step number */}
           <div className="flex items-center gap-1 pt-2 shrink-0">
             <button
+              aria-label="Drag to reorder this step"
               type="button"
               className="cursor-grab text-muted-foreground/50 hover:text-muted-foreground"
               onMouseDown={(e) => e.preventDefault()}

@@ -387,6 +387,7 @@ export function AIModelManager() {
                         )}
                       </div>
                       <Button
+                        aria-label="Copy the environment variable"
                         variant="ghost"
                         size="sm"
                         onClick={() => copyToClipboard(`{{ team.${config.coolify_variable} }}`)}

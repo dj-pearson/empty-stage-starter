@@ -205,6 +205,7 @@ export function ManageCollectionsDialog({
 
                     <div className="flex items-center gap-1">
                       <Button
+                        aria-label="Rename this collection"
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(collection)}
@@ -213,6 +214,7 @@ export function ManageCollectionsDialog({
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
+                        aria-label="Delete this collection"
                         variant="ghost"
                         size="sm"
                         onClick={() => confirmDelete(collection)}

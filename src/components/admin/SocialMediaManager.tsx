@@ -691,6 +691,7 @@ export function SocialMediaManager() {
                             </Button>
                           )}
                           <Button
+                            aria-label="Delete this post"
                             size="sm"
                             variant="ghost"
                             onClick={() => handleDeletePost(post.id)}

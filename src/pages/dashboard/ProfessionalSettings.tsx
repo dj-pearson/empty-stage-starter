@@ -451,6 +451,7 @@ function DNSVerificationInstructions({ domain }: { domain: CustomDomain }) {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{dnsRecords.verification.type}</span>
                   <Button
+                    aria-label="Copy the verification record type"
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0"
@@ -465,6 +466,7 @@ function DNSVerificationInstructions({ domain }: { domain: CustomDomain }) {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{dnsRecords.verification.name}</span>
                   <Button
+                    aria-label="Copy the verification record name"
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0"
@@ -479,6 +481,7 @@ function DNSVerificationInstructions({ domain }: { domain: CustomDomain }) {
                 <div className="flex items-center gap-2 max-w-xs">
                   <span className="font-semibold truncate">{dnsRecords.verification.value}</span>
                   <Button
+                    aria-label="Copy the verification record value"
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0"
@@ -513,6 +516,7 @@ function DNSVerificationInstructions({ domain }: { domain: CustomDomain }) {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{dnsRecords.cname.value}</span>
                   <Button
+                    aria-label="Copy the CNAME record value"
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0"

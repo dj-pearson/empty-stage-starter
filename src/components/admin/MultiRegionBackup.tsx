@@ -603,6 +603,7 @@ export function MultiRegionBackup() {
                         </Button>
                         {!region.isPrimary && (
                           <Button
+                            aria-label="Delete this region"
                             variant="outline"
                             size="sm"
                             className="text-destructive"

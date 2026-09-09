@@ -370,7 +370,8 @@ export function FeatureFlagDashboard() {
           <h2 className="text-2xl font-bold">Feature Flags</h2>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={fetchFlags} disabled={loading}>
+          <Button
+            aria-label="Refresh feature flags" variant="outline" size="sm" onClick={fetchFlags} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>

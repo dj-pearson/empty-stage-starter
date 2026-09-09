@@ -307,7 +307,8 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                   <Camera className="h-5 w-5 mr-2" />
                   Capture
                 </Button>
-                <Button onClick={stopCamera} variant="outline" size="lg">
+                <Button
+                  aria-label="Stop the camera" onClick={stopCamera} variant="outline" size="lg">
                   <X className="h-5 w-5" />
                 </Button>
               </div>
