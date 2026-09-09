@@ -481,7 +481,7 @@ export default function MealPlanGeneratorResults() {
           </Tabs>
 
           {/* CTA Section */}
-          <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground mt-10">
+          <Card className="bg-primary bg-gradient-to-r from-primary to-primary/80 text-primary-foreground mt-10">
             <CardContent className="pt-6">
               <div className="text-center space-y-4">
                 <h2 className="text-3xl font-bold">

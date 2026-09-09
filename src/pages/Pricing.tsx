@@ -324,7 +324,7 @@ export default function Pricing() {
         return <Badge variant="secondary">Most Popular for Families</Badge>;
       case "Family Plus":
         return (
-          <Badge className="bg-gradient-to-r from-primary to-accent text-white">
+          <Badge className="bg-primary bg-gradient-to-r from-primary to-accent text-white">
             Best Value
           </Badge>
         );
