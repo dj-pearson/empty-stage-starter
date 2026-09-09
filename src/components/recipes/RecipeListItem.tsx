@@ -101,7 +101,7 @@ export const RecipeListItem = memo(function RecipeListItem({
 
       {/* Quick actions (visible on hover / always on mobile) */}
       <div
-        className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity sm:opacity-0 max-sm:opacity-100"
+        className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity sm:opacity-0 max-sm:opacity-100"
         onClick={(e) => e.stopPropagation()}
       >
         <Button

@@ -179,7 +179,7 @@ export const PantryListItem = memo(function PantryListItem({
       </span>
 
       {/* Actions */}
-      <div className="flex gap-0.5 shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+      <div className="flex gap-0.5 shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 pointer-coarse:opacity-100">
         {onAddToGrocery && (
           <Button
             size="icon"

@@ -4022,6 +4022,21 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 5) by a sweep for exported names defined in more than one file: 33 such names, of which this was the one with a real divergence rather than benign overlap.\n\nTHE DISAGREEMENT, at 768px, which is iPad portrait:\n    useMediaQuery.ts useIsMobile  (max-width: 768px)  -> mobile\n    use-mobile.tsx   useIsMobile  width < 768         -> desktop\n    Tailwind         md:          (min-width: 768px)  -> desktop\nThe first is the one re-exported from '@/hooks' and named in CLAUDE.md's hook list, so it is what a developer reaches for. Same shape at 1024: useIsDesktop was min-width 1025px against Tailwind's lg: at 1024. useIsLargeDesktop was 1440px, which is not a Tailwind breakpoint at all.\n\nNOT A LIVE BUG, and that is the only reason it had gone unnoticed: the four convenience hooks in useMediaQuery.ts had ZERO importers, and the two files that use useMediaQuery directly (Recipes.tsx, Planner.tsx) hand-write correctly-aligned queries. It was a trap set for the next feature that followed the documentation.\n\nDONE: src/lib/breakpoints.ts holds the numbers once with atLeast/below/between builders; the four hooks derive from it; src/hooks/useIsDesktop.ts (a third definition, unused) is deleted. src/lib/breakpoints.test.ts reads the numbers back out of tailwindcss/resolveConfig, so the config and the hooks cannot drift apart in silence. 13 tests, checked against four mutants including both original off-by-ones.\n\nDELIBERATELY LEFT: src/hooks/use-mobile.tsx still exports its own useIsMobile. It is shadcn-generated and imported by src/components/ui/sidebar.tsx, which CLAUDE.md forbids modifying. It is already Tailwind-aligned, so two symbols exist but they no longer disagree."
+    },
+    {
+      "id": "US-826",
+      "title": "Hover-reveal controls are invisible on touch but still tappable",
+      "description": "As a parent using the app on a phone or tablet, I want the remove and reorder buttons on recipe ingredients, instruction steps and planned meals to be visible, so that I can see the control before I hit it.",
+      "acceptanceCriteria": [
+        "Every hover-reveal control also reveals on a coarse pointer and on keyboard focus.",
+        "A repo-wide gate fails when a new one ships without those, not just on the one page US-576 fixed.",
+        "Elements that are decorative rather than interactive are exempt by an explicit list, and each exemption's stated reason is itself checked."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 6) by generalising the sweep behind src/pages/Grocery.a11y.test.ts to every file. 19 hover-reveal classNames across src/, 11 incomplete.\n\nWHY IT MATTERS MORE THAN 'INVISIBLE': opacity-0 does not remove hit-testing. The button is fully transparent on a touch device AND still tappable, so a parent on a phone cannot see the Remove control on a recipe ingredient, an instruction step or a planned meal -- but can hit it by accident.\n\nFIXED (8 sites, 7 files): recipes/IngredientRow, recipes/InstructionStepBuilder (x2), recipes/RecipeListItem, pantry/PantryListItem, GSAPCalendarMealPlanner (live, used by Planner.tsx), MealPlanningCalendar, admin/EmailTemplateBuilder. Each now carries group-focus-within / focus-visible / pointer-coarse, matching what US-576 established on Grocery.\n\nTWO WERE TABLET-ONLY HOLES, easy to miss: PantryListItem used md:opacity-0 and RecipeListItem used max-sm:opacity-100, so a phone was fine and a TABLET -- touch, no hover, above the breakpoint -- got the invisible control.\n\nTHREE EXEMPT, with the reason machine-checked: ui/toast.tsx and ui/QuickActionMenu.tsx are shadcn (CLAUDE.md forbids editing src/components/ui/), and QuickActionsMenu's element is a label hint carrying pointer-events-none, so it is not hit-testable. The gate asserts each file still matches its stated reason, so an exemption cannot outlive its justification.\n\nNOTED SEPARATELY: src/components/MealPlanningCalendar.tsx has ZERO references anywhere in the repo -- a survivor of the US-771 unreferenced-component sweep. Fixed here because the change is a className, but it is a deletion candidate."
     }
   ]
 }

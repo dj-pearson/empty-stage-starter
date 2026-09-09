@@ -105,7 +105,7 @@ export function InstructionStepBuilder({
           />
 
           {/* Move up/down */}
-          <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity">
             <button
               type="button"
               className="text-muted-foreground hover:text-foreground text-xs px-1"
@@ -130,7 +130,7 @@ export function InstructionStepBuilder({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
             onClick={() => removeStep(index)}
             aria-label="Remove step"
           >

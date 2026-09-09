@@ -511,7 +511,9 @@ export function EmailTemplateBuilder() {
         <div
           className={cn(
             "absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background border rounded-md shadow-sm transition-opacity",
-            isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            isSelected
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
           )}
         >
           <Button

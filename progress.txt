@@ -2504,3 +2504,69 @@ mounted, stacked at the same coordinates on every dashboard route.
     match.
   - A `container.screens` entry is not a breakpoint. Tailwind scopes it to one
     class, and it sits three lines from the real `screens` key in the config.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 6. US-826: hover-reveal controls are
+invisible on a phone and still tappable. src/lib/hoverRevealControls.test.ts.
+================================================================================
+
+- THE SWEEP CAME FROM AN EXISTING TEST. src/pages/Grocery.a11y.test.ts (US-576)
+  already enforces that a hover-revealed control also reveals on touch and on
+  keyboard focus -- for Grocery.tsx, and only Grocery.tsx. Running the same rule
+  over every .tsx: 19 hover-reveal classNames, 11 incomplete.
+
+- WHY THIS IS WORSE THAN "INVISIBLE ON MOBILE". opacity-0 does not remove
+  hit-testing. The control is fully transparent on a touch device AND still
+  tappable. So a parent on a phone cannot see the Remove button on a recipe
+  ingredient, an instruction step or a planned meal -- but can hit it by
+  accident. A missing button is a limitation; an invisible live one is a trap.
+
+- FIXED, 8 sites in 7 files: recipes/IngredientRow, recipes/InstructionStepBuilder
+  (x2), recipes/RecipeListItem, pantry/PantryListItem, GSAPCalendarMealPlanner
+  (live -- Planner.tsx lazy-loads it), MealPlanningCalendar,
+  admin/EmailTemplateBuilder. Each now carries group-focus-within,
+  focus-visible and pointer-coarse, matching what US-576 settled on.
+
+- TWO WERE TABLET-ONLY HOLES, which is exactly the kind a phone-based check
+  misses. PantryListItem used `md:opacity-0 md:group-hover:opacity-100` and
+  RecipeListItem used `max-sm:opacity-100`: both show the control on a phone and
+  hide it from md/sm upwards. A tablet is touch, has no hover, and is above that
+  breakpoint. Checking on a phone would have shown both as fine.
+
+- I VERIFIED WHAT WAS ACTUALLY A CONTROL rather than fixing all 11. Three of the
+  remainder are decorative: ui/toast.tsx and ui/QuickActionMenu.tsx are shadcn
+  (CLAUDE.md forbids editing src/components/ui/), and QuickActionsMenu's element
+  is a `<div>` label hint carrying pointer-events-none -- read the JSX, not just
+  the className. They are exempt by an explicit list.
+
+- THE EXEMPTION LIST IS ITSELF TESTED, which is the part I would want in six
+  months. Each entry states a reason and carries a regex proving it
+  (`ToastPrimitives`, `hidden md:flex`, `pointer-events-none`); the test fails
+  if a file stops matching its own justification, and fails if an entry no
+  longer has a hover-reveal class at all. An allowlist nobody re-checks becomes
+  a dumping ground, and this one cannot.
+
+- INSTRUMENT ASSERTED FIRST: the gate requires at least 15 hover-reveal
+  classNames before believing any result. If the className regex stops matching
+  -- someone refactors to clsx, say -- the "all clear" would otherwise be an
+  empty scan reporting success. Fifth time this loop that mattered.
+
+- Measured: 19 -> 3 incomplete (all three exempt with reasons). 3272 tests pass
+  (215 files). The gate is checked against two mutants: reverting one control to
+  the broken form fails it, and breaking an exemption's stated reason fails it.
+  Typecheck 814 against baseline 814; lint 1150 against 1156; invisible chars
+  clean.
+
+- RECORDED, NOT ACTED ON: src/components/MealPlanningCalendar.tsx has ZERO
+  references anywhere in the repo -- a survivor of the US-771 unreferenced
+  sweep. Patched here because the change is one className, but it is a deletion
+  candidate and the story says so.
+
+- **Learnings for future iterations:**
+  - A good single-file test is a sweep waiting to be written. Grocery.a11y.test.ts
+    encoded the right rule and applied it to 1 of 8 affected files; generalising
+    an existing gate found more than writing a new check would have.
+  - Responsive-prefixed hover reveals hide the bug from the obvious test device.
+    `md:opacity-0` looks safe on a phone and fails on an iPad.
+  - When an allowlist is the honest answer, make each entry prove itself. A
+    reason in a comment rots; a reason as a regex fails loudly.

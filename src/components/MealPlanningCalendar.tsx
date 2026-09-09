@@ -182,7 +182,7 @@ export const MealPlanningCalendar = memo(function MealPlanningCalendar({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="opacity-0 group-hover:opacity-100 h-5 w-5 p-0 shrink-0"
+                                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 h-5 w-5 p-0 shrink-0"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onRemoveMeal(entry.id);

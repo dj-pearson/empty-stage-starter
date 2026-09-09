@@ -1049,7 +1049,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
                           className="flex items-center justify-center h-full w-full text-muted-foreground/60 hover:text-primary transition-colors cursor-pointer"
                         >
                           <div className="flex flex-col items-center gap-1">
-                            <Plus className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <Plus className="h-5 w-5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity" />
                             <span className="text-xs font-medium">Add meal</span>
                           </div>
                         </button>

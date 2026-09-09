@@ -120,7 +120,7 @@ export const IngredientRow = memo(function IngredientRow({
       <Button
         variant="ghost"
         size="icon"
-        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
         onClick={onRemove}
         aria-label="Remove ingredient"
       >
