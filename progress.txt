@@ -2344,3 +2344,84 @@ now survives a shop with no signal. src/lib/webSyncQueue.ts.
   - Before asserting against a global in this repo, read src/test/setup.ts. Four
     of the globals are replaced with mocks, and a spy on the real prototype is a
     no-op that fails in a way that looks like a product bug.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 4. US-824: two install prompts, both
+mounted, stacked at the same coordinates on every dashboard route.
+================================================================================
+
+- HOW IT WAS FOUND, which is worth more than the bug. A mechanical sweep for
+  unbalanced addEventListener/removeEventListener, supabase.channel/removeChannel
+  and setInterval/clearInterval across src/ returned FOUR files. Three were
+  module-level listeners that legitimately live for the page's lifetime
+  (pwa.ts, performance.ts, apiRetry.ts). The fourth, PWAInstallPrompt, leaked
+  its 'appinstalled' listener -- a small thing that turned out to be the thread
+  worth pulling. Realtime channels were all balanced, which is its own result:
+  CLAUDE.md's "remember channel.unsubscribe()" warning is being honoured.
+
+- THE ACTUAL DEFECT. Two install prompts existed and BOTH were mounted:
+      src/components/PWAInstallPrompt.tsx   lazy, app-wide, App.tsx:144
+      src/components/AppInstallPrompt.tsx   Dashboard.tsx:482
+  Both listen for beforeinstallprompt (every listener gets the event), both
+  render `fixed bottom-4 ... md:right-4 z-50`. So on any /dashboard route in
+  Chrome, Edge or Android, two cards appear at the SAME coordinates, on
+  different timers -- 3 seconds and 30 seconds, so the second slides in under
+  the first almost half a minute later.
+
+  And the dismissal keys differ: 'pwa-install-dismissed' against
+  'app_install_dismissed'. Tapping Not Now on the visible card leaves the other
+  one sitting underneath, undismissed. This is the duplicate-implementation
+  shape this repo has already paid for at least four times (three shortfall
+  functions, three grocery insert allowlists, two calendars, two entitlement
+  systems narrowly avoided in US-780).
+
+- WHICH ONE SURVIVED, decided on merit rather than on which was mounted where.
+  AppInstallPrompt handles iOS (where beforeinstallprompt never fires at all,
+  so PWAInstallPrompt could never show on the platform that is the live
+  product), expires its dismissal after a week instead of never re-asking, and
+  removes its listener correctly. PWAInstallPrompt is deleted; AppInstallPrompt
+  took over the single app-wide mount and Dashboard's copy is gone.
+
+- THE MIGRATION THAT KEEPS IT HONEST. AppInstallPrompt now READS
+  'pwa-install-dismissed' as well as its own key. Without that, deleting the old
+  component silently re-prompts everyone who had already dismissed it -- a
+  regression a user experiences as the app forgetting what they said.
+
+- A SECOND BUG FIXED WHILE IN THERE. handleInstall only hid the card when the
+  outcome was 'accepted', but cleared deferredPrompt either way. Decline the
+  browser's own dialog and you were left with a card whose Install button did
+  nothing, forever, because a browser will not re-issue the prompt event for the
+  same page load. Now hides on either outcome, in a finally.
+
+- A MUTANT SURVIVED AND I DELETED THE CODE RATHER THAN THE EVIDENCE. I had
+  changed `dismissedTime &&` to `dismissedTime > 0 &&` as a NaN guard and
+  written a test for it. Mutating it back left all 7 tests green -- because
+  parseInt('not-a-timestamp') is NaN, NaN is falsy, and the two forms are
+  identical for every reachable input. The guard fixed nothing. Reverted it,
+  and kept the test after checking it discriminates against a mutation that IS
+  plausible: reading the key as a boolean (`if (dismissed)`) instead of parsing
+  it, which would hide the prompt forever on any unparseable value. That mutant
+  fails 2 tests.
+
+- Measured: 3253 tests pass (213 files); the 7 new ones are checked against
+  three mutants (drop the legacy key, never expire the dismissal, read the key
+  as a boolean) and each is caught. Typecheck 814 against baseline 814; lint
+  1150 against 1156 (one fewer, the deleted file's `any`); invisible chars
+  clean.
+
+- LEFT OPEN AS AC 4 OF US-824: three fixed overlays now share the bottom edge --
+  the install prompt, OfflineIndicator and SupportWidget. Offline plus an
+  install prompt is an ordinary state on a phone and they will overlap. That
+  wants one stacking policy, not a fourth component choosing its own offset.
+
+- **Learnings for future iterations:**
+  - A cheap mechanical imbalance sweep is worth running even when it returns
+    almost nothing. Four hits, three benign, and the fourth was the door to a
+    user-visible duplicate that no amount of reading feature code would have
+    surfaced.
+  - When deleting one of two competing components, the dismissal/preference key
+    is the part that silently regresses. Whatever the dead one persisted, the
+    survivor has to read.
+  - If a mutation of your own new defensive code doesn't fail a test, the code
+    probably guards nothing. Delete the guard, not the test -- and then check
+    the test still catches something real.

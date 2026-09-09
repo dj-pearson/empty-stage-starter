@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/contexts/AppContext";
 import { fetchOnboardingCompleted, readLocalOnboardingFlag } from "@/lib/onboardingStatus";
 import { SupportWidget } from "@/components/SupportWidget";
-import { AppInstallPrompt } from "@/components/AppInstallPrompt";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { KidSelector } from "@/components/KidSelector";
@@ -478,8 +477,6 @@ const Dashboard = () => {
       {/* Support Widget - Available on all pages */}
       <SupportWidget />
 
-      {/* App Install Prompt - PWA installation for mobile users */}
-      <AppInstallPrompt />
     </>
   );
 };
