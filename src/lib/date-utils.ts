@@ -6,6 +6,42 @@
  */
 
 /**
+ * Turn any accepted input into a Date, WITHOUT the date-only UTC trap.
+ *
+ * `new Date('2026-03-08')` is specified to parse as UTC midnight. Render that
+ * with a local formatter anywhere west of Greenwich and you get March 7. Every
+ * date key in this app is a local 'YYYY-MM-DD' -- toISODate() below builds it
+ * from local parts precisely so it means a calendar day rather than an instant
+ * -- so feeding one back through `new Date()` moved it a day for every user in
+ * the Americas. toISODate(new Date()) round-tripped to YESTERDAY.
+ *
+ * parseDate() at the bottom of this file already knew: it special-cases the
+ * date-only shape and says why. The other twenty-two `new Date(date)` calls in
+ * this same file did not, so formatDate, isToday, startOfWeek and the rest all
+ * carried the bug that one function had been fixed for.
+ *
+ * A string carrying a time (a `T`, an offset, a `Z`) is a real instant and is
+ * left to the platform parser -- created_at and friends must NOT be shifted.
+ */
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+export function toDate(date: Date | string | number): Date {
+  if (typeof date === 'string') {
+    const m = DATE_ONLY.exec(date);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  return new Date(date);
+}
+
+/**
+ * Parse a 'YYYY-MM-DD' key as local midnight. Exported for components that
+ * render a stored date key, which must never go through `new Date()` directly.
+ */
+export function parseIsoDate(isoDate: string): Date {
+  return toDate(isoDate.slice(0, 10));
+}
+
+/**
  * Format date to human-readable string
  *
  * Usage:
@@ -19,7 +55,7 @@ export function formatDate(
   date: Date | string | number,
   format: 'short' | 'medium' | 'long' | 'full' = 'medium'
 ): string {
-  const d = new Date(date);
+  const d = toDate(date);
 
   if (isNaN(d.getTime())) {
     return 'Invalid date';
@@ -46,7 +82,7 @@ export function formatDate(
  * ```
  */
 export function formatTime(date: Date | string | number, use24Hour: boolean = false): string {
-  const d = new Date(date);
+  const d = toDate(date);
 
   if (isNaN(d.getTime())) {
     return 'Invalid time';
@@ -75,7 +111,7 @@ export function formatDateTime(
   date: Date | string | number,
   format: 'short' | 'medium' | 'long' = 'medium'
 ): string {
-  const d = new Date(date);
+  const d = toDate(date);
 
   if (isNaN(d.getTime())) {
     return 'Invalid date/time';
@@ -94,7 +130,7 @@ export function formatDateTime(
  * ```
  */
 export function formatRelativeTime(date: Date | string | number): string {
-  const d = new Date(date);
+  const d = toDate(date);
   const now = new Date();
   const diffMs = d.getTime() - now.getTime();
   const diffSec = Math.floor(diffMs / 1000);
@@ -145,7 +181,7 @@ export function formatRelativeTime(date: Date | string | number): string {
  * Get date in YYYY-MM-DD format (ISO date string)
  */
 export function toISODate(date: Date | string | number): string {
-  const d = new Date(date);
+  const d = toDate(date);
   // Build from LOCAL parts. toISOString() converts to UTC first, which shifts
   // the calendar day for users away from UTC (e.g. after ~4pm US/Pacific it
   // returns tomorrow), so a date-keyed feature would write to the wrong day.
@@ -179,7 +215,7 @@ export function addIsoDays(isoDate: string, days: number): string {
  * Get start of day
  */
 export function startOfDay(date: Date | string | number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -188,7 +224,7 @@ export function startOfDay(date: Date | string | number): Date {
  * Get end of day
  */
 export function endOfDay(date: Date | string | number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   d.setHours(23, 59, 59, 999);
   return d;
 }
@@ -197,7 +233,7 @@ export function endOfDay(date: Date | string | number): Date {
  * Get start of week (Sunday)
  */
 export function startOfWeek(date: Date | string | number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   const day = d.getDay();
   const diff = d.getDate() - day;
   d.setDate(diff);
@@ -208,7 +244,7 @@ export function startOfWeek(date: Date | string | number): Date {
  * Get end of week (Saturday)
  */
 export function endOfWeek(date: Date | string | number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   const day = d.getDay();
   const diff = d.getDate() + (6 - day);
   d.setDate(diff);
@@ -219,7 +255,7 @@ export function endOfWeek(date: Date | string | number): Date {
  * Get start of month
  */
 export function startOfMonth(date: Date | string | number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   d.setDate(1);
   return startOfDay(d);
 }
@@ -228,7 +264,7 @@ export function startOfMonth(date: Date | string | number): Date {
  * Get end of month
  */
 export function endOfMonth(date: Date | string | number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   d.setMonth(d.getMonth() + 1, 0);
   return endOfDay(d);
 }
@@ -237,7 +273,7 @@ export function endOfMonth(date: Date | string | number): Date {
  * Add days to date
  */
 export function addDays(date: Date | string | number, days: number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   d.setDate(d.getDate() + days);
   return d;
 }
@@ -246,7 +282,7 @@ export function addDays(date: Date | string | number, days: number): Date {
  * Add months to date
  */
 export function addMonths(date: Date | string | number, months: number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   d.setMonth(d.getMonth() + months);
   return d;
 }
@@ -255,7 +291,7 @@ export function addMonths(date: Date | string | number, months: number): Date {
  * Add years to date
  */
 export function addYears(date: Date | string | number, years: number): Date {
-  const d = new Date(date);
+  const d = toDate(date);
   d.setFullYear(d.getFullYear() + years);
   return d;
 }
@@ -286,7 +322,7 @@ export function dateDiff(
  * Check if date is today
  */
 export function isToday(date: Date | string | number): boolean {
-  const d = new Date(date);
+  const d = toDate(date);
   const today = new Date();
   return (
     d.getDate() === today.getDate() &&
@@ -299,7 +335,7 @@ export function isToday(date: Date | string | number): boolean {
  * Check if date is yesterday
  */
 export function isYesterday(date: Date | string | number): boolean {
-  const d = new Date(date);
+  const d = toDate(date);
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   return (
@@ -313,7 +349,7 @@ export function isYesterday(date: Date | string | number): boolean {
  * Check if date is tomorrow
  */
 export function isTomorrow(date: Date | string | number): boolean {
-  const d = new Date(date);
+  const d = toDate(date);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return (
@@ -327,7 +363,7 @@ export function isTomorrow(date: Date | string | number): boolean {
  * Check if date is in the past
  */
 export function isPast(date: Date | string | number): boolean {
-  const d = new Date(date);
+  const d = toDate(date);
   return d.getTime() < Date.now();
 }
 
@@ -335,7 +371,7 @@ export function isPast(date: Date | string | number): boolean {
  * Check if date is in the future
  */
 export function isFuture(date: Date | string | number): boolean {
-  const d = new Date(date);
+  const d = toDate(date);
   return d.getTime() > Date.now();
 }
 
@@ -343,7 +379,7 @@ export function isFuture(date: Date | string | number): boolean {
  * Check if date is a weekend (Saturday or Sunday)
  */
 export function isWeekend(date: Date | string | number): boolean {
-  const d = new Date(date);
+  const d = toDate(date);
   const day = d.getDay();
   return day === 0 || day === 6;
 }
@@ -355,7 +391,7 @@ export function getDayName(
   date: Date | string | number,
   format: 'short' | 'long' = 'long'
 ): string {
-  const d = new Date(date);
+  const d = toDate(date);
   return d.toLocaleDateString('en-US', { weekday: format });
 }
 
@@ -366,7 +402,7 @@ export function getMonthName(
   date: Date | string | number,
   format: 'short' | 'long' = 'long'
 ): string {
-  const d = new Date(date);
+  const d = toDate(date);
   return d.toLocaleDateString('en-US', { month: format });
 }
 

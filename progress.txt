@@ -2631,3 +2631,70 @@ was illegible to a password manager. src/lib/formAutocomplete.test.ts.
   - When a sweep's fix is "add the attribute everywhere", look for the field
     that needs the opposite. There is usually one, and a later cleanup pass
     will break it unless a test says why.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 8. US-828: a stored date key read
+back through new Date() showed the previous day. src/lib/date-utils.ts.
+================================================================================
+
+- THE MEASUREMENT, run rather than reasoned about:
+
+      TZ=America/Los_Angeles
+      toISODate(new Date())        -> '2026-09-09'   (today, local parts)
+      new Date('2026-09-09')       -> 2026-09-09T00:00:00Z
+        .toLocaleDateString()      -> '9/8/2026'     YESTERDAY
+
+  Every date key in this app is a LOCAL calendar day: toISODate builds it from
+  getFullYear/getMonth/getDate on purpose, and says so. So the app wrote local
+  and read UTC, and the round trip lost a day for every user in the Americas.
+
+- THE FILE ALREADY KNEW, WHICH IS THE INTERESTING PART. parseDate() at the
+  bottom of date-utils.ts special-cases the date-only shape and its comment
+  explains this exact trap -- including that the branch had once been
+  unreachable and produced the off-by-one. The other TWENTY-TWO `new Date(date)`
+  calls in the SAME FILE never got the same treatment. formatDate, isToday,
+  startOfDay, startOfWeek, endOfWeek, getDayName, addDays and the rest all
+  carried the bug the function directly below them had been fixed for.
+
+- USER-VISIBLE SITES FIXED. SaveMealPlanTemplateDialog renders the week it is
+  about to save; Planner passes weekStart as format(currentWeekStart,
+  'yyyy-MM-dd'), so the dialog told a Californian parent it would save
+  "Mar 1 to Mar 7" for the week of Mar 2 to Mar 8. MealVotingCard showed each
+  meal's date a day early the same way.
+
+- THE DURABLE HALF IS THE TIMEZONE PIN. vitest.config.ts now sets
+  TZ=America/Los_Angeles. Under the runner's default UTC the local and UTC
+  calendar days are IDENTICAL, so this entire class of bug is invisible to the
+  suite -- US-818's DST bug and this one both shipped past a green run. LA also
+  observes DST, so transition bugs surface too.
+
+  I ran the whole suite under that TZ BEFORE pinning it: 3289 tests, all green.
+  Pinning a timezone that hides a new failure would be worse than not pinning
+  one, and "it probably passes" is not a measurement.
+
+- MY FIRST VERSION OF THE TEST WOULD HAVE BEEN RED IN CI. It asserted a
+  negative UTC offset and passed only because I had typed TZ= on the command
+  line; nothing in vitest.config.ts or setup.ts pinned it. Running it without
+  the env var failed exactly as it should. That guard is the reason the gap got
+  found instead of shipped -- a test that silently passes under UTC would have
+  proved nothing about the bug it was written for.
+
+- Guarded against three mutants: revert toDate to plain `new Date` (8 of 11
+  fail), widen the date-only regex so real timestamps get shifted too (1 fails
+  -- the instant-preservation case), and unpin the TZ (1 fails, the suite
+  noticing it can no longer see the bug at all).
+
+- Measured: 3289 tests pass (217 files). Typecheck 814 against baseline 814;
+  lint 1150 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A bug fixed in one function is a bug present in its neighbours. parseDate
+    carried a careful comment about this trap while 22 siblings in the same
+    file reproduced it. Grep the FILE for the pattern the comment describes.
+  - A test suite running in UTC cannot see date bugs. That is not a small gap
+    for a product whose users are entirely west of Greenwich; it makes the
+    green run meaningless for a whole category. Pin the zone, and run the suite
+    under it first to prove the pin is honest.
+  - Write the instrument guard even when you are sure. Asserting "we are really
+    in a negative-offset zone" is what turned an accidental command-line env
+    var into a config change instead of a CI failure next week.

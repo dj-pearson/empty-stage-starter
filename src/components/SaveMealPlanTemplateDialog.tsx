@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Save, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { parseIsoDate } from "@/lib/date-utils";
 
 interface SaveMealPlanTemplateDialogProps {
   open: boolean;
@@ -204,8 +205,8 @@ export function SaveMealPlanTemplateDialog({
           <div className="bg-muted/50 border rounded-lg p-3">
             <p className="text-sm text-muted-foreground">
               <strong>What gets saved:</strong> All meals from{" "}
-              {new Date(startDate).toLocaleDateString()} to{" "}
-              {new Date(endDate).toLocaleDateString()} will be saved as a reusable
+              {parseIsoDate(startDate).toLocaleDateString()} to{" "}
+              {parseIsoDate(endDate).toLocaleDateString()} will be saved as a reusable
               template.
             </p>
           </div>

@@ -4053,6 +4053,22 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 7) by a sweep of img/anchor/input attributes.\n\nTHE CONSEQUENCE IS A LOCKOUT, not a convenience. With no autoComplete on the three password boxes in AccountSettings, a manager cannot tell them apart: it will not offer the saved password, will not generate a new one, and will not prompt to UPDATE the stored password once the change succeeds. The user changes their password, the manager keeps the old one, and the next sign-in fails with a credential they no longer have.\n\nWHAT MAKES IT A CLEAN FINDING: Auth.tsx already does this correctly on all five of its fields (email, new-password x2, email, current-password). Somebody knew. It just never reached the page where a password is actually changed.\n\nFIXED, 8 fields: AccountSettings currentPassword/newPassword/confirmPassword (+ confirm-email as autoComplete=off), ProfessionalSettings contact_email, RecipeExportActions email and phone, quiz/EmailCaptureModal email. Plus rel=\"noopener noreferrer\" on the one target=_blank anchor that lacked it (admin/UserIntelligenceDashboard).\n\nMETHOD NOTE, because it nearly produced a false report: the first sweep used `<Input[^>]*>` and JSX handlers contain `>` inside `onChange={(e) => ...}`, so tags were truncated mid-handler and Auth.tsx's sign-in email was flagged as missing an attribute that sits three lines lower. The gate in src/lib/formAutocomplete.test.ts parses by brace depth instead, and that reasoning is written into the file so the next person does not reach for the regex.\n\nNOT FINDINGS, checked rather than assumed: 11 apparent missing-alt hits were all false -- lucide-react's <Image> icon, and KidPhoto, which requires alt as a typed prop and spreads it."
+    },
+    {
+      "id": "US-828",
+      "title": "A stored date key read back through new Date() showed the previous day",
+      "description": "As a parent in any US timezone, I want the dates the app shows me to be the dates I picked, so that a week I saved as a template does not claim to start the day before.",
+      "acceptanceCriteria": [
+        "A 'YYYY-MM-DD' key parses as local midnight, so toISODate round-trips it unchanged.",
+        "A string carrying a time (created_at and friends) is still parsed as the instant it is, not shifted.",
+        "Every helper in date-utils inherits the fix, not just parseDate.",
+        "The test suite runs in a negative-offset, DST-observing timezone so this class of bug is visible at all."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 8) while sweeping `new Date(<var>)` call sites.\n\nTHE MEASUREMENT: under TZ=America/Los_Angeles, toISODate(new Date()) produces today's key and new Date(thatKey) is YESTERDAY. new Date('2026-03-08') is specified to parse as UTC midnight; toLocaleDateString renders 'Saturday, Mar 7'. Every date key in this app is a LOCAL calendar day -- toISODate builds it from local parts on purpose (US-818) -- so the app wrote local and read UTC.\n\nTHE FILE ALREADY KNEW. parseDate() at the bottom of date-utils.ts special-cases the date-only shape and its comment explains this precise trap, including that the branch had once been unreachable. The other TWENTY-TWO `new Date(date)` calls in the same file never got the same treatment, so formatDate, isToday, startOfDay, startOfWeek, getDayName and the rest all carried the bug the neighbouring function had been fixed for.\n\nUSER-VISIBLE SITES FIXED: SaveMealPlanTemplateDialog rendered the week range a day early (Planner passes weekStart as format(..., 'yyyy-MM-dd')), and MealVotingCard rendered the meal's date a day early. Both wrong for every user in the Americas.\n\nTHE DURABLE HALF: vitest.config.ts now pins TZ to America/Los_Angeles. Under the runner's default UTC the local and UTC calendar days coincide, so this entire bug class is INVISIBLE to the suite -- US-818's DST bug and this one both shipped past a green run. LA also observes DST, so transition bugs surface too. The whole suite (3289 tests) was run under that TZ before pinning it, and passed, so the pin is not hiding a new failure.\n\nGuarded against three mutants: revert toDate to plain new Date (8 fail), widen the date-only regex so real timestamps get shifted too (1 fail), and unpin the TZ (1 fail -- the suite notices it can no longer see the bug)."
     }
   ]
 }

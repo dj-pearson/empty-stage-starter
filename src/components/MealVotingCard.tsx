@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, ChefHat, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseIsoDate } from "@/lib/date-utils";
 
 export type VoteType = 'love_it' | 'okay' | 'no_way' | null;
 
@@ -90,7 +91,7 @@ export const MealVotingCard = memo(function MealVotingCard({
   };
 
   // Format date nicely
-  const formattedDate = new Date(mealDate).toLocaleDateString('en-US', {
+  const formattedDate = parseIsoDate(mealDate).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
