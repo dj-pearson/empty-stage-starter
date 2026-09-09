@@ -71,7 +71,21 @@ All colors MUST be HSL.
     /* Berry Pink (HSL 340, 82%, 52%) */
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    /*
+      Darkened from 60% for WCAG AA (US-822), the same problem --primary had.
+
+      At 60% (#ef4343) white text on it measured 3.78:1, and it is the
+      destructive button -- delete a kid, delete a list, cancel a
+      subscription. The confirmations that most want reading were the least
+      readable thing on the page. As TEXT it was no better: 3.57:1 on
+      --background, 3.12:1 on the warm callout tint.
+
+      42% clears both directions against the worst surface rather than the
+      best: 6.06:1 for white on it, and 5.00 to 6.06 as text. 45% still leaves
+      the warm tint at 4.47:1, which is the kind of "probably nothing renders
+      there" assumption that put --primary a hair under the line twice.
+    */
+    --destructive: 0 84% 42%;
     --destructive-foreground: 0 0% 100%;
 
     /* Semantic status tokens (audit US-577). Tuned to the app's existing
