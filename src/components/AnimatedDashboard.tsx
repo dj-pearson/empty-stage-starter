@@ -160,7 +160,7 @@ export function AnimatedStatCard({
             )}
           </p>
           <m.p
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={{ opacity: shouldReduceMotion ? 1 : 0, scale: shouldReduceMotion ? 1 : 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{
               duration: shouldReduceMotion ? 0 : 0.5,
@@ -304,7 +304,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
     <LazyMotion features={domAnimation} strict>
       <div className="text-center mb-12">
         <m.div
-          initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 }}
+          initial={{ opacity: shouldReduceMotion ? 1 : 0, scale: shouldReduceMotion ? 1 : 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
             duration: shouldReduceMotion ? 0 : 0.5,
@@ -332,7 +332,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
         </m.div>
 
         <m.h1
-          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
+          initial={{ opacity: shouldReduceMotion ? 1 : 0, y: shouldReduceMotion ? 0 : 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
             duration: shouldReduceMotion ? 0 : 0.6,
@@ -344,7 +344,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
         </m.h1>
 
         <m.p
-          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 15 }}
+          initial={{ opacity: shouldReduceMotion ? 1 : 0, y: shouldReduceMotion ? 0 : 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
             duration: shouldReduceMotion ? 0 : 0.6,

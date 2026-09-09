@@ -35,4 +35,22 @@ describe('the dashboard entrance animation', () => {
     // The point is the preference, not removing the animation.
     expect(SOURCE).toMatch(/shouldReduceMotion\s*\?\s*0\s*:\s*0\.(4|5)/);
   });
+
+  it('gates every entrance opacity, inline ones included', () => {
+    // The variants were only half of it. Four m.* elements set their entrance
+    // state inline with initial={{ opacity: 0, y: shouldReduceMotion ? 0 : N }}
+    // -- the movement gated, the fade not. The subtitle in the welcome banner
+    // was still carrying style="opacity: 0" when the accessibility scan read
+    // it, which is why its text measured against a half-transparent card.
+    //
+    // The exception is a hover overlay, which starts invisible by design and
+    // has no `animate` of its own.
+    const inlineInitials = SOURCE.match(/initial=\{\{[^}]*\}\}/g) ?? [];
+    const entranceFades = inlineInitials.filter(
+      (block) => /opacity:/.test(block) && !/opacity:\s*shouldReduceMotion/.test(block)
+    );
+    expect(entranceFades, `ungated entrance fade: ${entranceFades.join(', ')}`).toEqual([
+      'initial={{ opacity: 0 }}',
+    ]);
+  });
 });
