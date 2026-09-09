@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sheet";
 import { HelpCircle, Send } from "lucide-react";
 import { toast } from "sonner";
+import { userFacingError } from "@/lib/networkFailure";
 
 export function SupportWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -76,7 +77,7 @@ export function SupportWidget() {
       });
       setIsOpen(false);
     } catch (error: unknown) {
-      toast.error("Error submitting ticket", { description: error instanceof Error ? error.message : "Failed to submit support ticket" });
+      toast.error("Error submitting ticket", { description: userFacingError(error, "Failed to submit support ticket") });
     } finally {
       setLoading(false);
     }

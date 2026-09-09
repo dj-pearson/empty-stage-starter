@@ -40,6 +40,7 @@ import {
   otpFailureMessageKey,
 } from "@/lib/authOtpErrors";
 import { allowedEmailRedirect } from "@/lib/authRedirect";
+import { userFacingError } from "@/lib/networkFailure";
 
 // Password requirement checks for real-time validation feedback
 interface PasswordRequirements {
@@ -302,7 +303,7 @@ const Auth = () => {
     setLoading(false);
 
     if (error) {
-      toast.error("Error", { description: error.message });
+      toast.error("Error", { description: userFacingError(error, "Could not create your account. Please try again.") });
     } else {
       // Show OTP verification screen
       setPendingEmail(email);
@@ -461,7 +462,7 @@ const Auth = () => {
         ? ` ${updatedCheck.remaining} attempt${updatedCheck.remaining === 1 ? '' : 's'} remaining.`
         : '';
 
-      toast.error("Error", { description: `${error.message}${remainingMsg}` });
+      toast.error("Error", { description: `${userFacingError(error, "Could not sign you in. Please try again.")}${remainingMsg}` });
     } else if (data.user) {
       // Clear rate limit on successful login
       clearRateLimit(email);

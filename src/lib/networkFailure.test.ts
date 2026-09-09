@@ -3,7 +3,9 @@ import {
   isBrowserOffline,
   isOfflineFailure,
   writeFailureMessage,
+  userFacingError,
   OFFLINE_WRITE_MESSAGE,
+  OFFLINE_MESSAGE,
 } from "./networkFailure";
 
 /** jsdom's navigator.onLine is a getter; override it for the duration of a test. */
@@ -108,5 +110,58 @@ describe("writeFailureMessage", () => {
     expect(message).toMatch(/offline/i);
     expect(message).toMatch(/reconnect/i);
     expect(message).not.toBe("Please try again.");
+  });
+});
+
+
+describe("userFacingError", () => {
+  // The worst case this fixes: signing in with no connection. `fetch` throws
+  // "TypeError: Failed to fetch" and that string was the entire description of
+  // the toast -- at the one moment a user cannot get past.
+  it("says you are offline instead of printing the fetch error", () => {
+    setOnLine(false);
+    expect(userFacingError(new TypeError("Failed to fetch"), "Could not sign you in.")).toBe(
+      OFFLINE_MESSAGE,
+    );
+  });
+
+  it("catches a captive portal too, where navigator still claims to be online", () => {
+    setOnLine(true);
+    expect(userFacingError({ message: "TypeError: Failed to fetch" }, "fallback")).toBe(
+      OFFLINE_MESSAGE,
+    );
+  });
+
+  // GoTrue writes these FOR the user. Swallowing them would make the sign-in
+  // form less usable, not more -- "Something went wrong" is worse than
+  // "Invalid login credentials".
+  it.each([
+    "Invalid login credentials",
+    "Email not confirmed",
+    "User already registered",
+    "Password should be at least 6 characters",
+  ])("passes a message written for the user straight through: %s", (message) => {
+    setOnLine(true);
+    expect(userFacingError({ message }, "fallback")).toBe(message);
+  });
+
+  // These reach the browser verbatim from PostgREST. They tell a parent
+  // nothing and tell a bystander a table name.
+  it.each([
+    'new row violates row-level security policy for table "plan_entries"',
+    'duplicate key value violates unique constraint "grocery_items_pkey"',
+    'column foods.colour does not exist',
+    "permission denied for table kids",
+    'invalid input syntax for type uuid: "abc"',
+  ])("replaces database internals with the caller's fallback: %s", (message) => {
+    setOnLine(true);
+    expect(userFacingError({ message }, "Could not save that.")).toBe("Could not save that.");
+  });
+
+  it("falls back when there is no message at all", () => {
+    setOnLine(true);
+    expect(userFacingError(null, "fallback")).toBe("fallback");
+    expect(userFacingError({ message: "   " }, "fallback")).toBe("fallback");
+    expect(userFacingError({}, "fallback")).toBe("fallback");
   });
 });

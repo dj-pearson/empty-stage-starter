@@ -18,6 +18,7 @@ import { Save, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { parseIsoDate } from "@/lib/date-utils";
+import { userFacingError } from "@/lib/networkFailure";
 
 interface SaveMealPlanTemplateDialogProps {
   open: boolean;
@@ -113,7 +114,7 @@ export function SaveMealPlanTemplateDialog({
       }
     } catch (error) {
       logger.error('Error saving template:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to save template');
+      toast.error(userFacingError(error, 'Failed to save template'));
     } finally {
       setIsLoading(false);
     }

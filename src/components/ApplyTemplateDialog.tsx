@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase";
 import { Kid } from "@/types";
 import { format, addDays, startOfWeek } from "date-fns";
 import { calculateAge } from "@/lib/utils";
+import { userFacingError } from "@/lib/networkFailure";
 
 interface MealPlanTemplate {
   id: string;
@@ -127,7 +128,7 @@ export function ApplyTemplateDialog({
       }
     } catch (error) {
       logger.error('Error applying template:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to apply template');
+      toast.error(userFacingError(error, 'Failed to apply template'));
     } finally {
       setIsLoading(false);
     }

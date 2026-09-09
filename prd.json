@@ -4100,6 +4100,22 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 10). US-828 fixed date-only parsing inside date-utils; these are the call sites the helper never reached.\n\nMEASURED under TZ=America/Los_Angeles: `new Date('2026-09-09')` then `.setHours(0,0,0,0)` yields Sep 8. That is exactly what TodayMeals, ProgressDashboard and AchievementsView did, so today's planned meals did not register as today's and every streak entry was bucketed a day early -- a streak including today could never count today.\n\nTWO OPPOSITE RULES, which is the trap. BUCKETING against 'today' must be LOCAL or the day shifts. DAY ARITHMETIC between two keys must be UTC, because UTC days are always exactly 24h. I initially converted PlanContext's copy-week/delete-week arithmetic to local parsing too and had to revert it: measured, local midnight to local midnight across 2026-03-08 is 23h, and Math.floor(23h/24h) is 0, so two consecutive dates read as the same day. That is US-818 reappearing through a different door.\n\nALSO FIXED: both streak implementations used Math.floor on a difference between two LOCAL midnights, so the spring-forward day collapsed and the streak silently broke every March. Now Math.round, verified against both DST boundaries and ordinary days.\n\nONE SITE ALREADY DID IT RIGHT: ResultHistoryCard appended 'T00:00:00' to force local parsing. Same shape as US-827 (Auth.tsx correct, settings not) and US-828 (parseDate correct, 22 siblings not).\n\nTESTING NOTE WORTH KEEPING: my first test file pinned the arithmetic using helpers defined in the test, and stayed green against mutants that reverted every call site -- it never touched them. Source guards were added so the components are actually held to the rules; all four mutants now fail. A rules test and a call-site test are different things."
+    },
+    {
+      "id": "US-831",
+      "title": "Signing in with no connection showed the user \"Failed to fetch\"",
+      "description": "As someone who cannot sign in, I want to be told what is wrong in words I can act on, so that I know whether to check my connection or my password.",
+      "acceptanceCriteria": [
+        "A transport failure reads as an offline message, not the browser's exception text.",
+        "Messages GoTrue writes for the user (Invalid login credentials, Email not confirmed) still reach the user unchanged.",
+        "PostgREST internals -- RLS policies, constraint names, column names -- never reach the screen.",
+        "No user-facing toast forwards a caught error's message without going through the translator."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 11) by sweeping toasts that forward a caught error's .message where the enclosing function does a fetch or a supabase call: 12 user-facing sites.\n\nTHE WORST TWO ARE Auth.tsx:305 and :464 -- sign-up and sign-in. `toast.error(\"Error\", { description: error.message })`. With no connection, fetch throws TypeError: Failed to fetch, so the entire description a locked-out user reads is \"Failed to fetch\". That is the one moment they cannot get past, and the app said nothing actionable.\n\nTHE FIX HAS THREE CASES AND THE MIDDLE ONE IS THE POINT. userFacingError(error, fallback): offline -> say so; PostgREST internals ('new row violates row-level security policy for table \"plan_entries\"', 'duplicate key value violates unique constraint ...', 'column ... does not exist') -> the caller's fallback; everything else -> THROUGH UNCHANGED. GoTrue's messages are written for the user, and replacing 'Invalid login credentials' with a generic apology would make the sign-in form worse, not safer. A blanket sanitiser would have done exactly that -- mutant C, which swallows every message, fails four tests.\n\nApplied to all 12 sites (Auth x2, BindEmailFlow x3, ProfessionalSettings x5, SaveMealPlanTemplateDialog, ApplyTemplateDialog, SupportWidget, backup). Sweep now returns 0.\n\nSecondary benefit: constraint and RLS text no longer reaches a screen someone else might be looking at."
     }
   ]
 }

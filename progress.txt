@@ -2840,3 +2840,60 @@ streaks were bucketed to the previous day. The call sites US-828 never reached.
   - Two negatives in a row is a result, not a wasted iteration -- provided the
     instrument was checked. My division sweep's first output was noise from my
     own regex; the second was trustworthy and said "nothing here".
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 11. US-831: signing in with no
+connection showed the user "Failed to fetch". src/lib/networkFailure.ts.
+================================================================================
+
+- THE SWEEP: toasts that forward a caught error's `.message` where the
+  enclosing function does a `fetch` or a `supabase` call. 12 user-facing sites
+  after excluding admin surfaces (admin has ~40 more; a developer reading a
+  constraint violation is fine).
+
+- THE WORST TWO ARE THE SIGN-UP AND SIGN-IN PATHS. Auth.tsx:305 and :464 both
+  read `toast.error("Error", { description: error.message })`. With no
+  connection, `fetch` throws `TypeError: Failed to fetch`, so the ENTIRE
+  description a locked-out user reads is "Failed to fetch". That is the one
+  moment they cannot get past, and the app told them nothing to act on.
+
+- THE FIX HAS THREE CASES AND THE MIDDLE ONE IS THE WHOLE POINT.
+  userFacingError(error, fallback):
+      offline                -> say so
+      PostgREST internals    -> the caller's fallback
+      anything else          -> THROUGH, unchanged
+
+  The third case is the one a careless "sanitise all errors" pass would get
+  wrong. GoTrue writes its messages FOR the user: "Invalid login credentials",
+  "Email not confirmed", "User already registered", "Password should be at
+  least 6 characters". Replacing those with a generic apology makes the sign-in
+  form worse, not safer. Mutant C -- swallow every message and always use the
+  fallback -- fails four tests for exactly that reason, which is why those
+  tests exist.
+
+- WHAT IS TREATED AS NOISE, and it is specific rather than a catch-all: RLS
+  policy text, unique/foreign-key/check/not-null constraint violations,
+  duplicate key, "column ... does not exist", "permission denied for",
+  "invalid input syntax for", PGRST codes. `new row violates row-level security
+  policy for table "plan_entries"` tells a parent nothing and tells anyone
+  reading over their shoulder a table name.
+
+- Applied to all 12: Auth x2, BindEmailFlow x3, ProfessionalSettings x5,
+  SaveMealPlanTemplateDialog, ApplyTemplateDialog, SupportWidget, backup. The
+  sweep now returns 0.
+
+- Measured: 3317 tests pass (219 files). 12 new tests, checked against three
+  mutants (skip the offline check, let database noise through, swallow every
+  message); each is caught. Typecheck 814 against baseline 814; lint 1150
+  against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - "Never show users raw error text" is wrong as stated. Some raw error text
+    is the most useful thing you can show them. The rule is about WHO WROTE the
+    message: the auth service writes for the user, the database writes for the
+    developer.
+  - This is the fourth thing in this loop that reduced to "the app had no idea
+    it was offline" (US-823's queue, US-827's lockout is adjacent, iteration 1's
+    toast copy, now this). A PWA that advertises offline support should treat
+    "no connection" as a first-class result everywhere, not as an exception
+    string that happens to reach a toast.

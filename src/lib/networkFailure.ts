@@ -93,3 +93,64 @@ export const OFFLINE_QUEUED_MESSAGE =
 export function writeFailureMessage(error: unknown, fallback: string): string {
   return isOfflineFailure(error) ? OFFLINE_WRITE_MESSAGE : fallback;
 }
+
+
+/**
+ * Database internals that must never reach a parent's screen.
+ *
+ * These come back from PostgREST verbatim. "new row violates row-level security
+ * policy for table \"plan_entries\"" tells the user nothing they can act on and
+ * tells anyone reading over their shoulder a table name and a policy shape.
+ */
+const DATABASE_NOISE = [
+  "violates row-level security",
+  "violates unique constraint",
+  "violates foreign key constraint",
+  "violates check constraint",
+  "violates not-null constraint",
+  "duplicate key value",
+  "does not exist",
+  "permission denied for",
+  "invalid input syntax for",
+  "could not find the",
+  "pgrst",
+  "syntax error at or near",
+];
+
+/**
+ * Turn a caught error into something worth showing a person.
+ *
+ * Three cases, in order:
+ *
+ *  1. No connection -> say so. `fetch` throws "TypeError: Failed to fetch",
+ *     which used to be printed verbatim in the sign-in toast: the one moment a
+ *     user cannot get past, told nothing they can act on.
+ *  2. Database internals -> the caller's fallback. Constraint and RLS text is
+ *     for the log, not the screen.
+ *  3. Anything else -> through unchanged. GoTrue's messages are written FOR the
+ *     user ("Invalid login credentials", "Email not confirmed", "User already
+ *     registered") and replacing them with a generic fallback would make the
+ *     sign-in form less usable, not more.
+ */
+export function userFacingError(error: unknown, fallback: string): string {
+  if (isOfflineFailure(error)) return OFFLINE_MESSAGE;
+
+  const message =
+    typeof error === "string"
+      ? error
+      : typeof error === "object" && error !== null &&
+          typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "";
+
+  if (!message.trim()) return fallback;
+
+  const lowered = message.toLowerCase();
+  if (DATABASE_NOISE.some((p) => lowered.includes(p))) return fallback;
+
+  return message;
+}
+
+/** Shown when a read or an action could not reach the server at all. */
+export const OFFLINE_MESSAGE =
+  "You're offline. Check your connection and try again.";
