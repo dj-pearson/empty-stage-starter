@@ -3658,3 +3658,77 @@ were sold and never charged for. 20260909000000_household_seat_limit.sql.
   - A paywall the UI renders as "something went wrong" is a paywall that
     generates support tickets instead of upgrades. The refusal message is part
     of the feature.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 7. US-841: withdrawing
+consent stopped nothing until the next page load. src/lib/consentEnforcement.ts
+================================================================================
+
+- THE QUESTION WAS "what leaves the browser for a third party", and the answer
+  was better built than expected in every place except one. Sentry: DSN is
+  public by design and documented as such, no setUser so no identity is
+  attached, cookies and Authorization stripped in beforeSend, and Session
+  Replay -- the integration that records the DOM -- is added ONLY when the
+  visitor has consented, decided at init. GA: never loaded without consent,
+  Consent Mode v2 defaults everything to denied, anonymize_ip on, and the
+  loader externalised so the CSP can drop 'unsafe-inline'. Someone did this
+  carefully.
+
+- ONE WIRE WAS NOT CONNECTED. src/lib/consent.ts exports onConsentChange, and
+  nothing in src/, app/ or tests/ subscribed to it. Grep for the symbol returns
+  exactly one line: its own definition.
+
+- WHICH MAKES THE TWO DIRECTIONS ASYMMETRIC, and that is the defect:
+
+      grant      setConsent(true) -> window.__eatpalLoadGA() -> GA starts NOW
+      withdraw   resetConsent()   -> clears storage, notifies nobody -> nothing
+
+  GA went on sending hits and Session Replay went on recording the DOM for the
+  rest of the visit, after the person had told the app to stop. GDPR Article
+  7(3) requires withdrawal to be as easy as granting; "as easy" cannot mean
+  "and then reload", because nothing tells them to.
+
+- THE CODE ALREADY KNEW. resetConsent's docblock: "Does not retroactively
+  unload analytics already loaded this session — a reload applies the new
+  state." That is the third time in seven iterations that the honest note
+  describing a gap was sitting in the file that had it. Iteration 4 found two
+  in the VPAT; iteration 6 found one in docs/entitlements.md.
+
+- TWO KILL SWITCHES FOR GA, and the second is the one that matters here.
+  `consent update -> denied` is the documented path and is correct. But the
+  case in hand is a tag that has ALREADY LOADED under a consent that no longer
+  holds, so `window['ga-disable-<ID>']` -- the flag gtag.js checks before every
+  single hit -- is set as well. Dropping it fails three tests.
+
+- GRANTING IS DELIBERATELY NOT HANDLED HERE. ga-loader.js and setConsent
+  already start GA on opt-in, and Session Replay is decided once at
+  Sentry.init, so a visitor who opts in mid-session gets replay from their next
+  visit. That errs toward not recording, which is the right way for this
+  particular error to fall.
+
+- THE ID CANNOT DRIFT. public/ga-loader.js is plain JS outside the bundle and
+  cannot import a constant, so the kill-switch key would have been a second
+  copy of the measurement id. The test reads GA_ID out of the loader and
+  asserts the two are equal; changing the loader's id fails.
+
+- THE TYPECHECK RATCHET EARNED ITS KEEP. 815 against a baseline of 814 -- one
+  new error, in my own test's replay mock (vi.fn's inferred return type made
+  `mockReturnValue(undefined)` illegal). Fixed by naming the handle type rather
+  than casting. This is the run where deleting *.tsbuildinfo first mattered:
+  the note in CLAUDE.md is right, and a stale buildinfo would have exited 0.
+
+- Measured: 3450 tests pass (231 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Six mutants, six
+  caught: remove the subscription from main.tsx, drop the kill switch, deny
+  analytics_storage only, skip stopping replay, treat "no decision" as
+  consented, drift the loader's measurement id.
+
+- **Learnings for future iterations:**
+  - An exported function with no callers is a decision somebody designed and
+    never finished. onConsentChange, a returned unsubscribe, a listener Set --
+    all of it built, none of it wired.
+  - Check both directions of a toggle. The grant path was instant and correct,
+    which is exactly what makes the withdrawal path easy to never test.
+  - When a docblock describes a limitation, treat it as an open ticket rather
+    than as documentation. Three of the seven finds this loop were written down
+    in the file that had the problem.

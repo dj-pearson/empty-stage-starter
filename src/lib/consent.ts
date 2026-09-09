@@ -92,8 +92,13 @@ export function setConsent(analytics: boolean): ConsentState {
 
 /**
  * Clear the stored decision so the consent banner is shown again, letting the
- * user change their choice ("Manage cookie preferences"). Does not retroactively
- * unload analytics already loaded this session — a reload applies the new state.
+ * user change their choice ("Manage cookie preferences").
+ *
+ * US-841: the subscribers below now act on this immediately —
+ * consentEnforcement.ts denies every Consent Mode signal, sets the gtag.js
+ * kill switch and stops Session Replay. The script tag GA already injected
+ * stays in the document, but it stops sending. No reload is required, which
+ * matters because nothing ever told the user to perform one.
  */
 export function resetConsent(): void {
   if (isBrowser()) {
