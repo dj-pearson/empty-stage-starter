@@ -3184,3 +3184,80 @@ WHAT THIS LOOP KEPT RE-LEARNING, in rough order of how often it mattered:
 5. SAY WHAT YOU DID NOT FIND. Four iterations produced clean negatives --
    index keys, division by zero, infinite spinners, prefix-blocked routes -- and
    recording them is what stops the next pass re-running the same sweep.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 1. US-835: sign-out cleared
+one storage key out of twenty-nine. src/lib/signOutScrub.ts.
+================================================================================
+
+- THREE NEGATIVES FIRST, all cheap and all worth not re-running. Realtime
+  channels: every .channel() call site has a matching removeChannel/unsubscribe
+  in cleanup, zero leaks. Unguarded JSON.parse: 7 hits, all either
+  JSON.parse(JSON.stringify(x)) deep clones or already inside an outer try.
+  Stale-chunk white screens: RouteErrorBoundary already detects five spellings
+  of a chunk-load failure and reloads once behind a 30s sessionStorage cooldown.
+
+- THE FIND, and it is US-834 again one layer down. That iteration stopped the
+  service worker writing a household's rows to Cache Storage. Nothing had asked
+  the same question of localStorage. US-537 scrubs `kid-meal-planner` when the
+  auth listener sees SIGNED_OUT and stops there; twelve other localStorage keys
+  and sixteen sessionStorage keys survive. On a shared family tablet the next
+  person to sign in got:
+
+      eatpal_recent_searches           the previous parent's typed searches --
+                                       food, recipe and child names -- rendered
+                                       back as "Recent" in the command palette
+      eatpal.auto_restock_blocklist    one household's mutes suppressing
+                                       another household's suggestions
+      eatpal.kid_birthday_dismissed.*  keyed by child id
+      eatpal-budget-calc-draft         household size, child ages, weekly budget
+      login/audit/activity/eatpal_session_id
+                                       the new user's logins, security audit
+                                       events and conversions attributed to the
+                                       previous user's session in the same tab
+
+- SESSIONSTORAGE IS NOT SESSION-SCOPED. It dies with the TAB, and signing out
+  and back in without closing the tab is the ordinary shared-device flow. Four
+  session ids, seven Search Console OAuth handshake keys and the share-target
+  stash all outlived a sign-out. That distinction is the whole reason the
+  session half of this exists.
+
+- THE GATE FOUND 21 KEYS MY MANUAL GREP HAD MISSED, which is the argument for
+  writing the sweep before the fix rather than after. My hand list had 15 keys
+  from `grep setItem`. The scan resolves const identifiers, reads getItem and
+  removeItem too, and splits the two storages: 29 keys, and the ones I had
+  missed included every gsc_oauth_* key and all four session ids.
+
+- TWO INSTRUMENT BUGS, both caught by running it:
+  (a) It reported `userName` as an unclassified production key. That string is
+      in a JSDoc example inside useLocalStorage.ts. Comments are stripped now,
+      and a test asserts `userName` is NOT in the scan -- the same mistake
+      iteration 12 made reading its own comment.
+  (b) The keep-list honesty check asked "is this key in the scan?" and failed on
+      eatpal_exit_popup_shown, which reaches storage as a default prop value and
+      no call-site regex will ever see. It asks "is it referenced in src?" now.
+
+- A MOCK THAT DISAGREED WITH THE PLATFORM. The first version enumerated with
+  Object.keys(localStorage), which works in browsers, and the behavioural test
+  showed nothing being cleared: src/test/setup.ts replaces storage with a plain
+  object whose keys are getItem/setItem/removeItem/clear/length/key. Switching
+  to the spec'd enumeration (length + key(i)) exposed the real problem -- that
+  mock exposes `length` as a vi.fn(), not a number, so `i < store.length` is
+  never true. Fixed the mock to a getter. Shipped code now uses the interface
+  Storage actually documents rather than the one that happens to work.
+
+- Measured: 3405 tests pass (224 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1148 against 1148; invisible chars clean. Five mutants,
+  five caught: comment out the scrubOnSignOut() call (1 fail), drop a local key
+  (4), drop a session key (4), disable comment stripping (2), remove a keep-list
+  entry (1).
+
+- **Learnings for future iterations:**
+  - When a fix names a threat model, ask which other stores share it. "Shared
+    family tablet" was written down in US-834's notes; localStorage was sitting
+    right there holding more of the same data with a cheaper attack.
+  - A hand-written list of anything in this repo is short. Fifteen keys by grep,
+    twenty-nine by a scan that reads all three accessors and resolves consts.
+  - A test double is a claim about the platform, and this one was wrong in a way
+    that made correct code look broken. When a passing implementation fails only
+    under test, suspect the mock before the code.

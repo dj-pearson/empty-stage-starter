@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
+import { scrubOnSignOut } from "@/lib/signOutScrub";
 import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
 import { selectLocalOnlyRecipes } from "@/lib/recipeMigration";
 import { redactSnapshotForCache } from "@/lib/cacheSnapshot";
@@ -513,6 +514,12 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       getStorage()
         .then((storage) => storage.removeItem(STORAGE_KEY))
         .catch((error) => logger.error('Error clearing storage on sign-out:', error));
+      // US-835: the snapshot above was the only thing sign-out removed. Twelve
+      // other keys carry a household's data -- searches, restock mutes,
+      // per-child dismissals, calculator drafts -- and on a shared tablet the
+      // next person to sign in was shown them. src/lib/signOutScrub.ts holds
+      // the list and the reason each survivor survives.
+      scrubOnSignOut();
     });
     return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
