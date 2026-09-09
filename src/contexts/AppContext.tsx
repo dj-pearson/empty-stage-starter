@@ -16,6 +16,7 @@ import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows }
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import { InventoryProvider, useInventory, parseMovementRows, parseStockRows, MOVEMENT_WINDOW_DAYS, MOVEMENT_LIMIT } from "./InventoryContext";
+import { toast } from "sonner";
 import { compareLedgerToLegacy, summarizeDivergences, type ComparableItem } from "@/lib/stockComparison";
 import { buildStockComparisonSample, sampleSignature, type StockComparisonSample } from "@/lib/stockComparisonSample";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
@@ -86,6 +87,39 @@ const LEDGER_DIVERGENCE_LOG_LIMIT = 50;
 
 // Long enough that a burst of realtime events settles into one comparison.
 const LEDGER_COMPARISON_DEBOUNCE_MS = 1000;
+
+/**
+ * Row caps on the initial load, and the reason they are named rather than
+ * inline (US-819).
+ *
+ * Each of these queries returns at most this many rows and says nothing when
+ * there are more. The slice is then written into state wholesale, so a
+ * household over the cap sees a partial catalogue that looks complete --
+ * nothing is missing from the database, but nothing on screen says so either.
+ *
+ * The ORDER makes it worse than "some are missing". grocery_items is ordered
+ * by created_at ascending, so the 500 a household sees are its OLDEST items
+ * and the ones it just added are the ones cut. foods is ordered by name, so
+ * the catalogue stops partway through the alphabet.
+ *
+ * Pagination is the actual fix and is US-819. Until then these are at least
+ * detected: reachedRowCap below reports a slice that came back exactly full,
+ * which is the only signal PostgREST gives without a count query.
+ */
+export const FOODS_ROW_CAP = 500;
+export const RECIPES_ROW_CAP = 200;
+export const GROCERY_ROW_CAP = 500;
+
+/**
+ * True when a result came back exactly at its cap.
+ *
+ * Exactly-at-the-cap is ambiguous -- a household with precisely 500 foods
+ * reports as truncated -- so this drives a message about what is shown, not a
+ * claim that rows were dropped.
+ */
+export function reachedRowCap(rows: unknown[] | null | undefined, cap: number): boolean {
+  return Array.isArray(rows) && rows.length >= cap;
+}
 
 const STARTER_FOODS: Omit<Food, "id">[] = [
   { name: "Chicken Nuggets", category: "protein", is_safe: true, is_try_bite: false },
@@ -274,15 +308,15 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
 
         const [kidsRes, foodsRes, recipesRes, planRes, groceryRes, movementsRes, stockRes] = await Promise.all([
           supabase.from('kids').select('*').eq('household_id', householdId).order('created_at', { ascending: true }),
-          supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(500),
+          supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(FOODS_ROW_CAP),
           // US-323: degrade to a plain select if the recipe_ingredients embed
           // isn't deployed in this environment, so recipes still load.
-          selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(200)),
+          selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(RECIPES_ROW_CAP)),
           supabase.from('plan_entries').select('*').eq('household_id', householdId)
             .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
             .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
             .order('date', { ascending: true }),
-          supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(500),
+          supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(GROCERY_ROW_CAP),
           supabase.from('inventory_movements').select('*').eq('household_id', householdId)
             .gte('occurred_at', movementWindowStart.toISOString())
             .order('occurred_at', { ascending: true })
@@ -393,6 +427,24 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             setRecipes(dbRecipes);
           }
         }
+        // US-819: say so when a slice came back at its cap, instead of
+        // rendering a partial catalogue that looks like the whole thing. The
+        // toast fires once per load, not once per slice, because three of them
+        // at once reads as breakage rather than as information.
+        const cappedSlices = [
+          reachedRowCap(foodsRes.data, FOODS_ROW_CAP) ? `${FOODS_ROW_CAP} foods` : null,
+          reachedRowCap(recipesRes.data as unknown[], RECIPES_ROW_CAP) ? `${RECIPES_ROW_CAP} recipes` : null,
+          reachedRowCap(groceryRes.data, GROCERY_ROW_CAP) ? `${GROCERY_ROW_CAP} grocery items` : null,
+        ].filter(Boolean) as string[];
+        if (cappedSlices.length > 0) {
+          logger.warn(
+            `US-819: load hit a row cap (${cappedSlices.join(', ')}). Anything past the cap is in the database but not in this session.`
+          );
+          toast.info(`Showing your first ${cappedSlices.join(' and ')}.`, {
+            description: 'You have more saved than fits in one load. Nothing has been deleted.',
+          });
+        }
+
         if (planRes.data) {
           // US-538: the plan_entries fetch is windowed (-30d..+90d). Merge it
           // with existing state so cached history OUTSIDE the window is not

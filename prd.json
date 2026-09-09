@@ -3902,6 +3902,23 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-08 (web loop, iteration 9). copyWeekPlan in PlanContext is fixed and tested; the rest of this story is the other call sites.\n\nThe pattern: 31 places build a date key with toISOString().split('T')[0] or .slice(0,10). Two correct helpers already exist and are barely used -- toISODate in src/lib/date-utils.ts (local calendar day, imported by exactly two files) and addDays in src/lib/exposureLadder.ts (UTC arithmetic on ISO strings, correct and tested). Both carry comments explaining the trap; the rest of the codebase does it by hand anyway.\n\nChecked and CORRECT, do not touch: exposureLadder.addDays, useFoodLadder.todayIsoDate (compensates for the offset deliberately), deleteWeekPlan (measures a difference between two UTC-midnight dates and never writes one back).\n\nStill to review, roughly in order of how much a wrong day costs: SmartRestockSuggestions.tsx 65-71 (a once-per-day cap keyed on 'today' -- a user west of UTC gets their new day in the evening), seasonalRecall.ts 240 (projected date written into a row), SeasonalRecallCard.tsx 91-92 (query range), AppContext.tsx 282-283 and 401-402 (the -30/+90 day plan-entry query window; a one-day shift at the edges is mild but it is the same mistake), conversion-tracking.ts 278, login-history.ts 503, runsDashboard.ts 43 (analytics windows). The download filenames in pdfGenerator.ts and shareImageGenerator.ts and the SEO lastmod dates are fine as UTC and should be annotated rather than changed."
+    },
+    {
+      "id": "US-819",
+      "title": "The initial load silently stops at 500 foods, 200 recipes, 500 grocery items",
+      "description": "As a household that has been using EatPal for a while, I want to see everything I have saved, so that the app does not quietly stop showing me my own data.",
+      "acceptanceCriteria": [
+        "A household with more than 500 foods can reach all of them from the web app",
+        "grocery_items no longer loads oldest-first with a cap, which drops the items the household just added",
+        "Either the load pages through the remaining rows, or the UI pages/searches server-side; the choice is recorded in the story before implementation",
+        "The write-through cache never persists a truncated slice over a fuller cached one",
+        "The toast added in iteration 10 is removed once the data is actually reachable, since it exists only to make the truncation visible"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 10). AppContext's initial load caps foods at 500 (ordered by name), recipes at 200 (created_at asc) and grocery_items at 500 (created_at asc), then writes each slice into state wholesale. Nothing detects or reports the truncation, so the app shows a partial catalogue that looks complete.\n\nThe ordering is what turns this from 'some rows missing' into a bug people would report. grocery_items ascending by created_at means the 500 shown are the OLDEST -- a household over the cap stops seeing the items it just added. foods ordered by name means the catalogue stops partway through the alphabet.\n\nIteration 10 did NOT fix this. It named the caps (FOODS_ROW_CAP, RECIPES_ROW_CAP, GROCERY_ROW_CAP), added reachedRowCap with tests, and made the app say 'Showing your first 500 foods' instead of saying nothing. That is a stopgap so the failure is visible, not a fix.\n\nWorth deciding before implementing: plan_entries already solved a related problem with a windowed fetch plus mergeWindowedPlanEntries (US-538), which is a precedent for keeping out-of-window cached rows rather than truncating state. Whether foods wants the same shape or real pagination depends on whether the UI needs the whole catalogue in memory to search it.\n\nNoticed while reading the same function, unrelated and unfixed: the post-migration recipe re-fetch around AppContext.tsx:410 selects with no household_id filter and no limit, unlike every other query in the load. RLS scopes it, so it is not a leak, but it is inconsistent and it is unbounded."
     }
   ]
 }
