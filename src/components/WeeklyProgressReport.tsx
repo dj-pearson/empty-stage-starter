@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useLadderWeek } from '@/hooks/useLadderWeek';
 import { renderLadderWeekly } from '@/lib/ladderWeeklyText';
+import { parseIsoDate } from "@/lib/date-utils";
 import {
   generateProgressReportPDF,
   downloadBlob,
@@ -59,7 +60,7 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
   // Get this week's entries
   const weekEntries = useMemo(() => {
     return planEntries.filter(entry => {
-      const entryDate = new Date(entry.date);
+      const entryDate = parseIsoDate(entry.date);
       return (
         entry.kid_id === targetKidId &&
         isWithinInterval(entryDate, { start: weekStartDate, end: weekEndDate })
@@ -102,7 +103,7 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
   const mealsByDay = useMemo(() => {
     return weekDays.map(day => {
       const dayEntries = weekEntries.filter(entry => {
-        const entryDate = new Date(entry.date);
+        const entryDate = parseIsoDate(entry.date);
         return entryDate.toDateString() === day.toDateString();
       });
 

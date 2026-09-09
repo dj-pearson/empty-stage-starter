@@ -2762,3 +2762,81 @@ could overwrite a newer one. AddFoodDialog, FoodChainingRecommendations.
     promises in the mock turn a flaky reproduction into an assertion.
   - A mutant that survives is the test telling you which line nobody measured.
     Then choose honestly: delete the line, or write the test that pins it.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 10. US-830: today's meals and both
+streaks were bucketed to the previous day. The call sites US-828 never reached.
+================================================================================
+
+- TWO CLEAN NEGATIVES FIRST, reported because they cost real time and the
+  answer is worth recording:
+  (a) `key={index}` -- 163 in src/, but only ONE file pairs an index key with
+      reorder controls, and there the rows are static <li> text with no input
+      state. Not a bug.
+  (b) Percentage divisions -- 30 candidates outside admin after fixing my own
+      regex (it captured a trailing paren, so `totalSent > 0 ? (a/totalSent)`
+      looked unguarded). Every one I checked is guarded: by early return
+      (VoteResultsDisplay returns before render at totalVotes === 0), by
+      `if (length >= 15)` / `>= 5` (SmartInsights), by a truthy check
+      (AchievementBadge), or by construction (achievements is a fixed
+      catalogue; macro targets are never below 1000 calories). No NaN reachable.
+
+- THE REAL FIND CAME OUT OF READING, NOT SWEEPING. While checking
+  AchievementsView's denominator I noticed `new Date(entry.date)` followed by
+  `setHours(0,0,0,0)` -- the US-828 bug, in files that never import date-utils.
+  Measured under TZ=America/Los_Angeles:
+
+      entry.date               = 2026-09-09        (today)
+      new Date(key)+setHours   = Tue Sep 08        <-- bucketed day
+      today bucketed           = Wed Sep 09        same day? false
+
+  So TodayMeals did not recognise today's planned meals as today's, and both
+  streak implementations bucketed every entry a day early -- a streak that
+  includes today could never count today.
+
+- TWO OPPOSITE RULES, AND I GOT ONE WRONG BEFORE CATCHING IT. Bucketing against
+  "today" must be LOCAL. Day ARITHMETIC between two keys must be UTC, because
+  UTC days are always exactly 24h. I converted PlanContext's copy-week and
+  delete-week arithmetic to local parsing along with everything else, then
+  measured it:
+
+      local midnight 2026-03-09 - local midnight 2026-03-08 = 23h
+      Math.floor(23h / 24h) = 0        <-- two consecutive dates read as one
+
+  That is US-818 coming back through a different door. Reverted, with a comment
+  at the site saying why it stays UTC, and a source guard so a later
+  "consistency" pass cannot convert it.
+
+- A THIRD BUG FOUND ON THE WAY: both streaks used Math.floor on a difference
+  between two LOCAL midnights, so the spring-forward day collapsed and the
+  streak silently broke every March. Math.round now -- verified against
+  spring-forward, fall-back and ordinary days.
+
+- ONE SITE ALREADY DID IT RIGHT: ResultHistoryCard appended 'T00:00:00' to
+  force local parsing. Third time this loop the correct version was sitting
+  next to the incorrect ones (US-827 Auth vs settings, US-828 parseDate vs 22
+  siblings, now this).
+
+- MY FIRST TEST FILE MEASURED NOTHING, and the mutants said so. It pinned the
+  arithmetic using a `bucket()` helper defined IN THE TEST, so reverting every
+  call site left all 18 assertions green -- it never touched the components.
+  This is the reimplementation trap I have been calling out for nine
+  iterations, and I walked into it. Source guards were added (the
+  Grocery.a11y.test.ts pattern) asserting the components use parseIsoDate and
+  Math.round, and that PlanContext keeps new Date on both sides. All four
+  mutants now fail.
+
+- Measured: 3305 tests pass (219 files). Typecheck 814 against baseline 814;
+  lint 1150 against 1156; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - A rules test and a call-site test are different artefacts. Demonstrating
+    that Math.round beats Math.floor proves nothing about the file that still
+    says floor. If the assertion does not import or read the subject, it cannot
+    fail when the subject regresses.
+  - When a fix has an opposite case, find it before shipping. "Parse date keys
+    locally" is right for display and wrong for day arithmetic, and applying it
+    uniformly would have reintroduced a bug this repo had already paid for.
+  - Two negatives in a row is a result, not a wasted iteration -- provided the
+    instrument was checked. My division sweep's first output was noise from my
+    own regex; the second was trustworthy and said "nothing here".

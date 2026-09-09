@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { TrendingUp, TrendingDown, Target, Award, Calendar, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { parseIsoDate } from "@/lib/date-utils";
 
 export function ProgressDashboard() {
   const { planEntries } = usePlan();
@@ -24,7 +25,7 @@ export function ProgressDashboard() {
     weekStart.setHours(0, 0, 0, 0);
 
     const thisWeekEntries = kidEntries.filter(entry => {
-      const entryDate = new Date(entry.date);
+      const entryDate = parseIsoDate(entry.date);
       return entryDate >= weekStart;
     });
 
@@ -38,7 +39,7 @@ export function ProgressDashboard() {
     // Try bites this month
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const thisMonthEntries = kidEntries.filter(entry => {
-      const entryDate = new Date(entry.date);
+      const entryDate = parseIsoDate(entry.date);
       return entryDate >= monthStart && entry.meal_slot === 'try_bite';
     });
 
@@ -59,20 +60,23 @@ export function ProgressDashboard() {
 
     // Streak calculation
     const sortedEntries = [...kidEntries]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => parseIsoDate(b.date).getTime() - parseIsoDate(a.date).getTime());
 
     let currentStreak = 0;
     let lastDate: Date | null = null;
 
     for (const entry of sortedEntries) {
-      const entryDate = new Date(entry.date);
+      const entryDate = parseIsoDate(entry.date);
       entryDate.setHours(0, 0, 0, 0);
 
       if (!lastDate) {
         lastDate = entryDate;
         currentStreak = 1;
       } else {
-        const dayDiff = Math.floor((lastDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
+        // Math.round, not floor: these are LOCAL midnights, and a DST day is
+        // 23 or 25 hours. floor(23h / 24h) is 0, which reads two consecutive
+        // days as the same day and silently breaks the streak every spring.
+        const dayDiff = Math.round((lastDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
         if (dayDiff === 1) {
           currentStreak++;
           lastDate = entryDate;

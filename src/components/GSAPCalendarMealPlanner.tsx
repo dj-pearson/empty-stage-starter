@@ -51,6 +51,7 @@ import { computeVarietyScore } from "@/lib/tonightModeRanking";
 import { TwistMealSheet } from "@/components/TwistMealSheet";
 import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { analytics } from "@/lib/analytics";
+import { parseIsoDate } from "@/lib/date-utils";
 
 /// US-298: threshold for surfacing the amber "try a twist?" chip. Tuned
 /// to match the AC: a recipe scoring >= 0.4 is far enough above the
@@ -753,7 +754,7 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
     const recent = planEntries
       .filter((e) => !!e.recipe_id)
       .map((e) => {
-        const ageMs = now - new Date(e.date).getTime();
+        const ageMs = now - parseIsoDate(e.date).getTime();
         const daysAgo = Math.max(0, Math.floor(ageMs / oneDay));
         return { recipeId: e.recipe_id as string, daysAgo };
       })

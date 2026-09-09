@@ -6,6 +6,7 @@ import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { Clock, CheckCircle2, Circle, Sparkles, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, isToday } from 'date-fns';
+import { parseIsoDate } from "@/lib/date-utils";
 
 interface TodayMealsProps {
   onLogMeal?: (mealSlot: string, planEntryId: string) => void;
@@ -35,7 +36,7 @@ export const TodayMeals = memo(function TodayMeals({ onLogMeal }: TodayMealsProp
         (p) =>
           p.kid_id === activeKidId &&
           p.meal_slot === slot.id &&
-          isToday(new Date(p.date))
+          isToday(parseIsoDate(p.date))
       );
 
       if (!entry) {

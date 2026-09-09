@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { PlanEntry, Food } from "@/types";
 import { format } from "date-fns";
 import { Clock } from "lucide-react";
+import { parseIsoDate } from "@/lib/date-utils";
 
 interface ResultHistoryCardProps {
   entries: PlanEntry[];
@@ -28,7 +29,7 @@ export function ResultHistoryCard({ entries, foods }: ResultHistoryCardProps) {
   // Sort by date descending
   const sortedEntries = [...entries]
     .filter(e => e.result !== null)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => parseIsoDate(b.date).getTime() - parseIsoDate(a.date).getTime())
     .slice(0, 20); // Show last 20 entries
 
   if (sortedEntries.length === 0) {
@@ -71,7 +72,7 @@ export function ResultHistoryCard({ entries, foods }: ResultHistoryCardProps) {
                 <div className="flex-1">
                   <p className="font-medium">{food.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {format(new Date(entry.date + "T00:00:00"), "MMM d, yyyy")} • {mealSlotLabels[entry.meal_slot]}
+                    {format(parseIsoDate(entry.date), "MMM d, yyyy")} • {mealSlotLabels[entry.meal_slot]}
                   </p>
                   {entry.notes && (
                     <p className="text-xs text-muted-foreground italic mt-1">

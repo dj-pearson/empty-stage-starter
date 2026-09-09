@@ -173,6 +173,13 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     // The destination date is built from the toDate STRING (addIsoDays), never
     // from a parsed Date, because reading a day through local getters and
     // writing it back through toISOString shifts it across a DST boundary.
+    // BOTH sides of the day-difference below are parsed the same way, as UTC
+    // midnight, ON PURPOSE. UTC days are always exactly 24h, so
+    // Math.floor(diff / 86400000) is exact. Parsing either side as LOCAL
+    // midnight would make the span 23h or 25h across a DST boundary and
+    // collapse or duplicate a day -- which is US-818, the bug addIsoDays
+    // exists to prevent. parseIsoDate is for DISPLAY and for comparing against
+    // "today"; day arithmetic stays in UTC.
     const fromDateObj = new Date(fromDate);
 
     const currentEntries = planEntriesRef.current;
