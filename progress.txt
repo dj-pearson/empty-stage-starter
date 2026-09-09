@@ -2425,3 +2425,82 @@ mounted, stacked at the same coordinates on every dashboard route.
   - If a mutation of your own new defensive code doesn't fail a test, the code
     probably guards nothing. Delete the guard, not the test -- and then check
     the test still catches something real.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 5. US-825: three definitions of
+"mobile", and the documented one disagreed with the stylesheet at 768px.
+================================================================================
+
+- THE SWEEP. Every `export function X` / `export const X = (` across src/,
+  grouped by name: 33 names defined in more than one file. Most are benign
+  namespace overlap (two ShareButtons under quiz/ and budget/, two
+  EmailCaptureModal, escapeHtml in string-utils.ts and sanitize.ts -- checked,
+  functionally identical, `&#039;` vs `&#39;` are the same entity). One had a
+  real divergence.
+
+- THE DIVERGENCE, at 768px, which is iPad portrait:
+
+      useMediaQuery.ts  useIsMobile  (max-width: 768px)   -> MOBILE at 768
+      use-mobile.tsx    useIsMobile  width < 768          -> desktop at 768
+      Tailwind          md:          (min-width: 768px)   -> desktop at 768
+
+  The first is what `import { useIsMobile } from '@/hooks'` resolves to, and it
+  is what CLAUDE.md's hook list names. So the documented hook and every `md:`
+  class on the page give opposite answers at one of the most common device
+  widths there is. Same shape one breakpoint up: useIsDesktop was
+  `min-width: 1025px` against Tailwind's `lg:` at 1024. useIsLargeDesktop was
+  1440px, which is not a Tailwind breakpoint at all.
+
+- NOT A LIVE BUG, AND I SAID SO RATHER THAN DRESSING IT UP. The four
+  convenience hooks in useMediaQuery.ts have ZERO importers. The two files that
+  use useMediaQuery directly hand-write their own queries and both are correct:
+  Recipes.tsx uses 1280/1536 (xl/2xl exactly), Planner.tsx uses
+  `max-width: 1023px`, the proper complement of `lg:`. So this was a trap set
+  for the next feature that followed the documentation, not a defect a user has
+  hit. Worth fixing precisely because the next thing to use it would inherit it.
+
+- ONE SOURCE NOW: src/lib/breakpoints.ts, with atLeast/below/between. The
+  0.02px step in `below` is load-bearing rather than cosmetic -- `max-width:
+  767px` beside `min-width: 768px` leaves a hole at the fractional widths
+  browsers really report under page zoom, where both queries are false and a
+  layout keyed off the pair renders neither branch.
+
+- THE GATE IS THE POINT. src/lib/breakpoints.test.ts reads the numbers back out
+  of `tailwindcss/resolveConfig`, so the module cannot drift from the
+  stylesheet: adding `theme.extend.screens` fails here instead of quietly
+  reintroducing the off-by-one. It also asserts the instrument first (that
+  resolveConfig returned at least 5 screens), because every comparison below it
+  would pass vacuously against an empty object -- the same "assert the fixture
+  landed" lesson US-784 wrote down.
+
+- A TRAP IN THE CONFIG, pinned explicitly: tailwind.config.ts sets
+  `container.screens['2xl'] = 1400px`. That applies to the `container` class
+  ONLY, not to the `2xl:` variant, which is still 1536. Reading it as the
+  variant would put the module 136px out, and it is exactly the kind of thing
+  someone "fixes" later. There is a test whose only job is to fail if that
+  happens.
+
+- Measured: 3266 tests pass (214 files). The 13 new ones are checked against
+  four mutants -- restore the max-width off-by-one, take 1400 as 2xl, drop a
+  breakpoint, restore lg:1025 -- and each is caught, including both of the
+  original bugs. Typecheck 814 against baseline 814; lint 1150 against 1156;
+  invisible chars clean.
+
+- DELETED: src/hooks/useIsDesktop.ts, a third definition (>= 1024, resize-event
+  based) with no importers outside the barrel.
+
+- DELIBERATELY LEFT ALONE: src/hooks/use-mobile.tsx still exports its own
+  useIsMobile. It is shadcn-generated and imported by
+  src/components/ui/sidebar.tsx, which CLAUDE.md forbids modifying, and it is
+  already Tailwind-aligned. Two symbols still exist; they no longer disagree,
+  which is the property that actually mattered.
+
+- **Learnings for future iterations:**
+  - "Defined in two files" is cheap to compute and mostly noise -- 33 hits, one
+    real. The signal is not duplication, it is duplication that DISAGREES. Diff
+    the implementations before believing either is a finding.
+  - A breakpoint constant in JS is a copy of a number that lives in CSS. Any
+    such copy wants a test that reads the original, not a comment saying they
+    match.
+  - A `container.screens` entry is not a breakpoint. Tailwind scopes it to one
+    class, and it sits three lines from the real `screens` key in the config.

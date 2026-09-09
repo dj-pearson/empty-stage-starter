@@ -4005,6 +4005,23 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 4) by a sweep for unbalanced addEventListener/removeEventListener pairs, which flagged PWAInstallPrompt leaking its 'appinstalled' listener -- and reading it turned up the duplicate.\n\nWHAT WAS WRONG. src/components/PWAInstallPrompt.tsx was lazy-mounted app-wide at App.tsx:144. src/components/AppInstallPrompt.tsx was mounted at Dashboard.tsx:482. Both listened for beforeinstallprompt, both rendered `fixed bottom-4 ... md:right-4 z-50`, so on any /dashboard route in Chrome/Edge/Android BOTH cards appeared at the same coordinates, on different timers (30s and 3s). Dismissal keys differed -- 'pwa-install-dismissed' vs 'app_install_dismissed' -- so saying Not Now to the visible card left the other one underneath, undismissed.\n\nDONE IN ITERATION 4 (AC 1-3): PWAInstallPrompt deleted, AppInstallPrompt promoted to the single app-wide mount, Dashboard's duplicate removed. AppInstallPrompt was the better of the two: it handles iOS (where beforeinstallprompt never fires), expires its dismissal after a week, and cleans up its listener. It now also reads the legacy key so nobody who already said no is asked again, and hides on either outcome of the native dialog -- it used to keep the card up when the user declined while clearing deferredPrompt, leaving an Install button that did nothing. 7 tests, mutation-checked.\n\nAC 4 IS OPEN. Three fixed overlays now share the bottom edge: AppInstallPrompt (bottom-4, full width on mobile), OfflineIndicator (bottom-4, centred) and SupportWidget. Offline plus an install prompt is an ordinary combination on a phone, and they will overlap. Wants one stacking policy rather than a fourth component picking its own offset."
+    },
+    {
+      "id": "US-825",
+      "title": "Three definitions of \"mobile\", and the documented one disagreed with the stylesheet",
+      "description": "As a developer or agent following CLAUDE.md's hook list, I want useIsMobile to flip on the same pixel as Tailwind's md: prefix, so that a layout keyed off both does not render two different answers at one width.",
+      "acceptanceCriteria": [
+        "One source of breakpoint numbers, shared by the hooks.",
+        "Each hook's boundary equals the Tailwind prefix of the same name, checked against the RESOLVED tailwind config so a future theme.screens override fails CI.",
+        "No width exists where a breakpoint and its complement are both false.",
+        "The container.screens 2xl override (1400px) is not mistaken for the 2xl: variant (1536px).",
+        "Only one definition of each breakpoint predicate remains in app code."
+      ],
+      "priority": 3,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 5) by a sweep for exported names defined in more than one file: 33 such names, of which this was the one with a real divergence rather than benign overlap.\n\nTHE DISAGREEMENT, at 768px, which is iPad portrait:\n    useMediaQuery.ts useIsMobile  (max-width: 768px)  -> mobile\n    use-mobile.tsx   useIsMobile  width < 768         -> desktop\n    Tailwind         md:          (min-width: 768px)  -> desktop\nThe first is the one re-exported from '@/hooks' and named in CLAUDE.md's hook list, so it is what a developer reaches for. Same shape at 1024: useIsDesktop was min-width 1025px against Tailwind's lg: at 1024. useIsLargeDesktop was 1440px, which is not a Tailwind breakpoint at all.\n\nNOT A LIVE BUG, and that is the only reason it had gone unnoticed: the four convenience hooks in useMediaQuery.ts had ZERO importers, and the two files that use useMediaQuery directly (Recipes.tsx, Planner.tsx) hand-write correctly-aligned queries. It was a trap set for the next feature that followed the documentation.\n\nDONE: src/lib/breakpoints.ts holds the numbers once with atLeast/below/between builders; the four hooks derive from it; src/hooks/useIsDesktop.ts (a third definition, unused) is deleted. src/lib/breakpoints.test.ts reads the numbers back out of tailwindcss/resolveConfig, so the config and the hooks cannot drift apart in silence. 13 tests, checked against four mutants including both original off-by-ones.\n\nDELIBERATELY LEFT: src/hooks/use-mobile.tsx still exports its own useIsMobile. It is shadcn-generated and imported by src/components/ui/sidebar.tsx, which CLAUDE.md forbids modifying. It is already Tailwind-aligned, so two symbols exist but they no longer disagree."
     }
   ]
 }
