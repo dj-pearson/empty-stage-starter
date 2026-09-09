@@ -2095,3 +2095,83 @@ Seven stories in one pass.
     Assert the fixture rendered before believing any result derived from it.
   - An assertion that passes against the broken build is not a test. Run every
     new gate against the code it is supposed to catch, before the fix.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 1. An offline write failure now names
+the connection. src/lib/networkFailure.ts. US-823 filed for the queue itself.
+================================================================================
+
+- THREE HYPOTHESES DIED BEFORE THE REAL FIND, and each is worth recording
+  because each looked like a certainty:
+  (a) "functions/ at the repo root is the Cloudflare Pages Functions directory
+      and holds 47 Deno edge functions, so Pages is publishing /stripe-webhook
+      and /agent-dispatcher on tryeatpal.com." Measured instead of asserted:
+      `npx wrangler pages functions build` compiles clean and the built worker
+      declares exactly three routePaths -- /sitemap.xml, /rss.xml, /feed.xml.
+      Wrangler skips a file with no onRequest export. No bug.
+  (b) "no public/_routes.json means Pages runs the worker on every request."
+      wrangler's convertRoutesToRoutesJSONSpec generates include[] from the
+      discovered routes when the file is absent, and only falls back to /* past
+      MAX_FUNCTIONS_ROUTES_RULES. Three routes. No bug.
+  (c) "82 Supabase calls destructure `error` and never check it." That count
+      came from a 12-line lookahead that could not see past a multi-line query
+      chain. Scanning to the end of the statement instead: ZERO unchecked. The
+      contexts are disciplined; the scan was not.
+
+- THE REAL FIND, in a file that reads as working code. OfflineIndicator.tsx
+  ships a QueuedMutation type, a localStorage key 'eatpal_offline_mutations',
+  queueMutation(), clearMutationQueue(), a pendingCount and a "<n> pending
+  changes" badge. grep across src/, app/, functions/ and supabase/ returns three
+  hits: the three declarations. Nothing calls them and nothing drains the key,
+  so the badge can never render and anything ever queued would sit there
+  forever. Same shape as US-765's service worker that nothing registered.
+
+- WHAT A USER GETS TODAY, checked at the write path rather than assumed.
+  addGroceryItem is server-first since US-717 (no phantom local row), so an add
+  with no connection does nothing at all. toggle/update/delete run through
+  runOptimisticMutation, so they flicker on and roll back. In every case the
+  toast said "Please try again." -- advice that cannot succeed, once per tap,
+  which is what makes the app read as broken rather than as offline.
+
+- SHIPPED: src/lib/networkFailure.ts, wired into the two toast sites in
+  optimisticMutation.ts (which every context funnels through) and the two direct
+  ones in GroceryContext. Offline now reads "You're offline, so that change
+  wasn't saved. Reconnect and try again." The wording says NOT SAVED rather than
+  pending on purpose -- there is no queue, and a "pending" that never lands is
+  the worse lie.
+
+- TWO SIGNALS, not one. navigator.onLine is definitive when false but reports
+  true for a captive portal, a dead uplink and a DNS failure, where every fetch
+  still throws. So the error shape is checked too: Failed to fetch, NetworkError,
+  Safari's "Load failed", net::ERR_*, GoTrue's AuthRetryableFetchError. The
+  guard that matters is the negative -- an error carrying an HTTP status means
+  the request ARRIVED, so it is never reported as offline however fetch-ish the
+  message reads. Blaming the connection for a 500 would hide a real defect.
+
+- MUTATION-CHECKED. Collapsing writeFailureMessage to `return fallback` fails 4
+  of the new tests and leaves all 9 pre-existing optimisticMutation tests green,
+  so the new ones pin the new behaviour and disturb nothing. One assertion I
+  wrote was wrong and the run caught it: I asserted the offline copy does not
+  end in "try again", when "Reconnect and try again" is the correct advice. The
+  assertion now checks what actually matters (it names the connection).
+
+- Measured: 146 context + helper tests pass; typecheck ratchet 814 against a
+  baseline of 814; lint 1151 against 1156 (unchanged by this diff, already below
+  baseline before it); check-invisible-chars clean.
+
+- NOT DONE, and filed rather than half-built: the queue. US-823. The temptation
+  was to wire queueMutation into the grocery toggle and call it offline support.
+  That is the second-parallel-system failure this repo has paid for three times
+  (US-777, US-780, US-784) -- app/mobile/lib/syncQueue.ts already does FIFO
+  replay with retry and is covered by src/lib/syncQueue.test.ts. The web queue
+  should be that module or a shared extraction of it, and it does not fit in one
+  iteration honestly.
+
+- **Learnings for future iterations:**
+  - A grep with a fixed lookahead window measures the window, not the code. The
+    "82 unchecked errors" and the real answer (zero) came from the same corpus.
+  - Build the thing and read its output before claiming what a build does. Two
+    infra "findings" evaporated against one wrangler invocation each.
+  - The dead code that matters is not the unreferenced component -- US-771
+    already deleted those. It is the exported function with zero callers sitting
+    inside a component that IS mounted, because everything around it works.

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const toastError = vi.fn();
 vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
@@ -12,7 +12,7 @@ vi.mock("@/lib/supabaseAuthError", () => ({
   handleSupabaseAuthError: (...a: unknown[]) => handleSupabaseAuthError(...a),
 }));
 
-import { runOptimisticMutation, rollbackOptimistic } from "./optimisticMutation";
+import { runOptimisticMutation, runOptimisticInsert, rollbackOptimistic } from "./optimisticMutation";
 
 interface Row { id: string; name: string }
 const r = (id: string, name = id): Row => ({ id, name });
@@ -30,6 +30,62 @@ function makeSetState<T>(initial: T[]) {
   };
   return { setState, get: () => state };
 }
+
+/** jsdom's navigator.onLine is a getter; override it for the duration of a test. */
+function setOnLine(value: boolean) {
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => value });
+}
+
+describe("offline write failures", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    handleSupabaseAuthError.mockResolvedValue("not-auth-error");
+    setOnLine(true);
+  });
+
+  afterEach(() => setOnLine(true));
+
+  it("tells an offline user the change was not saved, not to try again", async () => {
+    setOnLine(false);
+    const store = makeSetState<Row>([r("1")]);
+    await runOptimisticMutation<Row>(
+      store.setState,
+      (prev) => prev.filter((x) => x.id !== "1"),
+      () => Promise.resolve({ error: { message: "TypeError: Failed to fetch" } }),
+      { logLabel: "x", toastMessage: "Couldn't delete that item — restored. Please try again." },
+    );
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringMatching(/offline/i),
+    );
+    // and the rollback still happened
+    expect(store.get().map((x) => x.id)).toEqual(["1"]);
+  });
+
+  it("keeps the caller's wording when the server rejected the write", async () => {
+    const store = makeSetState<Row>([r("1")]);
+    await runOptimisticMutation<Row>(
+      store.setState,
+      (prev) => prev.filter((x) => x.id !== "1"),
+      () => Promise.resolve({ error: { status: 403, message: "row-level security" } }),
+      { logLabel: "x", toastMessage: "Couldn't delete that item — restored." },
+    );
+    expect(toastError).toHaveBeenCalledWith("Couldn't delete that item — restored.");
+  });
+
+  it("applies to inserts too", async () => {
+    setOnLine(false);
+    const store = makeSetState<Row>([]);
+    await runOptimisticInsert<Row>(
+      store.setState,
+      [r("tmp")],
+      () => Promise.resolve({ data: null, error: { message: "Load failed" } }),
+      () => [],
+      { logLabel: "x", toastMessage: "Couldn't add that item. Please try again." },
+    );
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/offline/i));
+    expect(store.get()).toEqual([]);
+  });
+});
 
 describe("runOptimisticMutation", () => {
   beforeEach(() => {

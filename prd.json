@@ -3970,6 +3970,25 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-08 (web loop, iteration 15) by the contrast test written in the same commit, which is the point: the same defect had been found three times by hand before anyone did the arithmetic.\n\n--secondary is 142 76% 36% with a white foreground: 3.35:1. --accent is 340 82% 52% with white: 4.33:1. Both are used as button fills and badges. Not changed here because they are brand colours with a wide blast radius and this was the last iteration of the loop -- picking new greens and pinks is a design decision, not a mechanical darkening, and it wants a look at the result rather than only a ratio.\n\nFor reference, --secondary needs roughly 30% lightness and --accent roughly 47% to clear 4.5:1 with white, but check them as text on the tinted surfaces too before settling: that is the step that was missed when --primary was set to 38% and still failed on every callout.\n\nAlso untested so far: the .dark block. themeContrast.test.ts slices the CSS at the first '.dark' and only measures the light theme. The dark tokens have their own foregrounds and have never been checked by anything but an axe run in light mode."
+    },
+    {
+      "id": "US-823",
+      "title": "The web app has no offline write queue, and ships a stub that reads like one",
+      "description": "As a parent adding items to the grocery list in a store with no signal, I want my changes to be kept and sent when the connection comes back, so that the PWA the app installs is usable where shopping actually happens.",
+      "acceptanceCriteria": [
+        "src/components/OfflineIndicator.tsx no longer exports queueMutation/clearMutationQueue as dead code: either they are wired to real writes or they are deleted. Today both have ZERO callers, so pendingCount is permanently 0 and the '<n> pending changes' badge can never render.",
+        "A durable web write queue exists with ONE implementation, not a second system beside the mobile one: app/mobile/lib/syncQueue.ts already does FIFO replay + retry and is covered by src/lib/syncQueue.test.ts. Either lift it into a shared module both platforms import, or state in the story why it cannot be shared.",
+        "Queued writes replay on the browser 'online' event and on next mount, in submission order, with a bounded retry and a cap on queue size.",
+        "Replay is idempotent against the load-precedence contract in CLAUDE.md: a server load REPLACES a slice wholesale, so a queued write must be re-applied after that load, not merged into the cache it overwrites.",
+        "The queue is scoped per user id and per household id, and is cleared on sign-out. A queue drained into the wrong household is worse than losing the write.",
+        "OfflineIndicator's pending count reads the real queue and clears as it drains.",
+        "Tests cover: a write made offline survives a reload; it lands exactly once when the connection returns; a write that the server then rejects is dropped with a toast rather than retried forever; and a queue that fails to parse does not wedge the app."
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 1) while checking what happens to a grocery write with no connection.\n\nWHAT IS ACTUALLY THERE. OfflineIndicator.tsx is 108 lines that read as a working offline layer: a QueuedMutation type, a localStorage key 'eatpal_offline_mutations', queueMutation(), clearMutationQueue(), a pendingCount and a '<n> pending changes' badge. `grep -rn \"queueMutation|clearMutationQueue|eatpal_offline_mutations\" src app functions supabase` returns THREE hits, all three the declarations themselves. Nothing calls them, nothing drains the key. If something ever did fill it, the entries would sit there forever. This is the same shape as US-765's unregistered service worker: a finished-looking module wired to nothing, which is exactly why nobody found it.\n\nWHAT THE USER GETS TODAY. GroceryContext.addGroceryItem is server-first by design (US-717 removed the phantom local row), so offline the add does nothing at all. toggle/update/delete go through runOptimisticMutation, so they flicker on and roll back. The banner correctly says 'You are offline'; the writes are simply lost.\n\nDONE IN ITERATION 1, NOT THE QUEUE: the failure toast now names the connection instead of saying 'Please try again' -- src/lib/networkFailure.ts + wiring in optimisticMutation.ts and GroceryContext. That makes the loss honest. It does not make it stop.\n\nNEXT ITERATION: start here. Read app/mobile/lib/syncQueue.ts FIRST -- the repo has paid three times for building a second copy of a system that already worked (US-777, US-780, US-784). The web queue should be that module or a shared extraction of it."
     }
   ]
 }

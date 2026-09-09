@@ -2,6 +2,7 @@ import type React from "react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
+import { writeFailureMessage } from "@/lib/networkFailure";
 
 /**
  * US-320: optimistic state mutation with server-error rollback.
@@ -72,8 +73,11 @@ export async function runOptimisticMutation<T extends { id: string }>(
   const handled = options.onError?.(error) === true;
   if (authOutcome === "not-auth-error" && !handled) {
     toast.error(
-      options.toastMessage ??
-        "Couldn't save your change — it's been reverted. Please try again.",
+      writeFailureMessage(
+        error,
+        options.toastMessage ??
+          "Couldn't save your change — it's been reverted. Please try again.",
+      ),
     );
   }
 
@@ -212,8 +216,11 @@ export async function runOptimisticInsert<T extends { id: string }>(
   const handled = options.onError?.(error) === true;
   if (authOutcome === "not-auth-error" && !handled) {
     toast.error(
-      options.toastMessage ??
-        "Couldn't save that — it's been removed. Please try again.",
+      writeFailureMessage(
+        error,
+        options.toastMessage ??
+          "Couldn't save that — it's been removed. Please try again.",
+      ),
     );
   }
 
