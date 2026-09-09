@@ -172,6 +172,12 @@ export default defineConfig(({ mode }) => ({
             if (/[\\/]node_modules[\\/]react[\\/]/.test(id) ||
                 /[\\/]node_modules[\\/]react-dom[\\/]/.test(id) ||
                 /[\\/]node_modules[\\/]react-is[\\/]/.test(id) ||
+                // use-sync-external-store is a React shim and, like tslib above,
+                // was claimed by no rule. It landed in vendor-tiptap, and because
+                // Radix's Avatar reads useSyncExternalStore through it, the avatar
+                // chunk statically imported 137 kB gzipped of rich-text editor --
+                // on the marketing home page, for one hook.
+                /[\\/]node_modules[\\/]use-sync-external-store[\\/]/.test(id) ||
                 /[\\/]node_modules[\\/]scheduler[\\/]/.test(id)) {
               return 'vendor-react';
             }
