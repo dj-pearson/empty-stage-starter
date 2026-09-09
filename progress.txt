@@ -2264,3 +2264,83 @@ queue's replay path had no test coverage at all. src/lib/offlineQueue.ts.
   - An optimistic initial state (isConnected: true) plus a transition-only
     trigger equals a trigger that never fires on the happy path. Worth checking
     wherever a useRef(false) gates work that a cold start also needs.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 3. US-823 web half: the grocery list
+now survives a shop with no signal. src/lib/webSyncQueue.ts.
+================================================================================
+
+- WHAT A SHOPPER GOT BEFORE THIS. Tap an item to check it off in a shop with no
+  signal: the row ticks, the server call fails, runOptimisticMutation rolls it
+  back, and a toast says it wasn't saved. Every tap. The app has shipped a full
+  PWA since US-765 -- service worker, offline.html, installable manifest -- and
+  held nothing at all for a failed write.
+
+- THE ONE DECISION THIS TURNS ON. A queued write is the single failure where
+  rolling back is WRONG. Every other rollback in this codebase tells the truth:
+  the change did not save, so take it off the screen. Rolling back a QUEUED op
+  would say "lost" about a change we have just promised to send. So the new
+  `offlineQueue` option on runOptimisticMutation, when it returns true, KEEPS
+  the optimistic row and toasts "Saved on this device and will sync when you
+  reconnect".
+
+  The inverse matters just as much and is where I nearly shipped a bug: if the
+  queue could NOT store the op (private window, quota, storage blocked), it must
+  return false and get the old rollback. queueWrite therefore does not trust
+  enqueue -- offlineQueue.save() deliberately swallows a storage failure so a
+  caller's write is not taken down with it, which means "enqueue didn't throw"
+  is NOT "the op is stored". It peeks and confirms. A mutation that replaces
+  that read with `return true` fails a test.
+
+- QUEUED ONLY FOR THE FAILURES THAT ARE ACTUALLY OFFLINE. The guard is
+  isOfflineFailure from iteration 1, so a 403 from RLS is never queued: it would
+  replay, fail, replay, and be dropped after five attempts, having told the user
+  it was saved the whole time. Mutation-checked -- dropping the guard fails a
+  test.
+
+- INSERTS ARE NOT QUEUED, AND THAT IS THE HONEST ANSWER, NOT AN OVERSIGHT.
+  groceryRow.ts states that the database owns `id`. A queued insert would
+  therefore replay under an id the optimistic row does not carry, arrive back
+  over realtime as a SECOND row, and leave a ghost until the next server load.
+  The real fix is client-generated ids on insert, which changes the insert
+  contract repo-wide. Adding an item offline still fails cleanly with the
+  iteration-1 message. Recorded in US-823 rather than half-built.
+
+- THE DEAD STUB IS GONE. OfflineIndicator's queueMutation/clearMutationQueue,
+  its QueuedMutation type and the 'eatpal_offline_mutations' key -- three
+  declarations with zero callers, found in iteration 1 -- are deleted. The
+  "<n> pending changes" badge now reads the real queue, which is the first time
+  it can render a number other than zero.
+
+- SCOPED PER USER, by key: 'eatpal.web.syncQueue.<userId>'. Signing in as
+  somebody else cannot drain the previous account's writes into the new one's
+  household. No shared-key fallback: an op with no owner is an op we cannot
+  place, so a signed-out visitor queues nothing at all. Mutation-checked.
+
+- TWO DRAIN TRIGGERS, and the second is the bug iteration 2 found on native:
+  the browser 'online' event, and once per mount. A shopper who closed the tab
+  in the aisle and opened it at home has no offline->online edge to catch.
+  Concurrent drains are refused -- 'online' can fire while a mount drain is in
+  flight, and replaying one op twice is two writes for one tap.
+
+- MY TEST INSTRUMENT WAS WRONG BEFORE THE CODE WAS. Two of the first thirteen
+  webSyncQueue tests failed, and both were the test's fault: src/test/setup.ts
+  replaces global.localStorage with an in-memory mock, so `localStorage.length`
+  is a vi.fn (it asserted against [Function spy]) and a spy on
+  Storage.prototype.setItem never applies. Fixed by making queueWrite,
+  queueWrites and pendingWriteCount take an injectable storage -- which is a
+  better seam anyway -- rather than by fighting the global. This is the fourth
+  time in this loop that an odd result indicted the instrument, not the subject.
+
+- Measured: 29 tests across the two helper suites, checked against four mutants
+  (ignore offlineQueue, queue a server rejection, trust enqueue blindly, drop
+  per-user scoping); each is caught. Typecheck ratchet 814 against baseline 814;
+  lint 1151 against 1156; check-invisible-chars clean.
+
+- **Learnings for future iterations:**
+  - "Did the write succeed" and "did the call throw" are different questions
+    whenever the callee swallows errors on purpose. offlineQueue.save() swallows
+    by design; trusting it would have shipped rows that look saved forever.
+  - Before asserting against a global in this repo, read src/test/setup.ts. Four
+    of the globals are replaced with mocks, and a spy on the real prototype is a
+    no-op that fails in a way that looks like a product bug.

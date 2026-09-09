@@ -80,6 +80,15 @@ export function isOfflineFailure(error: unknown): boolean {
 export const OFFLINE_WRITE_MESSAGE =
   "You're offline, so that change wasn't saved. Reconnect and try again.";
 
+/**
+ * What to tell the user when the write was rolled back... unless it was queued.
+ *
+ * US-823: a queued write is the opposite case -- it is waiting, not lost -- and
+ * saying "wasn't saved" about one would be the same lie in the other direction.
+ */
+export const OFFLINE_QUEUED_MESSAGE =
+  "You're offline. Saved on this device and will sync when you reconnect.";
+
 /** The offline wording when the connection is the cause, else `fallback`. */
 export function writeFailureMessage(error: unknown, fallback: string): string {
   return isOfflineFailure(error) ? OFFLINE_WRITE_MESSAGE : fallback;

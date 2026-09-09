@@ -2,7 +2,11 @@ import type React from "react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { handleSupabaseAuthError } from "@/lib/supabaseAuthError";
-import { writeFailureMessage } from "@/lib/networkFailure";
+import {
+  writeFailureMessage,
+  isOfflineFailure,
+  OFFLINE_QUEUED_MESSAGE,
+} from "@/lib/networkFailure";
 
 /**
  * US-320: optimistic state mutation with server-error rollback.
@@ -40,6 +44,17 @@ export async function runOptimisticMutation<T extends { id: string }>(
      * rather than "couldn't save". The rollback still happens either way.
      */
     onError?: (error: unknown) => boolean;
+    /**
+     * US-823: called only when the write failed because there is no connection
+     * (see isOfflineFailure). Return true if the operation was durably queued
+     * for replay.
+     *
+     * A queued op is the one case where rolling back would be WRONG: the change
+     * has been promised, so discarding it on screen would tell the user it was
+     * lost when it is merely waiting. So a true here keeps the optimistic state
+     * and says pending instead of lost.
+     */
+    offlineQueue?: (error: unknown) => Promise<boolean>;
   },
 ): Promise<{ error: unknown } | { error: null }> {
   let snapshot: T[] = [];
@@ -56,6 +71,14 @@ export async function runOptimisticMutation<T extends { id: string }>(
   if (!error) return { error: null };
 
   logger.error(options.logLabel, error);
+
+  // No connection and the op is safely queued: keep it on screen and tell the
+  // user it is waiting. Checked before the auth handler, whose refreshSession()
+  // would only fail the same way.
+  if (options.offlineQueue && isOfflineFailure(error) && (await options.offlineQueue(error))) {
+    toast.success(OFFLINE_QUEUED_MESSAGE);
+    return { error };
+  }
 
   // Expired session -> let the global handler refresh/redirect. Still roll
   // back so the rejected edit doesn't linger if the user stays.

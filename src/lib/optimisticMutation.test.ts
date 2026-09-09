@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const toastError = vi.fn();
-vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
+const toastSuccess = vi.fn();
+vi.mock("sonner", () => ({
+  toast: {
+    error: (...a: unknown[]) => toastError(...a),
+    success: (...a: unknown[]) => toastSuccess(...a),
+  },
+}));
 
 vi.mock("@/lib/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -84,6 +90,71 @@ describe("offline write failures", () => {
     );
     expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/offline/i));
     expect(store.get()).toEqual([]);
+  });
+});
+
+describe("offlineQueue: a queued write is kept, not rolled back", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    handleSupabaseAuthError.mockResolvedValue("not-auth-error");
+    setOnLine(false);
+  });
+
+  afterEach(() => setOnLine(true));
+
+  const offlineError = { message: "TypeError: Failed to fetch" };
+
+  it("keeps the optimistic change when the op was queued", async () => {
+    const store = makeSetState<Row>([r("1", "unchecked")]);
+    await runOptimisticMutation<Row>(
+      store.setState,
+      (prev) => prev.map((x) => (x.id === "1" ? r("1", "checked") : x)),
+      () => Promise.resolve({ error: offlineError }),
+      { logLabel: "x", offlineQueue: async () => true },
+    );
+    // The whole point: rolling this back would tell the shopper the tap was
+    // lost when it is queued and will be sent.
+    expect(store.get()).toEqual([r("1", "checked")]);
+  });
+
+  it("says pending rather than lost", async () => {
+    const store = makeSetState<Row>([r("1")]);
+    await runOptimisticMutation<Row>(
+      store.setState,
+      (prev) => prev.filter((x) => x.id !== "1"),
+      () => Promise.resolve({ error: offlineError }),
+      { logLabel: "x", offlineQueue: async () => true },
+    );
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringMatching(/sync/i));
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("rolls back and warns when the queue could NOT store the op", async () => {
+    const store = makeSetState<Row>([r("1")]);
+    await runOptimisticMutation<Row>(
+      store.setState,
+      (prev) => prev.filter((x) => x.id !== "1"),
+      () => Promise.resolve({ error: offlineError }),
+      { logLabel: "x", offlineQueue: async () => false },
+    );
+    expect(store.get()).toEqual([r("1")]);
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/offline/i));
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("does not queue a write the SERVER rejected", async () => {
+    setOnLine(true);
+    const queued = vi.fn(async () => true);
+    const store = makeSetState<Row>([r("1")]);
+    await runOptimisticMutation<Row>(
+      store.setState,
+      (prev) => prev.filter((x) => x.id !== "1"),
+      () => Promise.resolve({ error: { status: 403, message: "row-level security" } }),
+      { logLabel: "x", offlineQueue: queued },
+    );
+    // Replaying a forbidden write would fail forever and then be dropped.
+    expect(queued).not.toHaveBeenCalled();
+    expect(store.get()).toEqual([r("1")]);
   });
 });
 
