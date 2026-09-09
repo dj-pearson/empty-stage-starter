@@ -4282,6 +4282,24 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 7) by asking what leaves the browser for third parties. The consent plumbing was well built and one wire was not connected: src/lib/consent.ts exports onConsentChange, and NOTHING in src/, app/ or tests/ subscribed to it. So the two directions were asymmetric. Granting was instant -- setConsent(true) calls window.__eatpalLoadGA() and GA starts on that click. Withdrawing cleared localStorage, mirrored the state onto window, notified an empty subscriber set, and left GA sending hits and Sentry Session Replay recording the DOM for the rest of the visit. resetConsent's own docblock admitted it: 'Does not retroactively unload analytics already loaded this session -- a reload applies the new state.' Nothing tells the user to reload, and GDPR Article 7(3) requires withdrawal to be as easy as granting. Fix: src/lib/consentEnforcement.ts subscribes once from main.tsx, before initializeSentry, and on any non-granted state denies all four Consent Mode signals, sets window['ga-disable-<ID>'] (the flag gtag.js checks before every hit, which is the fallback for an already-loaded tag) and calls Sentry.getReplay()?.stop(). Granting is deliberately not handled -- ga-loader.js already covers it, and replay is decided once at Sentry.init, so a mid-session opt-in gets replay next visit, erring toward not recording. The measurement id is asserted equal to the GA_ID literal in public/ga-loader.js, which is a plain-JS file outside the bundle and cannot import it. Six mutants caught: remove the subscription, drop the kill switch, deny analytics_storage only, skip stopping replay, treat 'no decision' as consented, and drift the loader's id. Also caught and fixed one new type error the ratchet flagged in the test's replay mock."
+    },
+    {
+      "id": "US-842",
+      "title": "The feature-flag cache had a TTL that any unrelated write renewed",
+      "description": "As an engineer running a staged rollout, I want a flag change to reach browsers and my own browser to tell me the truth, so that turning a kill switch off actually turns it off.",
+      "acceptanceCriteria": [
+        "Each cached flag ages on its own; writing one flag does not renew any other.",
+        "A flag cached once cannot be kept fresh indefinitely by a busy neighbour flag.",
+        "The admin dashboard evicts a toggled flag instead of writing a value it cannot compute, and cannot write one by import either.",
+        "The old single-timestamp payload is treated as expired rather than migrated, and corrupt or versionless payloads read as a miss.",
+        "The cache key stays the literal US-835's sign-out scrub lists.",
+        "Tests seed the cache through the module, not by hand-writing its on-disk shape."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 8). The cache was `{ flags: Record<string, boolean>, timestamp: number }` -- ONE timestamp for every flag. Both readers rejected the whole object once that timestamp aged past 5 minutes, and all three writers (setCachedFlag, setCachedFlags, and the admin dashboard's syncFlagToHookCache) reset it to Date.now(). So writing ANY flag renewed the freshness of EVERY OTHER flag: a value whose consumer was not currently mounted could stay 'fresh' for as long as the browser stayed open, and turning a kill switch off server-side would not reach it. Second defect, same file: syncFlagToHookCache wrote `feature_flags.enabled` -- the raw column -- into a cache that holds the PER-USER result (enabled AND the user's bucket inside rollout_percentage). An admin turning a flag on at 5% saw it enabled in their own browser whatever bucket they were in, and an admin's browser is the one place a staged rollout gets eyeballed. Fix: src/lib/featureFlagCache.ts timestamps each flag; the dashboard calls evictFlag, which forces a real re-evaluation and claims nothing it cannot compute. The legacy shape is treated as expired rather than migrated -- its values may have been renewed arbitrarily far past their real age, so there is nothing worth carrying forward. TWO MUTANTS SURVIVED THE FIRST DRAFT and both produced better tests: the version check was only 'caught' by NaN arithmetic (a versionless payload with modern-looking entries now discriminates it), and nothing stopped the dashboard writing again (the import line is now asserted). Also negative: a general dead-export sweep is the wrong instrument -- 673 hits, mostly helpers exported for tests and components reached through lazy(), and its first two 'finds' were used in their own file."
     }
   ]
 }

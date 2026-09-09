@@ -3732,3 +3732,78 @@ consent stopped nothing until the next page load. src/lib/consentEnforcement.ts
   - When a docblock describes a limitation, treat it as an open ticket rather
     than as documentation. Three of the seven finds this loop were written down
     in the file that had the problem.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 8. US-842: the feature-flag
+cache had a TTL any unrelated write renewed. src/lib/featureFlagCache.ts
+================================================================================
+
+- A NEGATIVE THAT COST TWENTY MINUTES, and the instrument was the problem again.
+  Iteration 7's find was "an exported function with no callers", so I tried to
+  generalise it into a sweep. 673 hits. The category is mostly noise: pure
+  helpers exported so a test can reach them, and page components reached only
+  through lazy(() => import(...)), which no token scan will attribute. The two
+  entries I actually chased -- LEDGER_READS_FLAG and LEDGER_WRITES_FLAG -- are
+  used fourteen lines below their own definition. "No caller OUTSIDE its own
+  file" is not the same question as "no caller", and I had written the wrong one.
+  The first version also ran O(exports x files) regexes and timed out at 120s.
+
+- THE FIND CAME FROM READING THE FILE THE SWEEP POINTED AT, not from the sweep.
+  useFeatureFlag.ts cached flags as
+
+      { flags: { [key]: boolean }, timestamp: number }
+
+  ONE TIMESTAMP FOR EVERY FLAG. Both readers rejected the whole object once
+  that single timestamp aged past five minutes, and all three writers --
+  setCachedFlag, setCachedFlags, and the admin dashboard's syncFlagToHookCache
+  -- set `parsed.timestamp = Date.now()`.
+
+  So writing any flag renewed every other flag in the cache. A flag whose
+  consumer is not currently mounted is never re-evaluated, and its value stayed
+  fresh for as long as the browser stayed open and evaluated anything else.
+  Turning a kill switch off server-side would not reach that browser at all.
+  A TTL that an unrelated write renews is not a TTL.
+
+- SECOND DEFECT, SAME PAIR OF FILES. syncFlagToHookCache wrote
+  `feature_flags.enabled` -- the raw column -- into a cache that holds the
+  PER-USER result, which is `enabled AND the user's bucket falls inside
+  rollout_percentage`. An admin who turned a flag on at 5% saw it enabled in
+  their own browser whatever bucket they were in. That is the one browser in
+  which a staged rollout gets eyeballed, and "I turned it on at 5% and I can
+  see it" is exactly the wrong conclusion to be able to draw. The dashboard
+  evicts now: same immediate refresh, no claim it is not in a position to make.
+
+- TWO MUTANTS SURVIVED THE FIRST DRAFT and both produced a better test.
+  (a) Deleting the `v !== 2` version check changed nothing, because an
+      old-shape entry is a bare boolean, so `now - entry.at` is NaN and the
+      freshness comparison is false anyway. The guard was being credited for an
+      accident. The new case feeds it a payload with NO version but with
+      modern-looking `{ value, at }` entries -- which would be read happily
+      without the check.
+  (b) Nothing stopped the dashboard writing a value again. The rule is about
+      the admin surface, so it is asserted on the import line: the dashboard
+      may import evictFlag and must not import writeFlag/writeFlags.
+
+- THE SHAPE CHANGE BROKE TWO TESTS, CORRECTLY. AppContext.precedence and
+  InventoryContext.append enabled the ledger flags by hand-writing
+  `{ flags, timestamp }` into localStorage -- a second copy of a format. They
+  seed through writeFlag() now, so the next format change cannot break them.
+
+- Measured: 3466 tests pass (232 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught after the two fixes: renew-everything-on-write (3 fail), trust a
+  versionless payload (1), evict-writes-true (2), rename the cache key so the
+  sign-out scrub misses it (2), admin writes the raw column (1).
+
+- **Learnings for future iterations:**
+  - Generalising last iteration's find into a sweep is tempting and was wrong.
+    One good find does not mean the category is dense; check the first three
+    hits by hand before building anything on the list.
+  - When a mutant survives, ask whether the code it targets was ever load-
+    bearing. Here the version check was doing nothing that NaN arithmetic was
+    not already doing by accident -- worth knowing before trusting it.
+  - A cache with one timestamp for many entries has no TTL, it has a
+    last-touched marker. Per-entry ageing or nothing.
+  - A test that writes another module's storage format by hand is a copy of
+    that format. It will go red for the right reason eventually, which is the
+    good case; the bad case is that it goes green while the format drifts.

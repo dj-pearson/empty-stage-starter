@@ -1,71 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
-
-/**
- * Shared localStorage cache used by both the useFeatureFlag hook and the
- * admin FeatureFlagDashboard. The admin dashboard writes to this same key
- * whenever a flag is toggled so frontend consumers see changes immediately.
- */
-const FLAG_CACHE_KEY = "eatpal_feature_flags";
-const FLAG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// ---------------------------------------------------------------------------
-// Cache helpers
-// ---------------------------------------------------------------------------
-
-interface FlagCache {
-  flags: Record<string, boolean>;
-  timestamp: number;
-}
-
-function getCachedFlag(flagKey: string): boolean | null {
-  try {
-    const cached = localStorage.getItem(FLAG_CACHE_KEY);
-    if (!cached) return null;
-    const parsed: FlagCache = JSON.parse(cached);
-    if (Date.now() - parsed.timestamp > FLAG_CACHE_TTL) return null;
-    return parsed.flags?.[flagKey] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function setCachedFlag(flagKey: string, value: boolean): void {
-  try {
-    const cached = localStorage.getItem(FLAG_CACHE_KEY);
-    const parsed: FlagCache = cached ? JSON.parse(cached) : { flags: {}, timestamp: Date.now() };
-    parsed.flags[flagKey] = value;
-    parsed.timestamp = Date.now();
-    localStorage.setItem(FLAG_CACHE_KEY, JSON.stringify(parsed));
-  } catch {
-    // localStorage may be unavailable
-  }
-}
-
-function setCachedFlags(flagsObj: Record<string, boolean>): void {
-  try {
-    const cached = localStorage.getItem(FLAG_CACHE_KEY);
-    const parsed: FlagCache = cached ? JSON.parse(cached) : { flags: {}, timestamp: Date.now() };
-    Object.assign(parsed.flags, flagsObj);
-    parsed.timestamp = Date.now();
-    localStorage.setItem(FLAG_CACHE_KEY, JSON.stringify(parsed));
-  } catch {
-    // localStorage may be unavailable
-  }
-}
-
-function getAllCachedFlags(): Record<string, boolean> | null {
-  try {
-    const cached = localStorage.getItem(FLAG_CACHE_KEY);
-    if (!cached) return null;
-    const parsed: FlagCache = JSON.parse(cached);
-    if (Date.now() - parsed.timestamp > FLAG_CACHE_TTL) return null;
-    return parsed.flags ?? null;
-  } catch {
-    return null;
-  }
-}
+import {
+  readFlag as getCachedFlag,
+  readAllFlags as getAllCachedFlags,
+  writeFlag as setCachedFlag,
+  writeFlags as setCachedFlags,
+} from "@/lib/featureFlagCache";
 
 // ---------------------------------------------------------------------------
 // useFeatureFlag -- single flag check

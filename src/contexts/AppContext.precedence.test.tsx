@@ -20,6 +20,7 @@ import { render, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { AppProvider, useFoods, useInventory } from './AppContext';
+import { writeFlag } from '@/lib/featureFlagCache';
 
 // ---- Supabase mock: a chainable, thenable query builder per table ----------
 const tableData: Record<string, unknown[]> = {};
@@ -317,7 +318,6 @@ describe('US-671: the ledger slices under the US-341 precedence contract', () =>
  * from. Off is the shipped behaviour, unchanged; on reads the ledger.
  */
 describe('US-671: the feature-flag gate on pantry quantity', () => {
-  const FLAG_CACHE_KEY = 'eatpal_feature_flags';
   // 2 kg on hand in the ledger, while the legacy column still says 1.
   const FOOD = { id: 'f1', quantity: 1, unit: 'kg', canonical_unit: 'g' };
 
@@ -346,10 +346,9 @@ describe('US-671: the feature-flag gate on pantry quantity', () => {
   });
 
   it('on: renders the ledger balance converted into the item display unit', async () => {
-    localStorage.setItem(
-      FLAG_CACHE_KEY,
-      JSON.stringify({ flags: { kitchen_loop_ledger_reads: true }, timestamp: Date.now() })
-    );
+    // US-842: seed through the cache module, so the seed cannot drift from
+    // the on-disk format the way this hand-written literal did.
+    writeFlag('kitchen_loop_ledger_reads', true);
 
     let latest = { rendered: -1, enabled: false };
     render(
@@ -364,10 +363,9 @@ describe('US-671: the feature-flag gate on pantry quantity', () => {
   });
 
   it('on: keeps the legacy number for an item the ledger has no balance for', async () => {
-    localStorage.setItem(
-      FLAG_CACHE_KEY,
-      JSON.stringify({ flags: { kitchen_loop_ledger_reads: true }, timestamp: Date.now() })
-    );
+    // US-842: seed through the cache module, so the seed cannot drift from
+    // the on-disk format the way this hand-written literal did.
+    writeFlag('kitchen_loop_ledger_reads', true);
     tableData['item_stock'] = [];
 
     let latest = { rendered: -1, enabled: false };

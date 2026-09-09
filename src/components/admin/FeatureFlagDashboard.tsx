@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { evictFlag } from "@/lib/featureFlagCache";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,12 +67,6 @@ const ADMIN_FLAGS_CACHE_KEY = "eatpal_admin_feature_flags";
 /** TTL for the admin flag list cache (5 minutes). */
 const ADMIN_FLAGS_CACHE_TTL = 5 * 60 * 1000;
 
-/**
- * Cache key used by the useFeatureFlag hook for per-flag boolean lookups.
- * We write to this key whenever the admin toggles a flag so that frontend
- * consumers see the change immediately without waiting for an RPC round-trip.
- */
-const HOOK_FLAG_CACHE_KEY = "eatpal_feature_flags";
 
 function getCachedAdminFlags(): FeatureFlag[] | null {
   try {
@@ -100,37 +95,24 @@ function setCachedAdminFlags(flags: FeatureFlag[]): void {
 }
 
 /**
- * Sync a flag's enabled state into the useFeatureFlag hook's localStorage
- * cache so that frontend consumers pick up the change immediately.
+ * US-842: forget a flag in the hook's cache when the admin changes it, so the
+ * next consumer re-evaluates it against the server.
+ *
+ * This used to WRITE `feature_flags.enabled` into that cache. The hook's cache
+ * holds the PER-USER result -- `enabled` AND the user's bucket falling inside
+ * `rollout_percentage` -- and the raw column is not that. An admin who turned a
+ * flag on at 5% rollout therefore saw it enabled in their own browser whatever
+ * bucket they were in, and an admin's browser is the one place a staged rollout
+ * gets eyeballed. Eviction refreshes just as promptly and claims nothing this
+ * file is in a position to compute.
  */
-function syncFlagToHookCache(flagKey: string, enabled: boolean): void {
-  try {
-    const raw = localStorage.getItem(HOOK_FLAG_CACHE_KEY);
-    const parsed = raw
-      ? (JSON.parse(raw) as { flags: Record<string, boolean>; timestamp: number })
-      : { flags: {}, timestamp: Date.now() };
-    parsed.flags[flagKey] = enabled;
-    parsed.timestamp = Date.now();
-    localStorage.setItem(HOOK_FLAG_CACHE_KEY, JSON.stringify(parsed));
-  } catch {
-    // localStorage may be unavailable
-  }
+function syncFlagToHookCache(flagKey: string): void {
+  evictFlag(flagKey);
 }
 
-/**
- * Remove a flag from the useFeatureFlag hook's localStorage cache.
- */
+/** Remove a flag from the useFeatureFlag hook's localStorage cache. */
 function removeFlagFromHookCache(flagKey: string): void {
-  try {
-    const raw = localStorage.getItem(HOOK_FLAG_CACHE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as { flags: Record<string, boolean>; timestamp: number };
-    delete parsed.flags[flagKey];
-    parsed.timestamp = Date.now();
-    localStorage.setItem(HOOK_FLAG_CACHE_KEY, JSON.stringify(parsed));
-  } catch {
-    // localStorage may be unavailable
-  }
+  evictFlag(flagKey);
 }
 
 /** Extract a human-readable message from an unknown error value. */
@@ -204,7 +186,7 @@ export function FeatureFlagDashboard() {
     // Sync to useFeatureFlag hook cache
     const targetFlag = flags.find((f) => f.id === flagId);
     if (targetFlag) {
-      syncFlagToHookCache(targetFlag.key, newEnabled);
+      syncFlagToHookCache(targetFlag.key);
     }
 
     try {
@@ -226,7 +208,7 @@ export function FeatureFlagDashboard() {
         return reverted;
       });
       if (targetFlag) {
-        syncFlagToHookCache(targetFlag.key, currentEnabled);
+        syncFlagToHookCache(targetFlag.key);
       }
 
       toast.error("Error updating feature flag", { description: getErrorMessage(error) });
@@ -290,7 +272,7 @@ export function FeatureFlagDashboard() {
 
       // Sync the new flag to useFeatureFlag hook cache
       const flagKey = formData.key.toLowerCase().replace(/\s+/g, "_");
-      syncFlagToHookCache(flagKey, formData.enabled);
+      syncFlagToHookCache(flagKey);
 
       toast.success("Feature flag created", { description: "The new feature flag has been created successfully" });
 
