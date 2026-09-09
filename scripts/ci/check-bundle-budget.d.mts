@@ -7,3 +7,4 @@
  * untyped-module error that lands in the typecheck ratchet.
  */
 export declare function chunkKey(fileName: string): string;
+export declare function staticImportsOf(source: string): string[];
