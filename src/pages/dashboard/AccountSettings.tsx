@@ -1168,6 +1168,7 @@ export default function AccountSettings() {
                   <Input
                     id="currentPassword"
                     type="password"
+                    autoComplete="current-password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Enter your current password"
@@ -1182,6 +1183,7 @@ export default function AccountSettings() {
                   <Input
                     id="newPassword"
                     type="password"
+                    autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
@@ -1194,6 +1196,7 @@ export default function AccountSettings() {
                   <Input
                     id="confirmPassword"
                     type="password"
+                    autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
@@ -1309,6 +1312,7 @@ export default function AccountSettings() {
                               <Input
                                 id="confirm-email"
                                 type="email"
+                                autoComplete="off"
                                 placeholder={user?.email ?? "your@email.com"}
                                 value={deleteConfirmEmail}
                                 onChange={(e) => setDeleteConfirmEmail(e.target.value)}

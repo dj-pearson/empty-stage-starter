@@ -112,6 +112,7 @@ export function EmailCaptureModal({
             <Input
               id="email"
               type="email"
+              autoComplete="email"
               placeholder="your@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

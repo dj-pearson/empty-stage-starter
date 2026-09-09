@@ -4037,6 +4037,22 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 6) by generalising the sweep behind src/pages/Grocery.a11y.test.ts to every file. 19 hover-reveal classNames across src/, 11 incomplete.\n\nWHY IT MATTERS MORE THAN 'INVISIBLE': opacity-0 does not remove hit-testing. The button is fully transparent on a touch device AND still tappable, so a parent on a phone cannot see the Remove control on a recipe ingredient, an instruction step or a planned meal -- but can hit it by accident.\n\nFIXED (8 sites, 7 files): recipes/IngredientRow, recipes/InstructionStepBuilder (x2), recipes/RecipeListItem, pantry/PantryListItem, GSAPCalendarMealPlanner (live, used by Planner.tsx), MealPlanningCalendar, admin/EmailTemplateBuilder. Each now carries group-focus-within / focus-visible / pointer-coarse, matching what US-576 established on Grocery.\n\nTWO WERE TABLET-ONLY HOLES, easy to miss: PantryListItem used md:opacity-0 and RecipeListItem used max-sm:opacity-100, so a phone was fine and a TABLET -- touch, no hover, above the breakpoint -- got the invisible control.\n\nTHREE EXEMPT, with the reason machine-checked: ui/toast.tsx and ui/QuickActionMenu.tsx are shadcn (CLAUDE.md forbids editing src/components/ui/), and QuickActionsMenu's element is a label hint carrying pointer-events-none, so it is not hit-testable. The gate asserts each file still matches its stated reason, so an exemption cannot outlive its justification.\n\nNOTED SEPARATELY: src/components/MealPlanningCalendar.tsx has ZERO references anywhere in the repo -- a survivor of the US-771 unreferenced-component sweep. Fixed here because the change is a className, but it is a deletion candidate."
+    },
+    {
+      "id": "US-827",
+      "title": "The change-password form is illegible to a password manager",
+      "description": "As a signed-in parent changing my password, I want my password manager to notice and update the stored credential, so that my next sign-in does not fail with a password I no longer have.",
+      "acceptanceCriteria": [
+        "Every email, password and tel input declares autoComplete.",
+        "The change-password form uses current-password / new-password / new-password so a manager can tell the three boxes apart.",
+        "The delete-account confirmation opts out with autoComplete=\"off\" -- typing the address deliberately IS the confirmation.",
+        "A gate fails when a new credential field ships without one."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 7) by a sweep of img/anchor/input attributes.\n\nTHE CONSEQUENCE IS A LOCKOUT, not a convenience. With no autoComplete on the three password boxes in AccountSettings, a manager cannot tell them apart: it will not offer the saved password, will not generate a new one, and will not prompt to UPDATE the stored password once the change succeeds. The user changes their password, the manager keeps the old one, and the next sign-in fails with a credential they no longer have.\n\nWHAT MAKES IT A CLEAN FINDING: Auth.tsx already does this correctly on all five of its fields (email, new-password x2, email, current-password). Somebody knew. It just never reached the page where a password is actually changed.\n\nFIXED, 8 fields: AccountSettings currentPassword/newPassword/confirmPassword (+ confirm-email as autoComplete=off), ProfessionalSettings contact_email, RecipeExportActions email and phone, quiz/EmailCaptureModal email. Plus rel=\"noopener noreferrer\" on the one target=_blank anchor that lacked it (admin/UserIntelligenceDashboard).\n\nMETHOD NOTE, because it nearly produced a false report: the first sweep used `<Input[^>]*>` and JSX handlers contain `>` inside `onChange={(e) => ...}`, so tags were truncated mid-handler and Auth.tsx's sign-in email was flagged as missing an attribute that sits three lines lower. The gate in src/lib/formAutocomplete.test.ts parses by brace depth instead, and that reasoning is written into the file so the next person does not reach for the regex.\n\nNOT FINDINGS, checked rather than assumed: 11 apparent missing-alt hits were all false -- lucide-react's <Image> icon, and KidPhoto, which requires alt as a typed prop and spreads it."
     }
   ]
 }

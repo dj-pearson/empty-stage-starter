@@ -2570,3 +2570,64 @@ invisible on a phone and still tappable. src/lib/hoverRevealControls.test.ts.
     `md:opacity-0` looks safe on a phone and fails on an iPad.
   - When an allowlist is the honest answer, make each entry prove itself. A
     reason in a comment rots; a reason as a regex fails loudly.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 7. US-827: the change-password form
+was illegible to a password manager. src/lib/formAutocomplete.test.ts.
+================================================================================
+
+- THE CONSEQUENCE IS A LOCKOUT, not a missing convenience. AccountSettings has
+  three password boxes -- current, new, confirm -- and none declared
+  autoComplete. A password manager cannot tell them apart without it, so it
+  will not offer the saved password, will not generate a new one, and will not
+  prompt to UPDATE the stored credential once the change succeeds. The user
+  changes their password, the manager keeps the old one, and the next sign-in
+  fails with a password they no longer have.
+
+- WHAT MAKES IT A CLEAN FINDING RATHER THAN A STYLE OPINION: Auth.tsx already
+  does it correctly on all five of its fields -- email, new-password twice,
+  email, current-password. Somebody knew the rule. It just never reached the
+  page where a password is actually changed.
+
+- MY FIRST SWEEP WAS WRONG AND I CAUGHT IT BEFORE REPORTING IT. I matched tags
+  with `<Input[^>]*>`. JSX handlers contain a `>`: `onChange={(e) => ...}`. So
+  every tag was truncated mid-handler and attributes below the arrow were
+  invisible -- which flagged Auth.tsx's sign-in email as missing an
+  autoComplete that sits three lines lower. Rewrote it to walk brace depth with
+  quote tracking. That reasoning is now a comment in the gate, because the next
+  person to touch it will reach for the regex.
+
+- FIXED, 8 fields: AccountSettings currentPassword / newPassword /
+  confirmPassword, ProfessionalSettings contact_email, RecipeExportActions
+  email and phone, quiz/EmailCaptureModal email. Plus `rel="noopener
+  noreferrer"` on the one `target="_blank"` anchor missing it.
+
+- ONE FIELD DELIBERATELY OPTS OUT. The delete-account confirmation gets
+  `autoComplete="off"`: typing your own address IS the confirmation, and a
+  browser filling it in for you removes the entire safeguard. The gate asserts
+  that specifically, so a later "fix all the missing autocompletes" pass cannot
+  helpfully turn it back on.
+
+- NOT FINDINGS, CHECKED RATHER THAN COUNTED: 11 apparent missing-alt hits were
+  all false. Nine are lucide-react's `<Image>` ICON, which has no business
+  carrying alt, and two are KidPhoto, which takes `alt: string` as a required
+  typed prop and spreads it. Reporting "11 images without alt text" would have
+  been a confident, checkable, wrong number.
+
+- Measured: 3278 tests pass (216 files). The 6 new ones are checked against
+  three mutants -- drop an autoComplete, mislabel current-password as
+  new-password, let the delete-account field autofill -- and each is caught.
+  Typecheck 814 against baseline 814; lint 1150 against 1156; invisible chars
+  clean.
+
+- **Learnings for future iterations:**
+  - Do not parse JSX with `<[^>]*>`. Arrow functions in props put a `>` inside
+    every handler, so the match ends early and the sweep silently under-reads
+    the tag. This is the second instrument bug this loop; both produced
+    plausible numbers.
+  - A rule applied correctly in one file and nowhere else is a stronger signal
+    than a rule applied nowhere. Auth.tsx being right is what made this
+    unambiguous rather than a matter of taste.
+  - When a sweep's fix is "add the attribute everywhere", look for the field
+    that needs the opposite. There is usually one, and a later cleanup pass
+    will break it unless a test says why.

@@ -636,6 +636,7 @@ function BrandCustomizationForm({
               <label className="text-sm font-medium">Contact Email</label>
               <Input
                 type="email"
+                autoComplete="email"
                 value={formData.contact_email || ""}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                 placeholder="support@example.com"
