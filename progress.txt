@@ -3582,3 +3582,79 @@ iteration): the two stale VPAT rows, closed on evidence. src/lib/vpatClaims.test
     admit which row it checks.
   - Refusing to flip a claim without a test cost one iteration and produced a
     gate that keeps six rows honest. Worth it.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 6. US-840: household seats
+were sold and never charged for. 20260909000000_household_seat_limit.sql.
+================================================================================
+
+- THE REPO HAD ALREADY WRITTEN THE TICKET. docs/entitlements.md has carried
+  "Household members | 1 | 1 | unlimited | unlimited | not enforced" and the
+  line "no gate exists at the invite path" since Dj signed the limit table on
+  2026-09-03. There was no gate anywhere: accept_household_invite, from
+  migration 20260426000001, inserts into household_members with no plan lookup
+  at all. A Free account could mint invite links and add caregivers without
+  limit -- which is the entire difference Family Plus sells over Pro.
+
+- WHOSE PLAN COUNTS was the only real design question, and the obvious answer
+  is wrong. public.households is (id, name, created_at, updated_at) -- no owner
+  column. Using the JOINER's plan would let a Free household fill itself by
+  having a Family Plus friend accept the first invite. household_owner_id
+  resolves the earliest household_members row instead, which is the creator,
+  because ensure_user_household inserts them first.
+
+- NOBODY IS EVICTED, and that is a deliberate line. The check runs on the
+  accept path only. A household already over its new limit keeps every member
+  it has and simply cannot add another. Enforcing against existing rows would
+  remove a caregiver's access to a child's food history without warning; that
+  is not a billing correction, it is data loss. Case 6 of the SQL test pins it.
+
+- THE CHECK SITS AFTER THE IDEMPOTENT BRANCH, which is the kind of ordering
+  that is obvious once it breaks and invisible until then. Re-redeeming a code
+  you have already used consumes no seat, so a full household must not turn a
+  no-op into an error. Moving the check three lines earlier fails the suite.
+
+- THE MINT SIDE IS ADVISORY, THE ACCEPT SIDE IS AUTHORITATIVE. create_household_
+  invite checks too, so the owner is told while looking at the button rather
+  than after a caregiver has tried and failed. But a link minted while paid must
+  stop working after a downgrade, and case 5 proves it does.
+
+- FIRST VERSION OF CASE 5 WOULD HAVE PASSED WITHOUT THE FEATURE. It impersonated
+  a random uuid and caught `WHEN others`, so the foreign key on
+  household_members.user_id would have satisfied it. Now it inserts a real
+  auth.users row, catches check_violation specifically, and asserts the message
+  mentions "full". A case that passes whether or not the gate exists is not a
+  case.
+
+- VERIFIED AGAINST A REAL POSTGRES 16, initdb'd in this container (as the
+  postgres user -- initdb refuses to run as root, which is why the first attempt
+  silently created nothing). 8 cases, each printing EXPECTED beside the measured
+  value. Confirmed to FAIL without the migration: "column max_household_members
+  does not exist", exit 3.
+
+- THE CLIENT WAS THROWING AWAY THE ONE USEFUL MESSAGE. useHousehold's
+  createInviteCode returned a bare null on every failure and the page rendered
+  "Couldn't create an invite link", so the paywall would have looked like a bug.
+  It returns a discriminated result now, and the message goes through
+  userFacingError (US-831), so the seat message reaches the screen and an RLS
+  or constraint string still cannot.
+
+- Measured: 3436 tests pass (230 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; supabase config check 33/33 paths;
+  invisible chars clean. Six SQL mutants, six caught: owner = newest member,
+  drop the accept check, give Pro unlimited seats, move the check before the
+  idempotent branch, hardcode the Free fallback instead of reading the plan row,
+  and read user_subscriptions instead of effective_plan_id.
+
+- **Learnings for future iterations:**
+  - The repo's own docs carry unfinished work with the analysis already done.
+    docs/entitlements.md listed four remaining items in priority order; item (2)
+    was a day's work and a direct revenue leak, sitting in a file nobody re-reads.
+  - "Enforce the limit" and "enforce it against existing rows" are different
+    changes, and only one of them is a billing fix. Ask who loses access before
+    writing the WHERE clause.
+  - An exception test that catches `others` tests nothing. Name the SQLSTATE and
+    assert on the message, or the foreign key will pass your test for you.
+  - A paywall the UI renders as "something went wrong" is a paywall that
+    generates support tickets instead of upgrades. The refusal message is part
+    of the feature.

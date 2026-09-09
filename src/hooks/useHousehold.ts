@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { logger } from "@/lib/logger";
+import { userFacingError } from "@/lib/networkFailure";
+
+/** US-840: an invite either exists or there is a reason it does not. */
+export type CreateInviteResult =
+  | { ok: true; code: string }
+  | { ok: false; message: string };
 
 /**
  * The household's members and its live invite codes, in one place (US-789).
@@ -134,9 +140,19 @@ export function useHousehold() {
     void load();
   }, [load]);
 
-  /** Returns the new code, or null when the RPC refused. */
+  /**
+   * Mint an invite link.
+   *
+   * US-840: the RPC now refuses when the household has used every seat its
+   * plan allows, and the refusal carries the reason ("...is full. Upgrade to
+   * Family Plus to add more caregivers."). This used to return a bare null and
+   * the page turned every failure into "Couldn't create an invite link", so
+   * the one message the user needed -- the paywall -- was the one thrown away.
+   * The message comes back now, sanitised through userFacingError so a
+   * constraint or RLS string can never reach the screen in its place.
+   */
   const createInviteCode = useCallback(
-    async (role = "parent"): Promise<string | null> => {
+    async (role = "parent"): Promise<CreateInviteResult> => {
       const { data, error } = await (
         supabase.rpc as unknown as (
           fn: string,
@@ -146,10 +162,13 @@ export function useHousehold() {
 
       if (error || !data) {
         logger.error("Error creating invite code:", error);
-        return null;
+        return {
+          ok: false,
+          message: userFacingError(error, "Couldn't create an invite link."),
+        };
       }
       await load();
-      return data;
+      return { ok: true, code: data };
     },
     [load]
   );
