@@ -3497,3 +3497,88 @@ US-839 opened for the next iteration.
     exposed the parser bug.
   - Correcting a claim in a compliance document needs a test in the same
     commit, or it is just a different unverified claim.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 5. US-839 (opened last
+iteration): the two stale VPAT rows, closed on evidence. src/lib/vpatClaims.test.ts
+================================================================================
+
+- BOTH ROWS WERE STALE, and both are now "Supports" with a test named beside
+  them. The point of the iteration was not the flip -- it was refusing to flip
+  them last time without one.
+
+- 2.1.2 NO KEYBOARD TRAP. accessibilityWidget.focus.test.tsx drives the real
+  widget: opening moves focus into the panel, Tab wraps last->first, Shift+Tab
+  wraps first->last, a full cycle plus two never leaves the panel, and Escape
+  and a backdrop click BOTH return focus to the trigger. The WCAG-correct trap
+  is the one with an exit, so the exits are half the assertions.
+
+- 2.2.2 PAUSE, STOP, HIDE, and the thing that made this worth doing properly:
+  motion has TWO switches, and each has to reach BOTH engines.
+
+                     framer-motion          CSS
+      OS preference  MotionConfig 'user'    @media (prefers-reduced-motion)
+      in-app toggle  MotionConfig 'always'  html.reduce-motion
+
+  The bottom-right cell is the one that is easy to leave empty, and it is the
+  one that matters most: a user who turns motion off IN THE APP, with no OS
+  preference set, gets no media query at all. 13 `infinite` CSS animations --
+  float, drift, orbit, wiggle, bounce-dynamic, pulse-glow -- would have kept
+  running while the framer entrances obediently stopped. That cell exists
+  (`.reduce-motion, .reduce-motion *` plus the classList.add in
+  AccessibilityContext) and now cannot be removed quietly.
+
+  This also explains the six components that import framer-motion and touch no
+  reduced-motion hook, which is presumably what the old remark was counting:
+  they do not need one. MotionConfig is a single root-level gate.
+
+- TWO INSTRUMENT BUGS, and the second one is the better story.
+
+  (a) osPreferenceBlock read the FIRST `@media (prefers-reduced-motion: reduce)`
+      in index.css. There are three, and the first is a narrow rule for one
+      class. It reported "this stylesheet has no universal reduce rule" while
+      the universal rule sat 118 lines below. Now plural, and the instrument
+      test feeds it a two-block stylesheet where only the second is universal.
+
+  (b) A MUTANT SURVIVED, which is the only reason I found this one. Renaming
+      `.reduce-motion` to `.reduce-motion-disabled` -- which would break the
+      in-app toggle completely, since AccessibilityContext still adds
+      `reduce-motion` -- left the suite green. The matcher asked
+      `selector.includes('.reduce-motion')`, and `.reduce-motion-disabled`
+      contains that substring. Selectors are now split on commas and compared
+      whole. Two mutants that previously survived now fail.
+
+- THE VPAT NOW POINTS AT ITS TESTS, which is AC3/AC4 and the part that outlasts
+  this loop. Rows gained an optional `verifiedBy: string[]`, and
+  vpatClaims.test.ts makes the pointer load-bearing in BOTH directions: the file
+  must exist, AND the cited file must mention the criterion number. Pointing
+  2.2.2 at a real-but-unrelated test fails. It also fails any row that claims
+  "Supports" while its own remark says "in progress" -- the exact contradiction
+  that started this story. Six rows cite a test now (1.3.5, 2.1.2, 2.2.2, 2.4.1,
+  2.5.3, 4.1.2); the rest are human judgements ("no content flashes more than 3
+  times per second") and are honestly left uncited.
+
+- ONE CITATION WAS ALREADY WRONG when I added it. 1.3.5 cites
+  formAutocomplete.test.ts, which never mentioned 1.3.5 -- so the gate rejected
+  my own first version of the link and I added the reference to that file's
+  header. A pointer nobody checks is a pointer that is already wrong.
+
+- Measured: 3433 tests pass (229 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Seven mutants,
+  seven caught (after the two fixes above): cite a deleted test (2 fail), cite
+  an unrelated test (2), rename the in-app class (1), scope the in-app rule to
+  the element only (1), delete the universal OS block (1), break the tab
+  wrap-around (2), stop restoring focus on close (2).
+
+- **Learnings for future iterations:**
+  - A preference with two sources needs its matrix drawn. "Does the app respect
+    reduced motion?" has four answers, not one, and three of them being right
+    is indistinguishable from four until you write them down.
+  - Substring matching on a selector, a class or an identifier is not matching.
+    `.reduce-motion-disabled` contains `.reduce-motion`, and the only reason I
+    know is that a mutant lived.
+  - Make a cross-reference verifiable in both directions or it will drift. "This
+    row is checked by that file" is worth nothing unless that file also has to
+    admit which row it checks.
+  - Refusing to flip a claim without a test cost one iteration and produced a
+    gate that keeps six rows honest. Worth it.

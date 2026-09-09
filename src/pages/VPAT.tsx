@@ -20,6 +20,19 @@ interface WCAGCriterion {
   level: "A" | "AA" | "AAA";
   conformance: ConformanceLevel;
   remarks: string;
+  /**
+   * US-839: the tests that check this row, where the claim is something a
+   * machine can check. Two rows here described a remediation as "in progress"
+   * for months after it shipped, because a conformance report is only ever as
+   * current as the last person who remembered to edit it. A row that names its
+   * test is a row that goes red when the code stops matching it --
+   * src/lib/vpatClaims.test.ts requires every path to exist and every named
+   * file to mention the criterion, so the pointer cannot rot either way.
+   *
+   * Absent means the claim is a human judgement (no video content, no flashing,
+   * consistent labelling) rather than something to assert in CI.
+   */
+  verifiedBy?: string[];
 }
 
 const wcagCriteria: WCAGCriterion[] = [
@@ -34,18 +47,18 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "1.4.1", name: "Use of Color", level: "A", conformance: "Supports", remarks: "Color is never the sole indicator. Icons, text, and patterns supplement color coding." },
   { criterion: "1.4.2", name: "Audio Control", level: "A", conformance: "Supports", remarks: "No auto-playing audio. All media requires user interaction." },
   { criterion: "2.1.1", name: "Keyboard", level: "A", conformance: "Supports", remarks: "All functionality accessible via keyboard. Custom components support standard keyboard patterns." },
-  { criterion: "2.1.2", name: "No Keyboard Trap", level: "A", conformance: "Partially Supports", remarks: "Radix-based modal dialogs trap and release focus correctly. The custom accessibility-settings panel currently supports Escape-to-close but does not yet fully trap/restore focus; remediation in progress." },
+  { criterion: "2.1.2", name: "No Keyboard Trap", level: "A", conformance: "Supports", remarks: "Radix-based modal dialogs trap and release focus correctly. The custom accessibility-settings panel cycles focus within itself while open and returns focus to the trigger on Escape, on the close button and on a backdrop click.", verifiedBy: ["src/components/accessibilityWidget.focus.test.tsx"] },
   { criterion: "2.1.4", name: "Character Key Shortcuts", level: "A", conformance: "Supports", remarks: "Keyboard shortcuts use modifier keys (Ctrl/Cmd+K). Can be disabled in settings." },
   { criterion: "2.2.1", name: "Timing Adjustable", level: "A", conformance: "Supports", remarks: "Extended timeout option available in accessibility settings." },
-  { criterion: "2.2.2", name: "Pause, Stop, Hide", level: "A", conformance: "Partially Supports", remarks: "CSS animations respect prefers-reduced-motion globally. Some JavaScript-driven (Framer Motion) animations are not yet fully gated on prefers-reduced-motion; remediation in progress." },
+  { criterion: "2.2.2", name: "Pause, Stop, Hide", level: "A", conformance: "Supports", remarks: "Motion can be reduced by the operating system or by the toggle in the accessibility panel, and each switch reaches both engines: framer-motion through a single MotionConfig at the app root, and CSS through a universal rule under both the media query and an html.reduce-motion class. Every looping animation stops under either.", verifiedBy: ["src/lib/reducedMotion.test.ts"] },
   { criterion: "2.3.1", name: "Three Flashes or Below Threshold", level: "A", conformance: "Supports", remarks: "No content flashes more than 3 times per second." },
-  { criterion: "2.4.1", name: "Bypass Blocks", level: "A", conformance: "Supports", remarks: "Skip to main content link implemented on all pages." },
+  { criterion: "2.4.1", name: "Bypass Blocks", level: "A", conformance: "Supports", remarks: "Skip to main content link on every page. Activating it moves keyboard focus into the main landmark rather than only scrolling to it.", verifiedBy: ["src/components/skipToContent.test.tsx"] },
   { criterion: "2.4.2", name: "Page Titled", level: "A", conformance: "Supports", remarks: "All pages have unique, descriptive titles via react-helmet-async." },
   { criterion: "2.4.3", name: "Focus Order", level: "A", conformance: "Supports", remarks: "Focus order follows logical reading sequence. Tab index properly managed." },
   { criterion: "2.4.4", name: "Link Purpose (In Context)", level: "A", conformance: "Supports", remarks: "Link text describes destination. Generic links have aria-label." },
   { criterion: "2.5.1", name: "Pointer Gestures", level: "A", conformance: "Supports", remarks: "No multipoint or path-based gestures required. Single pointer alternatives available." },
   { criterion: "2.5.2", name: "Pointer Cancellation", level: "A", conformance: "Supports", remarks: "Actions trigger on up-event. Abort mechanism available for drag operations." },
-  { criterion: "2.5.3", name: "Label in Name", level: "A", conformance: "Partially Supports", remarks: "Text controls include their visible label in the accessible name. Icon-only buttons all expose an accessible name, enforced in CI by src/lib/iconButtonNames.test.ts; icon-only controls built on other elements are still being reviewed." },
+  { criterion: "2.5.3", name: "Label in Name", level: "A", conformance: "Partially Supports", remarks: "Text controls include their visible label in the accessible name. Icon-only buttons all expose an accessible name; icon-only controls built on other elements are still being reviewed.", verifiedBy: ["src/lib/iconButtonNames.test.ts"] },
   { criterion: "2.5.4", name: "Motion Actuation", level: "A", conformance: "Supports", remarks: "No motion-activated functionality. All features have standard input alternatives." },
   { criterion: "3.1.1", name: "Language of Page", level: "A", conformance: "Supports", remarks: "HTML lang=\"en\" attribute set on root element." },
   { criterion: "3.2.1", name: "On Focus", level: "A", conformance: "Supports", remarks: "Focus does not trigger unexpected context changes." },
@@ -53,13 +66,13 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "3.3.1", name: "Error Identification", level: "A", conformance: "Supports", remarks: "Form errors clearly identified with text and ARIA. Error messages linked to fields." },
   { criterion: "3.3.2", name: "Labels or Instructions", level: "A", conformance: "Supports", remarks: "All form fields have visible labels. Instructions provided for complex inputs." },
   { criterion: "4.1.1", name: "Parsing", level: "A", conformance: "Supports", remarks: "Valid HTML5. No duplicate IDs. Proper nesting maintained." },
-  { criterion: "4.1.2", name: "Name, Role, Value", level: "A", conformance: "Partially Supports", remarks: "Custom components use appropriate ARIA roles, states, and properties. The 38 icon-only buttons that announced as just \"button\" were named in September 2026 and a CI gate keeps them named." },
+  { criterion: "4.1.2", name: "Name, Role, Value", level: "A", conformance: "Partially Supports", remarks: "Custom components use appropriate ARIA roles, states, and properties. The 38 icon-only buttons that announced as just \"button\" were named in September 2026 and a gate keeps them named.", verifiedBy: ["src/lib/iconButtonNames.test.ts"] },
 
   // Level AA Criteria
   { criterion: "1.2.4", name: "Captions (Live)", level: "AA", conformance: "Not Applicable", remarks: "No live audio content." },
   { criterion: "1.2.5", name: "Audio Description (Prerecorded)", level: "AA", conformance: "Not Applicable", remarks: "No prerecorded video content." },
   { criterion: "1.3.4", name: "Orientation", level: "AA", conformance: "Supports", remarks: "Content adapts to portrait and landscape. No orientation lock." },
-  { criterion: "1.3.5", name: "Identify Input Purpose", level: "AA", conformance: "Supports", remarks: "Form inputs use appropriate autocomplete attributes." },
+  { criterion: "1.3.5", name: "Identify Input Purpose", level: "AA", conformance: "Supports", remarks: "Form inputs use appropriate autocomplete attributes.", verifiedBy: ["src/lib/formAutocomplete.test.ts"] },
   { criterion: "1.4.3", name: "Contrast (Minimum)", level: "AA", conformance: "Partially Supports", remarks: "The primary brand colour was darkened in September 2026 so that body text and white-on-primary both meet 4.5:1 in the light theme, and the dark theme uses a dark foreground on primary for the same reason; both were previously below 3:1. A high-contrast mode is available. Some components still use hardcoded colours that do not remap under high-contrast mode, and an automated axe scan of the signed-in pages runs in CI against a per-page budget; migration to semantic tokens is in progress." },
   { criterion: "1.4.4", name: "Resize Text", level: "AA", conformance: "Supports", remarks: "Text resizes up to 200% without loss of functionality. Font size settings available." },
   { criterion: "1.4.5", name: "Images of Text", level: "AA", conformance: "Supports", remarks: "No images of text used for content. Logo is exception per WCAG." },
