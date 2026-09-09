@@ -3977,3 +3977,89 @@ Sentry downloaded before first render. src/lib/sentryClient.ts
     stops a partial change that saves nothing.
   - Lower the budget in the same commit. Otherwise the next person gets to
     re-add 130 kB and still see green.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 11. US-845: the production
+CSP refused the theme script on every page. scripts/build/inject-csp-hashes.mjs
+================================================================================
+
+- A NEW INSTRUMENT, and it is the one that found this. Serve the real dist/
+  from a local node server that sets the EXACT Content-Security-Policy out of
+  public/_headers, then load six routes in Chromium and collect console errors,
+  page errors, failed requests and 4xx/5xx responses. Nothing in this repo had
+  ever run the built artefact under its own production headers.
+
+- EVERY ROUTE PRINTED THE SAME LINE:
+
+      Refused to execute inline script because it violates the following
+      Content Security Policy directive: "script-src 'self' ..."
+
+  on /, /pricing, /faq, /blog, /auth and /guides.
+
+- THE SCRIPT IS next-themes' ThemeProvider blocking script: the 557 bytes that
+  read the stored theme and set `class="dark"` on <html> BEFORE first paint. It
+  ships with `nonce=""` -- an empty nonce, because none is configured -- and
+  script-src carries no nonce and no 'unsafe-inline' (US-529 removed it). So it
+  never ran, and a dark-theme visitor got a white page until React hydrated,
+  which even after US-844 is ~260 kB of JS away. That is exactly the flash the
+  script exists to prevent.
+
+- THE FILE ASSERTED THE OPPOSITE. public/_headers, in a comment:
+
+      "Vite's inline modulepreload-polyfill is disabled ... so the built
+       index.html carries zero inline <script>."
+
+  False, and false for as long as next-themes has been mounted. Written once,
+  never executed. Fourth time this loop that the honest-sounding note describing
+  a mechanism was the thing hiding the defect.
+
+- HASH, NOT NONCE, AND THE REASON IS THE HOST. A nonce must be unique per
+  response and Cloudflare Pages serves _headers statically -- there is nothing
+  to generate one. A hash is fixed for a given body, which is what a static
+  header can carry. It is computed from the BUILT output on every build rather
+  than committed, because a committed hash pins one build of one library
+  version and goes stale in silence.
+
+- ld+json IS EXCLUDED ON PURPOSE. Five of those ship per page, they are data
+  rather than executable, the CSP does not gate them, and hashing them would
+  add five long tokens to every response protecting nothing.
+
+- THE INSTRUMENT WAS WRONG FIRST, AGAIN, AND IN THE SAME WAY. The scanner
+  reported 4 distinct hashes. Two of them were HTML COMMENT text: index.html
+  carries a comment explaining the CSP that quotes `<script src="/ga-loader.js"
+  defer>` inside it, and `<script([^>]*)>([\s\S]*?)</script>` matched from that
+  quoted opening tag. It was hashing prose -- a "hash" that would change
+  whenever somebody edited the comment. Comments stripped: 4 -> 2.
+
+- VERIFIED THE WAY IT WAS FOUND. Rebuilt, re-ran the same Chromium check
+  against dist/_headers with the hashes in it: zero refusals on all six routes.
+  30 inline scripts across the build, 2 distinct hashes.
+
+- THE TYPECHECK RATCHET CAUGHT A SECOND-ORDER COST. Importing the .mjs from a
+  test added a TS7016 (814 vs 813). A .d.ts did not fix it -- TypeScript wants
+  .d.mts for a .mjs specifier. Worth knowing: the sibling
+  scripts/ci/check-bundle-budget.mjs has no declaration file and is one of the
+  813 baseline errors for the same reason.
+
+- THREE NEGATIVES: prerendering emits real content, not a shell (109 kB on the
+  landing page, 29 routes); all six font stylesheets carry font-display:swap;
+  CSS is 26.6 kB gz. The Supabase and Sentry errors in the browser run are
+  artefacts of building without env vars locally, not findings.
+
+- Measured: 3507 tests pass (235 files, 1 skipped). Typecheck 813 against
+  baseline 813; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught: stop excluding ld+json, stop stripping comments, drop the
+  injector from the build, "fix" it with unsafe-inline, restore the false claim.
+
+- **Learnings for future iterations:**
+  - Run the artefact under its own production headers. A CSP is only enforced
+    by a browser that was served it, so dev, tests and CI all agree the app is
+    fine while every real visitor gets a refusal.
+  - A comment asserting an invariant is a test that never runs. This is the
+    fourth this loop -- the VPAT twice, docs/entitlements.md, resetConsent's
+    docblock, and now _headers.
+  - `<script` inside an HTML comment is still `<script` to a regex. Strip
+    comments before parsing markup, the same way you strip them before parsing
+    code.
+  - TypeScript resolves `.d.mts` for a `.mjs` import, not `.d.ts`. A declaration
+    file with the wrong extension is invisible and silent.
