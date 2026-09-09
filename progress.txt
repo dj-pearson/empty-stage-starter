@@ -2698,3 +2698,67 @@ back through new Date() showed the previous day. src/lib/date-utils.ts.
   - Write the instrument guard even when you are sure. Asserting "we are really
     in a negative-offset zone" is what turned an accidental command-line env
     var into a config change instead of a CI failure next week.
+
+================================================================================
+2026-09-09 -- web platform loop, iteration 9. US-829: a slower earlier query
+could overwrite a newer one. AddFoodDialog, FoodChainingRecommendations.
+================================================================================
+
+- THE SWEEP: useEffect bodies that await a fetch, call a setter, and have
+  reactive deps, minus any carrying a cancellation guard. 26 candidates. Most
+  have deps that change rarely (navigate, t) or run once. Two are real.
+
+- ADDFOODDIALOG, and the reason it is not a 50/50 coin flip. The 300ms debounce
+  cleanup cancels the TIMER, not a query already in flight. Type "ch", pause,
+  type "chicken": both queries run. `ilike '%ch%'` matches far MORE rows than
+  `'%chicken%'`, so the broader, staler query is the one more likely to finish
+  last. The ordering is biased toward the wrong answer winning, which is why
+  this shows up in real use rather than only under load.
+
+- FOODCHAININGRECOMMENDATIONS re-runs on activeKidId, and nothing stopped one
+  child's query resolving after the next child's. The panel is explicitly
+  per-child, so the failure renders one sibling's successful foods under the
+  other's name.
+
+- BOTH ALSO CLEARED THE SPINNER from the stale request. With results still
+  empty the list falls through to "No foods found." while the current query is
+  still running -- a flash of "nothing here" over a search about to return.
+
+- CHECKED AND NOT A BUG: AppContext's load effect was flagged by the sweep and
+  is fine. loadedScopeRef (US-538/US-550) already gates it per user:household
+  and clears state on an account switch; my regex looked for
+  cancel/ignore/mounted and could not see a scope ref. Read it before claiming.
+
+- THE TEST DOES NOT RELY ON TIMING. The supabase mock hands out deferred
+  promises, so the test resolves them in the damaging order deliberately:
+  newest first, then the stale broad query. A race reproduced by hoping is a
+  race that will pass on a fast machine.
+
+- I SHIPPED AN UNPINNED GUARD AND THE MUTANTS CAUGHT IT. Removing the whole
+  guard failed the ordering test, but un-guarding ONLY the spinner still passed
+  all three -- so the `if (!superseded) setIsSearching(false)` line was
+  unmeasured code. Rather than delete it (it prevents a real flicker), I wrote
+  the test that discriminates: resolve the STALE request first and assert
+  "No foods found." is not shown. Same lesson as iteration 4, opposite
+  resolution, because this time the guard was load-bearing.
+
+  I also dropped a test I had written for "does not write after the dialog
+  closes": with open={false} the DialogContent never renders, so the assertion
+  was true whatever the code did. It survived mutant A, which is how I noticed.
+
+- Measured: 3292 tests pass (218 files). Typecheck 814 against baseline 814;
+  lint 1150 against 1156; invisible chars clean.
+
+- LEFT ALONE DELIBERATELY: the other 24 unguarded effects. Pattern-patching all
+  of them would be 24 changes with no evidence any is reachable. Recorded in
+  US-829 that AuditTab and RunsTab are the same shape (paginated, filtered) if
+  a wrong-data report ever arrives from the admin tables.
+
+- **Learnings for future iterations:**
+  - When two requests race, ask which one is SLOWER, not which started first. A
+    broader LIKE pattern scans more rows, so the stale query systematically
+    wins. "Rare timing bug" was the wrong model.
+  - Test a race by constructing the ordering, not by triggering it. Deferred
+    promises in the mock turn a flaky reproduction into an assertion.
+  - A mutant that survives is the test telling you which line nobody measured.
+    Then choose honestly: delete the line, or write the test that pins it.
