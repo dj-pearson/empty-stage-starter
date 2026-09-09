@@ -15,8 +15,15 @@ const replayStop = vi.fn();
 type ReplayHandle = { stop: () => void } | undefined;
 const getReplay = vi.fn((): ReplayHandle => ({ stop: replayStop }));
 
-vi.mock('@sentry/react', () => ({
-  getReplay: () => getReplay(),
+/**
+ * US-844: the seam moved. consentEnforcement no longer imports @sentry/react;
+ * it asks sentryClient for the module only if something has already loaded it,
+ * so that withdrawing consent cannot itself pull 126 kB of SDK. Mocking our own
+ * seam rather than the vendor package is also the more honest double: it is the
+ * contract this module actually depends on.
+ */
+vi.mock('@/lib/sentryClient', () => ({
+  loadedSentry: () => ({ getReplay: () => getReplay() }),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },

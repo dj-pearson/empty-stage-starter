@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react';
+import { withSentry } from '@/lib/sentryClient';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { parseStorageObjectUrl } from '@/lib/storagePaths';
@@ -19,10 +19,12 @@ import { parseStorageObjectUrl } from '@/lib/storagePaths';
 function reportOrphanedObject(reason: string, context: Record<string, unknown>): void {
   logger.warn(`Storage object was not removed: ${reason}`, context);
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
-    Sentry.captureException(new Error(`Storage object not removed: ${reason}`), {
-      tags: { type: 'storage_orphan' },
-      extra: context,
-    });
+    withSentry((Sentry) =>
+      Sentry.captureException(new Error(`Storage object not removed: ${reason}`), {
+        tags: { type: 'storage_orphan' },
+        extra: context,
+      }),
+    );
   }
 }
 

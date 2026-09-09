@@ -3887,3 +3887,93 @@ stopped two of the three emails we send. functions/_shared/email-suppression.ts
     error too.
   - Dead code that CANNOT work is worth recording even when you do not delete
     it. unsubscribeAll looks like a working unsubscribe to the next reader.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 10. US-844: 126 kB of
+Sentry downloaded before first render. src/lib/sentryClient.ts
+================================================================================
+
+- THIS ONE CAME FROM BUILDING, NOT READING. `npm run build` and a walk of the
+  entry's static import closure. Nine iterations of reading found nine real
+  things; this took one build and produced the biggest measured win yet.
+
+- THE DEFERRAL WAS HALF-IMPLEMENTED, which is the fourth time this loop has
+  found that shape. main.tsx:
+
+      // Defer Sentry initialization to after first render to reduce TBT
+      requestIdleCallback(initSentryDeferred, { timeout: 4000 })
+
+  and, three lines above it, `import { initializeSentry } from './lib/sentry'`
+  -- a STATIC import, into a module opening with `import * as Sentry from
+  '@sentry/react'`. Deferring the call postpones nothing the browser must do:
+  the bytes are fetched, parsed and evaluated before the app runs either way.
+  The comment describes an intention the import contradicts.
+
+- MEASURED, BEFORE:
+
+      EAGER closure: 9 chunks, 386.3 kB gz
+        126.1 kB  vendor-sentry     <- largest member
+        114.3 kB  index             <- the app's own code
+         59.6 kB  vendor-react
+         ...
+
+  Sentry was bigger than the entire application entry chunk, and every visitor
+  to the landing page, a blog post or a programmatic guide paid it before
+  anything rendered. Those pages are the whole SEO strategy.
+
+- FOUR MODULES PINNED IT, which is why the fix could not be local: sentry.tsx,
+  api-errors.ts, storageCleanup.ts (reached through KidsContext, which
+  AppContext pulls in eagerly) and consentEnforcement.ts -- the last of which I
+  added myself in iteration 7. Removing any one would have moved zero bytes.
+  So '@sentry/react' is now named in exactly one file, inside import().
+
+- AFTER: 8 chunks, 260.4 kB gz. The gate's own number went 395.6 -> 266.6 kB,
+  a 129 kB / 33% cut in what the browser fetches before it can run anything.
+
+- REPORTING IS NOT WEAKER, AND THE TESTS SAY WHICH WAY. withSentry queues
+  (bounded at 50) while the module is in flight and flushes in order; it does
+  NOTHING when nothing has asked for the SDK, so logError in a dev session no
+  longer risks pulling 126 kB. The mutant that makes withSentry load on demand
+  fails two tests, and the one that drops the queue entirely fails three.
+
+- A SECOND DEFECT FIXED IN PASSING. webVitals.ts already used a dynamic import
+  -- and an unguarded one, fetching the SDK on EVERY metric, including in dev
+  and in any build where Sentry is off, to record a measurement with no client
+  to record it against. Routed through withSentry.
+
+- TWO INSTRUMENT BUGS ON THE FIRST RUN, BOTH SELF-INFLICTED AND BOTH THE SAME
+  MISTAKE THIS LOG HAS RECORDED TWICE BEFORE. The "only one module names the
+  SDK" scan read (a) its own docblock, which names '@sentry/react' while
+  explaining why nothing should, and (b) consentEnforcement's comment
+  "loadedSentry(), not loadSentry()" -- quoting the exact call the assertion
+  forbids. Comments stripped, test files skipped.
+
+- THE BUDGET WAS TIGHTENED, not left at 454000. An un-lowered budget banks the
+  win in the build and not in the gate, and the next careless static import
+  would have slipped straight back under it. 454000 -> 280000 against 266.6
+  measured. Typecheck baseline also lowered 814 -> 813.
+
+- TWO TEST FILES MOVED THEIR SEAM, correctly. consentEnforcement.test.ts and
+  storageCleanup.test.ts mocked '@sentry/react' directly and went red because
+  their subjects no longer import it. They mock '@/lib/sentryClient' now, which
+  is the contract those modules actually depend on -- a better double than the
+  vendor package was.
+
+- Measured: 3491 tests pass (234 files, 1 skipped). Typecheck 813 against a
+  baseline now also 813; lint 1144 against 1144; bundle budget 266.6/280.0 kB
+  eager and 2396.3/2510.0 kB total; invisible chars clean. Five mutants, five
+  caught.
+
+- **Learnings for future iterations:**
+  - Build it. Nine iterations of reading source found real bugs, and one build
+    found the largest measured regression in the tree. Some defects have no
+    textual tell at all -- a static import looks exactly like a lazy one until
+    you weigh the output.
+  - "Deferred" describes when a function is CALLED. Whether its module is
+    downloaded is decided by the import statement, and the two have nothing to
+    do with each other.
+  - When N modules pull in the same heavy dependency, the fix is one module
+    they all go through, not N edits. Counting the importers first is what
+    stops a partial change that saves nothing.
+  - Lower the budget in the same commit. Otherwise the next person gets to
+    re-add 130 kB and still see green.

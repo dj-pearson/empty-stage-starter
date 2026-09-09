@@ -3,10 +3,19 @@ import { readFileSync } from 'fs';
 import path from 'path';
 
 const captured: { message: string; tags: Record<string, string> }[] = [];
-vi.mock('@sentry/react', () => ({
-  captureException: (e: Error, opts: { tags: Record<string, string> }) => {
-    captured.push({ message: e.message, tags: opts.tags });
-  },
+/**
+ * US-844: the seam moved. storageCleanup goes through sentryClient's
+ * withSentry, which keeps @sentry/react out of the entry chunk's static
+ * closure. The double runs the callback immediately, standing in for "the SDK
+ * is loaded" -- the case these assertions are about.
+ */
+vi.mock('@/lib/sentryClient', () => ({
+  withSentry: (fn: (s: { captureException: (e: Error, o: { tags: Record<string, string> }) => void }) => void) =>
+    fn({
+      captureException: (e: Error, opts: { tags: Record<string, string> }) => {
+        captured.push({ message: e.message, tags: opts.tags });
+      },
+    }),
 }));
 
 const removeCalls: { bucket: string; paths: string[] }[] = [];

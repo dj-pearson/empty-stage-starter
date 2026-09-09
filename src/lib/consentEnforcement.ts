@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react';
+import { loadedSentry } from '@/lib/sentryClient';
 import { logger } from '@/lib/logger';
 import { onConsentChange, type ConsentState } from '@/lib/consent';
 
@@ -76,7 +76,10 @@ export function stopGoogleAnalytics(): void {
 /** Stop Session Replay if it is running. No-op when replay was never added. */
 export function stopSessionReplay(): void {
   try {
-    Sentry.getReplay()?.stop();
+    // loadedSentry(), not loadSentry(): withdrawing consent must not DOWNLOAD
+    // 126 kB of error-monitoring SDK in order to switch off a recording that,
+    // if the SDK never loaded, was never running.
+    loadedSentry()?.getReplay()?.stop();
   } catch (error) {
     // Replay's stop() rejects if it was never started; that is the common case
     // for a visitor who never consented, and is not worth a log line each time.
