@@ -744,7 +744,7 @@ const Landing = () => {
                 <div key={index} className="animate-item">
                   <Card className="hover:border-primary/30 transition-colors">
                     <CardHeader>
-                      <CardTitle className="text-xl text-primary/90">{faq.question}</CardTitle>
+                      <CardTitle className="text-xl text-primary">{faq.question}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
