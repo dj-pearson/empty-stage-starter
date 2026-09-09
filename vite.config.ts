@@ -144,8 +144,24 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('@tanstack')) {
               return 'vendor-query';
             }
-            // Utilities (small, can bundle together)
-            if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('date-fns')) {
+            // Utilities (small, can bundle together).
+            //
+            // tslib is here deliberately. It is claimed by no other rule, and a
+            // module no rule claims gets filed by Rollup under whichever chunk
+            // happens to reach it -- which was vendor-markdown. react-remove-scroll
+            // sits in the eager graph behind every Radix dialog and needs tslib's
+            // __assign/__rest/__spreadArray, so the entry chunk had to statically
+            // import vendor-markdown for three helper functions, and every visitor
+            // to the landing page downloaded 136 kB gzipped of react-markdown before
+            // anything ran. Tightening the markdown rule only moved it: tslib went
+            // to vendor-swagger and the entry pulled 283 kB of Swagger UI instead.
+            // vendor-utils is already in the eager set, so this costs no request.
+            if (
+              id.includes('clsx') ||
+              id.includes('tailwind-merge') ||
+              id.includes('date-fns') ||
+              /[\\/]node_modules[\\/]tslib[\\/]/.test(id)
+            ) {
               return 'vendor-utils';
             }
             // React core only — keep minimal to avoid circular chunk deps.

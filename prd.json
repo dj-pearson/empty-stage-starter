@@ -3852,6 +3852,23 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Audit 2026-09-07 (UX deep dive), item 7: mobile carried a top-right hamburger, a bottom bar, a bottom More sheet and a floating action button pinned over the bottom bar. The hamburger and More overlapped almost completely, and disagreed about grouping. Follows US-811, which is what made the hamburger redundant rather than merely duplicative. The FAB still overlaps the bottom bar's right edge; that is not addressed here."
+    },
+    {
+      "id": "US-816",
+      "title": "The prerendered HTML preloads chunks the page cannot use",
+      "description": "As a first-time visitor on a phone, I want the landing page to download only what it needs, so that it paints before I lose interest.",
+      "acceptanceCriteria": [
+        "dist/index.html carries no modulepreload link that dist/app-shell.html does not, unless the chunk is genuinely on the route's critical path",
+        "vendor-tiptap (137 kB gzipped, the blog CMS rich-text editor) is not preloaded on /",
+        "The eager preload budget for / is asserted in CI, in kilobytes gzipped, so the next regression fails a check rather than a Lighthouse run nobody reads",
+        "The budget check covers app-shell.html and the prerendered per-route HTML separately, because they drift",
+        "Prerendered routes still render their content -- the prerender output is unchanged apart from the link tags"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-08 (web loop, iteration 4) while fixing the tslib/vendor-markdown leak. Vite emits 8 modulepreload links into app-shell.html, 308 kB gzipped. The prerendered dist/index.html has 62, 670 kB gzipped. The extra 54 are runtime-injected: __vitePreload adds <link rel=modulepreload> to the live DOM as chunks load, and the prerenderer serialises document.documentElement.outerHTML, freezing them into the static HTML. So chunks the runtime would have fetched on demand, or not at all, become eager downloads for every visitor. vendor-tiptap is the clearest case: 137 kB gzipped of rich-text editor, reachable only from the admin blog CMS, preloaded on the marketing home page. Likely fix is a strip step in scripts/prerender.mjs that keeps only the link tags present in app-shell.html, plus a budget assertion so it stays fixed."
     }
   ]
 }
