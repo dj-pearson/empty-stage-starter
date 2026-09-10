@@ -337,6 +337,51 @@ final class HealthKitService {
         try await store.save(correlation)
     }
 
+    /// Applies a plan entry's result to Health: writes the meal when it was
+    /// eaten, removes it otherwise.
+    ///
+    /// Shared so every surface that can set a result behaves the same. It was
+    /// only wired into `AppState.updatePlanEntry`, and the Siri intent writes
+    /// straight through `DataService`, so "Hey Siri, log breakfast as ate"
+    /// updated the row and put nothing in Health. A user who opted into Health
+    /// sync got a nutrition log that was complete or not depending on which
+    /// surface they happened to use, with nothing to tell them.
+    ///
+    /// A no-op unless the user opted in, and unless the entry links to a
+    /// recipe carrying nutrition -- food-only entries do not have macros in
+    /// the schema.
+    func applyMealResult(
+        entry: PlanEntry,
+        recipes: [Recipe],
+        isEaten: Bool
+    ) async throws {
+        guard isEnabled, isAvailable else { return }
+
+        guard isEaten else {
+            try await deleteMeal(planEntryId: entry.id)
+            return
+        }
+
+        guard let recipeId = entry.recipeId,
+              let recipe = recipes.first(where: { $0.id == recipeId }),
+              let nutrition = recipe.nutritionInfo else { return }
+
+        // US-435: date the sample to the meal's civil day. If the stored date
+        // cannot be parsed, skip rather than mis-date the sample to "now",
+        // which would attribute the meal to the wrong day in Health.
+        guard let mealDate = DateFormatter.isoDate.date(from: entry.date) else { return }
+
+        try await writeMeal(
+            planEntryId: entry.id,
+            calories: nutrition.calories,
+            proteinGrams: nutrition.proteinG,
+            carbsGrams: nutrition.carbsG,
+            fatGrams: nutrition.fatG,
+            mealDate: mealDate,
+            mealName: recipe.name
+        )
+    }
+
     /// Removes the meal previously written for this plan entry, if any.
     ///
     /// Called when a result moves away from `.ate`. Without it, unmarking a

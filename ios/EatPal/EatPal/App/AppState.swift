@@ -808,11 +808,9 @@ final class AppState: ObservableObject {
                 // US-144: write nutrition to Health when the meal was eaten,
                 // and take it back out when the result changes to anything
                 // else. Both are no-ops unless the user opted in.
-                if result == MealResult.ate.rawValue {
-                    Task { await writeHealthSample(for: planEntries[index]) }
-                } else {
-                    Task { await removeHealthSample(for: planEntries[index]) }
-                }
+                let entry = planEntries[index]
+                let isEaten = result == MealResult.ate.rawValue
+                Task { await syncHealthSample(for: entry, isEaten: isEaten) }
                 // US-241: re-evaluate badges after each result update. Cheap —
                 // only runs criteria for unearned badges, and the planEntries
                 // / foods / recipes arrays are already in memory.
@@ -837,50 +835,19 @@ final class AppState: ObservableObject {
     /// user hasn't opted in, HealthKit isn't available, or the linked
     /// recipe has no nutrition data attached (food-only plan entries
     /// don't currently carry macros in the schema).
-    /// US-144: takes a meal back out of Health when its result moves away
-    /// from `.ate`. Nothing did this before, so unmarking a meal left the
-    /// nutrition in Health for good and the user's day kept counting food
-    /// nobody ate.
-    private func removeHealthSample(for entry: PlanEntry) async {
-        let service = HealthKitService.shared
-        guard service.isEnabled, service.isAvailable else { return }
+    /// US-144: reflects a meal's result in Health. Delegates to the shared
+    /// `HealthKitService.applyMealResult` so the Siri intent, which writes
+    /// straight through DataService, produces the same Health state as this
+    /// in-app path.
+    private func syncHealthSample(for entry: PlanEntry, isEaten: Bool) async {
         do {
-            try await service.deleteMeal(planEntryId: entry.id)
-        } catch {
-            SentryService.capture(error, extras: ["context": "healthkit_deleteMeal"])
-        }
-    }
-
-    private func writeHealthSample(for entry: PlanEntry) async {
-        let service = HealthKitService.shared
-        guard service.isEnabled, service.isAvailable else { return }
-
-        guard let recipeId = entry.recipeId,
-              let recipe = recipes.first(where: { $0.id == recipeId }),
-              let nutrition = recipe.nutritionInfo else { return }
-
-        // US-435: date the sample to the meal's civil day. If the stored date
-        // can't be parsed, skip the write rather than silently mis-dating the
-        // sample to "now" (which would attribute the meal to the wrong day in
-        // Health).
-        guard let mealDate = DateFormatter.isoDate.date(from: entry.date) else { return }
-
-        do {
-            try await service.writeMeal(
-                planEntryId: entry.id,
-                calories: nutrition.calories,
-                proteinGrams: nutrition.proteinG,
-                carbsGrams: nutrition.carbsG,
-                fatGrams: nutrition.fatG,
-                mealDate: mealDate,
-                mealName: recipe.name
-            )
-            SentryService.leaveBreadcrumb(
-                category: "healthkit",
-                message: "Wrote food correlation for \(recipe.name)"
+            try await HealthKitService.shared.applyMealResult(
+                entry: entry,
+                recipes: recipes,
+                isEaten: isEaten
             )
         } catch {
-            SentryService.capture(error, extras: ["context": "healthkit_writeMeal"])
+            SentryService.capture(error, extras: ["context": "healthkit_applyMealResult"])
         }
     }
 

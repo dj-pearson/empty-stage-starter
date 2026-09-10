@@ -64,13 +64,15 @@ describe('HealthKit meal idempotency', () => {
   it('removes the sample when a meal is no longer eaten', () => {
     expect(SERVICE).toContain('func deleteMeal(planEntryId: String)');
     expect(SERVICE).toContain('store.deleteObjects(');
-    // And the result branch actually calls it.
-    const branch = APP_STATE.slice(APP_STATE.indexOf('if result == MealResult.ate.rawValue {')).slice(
-      0,
-      400,
-    );
-    expect(branch).toContain('writeHealthSample');
-    expect(branch).toContain('removeHealthSample');
+    // And the result branch actually reaches it. Both directions now go
+    // through one call that takes `isEaten`, shared with the Siri intent --
+    // see src/lib/mealResultSurfaces.test.ts.
+    const branch = APP_STATE.slice(
+      APP_STATE.indexOf('let isEaten = result == MealResult.ate.rawValue'),
+    ).slice(0, 300);
+    expect(branch).toContain('syncHealthSample(for: entry, isEaten: isEaten)');
+    const apply = SERVICE.slice(SERVICE.indexOf('func applyMealResult('));
+    expect(apply.slice(0, 800)).toContain('deleteMeal(planEntryId: entry.id)');
   });
 
   it('keeps names out of HealthKit metadata', () => {

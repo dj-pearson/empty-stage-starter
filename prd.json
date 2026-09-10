@@ -4470,6 +4470,23 @@
       "platform": "ios",
       "loopVerifiable": false,
       "notes": "Found 2026-09-10 (iOS platform loop, iteration 3). app/mobile/lib/notifications.ts does `await import('expo-notifications').catch(() => null)` and returns early when that is null. expo-notifications is not in package.json dependencies (expo-camera, expo-haptics, expo-secure-store and the rest are), so the catch fires every time and requestPushPermission / registerPushToken are no-ops on every build. The iteration-3 sign-out fix touches this file and is correct, but on the Expo side it is currently inert for the same reason. The shipped Swift app is unaffected -- it registers with APNs directly. Fixing this needs a dependency add, a plugin entry, a device build to verify against, and a decision about what the settings screen should show when push is unavailable, which is more than one loop iteration."
+    },
+    {
+      "id": "US-853",
+      "title": "Logging a meal by voice should count towards streaks and badges",
+      "description": "As a parent who logs meals with Siri, I want my child's streak and badges to advance the same way they do when I tap it in the app, so that the surface I happen to use does not decide whether the progress counts.",
+      "acceptanceCriteria": [
+        "LogMealResultIntent re-evaluates badges for the affected child after updating the entries, the way AppState.updatePlanEntry does.",
+        "BadgeService.evaluate is callable without AppState, taking the foods, recipes and plan entries it needs as arguments (it already does) and with a defined place for the intent to source them.",
+        "A badge earned from a Siri-logged meal surfaces its celebration the next time the app opens, rather than being silently recorded or silently missed.",
+        "The analytics event for a logged meal fires from both surfaces, with the surface distinguishable.",
+        "Tests cover: badge advanced by a Siri log, no double-award when the same meal is logged twice, and a Siri log for a child with no badge criteria met."
+      ],
+      "priority": 3,
+      "passes": false,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Found 2026-09-10 (iOS platform loop, iteration 13). The iteration fixed the HealthKit half of this: LogMealResultIntent writes plan_entries.result straight through DataService and skipped everything AppState.updatePlanEntry does afterwards. Health sync now runs from both surfaces via the shared HealthKitService.applyMealResult. Two things are still in-app only: BadgeService.evaluate (so a Siri-logged meal does not advance a streak or earn a badge) and AnalyticsService.track(.mealResultLogged). Badges are the harder one -- evaluate() surfaces a celebration sheet through shared state the intent has no access to, so it needs a decision about what an earned-while-in-Siri badge does, which is more than one loop iteration."
     }
   ]
 }
