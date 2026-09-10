@@ -60,6 +60,9 @@ struct RootView: View {
                 // US-494 (M2): also try to drain the offline write queue on
                 // foreground; it no-ops when offline or empty.
                 Task { await OfflineStore.shared.syncPendingMutations() }
+                // US-145: a suspended app runs no timers, so the abandoned-trip
+                // check has to happen when it is running again.
+                Task { await GroceryTripActivityService.shared.endIfExpired() }
                 refreshIfStale()
 
             default:
