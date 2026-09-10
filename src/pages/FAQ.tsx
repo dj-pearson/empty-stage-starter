@@ -241,11 +241,11 @@ const FAQ = () => {
             <h2 className="sr-only">Questions and answers</h2>
             <Accordion type="single" collapsible className="w-full space-y-4">
             {filteredFaqData.map((faq, index) => (
-              <AccordionItem key={`item-${index + 1}`} value={`item-${index + 1}`}>
+              <AccordionItem key={`item-${index + 1}`} value={`item-${index + 1}`} className="group">
                 <AccordionTrigger className="text-left text-lg font-semibold">
                   {faq.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-muted-foreground leading-relaxed">
+                <AccordionContent forceMount className="text-muted-foreground leading-relaxed group-data-[state=closed]:h-0 group-data-[state=closed]:overflow-hidden group-data-[state=closed]:pb-0">
                   {faq.answer}
                 </AccordionContent>
               </AccordionItem>

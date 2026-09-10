@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 13,
+    "iterationsUsed": 14,
     "completed": [
       {
         "iteration": 1,
@@ -82,6 +82,12 @@
         "iteration": 13,
         "id": "SEO-019",
         "title": "A purpose-made 1200x630 social share image",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 14,
+        "id": "SEO-020",
+        "title": "The FAQ page declared 15 answers and rendered none of them",
         "commit": "see git log on this branch"
       }
     ]
@@ -249,6 +255,20 @@
       "priority": 2,
       "passes": true,
       "notes": "Implementing a fix the codebase had already written down. SEOHead's own comment said Cover.webp is 1536x1024, that 3:2 is neither Open Graph's ~1.91:1 nor Twitter's 2:1, and that a purpose-made 1200x630 export would render better -- declaring the true size was only the correctness half. scripts/build/generate-og-image.mjs centre-crops to 1.905:1 and resizes; safe for this artwork because the wordmark, spoon and tagline sit in the middle with margin and only the decorative corner blobs are trimmed. Checked the output by eye. Same webp format as before, so no scraper compatibility change. Not wired into npm run build: the output is committed like the other derivatives in public/, and the source art changes about once a year. Cover.webp is untouched for everything wanting the full frame."
+    },
+    {
+      "id": "SEO-020",
+      "title": "The FAQ page declared 15 answers and rendered none of them",
+      "description": "As a search engine, I want the FAQ answers the page marks up to exist on the page, so that the structured data is not describing content no crawler can find.",
+      "acceptanceCriteria": [
+        "Every answer in the FAQPage schema is present in the DOM",
+        "Closed answers stay collapsed, and the disclosure still opens and closes",
+        "The page renders identically to before",
+        "Tests cover what jsdom can see; the layout half is measured in a browser"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found in production: all 15 questions in the prerendered HTML, none of the 15 answers, because Radix unmounts a closed AccordionContent. Affects every crawler, not only the non-JS ones -- rendering does not click. Three traps on the way to the fix, each caught before shipping. forceMount alone renders all 15 answers OPEN, because Radix computes hidden as `open || isPresent` and the accordion-up keyframe has no forwards fill; measured in Chromium, not guessed. A plain data-[state=closed]: variant never matches, because shadcn puts the className on an inner div with no data-state -- hence `group` on the item. And h-0 alone leaves pb-4's 16px showing, so pb-0 goes with it. Verified in Chromium: 15 panels at 0px, 4794 characters of answer text in the DOM and none visible, one click opens exactly one panel with its real answer, another closes it, and before/after screenshots differ by 0 of 2,970,000 subpixels."
     },
     {
       "id": "SEO-002",
