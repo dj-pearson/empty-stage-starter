@@ -4283,3 +4283,98 @@ pages skipped h1 -> h3. src/lib/headingOutline.test.ts
     way to fix structure without redesigning.
   - A gate that reads dist/ needs a full rebuild per mutant. Worth it, and
     worth saying so: it is why this iteration has three mutants and not six.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 15 (LAST). US-850: the
+manifest registered a protocol handler with no route behind it.
+src/lib/manifestRoutes.test.ts
+================================================================================
+
+- TWO NEGATIVES FIRST, both measured rather than assumed, and both closing out
+  VPAT rows. FOCUS VISIBILITY (2.4.7): tabbed through /, /pricing and /faq --
+  132 stops -- and every single one has an outline or a box-shadow ring. Zero
+  failures. FOCUS ORDER (2.4.3): measured the y-position of every stop and
+  looked for backward jumps. There are some, and all of them are correct:
+  multi-column footers go down one column and back up to the top of the next,
+  which is the expected pattern, and the cookie banner deliberately precedes
+  the header. The accessibility widget's floating trigger is the 5th tab stop
+  while sitting at the bottom-left of the screen -- a mild ordering wart, not a
+  violation, and recorded rather than changed.
+
+- THE FIND. public/manifest.json declared
+
+      { "protocol": "web+eatpal", "url": "/import?url=%s" }
+
+  There is no /import route in App.tsx and nothing in the repo emits a
+  web+eatpal: link. An installed PWA registers that handler WITH THE OPERATING
+  SYSTEM, so the app advertised a capability it does not have; anything that
+  ever followed such a link would land on the 404 page.
+
+- REMOVED, NOT IMPLEMENTED. You do not ship a handler for a protocol you do not
+  handle, and inventing an /import route to satisfy a declaration nobody uses
+  would be building a feature to justify a typo. The manifest carries a note
+  saying to re-add it in the same change that adds the route.
+
+- THE MANIFEST IS THE ONE FILE THAT HANDS URLS TO THE OS instead of to the
+  router, which is why nothing noticed. The gate checks all of them -- start_url,
+  the four shortcuts, share_target.action and any protocol handler -- so the
+  next one to drift fails with the same assertion.
+
+- INSTRUMENT BUG, and it is the same shape as most of the others this loop: the
+  first route resolver kept nested routes as a flat set of NAMES, so
+  "/pricing/planner" resolved -- /pricing is a route and "planner" is a route
+  name somewhere under /dashboard. Nested paths are attributed to the nearest
+  absolute path declared before them now. The mutant that flattens it again
+  fails four tests.
+
+================================================================================
+LOOP CLOSED -- 15 iterations, US-835 to US-850
+================================================================================
+
+- SIXTEEN STORIES, fifteen closed and one deliberately left open (US-847, the
+  WebP og:image, which needs an asset and an owner's decision rather than code).
+
+- WHAT THE FINDS HAD IN COMMON, in rough order of how often it came up:
+
+  1. A CONFIDENT COMMENT IS A TEST THAT NEVER RUNS. Five of the fifteen were
+     written down, in the file that had them, by someone who knew: the VPAT
+     four times over (2.4.1, 2.1.2, 2.2.2, 1.3.1), docs/entitlements.md's "no
+     gate exists at the invite path", resetConsent's "a reload applies the new
+     state", and _headers' "the built index.html carries zero inline <script>".
+     The prose was right about the mechanism and nobody had checked it lately.
+
+  2. HALF-WIRED DECISIONS. Somebody designed the whole thing and left one wire
+     off: onConsentChange with no subscribers, a limit table with no gate, an
+     unsubscribe that two of three senders honoured, a cache written and never
+     read, a deferral that deferred the call but not the download.
+
+  3. THE INSTRUMENT WAS WRONG BEFORE THE CODE WAS, about ten times. Comments
+     quoted as code (three separate iterations), `[^>]*` as an attribute list
+     (79% under-report), one timestamp read out of three, substring matching on
+     a class name, a flat set of route names, and a <noscript> h1 counted as a
+     real one -- that last would have been a big and entirely false finding.
+
+  4. TEST DOUBLES THAT DISAGREED WITH THE PLATFORM, twice, and both times a
+     correct implementation looked broken: a storage mock exposing `length` as
+     a function, and a Cache API double comparing raw strings where the real one
+     resolves relative URLs.
+
+  5. BUILD IT AND RUN IT. Nine iterations of reading found nine real defects.
+     Then one build found 126 kB of Sentry blocking first render, and a browser
+     under the production CSP found a refused theme script on every page, a
+     19px overflow on the page that takes the money, and an offline path that
+     ignored its own cache. Some defects have no textual tell at all.
+
+- MEASURED AT CLOSE: 3539 tests pass (238 files, 3 skipped), up from 3405.
+  Typecheck 813 against a baseline lowered from 814. Lint 1144, lowered from
+  1148. Eager bundle 266.6 kB gz against a budget lowered from 454 to 280 --
+  129 kB less than the loop started with. Bundle total 2396/2510 kB. Supabase
+  config 33/33. Invisible chars clean. 71 mutants across the fifteen
+  iterations, every one caught, four of them only after the test that missed
+  them was rewritten.
+
+- **The one thing worth carrying forward:** every iteration that produced a
+  real find started by measuring something, and every iteration that nearly
+  produced a false one started by believing a sweep. Assert the instrument
+  first -- a floor, a control, a known-bad input -- and check the first three
+  hits by hand before building anything on the list.

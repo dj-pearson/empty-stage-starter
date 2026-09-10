@@ -96,10 +96,5 @@
       ]
     }
   },
-  "protocol_handlers": [
-    {
-      "protocol": "web+eatpal",
-      "url": "/import?url=%s"
-    }
-  ]
+  "_protocol_handlers_note": "US-850: a web+eatpal handler pointing at /import?url=%s was declared here and removed. There is no /import route in src/App.tsx and nothing in the repo emits a web+eatpal: link, so an installed PWA registered a handler with the OS that could only land on the 404 page. Re-add it in the same change that adds the route, not before -- src/lib/manifestRoutes.test.ts checks every URL this file points at against the router."
 }
