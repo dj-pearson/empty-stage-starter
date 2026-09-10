@@ -69,6 +69,7 @@ enum ProductPhotoIdentifier {
             let response: IdentifiedProduct = try await EdgeFunctions.invoke(
                 "identify-product",
                 body: RequestBody(imageBase64: jpeg.base64EncodedString()),
+                retry: .safeToRepeat,
                 as: IdentifiedProduct.self
             )
             // Server returns 422 with an error body when name is empty,

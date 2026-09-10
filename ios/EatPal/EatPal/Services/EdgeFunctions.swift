@@ -37,10 +37,11 @@ enum EdgeFunctions {
     static func invoke<Response: Decodable>(
         _ name: String,
         body: some Encodable,
+        retry: RetrySafety = .sendOnce,
         as: Response.Type = Response.self
     ) async throws -> Response {
         let data = try JSONEncoder().encode(body)
-        return try await invoke(name, jsonBody: data, as: Response.self)
+        return try await invoke(name, jsonBody: data, retry: retry, as: Response.self)
     }
 
     /// Invoke an edge function with raw JSON `Data`, decode a Codable response.
@@ -49,9 +50,10 @@ enum EdgeFunctions {
     static func invoke<Response: Decodable>(
         _ name: String,
         jsonBody: Data,
+        retry: RetrySafety = .sendOnce,
         as: Response.Type = Response.self
     ) async throws -> Response {
-        let data = try await invokeRaw(name, jsonBody: jsonBody)
+        let data = try await invokeRaw(name, jsonBody: jsonBody, retry: retry)
         do {
             return try JSONDecoder().decode(Response.self, from: data)
         } catch {
@@ -59,9 +61,49 @@ enum EdgeFunctions {
         }
     }
 
-    /// HTTP status codes that are worth retrying — transient gateway/upstream
-    /// failures rather than client errors.
+    /// Whether repeating this call is safe if the first attempt's outcome is
+    /// unknown.
+    ///
+    /// US-400 added a blanket retry on timeouts, dropped connections and
+    /// 502/503/504. That is right for a read and wrong for anything that
+    /// changes state, because a timeout does not mean the server did nothing --
+    /// it means we did not hear back. `bind-email-verify` is the case that
+    /// shows why: the code is single-use, so a request that succeeded and then
+    /// timed out gets retried, the server rejects the now-spent code, and the
+    /// user is told their code is invalid while their email is in fact bound.
+    ///
+    /// Default is `.sendOnce`. A caller opts into repetition by saying so.
+    enum RetrySafety {
+        /// The call has no side effect worth worrying about, or repeating it
+        /// converges on the same result. Retries every transient failure.
+        case safeToRepeat
+        /// The call may have been processed even though we did not hear back.
+        /// Retries only failures that prove the request never reached the
+        /// server.
+        case sendOnce
+    }
+
+    /// HTTP status codes worth retrying for a `.safeToRepeat` call — transient
+    /// gateway/upstream failures rather than client errors.
+    ///
+    /// None of them are retried under `.sendOnce`. Receiving any of these means
+    /// the connection reached the gateway, and from the client there is no way
+    /// to tell a Kong that never proxied the request from an upstream that ran
+    /// it and then failed to answer in time.
     private static let retryableStatuses: Set<Int> = [502, 503, 504]
+
+    /// URL errors that prove the request never reached the server, so
+    /// repeating it cannot duplicate a side effect. Safe under both policies.
+    private static let neverReachedServer: Set<URLError.Code> = [
+        .notConnectedToInternet, .cannotFindHost, .dnsLookupFailed, .cannotConnectToHost
+    ]
+
+    /// URL errors where the request may well have been processed. `.timedOut`
+    /// and `.networkConnectionLost` both happen after the bytes are on the
+    /// wire. Retried only for `.safeToRepeat`.
+    private static let outcomeUnknown: Set<URLError.Code> = [
+        .timedOut, .networkConnectionLost
+    ]
 
     /// Max attempts (1 original + retries). US-400: at least one retry on a
     /// transient failure before surfacing the error.
@@ -72,7 +114,11 @@ enum EdgeFunctions {
     /// US-400: retries transient failures (502/503/504, connection lost, timed
     /// out) with backoff, and honors Task cancellation so dismissing a view
     /// aborts in-flight work. Centralized here so every AI caller benefits.
-    static func invokeRaw(_ name: String, jsonBody: Data) async throws -> Data {
+    static func invokeRaw(
+        _ name: String,
+        jsonBody: Data,
+        retry safety: RetrySafety = .sendOnce
+    ) async throws -> Data {
         guard let url = url(for: name), let anonKey = anonKey() else {
             throw CallError.missingConfig
         }
@@ -106,7 +152,9 @@ enum EdgeFunctions {
                 let statusError = CallError.status(http.statusCode, String(data: data, encoding: .utf8))
                 // Only retry transient upstream/gateway statuses; 4xx and other
                 // 5xx are surfaced immediately.
-                if retryableStatuses.contains(http.statusCode), attempt < maxAttempts {
+                if safety == .safeToRepeat,
+                   retryableStatuses.contains(http.statusCode),
+                   attempt < maxAttempts {
                     lastError = statusError
                     try await backoff(forAttempt: attempt)
                     continue
@@ -119,7 +167,7 @@ enum EdgeFunctions {
             } catch {
                 // URLError (timed out, connection lost, can't connect, etc.).
                 lastError = error
-                if attempt < maxAttempts, isTransient(error) {
+                if attempt < maxAttempts, shouldRetry(error, under: safety) {
                     try await backoff(forAttempt: attempt)
                     continue
                 }
@@ -129,16 +177,11 @@ enum EdgeFunctions {
         throw lastError
     }
 
-    /// Whether a URLSession error is transient and worth retrying.
-    private static func isTransient(_ error: Error) -> Bool {
+    /// Whether a URLSession error is worth retrying under the given policy.
+    private static func shouldRetry(_ error: Error, under safety: RetrySafety) -> Bool {
         guard let urlError = error as? URLError else { return false }
-        switch urlError.code {
-        case .timedOut, .networkConnectionLost, .cannotConnectToHost,
-             .cannotFindHost, .dnsLookupFailed, .notConnectedToInternet:
-            return true
-        default:
-            return false
-        }
+        if neverReachedServer.contains(urlError.code) { return true }
+        return safety == .safeToRepeat && outcomeUnknown.contains(urlError.code)
     }
 
     /// Cancellation-aware exponential backoff: 0.5s, 1s, …

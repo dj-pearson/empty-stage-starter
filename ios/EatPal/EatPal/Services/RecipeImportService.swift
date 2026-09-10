@@ -65,6 +65,7 @@ enum RecipeImportService {
             if let direct: ParsedRecipe = try? await EdgeFunctions.invoke(
                 "parse-recipe",
                 body: body,
+                retry: .safeToRepeat,
                 as: ParsedRecipe.self
             ) {
                 return direct
@@ -74,6 +75,7 @@ enum RecipeImportService {
             let wrapper: ResponseWrapper = try await EdgeFunctions.invoke(
                 "parse-recipe",
                 body: body,
+                retry: .safeToRepeat,
                 as: ResponseWrapper.self
             )
             guard let recipe = wrapper.recipe else {

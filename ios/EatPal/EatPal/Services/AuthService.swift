@@ -132,6 +132,8 @@ final class AuthService {
     func bindEmailRequest(email: String) async throws {
         struct Request: Encodable { let email: String }
         struct Response: Decodable { let ok: Bool?; let error: String? }
+        // No retry override on purpose: this sends an email, and a repeat both
+        // sends a second one and may rotate the code out from under the first.
         let response: Response = try await EdgeFunctions.invoke(
             "bind-email-request",
             body: Request(email: email),
@@ -149,6 +151,10 @@ final class AuthService {
     func bindEmailVerify(code: String) async throws -> String {
         struct Request: Encodable { let code: String }
         struct Response: Decodable { let ok: Bool?; let email: String?; let error: String? }
+        // No retry override on purpose: the code is single-use. A request that
+        // succeeded and then timed out must not be repeated -- the server would
+        // reject the now-spent code and the user would be told their code is
+        // invalid while their email is in fact bound.
         let response: Response = try await EdgeFunctions.invoke(
             "bind-email-verify",
             body: Request(code: code),
