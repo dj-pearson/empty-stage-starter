@@ -72,9 +72,19 @@ describe('US-844: only one module names the SDK, and it does so dynamically', ()
 
   it('the eager budget was tightened rather than left as a ceiling', () => {
     const budget = JSON.parse(readFileSync(join(ROOT, '.ci', 'bundle-budget.json'), 'utf8'));
-    // 266.6 kB measured; anything at or above the old 454000 means the win was
-    // banked in the build and not in the gate.
-    expect(budget.eagerJs).toBeLessThan(300000);
+    // Anything at or above the pre-US-844 454000 would mean the win was banked
+    // in the build and not in the gate.
+    //
+    // The threshold was 300000, chosen against a 266.6 kB measurement. That
+    // measurement was taken on a build with no JWT-shaped VITE_SUPABASE_ANON_KEY,
+    // which tree-shakes the Supabase client out and shrinks the eager closure by
+    // 39 kB. The build that ships measures 305.7 kB, so no authorized build could
+    // ever meet a 280000 budget and main ran red on it for two merges. Budget
+    // corrected to 322000 on 2026-09-10; see .ci/bundle-budget.md.
+    //
+    // 360000 keeps the same intent against the honest number: still 20% under
+    // the pre-US-844 ceiling, with room for the ~5% headroom budgetFor applies.
+    expect(budget.eagerJs).toBeLessThan(360000);
   });
 });
 

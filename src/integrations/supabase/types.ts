@@ -19443,6 +19443,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      household_owner_id: { Args: { p_household_id: string }; Returns: string }
+      household_seat_limit: {
+        Args: { p_household_id: string }
+        Returns: number
+      }
       increment_budget_referral_count: {
         Args: { referrer_email_param: string }
         Returns: undefined
