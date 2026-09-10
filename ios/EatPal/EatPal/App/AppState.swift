@@ -800,10 +800,13 @@ final class AppState: ObservableObject {
                     result: result,
                     kidId: planEntries[index].kidId
                 ))
-                // US-144: write nutrition to Health when the meal was eaten
-                // and the user has opted in. No-op otherwise.
+                // US-144: write nutrition to Health when the meal was eaten,
+                // and take it back out when the result changes to anything
+                // else. Both are no-ops unless the user opted in.
                 if result == MealResult.ate.rawValue {
                     Task { await writeHealthSample(for: planEntries[index]) }
+                } else {
+                    Task { await removeHealthSample(for: planEntries[index]) }
                 }
                 // US-241: re-evaluate badges after each result update. Cheap —
                 // only runs criteria for unearned badges, and the planEntries
@@ -829,6 +832,20 @@ final class AppState: ObservableObject {
     /// user hasn't opted in, HealthKit isn't available, or the linked
     /// recipe has no nutrition data attached (food-only plan entries
     /// don't currently carry macros in the schema).
+    /// US-144: takes a meal back out of Health when its result moves away
+    /// from `.ate`. Nothing did this before, so unmarking a meal left the
+    /// nutrition in Health for good and the user's day kept counting food
+    /// nobody ate.
+    private func removeHealthSample(for entry: PlanEntry) async {
+        let service = HealthKitService.shared
+        guard service.isEnabled, service.isAvailable else { return }
+        do {
+            try await service.deleteMeal(planEntryId: entry.id)
+        } catch {
+            SentryService.capture(error, extras: ["context": "healthkit_deleteMeal"])
+        }
+    }
+
     private func writeHealthSample(for entry: PlanEntry) async {
         let service = HealthKitService.shared
         guard service.isEnabled, service.isAvailable else { return }
@@ -845,6 +862,7 @@ final class AppState: ObservableObject {
 
         do {
             try await service.writeMeal(
+                planEntryId: entry.id,
                 calories: nutrition.calories,
                 proteinGrams: nutrition.proteinG,
                 carbsGrams: nutrition.carbsG,
