@@ -28,23 +28,39 @@ final class WatchSessionStore: NSObject, ObservableObject {
 
     // MARK: - Outbound
 
-    /// Optimistically toggles the row locally + asks the iPhone to write
-    /// the change. Network roundtrip is fire-and-forget; on next snapshot
-    /// the iPhone confirms whatever it persisted.
+    /// Checks the row off locally and asks the iPhone to write the change.
+    /// Fire-and-forget; the next snapshot confirms whatever the phone
+    /// persisted.
+    ///
+    /// The message carries an explicit desired state, not a flip. The watch
+    /// only ever lists unchecked rows, so a tap always means "check this off"
+    /// -- but the old `grocery_toggle` key made the phone flip whatever the
+    /// current state was, which is wrong over a store-and-forward channel. If
+    /// the phone was out of range, the tap went out via `transferUserInfo` and
+    /// could arrive after the same row had already been checked on the phone,
+    /// flipping it back to unchecked and putting a bought item back on the
+    /// list.
+    ///
+    /// `grocery_toggle` is still sent so an older phone build paired with this
+    /// watch keeps working. A phone that understands `grocery_checked` reads
+    /// that instead and ignores the legacy key.
     func toggleGrocery(_ row: WatchSnapshot.GroceryRow) {
         // Drop the row from the local list so the user gets immediate
         // visual feedback even if WCSession is slow.
-        var meals = snapshot.meals
         var grocery = snapshot.grocery
         grocery.removeAll { $0.id == row.id }
         snapshot = WatchSnapshot(
             generatedAt: snapshot.generatedAt,
-            meals: meals,
+            meals: snapshot.meals,
             grocery: grocery,
             totalGroceryCount: snapshot.totalGroceryCount,
             checkedGroceryCount: snapshot.checkedGroceryCount + 1
         )
-        _ = meals  // keep meals in scope so the inout isn't optimized away
+
+        let payload: [String: Any] = [
+            "grocery_toggle": row.id,
+            "grocery_checked": true
+        ]
 
         guard WCSession.default.activationState == .activated else { return }
         // sendMessage is the right call here — we want low latency for the
@@ -53,7 +69,7 @@ final class WatchSessionStore: NSObject, ObservableObject {
         // arrive after the iPhone-side state has changed anyway.
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(
-                ["grocery_toggle": row.id],
+                payload,
                 replyHandler: nil,
                 errorHandler: nil
             )
@@ -61,7 +77,7 @@ final class WatchSessionStore: NSObject, ObservableObject {
             // iPhone is asleep / out of range — fall back to the queued
             // userInfo channel. Will deliver next time the phone reaches
             // out, which is the correct fallback.
-            WCSession.default.transferUserInfo(["grocery_toggle": row.id])
+            WCSession.default.transferUserInfo(payload)
         }
     }
 

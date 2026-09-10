@@ -1589,8 +1589,23 @@ final class AppState: ObservableObject {
 
     func toggleGroceryItem(_ id: String) async throws {
         guard let index = groceryItems.firstIndex(where: { $0.id == id }) else { return }
-        groceryItems[index].checked.toggle()
-        let checked = groceryItems[index].checked
+        try await setGroceryItemChecked(id, checked: !groceryItems[index].checked)
+    }
+
+    /// Sets a grocery item's checked state to a specific value.
+    ///
+    /// The idempotent form of `toggleGroceryItem`, and the one the watch uses.
+    /// A toggle is a flip of whatever the current state happens to be, which
+    /// is wrong over a store-and-forward channel: the watch falls back to
+    /// `transferUserInfo` when the phone is out of range, so a row checked off
+    /// in the shop could arrive after the same row had already been checked on
+    /// the phone, and flip it back to unchecked. Setting a value is safe to
+    /// deliver late or twice.
+    func setGroceryItemChecked(_ id: String, checked: Bool) async throws {
+        guard let index = groceryItems.firstIndex(where: { $0.id == id }) else { return }
+        let previous = groceryItems[index].checked
+        guard previous != checked else { return }
+        groceryItems[index].checked = checked
         let itemName = groceryItems[index].name
         // US-255: a check toggle is a local edit too — stamp it so the
         // 5s conflict window catches a household-mate's concurrent edit
@@ -1620,7 +1635,7 @@ final class AppState: ObservableObject {
                 HapticManager.lightImpact()
                 await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")
             } else {
-                groceryItems[index].checked.toggle()
+                groceryItems[index].checked = previous
                 toast.error("Failed to update item")
                 HapticManager.error()
                 throw error

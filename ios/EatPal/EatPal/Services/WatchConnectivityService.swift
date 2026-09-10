@@ -146,10 +146,26 @@ final class WatchConnectivityService: NSObject, ObservableObject {
     /// Apply a grocery toggle requested from the watch. We re-route through
     /// AppState so the iPhone UI, realtime channel, and offline queue all
     /// stay in sync — the watch never talks to Supabase directly.
-    func handleGroceryToggleFromWatch(itemId: String) {
+    /// Applies a grocery check the watch sent.
+    ///
+    /// `checked` is the state the watch is asking for, not a flip. The watch
+    /// only lists unchecked rows, so a tap always means true -- but it can
+    /// reach us late, through the queued `transferUserInfo` channel, after the
+    /// same row was already checked on the phone. A flip would undo that and
+    /// put a bought item back on the list; setting a value is safe to apply
+    /// twice or out of order.
+    ///
+    /// `checked` is nil when an older watch build sends only the legacy
+    /// `grocery_toggle` key. That case keeps the old flip so the pairing does
+    /// not simply stop working while the watch app catches up.
+    func handleGroceryToggleFromWatch(itemId: String, checked: Bool?) {
         Task { @MainActor in
             guard let appState else { return }
-            try? await appState.toggleGroceryItem(itemId)
+            if let checked {
+                try? await appState.setGroceryItemChecked(itemId, checked: checked)
+            } else {
+                try? await appState.toggleGroceryItem(itemId)
+            }
         }
     }
 
@@ -193,7 +209,10 @@ extension WatchConnectivityService: WCSessionDelegate {
         didReceiveMessage message: [String: Any]
     ) {
         if let toggleId = message["grocery_toggle"] as? String {
-            Task { @MainActor in self.handleGroceryToggleFromWatch(itemId: toggleId) }
+            let checked = message["grocery_checked"] as? Bool
+            Task { @MainActor in
+                self.handleGroceryToggleFromWatch(itemId: toggleId, checked: checked)
+            }
         }
     }
 
@@ -211,7 +230,10 @@ extension WatchConnectivityService: WCSessionDelegate {
         // are persisted instead of silently dropped and later resurrected by
         // the next snapshot.
         if let toggleId = userInfo["grocery_toggle"] as? String {
-            Task { @MainActor in self.handleGroceryToggleFromWatch(itemId: toggleId) }
+            let checked = userInfo["grocery_checked"] as? Bool
+            Task { @MainActor in
+                self.handleGroceryToggleFromWatch(itemId: toggleId, checked: checked)
+            }
             return
         }
 
