@@ -73,3 +73,68 @@ describe('BreadcrumbSchema', () => {
     expect(parsed.itemListElement).toHaveLength(1);
   });
 });
+
+/**
+ * BreadcrumbNavigation renders <Link to={item.url}> from the same items it hands to
+ * this component, so its callers pass router paths. Those went into the schema
+ * untouched, and Google discards a BreadcrumbList whose item values are not URLs.
+ */
+describe('BreadcrumbSchema absolutises item URLs', () => {
+  const itemsOf = (json: string) =>
+    (JSON.parse(json).itemListElement as { item: string }[]).map((entry) => entry.item);
+
+  it('turns router paths into URLs', () => {
+    render(
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: '/' },
+          { name: 'Blog', url: '/blog' },
+          { name: 'Article', url: '/blog/safe-foods-that-travel' },
+        ]}
+      />,
+    );
+
+    expect(itemsOf(capturedJsonLd)).toEqual([
+      'https://tryeatpal.com/',
+      'https://tryeatpal.com/blog',
+      'https://tryeatpal.com/blog/safe-foods-that-travel',
+    ]);
+  });
+
+  it('leaves an already absolute URL alone', () => {
+    render(
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: 'https://tryeatpal.com/' },
+          { name: 'Compare', url: 'https://tryeatpal.com/compare' },
+        ]}
+      />,
+    );
+
+    expect(itemsOf(capturedJsonLd)).toEqual([
+      'https://tryeatpal.com/',
+      'https://tryeatpal.com/compare',
+    ]);
+  });
+
+  it('does not double the slash on a path missing its leading one', () => {
+    render(<BreadcrumbSchema items={[{ name: 'Guides', url: 'guides' }]} />);
+    expect(itemsOf(capturedJsonLd)).toEqual(['https://tryeatpal.com/guides']);
+  });
+
+  it('leaves every item an absolute URL, whatever the mix', () => {
+    render(
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', url: '/' },
+          { name: 'Guides', url: 'https://tryeatpal.com/guides' },
+          { name: 'Chicken nuggets', url: '/guides/foods/chicken-nuggets' },
+        ]}
+      />,
+    );
+
+    for (const item of itemsOf(capturedJsonLd)) {
+      expect(item).toMatch(/^https:\/\/tryeatpal\.com\//);
+    }
+  });
+});

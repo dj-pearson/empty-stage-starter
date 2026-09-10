@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 6,
+    "iterationsUsed": 7,
     "completed": [
       {
         "iteration": 1,
@@ -40,6 +40,12 @@
         "iteration": 6,
         "id": "SEO-010",
         "title": "Blog posts claimed they had never been edited",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 7,
+        "id": "SEO-011",
+        "title": "Breadcrumb schema used router paths where a URL is required",
         "commit": "see git log on this branch"
       }
     ]
@@ -188,7 +194,7 @@
     },
     {
       "id": "SEO-011",
-      "title": "Blog post breadcrumbs use relative URLs, which schema.org rejects",
+      "title": "Breadcrumb schema used router paths where a URL is required",
       "description": "As a search engine, I want BreadcrumbList item values to be absolute URLs, so that the breadcrumb rich result is not discarded.",
       "acceptanceCriteria": [
         "Every BreadcrumbList item is an absolute https://tryeatpal.com URL",
@@ -197,8 +203,8 @@
         "A test fails if a relative item reaches the schema"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Found while inspecting the rendered head in iteration 6. A blog post emits itemListElement with item values of \"/\" and \"/blog\". ArfidPage passes absolute URLs to BreadcrumbSchema directly, so the two callers disagree and BlogPost is the wrong one. Needs a sweep of every caller plus a decision about where the absolutising belongs, which is more than the remainder of this iteration."
+      "passes": true,
+      "notes": "Wider than the blog. Five of the eleven callers passed relative paths, and they had no way to do otherwise: BreadcrumbNavigation renders <Link to={item.url}> from the same items it gives the schema, so a router path is what a Link needs. PseoPage is worse -- it feeds buildBreadcrumbs output straight in, and that is relative by construction, so the entire programmatic guide cluster shipped a BreadcrumbList Google discards. Normalised inside BreadcrumbSchema, the one choke point all eleven go through: visible links stay relative, schema comes out absolute, and the six callers already passing absolute URLs are untouched. Verified end to end on a rendered blog post, not just at the component. 4 new tests, 10 in the file."
     }
   ]
 }
