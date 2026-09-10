@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 11,
+    "iterationsUsed": 12,
     "completed": [
       {
         "iteration": 1,
@@ -70,6 +70,12 @@
         "iteration": 11,
         "id": "SEO-016",
         "title": "Every URL in the sitemap was a 308 redirect",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 12,
+        "id": "SEO-018",
+        "title": "Two contradictory BreadcrumbLists on every article page",
         "commit": "see git log on this branch"
       }
     ]
@@ -210,6 +216,20 @@
       "notes": "Found by checking production rather than the repo. Every route in the live sitemap except \"/\" answered 308 to its trailing-slash form -- /pricing, /faq, /blog, /compare/eatpal-vs-mealime, /arfid/what-is-arfid, all 180 -- because Cloudflare Pages serves a directory's index.html at the slash URL and redirects the bare one to it. The page each redirect landed on then declared the no-slash URL as its canonical and og:url: /arfid/what-is-arfid/ served canonical=\"https://tryeatpal.com/arfid/what-is-arfid\", which redirects back. Google resolves that by ignoring the declared canonical and files the sitemap under \"Page with redirect\". Nothing local could see it: scripts/dev/serve-dist.mjs models Pages' file resolution but not the redirect Pages generates for a directory index, so CI answered 200 for a URL production answered 308 for. That gap is now written into the file. NOT VERIFIED IN PRODUCTION -- a Pages preview has to confirm /pricing answers 200 rather than a redirect, which cannot be checked from here."
     },
     {
+      "id": "SEO-018",
+      "title": "Two contradictory BreadcrumbLists on every article page",
+      "description": "As a search engine, I want one breadcrumb trail per page, naming the path the page actually sits on.",
+      "acceptanceCriteria": [
+        "ArticleSchema emits no BreadcrumbList",
+        "Its WebPage node carries no dangling breadcrumb @id reference",
+        "A rendered blog post carries exactly one BreadcrumbList",
+        "Guides no longer claim /blog as their parent"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Seen on a live blog post: two BreadcrumbList blocks in the head with different item values. ArticleSchema hardcoded its own Home -> Blog -> title, while the page also rendered a real trail -- BlogPost via BreadcrumbNavigation, PseoPage via BreadcrumbSchema. On the guide cluster the hardcoded one was not merely duplicative but false: /guides/foods/<slug> was claiming /blog as its parent. Removed from ArticleSchema, along with the WebPage's breadcrumb @id reference, which would otherwise dangle. The trail belongs to whichever component knows the path, which is never this one. Verified by rendering a post: one BreadcrumbList, absolute items."
+    },
+    {
       "id": "SEO-002",
       "title": "/authors: confirm whether it still self-noindexes (it does not)",
       "description": "As a site owner, I want the sitemap to stop advertising a URL that serves noindex, so that Search Console stops reporting 'Submitted URL marked noindex' and the E-E-A-T page either counts or is withdrawn.",
@@ -303,6 +323,19 @@
       "priority": 2,
       "passes": false,
       "notes": "Left untouched deliberately in iteration 8. These are product, legal and compliance claims, not SEO defects, and I have no evidence in the repo either way -- which is the point: they are asserted to AI crawlers with nothing behind them that a reader here can check. The superlative (\"the only\") is the weakest of them. Needs a decision from someone who knows whether the audits exist, so it is a question rather than a patch."
+    },
+    {
+      "id": "SEO-017",
+      "title": "Any unknown URL serves an indexable homepage shell to non-JS crawlers",
+      "description": "As a search engine that does not run JavaScript, I want a URL that does not exist to say so, rather than returning 200 with an index directive.",
+      "acceptanceCriteria": [
+        "A nonexistent path stops returning meta robots index, follow to a non-JS client",
+        "Client-only routes that are not prerendered (/dashboard/*, /auth/callback, tier-2 guides) keep working",
+        "Decide between: an explicit catch-all in _redirects pointing at a noindex shell; a Pages Function that sets X-Robots-Tag for unknown paths; or accepting it"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Confirmed in production on 2026-09-10: https://tryeatpal.com/nonexistent-page-xyz returns 200 with <meta name=\"robots\" content=\"index, follow, ...\">, canonical https://tryeatpal.com/, the homepage title, and 11.5 kB of body that is entirely the theme script -- no content. NotFound.tsx sets noindex, but only once React runs, and robots.txt admits GPTBot, ClaudeBot and PerplexityBot by name, none of which do. Not fixed here on purpose. public/_redirects has no catch-all (line 74 says an explicit one caused an infinite-loop warning), so Pages is doing the SPA fallback implicitly from index.html -- which is also the prerendered homepage, which is why the fallback wears the homepage head. Adding dist/404.html would give a real 404 but would break every client-only route. The workable fix is a separate noindex shell behind an explicit catch-all, and that is a second deploy-shaped change stacked on iteration 11's, which is more risk than one iteration should take on an app whose iOS build is live."
     }
   ]
 }

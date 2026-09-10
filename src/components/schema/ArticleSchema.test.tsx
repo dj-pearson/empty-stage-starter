@@ -65,10 +65,30 @@ describe('ArticleSchema', () => {
     expect(article.description).toBe('Test');
   });
 
-  it('includes BreadcrumbList in graph', () => {
+  it('emits no BreadcrumbList of its own', () => {
+    // Every page rendering this also renders a real breadcrumb -- BlogPost through
+    // BreadcrumbNavigation, PseoPage through BreadcrumbSchema. This component used to
+    // add a second, hardcoded Home -> Blog -> title, so articles shipped two
+    // BreadcrumbList entities that disagreed, and on a guide the hardcoded one claimed
+    // /blog as the parent of /guides/foods/<slug>.
     render(
       <ArticleSchema
-        title="Test Article"
+        title="Chicken Nuggets"
+        description="A food chaining guide"
+        url="https://tryeatpal.com/guides/foods/chicken-nuggets"
+        datePublished="2026-01-15"
+      />
+    );
+
+    const parsed = JSON.parse(capturedJsonLd);
+    const types = parsed['@graph'].map((item: Record<string, unknown>) => item['@type']);
+    expect(types).not.toContain('BreadcrumbList');
+  });
+
+  it('leaves no dangling breadcrumb reference on the WebPage', () => {
+    render(
+      <ArticleSchema
+        title="Test"
         description="Test"
         url="https://tryeatpal.com/blog/test"
         datePublished="2026-01-15"
@@ -76,9 +96,11 @@ describe('ArticleSchema', () => {
     );
 
     const parsed = JSON.parse(capturedJsonLd);
-    const breadcrumb = parsed['@graph'].find((item: Record<string, unknown>) => item['@type'] === 'BreadcrumbList');
-    expect(breadcrumb).toBeDefined();
-    expect(breadcrumb.itemListElement).toHaveLength(3);
+    const webPage = parsed['@graph'].find(
+      (item: Record<string, unknown>) => item['@type'] === 'WebPage',
+    );
+    expect(webPage).toBeDefined();
+    expect(webPage.breadcrumb).toBeUndefined();
   });
 
   it('includes WebPage in graph', () => {
