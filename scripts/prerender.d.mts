@@ -46,3 +46,6 @@ export function buildPrerenderManifest(run: PrerenderManifestInput): PrerenderMa
 export function discoverDynamicRoutes(...args: unknown[]): Promise<string[]>;
 
 export function validateSnapshot(...args: unknown[]): unknown;
+
+/** Absolute path the snapshot for `route` is written to, under dist/. */
+export function outputPathFor(route: string): string;

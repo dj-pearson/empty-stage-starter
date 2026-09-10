@@ -222,7 +222,7 @@ jobs:
       #
       # `vite build` stops at the SPA shell. `npm run build` is
       # ensure-chromium && vite build && prerender, and the prerender step is
-      # what writes dist/<route>/index.html -- the files a crawler that does not
+      # what writes dist/<route>.html -- the files a crawler that does not
       # run JavaScript actually reads. Cloudflare Pages' own Git build runs the
       # prerender (see the header of scripts/ensure-chromium.mjs, which exists
       # because that step once failed there and took the deploy with it), so CI
@@ -318,7 +318,7 @@ jobs:
 
       # E2E_TARGET=dist makes playwright.config.ts serve the downloaded dist/
       # through scripts/dev/serve-dist.mjs on 4173, which resolves URLs the way
-      # Cloudflare Pages does -- prerendered dist/<route>/index.html first,
+      # Cloudflare Pages does -- prerendered dist/<route>.html first,
       # SPA fallback after. `npm run dev` would test a different resolver.
       - name: Run Playwright
         run: npx playwright test --project=chromium tests/*.spec.ts

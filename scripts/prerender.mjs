@@ -10,7 +10,7 @@
  *
  * This script runs after `vite build`, loads each public route in headless Chromium,
  * waits for React + react-helmet-async to settle, and writes the resulting HTML to
- * `dist/<route>/index.html`. Cloudflare Pages serves those files directly, so crawlers
+ * `dist/<route>.html`. Cloudflare Pages serves those files directly, so crawlers
  * get real content and the correct per-route <head> with zero runtime cost.
  *
  * It is a prerender, not SSR: the client still boots normally and `createRoot` replaces
@@ -238,7 +238,7 @@ export async function discoverDynamicRoutes(config) {
         const route = source.pattern.replace(/:(\w+)/g, (_, key) => row[key] ?? '');
         if (route.includes('//') || route.endsWith('/')) continue;
         // A retired duplicate still has a published row, so it is still discovered here.
-        // Writing dist/blog/<slug>/index.html for one would leave a real static asset at
+        // Writing dist/blog/<slug>.html for one would leave a real static asset at
         // a path public/_redirects is trying to 301 away, and a static file can win. The
         // URL would stay alive and keep competing with the copy it was folded into.
         // See src/lib/retired-blog-slugs.ts.
@@ -385,10 +385,35 @@ export function validateSnapshot(
 
 }
 
-/** dist/pricing/index.html for "/pricing"; dist/index.html for "/". */
-function outputPathFor(route) {
+/**
+ * dist/pricing.html for "/pricing"; dist/index.html for "/".
+ *
+ * A flat file, not dist/pricing/index.html, and the difference is the whole point.
+ *
+ * Cloudflare Pages serves a directory's index.html at the trailing-slash URL and 308s
+ * the bare one to it. So writing dist/pricing/index.html meant every prerendered route
+ * answered a redirect: /pricing 308 -> /pricing/. The sitemap submits /pricing, every
+ * page declares <link rel="canonical" href=".../pricing"> and og:url to match, so a
+ * crawler was handed a sitemap of 180 redirects, and the page each one landed on named
+ * the redirecting URL as its canonical. Google resolves that by ignoring the declared
+ * canonical, and Search Console files the lot under "Page with redirect".
+ *
+ * Verified against production on 2026-09-10: every route in the sitemap except "/"
+ * returned 308, and https://tryeatpal.com/arfid/what-is-arfid/ served
+ * canonical="https://tryeatpal.com/arfid/what-is-arfid", which redirects back to it.
+ *
+ * A flat dist/pricing.html is served at /pricing directly, which is the URL the
+ * sitemap and the canonical already agree on. Nested routes still nest --
+ * dist/compare/eatpal-vs-mealime.html beside dist/compare.html -- because a file and a
+ * directory of the same name coexist fine.
+ *
+ * DEPLOY NOTE: this changes what Cloudflare Pages serves for every prerendered route.
+ * Confirm on a Pages preview before it reaches production that /pricing answers 200
+ * rather than a redirect.
+ */
+export function outputPathFor(route) {
   if (route === '/') return path.join(DIST, 'index.html');
-  return path.join(DIST, route.replace(/^\//, ''), 'index.html');
+  return path.join(DIST, `${route.replace(/^\//, '')}.html`);
 }
 
 async function prerenderRoute(page, origin, route) {
