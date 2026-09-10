@@ -69,17 +69,16 @@ node optimize-images.js
 
 ### 🗺️ Sitemap Generation
 
-#### `generate-sitemap.js`
-**Generates sitemap.xml for SEO**
+There is no sitemap script here. `/sitemap.xml` is generated at request time by the
+Supabase edge function `supabase/functions/generate-sitemap/`, proxied by the
+Cloudflare Pages function `functions/sitemap.xml.ts`, which falls back to a static
+list of the marketing routes if that call fails.
 
-```bash
-node generate-sitemap.js
-```
-
-**Includes:**
-- All public pages
-- Blog posts (if applicable)
-- Priority and change frequency
+A second generator, `scripts/generate-sitemap.js`, used to sit here. It could never
+have run: it declared TypeScript interfaces inside a `.js` file, so node threw a
+SyntaxError before reaching any of it. Nothing referenced it, and had it worked it
+would have written `/recipes/<id>` URLs for a route that only exists behind auth,
+plus a `sitemap-index.xml` pointing at a `sitemap-dynamic.xml` nothing serves.
 
 ---
 
@@ -118,7 +117,6 @@ node setup-mobile-assets.cjs
 | Change database password | `.\change-supabase-password.ps1` |
 | Setup Stripe products | `.\setup-stripe-products.ps1` |
 | Optimize images | `node optimize-images.js` |
-| Generate sitemap | `node generate-sitemap.js` |
 | Setup mobile assets | `node setup-mobile-assets.cjs` |
 
 ## Requirements

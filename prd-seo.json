@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 4,
+    "iterationsUsed": 5,
     "completed": [
       {
         "iteration": 1,
@@ -28,6 +28,12 @@
         "iteration": 4,
         "id": "SEO-008",
         "title": "The ARFID cluster had no sitewide link",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 5,
+        "id": "SEO-003 + SEO-009",
+        "title": "Deleted the unrunnable sitemap script; /guides schema no longer claims noindex pages",
         "commit": "see git log on this branch"
       }
     ]
@@ -78,6 +84,20 @@
       "notes": "/arfid/what-is-arfid, /arfid/arfid-vs-picky-eating and /arfid/arfid-in-adults were reachable from /picky-eater-quiz alone, and /arfid/safe-foods-list from /budget-calculator alone. The four pages cross-link each other, which makes them a closed loop rather than a cluster something points into. Meanwhile the footer already carried all five /picky-eater/* pages, /guides and /compare, each added after exactly this problem was found there. The nav is lg:grid-cols-6 and had five columns, so the ARFID column filled a reserved slot. Pinned by a new assertion in src/lib/arfid-content.test.ts, matching the one /compare has."
     },
     {
+      "id": "SEO-009",
+      "title": "/guides claimed noindex guides as the members of its collection",
+      "description": "As a search engine, I want a CollectionPage to name pages the site wants indexed, so that its ItemList is not contradicted by the robots tag on the pages it names.",
+      "acceptanceCriteria": [
+        "The CollectionPage ItemList enumerates only guides at or below MAX_INDEXABLE_TIER",
+        "numberOfItems counts the same set",
+        "The page itself still lists every published guide for readers",
+        "Tests cover the split"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "GuidesIndex selected slug, title, meta_description and page_type -- no tier -- so its CollectionPage/ItemList named whatever came back, including every guide above MAX_INDEXABLE_TIER that PseoPage marks noindex, follow. Listing those for readers is the documented intent (see src/lib/pseo/indexability.ts) and is unchanged; claiming them in schema is a different act, and numberOfItems was counting them too. GuidesIndex is the fourth surface that has to agree with MAX_INDEXABLE_TIER and the only one that can import the rule instead of restating it, which it now does. src/pages/pseo/GuidesIndex.schema.test.tsx, 4 tests."
+    },
+    {
       "id": "SEO-002",
       "title": "/authors: confirm whether it still self-noindexes (it does not)",
       "description": "As a site owner, I want the sitemap to stop advertising a URL that serves noindex, so that Search Console stops reporting 'Submitted URL marked noindex' and the E-E-A-T page either counts or is withdrawn.",
@@ -101,8 +121,8 @@
         "Nothing in package.json or CI references a generator that does not exist"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "The file declares `interface SitemapUrl` and typed parameters inside a .js module, so node throws a SyntaxError on the first interface. It is referenced by nothing, and the edge function has superseded it (it also handles retired slugs and the pSEO tier gate, which this one does not). Most likely resolution is deletion."
+      "passes": true,
+      "notes": "Deleted in iteration 5. Nothing referenced it, and it could never have run: TypeScript interfaces in a .js file, so node threw a SyntaxError before the first statement. Had it run it would have written /recipes/<id> URLs for a route that only exists behind auth, plus a sitemap-index.xml pointing at a sitemap-dynamic.xml nothing serves. scripts/README.md now says where the real sitemap comes from, and documents/variables.md's two rows for VITE_SUPABASE_URL/ANON_KEY under Scripts were repointed at scripts/prerender.mjs, which is what actually reads them (lines 193-198)."
     },
     {
       "id": "SEO-004",

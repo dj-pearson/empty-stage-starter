@@ -134,8 +134,8 @@ These are Node.js environment variables used during build time (CI/CD).
 
 | Variable | Required | Format | Description | Used In |
 |----------|----------|--------|-------------|---------|
-| `VITE_SUPABASE_URL` | For sitemap | URL | Used by sitemap generator script | `scripts/generate-sitemap.js:14` |
-| `VITE_SUPABASE_ANON_KEY` | For sitemap | JWT | Used by sitemap generator script | `scripts/generate-sitemap.js:15` |
+| `VITE_SUPABASE_URL` | For prerender | URL | Discovers blog and guide routes to prerender | `scripts/prerender.mjs` |
+| `VITE_SUPABASE_ANON_KEY` | For prerender | JWT | Same; without it the build prerenders static routes only | `scripts/prerender.mjs` |
 
 ---
 

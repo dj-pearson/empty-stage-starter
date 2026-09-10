@@ -9,6 +9,7 @@ import { Footer } from '@/components/Footer';
 import { CardSkeleton } from '@/components/loading';
 import { logger } from '@/lib/logger';
 import { pathnameForSlug } from '@/lib/pseo/slug';
+import { isGuideIndexable } from '@/lib/pseo/indexability';
 import type { PseoPageType } from '@/types/pseo';
 
 /**
@@ -32,6 +33,8 @@ interface GuideRow {
   title: string;
   meta_description: string | null;
   page_type: PseoPageType;
+  /** Read only to decide what the ItemList may claim. Every guide is still listed. */
+  tier: number | null;
 }
 
 /** Display grouping. Order here is the order sections render in. */
@@ -76,7 +79,7 @@ export default function GuidesIndex() {
     async function load() {
       const { data, error } = await supabase
         .from('pseo_pages')
-        .select('slug, title, meta_description, page_type')
+        .select('slug, title, meta_description, page_type, tier')
         .eq('generation_status', 'published')
         .order('title', { ascending: true });
 
@@ -97,6 +100,8 @@ export default function GuidesIndex() {
     };
   }, []);
 
+  const indexableGuides = guides.filter((guide) => isGuideIndexable(guide));
+
   const sections = GROUPS.map((group) => ({
     ...group,
     items: guides.filter((guide) => group.types.includes(guide.page_type)),
@@ -108,8 +113,19 @@ export default function GuidesIndex() {
 
       {/* An ItemList of the guides themselves tells search engines this is a hub over a
           known set of pages rather than a navigational stub. Only emitted once there is
-          something to list. */}
-      {guides.length > 0 && (
+          something to list.
+
+          It enumerates the INDEXABLE guides only, while the page below lists them all.
+          That is not an inconsistency: guides above MAX_INDEXABLE_TIER stay published,
+          linked and useful to readers, and carry noindex, follow deliberately (see
+          @/lib/pseo/indexability). A collection that names them as its members would be
+          telling Google "these pages are what this hub is about" about URLs we are
+          asking it to ignore in the same breath, and numberOfItems would count them
+          too. Listing a page for readers and claiming it in schema are different acts.
+
+          This is the fourth surface that has to agree with MAX_INDEXABLE_TIER, and the
+          only one that can import the rule rather than restate it. */}
+      {indexableGuides.length > 0 && (
         <Helmet>
           <script type="application/ld+json">
             {JSON.stringify({
@@ -123,8 +139,8 @@ export default function GuidesIndex() {
               isPartOf: { '@id': 'https://tryeatpal.com/#website' },
               mainEntity: {
                 '@type': 'ItemList',
-                numberOfItems: guides.length,
-                itemListElement: guides.slice(0, 100).map((guide, index) => ({
+                numberOfItems: indexableGuides.length,
+                itemListElement: indexableGuides.slice(0, 100).map((guide, index) => ({
                   '@type': 'ListItem',
                   position: index + 1,
                   name: guide.title,
