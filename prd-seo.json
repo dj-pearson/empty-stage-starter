@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 14,
+    "iterationsUsed": 15,
     "completed": [
       {
         "iteration": 1,
@@ -89,8 +89,35 @@
         "id": "SEO-020",
         "title": "The FAQ page declared 15 answers and rendered none of them",
         "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 15,
+        "id": "verification",
+        "title": "Swept the remaining FAQ pages, verified the tree, wrote the handover",
+        "commit": "see git log on this branch"
       }
-    ]
+    ],
+    "status": "complete",
+    "handover": {
+      "branch": "claude/seo-iterative-loop-s4aoqh",
+      "needsAPagesPreviewBeforeProduction": [
+        "SEO-016 (iteration 11) changes the prerender output from dist/<route>/index.html to dist/<route>.html. It is the fix for every sitemap URL being a 308, but the serving side cannot be checked from a build. Confirm on a Pages preview that /pricing answers 200 and not a redirect. If Pages needs the other direction, the alternative is moving the canonicals and the sitemap to the trailing-slash form instead, which is larger and entrenches the slashes."
+      ],
+      "needsAHumanDecision": [
+        "SEO-013: HIPAA compliance is asserted five times across llms.txt and llms-full.txt, along with SOC 2 compliant infrastructure and 'the only picky eater platform with a HIPAA-compliant professional tier'. Nothing in the repo supports or contradicts any of it, and it is being fed to AI crawlers. Also: PRICING_PLANS.professional.summary says 'insurance-compatible documentation' where both files say 'insurance billing'.",
+        "SEO-017: any unknown URL returns 200 with meta robots index, follow and the homepage canonical, to any crawler that does not run JavaScript. The fix is a separate noindex shell behind an explicit catch-all in _redirects, which is a second serving-layer change and wants its own verified deploy rather than riding along with SEO-016.",
+        "SEO-005: whether changefreq and priority earn their place in the sitemap. Google has said it ignores both. Removing them would cut roughly a third of the file's bytes and nothing else; left alone deliberately rather than changed on the way out.",
+        "Four page titles run 61 to 68 characters, past where Google truncates: the homepage, /pricing, /blog and /guides. Rewriting them is a brand-voice call."
+      ],
+      "notSeoButFound": [
+        "ci.yml enumerates the six Deno test paths by hand (lines 460-517), so a seventh test added under supabase/functions would never run."
+      ],
+      "verifiedAtClose": {
+        "vitest": "green, see the iteration 15 commit message for counts",
+        "lintRatchet": "1143 errors against a baseline of 1143, lowered from 1144 in iteration 6",
+        "productionChecks": "robots.txt, sitemap.xml (180 URLs, no duplicates, no retired slugs), rss.xml (50 items, well-formed), feed.xml, llms.txt, no stray X-Robots-Tag on public pages, no duplicate head tags across six sampled routes, and 27 FAQ answers across five pages all present in the HTML"
+      }
+    }
   },
   "userStories": [
     {
