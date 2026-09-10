@@ -384,6 +384,13 @@ final class AppState: ObservableObject {
         // return. Reads are also gated by `cachedByUserId`, so this is
         // defense-in-depth against a cache that outlives the session.
         OfflineStore.shared.clearCachedData()
+        // The App Group holds two more copies of this account's data that no
+        // session check guards: the home-screen/Lock-Screen widget snapshot
+        // and the watch snapshot behind the complication. Both read straight
+        // out of the shared container, so without this they keep showing the
+        // departed account's dinner, meal slots and grocery count.
+        WidgetSnapshot.clear()
+        WatchConnectivityService.shared.clearForSignOut()
         currentUserId = ""
     }
 

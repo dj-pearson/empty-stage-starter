@@ -71,6 +71,26 @@ final class WatchConnectivityService: NSObject, ObservableObject {
         session.transferUserInfo(["snapshot": data])
     }
 
+    /// Sign-out: drop the phone-side cache and push an empty snapshot so the
+    /// watch app and the complication stop showing the departed account's
+    /// meals and grocery list. `transferUserInfo` queues it, so a watch that
+    /// is out of range still gets the clear next time it connects.
+    ///
+    /// Cancels the pending debounced push first, or the timer scheduled by the
+    /// deletes that sign-out just performed fires afterwards and re-sends.
+    func clearForSignOut() {
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
+
+        WatchSnapshotStore.clear()
+
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        guard let data = try? JSONEncoder().encode(WatchSnapshot.empty) else { return }
+        session.transferUserInfo(["snapshot": data])
+    }
+
     /// Pure builder — also used by the watch-side preview to render with
     /// realistic shapes.
     static func buildSnapshot(appState: AppState) -> WatchSnapshot {
