@@ -6,6 +6,10 @@ import path from "path";
 /**
  * US-827: credential and contact fields must declare what they hold.
  *
+ * This is the test src/pages/VPAT.tsx cites for WCAG 1.3.5 Identify Input
+ * Purpose (see US-839): the row's claim that form inputs carry appropriate
+ * autocomplete attributes is exactly what the assertions below check.
+ *
  * The damage is not "autofill is a bit nicer". Without autoComplete on a
  * change-password form a manager cannot tell the three boxes apart, so it will
  * not offer the saved password, will not generate a new one, and -- the part

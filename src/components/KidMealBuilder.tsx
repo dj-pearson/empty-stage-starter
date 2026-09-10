@@ -399,6 +399,7 @@ export function KidMealBuilder() {
                         I Want This!
                       </Button>
                       <Button
+                        aria-label="Delete this creation"
                         size="sm"
                         variant="outline"
                         onClick={() => handleDeleteCreation(creation.id)}

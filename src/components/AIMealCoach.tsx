@@ -397,7 +397,8 @@ export function AIMealCoach() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-lg">Conversations</CardTitle>
-            <Button onClick={createNewConversation} size="sm">
+            <Button
+              aria-label="Start a new conversation" onClick={createNewConversation} size="sm">
               <Plus className="h-4 w-4" />
             </Button>
           </div>

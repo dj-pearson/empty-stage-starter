@@ -15063,6 +15063,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           max_children: number | null
+          max_household_members: number | null
           max_meal_plans: number | null
           max_pantry_foods: number | null
           max_recipes: number | null
@@ -15092,6 +15093,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_children?: number | null
+          max_household_members?: number | null
           max_meal_plans?: number | null
           max_pantry_foods?: number | null
           max_recipes?: number | null
@@ -15121,6 +15123,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           max_children?: number | null
+          max_household_members?: number | null
           max_meal_plans?: number | null
           max_pantry_foods?: number | null
           max_recipes?: number | null

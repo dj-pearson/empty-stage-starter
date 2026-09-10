@@ -19,18 +19,18 @@ const LandingPage = lazy(() => import('./LandingPage'));
 
 function LoadingState() {
   return (
-    <div className="min-h-screen flex items-center justify-center" role="status">
+    <main id="main-content" className="min-h-screen flex items-center justify-center" role="status">
       <div className="text-center space-y-4">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
         <p className="text-muted-foreground text-sm">Loading page...</p>
       </div>
-    </div>
+    </main>
   );
 }
 
 function NotFoundState() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <main id="main-content" className="min-h-screen flex items-center justify-center p-6">
       {/* Soft 404: the SPA can only answer 200, so tell crawlers not to index the
           "Page not found" body. Without this, an unpublished or mistyped guide URL
           gets indexed as a thin duplicate of every other missing guide. */}
@@ -51,7 +51,7 @@ function NotFoundState() {
           </Link>
         </Button>
       </div>
-    </div>
+    </main>
   );
 }
 

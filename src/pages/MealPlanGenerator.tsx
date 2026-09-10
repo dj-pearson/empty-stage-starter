@@ -307,21 +307,21 @@ export default function MealPlanGenerator() {
             <Card>
               <CardContent className="pt-6 text-center">
                 <Utensils className="w-8 h-8 text-primary mx-auto mb-2" />
-                <h3 className="font-semibold mb-1">Picky Eater Friendly</h3>
+                <h2 className="font-semibold mb-1">Picky Eater Friendly</h2>
                 <p className="text-sm text-muted-foreground">Meals your kids will actually eat</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
                 <Clock className="w-8 h-8 text-primary mx-auto mb-2" />
-                <h3 className="font-semibold mb-1">Time Saving</h3>
+                <h2 className="font-semibold mb-1">Time Saving</h2>
                 <p className="text-sm text-muted-foreground">Meals that fit your schedule</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
                 <Users className="w-8 h-8 text-primary mx-auto mb-2" />
-                <h3 className="font-semibold mb-1">Family Sized</h3>
+                <h2 className="font-semibold mb-1">Family Sized</h2>
                 <p className="text-sm text-muted-foreground">Scaled to your family</p>
               </CardContent>
             </Card>

@@ -307,21 +307,21 @@ export default function BudgetCalculator() {
             <Card>
               <CardContent className="pt-6 text-center">
                 <DollarSign className="w-8 h-8 text-primary mx-auto mb-2" />
-                <h3 className="font-semibold mb-1">Based on USDA Food Plans</h3>
+                <h2 className="font-semibold mb-1">Based on USDA Food Plans</h2>
                 <p className="text-sm text-muted-foreground">Official 2024 food cost data</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
                 <Users className="w-8 h-8 text-primary mx-auto mb-2" />
-                <h3 className="font-semibold mb-1">Personalized</h3>
+                <h2 className="font-semibold mb-1">Personalized</h2>
                 <p className="text-sm text-muted-foreground">Custom for your family size</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6 text-center">
                 <MapPin className="w-8 h-8 text-primary mx-auto mb-2" />
-                <h3 className="font-semibold mb-1">Regional Pricing</h3>
+                <h2 className="font-semibold mb-1">Regional Pricing</h2>
                 <p className="text-sm text-muted-foreground">Adjusted for your location</p>
               </CardContent>
             </Card>

@@ -46,7 +46,7 @@ export default function NotFound() {
         <title>Page Not Found - EatPal</title>
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <main id="main-content" className="min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full text-center space-y-6">
           <div className="text-6xl font-bold text-primary">404</div>
           <h1 className="text-2xl font-bold">{t('notFound.title')}</h1>
@@ -87,7 +87,7 @@ export default function NotFound() {
             </Link>
           </Button>
         </div>
-      </div>
+      </main>
     </>
   );
 }

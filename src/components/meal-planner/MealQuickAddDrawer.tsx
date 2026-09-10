@@ -202,6 +202,7 @@ export function MealQuickAddDrawer({
             />
             {searchQuery && (
               <button
+                aria-label="Clear the search box"
                 onClick={() => setSearchQuery("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >

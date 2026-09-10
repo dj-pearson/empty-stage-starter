@@ -128,6 +128,13 @@ test.describe('Mobile Responsive', () => {
     await page.waitForTimeout(100);
   });
 
+  /**
+   * US-846: this checks ONE page, at iPhone 13 width, and `/` was the page
+   * that passed. tests/responsive/reflow-320.spec.ts is the real check --
+   * every public route at the 320px WCAG 1.4.10 names, where /pricing was 19px
+   * over and /accessibility 1px. Kept because a second viewport is still worth
+   * something; do not mistake it for coverage.
+   */
   test('should not have horizontal scroll', async ({ page }) => {
     await page.goto('/');
 

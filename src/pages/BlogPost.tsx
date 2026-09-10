@@ -670,7 +670,7 @@ const BlogPost = () => {
               </p>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Product</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/#features" className="hover:text-primary transition-colors">Features</Link></li>
                 <li><Link to="/#how-it-works" className="hover:text-primary transition-colors">How It Works</Link></li>
@@ -679,7 +679,7 @@ const BlogPost = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Company</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
                 <li><Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
@@ -687,7 +687,7 @@ const BlogPost = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Support</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link></li>
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Help Center</Link></li>

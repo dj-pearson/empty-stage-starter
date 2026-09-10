@@ -402,7 +402,8 @@ export function AlertManager() {
             )}
             {showResolved ? "Hide Resolved" : "Show All"}
           </Button>
-          <Button variant="outline" size="sm" onClick={fetchAlerts} disabled={loading}>
+          <Button
+            aria-label="Refresh alerts" variant="outline" size="sm" onClick={fetchAlerts} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>

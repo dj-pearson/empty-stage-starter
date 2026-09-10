@@ -373,6 +373,7 @@ export function ContentOptimizer() {
                   <div className="flex items-center justify-between">
                     <Label className="text-xs text-muted-foreground">Suggested Title</Label>
                     <Button
+                      aria-label="Copy the suggested title"
                       size="sm"
                       variant="ghost"
                       onClick={() =>
@@ -423,6 +424,7 @@ export function ContentOptimizer() {
                   <div className="flex items-center justify-between">
                     <Label className="text-xs text-muted-foreground">Suggested Description</Label>
                     <Button
+                      aria-label="Copy the suggested meta description"
                       size="sm"
                       variant="ghost"
                       onClick={() =>
@@ -482,6 +484,7 @@ export function ContentOptimizer() {
                               <div className="flex items-center justify-between mb-1">
                                 <p className="text-xs text-muted-foreground">Suggested</p>
                                 <Button
+                                  aria-label="Copy the suggested heading"
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => copyToClipboard(heading.suggested)}
@@ -611,6 +614,7 @@ export function ContentOptimizer() {
                               <div className="flex items-center justify-between mb-1">
                                 <p className="text-xs text-muted-foreground">Suggested</p>
                                 <Button
+                                  aria-label="Copy the suggested rewrite"
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => copyToClipboard(rewrite.suggestedText)}

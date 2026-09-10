@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { AppProvider, useInventory } from './AppContext';
 import type { MovementItem, PurchasableGroceryItem } from '@/lib/movementBuilders';
+import { writeFlag } from '@/lib/featureFlagCache';
 
 const tableData: Record<string, unknown[]> = {};
 let sessionUser: { id: string } | null = null;
@@ -87,8 +88,6 @@ vi.mock('@/hooks/useRealtimeSubscription', () => ({
   unregisterSubscription: vi.fn(),
 }));
 
-const FLAG_CACHE_KEY = 'eatpal_feature_flags';
-
 type Inventory = ReturnType<typeof useInventory>;
 
 function InventoryHandle({ onReady }: { onReady: (v: Inventory) => void }) {
@@ -109,11 +108,14 @@ async function mountInventory() {
   return () => latest as Inventory;
 }
 
+/**
+ * US-842: seed through the cache module rather than writing its on-disk shape
+ * by hand. These tests hand-wrote `{ flags, timestamp }` and went red when the
+ * cache moved to a per-flag timestamp -- a second copy of a format, which is
+ * the thing this repo keeps paying for.
+ */
 function enableWrites() {
-  localStorage.setItem(
-    FLAG_CACHE_KEY,
-    JSON.stringify({ flags: { kitchen_loop_ledger_writes: true }, timestamp: Date.now() })
-  );
+  writeFlag('kitchen_loop_ledger_writes', true);
 }
 
 /** Flour: held in grams, displayed in kilograms. */

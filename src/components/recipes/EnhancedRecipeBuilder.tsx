@@ -408,6 +408,7 @@ export function EnhancedRecipeBuilder({
                 <Badge key={tag} variant="secondary" className="gap-1">
                   {tag}
                   <button
+                    aria-label="Remove this tag"
                     type="button"
                     onClick={() => removeTag(tag)}
                     className="hover:text-destructive"

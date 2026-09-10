@@ -959,7 +959,8 @@ function GenerateTab() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Active Batches</CardTitle>
-            <Button variant="ghost" size="sm" onClick={fetchActiveBatches}>
+            <Button
+              aria-label="Refresh active batches" variant="ghost" size="sm" onClick={fetchActiveBatches}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
@@ -1410,6 +1411,7 @@ function PageBrowserTab() {
             </p>
             <div className="flex items-center gap-1.5">
               <Button
+                aria-label="Previous page"
                 variant="outline"
                 size="sm"
                 className="h-7"
@@ -1422,6 +1424,7 @@ function PageBrowserTab() {
                 {page + 1} / {totalPages}
               </span>
               <Button
+                aria-label="Next page"
                 variant="outline"
                 size="sm"
                 className="h-7"

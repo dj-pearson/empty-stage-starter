@@ -246,6 +246,7 @@ export function ManageStoreAislesDialog({
                       </div>
 
                       <Button
+                        aria-label="Delete this aisle"
                         variant="ghost"
                         size="sm"
                         onClick={() => confirmDelete(aisle)}

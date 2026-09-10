@@ -19,6 +19,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.25.76';
 import { runAgent, type AgentDefinition, type Json } from '../_shared/agent-runtime.ts';
+import { functionsBase } from '../_shared/functions-url.ts';
 import {
   shouldEnroll,
   decideStepAction,
@@ -56,10 +57,6 @@ const json = (body: unknown, status: number) =>
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
 
-function functionsBase(): string {
-  const url = Deno.env.get('SUPABASE_URL');
-  return url ? `${url}/functions/v1` : (Deno.env.get('FUNCTIONS_URL') ?? '');
-}
 
 serve(async (req) => {
   const expected = Deno.env.get('AGENT_DISPATCH_SECRET');
@@ -329,6 +326,11 @@ serve(async (req) => {
               user_id: enr.user_id,
               kind: 'nurture',
               templated: rendered.templated,
+              // US-843: carried so approval-executor can set List-Unsubscribe
+              // on the message. The URL is already in the body; the headers are
+              // what let a mail client offer its own one-click unsubscribe, and
+              // without one recipients reach for "report spam" instead.
+              unsubscribe_url: unsubscribeUrl,
             } as unknown as Json,
             expiresInHours: 72,
           });

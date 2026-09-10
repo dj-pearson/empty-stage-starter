@@ -221,7 +221,7 @@ interface FoodChainingGuideProps {
 
 export function FoodChainingGuide({ content, relatedPages }: FoodChainingGuideProps) {
   return (
-    <article className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
+    <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
       {/* 1. Hero */}
       <PseoHero
         headline={content.headline}
@@ -347,7 +347,7 @@ export function FoodChainingGuide({ content, relatedPages }: FoodChainingGuidePr
         heading="Ready to expand your child's diet?"
         body="EatPal makes food chaining easy with personalized plans, progress tracking, and expert guidance."
       />
-    </article>
+    </main>
   );
 }
 

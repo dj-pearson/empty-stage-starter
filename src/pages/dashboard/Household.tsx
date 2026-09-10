@@ -65,12 +65,14 @@ export default function Household() {
 
   const handleCreate = async () => {
     setBusy(true);
-    const code = await createInviteCode();
+    const result = await createInviteCode();
     setBusy(false);
-    if (code) {
+    if (result.ok) {
       toast.success("Invite link created. Share it with the other caregiver.");
     } else {
-      toast.error("Couldn't create an invite link.");
+      // US-840: say WHY. A full household on Free gets the upgrade message the
+      // RPC raised, not a generic failure that looks like a bug.
+      toast.error(result.message);
     }
   };
 

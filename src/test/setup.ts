@@ -64,8 +64,14 @@ const createStorageMock = () => {
     clear: vi.fn(() => {
       store = {};
     }),
-    length: vi.fn(() => Object.keys(store).length),
-    key: vi.fn((index: number) => Object.keys(store)[index] || null),
+    // US-835: `length` is a number on the real Storage interface, not a
+    // method. As a vi.fn() it was truthy-but-wrong, so any code enumerating
+    // storage the spec'd way (length + key(i)) saw NaN entries here and worked
+    // in a browser -- a mock that disagrees with the platform it stands in for.
+    get length() {
+      return Object.keys(store).length;
+    },
+    key: vi.fn((index: number) => Object.keys(store)[index] ?? null),
   };
 };
 

@@ -334,14 +334,29 @@ const Accessibility = () => {
             </p>
 
             <div className="bg-secondary/10 rounded-lg p-6 space-y-4">
+              {/*
+                US-846: min-w-0 is the part that actually lets the address
+                wrap. A flex child defaults to min-width:auto, so it refuses to
+                shrink below its content -- and the content here is one
+                unbreakable 213px word. break-words alone changed nothing
+                because there was no constrained width to break against.
+              */}
               <div className="flex items-start gap-3">
                 <Mail className="h-5 w-5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
-                <div>
+                <div className="min-w-0">
                   <strong className="text-foreground">Email:</strong>
                   <p className="text-muted-foreground">
+                    {/*
+                      US-846: an email address is one unbreakable 213px word,
+                      and at 320px it pushed the document 1px wider than the
+                      viewport. WCAG 1.4.10 Reflow names exactly this case, and
+                      the address on the accessibility page is a poor place to
+                      fail it. break-words lets it wrap mid-address rather than
+                      widening the page.
+                    */}
                     <a
                       href="mailto:accessibility@tryeatpal.com"
-                      className="text-primary hover:underline"
+                      className="text-primary hover:underline break-words"
                     >
                       accessibility@tryeatpal.com
                     </a>
@@ -515,7 +530,7 @@ const Accessibility = () => {
               </p>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Product</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/#features" className="hover:text-primary transition-colors">Features</Link></li>
                 <li><Link to="/#how-it-works" className="hover:text-primary transition-colors">How It Works</Link></li>
@@ -524,7 +539,7 @@ const Accessibility = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Company</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
                 <li><Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
@@ -533,7 +548,7 @@ const Accessibility = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Support</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link></li>
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Help Center</Link></li>

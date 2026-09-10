@@ -116,7 +116,7 @@ export default function Onboarding() {
         <meta name="robots" content="noindex" />
       </Helmet>
 
-      <main className="container mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 p-4 sm:p-6">
+      <main id="main-content" className="container mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 p-4 sm:p-6">
         <div className="space-y-2">
           <Progress value={(step / totalSteps) * 100} className="h-2" />
           <p className="text-sm text-muted-foreground">

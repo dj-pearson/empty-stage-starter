@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react';
+import { loadSentry, withSentry } from '@/lib/sentryClient';
 import { logger } from '@/lib/logger';
 import { hasAnalyticsConsent } from '@/lib/consent';
 
@@ -19,7 +19,7 @@ export function resolveSentryDsn(): string {
   return import.meta.env.VITE_SENTRY_DSN || DEFAULT_SENTRY_DSN;
 }
 
-export function initializeSentry() {
+export async function initializeSentry() {
   // Only initialize in production or if explicitly enabled
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
     const dsn = resolveSentryDsn();
@@ -30,15 +30,22 @@ export function initializeSentry() {
     }
 
     try {
+      const Sentry = await loadSentry();
       // Initialize with both tracing and replay integrations
       // Keeping them together prevents circular dependency issues.
       // Session Replay records user sessions, so it is gated on analytics
       // consent (compliance audit 2026-07). Error/performance monitoring is
       // retained under legitimate interest for security and reliability; only
       // the replay integration is added when the visitor has opted in.
-      // Type inferred from the integration return type — the installed
-      // @sentry/react does not export a `Sentry.Integration` type alias.
-      const integrations = [Sentry.browserTracingIntegration()];
+      // The installed @sentry/react exports no `Integration` type alias, and
+      // the two factories return different shapes, so the array is widened to
+      // their union rather than inferred from its first element (US-844: with
+      // the module now loaded through `await import()`, inference narrowed to
+      // the tracing integration and rejected the replay one).
+      type SentryIntegration =
+        | ReturnType<typeof Sentry.browserTracingIntegration>
+        | ReturnType<typeof Sentry.replayIntegration>;
+      const integrations: SentryIntegration[] = [Sentry.browserTracingIntegration()];
       if (hasAnalyticsConsent()) {
         integrations.push(
           Sentry.replayIntegration({
@@ -189,12 +196,14 @@ export function logError(error: Error, context?: Record<string, unknown>) {
   logger.error('Error:', error);
 
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
-    Sentry.captureException(error, {
-      tags: {
-        custom_error: true,
-      },
-      extra: context,
-    });
+    withSentry((Sentry) =>
+      Sentry.captureException(error, {
+        tags: {
+          custom_error: true,
+        },
+        extra: context,
+      }),
+    );
   }
 }
 
@@ -211,24 +220,28 @@ export function logApiError(endpoint: string, error: unknown, requestData?: unkn
   logger.error('API Error:', errorContext);
 
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
-    Sentry.captureException(error, {
-      tags: {
-        type: 'api_error',
-        endpoint,
-      },
-      extra: errorContext,
-    });
+    withSentry((Sentry) =>
+      Sentry.captureException(error, {
+        tags: {
+          type: 'api_error',
+          endpoint,
+        },
+        extra: errorContext,
+      }),
+    );
   }
 }
 
 // Track custom events
 export function trackEvent(eventName: string, data?: Record<string, unknown>) {
   if (import.meta.env.MODE === 'production' || import.meta.env.VITE_SENTRY_ENABLED === 'true') {
-    Sentry.addBreadcrumb({
-      category: 'custom_event',
-      message: eventName,
-      level: 'info',
-      data,
-    });
+    withSentry((Sentry) =>
+      Sentry.addBreadcrumb({
+        category: 'custom_event',
+        message: eventName,
+        level: 'info',
+        data,
+      }),
+    );
   }
 }

@@ -410,6 +410,7 @@ export function AISettingsManager() {
                     </Button>
                   )}
                   <Button
+                    aria-label="Delete this model"
                     size="sm"
                     variant="ghost"
                     onClick={() => setDeleteModelId(model.id)}

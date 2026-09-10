@@ -541,7 +541,23 @@ export default function Pricing() {
           </div>
 
           {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-3 p-1 bg-muted rounded-lg" role="radiogroup" aria-label="Billing cycle">
+          {/*
+            US-846: this overflowed the viewport by 19px at 320px, measured in
+            Chromium against the real build. Two shadcn Buttons -- which carry
+            whitespace-nowrap -- plus the "Save 20%" badge came to 274px, and
+            gap-3 with p-1 pushed the group past the 288px a 320px screen
+            leaves after the page gutter. The pricing page is where somebody
+            decides to pay, and 320px is the width WCAG 1.4.10 Reflow names.
+            flex-wrap is the part that actually fixes it: the tighter gap keeps
+            both on one line at every width we care about, and if a longer
+            translation ever does not fit, the group stacks instead of pushing
+            the document sideways.
+          */}
+          <div
+            className="inline-flex max-w-full flex-wrap items-center justify-center gap-1 p-1 sm:gap-3 bg-muted rounded-lg"
+            role="radiogroup"
+            aria-label="Billing cycle"
+          >
             <Button
               variant={billingCycle === "monthly" ? "default" : "ghost"}
               size="sm"

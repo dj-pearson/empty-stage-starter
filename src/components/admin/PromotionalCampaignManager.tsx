@@ -456,6 +456,7 @@ export function PromotionalCampaignManager() {
                           )}
                         </Button>
                         <Button
+                          aria-label="Edit this campaign"
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEdit(campaign)}
@@ -463,6 +464,7 @@ export function PromotionalCampaignManager() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
+                          aria-label="Delete this campaign"
                           size="sm"
                           variant="ghost"
                           onClick={() => requestDelete(campaign.id)}

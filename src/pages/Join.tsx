@@ -55,7 +55,7 @@ export default function Join() {
   }, [location.search]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <main id="main-content" className="min-h-screen flex items-center justify-center p-4">
       <Helmet>
         <title>Join a household · EatPal</title>
         <meta name="robots" content="noindex" />
@@ -118,6 +118,6 @@ export default function Join() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

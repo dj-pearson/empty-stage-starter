@@ -34,6 +34,7 @@ import './index.css';
 import './styles/mobile-first.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { initializeSentry, resolveSentryDsn } from './lib/sentry';
+import { startConsentEnforcement } from '@/lib/consentEnforcement';
 import { validateEnv } from './lib/env';
 import { initWebVitals } from './lib/webVitals';
 import { registerServiceWorker } from './lib/pwa';
@@ -63,6 +64,12 @@ debugLog('Starting application...');
 debugLog('Environment:', import.meta.env.MODE);
 debugLog('Sentry DSN configured:', !!resolveSentryDsn());
 debugLog('Supabase URL configured:', !!import.meta.env.VITE_SUPABASE_URL);
+
+// US-841: make a withdrawal of consent take effect in THIS page, not the next
+// one. Subscribed before Sentry starts, and deliberately outside the deferred
+// callback below -- a person can dismiss the banner in the first second, well
+// before requestIdleCallback fires, and that decision must not be missed.
+startConsentEnforcement();
 
 // Defer Sentry initialization to after first render to reduce TBT
 const initSentryDeferred = () => {

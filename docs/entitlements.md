@@ -122,14 +122,26 @@ Signed off by Dj on 2026-09-03. Rows already enforced are marked.
 | Pantry foods | capped | unlimited | unlimited | unlimited | **enforced** (client + trigger) |
 | AI recipe imports | 5 / month | unlimited | unlimited | unlimited | not enforced — no usage counter exists |
 | AI meal-plan generations | 1 / week | unlimited | unlimited | unlimited | not enforced — `max_meal_plans` column exists, unused |
-| Household members | 1 | 1 | unlimited | unlimited | not enforced |
+| Household members | 1 | 1 | unlimited | unlimited | **enforced** (US-840: accept + mint RPCs, `max_household_members`) |
 | Food chaining / ladders | view only | full | full | full | partial — `food_chaining` is a FeatureType; verify the call site |
 
 ## What is actually left to do
 
 1. ~~Fix the Apple gap.~~ Done, see above -- and the comp gap and the
    custom-domain RLS gap with it.
-2. Household-member seats: no gate exists at the invite path.
+2. ~~Household-member seats.~~ Done, US-840, migration
+   `20260909000000_household_seat_limit.sql`. `subscription_plans` gained
+   `max_household_members` (NULL = unlimited, seeded Free 1 / Pro 1 / Family
+   Plus and Professional unlimited), and both `accept_household_invite` and
+   `create_household_invite` now check it. The household's plan is the OWNER's
+   -- `household_owner_id` resolves the earliest `household_members` row,
+   because `public.households` has no owner column -- and it goes through
+   `effective_plan_id`, so App Store and comped subscribers count as paid here
+   too. Nobody is evicted: the check runs on the accept path only, so a
+   household that already exceeds its limit keeps every member it has and
+   simply cannot add another. Verified against Postgres 16 in
+   `supabase/tests/us840_household_seats.test.sql` (8 cases), confirmed to fail
+   without the migration.
 3. The two AI rate limits need a usage counter. `user_usage_tracking` counts
    `ai_coach_requests` and `food_tracker_entries` per day but has no column for
    recipe imports or meal-plan generations, so this needs new schema and is the

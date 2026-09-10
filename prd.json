@@ -4163,6 +4163,278 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 15) while auditing public/sw.js, which has only been registered at all since US-765.\n\nTHE DEFECT: API_PATTERNS (/rest/v1/, /auth/v1/, /functions/v1/) routed to networkFirstStrategy, which does `cache.put(request, response.clone())` on every 200. So per-user Supabase rows -- and /auth/v1/ session payloads -- were written to Cache Storage on the device, and read back whenever fetch() failed.\n\nWHY IT LEAKS ACROSS USERS: Cache Storage matches on URL. Authorization is a request HEADER, and cache.match() ignores headers unless the stored response carries a matching Vary, which PostgREST does not send for it. The entry for GET /rest/v1/kids?select=* therefore matches ANY user's request for that URL. Shared family tablet, user A signs in and loads their children, user B signs in later and loses connection: the worker serves user B user A's rows. CACHE_NAME carries the build id, so a deploy that changes asset hashes clears it -- but between deploys it persists, and a deploy that does not change hashes keeps the name and the data.\n\nFIXED: authenticated endpoints go through networkOnlyForPrivateApi, which fetches and keeps nothing. Nothing is lost -- the app already keeps its own per-user offline copy in localStorage via AppContext, and CLAUDE.md's load precedence treats the server as authoritative. Activation also purges any entries an older worker left behind, since changing the strategy does not clear what is already on disk.\n\nTESTED BY EVALUATING THE SHIPPED FILE. public/sw.js is a browser artefact outside the bundle, so the test runs it in a vm with stubbed service-worker globals and drives its real fetch and activate handlers, rather than asserting the source contains particular words. Mutants: routing API requests back through networkFirstStrategy fails 4 tests; dropping the activation purge fails 1. One test asserts a static asset IS still cached, so the suite cannot pass by caching nothing at all."
+    },
+    {
+      "id": "US-835",
+      "title": "Sign-out left one household's data in the browser for the next person",
+      "description": "As a parent who shares a tablet with my family, I want signing out to take my household's data with it, so that the next person to sign in is not shown my searches, my children or my drafts.",
+      "acceptanceCriteria": [
+        "Signing out removes every localStorage and sessionStorage key that holds account or household data, not just the AppContext snapshot.",
+        "Keys that belong to the browser rather than the account -- cookie consent, accessibility preferences, install-prompt dismissal, the rate limiter, the service-worker kill switch, the deploy-reload cooldown -- survive sign-out, each with a written reason.",
+        "The four *_session_id keys are cleared, so the next person's activity, logins and conversions are not attributed to the previous session in the same tab.",
+        "A key added to the codebase later cannot silently survive sign-out: a gate scans src/ and fails on any storage key that is neither scrubbed nor kept for a stated reason.",
+        "The scan asserts on itself (a key floor, a key on each side of the classification, and that it reads code rather than comments) so it cannot pass by finding nothing."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 1) as the localStorage counterpart of US-834. US-537 scrubbed `kid-meal-planner` on SIGNED_OUT and nothing else; 12 other localStorage keys and 16 sessionStorage keys survived. The ones that mattered: eatpal_recent_searches (the previous parent's typed searches -- food, recipe and child names -- rendered back as \"Recent\" in the command palette), eatpal.auto_restock_blocklist (one household's mutes suppressing another's suggestions), eatpal.kid_birthday_dismissed.* (keyed by child id), eatpal-budget-calc-draft (household size, child ages, weekly budget), and the four *_session_id keys, which kept attributing the new signed-in user's activity, logins and conversions to the previous user's session in the same tab. Fix: src/lib/signOutScrub.ts holds the classification (SCRUBBED_KEYS, SCRUBBED_SESSION_KEYS, SCRUBBED_PREFIXES, KEPT_KEYS/KEPT_PREFIXES with a reason each) and scrubOnSignOut() runs from the existing SIGNED_OUT branch in AppContext. Gate: src/lib/signOutScrub.test.ts scans src/ for storage-key literals, resolves const identifiers, strips comments first, separates localStorage from sessionStorage, and requires every key to be classified; the runtime-key allowlist must match the tree exactly. Behaviour is pinned in AppContext.cache.test.tsx against the real SIGNED_OUT handler. Five mutants caught (removing the call, dropping a local key, dropping a session key, disabling comment stripping, removing a keep-list entry). Also fixed src/test/setup.ts, whose storage mock exposed `length` as a vi.fn() rather than a number, so spec-correct enumeration (length + key(i)) saw nothing under test while working in a browser."
+    },
+    {
+      "id": "US-836",
+      "title": "The login path fetched a third-party geolocation API that the CSP blocks",
+      "description": "As someone signing in on the web, I want the login to talk to nobody but EatPal, so that my IP address is not handed to a third party at the moment I authenticate.",
+      "acceptanceCriteria": [
+        "No code in the web bundle fetches an origin that the connect-src of public/_headers does not allow.",
+        "The login path makes no third-party request at all.",
+        "login_history rows carry a real timezone instead of eight nulls.",
+        "A gate reads the shipped CSP and the shipped call sites and fails when they disagree; because there are currently no hardcoded external fetch targets, it proves the checker works by running it on a known-bad and a known-good synthetic input."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 2). loginHistory.logLogin runs on every successful web sign-in (three call sites in Auth.tsx, one in AuthCallback.tsx) and called fetch('https://ipapi.co/json/'). That host is absent from the connect-src in public/_headers, so in production the request never left the page: a CSP violation on every login and null in all eight geo columns. It only worked in `vite dev`, where no CSP is applied. Allowing the origin was rejected as the fix -- it would START handing a third party the IP of every person signing in to a product holding children's data, and put a 3s third-party round-trip on the login path. Instead the network call is gone and timezone is read locally from Intl.DateTimeFormat().resolvedOptions(), which is the signal the suspicious-login check actually wants and which was null on every row until now. Gate: src/lib/cspConnectSrc.test.ts parses the CSP out of public/_headers, implements browser-accurate wildcard source matching (with its own assertions, including that *.sentry.io does not match sentry.io), and checks every literal fetch/WebSocket origin in src/ plus the VITE_SUPABASE_URL and VITE_FUNCTIONS_URL origins from env.example.txt. Also deleted src/lib/url-utils.ts and its test (741 + 425 lines), which the gate surfaced: it fetched api-ssl.bitly.com and tinyurl.com, both CSP-blocked, and read a VITE_BITLY_API_KEY that a VITE_ prefix would have published in the client bundle. Nothing in src/, app/, tests/, scripts/ or functions/ imported it. Four mutants caught: restoring the ipapi fetch (3 fail), dropping functions.tryeatpal.com from connect-src (1), removing the CSP line entirely (collection error, exit 1), dropping the wss source (1)."
+    },
+    {
+      "id": "US-837",
+      "title": "The skip link scrolled but never moved focus, and half the pages had nothing to skip to",
+      "description": "As a keyboard user, I want the skip link to put me in the page content, so that I do not have to tab through the whole navigation on every page.",
+      "acceptanceCriteria": [
+        "Activating the skip link moves keyboard focus into the main content, not just the scroll position.",
+        "The focused target is reachable by script but stays out of the tab order (tabindex=-1), and an existing tabindex is left alone.",
+        "A page with no #main-content falls back to its first <main> or [role=\"main\"] landmark instead of being a dead anchor.",
+        "Every page a visitor can land on directly declares a landmark, including all the programmatic guide templates; anything exempt says why.",
+        "The gate proves it can tell a landmark from its absence, so it cannot pass by recognising nothing."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 3) by checking the VPAT's own claim. src/pages/VPAT.tsx asserts WCAG 2.4.1 Bypass Blocks 'Supports' with the remark 'Skip to main content link implemented on all pages'. Both halves of that were false. (1) SkipToContent rendered a bare <a href=\"#main-content\">. Chrome, Safari and Edge scroll to a non-focusable target without moving focus -- only Firefox moves it -- so the next Tab went straight back into the navigation the link exists to bypass. (2) Only 32 of 63 page files declared id=\"main-content\"; on the rest the link was a dead anchor, including every programmatic guide (5 of 6 pseo files), which is the highest-traffic public surface. Fix: SkipToContent now resolves the target (#id, then the first <main>, then [role=\"main\"]), sets tabindex=-1 when the element is not already focusable, focuses it and scrolls it in, preventing the browser's own anchor jump so the two do not fight. Doing it in the component meant the 32 pages that already had the id needed no change. Landmarks added to Onboarding, NotFound, Join, AdminDashboard, ShareTarget and all four pSEO templates plus PseoPage's loading and soft-404 states. AuthCallback and OAuthCallback are exempt with a written reason (transient redirect screens with no navigation to skip). Gate: src/components/skipToContent.test.tsx drives the real click through userEvent and asserts document.activeElement, then parses App.tsx for lazy imports and absolute-path routes and requires a landmark per routed page, with the nested /dashboard and /admin children checked via their layouts. Five mutants caught: remove the onClick (2 fail), drop the tabindex assignment (2), drop the <main> fallback (2), strip the id from one routed page (1), strip it from one pSEO template (1)."
+    },
+    {
+      "id": "US-838",
+      "title": "38 icon-only buttons announced as just \"button\"",
+      "description": "As someone using a screen reader, I want every icon button to say what it does, so that I am not guessing which unlabelled button stops the camera.",
+      "acceptanceCriteria": [
+        "No button whose only child is an icon is left without an accessible name.",
+        "The detector reads JSX attributes past a fat arrow in an inline handler, past a > inside a template string, and skips comments.",
+        "The detector proves it can tell a labelled button from an unlabelled one, so a green run is not a broken regex.",
+        "The VPAT remarks for 2.5.3 and 4.1.2 say what is now enforced instead of describing a remediation as in progress."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 4) by checking the VPAT's declared open items. Rows 2.5.3 and 4.1.2 said 'some icon-only buttons do not yet expose an accessible name; remediation in progress'. True, and worse than 'some': 38 of them, across 24 files. User-facing ones included the control that stops the camera on the food-capture screen, the one that starts a new conversation in the AI coach, and the tag-remove buttons in the recipe builder. THE FIRST DETECTOR FOUND 8. It used /<Button([^>]*)>/, which stops at the first > it meets -- and `onClick={() => ...}` contains one, so every button with an inline arrow handler was invisible. The shipped detector walks the tag character by character, tracking brace depth and skipping quoted strings, to find the real end of the attribute list. Gate: src/lib/iconButtonNames.test.ts, with controls for the arrow handler, a labelled button, a button with visible text, a > inside a template literal, and a commented-out button."
+    },
+    {
+      "id": "US-839",
+      "title": "The VPAT declares two remediations still in progress that appear to have shipped",
+      "description": "As the owner of a published accessibility conformance report, I want every row to match the code, so that the document is evidence rather than a snapshot of whenever it was last edited.",
+      "acceptanceCriteria": [
+        "2.1.2 No Keyboard Trap: pin the accessibility panel's focus behaviour in a test -- forward wrap, backward wrap, focus restored to the trigger on Escape and on backdrop close -- and correct the row if it passes.",
+        "2.2.2 Pause, Stop, Hide: establish what MotionConfig reducedMotion actually gates (framer-motion suppresses transform and layout animations but deliberately keeps opacity and colour), check for repeat: Infinity animations that survive it, and correct or keep the row on that evidence.",
+        "Every VPAT row whose claim is machine-checkable names the test that checks it.",
+        "No row is flipped to a stronger conformance level without a test landing in the same change."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Opened iteration 4, closed iteration 5 (2026-09-09). While chasing US-838 I probed the two other rows the VPAT marks 'remediation in progress' and both look stale, but neither has a test, so I did not flip them. (1) 2.1.2 says the accessibility-settings panel 'supports Escape-to-close but does not yet fully trap/restore focus'. A throwaway probe driving the real AccessibilityWidget through userEvent showed the opposite: opening it focuses the close button, Tab wraps from the last control back to the first, Shift+Tab wraps backwards, and Escape AND a backdrop click both return focus to the trigger. useFocusTrap is wired and works. (2) 2.2.2 says 'some Framer Motion animations are not yet fully gated on prefers-reduced-motion'. Six components import framer-motion without touching a reduced-motion hook, but App.tsx wraps the whole tree in <MotionConfig reducedMotion={preferences.reducedMotion ? 'always' : 'user'}>, which covers them. The open question is what that setting does NOT cover: framer-motion's 'user' mode suppresses transform and layout animations and deliberately leaves opacity and colour alone, so a repeat: Infinity opacity pulse would still run, and that -- not the entrance animations -- is what 2.2.2 is actually about. Sweep for infinite animations before deciding. Do not raise a conformance level without landing the test in the same change; an overstated VPAT is worse than a stale one. CLOSED: both rows were stale and both are now corrected on the strength of a test. 2.1.2 -> Supports, pinned by src/components/accessibilityWidget.focus.test.tsx (7 tests: opening moves focus into the panel, Tab wraps last->first, Shift+Tab wraps first->last, a full cycle never leaves the panel, and Escape AND a backdrop click both return focus to the trigger). 2.2.2 -> Supports, pinned by src/lib/reducedMotion.test.ts. The evidence that settled it: motion has TWO switches (the OS preference and the app's own toggle) and each has to reach BOTH engines. framer-motion is covered for both by a single MotionConfig at the app root, which is why the six components importing framer-motion without a reduced-motion hook are fine. CSS is covered for the OS by a universal @media block in index.css and mobile-first.css, and for the in-app toggle by `.reduce-motion, .reduce-motion *` plus the classList.add in AccessibilityContext -- the cell that would otherwise leave 13 `infinite` CSS animations running for a user who switched motion off inside the app. AC3/AC4 shipped as a `verifiedBy` field on the VPAT row type plus src/lib/vpatClaims.test.ts, which requires every cited path to exist AND the cited file to mention the criterion, so a pointer cannot rot in either direction; it also fails any row that claims Supports while its own remark says 'in progress'. Six rows now cite a test (1.3.5, 2.1.2, 2.2.2, 2.4.1, 2.5.3, 4.1.2). Seven mutants, seven caught after two instrument fixes -- see progress.txt for the two that got through the first draft."
+    },
+    {
+      "id": "US-840",
+      "title": "Household seats were sold and never charged for",
+      "description": "As the business, I want household sharing to be the paid feature the price page says it is, so that Family Plus has something Free and Pro do not.",
+      "acceptanceCriteria": [
+        "A household can only add a member when the owner's plan has a seat free; the limit lives in subscription_plans, not in a literal.",
+        "Entitlement resolves through effective_plan_id, so an App Store or comped subscriber gets the seats they paid for.",
+        "A household already over its new limit keeps every member it has -- the gate runs on the accept path, never against existing rows.",
+        "Re-redeeming a code you already used stays a no-op even when the household is full.",
+        "An invite link minted while paid stops working after a downgrade: the accept path is authoritative, not the mint path.",
+        "The person who hits the limit is told why, and no constraint or RLS string ever reaches the screen in its place.",
+        "Verified against a real Postgres, and the test fails without the migration."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 6) as item (2) of US-780's remaining scope, which docs/entitlements.md had been carrying as 'no gate exists at the invite path' since 2026-09-03. There was no gate anywhere: accept_household_invite (migration 20260426000001) inserted into household_members with no plan lookup at all, so a Free account could mint invite links and add caregivers without limit -- which is the whole of what Family Plus sells over Pro. Migration 20260909000000_household_seat_limit.sql adds subscription_plans.max_household_members (nullable, NULL = unlimited, matching max_children), seeds it per the table Dj signed off (Free 1, Pro 1, Family Plus and Professional unlimited), and adds household_owner_id + household_seat_limit. WHOSE PLAN COUNTS was the design question: public.households has no owner column, so the owner is the earliest household_members row (ensure_user_household inserts the creator first); using the joiner's plan would let a Free household fill up by having a paying friend accept first. Both RPCs are CREATE OR REPLACE'd from the original text with the check inserted as a pure insertion, per US-780's lesson about rewriting a function and silently dropping live branches. The check sits AFTER the idempotent already-a-member branch so re-redeeming your own code in a full household is still a no-op. Verified against Postgres 16: supabase/tests/us840_household_seats.test.sql, 8 cases each printing EXPECTED beside the value, confirmed to fail without the migration (exit 3). Client half: useHousehold.createInviteCode returned a bare null on every failure and the page rendered \"Couldn't create an invite link\", so the paywall was invisible; it returns a discriminated result now and the message goes through userFacingError (US-831) so an RLS string can never take its place. Six mutants caught: owner = newest member, drop the accept check, give Pro unlimited seats, move the check before the idempotent branch, hardcode the Free fallback, and read user_subscriptions instead of effective_plan_id. Remaining US-780 scope: items (3) AI rate-limit counters and (4) hand iOS the table."
+    },
+    {
+      "id": "US-841",
+      "title": "Withdrawing cookie consent stopped nothing until the next page load",
+      "description": "As someone who turns analytics off, I want the tracking to stop when I say so, so that withdrawing consent is as easy as giving it.",
+      "acceptanceCriteria": [
+        "Withdrawing analytics consent stops Google Analytics and Sentry Session Replay in the current page, with no reload.",
+        "Both the Consent Mode update and the gtag.js per-hit kill switch are used, because a tag loaded under a consent that no longer holds may not honour the update alone.",
+        "Every Consent Mode signal is denied, not analytics_storage alone.",
+        "No decision at all counts as withdrawn, the same as an explicit no.",
+        "The kill-switch key cannot drift from the measurement id public/ga-loader.js actually ships.",
+        "The subscription is made before Sentry starts, so a banner dismissed in the first second is not missed."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 7) by asking what leaves the browser for third parties. The consent plumbing was well built and one wire was not connected: src/lib/consent.ts exports onConsentChange, and NOTHING in src/, app/ or tests/ subscribed to it. So the two directions were asymmetric. Granting was instant -- setConsent(true) calls window.__eatpalLoadGA() and GA starts on that click. Withdrawing cleared localStorage, mirrored the state onto window, notified an empty subscriber set, and left GA sending hits and Sentry Session Replay recording the DOM for the rest of the visit. resetConsent's own docblock admitted it: 'Does not retroactively unload analytics already loaded this session -- a reload applies the new state.' Nothing tells the user to reload, and GDPR Article 7(3) requires withdrawal to be as easy as granting. Fix: src/lib/consentEnforcement.ts subscribes once from main.tsx, before initializeSentry, and on any non-granted state denies all four Consent Mode signals, sets window['ga-disable-<ID>'] (the flag gtag.js checks before every hit, which is the fallback for an already-loaded tag) and calls Sentry.getReplay()?.stop(). Granting is deliberately not handled -- ga-loader.js already covers it, and replay is decided once at Sentry.init, so a mid-session opt-in gets replay next visit, erring toward not recording. The measurement id is asserted equal to the GA_ID literal in public/ga-loader.js, which is a plain-JS file outside the bundle and cannot import it. Six mutants caught: remove the subscription, drop the kill switch, deny analytics_storage only, skip stopping replay, treat 'no decision' as consented, and drift the loader's id. Also caught and fixed one new type error the ratchet flagged in the test's replay mock."
+    },
+    {
+      "id": "US-842",
+      "title": "The feature-flag cache had a TTL that any unrelated write renewed",
+      "description": "As an engineer running a staged rollout, I want a flag change to reach browsers and my own browser to tell me the truth, so that turning a kill switch off actually turns it off.",
+      "acceptanceCriteria": [
+        "Each cached flag ages on its own; writing one flag does not renew any other.",
+        "A flag cached once cannot be kept fresh indefinitely by a busy neighbour flag.",
+        "The admin dashboard evicts a toggled flag instead of writing a value it cannot compute, and cannot write one by import either.",
+        "The old single-timestamp payload is treated as expired rather than migrated, and corrupt or versionless payloads read as a miss.",
+        "The cache key stays the literal US-835's sign-out scrub lists.",
+        "Tests seed the cache through the module, not by hand-writing its on-disk shape."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 8). The cache was `{ flags: Record<string, boolean>, timestamp: number }` -- ONE timestamp for every flag. Both readers rejected the whole object once that timestamp aged past 5 minutes, and all three writers (setCachedFlag, setCachedFlags, and the admin dashboard's syncFlagToHookCache) reset it to Date.now(). So writing ANY flag renewed the freshness of EVERY OTHER flag: a value whose consumer was not currently mounted could stay 'fresh' for as long as the browser stayed open, and turning a kill switch off server-side would not reach it. Second defect, same file: syncFlagToHookCache wrote `feature_flags.enabled` -- the raw column -- into a cache that holds the PER-USER result (enabled AND the user's bucket inside rollout_percentage). An admin turning a flag on at 5% saw it enabled in their own browser whatever bucket they were in, and an admin's browser is the one place a staged rollout gets eyeballed. Fix: src/lib/featureFlagCache.ts timestamps each flag; the dashboard calls evictFlag, which forces a real re-evaluation and claims nothing it cannot compute. The legacy shape is treated as expired rather than migrated -- its values may have been renewed arbitrarily far past their real age, so there is nothing worth carrying forward. TWO MUTANTS SURVIVED THE FIRST DRAFT and both produced better tests: the version check was only 'caught' by NaN arithmetic (a versionless payload with modern-looking entries now discriminates it), and nothing stopped the dashboard writing again (the import line is now asserted). Also negative: a general dead-export sweep is the wrong instrument -- 673 hits, mostly helpers exported for tests and components reached through lazy(), and its first two 'finds' were used in their own file."
+    },
+    {
+      "id": "US-843",
+      "title": "Unsubscribing stopped two of the three emails we send",
+      "description": "As a parent who clicked unsubscribe, I want the email to stop, so that I do not have to report us as spam to make it stop.",
+      "acceptanceCriteria": [
+        "Every sender honours the one suppression list, including the weekly nutrition summary.",
+        "The suppression check fails closed: a query error is treated as suppressed, never as consent.",
+        "Bulk mail carries List-Unsubscribe and List-Unsubscribe-Post together, and transactional mail carries neither.",
+        "The weekly summary carries a signed one-click unsubscribe link, not only a preferences page behind a sign-in.",
+        "functionsBase has one home rather than the three copies it was heading for."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 9). nurture-unsubscribe writes to email_suppressions; agent-nurture-engine and agent-weekly-digest both read it; weekly-nutrition-email did not. It checked only its own automation_email_subscriptions row, so a parent who clicked unsubscribe in a nurture email went on receiving the weekly nutrition summary indefinitely. Two of three senders honoured the list. Second half: no sender set List-Unsubscribe or List-Unsubscribe-Post, which Gmail and Yahoo have required of bulk senders since February 2024 -- without them a mail client shows no unsubscribe of its own, recipients reach for 'report spam', and the complaint rate is measured against the whole domain, which is the same reputation that decides whether a password reset lands in the inbox. Fix: functions/_shared/email-suppression.ts (one implementation, fails CLOSED on a query error -- a database blip must not be read as consent), functions/_shared/email-headers.ts (both headers built together, because List-Unsubscribe without the Post header is the old behaviour), and functions/_shared/functions-url.ts (agent-csat and agent-nurture-engine each carried an identical functionsBase and weekly-nutrition-email was about to be the third). The weekly summary now mints a signed unsubscribe URL with the same signEmailToken scheme the nurture links use, and puts it in the body beside the existing preferences link. approval-executor sets the headers only when the payload carries an unsubscribe URL, so a support reply -- not a mailing anyone can leave -- does not advertise one. NEGATIVES: EmailPreferences IS mounted on the settings page, so 'Manage preferences' reaches a working control; the nurture engine's own unsubscribe is correctly signed and suppression-checked. DEAD CODE FOUND, NOT REMOVED: src/lib/email.ts exports unsubscribeAll(token), which has no caller and could not work if wired -- it is a client-side UPDATE filtered by unsubscribe_token against a table whose only RLS policy is auth.uid() = user_id, so a signed-out click would update zero rows. Left for a deletion pass. Five mutants caught: drop the weekly suppression check, fail open on a query error, send List-Unsubscribe without the Post header, add the headers unconditionally, and stop normalising the address before comparing."
+    },
+    {
+      "id": "US-844",
+      "title": "126 kB of error-monitoring SDK was downloaded before the landing page could render",
+      "description": "As someone arriving on a blog post from search, I want the page to render without first fetching the crash reporter, so that the site is fast on the pages the whole SEO strategy depends on.",
+      "acceptanceCriteria": [
+        "No module static-imports @sentry/react; the SDK is named once, inside a dynamic import.",
+        "The eager closure no longer contains vendor-sentry, and the eagerJs budget is lowered to lock the win in rather than left as a ceiling.",
+        "Reporting is not weakened: errors raised before the SDK arrives are queued and flushed.",
+        "Reporting an error does not itself trigger the download when nothing has asked for the SDK.",
+        "Withdrawing consent does not pull the SDK in to stop a recording that was never running.",
+        "The queue is bounded, so an error loop cannot grow it without limit."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 10) by building and measuring rather than reading. main.tsx already deferred the CALL -- requestIdleCallback(initSentryDeferred), commented 'to reduce TBT' -- but `import { initializeSentry } from './lib/sentry'` is static and sentry.tsx opened with `import * as Sentry from '@sentry/react'`, so the whole SDK was in the entry chunk's static closure. Deferring the call postpones nothing the browser has to do. MEASURED: eager closure 386.3 kB gz across 9 chunks, of which vendor-sentry was 126.1 kB -- the largest single member, bigger than the app's own entry chunk at 114.3 kB. FOUR modules pinned it (sentry.tsx, api-errors.ts, storageCleanup.ts via KidsContext, consentEnforcement.ts), so removing any one would have moved nothing; that is why the fix is a single module, src/lib/sentryClient.ts, that names '@sentry/react' once inside import(). AFTER: 260.4 kB gz across 8 chunks, vendor-sentry gone from the closure; the gate's own figure went 395.6 -> 266.6 kB, and .ci/bundle-budget.json eagerJs was lowered 454000 -> 280000. Reporting is not weakened: withSentry queues (bounded at 50) until the module lands and flushes in order, and does nothing at all when nothing has asked for the SDK -- so logError in dev no longer risks pulling 126 kB. Second defect fixed in passing: webVitals.ts already used a dynamic import but an unguarded one, fetching the SDK on every metric even where Sentry is switched off. Typecheck baseline lowered 814 -> 813. Five mutants caught: re-add a static import, make withSentry download on demand, drop the queue, unbound the queue, leave the budget at 454000. Two instrument bugs on the first run, both self-inflicted: the scan read its own docblock naming '@sentry/react' and consentEnforcement's comment quoting the very call it forbids."
+    },
+    {
+      "id": "US-845",
+      "title": "The production CSP refused the theme script on every page",
+      "description": "As someone who uses dark mode, I want the page to come up dark, so that every navigation does not start with a flash of white.",
+      "acceptanceCriteria": [
+        "Loading the real build in a browser under the production CSP produces no 'Refused to execute inline script' on any route.",
+        "The CSP allows the inline script by hash, computed from the built output on every build, not by re-adding unsafe-inline.",
+        "ld+json blocks are excluded: they are data, not executable, and hashing them would add five tokens per page that protect nothing.",
+        "The scanner reads markup, not an HTML comment that quotes markup.",
+        "public/_headers no longer claims the build carries zero inline scripts, and commits no hash of its own."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-09 (web platform loop, iteration 11) by serving the real dist/ from a local server that sets the exact production CSP and loading six routes in Chromium. Every one printed \"Refused to execute inline script because it violates the following Content Security Policy directive: script-src 'self' ...\". The script is next-themes' ThemeProvider blocking script -- the one that reads the stored theme and sets class=\"dark\" on <html> BEFORE first paint -- emitted with an empty nonce=\"\" because none is configured. script-src carries no nonce and no 'unsafe-inline' (US-529 removed it), so Chrome refused it on every page and a dark-theme visitor got a white flash until React hydrated, which after US-844 is still ~260 kB of JS away. That is precisely the flash the script exists to prevent. public/_headers asserted the opposite in a comment -- 'the built index.html carries zero inline <script>' -- which is how it survived: the claim was written once and never executed. Fix: scripts/build/inject-csp-hashes.mjs runs after the prerender and appends a 'sha256-...' source per distinct inline script to script-src in dist/_headers. A nonce is the other answer and cannot work here: Cloudflare Pages serves _headers statically, so there is nothing to generate one per response. public/_headers commits no hash, because a committed one would pin a single build of a single library version and go stale silently. Verified: 30 inline scripts across the build, 2 distinct hashes, and a re-run in Chromium shows zero refusals on all six routes. INSTRUMENT BUG on the first run: the scanner matched a <script> tag quoted inside an HTML comment in index.html and hashed the prose, reporting 4 hashes instead of 2 -- one of which would have changed whenever somebody edited the comment. Five mutants caught. Negatives: prerendering emits real content (109 kB on the landing page, 29 routes), all six font stylesheets carry font-display:swap, and CSS is 26.6 kB gz."
+    },
+    {
+      "id": "US-846",
+      "title": "The pricing page scrolled sideways on a 320px phone",
+      "description": "As someone comparing plans on a small phone, I want the page to fit, so that I am not dragging the layout around to read a price.",
+      "acceptanceCriteria": [
+        "No public route scrolls the document horizontally at 320px, the width WCAG 1.4.10 names.",
+        "The billing toggle stays on one line where it fits and wraps where it does not, rather than widening the page.",
+        "A long unbreakable string such as an email address wraps instead of forcing the document wider.",
+        "Every public route is measured, not just the one that passed.",
+        "An element that scrolls itself, or sits inside one, is allowed to be wider than the viewport; the document is not.",
+        "The VPAT's 1.4.10 row cites the test that checks it."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-10 (web platform loop, iteration 12) with the browser instrument built in iteration 11: serve the real dist/ under the production CSP and measure document.scrollWidth against clientWidth at a 320px viewport. Two of ten public routes failed. /pricing was 339px, 19 over: the monthly/yearly billing toggle, two shadcn Buttons (which carry whitespace-nowrap) plus a 'Save 20%' badge totalling 274px, with gap-3 and p-1 pushing the group past the ~288px a 320px screen leaves after the gutter. That is the page where somebody decides to pay. /accessibility was 321px, 1 over: the contact address, one unbreakable 213px word. THE INTERESTING PART OF THE SECOND FIX is that break-words did nothing on its own -- the address sits in a flex child, whose default min-width:auto refuses to shrink below its content, so there was no constrained width to break against. min-w-0 is what made it wrap. What was checking this before: a single assertion in tests/mobile-responsive.spec.ts that loaded '/' at iPhone 13 width, and '/' was the page that passed. Replaced by tests/responsive/reflow-320.spec.ts, which iterates all ten public routes at 320px, reports the offending elements by tag/class/text when it fails, and skips elements that scroll themselves or sit inside something that does. tests/responsive/ is already wired into CI. Both fixes mutation-checked by reverting each and re-running the real spec: 1 failure each, on the right route. VPAT 1.4.10 now cites the spec through the verifiedBy mechanism from US-839. Negatives: og:image, twitter:image, canonical and title are correct and unique across all 29 prerendered pages, with width, height, alt and secure_url all present."
+    },
+    {
+      "id": "US-847",
+      "title": "Every share card points at a WebP image",
+      "description": "As someone sharing a page, I want the preview card to show the cover image, so that the link does not post as a bare headline.",
+      "acceptanceCriteria": [
+        "og:image points at a format the major scrapers render, with the existing width/height/alt/secure_url metadata kept.",
+        "The referenced file exists in the build, checked rather than assumed.",
+        "Whatever asset is added is produced deliberately, not derived at build time from a WebP by a script nobody reviews."
+      ],
+      "priority": 3,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Opened 2026-09-10 (web platform loop, iteration 12) — NOT DONE, needs an owner decision. All 29 prerendered pages set og:image and twitter:image to https://tryeatpal.com/Cover.webp, and everything around it is right: the file exists in the build, og:image:width (1536), og:image:height (1024), og:image:alt and og:image:secure_url are all set, and twitter:card is summary_large_image. The one gap is the format. Only Cover.webp and Cover.avif exist in public/; there is no JPEG or PNG of the cover anywhere in the repo, so this cannot be fixed by changing a string. Twitter/X renders WebP; Facebook's and LinkedIn's crawlers have historically wanted JPEG/PNG/GIF, which would make every share on those surfaces a text-only card. I did not verify that behaviour from here -- no network to those scrapers -- so the claim is recorded as the reason to look, not as a measured fact. Someone should confirm with the Facebook Sharing Debugger and, if it holds, add a Cover.jpg to public/ and point og:image at it. Deliberately NOT auto-converting the WebP in a build step: a share card is brand surface, and a script-generated recompression is the wrong way to get one."
+    },
+    {
+      "id": "US-848",
+      "title": "Every offline navigation hit a dead-end page the cache could have answered",
+      "description": "As someone whose connection drops, I want the app I already loaded to keep working, so that the offline page's promise that I can check my grocery list is true.",
+      "acceptanceCriteria": [
+        "An offline navigation serves the exact cached page when there is one.",
+        "A route the worker has never cached falls back to the app shell, so client-side routing renders it.",
+        "With nothing cached at all, the static offline page is still served -- the change is not 'always serve the shell'.",
+        "The exact page wins over the shell.",
+        "A successful navigation is unaffected."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-10 (web platform loop, iteration 13) with the browser harness: register the worker against the real build, go offline, navigate. networkFirstWithOfflineFallback went straight to offline.html and never read the cache -- not the shell precached at install, not the 70 JS/CSS chunks, not the navigation responses it stores itself on the success path two lines above. Measured across three clean trials: EVERY offline navigation got the static page, including reloading the page you were already on, whose HTML was in that same cache. That made offline.html's own copy false -- it promises 'View your saved meal plans' and 'Check your grocery list', and from a dead-end static page you can do neither. Fix: try the exact cached page, then the app shell (/index.html, or / which is the same document in this build), then the static page. After: all three trials boot the app, and AppContext hydrates from localStorage as the load-precedence contract describes. A FALSE START WORTH RECORDING: my first read of this said the app booted offline fine. It was contaminated -- I had reused one browser context across probes, so state from an earlier navigation made an unvisited route look cached. Three isolated trials with a fresh context each said the opposite, consistently. Also fixed the test double: the fake Cache API compared raw strings, so cache.match('/index.html') missed a store keyed by absolute URL and the shell fallback looked broken when the double was wrong. Keys are normalised through new URL(x, scope) now, which is what the real Cache API does. Four mutants caught: restore the straight-to-offline fallback (4 fail), drop only the shell fallback (2), serve the shell before the exact page (2), always serve the shell and never the offline page (1)."
+    },
+    {
+      "id": "US-849",
+      "title": "Five prerendered pages skipped from h1 straight to h3",
+      "description": "As someone who navigates a page by jumping between headings, I want the outline to be complete, so that the structure I am walking matches the page.",
+      "acceptanceCriteria": [
+        "Every prerendered page has exactly one h1 and skips no heading level.",
+        "The check excludes <noscript>, which is not rendered when scripts run and is not in the accessibility tree.",
+        "The levels shadcn ui/ components own are corrected from page code, not by editing src/components/ui/.",
+        "Correcting an outline adds no visible copy to a page nobody asked to redesign.",
+        "The VPAT's 1.3.1 row cites the gate."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-10 (web platform loop, iteration 14) by parsing the built HTML of all 29 prerendered pages. Five skipped h1 -> h3: /faq, /contact, /guides, /meal-plan and /budget-calculator. VPAT 1.3.1 claimed 'Supports -- ... proper heading hierarchy ... throughout', the fourth false VPAT claim this loop. Causes were two: the footer's five column titles were h3 with no h2 above them (which is the whole outline on /guides, whose own content has no sub-headings), and the feature cards on the two generator pages were h3. Both are page code and were promoted to h2 -- in SEVEN files, because Footer.tsx's markup is duplicated verbatim in Accessibility, BlogPost, Contact, TermsOfService, PrivacyPolicy and FAQ; 23 copies of one heading. The remaining two pages open with shadcn AccordionTrigger and CardTitle, which render h3 from src/components/ui/ and are off limits per CLAUDE.md, so the missing level is supplied from page code as an sr-only h2 -- correcting an outline is not a reason to add visible copy to a page. INSTRUMENT BUG, and a big one had I believed it: the first scan reported TWO h1s on every single page, the second being 'EatPal - Meal Planning for Picky Eaters & ARFID' -- identical site-wide, which looked like a serious duplicated-boilerplate finding. It is inside index.html's <noscript> block, so it is never rendered when scripts run and never in the accessibility tree. Excluding noscript took 29 'failing' pages down to 5 real ones. Three mutants caught: footer back to h3, drop the FAQ sr-only h2 and rebuild, stop excluding noscript. Negatives: the PWA manifest is correct (all five icons exist and match their declared sizes, 192 and 512 present with any maskable, share_target's POST is genuinely handled by the worker and already covered end-to-end by tests/pwa-offline.spec.ts). One dead declaration recorded: protocol_handlers registers web+eatpal -> /import?url=%s, there is no /import route and nothing in the repo emits such a link."
+    },
+    {
+      "id": "US-850",
+      "title": "The manifest registered a protocol handler with no route behind it",
+      "description": "As someone who installs the app, I want the capabilities it registers with my operating system to work, so that following a link it claimed to handle does not land on a 404.",
+      "acceptanceCriteria": [
+        "Every URL the manifest hands to the operating system resolves to a declared route.",
+        "The web+eatpal handler is gone, with a note saying why and what to do before re-adding it.",
+        "The route resolver understands nested routes and does not accept a nested name under the wrong parent.",
+        "The check has a floor, so 'all of them are routable' cannot be true of an empty list."
+      ],
+      "priority": 3,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-10 (web platform loop, iteration 15, last). public/manifest.json declared { protocol: 'web+eatpal', url: '/import?url=%s' }. There is no /import route in src/App.tsx and nothing in the repo emits a web+eatpal: link, so an installed PWA registered a handler with the operating system for something the app cannot serve; anything following such a link would reach the 404 page. Removed rather than implemented -- you do not ship a handler for a protocol you do not handle -- with a note in the manifest saying to re-add it in the same change that adds the route. Everything else the manifest points at was already fine (start_url, four shortcuts, share_target.action), and src/lib/manifestRoutes.test.ts now checks all of them, because the manifest is the one file that hands URLs to the OS rather than to the router and nothing else notices when the two disagree. INSTRUMENT BUG: the first resolver held nested routes as a flat set of names, so '/pricing/planner' resolved -- /pricing is a route and 'planner' is a route name somewhere. Nested paths are attributed to the nearest absolute path declared before them now, which gets the parent right for every nested route this app declares. Three mutants caught. NEGATIVES from the last iteration's browser work: focus visibility holds across 132 tab stops on three pages -- every one has an outline or a ring (VPAT 2.4.7). Tab order was measured too: the backward jumps are all explained, by multi-column footers (down one column, up to the next, which is the correct pattern) and by the cookie banner deliberately coming before the header. The accessibility widget's floating trigger is the 5th tab stop while sitting at the bottom-left of the viewport, which is a mild ordering wart rather than a violation, and is recorded here rather than changed."
     }
   ]
 }

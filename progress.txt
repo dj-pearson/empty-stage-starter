@@ -3184,3 +3184,1197 @@ WHAT THIS LOOP KEPT RE-LEARNING, in rough order of how often it mattered:
 5. SAY WHAT YOU DID NOT FIND. Four iterations produced clean negatives --
    index keys, division by zero, infinite spinners, prefix-blocked routes -- and
    recording them is what stops the next pass re-running the same sweep.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 1. US-835: sign-out cleared
+one storage key out of twenty-nine. src/lib/signOutScrub.ts.
+================================================================================
+
+- THREE NEGATIVES FIRST, all cheap and all worth not re-running. Realtime
+  channels: every .channel() call site has a matching removeChannel/unsubscribe
+  in cleanup, zero leaks. Unguarded JSON.parse: 7 hits, all either
+  JSON.parse(JSON.stringify(x)) deep clones or already inside an outer try.
+  Stale-chunk white screens: RouteErrorBoundary already detects five spellings
+  of a chunk-load failure and reloads once behind a 30s sessionStorage cooldown.
+
+- THE FIND, and it is US-834 again one layer down. That iteration stopped the
+  service worker writing a household's rows to Cache Storage. Nothing had asked
+  the same question of localStorage. US-537 scrubs `kid-meal-planner` when the
+  auth listener sees SIGNED_OUT and stops there; twelve other localStorage keys
+  and sixteen sessionStorage keys survive. On a shared family tablet the next
+  person to sign in got:
+
+      eatpal_recent_searches           the previous parent's typed searches --
+                                       food, recipe and child names -- rendered
+                                       back as "Recent" in the command palette
+      eatpal.auto_restock_blocklist    one household's mutes suppressing
+                                       another household's suggestions
+      eatpal.kid_birthday_dismissed.*  keyed by child id
+      eatpal-budget-calc-draft         household size, child ages, weekly budget
+      login/audit/activity/eatpal_session_id
+                                       the new user's logins, security audit
+                                       events and conversions attributed to the
+                                       previous user's session in the same tab
+
+- SESSIONSTORAGE IS NOT SESSION-SCOPED. It dies with the TAB, and signing out
+  and back in without closing the tab is the ordinary shared-device flow. Four
+  session ids, seven Search Console OAuth handshake keys and the share-target
+  stash all outlived a sign-out. That distinction is the whole reason the
+  session half of this exists.
+
+- THE GATE FOUND 21 KEYS MY MANUAL GREP HAD MISSED, which is the argument for
+  writing the sweep before the fix rather than after. My hand list had 15 keys
+  from `grep setItem`. The scan resolves const identifiers, reads getItem and
+  removeItem too, and splits the two storages: 29 keys, and the ones I had
+  missed included every gsc_oauth_* key and all four session ids.
+
+- TWO INSTRUMENT BUGS, both caught by running it:
+  (a) It reported `userName` as an unclassified production key. That string is
+      in a JSDoc example inside useLocalStorage.ts. Comments are stripped now,
+      and a test asserts `userName` is NOT in the scan -- the same mistake
+      iteration 12 made reading its own comment.
+  (b) The keep-list honesty check asked "is this key in the scan?" and failed on
+      eatpal_exit_popup_shown, which reaches storage as a default prop value and
+      no call-site regex will ever see. It asks "is it referenced in src?" now.
+
+- A MOCK THAT DISAGREED WITH THE PLATFORM. The first version enumerated with
+  Object.keys(localStorage), which works in browsers, and the behavioural test
+  showed nothing being cleared: src/test/setup.ts replaces storage with a plain
+  object whose keys are getItem/setItem/removeItem/clear/length/key. Switching
+  to the spec'd enumeration (length + key(i)) exposed the real problem -- that
+  mock exposes `length` as a vi.fn(), not a number, so `i < store.length` is
+  never true. Fixed the mock to a getter. Shipped code now uses the interface
+  Storage actually documents rather than the one that happens to work.
+
+- Measured: 3405 tests pass (224 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1148 against 1148; invisible chars clean. Five mutants,
+  five caught: comment out the scrubOnSignOut() call (1 fail), drop a local key
+  (4), drop a session key (4), disable comment stripping (2), remove a keep-list
+  entry (1).
+
+- **Learnings for future iterations:**
+  - When a fix names a threat model, ask which other stores share it. "Shared
+    family tablet" was written down in US-834's notes; localStorage was sitting
+    right there holding more of the same data with a cheaper attack.
+  - A hand-written list of anything in this repo is short. Fifteen keys by grep,
+    twenty-nine by a scan that reads all three accessors and resolves consts.
+  - A test double is a claim about the platform, and this one was wrong in a way
+    that made correct code look broken. When a passing implementation fails only
+    under test, suspect the mock before the code.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 2. US-836: the login path
+fetched an origin the CSP blocks. src/lib/cspConnectSrc.test.ts.
+================================================================================
+
+- FOUR NEGATIVES FIRST, all in areas that looked promising and are done.
+  dangerouslySetInnerHTML: 3 real uses, all DOMPurify'd, and US-530 already
+  moved JSON-LD to textContent and added a global afterSanitizeAttributes hook
+  that stamps rel="noopener noreferrer" on any sanitized anchor with a target.
+  target="_blank" in JSX: 0 without rel. Optimistic writes: all five entity
+  contexts route through runOptimisticMutation/runOptimisticInsert, whose
+  rollback (US-535) inverts only the optimistic diff so a concurrent realtime
+  event survives -- there is nothing left to find there. Realtime channels,
+  intervals and listeners: balanced everywhere.
+
+- THE FIND, and it is the shape this repo keeps producing: code that works in
+  every environment where anyone looks at it, and fails in the one where nobody
+  does. loginHistory.logLogin runs on every successful web sign-in (three call
+  sites in Auth.tsx, one in AuthCallback.tsx) and called
+
+      fetch('https://ipapi.co/json/')
+
+  ipapi.co is not in the connect-src of the CSP in public/_headers. In
+  production the request is blocked before it leaves the page. `vite dev`
+  applies no CSP, so it works perfectly on every developer's machine. The
+  visible symptom is eight null geo columns on every login_history row and a
+  console violation nobody reads.
+
+- THE FIX WAS A CHOICE, and "add the origin to the CSP" is the wrong half of
+  it. That would START doing something the app has never actually done in
+  production: hand a third party the IP address of every person at the moment
+  they authenticate, on a product holding children's data, with a 3s
+  third-party round-trip on the login path. The call is gone. Timezone comes
+  from Intl.DateTimeFormat().resolvedOptions() -- no network, and it is the
+  signal the suspicious-login check wants; it was null on every row until now.
+
+- A SWEEP THAT FINDS NOTHING PROVES NOTHING, which is the interesting part of
+  the gate. After the fix and the deletion below, src/ contains ZERO hardcoded
+  external fetch targets: everything goes through the Supabase client or
+  invokeEdgeFunction, both built from env. My first version asserted "at least
+  3 call sites found" and went red -- correctly. Replaced with a positive and a
+  negative control: the checker is handed a synthetic `fetch('https://ipapi.co/
+  json/')` and must reject it, and a synthetic `fetch('https://api.stripe.com/
+  v1/x')` and must accept it. Plus the configured origins from env.example.txt
+  (VITE_SUPABASE_URL, VITE_FUNCTIONS_URL) are checked against the policy, which
+  is real cross-file material rather than a count.
+
+- THE WILDCARD MATCHER HAS ITS OWN TESTS, because `https://*.sentry.io` does
+  NOT match `sentry.io` and a naive endsWith says it does. Also asserted:
+  `evil-api.tryeatpal.com.attacker.net` is not matched by
+  `https://api.tryeatpal.com`.
+
+- DELETED src/lib/url-utils.ts and its test, 1166 lines, which the gate found
+  on its first run. It fetched api-ssl.bitly.com and tinyurl.com -- both
+  CSP-blocked -- and read `VITE_BITLY_API_KEY`, which a VITE_ prefix would have
+  shipped into the client bundle for anyone to read. Nothing in src/, app/,
+  tests/, scripts/ or functions/ imported it; all 40 exports were referenced
+  only by the module's own test. Another US-771 survivor.
+
+- ALSO CONFIRMED NOT A BUG: world.openfoodfacts.org is reached only from
+  src/lib/database-prioritization.ts, which nothing in the web bundle imports,
+  and from app/(tabs)/scan.tsx, which is native and has no CSP. So the barcode
+  path is not broken on web -- it is not on web at all.
+
+- Lowered .ci/lint-baseline.txt 1148 -> 1144; deleting url-utils.ts took four
+  lint errors with it and the ratchet asked.
+
+- Measured: 3353 tests pass (224 files, 1 skipped; down 52 from 3405 because
+  url-utils.test.ts went with the module, up 8 from the new gate). Typecheck 814
+  against baseline 814; lint 1144 against a baseline now also 1144; invisible
+  chars clean. Four mutants, four caught: restore the ipapi fetch (3 fail), drop
+  functions.tryeatpal.com from connect-src (1), delete the CSP line (collection
+  error, exit 1), drop the wss source (1).
+
+- **Learnings for future iterations:**
+  - A CSP is a second, invisible copy of the app's dependency list, and nothing
+    in the build checks it against the first. Dev has no CSP, so the only place
+    the disagreement shows up is a production browser.
+  - "Add it to the allowlist" and "stop doing it" are different products, not
+    two spellings of one fix. Ask which one the change actually is before
+    picking the one-line version.
+  - When a sweep legitimately returns zero, the floor assertion has to be
+    replaced by a control, not deleted. Feed the checker a known-bad input and
+    make it say no.
+  - A VITE_-prefixed env var is public. `VITE_BITLY_API_KEY` in a module nobody
+    imports is a key waiting to be published by the first person who wires it up.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 3. US-837: the skip link
+scrolled but never moved focus. src/components/skipToContent.test.tsx.
+================================================================================
+
+- TWO NEGATIVES FIRST, both in the edge-function layer. CORS: functions/_shared/
+  cors.ts pins Access-Control-Allow-Origin to the production origin and the only
+  wildcard in the tree is generate-sitemap, which is a public sitemap. The 27
+  functions that do not import cors.ts are cron- or webhook-invoked and never
+  touched by a browser. Auth on verify_jwt=false functions: my first sweep
+  flagged agent-ci-triage, agent-migration-check, agent-sentry-triage and
+  agent-knowledge-ingest as unguarded service-role endpoints. All four are
+  authenticated -- GitHub HMAC over the raw body, Sentry HMAC, and an admin JWT
+  respectively. My grep just did not know those spellings. Instrument wrong
+  before the code, again.
+
+- THE FIND CAME FROM READING THE PRODUCT'S OWN CLAIM. src/pages/VPAT.tsx states
+  WCAG 2.4.1 Bypass Blocks: "Supports -- Skip to main content link implemented
+  on all pages." A published VPAT is a compliance document, so it is worth
+  checking rather than assuming. Both halves were false.
+
+  (a) SkipToContent rendered a bare `<a href="#main-content">`. When the target
+      is a plain <main> or <div>, Chrome, Safari and Edge scroll to it and
+      LEAVE FOCUS WHERE IT WAS -- only Firefox moves focus. So the very next
+      Tab went back into the navigation the link exists to bypass. The link
+      looked right, read right in a review, and did nothing for the user it was
+      written for.
+
+  (b) 32 of 63 page files declared id="main-content". On the other 31 the link
+      was a dead anchor. Among them: 5 of the 6 pSEO files, which are the
+      highest-traffic public surface and the likeliest first contact for a
+      keyboard visitor arriving from search.
+
+- FIXED IN THE COMPONENT, NOT IN 32 FILES. The click handler resolves the
+  target (#id, then the first <main>, then [role="main"]), sets tabindex="-1"
+  if it is not already focusable, focuses it, scrolls it in, and calls
+  preventDefault so the browser's own anchor jump does not fight the scroll.
+  The pages that already had the id needed no change at all; the fallback means
+  any page with a landmark works whether or not somebody remembered the id.
+
+- LANDMARKS ADDED where a routed page had none: Onboarding, NotFound, Join,
+  AdminDashboard, ShareTarget, all four pSEO templates, and PseoPage's loading
+  and soft-404 states. AuthCallback and OAuthCallback are exempt with a written
+  reason -- they are transient redirect screens with no navigation to skip past.
+
+- THE GATE FOUND ONE I HAD MISSED. My hand survey of routed pages missed
+  /onboarding, because the regex window I used to pair a <Route> with its
+  element was too short for that block. The test, which walks the lazy imports
+  and every absolute-path route in App.tsx, failed on it immediately.
+
+- NESTING WAS THE ONE DESIGN TRAP. PseoPage's NotFoundState renders BOTH
+  standalone (as the whole page) and as the default case inside <Suspense>. If
+  I had wrapped the Suspense block in <main> as well, the 404 case would have
+  nested a main inside a main. Giving each of the six components its own
+  landmark and wrapping nothing at the call site keeps exactly one per render.
+
+- Measured: 3395 tests pass (225 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught: remove the onClick (2 fail), drop the tabindex assignment (2),
+  drop the <main> fallback (2), strip the id from a routed page (1), strip it
+  from a pSEO template (1).
+
+- **Learnings for future iterations:**
+  - The product's own compliance documents are a list of falsifiable claims. A
+    VPAT row saying "Supports" is a test waiting to be written, and this one was
+    wrong in two independent ways.
+  - An accessibility feature that renders is not an accessibility feature that
+    works. The skip link existed, was mounted app-wide, and passed every review
+    it ever had, because reading `<a href="#main-content">` does not tell you
+    that three of the four major browsers ignore it.
+  - Fix at the one place, not at the 32. The same defect could have been closed
+    by adding tabIndex={-1} to every landmark; putting it in the click handler
+    meant one file changed and pages that do not exist yet are covered too.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 4. US-838: 38 icon-only
+buttons announced as just "button". src/lib/iconButtonNames.test.ts.
+US-839 opened for the next iteration.
+================================================================================
+
+- THE VPAT IS STILL PAYING OUT. Iteration 3 found one false row by reading it;
+  this iteration went through the rows it marks "remediation in progress",
+  which are the product telling you where its own bodies are buried. Three such
+  rows: 2.1.2 keyboard trap, 2.2.2 reduced motion, and 2.5.3/4.1.2 accessible
+  names. The third was true.
+
+- MY FIRST DETECTOR FOUND 8. The real number is 38. The regex was
+
+      <(Button|button)\b([^>]*)>
+
+  and `onClick={() => handleDelete(id)}` contains a `>`, so `[^>]*` stopped
+  inside the handler and every button with an inline arrow function was
+  invisible. The progress log has warned about exactly this ("a JSX parser
+  broken by `=>` inside a prop") and I wrote it again anyway. The shipped
+  detector walks the tag one character at a time, tracking brace depth and
+  skipping quoted strings, to find where the attribute list really ends.
+
+  I only noticed because I read a file the sweep had reported on -- and saw a
+  SECOND unlabelled button four lines below the one it found. A sweep that
+  reports 8 hits in a file with 3 is easier to trust than one that reports
+  nothing.
+
+- WHAT WAS UNNAMED, and it is not only admin screens: the button that stops the
+  camera on the food-capture screen, the one that starts a new conversation in
+  the AI coach, the tag-remove buttons in the recipe builder, the clear-filter
+  chip in the pantry, and the drag handle in the instruction-step builder. A
+  screen reader announced each of those as "button".
+
+- FIXED ALL 38 across 24 files, labels written from the handler each one calls
+  ("Stop the camera", "Delete this collection", "Copy the CNAME record value").
+  None of those files use i18n, so plain strings match their surroundings.
+
+- THE GATE'S CONTROLS ARE THE POINT, given that the tree is now clean and the
+  main assertion is `expect(unnamed).toEqual([])`. Five synthetic inputs it has
+  to classify: a button with an arrow handler (must be FOUND), the same one
+  labelled (must not), one with visible text beside the icon (must not), one
+  whose className template literal contains `a>b` (must not), and a
+  commented-out button (must not). Reverting the brace-aware scan to the naive
+  regex fails the first.
+
+- TWO NEGATIVES, both now US-839 rather than claims. I probed the accessibility
+  panel's focus trap by driving the real widget with userEvent: opening focuses
+  the close button, Tab wraps last->first, Shift+Tab wraps first->last, and
+  Escape and a backdrop click both restore focus to the trigger. 2.1.2's remark
+  is stale. And 2.2.2's "some Framer Motion animations are not gated" is
+  answered by App.tsx wrapping everything in MotionConfig -- six components
+  import framer-motion without a reduced-motion hook and are covered anyway.
+  I did NOT flip either row: there is no test pinning them, and raising a
+  conformance level on a document with legal weight without landing the test in
+  the same change is how a stale VPAT becomes an overstated one. US-839.
+
+- Measured: 3402 tests pass (226 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Three mutants,
+  three caught: strip one aria-label (1 fail), disable brace awareness (1),
+  disable comment stripping (1).
+
+- **Learnings for future iterations:**
+  - A document's "in progress" items are a to-do list somebody already wrote
+    for you, and they are the rows most likely to be either true and unfinished
+    or finished and unrecorded. Both are worth knowing.
+  - `[^>]*` is not an attribute list. JSX puts `>` inside arrow functions,
+    template literals and comparisons; a sweep that uses it under-reports
+    silently and by a lot -- here by 79%.
+  - Read one file the sweep reported on before believing its count. The
+    discrepancy between what the tool said and what the file contained is what
+    exposed the parser bug.
+  - Correcting a claim in a compliance document needs a test in the same
+    commit, or it is just a different unverified claim.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 5. US-839 (opened last
+iteration): the two stale VPAT rows, closed on evidence. src/lib/vpatClaims.test.ts
+================================================================================
+
+- BOTH ROWS WERE STALE, and both are now "Supports" with a test named beside
+  them. The point of the iteration was not the flip -- it was refusing to flip
+  them last time without one.
+
+- 2.1.2 NO KEYBOARD TRAP. accessibilityWidget.focus.test.tsx drives the real
+  widget: opening moves focus into the panel, Tab wraps last->first, Shift+Tab
+  wraps first->last, a full cycle plus two never leaves the panel, and Escape
+  and a backdrop click BOTH return focus to the trigger. The WCAG-correct trap
+  is the one with an exit, so the exits are half the assertions.
+
+- 2.2.2 PAUSE, STOP, HIDE, and the thing that made this worth doing properly:
+  motion has TWO switches, and each has to reach BOTH engines.
+
+                     framer-motion          CSS
+      OS preference  MotionConfig 'user'    @media (prefers-reduced-motion)
+      in-app toggle  MotionConfig 'always'  html.reduce-motion
+
+  The bottom-right cell is the one that is easy to leave empty, and it is the
+  one that matters most: a user who turns motion off IN THE APP, with no OS
+  preference set, gets no media query at all. 13 `infinite` CSS animations --
+  float, drift, orbit, wiggle, bounce-dynamic, pulse-glow -- would have kept
+  running while the framer entrances obediently stopped. That cell exists
+  (`.reduce-motion, .reduce-motion *` plus the classList.add in
+  AccessibilityContext) and now cannot be removed quietly.
+
+  This also explains the six components that import framer-motion and touch no
+  reduced-motion hook, which is presumably what the old remark was counting:
+  they do not need one. MotionConfig is a single root-level gate.
+
+- TWO INSTRUMENT BUGS, and the second one is the better story.
+
+  (a) osPreferenceBlock read the FIRST `@media (prefers-reduced-motion: reduce)`
+      in index.css. There are three, and the first is a narrow rule for one
+      class. It reported "this stylesheet has no universal reduce rule" while
+      the universal rule sat 118 lines below. Now plural, and the instrument
+      test feeds it a two-block stylesheet where only the second is universal.
+
+  (b) A MUTANT SURVIVED, which is the only reason I found this one. Renaming
+      `.reduce-motion` to `.reduce-motion-disabled` -- which would break the
+      in-app toggle completely, since AccessibilityContext still adds
+      `reduce-motion` -- left the suite green. The matcher asked
+      `selector.includes('.reduce-motion')`, and `.reduce-motion-disabled`
+      contains that substring. Selectors are now split on commas and compared
+      whole. Two mutants that previously survived now fail.
+
+- THE VPAT NOW POINTS AT ITS TESTS, which is AC3/AC4 and the part that outlasts
+  this loop. Rows gained an optional `verifiedBy: string[]`, and
+  vpatClaims.test.ts makes the pointer load-bearing in BOTH directions: the file
+  must exist, AND the cited file must mention the criterion number. Pointing
+  2.2.2 at a real-but-unrelated test fails. It also fails any row that claims
+  "Supports" while its own remark says "in progress" -- the exact contradiction
+  that started this story. Six rows cite a test now (1.3.5, 2.1.2, 2.2.2, 2.4.1,
+  2.5.3, 4.1.2); the rest are human judgements ("no content flashes more than 3
+  times per second") and are honestly left uncited.
+
+- ONE CITATION WAS ALREADY WRONG when I added it. 1.3.5 cites
+  formAutocomplete.test.ts, which never mentioned 1.3.5 -- so the gate rejected
+  my own first version of the link and I added the reference to that file's
+  header. A pointer nobody checks is a pointer that is already wrong.
+
+- Measured: 3433 tests pass (229 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Seven mutants,
+  seven caught (after the two fixes above): cite a deleted test (2 fail), cite
+  an unrelated test (2), rename the in-app class (1), scope the in-app rule to
+  the element only (1), delete the universal OS block (1), break the tab
+  wrap-around (2), stop restoring focus on close (2).
+
+- **Learnings for future iterations:**
+  - A preference with two sources needs its matrix drawn. "Does the app respect
+    reduced motion?" has four answers, not one, and three of them being right
+    is indistinguishable from four until you write them down.
+  - Substring matching on a selector, a class or an identifier is not matching.
+    `.reduce-motion-disabled` contains `.reduce-motion`, and the only reason I
+    know is that a mutant lived.
+  - Make a cross-reference verifiable in both directions or it will drift. "This
+    row is checked by that file" is worth nothing unless that file also has to
+    admit which row it checks.
+  - Refusing to flip a claim without a test cost one iteration and produced a
+    gate that keeps six rows honest. Worth it.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 6. US-840: household seats
+were sold and never charged for. 20260909000000_household_seat_limit.sql.
+================================================================================
+
+- THE REPO HAD ALREADY WRITTEN THE TICKET. docs/entitlements.md has carried
+  "Household members | 1 | 1 | unlimited | unlimited | not enforced" and the
+  line "no gate exists at the invite path" since Dj signed the limit table on
+  2026-09-03. There was no gate anywhere: accept_household_invite, from
+  migration 20260426000001, inserts into household_members with no plan lookup
+  at all. A Free account could mint invite links and add caregivers without
+  limit -- which is the entire difference Family Plus sells over Pro.
+
+- WHOSE PLAN COUNTS was the only real design question, and the obvious answer
+  is wrong. public.households is (id, name, created_at, updated_at) -- no owner
+  column. Using the JOINER's plan would let a Free household fill itself by
+  having a Family Plus friend accept the first invite. household_owner_id
+  resolves the earliest household_members row instead, which is the creator,
+  because ensure_user_household inserts them first.
+
+- NOBODY IS EVICTED, and that is a deliberate line. The check runs on the
+  accept path only. A household already over its new limit keeps every member
+  it has and simply cannot add another. Enforcing against existing rows would
+  remove a caregiver's access to a child's food history without warning; that
+  is not a billing correction, it is data loss. Case 6 of the SQL test pins it.
+
+- THE CHECK SITS AFTER THE IDEMPOTENT BRANCH, which is the kind of ordering
+  that is obvious once it breaks and invisible until then. Re-redeeming a code
+  you have already used consumes no seat, so a full household must not turn a
+  no-op into an error. Moving the check three lines earlier fails the suite.
+
+- THE MINT SIDE IS ADVISORY, THE ACCEPT SIDE IS AUTHORITATIVE. create_household_
+  invite checks too, so the owner is told while looking at the button rather
+  than after a caregiver has tried and failed. But a link minted while paid must
+  stop working after a downgrade, and case 5 proves it does.
+
+- FIRST VERSION OF CASE 5 WOULD HAVE PASSED WITHOUT THE FEATURE. It impersonated
+  a random uuid and caught `WHEN others`, so the foreign key on
+  household_members.user_id would have satisfied it. Now it inserts a real
+  auth.users row, catches check_violation specifically, and asserts the message
+  mentions "full". A case that passes whether or not the gate exists is not a
+  case.
+
+- VERIFIED AGAINST A REAL POSTGRES 16, initdb'd in this container (as the
+  postgres user -- initdb refuses to run as root, which is why the first attempt
+  silently created nothing). 8 cases, each printing EXPECTED beside the measured
+  value. Confirmed to FAIL without the migration: "column max_household_members
+  does not exist", exit 3.
+
+- THE CLIENT WAS THROWING AWAY THE ONE USEFUL MESSAGE. useHousehold's
+  createInviteCode returned a bare null on every failure and the page rendered
+  "Couldn't create an invite link", so the paywall would have looked like a bug.
+  It returns a discriminated result now, and the message goes through
+  userFacingError (US-831), so the seat message reaches the screen and an RLS
+  or constraint string still cannot.
+
+- Measured: 3436 tests pass (230 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; supabase config check 33/33 paths;
+  invisible chars clean. Six SQL mutants, six caught: owner = newest member,
+  drop the accept check, give Pro unlimited seats, move the check before the
+  idempotent branch, hardcode the Free fallback instead of reading the plan row,
+  and read user_subscriptions instead of effective_plan_id.
+
+- **Learnings for future iterations:**
+  - The repo's own docs carry unfinished work with the analysis already done.
+    docs/entitlements.md listed four remaining items in priority order; item (2)
+    was a day's work and a direct revenue leak, sitting in a file nobody re-reads.
+  - "Enforce the limit" and "enforce it against existing rows" are different
+    changes, and only one of them is a billing fix. Ask who loses access before
+    writing the WHERE clause.
+  - An exception test that catches `others` tests nothing. Name the SQLSTATE and
+    assert on the message, or the foreign key will pass your test for you.
+  - A paywall the UI renders as "something went wrong" is a paywall that
+    generates support tickets instead of upgrades. The refusal message is part
+    of the feature.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 7. US-841: withdrawing
+consent stopped nothing until the next page load. src/lib/consentEnforcement.ts
+================================================================================
+
+- THE QUESTION WAS "what leaves the browser for a third party", and the answer
+  was better built than expected in every place except one. Sentry: DSN is
+  public by design and documented as such, no setUser so no identity is
+  attached, cookies and Authorization stripped in beforeSend, and Session
+  Replay -- the integration that records the DOM -- is added ONLY when the
+  visitor has consented, decided at init. GA: never loaded without consent,
+  Consent Mode v2 defaults everything to denied, anonymize_ip on, and the
+  loader externalised so the CSP can drop 'unsafe-inline'. Someone did this
+  carefully.
+
+- ONE WIRE WAS NOT CONNECTED. src/lib/consent.ts exports onConsentChange, and
+  nothing in src/, app/ or tests/ subscribed to it. Grep for the symbol returns
+  exactly one line: its own definition.
+
+- WHICH MAKES THE TWO DIRECTIONS ASYMMETRIC, and that is the defect:
+
+      grant      setConsent(true) -> window.__eatpalLoadGA() -> GA starts NOW
+      withdraw   resetConsent()   -> clears storage, notifies nobody -> nothing
+
+  GA went on sending hits and Session Replay went on recording the DOM for the
+  rest of the visit, after the person had told the app to stop. GDPR Article
+  7(3) requires withdrawal to be as easy as granting; "as easy" cannot mean
+  "and then reload", because nothing tells them to.
+
+- THE CODE ALREADY KNEW. resetConsent's docblock: "Does not retroactively
+  unload analytics already loaded this session — a reload applies the new
+  state." That is the third time in seven iterations that the honest note
+  describing a gap was sitting in the file that had it. Iteration 4 found two
+  in the VPAT; iteration 6 found one in docs/entitlements.md.
+
+- TWO KILL SWITCHES FOR GA, and the second is the one that matters here.
+  `consent update -> denied` is the documented path and is correct. But the
+  case in hand is a tag that has ALREADY LOADED under a consent that no longer
+  holds, so `window['ga-disable-<ID>']` -- the flag gtag.js checks before every
+  single hit -- is set as well. Dropping it fails three tests.
+
+- GRANTING IS DELIBERATELY NOT HANDLED HERE. ga-loader.js and setConsent
+  already start GA on opt-in, and Session Replay is decided once at
+  Sentry.init, so a visitor who opts in mid-session gets replay from their next
+  visit. That errs toward not recording, which is the right way for this
+  particular error to fall.
+
+- THE ID CANNOT DRIFT. public/ga-loader.js is plain JS outside the bundle and
+  cannot import a constant, so the kill-switch key would have been a second
+  copy of the measurement id. The test reads GA_ID out of the loader and
+  asserts the two are equal; changing the loader's id fails.
+
+- THE TYPECHECK RATCHET EARNED ITS KEEP. 815 against a baseline of 814 -- one
+  new error, in my own test's replay mock (vi.fn's inferred return type made
+  `mockReturnValue(undefined)` illegal). Fixed by naming the handle type rather
+  than casting. This is the run where deleting *.tsbuildinfo first mattered:
+  the note in CLAUDE.md is right, and a stale buildinfo would have exited 0.
+
+- Measured: 3450 tests pass (231 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Six mutants, six
+  caught: remove the subscription from main.tsx, drop the kill switch, deny
+  analytics_storage only, skip stopping replay, treat "no decision" as
+  consented, drift the loader's measurement id.
+
+- **Learnings for future iterations:**
+  - An exported function with no callers is a decision somebody designed and
+    never finished. onConsentChange, a returned unsubscribe, a listener Set --
+    all of it built, none of it wired.
+  - Check both directions of a toggle. The grant path was instant and correct,
+    which is exactly what makes the withdrawal path easy to never test.
+  - When a docblock describes a limitation, treat it as an open ticket rather
+    than as documentation. Three of the seven finds this loop were written down
+    in the file that had the problem.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 8. US-842: the feature-flag
+cache had a TTL any unrelated write renewed. src/lib/featureFlagCache.ts
+================================================================================
+
+- A NEGATIVE THAT COST TWENTY MINUTES, and the instrument was the problem again.
+  Iteration 7's find was "an exported function with no callers", so I tried to
+  generalise it into a sweep. 673 hits. The category is mostly noise: pure
+  helpers exported so a test can reach them, and page components reached only
+  through lazy(() => import(...)), which no token scan will attribute. The two
+  entries I actually chased -- LEDGER_READS_FLAG and LEDGER_WRITES_FLAG -- are
+  used fourteen lines below their own definition. "No caller OUTSIDE its own
+  file" is not the same question as "no caller", and I had written the wrong one.
+  The first version also ran O(exports x files) regexes and timed out at 120s.
+
+- THE FIND CAME FROM READING THE FILE THE SWEEP POINTED AT, not from the sweep.
+  useFeatureFlag.ts cached flags as
+
+      { flags: { [key]: boolean }, timestamp: number }
+
+  ONE TIMESTAMP FOR EVERY FLAG. Both readers rejected the whole object once
+  that single timestamp aged past five minutes, and all three writers --
+  setCachedFlag, setCachedFlags, and the admin dashboard's syncFlagToHookCache
+  -- set `parsed.timestamp = Date.now()`.
+
+  So writing any flag renewed every other flag in the cache. A flag whose
+  consumer is not currently mounted is never re-evaluated, and its value stayed
+  fresh for as long as the browser stayed open and evaluated anything else.
+  Turning a kill switch off server-side would not reach that browser at all.
+  A TTL that an unrelated write renews is not a TTL.
+
+- SECOND DEFECT, SAME PAIR OF FILES. syncFlagToHookCache wrote
+  `feature_flags.enabled` -- the raw column -- into a cache that holds the
+  PER-USER result, which is `enabled AND the user's bucket falls inside
+  rollout_percentage`. An admin who turned a flag on at 5% saw it enabled in
+  their own browser whatever bucket they were in. That is the one browser in
+  which a staged rollout gets eyeballed, and "I turned it on at 5% and I can
+  see it" is exactly the wrong conclusion to be able to draw. The dashboard
+  evicts now: same immediate refresh, no claim it is not in a position to make.
+
+- TWO MUTANTS SURVIVED THE FIRST DRAFT and both produced a better test.
+  (a) Deleting the `v !== 2` version check changed nothing, because an
+      old-shape entry is a bare boolean, so `now - entry.at` is NaN and the
+      freshness comparison is false anyway. The guard was being credited for an
+      accident. The new case feeds it a payload with NO version but with
+      modern-looking `{ value, at }` entries -- which would be read happily
+      without the check.
+  (b) Nothing stopped the dashboard writing a value again. The rule is about
+      the admin surface, so it is asserted on the import line: the dashboard
+      may import evictFlag and must not import writeFlag/writeFlags.
+
+- THE SHAPE CHANGE BROKE TWO TESTS, CORRECTLY. AppContext.precedence and
+  InventoryContext.append enabled the ledger flags by hand-writing
+  `{ flags, timestamp }` into localStorage -- a second copy of a format. They
+  seed through writeFlag() now, so the next format change cannot break them.
+
+- Measured: 3466 tests pass (232 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught after the two fixes: renew-everything-on-write (3 fail), trust a
+  versionless payload (1), evict-writes-true (2), rename the cache key so the
+  sign-out scrub misses it (2), admin writes the raw column (1).
+
+- **Learnings for future iterations:**
+  - Generalising last iteration's find into a sweep is tempting and was wrong.
+    One good find does not mean the category is dense; check the first three
+    hits by hand before building anything on the list.
+  - When a mutant survives, ask whether the code it targets was ever load-
+    bearing. Here the version check was doing nothing that NaN arithmetic was
+    not already doing by accident -- worth knowing before trusting it.
+  - A cache with one timestamp for many entries has no TTL, it has a
+    last-touched marker. Per-entry ageing or nothing.
+  - A test that writes another module's storage format by hand is a copy of
+    that format. It will go red for the right reason eventually, which is the
+    good case; the bad case is that it goes green while the format drifts.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 9. US-843: unsubscribing
+stopped two of the three emails we send. functions/_shared/email-suppression.ts
+================================================================================
+
+- TWO NEGATIVES ON THE WAY IN, both in the place I expected the bug to be. The
+  weekly digest's "Manage preferences" link resolves: EmailPreferences IS
+  mounted on the settings page and writes automation_email_subscriptions, so
+  the door exists. And the nurture engine's own unsubscribe is properly signed
+  (HMAC, timing-safe compare, fail-closed when the secret is absent) and is
+  suppression-checked before every send.
+
+- THE FIND IS THE THIRD SENDER. nurture-unsubscribe writes to
+  email_suppressions. agent-nurture-engine reads it. agent-weekly-digest reads
+  it. weekly-nutrition-email did not -- it checked only its own
+  automation_email_subscriptions row. So a parent who clicked unsubscribe in a
+  nurture email was suppressed from two mailings and went on receiving the
+  weekly nutrition summary indefinitely.
+
+  An unsubscribe that stops two of three mailings is not an unsubscribe, and
+  the person on the other end has exactly one remaining lever: report spam.
+
+- SECOND HALF, AND IT AFFECTS THE MAIL THAT MATTERS MOST. No sender set
+  List-Unsubscribe or List-Unsubscribe-Post. Gmail and Yahoo have required
+  those of bulk senders since February 2024. Without them the mail client shows
+  no unsubscribe affordance of its own, the complaint rate goes up, and that
+  rate is measured against the whole sending domain -- the same reputation that
+  decides whether a password-reset email lands in the inbox or the spam folder.
+
+- BOTH HEADERS OR NEITHER, which is why they are built by one function rather
+  than by two call sites. List-Unsubscribe alone advertises a link; the Post
+  header is what promises a bare POST will act without a confirmation step. A
+  client that sees only the first falls back to the old behaviour. Setting the
+  Post header to '' fails two tests.
+
+- FAIL CLOSED ON THE SUPPRESSION CHECK. A query error returns "suppressed". A
+  skipped send is recoverable on the next run; an email to somebody who asked
+  us to stop is not. The mutant that flips it to fail-open is caught.
+
+- AND TRANSACTIONAL MAIL DELIBERATELY GETS NEITHER HEADER. approval-executor
+  sets them only when the payload carries an unsubscribe URL, because a support
+  reply is not a mailing anyone can leave and advertising one there would be a
+  lie. Adding them unconditionally fails three tests.
+
+- A THIRD COPY, CAUGHT BEFORE IT LANDED. agent-csat and agent-nurture-engine
+  each carried an identical four-line functionsBase(), and I was about to paste
+  a third into weekly-nutrition-email. It is functions/_shared/functions-url.ts
+  now, and all three import it -- with a test that none of them declares its own.
+
+- DEAD CODE FOUND, LEFT ALONE ON PURPOSE. src/lib/email.ts exports
+  unsubscribeAll(token). It has no caller, there is no /unsubscribe route, and
+  it could not work if wired: it is a client-side UPDATE filtered by
+  unsubscribe_token against a table whose only RLS policy is
+  auth.uid() = user_id, so a signed-out click from a mail client would update
+  zero rows and report success-ish. Noted in prd.json for a deletion pass
+  rather than swept into this change.
+
+- THE LINT RATCHET CAUGHT THE HOUSE PATTERN. 1145 against 1144: the shared
+  module copied `// deno-lint-ignore no-explicit-any` + `type SupabaseClient =
+  any` from its neighbours, and that comment means nothing to ESLint. Replaced
+  with a structural interface naming only the from/select/eq chain the module
+  uses -- narrower than the neighbours and one lint error cheaper.
+
+- Measured: 3479 tests pass (233 files, 1 skipped). Typecheck 814 against
+  baseline 814; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught.
+
+- **Learnings for future iterations:**
+  - When N places implement the same policy, check all N. Two of three is the
+    hardest ratio to notice, because every test you write against either of the
+    first two passes.
+  - "Fails closed" is a decision worth writing a test for, not just a comment.
+    The whole difference between the two versions is one boolean in an error
+    branch nobody exercises by hand.
+  - `deno-lint-ignore` does not suppress ESLint, and this repo runs both over
+    functions/. Copying a suppression comment from a neighbour copies the
+    error too.
+  - Dead code that CANNOT work is worth recording even when you do not delete
+    it. unsubscribeAll looks like a working unsubscribe to the next reader.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 10. US-844: 126 kB of
+Sentry downloaded before first render. src/lib/sentryClient.ts
+================================================================================
+
+- THIS ONE CAME FROM BUILDING, NOT READING. `npm run build` and a walk of the
+  entry's static import closure. Nine iterations of reading found nine real
+  things; this took one build and produced the biggest measured win yet.
+
+- THE DEFERRAL WAS HALF-IMPLEMENTED, which is the fourth time this loop has
+  found that shape. main.tsx:
+
+      // Defer Sentry initialization to after first render to reduce TBT
+      requestIdleCallback(initSentryDeferred, { timeout: 4000 })
+
+  and, three lines above it, `import { initializeSentry } from './lib/sentry'`
+  -- a STATIC import, into a module opening with `import * as Sentry from
+  '@sentry/react'`. Deferring the call postpones nothing the browser must do:
+  the bytes are fetched, parsed and evaluated before the app runs either way.
+  The comment describes an intention the import contradicts.
+
+- MEASURED, BEFORE:
+
+      EAGER closure: 9 chunks, 386.3 kB gz
+        126.1 kB  vendor-sentry     <- largest member
+        114.3 kB  index             <- the app's own code
+         59.6 kB  vendor-react
+         ...
+
+  Sentry was bigger than the entire application entry chunk, and every visitor
+  to the landing page, a blog post or a programmatic guide paid it before
+  anything rendered. Those pages are the whole SEO strategy.
+
+- FOUR MODULES PINNED IT, which is why the fix could not be local: sentry.tsx,
+  api-errors.ts, storageCleanup.ts (reached through KidsContext, which
+  AppContext pulls in eagerly) and consentEnforcement.ts -- the last of which I
+  added myself in iteration 7. Removing any one would have moved zero bytes.
+  So '@sentry/react' is now named in exactly one file, inside import().
+
+- AFTER: 8 chunks, 260.4 kB gz. The gate's own number went 395.6 -> 266.6 kB,
+  a 129 kB / 33% cut in what the browser fetches before it can run anything.
+
+- REPORTING IS NOT WEAKER, AND THE TESTS SAY WHICH WAY. withSentry queues
+  (bounded at 50) while the module is in flight and flushes in order; it does
+  NOTHING when nothing has asked for the SDK, so logError in a dev session no
+  longer risks pulling 126 kB. The mutant that makes withSentry load on demand
+  fails two tests, and the one that drops the queue entirely fails three.
+
+- A SECOND DEFECT FIXED IN PASSING. webVitals.ts already used a dynamic import
+  -- and an unguarded one, fetching the SDK on EVERY metric, including in dev
+  and in any build where Sentry is off, to record a measurement with no client
+  to record it against. Routed through withSentry.
+
+- TWO INSTRUMENT BUGS ON THE FIRST RUN, BOTH SELF-INFLICTED AND BOTH THE SAME
+  MISTAKE THIS LOG HAS RECORDED TWICE BEFORE. The "only one module names the
+  SDK" scan read (a) its own docblock, which names '@sentry/react' while
+  explaining why nothing should, and (b) consentEnforcement's comment
+  "loadedSentry(), not loadSentry()" -- quoting the exact call the assertion
+  forbids. Comments stripped, test files skipped.
+
+- THE BUDGET WAS TIGHTENED, not left at 454000. An un-lowered budget banks the
+  win in the build and not in the gate, and the next careless static import
+  would have slipped straight back under it. 454000 -> 280000 against 266.6
+  measured. Typecheck baseline also lowered 814 -> 813.
+
+- TWO TEST FILES MOVED THEIR SEAM, correctly. consentEnforcement.test.ts and
+  storageCleanup.test.ts mocked '@sentry/react' directly and went red because
+  their subjects no longer import it. They mock '@/lib/sentryClient' now, which
+  is the contract those modules actually depend on -- a better double than the
+  vendor package was.
+
+- Measured: 3491 tests pass (234 files, 1 skipped). Typecheck 813 against a
+  baseline now also 813; lint 1144 against 1144; bundle budget 266.6/280.0 kB
+  eager and 2396.3/2510.0 kB total; invisible chars clean. Five mutants, five
+  caught.
+
+- **Learnings for future iterations:**
+  - Build it. Nine iterations of reading source found real bugs, and one build
+    found the largest measured regression in the tree. Some defects have no
+    textual tell at all -- a static import looks exactly like a lazy one until
+    you weigh the output.
+  - "Deferred" describes when a function is CALLED. Whether its module is
+    downloaded is decided by the import statement, and the two have nothing to
+    do with each other.
+  - When N modules pull in the same heavy dependency, the fix is one module
+    they all go through, not N edits. Counting the importers first is what
+    stops a partial change that saves nothing.
+  - Lower the budget in the same commit. Otherwise the next person gets to
+    re-add 130 kB and still see green.
+
+================================================================================
+2026-09-09 -- web platform loop (new run), iteration 11. US-845: the production
+CSP refused the theme script on every page. scripts/build/inject-csp-hashes.mjs
+================================================================================
+
+- A NEW INSTRUMENT, and it is the one that found this. Serve the real dist/
+  from a local node server that sets the EXACT Content-Security-Policy out of
+  public/_headers, then load six routes in Chromium and collect console errors,
+  page errors, failed requests and 4xx/5xx responses. Nothing in this repo had
+  ever run the built artefact under its own production headers.
+
+- EVERY ROUTE PRINTED THE SAME LINE:
+
+      Refused to execute inline script because it violates the following
+      Content Security Policy directive: "script-src 'self' ..."
+
+  on /, /pricing, /faq, /blog, /auth and /guides.
+
+- THE SCRIPT IS next-themes' ThemeProvider blocking script: the 557 bytes that
+  read the stored theme and set `class="dark"` on <html> BEFORE first paint. It
+  ships with `nonce=""` -- an empty nonce, because none is configured -- and
+  script-src carries no nonce and no 'unsafe-inline' (US-529 removed it). So it
+  never ran, and a dark-theme visitor got a white page until React hydrated,
+  which even after US-844 is ~260 kB of JS away. That is exactly the flash the
+  script exists to prevent.
+
+- THE FILE ASSERTED THE OPPOSITE. public/_headers, in a comment:
+
+      "Vite's inline modulepreload-polyfill is disabled ... so the built
+       index.html carries zero inline <script>."
+
+  False, and false for as long as next-themes has been mounted. Written once,
+  never executed. Fourth time this loop that the honest-sounding note describing
+  a mechanism was the thing hiding the defect.
+
+- HASH, NOT NONCE, AND THE REASON IS THE HOST. A nonce must be unique per
+  response and Cloudflare Pages serves _headers statically -- there is nothing
+  to generate one. A hash is fixed for a given body, which is what a static
+  header can carry. It is computed from the BUILT output on every build rather
+  than committed, because a committed hash pins one build of one library
+  version and goes stale in silence.
+
+- ld+json IS EXCLUDED ON PURPOSE. Five of those ship per page, they are data
+  rather than executable, the CSP does not gate them, and hashing them would
+  add five long tokens to every response protecting nothing.
+
+- THE INSTRUMENT WAS WRONG FIRST, AGAIN, AND IN THE SAME WAY. The scanner
+  reported 4 distinct hashes. Two of them were HTML COMMENT text: index.html
+  carries a comment explaining the CSP that quotes `<script src="/ga-loader.js"
+  defer>` inside it, and `<script([^>]*)>([\s\S]*?)</script>` matched from that
+  quoted opening tag. It was hashing prose -- a "hash" that would change
+  whenever somebody edited the comment. Comments stripped: 4 -> 2.
+
+- VERIFIED THE WAY IT WAS FOUND. Rebuilt, re-ran the same Chromium check
+  against dist/_headers with the hashes in it: zero refusals on all six routes.
+  30 inline scripts across the build, 2 distinct hashes.
+
+- THE TYPECHECK RATCHET CAUGHT A SECOND-ORDER COST. Importing the .mjs from a
+  test added a TS7016 (814 vs 813). A .d.ts did not fix it -- TypeScript wants
+  .d.mts for a .mjs specifier. Worth knowing: the sibling
+  scripts/ci/check-bundle-budget.mjs has no declaration file and is one of the
+  813 baseline errors for the same reason.
+
+- THREE NEGATIVES: prerendering emits real content, not a shell (109 kB on the
+  landing page, 29 routes); all six font stylesheets carry font-display:swap;
+  CSS is 26.6 kB gz. The Supabase and Sentry errors in the browser run are
+  artefacts of building without env vars locally, not findings.
+
+- Measured: 3507 tests pass (235 files, 1 skipped). Typecheck 813 against
+  baseline 813; lint 1144 against 1144; invisible chars clean. Five mutants,
+  five caught: stop excluding ld+json, stop stripping comments, drop the
+  injector from the build, "fix" it with unsafe-inline, restore the false claim.
+
+- **Learnings for future iterations:**
+  - Run the artefact under its own production headers. A CSP is only enforced
+    by a browser that was served it, so dev, tests and CI all agree the app is
+    fine while every real visitor gets a refusal.
+  - A comment asserting an invariant is a test that never runs. This is the
+    fourth this loop -- the VPAT twice, docs/entitlements.md, resetConsent's
+    docblock, and now _headers.
+  - `<script` inside an HTML comment is still `<script` to a regex. Strip
+    comments before parsing markup, the same way you strip them before parsing
+    code.
+  - TypeScript resolves `.d.mts` for a `.mjs` import, not `.d.ts`. A declaration
+    file with the wrong extension is invisible and silent.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 12. US-846: the pricing page
+scrolled sideways at 320px. tests/responsive/reflow-320.spec.ts
+US-847 opened (og:image format) -- needs an owner decision.
+================================================================================
+
+- THE INSTRUMENT FROM ITERATION 11 PAID AGAIN, and that is the point of having
+  built it. Serve the real dist/ under the production CSP, load ten public
+  routes at a 320px viewport, compare document.scrollWidth to clientWidth. Two
+  failed.
+
+      /pricing        339px  (+19)
+      /accessibility  321px  (+1)
+
+- /PRICING IS THE PAGE WHERE SOMEBODY DECIDES TO PAY. The monthly/yearly
+  billing toggle: two shadcn Buttons -- which carry whitespace-nowrap -- plus
+  the "Save 20%" badge came to 274px, and gap-3 with p-1 pushed the group past
+  the ~288px a 320px screen leaves after the gutter. Fixed with flex-wrap plus
+  a tighter gap below sm: it stays on one line everywhere it fits, and stacks
+  rather than widening the document where it does not.
+
+- THE ONE-PIXEL ONE WAS THE MORE INTERESTING FIX. An email address is a single
+  unbreakable 213px word, and `break-words` DID NOTHING. Rebuilt, re-measured,
+  still 321. The address sits in a flex child, and a flex child defaults to
+  min-width:auto -- it refuses to shrink below its content, so there was no
+  constrained width to break against. `min-w-0` is what actually let it wrap.
+  Worth remembering: overflow-wrap needs something to wrap INSIDE.
+
+- WHAT WAS SUPPOSEDLY CHECKING THIS. One assertion in
+  mobile-responsive.spec.ts: `should not have horizontal scroll`, which loads
+  `/` -- at iPhone 13 width, not 320 -- and `/` is the page that passed. The
+  exact shape the previous loop's iteration 12 recorded ("one viewport is not a
+  layout test") and the previous iteration 13 recorded again (a gate over three
+  hardcoded files out of three hundred). Left in place with a comment saying
+  what it is not, and superseded by a spec over all ten routes.
+
+- THE SPEC REPORTS WHAT IT FOUND, not just that it failed: tag, class, width
+  and the first 40 characters of text for up to five offending elements. That
+  is the difference between a red test and a red test somebody can act on. It
+  also skips elements that scroll themselves or sit inside something that does
+  -- a table or a code block is allowed to be wider than the viewport; the
+  document is not.
+
+- MUTATION-CHECKED THROUGH THE REAL PIPELINE, which meant a full rebuild per
+  mutant. Reverting the toggle fails exactly /pricing; reverting min-w-0 fails
+  exactly /accessibility. One failure each, on the right route.
+
+- VPAT 1.4.10 NOW CITES THE SPEC through the verifiedBy mechanism US-839 added
+  three iterations ago. That row said "Supports -- Content reflows at 320px
+  width. No horizontal scrolling required." while two routes did not. Third
+  false VPAT claim this loop.
+
+- US-847 OPENED AND DELIBERATELY NOT FIXED. All 29 prerendered pages point
+  og:image and twitter:image at Cover.webp. Everything around it is right --
+  the file exists, width/height/alt/secure_url are set, twitter:card is
+  summary_large_image, titles are unique, every page has a canonical. The gap
+  is the format, and there is no JPEG or PNG of the cover in the repo, so it is
+  not a string change. I could not verify the scrapers' behaviour from here, so
+  the story records it as a reason to look rather than as a measured fact, and
+  says not to auto-convert the WebP in a build step: a share card is brand
+  surface.
+
+- Measured: 3508 tests pass (235 files, 1 skipped) plus 11 Playwright tests in
+  the new spec. Typecheck 813 against baseline 813; lint 1144 against 1144;
+  bundle 266.6/280.0 kB eager; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - Reuse the instrument. Iteration 11 spent its budget building a browser
+    harness; iteration 12 spent five minutes pointing it somewhere else and
+    found a defect on the page that takes the money.
+  - `overflow-wrap` cannot wrap text inside a box that will not shrink. In a
+    flex row, min-width:auto is the default and it beats break-words every
+    time. Reach for min-w-0 first.
+  - A test named for a general property that checks one instance is worse than
+    no test: it is the reason nobody looks again. Both times this loop has
+    found one, the instance it checked was the one that passed.
+  - Record what you could not verify AS unverified. US-847 is a strong hunch
+    with real evidence for the setup and none for the conclusion, and saying so
+    is what makes it useful to the person who picks it up.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 13. US-848: every offline
+navigation hit a dead end the cache could have answered. public/sw.js
+================================================================================
+
+- A FALSE START, AND IT IS THE MOST USEFUL PART OF THIS ENTRY. My first probe
+  said the offline path worked: the worker registered, precached 37 entries
+  including /offline.html, an offline navigation to /faq returned the offline
+  page, and a subsequent navigation to / BOOTED THE APP with 70 JS/CSS chunks
+  cached. I nearly wrote that up as a clean negative.
+
+  It was contaminated. I had reused one browser context across probes, so state
+  from an earlier navigation made a route look cached that was not. Three
+  isolated trials, fresh context each, said the opposite and said it
+  consistently:
+
+      online at /  -> offline /pricing  -> offline page
+      online at /  -> offline /         -> offline page   <- the page you are ON
+      online at /faq -> offline /pricing -> offline page
+
+- THE DEFECT. networkFirstWithOfflineFallback went straight to offline.html and
+  never read the cache. Not the shell precached at install. Not the 70 chunks.
+  Not the navigation responses the same function stores on its success path TWO
+  LINES ABOVE. Everything needed to serve the app was there and none of it was
+  consulted.
+
+- WHICH MADE THE OFFLINE PAGE'S OWN COPY FALSE:
+
+      "Don't worry! TryEatPal works offline. Here's what you can still do:
+       View your saved meal plans / Check your grocery list"
+
+  From a dead-end static page you can do neither. The claim was true of the
+  cache and false of the page the user was actually looking at.
+
+- FIXED IN THE ORDER THAT MATCHES WHAT THE USER ASKED FOR: the exact cached
+  page first (it may be a prerendered route with its own content), then the app
+  shell so client-side routing renders whatever they asked for, then the static
+  page. All three trials boot the app now, and AppContext hydrates from
+  localStorage exactly as the load-precedence contract in CLAUDE.md describes.
+
+- NOT "ALWAYS SERVE THE SHELL". With nothing cached the static page is exactly
+  right, and the test that pins that is what stops the shell case passing
+  vacuously. The mutant that always serves a shell fails it.
+
+- THE TEST DOUBLE WAS WRONG, WHICH LOOKED LIKE THE CODE BEING WRONG. Three
+  cases failed on the first run. The fake Cache API compared raw strings, so
+  `cache.match('/index.html')` missed a store keyed by absolute URL -- the real
+  Cache API resolves a relative path against the worker's scope. Keys go
+  through `new URL(x, scope)` now. Second time this loop a passing
+  implementation looked broken because the double disagreed with the platform
+  (US-835's storage mock exposed `length` as a function).
+
+- Measured: 3515 tests pass (235 files, 1 skipped). Typecheck 813 against
+  baseline 813; lint 1144 against 1144; invisible chars clean. Four mutants,
+  four caught.
+
+- **Learnings for future iterations:**
+  - One browser context across probes is one shared cache, one shared origin
+    and one shared worker. If a result depends on what you did before it, you
+    are measuring your own script. Fresh context per trial, and run the trials
+    in more than one order.
+  - Be most suspicious of a probe that says everything is fine. The clean
+    negative is the cheapest possible outcome and therefore the one worth
+    re-running before you write it down.
+  - A cache you write and never read is not a cache. The success path here had
+    been diligently storing navigations for as long as the worker has existed.
+  - When a test double and the implementation disagree, check which one models
+    the platform. Twice now the double was the liar.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 14. US-849: five prerendered
+pages skipped h1 -> h3. src/lib/headingOutline.test.ts
+================================================================================
+
+- THE INSTRUMENT NEARLY HANDED ME A MUCH BIGGER, ENTIRELY FALSE FINDING. My
+  first scan of the built HTML reported TWO h1 elements on every one of the 29
+  pages, the second identical site-wide:
+
+      "EatPal - Meal Planning for Picky Eaters & ARFID"
+
+  A boilerplate h1 duplicated across the whole site would be a serious SEO and
+  a11y defect, and it was three sentences from being written up as one. It sits
+  inside index.html's <noscript> block. Never rendered when scripts run, never
+  in the accessibility tree, not part of the outline. Excluding <noscript> took
+  29 "failing" pages down to 5 real ones.
+
+- THE REAL FINDING, and it is modest by comparison: /faq, /contact, /guides,
+  /meal-plan and /budget-calculator go from the page h1 straight to h3.
+  Jumping between headings is how many screen-reader users move through a page,
+  so a skipped level makes the outline they are walking wrong. VPAT 1.3.1 says
+  "Supports -- Semantic HTML, ARIA landmarks, proper heading hierarchy ...
+  throughout". Fourth false VPAT row this loop.
+
+- TWO CAUSES. The footer's five column titles were h3 with no h2 anywhere above
+  them -- and on /guides that IS the entire outline, because the page's own
+  content has no sub-headings at all. And the feature cards on the two
+  generator pages were h3. Both are page code; both became h2.
+
+- IN SEVEN FILES, because Footer.tsx's markup is pasted verbatim into
+  Accessibility, BlogPost, Contact, TermsOfService, PrivacyPolicy and FAQ. 23
+  copies of one heading line. Not this story's job to de-duplicate, so the gate
+  instead asserts that none of the six copies drifts back to h3 -- whichever
+  one did would reintroduce the jump on its own page and nowhere else.
+
+- THE LAST TWO PAGES BELONG TO SHADCN. /faq opens with AccordionTrigger and
+  /contact with CardTitle, both of which render h3 from src/components/ui/,
+  which CLAUDE.md puts off limits. So the missing level is supplied from page
+  code as an sr-only h2. Deliberately not visible: correcting a heading level is
+  not a reason to add copy to a page nobody asked me to redesign.
+
+- Measured: 29 pages, 0 with issues, from 5. 3525 tests pass (236 files, 1
+  skipped). Typecheck 813 against baseline 813; lint 1144 against 1144;
+  invisible chars clean. Three mutants, three caught -- two of them requiring a
+  full rebuild, since the gate reads dist/.
+
+- NEGATIVES, and the manifest one is a genuinely clean bill of health. All five
+  PWA icons exist and match their declared sizes; 192 and 512 are present with
+  "any maskable"; name, short_name, start_url, scope and display standalone are
+  all set. share_target declares a multipart POST to /share, and the worker
+  really does implement it -- with an unversioned cache that deliberately
+  survives activation so a pending share is not thrown away -- and
+  tests/pwa-offline.spec.ts already drives it end to end. One dead declaration
+  recorded rather than fixed: protocol_handlers registers web+eatpal ->
+  /import?url=%s, there is no /import route, and nothing in the repo emits such
+  a link.
+
+- **Learnings for future iterations:**
+  - The bigger the finding, the harder to check it before believing it. "Every
+    page has a duplicate boilerplate h1" was exciting, tidy and wrong, and the
+    only thing between it and the commit message was asking where the second
+    one came from.
+  - <noscript> is markup that is never rendered. Any scan of built HTML that
+    reasons about what a user or a screen reader sees has to strip it, the same
+    way code scans strip comments.
+  - When a component you may not edit owns the wrong heading level, add the
+    level above it rather than fighting the component. sr-only is the honest
+    way to fix structure without redesigning.
+  - A gate that reads dist/ needs a full rebuild per mutant. Worth it, and
+    worth saying so: it is why this iteration has three mutants and not six.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 15 (LAST). US-850: the
+manifest registered a protocol handler with no route behind it.
+src/lib/manifestRoutes.test.ts
+================================================================================
+
+- TWO NEGATIVES FIRST, both measured rather than assumed, and both closing out
+  VPAT rows. FOCUS VISIBILITY (2.4.7): tabbed through /, /pricing and /faq --
+  132 stops -- and every single one has an outline or a box-shadow ring. Zero
+  failures. FOCUS ORDER (2.4.3): measured the y-position of every stop and
+  looked for backward jumps. There are some, and all of them are correct:
+  multi-column footers go down one column and back up to the top of the next,
+  which is the expected pattern, and the cookie banner deliberately precedes
+  the header. The accessibility widget's floating trigger is the 5th tab stop
+  while sitting at the bottom-left of the screen -- a mild ordering wart, not a
+  violation, and recorded rather than changed.
+
+- THE FIND. public/manifest.json declared
+
+      { "protocol": "web+eatpal", "url": "/import?url=%s" }
+
+  There is no /import route in App.tsx and nothing in the repo emits a
+  web+eatpal: link. An installed PWA registers that handler WITH THE OPERATING
+  SYSTEM, so the app advertised a capability it does not have; anything that
+  ever followed such a link would land on the 404 page.
+
+- REMOVED, NOT IMPLEMENTED. You do not ship a handler for a protocol you do not
+  handle, and inventing an /import route to satisfy a declaration nobody uses
+  would be building a feature to justify a typo. The manifest carries a note
+  saying to re-add it in the same change that adds the route.
+
+- THE MANIFEST IS THE ONE FILE THAT HANDS URLS TO THE OS instead of to the
+  router, which is why nothing noticed. The gate checks all of them -- start_url,
+  the four shortcuts, share_target.action and any protocol handler -- so the
+  next one to drift fails with the same assertion.
+
+- INSTRUMENT BUG, and it is the same shape as most of the others this loop: the
+  first route resolver kept nested routes as a flat set of NAMES, so
+  "/pricing/planner" resolved -- /pricing is a route and "planner" is a route
+  name somewhere under /dashboard. Nested paths are attributed to the nearest
+  absolute path declared before them now. The mutant that flattens it again
+  fails four tests.
+
+================================================================================
+LOOP CLOSED -- 15 iterations, US-835 to US-850
+================================================================================
+
+- SIXTEEN STORIES, fifteen closed and one deliberately left open (US-847, the
+  WebP og:image, which needs an asset and an owner's decision rather than code).
+
+- WHAT THE FINDS HAD IN COMMON, in rough order of how often it came up:
+
+  1. A CONFIDENT COMMENT IS A TEST THAT NEVER RUNS. Five of the fifteen were
+     written down, in the file that had them, by someone who knew: the VPAT
+     four times over (2.4.1, 2.1.2, 2.2.2, 1.3.1), docs/entitlements.md's "no
+     gate exists at the invite path", resetConsent's "a reload applies the new
+     state", and _headers' "the built index.html carries zero inline <script>".
+     The prose was right about the mechanism and nobody had checked it lately.
+
+  2. HALF-WIRED DECISIONS. Somebody designed the whole thing and left one wire
+     off: onConsentChange with no subscribers, a limit table with no gate, an
+     unsubscribe that two of three senders honoured, a cache written and never
+     read, a deferral that deferred the call but not the download.
+
+  3. THE INSTRUMENT WAS WRONG BEFORE THE CODE WAS, about ten times. Comments
+     quoted as code (three separate iterations), `[^>]*` as an attribute list
+     (79% under-report), one timestamp read out of three, substring matching on
+     a class name, a flat set of route names, and a <noscript> h1 counted as a
+     real one -- that last would have been a big and entirely false finding.
+
+  4. TEST DOUBLES THAT DISAGREED WITH THE PLATFORM, twice, and both times a
+     correct implementation looked broken: a storage mock exposing `length` as
+     a function, and a Cache API double comparing raw strings where the real one
+     resolves relative URLs.
+
+  5. BUILD IT AND RUN IT. Nine iterations of reading found nine real defects.
+     Then one build found 126 kB of Sentry blocking first render, and a browser
+     under the production CSP found a refused theme script on every page, a
+     19px overflow on the page that takes the money, and an offline path that
+     ignored its own cache. Some defects have no textual tell at all.
+
+- MEASURED AT CLOSE: 3539 tests pass (238 files, 3 skipped), up from 3405.
+  Typecheck 813 against a baseline lowered from 814. Lint 1144, lowered from
+  1148. Eager bundle 266.6 kB gz against a budget lowered from 454 to 280 --
+  129 kB less than the loop started with. Bundle total 2396/2510 kB. Supabase
+  config 33/33. Invisible chars clean. 71 mutants across the fifteen
+  iterations, every one caught, four of them only after the test that missed
+  them was rewritten.
+
+- **The one thing worth carrying forward:** every iteration that produced a
+  real find started by measuring something, and every iteration that nearly
+  produced a false one started by believing a sweep. Assert the instrument
+  first -- a floor, a control, a known-bad input -- and check the first three
+  hits by hand before building anything on the list.

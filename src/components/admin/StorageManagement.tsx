@@ -310,6 +310,7 @@ export function StorageManagement() {
                                       <div className="flex justify-end gap-1">
                                         {file.publicUrl && (
                                           <Button
+                                            aria-label="Open this file in a new tab"
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => window.open(file.publicUrl, '_blank')}
@@ -318,6 +319,7 @@ export function StorageManagement() {
                                           </Button>
                                         )}
                                         <Button
+                                          aria-label="Download this file"
                                           variant="ghost"
                                           size="sm"
                                           onClick={() =>
@@ -329,6 +331,7 @@ export function StorageManagement() {
                                         <AlertDialog>
                                           <AlertDialogTrigger asChild>
                                             <Button
+                                              aria-label="Delete this file"
                                               variant="ghost"
                                               size="sm"
                                               className="text-destructive"

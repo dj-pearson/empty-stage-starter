@@ -388,6 +388,7 @@ export const NutritionManager = () => {
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
+                        aria-label="Edit this nutrition entry"
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(item)}
@@ -395,6 +396,7 @@ export const NutritionManager = () => {
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
+                        aria-label="Delete this nutrition entry"
                         variant="ghost"
                         size="sm"
                         onClick={() => requestDelete(item.id)}

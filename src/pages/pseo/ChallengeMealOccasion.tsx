@@ -166,7 +166,7 @@ interface ChallengeMealOccasionProps {
 
 export function ChallengeMealOccasion({ content, relatedPages }: ChallengeMealOccasionProps) {
   return (
-    <article className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
+    <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 pb-16">
       {/* 1. Hero */}
       <PseoHero
         headline={content.headline}
@@ -280,7 +280,7 @@ export function ChallengeMealOccasion({ content, relatedPages }: ChallengeMealOc
         heading="Make mealtimes easier"
         body="EatPal helps you plan meals your child will actually eat, with personalized suggestions and progress tracking."
       />
-    </article>
+    </main>
   );
 }
 

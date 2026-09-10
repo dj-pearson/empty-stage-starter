@@ -36,20 +36,27 @@ function loadWorker(fetchImpl: (req: { url: string; method: string; mode?: strin
   const listeners = new Map<string, (event: unknown) => void>();
   const caches_: Record<string, FakeCache> = {};
 
+  /**
+   * US-848: keys are normalised to absolute URLs, because the real Cache API
+   * does. `cache.match('/index.html')` resolves the path against the worker's
+   * scope; the first version of this double compared the raw string and
+   * returned undefined, so the shell fallback looked broken when it was the
+   * double that was wrong.
+   */
+  const SCOPE = 'https://tryeatpal.com';
+  const keyOf = (req: string | { url: string }) =>
+    new URL(typeof req === 'string' ? req : req.url, SCOPE).href;
+
   const makeCache = (): FakeCache => {
     const store = new Map<string, unknown>();
     return {
       store,
       put: vi.fn(async (req: { url: string }, res: unknown) => {
-        store.set(typeof req === 'string' ? req : req.url, res);
+        store.set(keyOf(req), res);
       }),
-      match: vi.fn(async (req: { url: string }) =>
-        store.get(typeof req === 'string' ? req : req.url),
-      ),
+      match: vi.fn(async (req: { url: string }) => store.get(keyOf(req))),
       keys: vi.fn(async () => [...store.keys()].map((url) => ({ url }))),
-      delete: vi.fn(async (req: { url: string }) =>
-        store.delete(typeof req === 'string' ? req : req.url),
-      ),
+      delete: vi.fn(async (req: { url: string }) => store.delete(keyOf(req))),
       addAll: vi.fn(async () => {}),
     };
   };
@@ -153,5 +160,100 @@ describe('activation clears what an older worker stored', () => {
     await settled;
 
     expect([...cache.store.keys()]).toEqual(['https://tryeatpal.com/assets/index-abc123.js']);
+  });
+});
+
+/**
+ * US-848: an offline navigation must use what the worker already cached.
+ *
+ * The fallback went straight to offline.html and never read the cache -- not
+ * the shell precached at install, not the 70 JS/CSS chunks, not the navigation
+ * responses this very function stores on the success path two lines above.
+ * Measured in Chromium against the real build: EVERY offline navigation got
+ * the static page, including reloading the page you were already on.
+ *
+ * Which made offline.html's own copy false. It promises "View your saved meal
+ * plans" and "Check your grocery list", and a dead-end static page can do
+ * neither.
+ */
+describe('US-848: an offline navigation serves the app, not a dead end', () => {
+  const CACHE = 'tryeatpal-test-build';
+  const navigate = (url: string) => ({ url, method: 'GET', mode: 'navigate' });
+
+  /** A worker whose network is down, with `seed` already in its cache. */
+  async function offlineWorkerWith(seed: Record<string, unknown>) {
+    const worker = loadWorker(async () => {
+      throw new Error('offline');
+    });
+    const cache = await worker.sandbox.caches.open(CACHE);
+    for (const [url, body] of Object.entries(seed)) cache.store.set(url, body);
+    return worker;
+  }
+
+  it('serves the exact page when that page is cached', async () => {
+    const page = { status: 200, tag: 'cached /faq' };
+    const worker = await offlineWorkerWith({
+      'https://tryeatpal.com/faq': page,
+      'https://tryeatpal.com/index.html': { status: 200, tag: 'shell' },
+      'https://tryeatpal.com/offline.html': { status: 200, tag: 'offline page' },
+    });
+    const res = await handleFetch(worker.listeners, navigate('https://tryeatpal.com/faq'));
+    expect(res).toBe(page);
+  });
+
+  it('falls back to the app shell for a route it has never cached', async () => {
+    // The case that matters most: the user taps a link to a page they have not
+    // visited. The shell boots and client-side routing renders it.
+    const shell = { status: 200, tag: 'shell' };
+    const worker = await offlineWorkerWith({
+      'https://tryeatpal.com/index.html': shell,
+      'https://tryeatpal.com/offline.html': { status: 200, tag: 'offline page' },
+    });
+    const res = await handleFetch(worker.listeners, navigate('https://tryeatpal.com/pricing'));
+    expect(res).toBe(shell);
+  });
+
+  it("accepts '/' as the shell, since that is the same document in this build", async () => {
+    const root = { status: 200, tag: 'root' };
+    const worker = await offlineWorkerWith({
+      'https://tryeatpal.com/': root,
+      'https://tryeatpal.com/offline.html': { status: 200, tag: 'offline page' },
+    });
+    const res = await handleFetch(worker.listeners, navigate('https://tryeatpal.com/pricing'));
+    expect(res).toBe(root);
+  });
+
+  it('still shows the offline page when there is no shell at all', async () => {
+    // Not a scrub-everything change: with nothing cached, the static page is
+    // exactly right, and this is what stops the test above passing vacuously.
+    const offlinePage = { status: 200, tag: 'offline page' };
+    const worker = await offlineWorkerWith({ 'https://tryeatpal.com/offline.html': offlinePage });
+    const res = await handleFetch(worker.listeners, navigate('https://tryeatpal.com/pricing'));
+    expect(res).toBe(offlinePage);
+  });
+
+  it('prefers the exact page over the shell', async () => {
+    const page = { status: 200, tag: 'cached /faq' };
+    const worker = await offlineWorkerWith({
+      'https://tryeatpal.com/faq': page,
+      'https://tryeatpal.com/index.html': { status: 200, tag: 'shell' },
+    });
+    const res = await handleFetch(worker.listeners, navigate('https://tryeatpal.com/faq'));
+    expect(res).toBe(page);
+  });
+
+  it('leaves a successful navigation alone', async () => {
+    const worker = loadWorker(async () => OK);
+    const res = await handleFetch(worker.listeners, navigate('https://tryeatpal.com/faq'));
+    expect(res).toBe(OK);
+  });
+
+  it("the offline page's promises are the ones the shell fallback makes true", () => {
+    // If somebody rewrites offline.html to stop claiming the app works
+    // offline, this fallback is still right -- but the claim is what made it
+    // urgent, so it is pinned here rather than left as prose in a commit.
+    const offline = readFileSync(path.resolve(__dirname, '../../public/offline.html'), 'utf8');
+    expect(offline).toMatch(/meal plans/i);
+    expect(offline).toMatch(/grocery list/i);
   });
 });

@@ -8,20 +8,25 @@
 
 import type { Metric } from 'web-vitals';
 import { logger } from "@/lib/logger";
+import { withSentry } from "@/lib/sentryClient";
 
 const isDev = import.meta.env.DEV;
 
+/**
+ * US-844: through the shared client, so a metric never CAUSES the download.
+ *
+ * This already used a dynamic import, but an unguarded one: every metric
+ * fetched the SDK, including in dev and in any build where Sentry is switched
+ * off -- 126 kB gz to record a measurement that had no client to record it
+ * against. withSentry runs only if something has already asked for the module,
+ * which in production is initializeSentry at idle. A metric emitted before
+ * that is dropped rather than handed to an uninitialised client, which is what
+ * happened to it before anyway.
+ */
 function reportToSentry(metric: Metric): void {
-  try {
-    // Dynamically import Sentry to avoid circular deps
-    import('@sentry/react').then((Sentry) => {
-      Sentry.setMeasurement(metric.name, metric.value, metric.name === 'CLS' ? '' : 'millisecond');
-    }).catch(() => {
-      // Sentry not available — skip
-    });
-  } catch {
-    // Sentry not configured
-  }
+  withSentry((Sentry) => {
+    Sentry.setMeasurement(metric.name, metric.value, metric.name === 'CLS' ? '' : 'millisecond');
+  });
 }
 
 function reportMetric(metric: Metric): void {
