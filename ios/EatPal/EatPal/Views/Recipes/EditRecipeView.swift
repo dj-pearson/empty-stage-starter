@@ -286,6 +286,7 @@ struct EditRecipeView: View {
         // leave the Save button stuck disabled.
         defer { isSubmitting = false }
 
+        let previousImageURL = recipe.imageUrl
         var imageUrl: String?
         if let image = recipeImage {
             // US-413: surface upload failure instead of silently dropping the
@@ -340,6 +341,12 @@ struct EditRecipeView: View {
                 updates: updates,
                 ingredients: resolvedIngredients
             )
+            // The row now points at the new image, so the old object can go.
+            // Ignored when the previous URL was hosted elsewhere, which is the
+            // case for a recipe imported from another site.
+            if let previousImageURL, let imageUrl, previousImageURL != imageUrl {
+                await ImageUploadService.deletePublicURL(previousImageURL)
+            }
             HapticManager.success()
             dismiss()
         } catch {

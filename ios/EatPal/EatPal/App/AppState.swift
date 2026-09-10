@@ -609,6 +609,15 @@ final class AppState: ObservableObject {
         if activeKidId == id { activeKidId = kids.first?.id }
         do {
             try await dataService.deleteKid(id)
+            // The row is gone, so the photo should be too. Storage is
+            // public-read by URL and nothing else prunes it, so without this a
+            // deleted child's picture stayed fetchable by anyone holding the
+            // link. Best effort -- the profile is already deleted.
+            for kid in removed {
+                if let photo = kid.profilePictureUrl {
+                    await ImageUploadService.deletePublicURL(photo)
+                }
+            }
             toast.success("Child removed")
             HapticManager.mediumImpact()
             AnalyticsService.track(.kidDeleted)

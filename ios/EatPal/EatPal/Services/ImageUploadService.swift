@@ -68,6 +68,50 @@ enum ImageUploadService {
             .remove(paths: [path])
     }
 
+    /// Deletes the object a previously-returned public URL points at.
+    ///
+    /// Replacing a photo uploads a new random object name (US-635) and used to
+    /// leave the old one in place, because `delete` had no callers at all. The
+    /// bucket is public-read by URL, so a child's previous profile picture
+    /// stayed fetchable by anyone holding that link even after the parent
+    /// replaced it -- and nothing was ever going to remove it.
+    ///
+    /// Best effort by design: this runs after the row already points at the
+    /// new image, so a failure here leaves an orphan rather than breaking a
+    /// save that has succeeded. Returns whether an object was removed.
+    ///
+    /// Anything that is not one of our public URLs is ignored, which covers
+    /// recipe images imported from other sites.
+    @discardableResult
+    static func deletePublicURL(_ urlString: String) async -> Bool {
+        guard let path = objectPath(fromPublicURL: urlString) else { return false }
+        do {
+            try await delete(path: path)
+            return true
+        } catch {
+            SentryService.capture(error, extras: [
+                "context": "image_delete_previous",
+                "path": path
+            ])
+            return false
+        }
+    }
+
+    /// Extracts the storage object path from a Supabase public URL.
+    ///
+    /// `https://<host>/storage/v1/object/public/images/kids/<uuid>.jpg`
+    /// becomes `kids/<uuid>.jpg`. Returns nil for any URL that does not point
+    /// into this bucket, so an externally-hosted image is never a delete
+    /// attempt.
+    static func objectPath(fromPublicURL urlString: String) -> String? {
+        let marker = "/object/public/\(bucketName)/"
+        guard let range = urlString.range(of: marker) else { return nil }
+        let path = String(urlString[range.upperBound...])
+        // Drop any query string a signed or cache-busted URL might carry.
+        let clean = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        return clean.isEmpty ? nil : clean
+    }
+
     /// Resizes an image to a maximum dimension while maintaining aspect ratio.
     static func resize(_ image: UIImage, maxDimension: CGFloat = 1024) -> UIImage {
         let size = image.size
