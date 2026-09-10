@@ -191,6 +191,44 @@ export const Footer = () => {
               </li>
             </ul>
           </div>
+          {/* The ARFID cluster. It was the one topical cluster on the site with no
+              sitewide link: /arfid/what-is-arfid, /arfid/arfid-vs-picky-eating and
+              /arfid/arfid-in-adults were reachable only from /picky-eater-quiz, and
+              /arfid/safe-foods-list only from /budget-calculator. The four pages
+              cross-link each other, which makes them a closed loop rather than a
+              cluster something points into. Same failure /compare and /guides had, on
+              the terms closest to what EatPal is for.
+
+              The grid is lg:grid-cols-6 and had five columns, so this fills the slot
+              that was already reserved rather than reflowing the row. */}
+          <div>
+            <h2 className="font-heading font-semibold mb-4 text-primary">ARFID</h2>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              <li>
+                <Link to="/arfid/what-is-arfid" className="hover:text-primary transition-colors">
+                  What Is ARFID?
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/arfid/arfid-vs-picky-eating"
+                  className="hover:text-primary transition-colors"
+                >
+                  ARFID vs Picky Eating
+                </Link>
+              </li>
+              <li>
+                <Link to="/arfid/safe-foods-list" className="hover:text-primary transition-colors">
+                  Safe Foods List
+                </Link>
+              </li>
+              <li>
+                <Link to="/arfid/arfid-in-adults" className="hover:text-primary transition-colors">
+                  ARFID in Adults
+                </Link>
+              </li>
+            </ul>
+          </div>
           <div>
             <h2 className="font-heading font-semibold mb-4 text-primary">Company</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">

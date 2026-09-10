@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 3,
+    "iterationsUsed": 4,
     "completed": [
       {
         "iteration": 1,
@@ -22,6 +22,12 @@
         "iteration": 3,
         "id": "SEO-007",
         "title": "Crashed routes were indexable 200s wearing the homepage head",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 4,
+        "id": "SEO-008",
+        "title": "The ARFID cluster had no sitewide link",
         "commit": "see git log on this branch"
       }
     ]
@@ -59,6 +65,19 @@
       "notes": "src/pages/BlogPost.tsx's `if (!post)` branch rendered a 404 body with no Helmet at all. Because index.html is the SPA fallback document, its data-rh defaults describe the homepage, so every deleted post, draft, typo and stale inbound link under /blog/ answered 200 with the homepage title, the homepage description and <link rel=\"canonical\" href=\"https://tryeatpal.com/\">. Fixed by mirroring NotFoundState in src/pages/pseo/PseoPage.tsx, which already had this right. Covered by src/pages/BlogPost.notFound.test.tsx, 4 tests."
     },
     {
+      "id": "SEO-008",
+      "title": "The ARFID cluster had no sitewide link",
+      "description": "As a search engine, I want the site's own links to say which pages matter, so that the cluster closest to what EatPal is for is not the one nothing points at.",
+      "acceptanceCriteria": [
+        "All four /arfid/* pages are linked from the sitewide footer",
+        "The footer's existing layout absorbs it without reflowing",
+        "A test fails if a future ARFID page is added without a footer link"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "/arfid/what-is-arfid, /arfid/arfid-vs-picky-eating and /arfid/arfid-in-adults were reachable from /picky-eater-quiz alone, and /arfid/safe-foods-list from /budget-calculator alone. The four pages cross-link each other, which makes them a closed loop rather than a cluster something points into. Meanwhile the footer already carried all five /picky-eater/* pages, /guides and /compare, each added after exactly this problem was found there. The nav is lg:grid-cols-6 and had five columns, so the ARFID column filled a reserved slot. Pinned by a new assertion in src/lib/arfid-content.test.ts, matching the one /compare has."
+    },
+    {
       "id": "SEO-002",
       "title": "/authors: confirm whether it still self-noindexes (it does not)",
       "description": "As a site owner, I want the sitemap to stop advertising a URL that serves noindex, so that Search Console stops reporting 'Submitted URL marked noindex' and the E-E-A-T page either counts or is withdrawn.",
@@ -87,16 +106,16 @@
     },
     {
       "id": "SEO-004",
-      "title": "Edge-function tests never run",
+      "title": "Edge-function tests: check whether they run (they do)",
       "description": "As a maintainer, I want the SEO logic that lives in supabase/functions to be covered by the suite, so that a change there is not shipped on inspection alone.",
       "acceptanceCriteria": [
-        "vitest picks up supabase/functions/**/*.test.ts (its include is currently 'src/**/*.{test,spec}.{ts,tsx}' only)",
-        "The existing tests under supabase/functions/_shared pass, or are fixed/removed with the reason recorded",
-        "Coverage thresholds still hold with the new files in scope"
+        "Establish whether supabase/functions tests run anywhere (they do, under deno test in ci.yml)",
+        "Establish whether vitest could run them (it cannot, they are Deno tests importing over https)",
+        "Record the residual risk: ci.yml lists the six paths by hand"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "supabase/functions/_shared carries ai-retention.test.ts, catalogPromotion.test.ts, image-gen.test.ts, meal-plan-templates.test.ts, parse-recipe-access.test.ts and more, none of which the runner has ever executed. Widening the glob will surface an unknown number of failures at once, so it needs its own iteration."
+      "passes": true,
+      "notes": "Closed as a false finding, in iteration 4. The six files under supabase/functions/_shared are Deno tests -- Deno.test, asserts from deno.land/std -- and ci.yml runs every one of them by name in a denoland/setup-deno job (lines 460-517). Widening vitest's include is the wrong fix and does not work anyway: all six fail collection under Node with \"Only URLs with a scheme in: file and data are supported\", because they import over https. Verified separately that the vitest suite itself is green: 3559 passing, 3 skipped, 240 files. One real gap remains and is not SEO: ci.yml enumerates those six paths by hand, so a seventh Deno test added tomorrow would never run. Worth a `deno test` glob, in some other loop."
     },
     {
       "id": "SEO-005",
