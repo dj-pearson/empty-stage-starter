@@ -66,6 +66,11 @@ final class NotificationService: ObservableObject {
         print("APNs device token: \(token)")
         #endif
 
+        // Remember which row this device owns so signing out can deactivate
+        // it. Persisted rather than held in memory because a sign-out can
+        // happen on a launch where APNs has not called back yet.
+        UserDefaults.standard.set(token, forKey: Self.deviceTokenDefaultsKey)
+
         // US-379: write to the canonical `push_tokens` table (what the
         // process-notification-queue sender reads), scoped to the
         // authenticated user, with `token` as the explicit conflict target so
@@ -102,6 +107,106 @@ final class NotificationService: ObservableObject {
             // DEBUG-only print.
             SentryService.capture(error, extras: ["context": "apns_token_register"])
         }
+    }
+
+    // MARK: - Sign-out teardown
+
+    /// UserDefaults key holding this device's most recent APNs token.
+    private static let deviceTokenDefaultsKey = "eatpal.apns.device_token"
+
+    /// Stops every notification channel that points at the account being
+    /// signed out.
+    ///
+    /// Two of them survived a sign-out before this existed:
+    ///
+    /// * The `push_tokens` row stayed `is_active = true` against the departing
+    ///   user, so `process-notification-queue` kept pushing their meal plan,
+    ///   grocery list, and children's names to a device they had signed out
+    ///   of. The row was only ever corrected by somebody else signing in on
+    ///   the same device, which is the one case that was already fine.
+    /// * Daily reminders are `UNCalendarNotificationTrigger(repeats: true)`.
+    ///   Nothing cancelled them, so they kept firing on the lock screen
+    ///   indefinitely, and anything already sitting in Notification Center
+    ///   stayed there.
+    ///
+    /// Call this BEFORE tearing down the session: deactivating the row is an
+    /// authenticated write, and RLS scopes it to `auth.uid()`. The local half
+    /// runs regardless of whether the remote half succeeded, so a device that
+    /// is offline at sign-out still stops showing the previous account's
+    /// reminders.
+    func handleSignOut() async {
+        await deactivateDeviceToken()
+        await clearAllLocalNotifications()
+    }
+
+    /// Flips this device's `push_tokens` row to `is_active = false`. Best
+    /// effort: a failure here must never block a sign-out, and the row is
+    /// reclaimed by the next `handleDeviceToken` upsert anyway.
+    private func deactivateDeviceToken() async {
+        guard let token = UserDefaults.standard.string(forKey: Self.deviceTokenDefaultsKey),
+              !token.isEmpty else { return }
+
+        struct Deactivation: Encodable {
+            let isActive: Bool
+            enum CodingKeys: String, CodingKey { case isActive = "is_active" }
+        }
+
+        do {
+            try await SupabaseManager.client.from("push_tokens")
+                .update(Deactivation(isActive: false))
+                .eq("token", value: token)
+                .execute()
+        } catch {
+            SentryService.capture(error, extras: ["context": "apns_token_deactivate"])
+        }
+    }
+
+    /// Undoes `handleSignOut` when the sign-out it was preparing for failed.
+    ///
+    /// US-432 established that a failed sign-out must not leave the account in
+    /// a half-torn-down state. The same applies here: the session is still
+    /// alive, so the reminders have to come back and the device has to start
+    /// receiving push again.
+    func restoreAfterFailedSignOut() async {
+        await reactivateDeviceToken()
+        await rescheduleAllTopics()
+    }
+
+    private func reactivateDeviceToken() async {
+        guard let token = UserDefaults.standard.string(forKey: Self.deviceTokenDefaultsKey),
+              !token.isEmpty else { return }
+
+        struct Reactivation: Encodable {
+            let isActive: Bool
+            enum CodingKeys: String, CodingKey { case isActive = "is_active" }
+        }
+
+        do {
+            try await SupabaseManager.client.from("push_tokens")
+                .update(Reactivation(isActive: true))
+                .eq("token", value: token)
+                .execute()
+        } catch {
+            SentryService.capture(error, extras: ["context": "apns_token_reactivate"])
+        }
+    }
+
+    /// Local-only teardown, for the account-deletion path. The `push_tokens`
+    /// row is already gone there -- it cascades from `auth.users` -- but the
+    /// reminders on the device are not.
+    func clearLocalNotificationsAfterAccountDeletion() async {
+        await clearAllLocalNotifications()
+    }
+
+    /// Drops every scheduled reminder and clears anything already delivered,
+    /// so no trace of the previous account is left on the lock screen or in
+    /// Notification Center.
+    private func clearAllLocalNotifications() async {
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+        // iOS 17's setBadgeCount is async and throws; a failed badge reset is
+        // cosmetic and must not surface during sign-out.
+        try? await center.setBadgeCount(0)
     }
 
     // MARK: - Local Notifications: Grocery

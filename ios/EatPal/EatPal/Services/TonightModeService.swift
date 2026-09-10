@@ -113,6 +113,7 @@ enum TonightModeService {
                 try await EdgeFunctions.invoke(
                     "tonight-mode",
                     body: body,
+                    retry: .safeToRepeat,
                     as: EdgeResponse.self
                 )
             }

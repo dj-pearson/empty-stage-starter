@@ -122,6 +122,14 @@ struct LogMealResultIntent: AppIntent {
                 )
             }
 
+            // US-144: keep Health in step with the in-app path. This intent
+            // writes straight through DataService, so without this a meal
+            // logged by voice updated the row and put nothing in Health, and
+            // the user's nutrition log was complete or not depending on which
+            // surface they used. Best effort -- a Health failure must not turn
+            // a successful log into a Siri error.
+            await syncHealth(matches: matches, isEaten: domainResult == MealResult.ate.rawValue)
+
             // US-412: refresh the tonight/meals snapshot the widget reads.
             await WidgetSnapshot.rebuildFromServer()
 
@@ -135,6 +143,39 @@ struct LogMealResultIntent: AppIntent {
         } catch {
             SentryService.capture(error, extras: ["intent": "LogMealResult"])
             throw error
+        }
+    }
+
+    /// Mirrors the meal's result into Health for every entry just updated.
+    /// Recipes are fetched here because the intent runs without AppState, and
+    /// only when there is something that could carry nutrition.
+    @MainActor
+    private func syncHealth(matches: [PlanEntry], isEaten: Bool) async {
+        let service = HealthKitService.shared
+        guard service.isEnabled, service.isAvailable else { return }
+
+        let recipes: [Recipe]
+        if isEaten, matches.contains(where: { $0.recipeId != nil }) {
+            recipes = (try? await DataService.shared.fetchRecipes()) ?? []
+        } else {
+            // Removal does not need them, and neither does an entry with no
+            // linked recipe.
+            recipes = []
+        }
+
+        for entry in matches {
+            do {
+                try await service.applyMealResult(
+                    entry: entry,
+                    recipes: recipes,
+                    isEaten: isEaten
+                )
+            } catch {
+                SentryService.capture(error, extras: [
+                    "intent": "LogMealResult",
+                    "context": "healthkit_applyMealResult"
+                ])
+            }
         }
     }
 

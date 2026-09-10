@@ -154,6 +154,41 @@ enum WidgetSnapshot {
         DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: work)
     }
 
+    /// Wipes the App Group snapshot on sign-out.
+    ///
+    /// The widget reads straight out of the shared container and knows nothing
+    /// about sessions, so without this it kept rendering the departed
+    /// account's dinner, meal slots, grocery count and try-bite streak on the
+    /// home screen -- indefinitely, and on the Lock Screen accessory too,
+    /// where it is legible without unlocking. `AppState.clearData()` drops the
+    /// in-memory rows and the SwiftData cache; this is the third copy.
+    ///
+    /// Cancels the pending debounced write first. A burst of deletes during
+    /// sign-out schedules a `write` 0.5s out; clearing without cancelling lets
+    /// that timer fire afterwards and put the data straight back.
+    ///
+    /// The widget's own `loadFromAppGroup` already renders a sane empty state
+    /// for absent keys ("Open EatPal to plan", zero counts), so removing them
+    /// is the whole fix.
+    static func clear() {
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
+
+        guard let defaults = UserDefaults(suiteName: appGroup) else { return }
+        for key in [
+            Key.meals,
+            Key.groceryCount,
+            Key.pantryLowCount,
+            Key.tonightDish,
+            Key.tryBiteStreak,
+            Key.lastUpdatedAt
+        ] {
+            defaults.removeObject(forKey: key)
+        }
+
+        WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
+    }
+
     // MARK: - Private
 
     private static func persist(_ payload: Payload) {

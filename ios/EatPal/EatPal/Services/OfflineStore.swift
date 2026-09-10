@@ -177,6 +177,36 @@ final class OfflineStore: ObservableObject {
         case delete
     }
 
+    /// A queued mutation this build cannot replay.
+    ///
+    /// `replay` used to `return` or `break` out of its switches for anything it
+    /// did not recognise, and the caller reads a non-throwing return as
+    /// "landed on the server" and clears the row. So an unhandled case was
+    /// silently indistinguishable from success: the user's offline edit
+    /// disappeared with no error, no toast and nothing in Sentry. The update
+    /// switch was missing `kids` and `recipes`, and a payload that failed to
+    /// encode at enqueue time was stored as nil and then dropped on the same
+    /// path.
+    ///
+    /// Throwing instead routes these into the existing failure handling, which
+    /// reports them. Neither case can succeed on a retry, so `isPermanent`
+    /// tells the drain to quarantine immediately rather than burn five passes.
+    enum ReplayError: Error, LocalizedError {
+        case missingPayload(table: String, operation: String)
+        case unsupported(table: String, operation: String)
+
+        var isPermanent: Bool { true }
+
+        var errorDescription: String? {
+            switch self {
+            case .missingPayload(let table, let operation):
+                return "Queued \(operation) on \(table) has no payload to replay."
+            case .unsupported(let table, let operation):
+                return "No replay path for \(operation) on \(table)."
+            }
+        }
+    }
+
     enum Table: String {
         case foods
         case kids
@@ -346,7 +376,7 @@ final class OfflineStore: ObservableObject {
     /// Queue an insert with an encodable payload. The payload is JSON-encoded
     /// and decoded back during sync.
     func enqueueInsert<T: Encodable>(_ payload: T, table: Table, entityId: String, userId: String) {
-        let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
+        guard let data = encodeOrReport(payload, table: table, operation: .insert) else { return }
         addPendingMutation(
             table: table.rawValue,
             operation: Operation.insert.rawValue,
@@ -358,7 +388,7 @@ final class OfflineStore: ObservableObject {
 
     /// Queue an update with an encodable update struct.
     func enqueueUpdate<T: Encodable>(_ payload: T, table: Table, entityId: String, userId: String) {
-        let data = try? JSONEncoder.supabaseSnakeCase.encode(payload)
+        guard let data = encodeOrReport(payload, table: table, operation: .update) else { return }
         addPendingMutation(
             table: table.rawValue,
             operation: Operation.update.rawValue,
@@ -366,6 +396,30 @@ final class OfflineStore: ObservableObject {
             payload: data,
             userId: userId
         )
+    }
+
+    /// Encode a queued payload, reporting rather than swallowing a failure.
+    ///
+    /// This used to be `try?`, which stored nil and left the drain to discard
+    /// the mutation as if it had synced. Refusing to queue something we cannot
+    /// replay is no better for the user's data, but it is at least honest and
+    /// it shows up in Sentry instead of nowhere.
+    private func encodeOrReport<T: Encodable>(
+        _ payload: T,
+        table: Table,
+        operation: Operation
+    ) -> Data? {
+        do {
+            return try JSONEncoder.supabaseSnakeCase.encode(payload)
+        } catch {
+            SentryService.capture(error, extras: [
+                "queue": "OfflineStore",
+                "context": "enqueue_encode_failed",
+                "table": table.rawValue,
+                "operation": operation.rawValue
+            ])
+            return nil
+        }
     }
 
     /// Queue a delete for a specific row id.
@@ -438,13 +492,19 @@ final class OfflineStore: ObservableObject {
                 try? context.save()
 
                 lastSyncError = error.localizedDescription
-                if mutation.attemptCount >= Self.maxReplayAttempts {
+
+                // A mutation this build has no replay path for will fail the
+                // same way on every pass. Quarantine it now rather than
+                // blocking its entity for five reconnections first.
+                let permanent = (error as? ReplayError)?.isPermanent ?? false
+                if permanent || mutation.attemptCount >= Self.maxReplayAttempts {
                     SentryService.capture(error, extras: [
                         "queue": "OfflineStore",
                         "table": mutation.table,
                         "operation": mutation.operation,
                         "id": mutation.entityId,
                         "quarantined": true,
+                        "permanent": permanent,
                         "attempts": mutation.attemptCount
                     ])
                     clearPendingMutation(mutation)
@@ -491,7 +551,9 @@ final class OfflineStore: ObservableObject {
                 .execute()
 
         case Operation.insert.rawValue:
-            guard let data = mutation.payload else { return }
+            guard let data = mutation.payload else {
+                throw ReplayError.missingPayload(table: table, operation: mutation.operation)
+            }
 
             // US-385: replay inserts as upsert-on-id so a row that already
             // landed (e.g. the request succeeded server-side but the response
@@ -524,11 +586,13 @@ final class OfflineStore: ObservableObject {
                 recipe.userId = userId
                 try await client.from(table).upsert(recipe, onConflict: "id").execute()
             default:
-                break
+                throw ReplayError.unsupported(table: table, operation: mutation.operation)
             }
 
         case Operation.update.rawValue:
-            guard let data = mutation.payload else { return }
+            guard let data = mutation.payload else {
+                throw ReplayError.missingPayload(table: table, operation: mutation.operation)
+            }
 
             switch table {
             case Table.groceryItems.rawValue:
@@ -540,12 +604,21 @@ final class OfflineStore: ObservableObject {
             case Table.planEntries.rawValue:
                 let update = try decoder.decode(PlanEntryUpdate.self, from: data)
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
+            // Both of these were missing while `enqueueUpdate` is generic over
+            // `Table`, so an offline edit to a child's profile or a recipe was
+            // accepted, "replayed" as a no-op, and cleared.
+            case Table.kids.rawValue:
+                let update = try decoder.decode(KidUpdate.self, from: data)
+                try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
+            case Table.recipes.rawValue:
+                let update = try decoder.decode(RecipeUpdate.self, from: data)
+                try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
             default:
-                break
+                throw ReplayError.unsupported(table: table, operation: mutation.operation)
             }
 
         default:
-            break
+            throw ReplayError.unsupported(table: table, operation: mutation.operation)
         }
     }
 }

@@ -256,7 +256,20 @@ final class HealthKitService {
     /// Writes a meal's macros as a single `HKCorrelation` of type `.food`.
     /// No-op if the user hasn't opted in, HealthKit is unavailable, or the
     /// nutrition payload is entirely empty.
+    ///
+    /// `planEntryId` makes the write idempotent, which it was not before.
+    /// `AppState.updatePlanEntry` calls this every time a result is set to
+    /// `.ate`, and there are several ways to set it more than once for one
+    /// meal: re-tapping, marking refused and then eaten again, or logging the
+    /// same entry from the Siri intent and the phone. Each of those added
+    /// another correlation, so the meal was counted twice or three times in
+    /// Health and the only fix was deleting the extras by hand.
+    ///
+    /// The id is written to `HKMetadataKeyExternalUUID`, which is Apple's
+    /// field for exactly this. Note that HealthKit does not deduplicate on it
+    /// by itself, so the check below is explicit.
     func writeMeal(
+        planEntryId: String,
         calories: Double?,
         proteinGrams: Double?,
         carbsGrams: Double?,
@@ -265,6 +278,10 @@ final class HealthKitService {
         mealName: String?
     ) async throws {
         guard isEnabled, isAvailable else { return }
+
+        // Already recorded for this plan entry -- leave the existing sample
+        // alone rather than adding a second one.
+        if await hasMealSample(planEntryId: planEntryId) { return }
 
         var samples: Set<HKSample> = []
 
@@ -297,7 +314,14 @@ final class HealthKitService {
         // sample shows up with context in Health. We deliberately avoid
         // storing kid names or EatPal IDs — HealthKit data is not the
         // place for our internal PII.
-        var metadata: [String: Any] = [:]
+        // The dish name goes in as HKMetadataKeyFoodType so the sample reads
+        // with context in Health. No child names and no other EatPal fields --
+        // HealthKit is not the place for them. The plan entry id is the one
+        // exception and belongs here: HKMetadataKeyExternalUUID exists to tie a
+        // sample back to the record that produced it, and without it there is
+        // no way to avoid writing the same meal twice or to remove it when the
+        // user changes their mind.
+        var metadata: [String: Any] = [HKMetadataKeyExternalUUID: planEntryId]
         if let mealName {
             metadata[HKMetadataKeyFoodType] = mealName
         }
@@ -307,9 +331,104 @@ final class HealthKitService {
             start: mealDate,
             end: mealDate,
             objects: samples,
-            metadata: metadata.isEmpty ? nil : metadata
+            metadata: metadata
         )
 
         try await store.save(correlation)
+    }
+
+    /// Applies a plan entry's result to Health: writes the meal when it was
+    /// eaten, removes it otherwise.
+    ///
+    /// Shared so every surface that can set a result behaves the same. It was
+    /// only wired into `AppState.updatePlanEntry`, and the Siri intent writes
+    /// straight through `DataService`, so "Hey Siri, log breakfast as ate"
+    /// updated the row and put nothing in Health. A user who opted into Health
+    /// sync got a nutrition log that was complete or not depending on which
+    /// surface they happened to use, with nothing to tell them.
+    ///
+    /// A no-op unless the user opted in, and unless the entry links to a
+    /// recipe carrying nutrition -- food-only entries do not have macros in
+    /// the schema.
+    func applyMealResult(
+        entry: PlanEntry,
+        recipes: [Recipe],
+        isEaten: Bool
+    ) async throws {
+        guard isEnabled, isAvailable else { return }
+
+        guard isEaten else {
+            try await deleteMeal(planEntryId: entry.id)
+            return
+        }
+
+        guard let recipeId = entry.recipeId,
+              let recipe = recipes.first(where: { $0.id == recipeId }),
+              let nutrition = recipe.nutritionInfo else { return }
+
+        // US-435: date the sample to the meal's civil day. If the stored date
+        // cannot be parsed, skip rather than mis-date the sample to "now",
+        // which would attribute the meal to the wrong day in Health.
+        guard let mealDate = DateFormatter.isoDate.date(from: entry.date) else { return }
+
+        try await writeMeal(
+            planEntryId: entry.id,
+            calories: nutrition.calories,
+            proteinGrams: nutrition.proteinG,
+            carbsGrams: nutrition.carbsG,
+            fatGrams: nutrition.fatG,
+            mealDate: mealDate,
+            mealName: recipe.name
+        )
+    }
+
+    /// Removes the meal previously written for this plan entry, if any.
+    ///
+    /// Called when a result moves away from `.ate`. Without it, unmarking a
+    /// meal left the nutrition in Health for good, so the user's day silently
+    /// kept counting food nobody ate. Deletion is scoped by
+    /// `HKMetadataKeyExternalUUID` and HealthKit only lets an app delete what
+    /// it wrote, so this cannot touch another app's samples.
+    func deleteMeal(planEntryId: String) async throws {
+        guard isEnabled, isAvailable else { return }
+        guard let correlationType = HKObjectType.correlationType(forIdentifier: .food) else { return }
+
+        try await store.deleteObjects(
+            of: correlationType,
+            predicate: Self.externalUUIDPredicate(planEntryId)
+        )
+    }
+
+    /// Whether a `.food` correlation already exists for this plan entry.
+    private func hasMealSample(planEntryId: String) async -> Bool {
+        guard let correlationType = HKObjectType.correlationType(forIdentifier: .food) else {
+            return false
+        }
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: correlationType,
+                predicate: Self.externalUUIDPredicate(planEntryId),
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                // On a query failure, report "not present". Writing a possible
+                // duplicate is recoverable; skipping a write the user asked for
+                // silently loses their data.
+                if error != nil {
+                    continuation.resume(returning: false)
+                    return
+                }
+                continuation.resume(returning: !(samples ?? []).isEmpty)
+            }
+            store.execute(query)
+        }
+    }
+
+    private static func externalUUIDPredicate(_ planEntryId: String) -> NSPredicate {
+        HKQuery.predicateForObjects(
+            withMetadataKey: HKMetadataKeyExternalUUID,
+            allowedValues: [planEntryId]
+        )
     }
 }

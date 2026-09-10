@@ -77,12 +77,27 @@
     <string>$(SENTRY_DSN)</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <!-- The camera does more than barcodes: receipts (ScanReceiptSheet), fridge
+         contents (FridgePhotoSheet), product identification (QuickAddGrocerySheet,
+         PhotoImportGrocerySheet) and the AR shelf finder all use it. A purpose
+         string has to describe what actually happens, and the recognition paths
+         send the image off the device, which the user should be told before they
+         say yes. (Distinct from ImageUploadService, which stores photos the user
+         deliberately attaches to a food, recipe or child.) -->
     <key>NSCameraUsageDescription</key>
-    <string>EatPal needs camera access to scan food barcodes.</string>
+    <string>EatPal uses the camera to scan barcodes and receipts, and to recognize food from a photo of your fridge or a product. Photos used for recognition are sent to our service for processing.</string>
+    <!-- Kept deliberately even though nothing currently triggers it. Photo
+         selection goes through SwiftUI's PhotosPicker (PHPickerViewController),
+         which runs out of process and needs no authorization. This is the guard
+         for the day something reaches for PHPhotoLibrary directly, where a
+         missing string is an immediate crash rather than a denied prompt. -->
     <key>NSPhotoLibraryUsageDescription</key>
     <string>EatPal needs photo library access to add profile pictures and food photos.</string>
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>EatPal saves meal photos you take to your photo library.</string>
+    <!-- NSPhotoLibraryAddUsageDescription removed: nothing in the app writes to
+         the photo library. There is no UIImageWriteToSavedPhotosAlbum and no
+         PHPhotoLibrary.performChanges anywhere, so the string was telling users
+         EatPal saves photos to their library when it does not. Re-add it in the
+         same change that adds a save path, not before. -->
     <key>NSMicrophoneUsageDescription</key>
     <string>EatPal uses the microphone so you can add grocery items by voice.</string>
     <key>NSSpeechRecognitionUsageDescription</key>

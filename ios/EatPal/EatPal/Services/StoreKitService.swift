@@ -146,7 +146,25 @@ final class StoreKitService: ObservableObject {
 
     // MARK: - Purchase
 
-    func purchase(_ product: Product) async throws -> StoreKit.Transaction? {
+    /// What came back from a purchase attempt.
+    ///
+    /// `.pending` used to be folded in with `.userCancelled` and both returned
+    /// nil, so the paywall did nothing at all for a deferred purchase. On a
+    /// family app that case is mostly Ask to Buy: the child taps Subscribe,
+    /// iOS sends an approval request to the parent, and the app then looked
+    /// exactly like it had ignored the tap -- which invites tapping again, and
+    /// sending the parent another request each time. The purchase does land
+    /// eventually through `Transaction.updates`; the problem was never telling
+    /// anyone it was coming.
+    enum PurchaseOutcome {
+        case completed(StoreKit.Transaction)
+        case cancelled
+        /// Deferred pending someone else's action -- Ask to Buy approval, or a
+        /// bank's Strong Customer Authentication step.
+        case awaitingApproval
+    }
+
+    func purchase(_ product: Product) async throws -> PurchaseOutcome {
         isLoading = true
         errorMessage = nil
 
@@ -160,19 +178,21 @@ final class StoreKitService: ObservableObject {
                 await syncSubscriptionToSupabase(transaction: transaction)
                 await transaction.finish()
                 isLoading = false
-                return transaction
+                return .completed(transaction)
 
             case .userCancelled:
                 isLoading = false
-                return nil
+                return .cancelled
 
             case .pending:
                 isLoading = false
-                return nil
+                return .awaitingApproval
 
             @unknown default:
+                // A future case we cannot interpret. Treated as cancelled
+                // rather than as success, so nothing is unlocked on a guess.
                 isLoading = false
-                return nil
+                return .cancelled
             }
         } catch {
             errorMessage = error.localizedDescription

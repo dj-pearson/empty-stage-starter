@@ -60,6 +60,7 @@ enum ReceiptScanService {
             let response: Receipt = try await EdgeFunctions.invoke(
                 "parse-receipt-image",
                 body: RequestBody(imageBase64: jpeg.base64EncodedString()),
+                retry: .safeToRepeat,
                 as: Receipt.self
             )
             if response.lineItems.isEmpty {

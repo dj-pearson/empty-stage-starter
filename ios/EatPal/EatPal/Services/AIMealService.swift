@@ -206,6 +206,7 @@ final class AIMealService: ObservableObject {
             let decoded: [MealSuggestion] = try await EdgeFunctions.invoke(
                 "generate-meal-suggestions",
                 body: request,
+                retry: .safeToRepeat,
                 as: [MealSuggestion].self
             )
             suggestions = decoded

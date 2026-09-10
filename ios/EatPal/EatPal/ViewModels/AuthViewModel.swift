@@ -243,10 +243,17 @@ final class AuthViewModel: ObservableObject {
     /// successful session sign-out (and surface a failure) instead of wiping
     /// local data while the session is still alive.
     func signOut() async throws {
+        // Stop notifications first: deactivating this device's push_tokens row
+        // is an authenticated write, so it needs the session that is about to
+        // be torn down. Best effort inside -- it never blocks the sign-out.
+        await NotificationService.shared.handleSignOut()
         do {
             try await authService.signOut()
             AnalyticsService.track(.signOutCompleted)
         } catch {
+            // The session survived, so put the notification state back rather
+            // than leaving a signed-in user with silent reminders.
+            await NotificationService.shared.restoreAfterFailedSignOut()
             errorMessage = error.localizedDescription
             throw error
         }
@@ -257,6 +264,9 @@ final class AuthViewModel: ObservableObject {
     /// listener handles the sign-out transition on success.
     func deleteAccount() async throws {
         try await authService.deleteAccount()
+        // push_tokens cascades from auth.users, so the remote half is already
+        // gone. The reminders scheduled on this device are not.
+        await NotificationService.shared.clearLocalNotificationsAfterAccountDeletion()
     }
 
     // MARK: - Apple Sign-In

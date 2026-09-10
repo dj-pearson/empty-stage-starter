@@ -18,6 +18,12 @@ enum WatchSnapshotStore {
         defaults.set(data, forKey: cacheKey)
     }
 
+    /// Drop the cached snapshot. Called on sign-out so the complication and the
+    /// watch app stop showing the departed account's meals and grocery list.
+    static func clear() {
+        defaults.removeObject(forKey: cacheKey)
+    }
+
     static func load() -> WatchSnapshot? {
         guard let data = defaults.data(forKey: cacheKey),
               let decoded = try? JSONDecoder().decode(WatchSnapshot.self, from: data) else {

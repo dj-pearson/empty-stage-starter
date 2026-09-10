@@ -359,6 +359,7 @@ struct KidProfileEditorView: View {
         defer { isSubmitting = false }
 
         // Upload photo if changed
+        let previousPhotoURL = kid.profilePictureUrl
         var photoURL = kid.profilePictureUrl
         if let image = profileImage {
             // US-413: warn on upload failure instead of silently keeping the
@@ -403,6 +404,12 @@ struct KidProfileEditorView: View {
         // and keep the sheet open so the user doesn't lose their profile edits.
         do {
             try await appState.updateKid(kid.id, updates: updates)
+            // US-635 follow-up: the row now points at the new image, so the
+            // old object can go. The bucket is public-read by URL, and
+            // nothing else was ever going to remove a replaced child photo.
+            if let previousPhotoURL, previousPhotoURL != photoURL {
+                await ImageUploadService.deletePublicURL(previousPhotoURL)
+            }
             HapticManager.success()
             dismiss()
         } catch {

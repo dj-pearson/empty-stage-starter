@@ -76,6 +76,7 @@ final class AICoachService: ObservableObject {
             let decoded: CoachResponse = try await EdgeFunctions.invoke(
                 "ai-coach-chat",
                 jsonBody: requestBody,
+                retry: .safeToRepeat,
                 as: CoachResponse.self
             )
             // US-401: a response that arrives after reset/cancel is discarded,

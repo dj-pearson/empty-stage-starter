@@ -74,6 +74,7 @@ enum FridgeRecognitionService {
             let response: ResponseBody = try await EdgeFunctions.invoke(
                 "recognize-fridge-contents",
                 body: RequestBody(imageBase64: base64),
+                retry: .safeToRepeat,
                 as: ResponseBody.self
             )
             guard !response.items.isEmpty else { throw FridgeError.empty }

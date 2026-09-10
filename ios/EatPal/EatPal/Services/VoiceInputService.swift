@@ -169,29 +169,54 @@ final class VoiceInputService: ObservableObject {
     func stop() {
         guard state == .listening || state == .preparing else { return }
 
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
         task?.finish()
-        task = nil
-        request = nil
-
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        teardownAudio()
 
         // If the recognizer never produced a final callback, fall back to the
         // most recent partial transcript so the UI still sees what was said.
         if finalTranscript.isEmpty {
             finalTranscript = liveTranscript
         }
-        inputLevel = 0
         state = .idle
     }
 
     func cancel() {
         task?.cancel()
         stop()
+        // `stop()` returns early unless we were listening, and after a
+        // recognition error the state is `.error`. Tear down unconditionally
+        // so cancelling out of a failed attempt still releases the microphone
+        // and the audio session.
+        teardownAudio()
         liveTranscript = ""
         finalTranscript = ""
+    }
+
+    /// Releases the microphone and hands the audio session back.
+    ///
+    /// The `setActive(false, .notifyOthersOnDeactivation)` is the part that
+    /// matters beyond this app: the session is taken with `.duckOthers`, so
+    /// until it is released the user's music or podcast stays quiet. It used
+    /// to live only in `stop()`, while `finish(withError:)` -- the path taken
+    /// whenever recognition fails, which includes the ordinary "didn't catch
+    /// any speech" case -- stopped the engine and left the session held. And
+    /// because `stop()` returns early unless the state is listening or
+    /// preparing, and a failure leaves it `.error`, nothing released it
+    /// afterwards either. Somebody who asked for an item while listening to
+    /// something, and whose recognition failed, had their audio ducked until
+    /// the next successful voice input.
+    private func teardownAudio() {
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        task = nil
+        request = nil
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+
+        // The meter is driven by the tap that just went away, so without this
+        // it freezes at whatever the last buffer measured.
+        inputLevel = 0
     }
 
     // MARK: - Private helpers
@@ -200,10 +225,7 @@ final class VoiceInputService: ObservableObject {
         if let error {
             state = .error(error.localizedDescription)
         }
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        task = nil
-        request = nil
+        teardownAudio()
     }
 
     /// US-495: pure RMS → normalised meter level. `nonisolated` so it can run

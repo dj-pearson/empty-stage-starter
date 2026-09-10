@@ -6,22 +6,64 @@ import Foundation
 /// `GroceryTripAttributes` type.
 ///
 /// A trip can only have ONE active Activity at a time — starting a new one
-/// while one is already live ends the previous. Activities auto-end 8 hours
-/// after start as a safety net so abandoned trips don't stick on the Lock
-/// Screen forever.
+/// while one is already live ends the previous.
+///
+/// Abandoned trips are ended 8 hours after they started. That safety net was
+/// described here before it existed: `autoEndInterval` was only ever passed as
+/// `ActivityContent.staleDate`, which does not end anything. A stale date tells
+/// the widget its content is out of date so it can render accordingly; the
+/// activity stays on the Lock Screen regardless. Worse, every `update` pushed
+/// the stale date forward from "now", so a trip being actively checked off
+/// never even reached it. `endIfExpired()` is the actual net, checked on launch
+/// and on every foreground.
 @MainActor
 final class GroceryTripActivityService {
     static let shared = GroceryTripActivityService()
 
     private var current: Activity<GroceryTripAttributes>?
-    private let autoEndInterval: TimeInterval = 8 * 60 * 60  // 8 hours
+    private static let autoEndInterval: TimeInterval = 8 * 60 * 60
 
     private init() {
         // Recover a lingering activity from a previous app launch — prevents
-        // state drift when the user force-quit mid-trip.
-        if let existing = Activity<GroceryTripAttributes>.activities.first {
-            self.current = existing
+        // state drift when the user force-quit mid-trip. Adopt the most recent
+        // one; anything older is an orphan this process can no longer manage,
+        // so end it rather than leave it on the Lock Screen forever.
+        let existing = Activity<GroceryTripAttributes>.activities
+            .sorted { $0.attributes.startedAt > $1.attributes.startedAt }
+        self.current = existing.first
+
+        let orphans = existing.dropFirst()
+        if !orphans.isEmpty {
+            Task {
+                for orphan in orphans {
+                    await orphan.end(nil, dismissalPolicy: .immediate)
+                }
+            }
         }
+
+        Task { await endIfExpired() }
+    }
+
+    /// Ends the current activity once it is past `autoEndInterval`.
+    ///
+    /// Called on launch and on foreground. There is no timer to rely on: a
+    /// suspended app runs no code, so the only honest place to check is when
+    /// the app is running again.
+    func endIfExpired() async {
+        guard let current, current.activityState == .active else { return }
+        guard Date() >= Self.deadline(for: current.attributes) else { return }
+
+        SentryService.leaveBreadcrumb(
+            category: "liveactivity",
+            message: "Grocery trip auto-ended after \(Self.autoEndInterval / 3600)h"
+        )
+        await end(dismissalPolicy: .immediate)
+    }
+
+    /// When a trip stops being worth showing. Fixed to the start, so it does
+    /// not move every time an item is checked off.
+    private static func deadline(for attributes: GroceryTripAttributes) -> Date {
+        attributes.startedAt.addingTimeInterval(autoEndInterval)
     }
 
     /// Whether Live Activities are available and enabled for this app.
@@ -58,7 +100,7 @@ final class GroceryTripActivityService {
         )
         let content = ActivityContent(
             state: state,
-            staleDate: Date().addingTimeInterval(autoEndInterval)
+            staleDate: Self.deadline(for: attributes)
         )
 
         do {
@@ -93,7 +135,7 @@ final class GroceryTripActivityService {
         )
         let content = ActivityContent(
             state: state,
-            staleDate: Date().addingTimeInterval(autoEndInterval)
+            staleDate: Self.deadline(for: current.attributes)
         )
 
         await current.update(content)

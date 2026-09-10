@@ -60,11 +60,16 @@ export async function registerPushToken(): Promise<string | null> {
     // Upsert (user_id, token) so the same device on multiple sign-ins
     // doesn't pile up duplicate rows. The `push_tokens` schema is expected
     // to include columns: user_id, token, platform, updated_at.
+    // `is_active` is written explicitly. An upsert only touches the columns
+    // it names, so re-registering after a sign-out (which sets it false)
+    // would otherwise leave the row inactive forever and push would never
+    // resume for this device.
     const { error } = await supabase.from('push_tokens').upsert(
       {
         user_id: user.id,
         token,
         platform: Platform.OS,
+        is_active: true,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'token' }
@@ -76,6 +81,43 @@ export async function registerPushToken(): Promise<string | null> {
   } catch (err) {
     console.warn('[push] token fetch failed:', err);
     return null;
+  }
+}
+
+/**
+ * Stops push delivery to this device before a sign-out.
+ *
+ * Without it the `push_tokens` row stays `is_active = true` against the
+ * departing user, and `process-notification-queue` keeps pushing their meal
+ * plan, grocery list, and children's names to a phone they signed out of. The
+ * row was only ever corrected by somebody signing in again on the same device.
+ *
+ * Must run BEFORE `supabase.auth.signOut()`: the update is authenticated and
+ * RLS scopes `push_tokens` to `auth.uid()`. Returns whether the row was
+ * deactivated so a caller can restore it if the sign-out itself then fails.
+ */
+export async function deactivatePushToken(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  try {
+    const Notifications = await import('expo-notifications').catch(() => null);
+    if (!Notifications) return false;
+
+    const tokenResult = await Notifications.getExpoPushTokenAsync();
+    const token = tokenResult?.data ?? null;
+    if (!token) return false;
+
+    const { error } = await supabase
+      .from('push_tokens')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('token', token);
+    if (error) {
+      console.warn('[push] token deactivation failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[push] token deactivation failed:', err);
+    return false;
   }
 }
 

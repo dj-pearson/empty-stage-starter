@@ -223,8 +223,13 @@ final class AppState: ObservableObject {
 
     // MARK: - Data Loading
 
-    func loadAllData() async {
-        isLoading = true
+    /// Fetches everything and (re)starts the realtime subscriptions.
+    ///
+    /// `showLoadingIndicator` is false for the foreground refresh, which
+    /// happens without the user asking for it. Flipping `isLoading` there
+    /// would replace a screen the user is already reading with a spinner.
+    func loadAllData(showLoadingIndicator: Bool = true) async {
+        if showLoadingIndicator { isLoading = true }
         errorMessage = nil
 
         // US-489: resolve the signed-in user up front so the offline cache and
@@ -384,6 +389,13 @@ final class AppState: ObservableObject {
         // return. Reads are also gated by `cachedByUserId`, so this is
         // defense-in-depth against a cache that outlives the session.
         OfflineStore.shared.clearCachedData()
+        // The App Group holds two more copies of this account's data that no
+        // session check guards: the home-screen/Lock-Screen widget snapshot
+        // and the watch snapshot behind the complication. Both read straight
+        // out of the shared container, so without this they keep showing the
+        // departed account's dinner, meal slots and grocery count.
+        WidgetSnapshot.clear()
+        WatchConnectivityService.shared.clearForSignOut()
         currentUserId = ""
     }
 
@@ -597,6 +609,15 @@ final class AppState: ObservableObject {
         if activeKidId == id { activeKidId = kids.first?.id }
         do {
             try await dataService.deleteKid(id)
+            // The row is gone, so the photo should be too. Storage is
+            // public-read by URL and nothing else prunes it, so without this a
+            // deleted child's picture stayed fetchable by anyone holding the
+            // link. Best effort -- the profile is already deleted.
+            for kid in removed {
+                if let photo = kid.profilePictureUrl {
+                    await ImageUploadService.deletePublicURL(photo)
+                }
+            }
             toast.success("Child removed")
             HapticManager.mediumImpact()
             AnalyticsService.track(.kidDeleted)
@@ -793,11 +814,12 @@ final class AppState: ObservableObject {
                     result: result,
                     kidId: planEntries[index].kidId
                 ))
-                // US-144: write nutrition to Health when the meal was eaten
-                // and the user has opted in. No-op otherwise.
-                if result == MealResult.ate.rawValue {
-                    Task { await writeHealthSample(for: planEntries[index]) }
-                }
+                // US-144: write nutrition to Health when the meal was eaten,
+                // and take it back out when the result changes to anything
+                // else. Both are no-ops unless the user opted in.
+                let entry = planEntries[index]
+                let isEaten = result == MealResult.ate.rawValue
+                Task { await syncHealthSample(for: entry, isEaten: isEaten) }
                 // US-241: re-evaluate badges after each result update. Cheap —
                 // only runs criteria for unearned badges, and the planEntries
                 // / foods / recipes arrays are already in memory.
@@ -822,35 +844,19 @@ final class AppState: ObservableObject {
     /// user hasn't opted in, HealthKit isn't available, or the linked
     /// recipe has no nutrition data attached (food-only plan entries
     /// don't currently carry macros in the schema).
-    private func writeHealthSample(for entry: PlanEntry) async {
-        let service = HealthKitService.shared
-        guard service.isEnabled, service.isAvailable else { return }
-
-        guard let recipeId = entry.recipeId,
-              let recipe = recipes.first(where: { $0.id == recipeId }),
-              let nutrition = recipe.nutritionInfo else { return }
-
-        // US-435: date the sample to the meal's civil day. If the stored date
-        // can't be parsed, skip the write rather than silently mis-dating the
-        // sample to "now" (which would attribute the meal to the wrong day in
-        // Health).
-        guard let mealDate = DateFormatter.isoDate.date(from: entry.date) else { return }
-
+    /// US-144: reflects a meal's result in Health. Delegates to the shared
+    /// `HealthKitService.applyMealResult` so the Siri intent, which writes
+    /// straight through DataService, produces the same Health state as this
+    /// in-app path.
+    private func syncHealthSample(for entry: PlanEntry, isEaten: Bool) async {
         do {
-            try await service.writeMeal(
-                calories: nutrition.calories,
-                proteinGrams: nutrition.proteinG,
-                carbsGrams: nutrition.carbsG,
-                fatGrams: nutrition.fatG,
-                mealDate: mealDate,
-                mealName: recipe.name
-            )
-            SentryService.leaveBreadcrumb(
-                category: "healthkit",
-                message: "Wrote food correlation for \(recipe.name)"
+            try await HealthKitService.shared.applyMealResult(
+                entry: entry,
+                recipes: recipes,
+                isEaten: isEaten
             )
         } catch {
-            SentryService.capture(error, extras: ["context": "healthkit_writeMeal"])
+            SentryService.capture(error, extras: ["context": "healthkit_applyMealResult"])
         }
     }
 
@@ -1564,8 +1570,23 @@ final class AppState: ObservableObject {
 
     func toggleGroceryItem(_ id: String) async throws {
         guard let index = groceryItems.firstIndex(where: { $0.id == id }) else { return }
-        groceryItems[index].checked.toggle()
-        let checked = groceryItems[index].checked
+        try await setGroceryItemChecked(id, checked: !groceryItems[index].checked)
+    }
+
+    /// Sets a grocery item's checked state to a specific value.
+    ///
+    /// The idempotent form of `toggleGroceryItem`, and the one the watch uses.
+    /// A toggle is a flip of whatever the current state happens to be, which
+    /// is wrong over a store-and-forward channel: the watch falls back to
+    /// `transferUserInfo` when the phone is out of range, so a row checked off
+    /// in the shop could arrive after the same row had already been checked on
+    /// the phone, and flip it back to unchecked. Setting a value is safe to
+    /// deliver late or twice.
+    func setGroceryItemChecked(_ id: String, checked: Bool) async throws {
+        guard let index = groceryItems.firstIndex(where: { $0.id == id }) else { return }
+        let previous = groceryItems[index].checked
+        guard previous != checked else { return }
+        groceryItems[index].checked = checked
         let itemName = groceryItems[index].name
         // US-255: a check toggle is a local edit too — stamp it so the
         // 5s conflict window catches a household-mate's concurrent edit
@@ -1595,7 +1616,7 @@ final class AppState: ObservableObject {
                 HapticManager.lightImpact()
                 await updateGroceryTripActivity(lastCheckedName: checked ? itemName : "")
             } else {
-                groceryItems[index].checked.toggle()
+                groceryItems[index].checked = previous
                 toast.error("Failed to update item")
                 HapticManager.error()
                 throw error
