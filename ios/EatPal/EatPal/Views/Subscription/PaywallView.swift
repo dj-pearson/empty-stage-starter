@@ -74,16 +74,31 @@ struct PaywallView: View {
                         Button {
                             Task {
                                 // US-419: confirm a completed purchase and close
-                                // the paywall; cancel/pending fall through quietly
-                                // and real errors surface via the ErrorBanner.
+                                // the paywall. Real errors surface via the
+                                // ErrorBanner.
                                 do {
-                                    if try await store.purchase(product) != nil {
+                                    switch try await store.purchase(product) {
+                                    case .completed:
                                         HapticManager.success()
                                         ToastManager.shared.success(
                                             "You're subscribed!",
                                             message: "Enjoy EatPal Premium."
                                         )
                                         dismiss()
+
+                                    case .awaitingApproval:
+                                        // Ask to Buy. Say so and stay put:
+                                        // silence here reads as a dead button
+                                        // and gets the approver another
+                                        // request every time it is tapped.
+                                        HapticManager.lightImpact()
+                                        ToastManager.shared.info(
+                                            "Waiting for approval",
+                                            message: "We've sent a request to buy. Premium unlocks as soon as it's approved. No need to tap again."
+                                        )
+
+                                    case .cancelled:
+                                        break
                                     }
                                 } catch {
                                     HapticManager.error()
