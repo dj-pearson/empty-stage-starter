@@ -146,3 +146,57 @@ between chunks rather than appearing, so the next person to touch
 trusting the table. The rows above `vendor-supabase` still list
 `vendor-three-core` and `vendor-three-eco`, which no longer ship; the JSON has
 already dropped them.
+
+## Correction, 2026-09-10: eagerJs 280 kB -> 322 kB, and what the 0.9 kB build was
+
+The section above ends on an open question: `vendor-supabase` measured 0.9 kB in
+one generation of this file and 39.5 kB in two real builds, and "the 0.9 kB shim
+measurement describes some build that cannot be produced today."
+
+It can be produced today, and it takes one environment variable.
+
+`src/integrations/supabase/client.ts` computes `isSupabaseConfigured` from
+`import.meta.env.VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, and treats an
+anon key that is not a JWT (does not start with `eyJ`) as unconfigured, falling
+back to a hand-written mock. Vite inlines those values as literals, so with no
+usable key the constant folds to `false` and Rollup tree-shakes the entire
+`createClient` path away. What is left in `vendor-supabase` is a ~1 kB
+re-export shim.
+
+Build the same commit two ways and the difference is reproducible to the byte:
+
+| build | vendor-supabase | eager closure |
+|---|---|---|
+| no anon key (or a non-JWT placeholder) | 0.9 kB | 266.7 kB |
+| JWT-shaped anon key, as on `main` | 39.6 kB | **305.7 kB** |
+
+That is what broke CI. US-844 lowered `eagerJs` from 454000 to 280000 on the
+strength of a 266.6 kB measurement — taken, it turns out, on a build with no
+usable key. No authorized build can meet it: every push to `main` carries the
+real secret, measures 305.7 kB, and fails by 25.7 kB. `main` ran red on exactly
+this for two merges (PR #275 and PR #276) before anyone had reason to look at
+the environment rather than the code.
+
+**The fix.** `eagerJs` is re-measured on the build that ships: 305,743 bytes,
+`budgetFor` -> 322000. Nothing else in the JSON moved. A `--update` run does
+re-baseline every per-chunk row, and those rows were all passing, so they were
+restored to their tighter values by hand rather than quietly loosened.
+
+**So it cannot happen again.** `check-bundle-budget.mjs` now looks for
+`GoTrueClient` in the built JS to decide whether a build is the one that ships:
+
+- `--update` refuses to write budgets from a build without it, which is how the
+  wrong number got in.
+- a check run on a build without it skips the `eagerJs` comparison and says so,
+  rather than passing a number 39 kB below what ships. It skips rather than
+  fails because fork PRs have no access to the secret and CI deliberately falls
+  back to a placeholder for them.
+
+**What this leaves open.** 39.6 kB of the eager closure is the Supabase client,
+downloaded before the first paint on every route including the prerendered
+marketing pages, which do not use it. The same treatment Sentry got in US-844 —
+behind a dynamic import — would take the closure back under 270 kB. That is a
+real refactor rather than a budget change: `supabase` is imported synchronously
+across the app, and vite.config.ts's chunking is, per the header of the check
+script, empirically derived scar tissue. Worth doing, not worth smuggling into
+a CI fix.

@@ -128,6 +128,38 @@ const LAZY_ONLY_CHUNKS = [
   'vendor-markdown',
 ];
 
+/**
+ * A marker that only appears when the real Supabase SDK is in the build.
+ *
+ * `src/integrations/supabase/client.ts` derives `isSupabaseConfigured` from
+ * `import.meta.env` values that Vite inlines as literals, and falls back to a
+ * hand-written mock object when they are missing or when the anon key is not a
+ * JWT. With the constant folded to `false`, Rollup tree-shakes the entire
+ * `createClient` path away and `vendor-supabase` collapses from ~40 kB gz to a
+ * ~1 kB re-export shim.
+ *
+ * That is a 39 kB difference in the eager closure between two builds of the
+ * same commit, decided by an environment variable. It is exactly how the
+ * `eagerJs` budget came to be wrong: 280000 was measured on a build with no
+ * usable anon key, so it described a bundle that never ships, and every
+ * authorized build on main measured 305.7 kB and failed against it. Two merges
+ * ran red that way before anyone had a reason to look at the env.
+ */
+const SUPABASE_SDK_MARKER = 'GoTrueClient';
+
+/**
+ * Whether this build is the one that ships.
+ *
+ * Budgets are only comparable between builds that made the same decisions, so
+ * a build missing the SDK is not measured against them and is never allowed to
+ * generate them.
+ */
+function buildIncludesSupabaseSdk() {
+  return readdirSync(JS_DIR)
+    .filter((f) => f.endsWith('.js'))
+    .some((f) => readFileSync(path.join(JS_DIR, f), 'utf8').includes(SUPABASE_SDK_MARKER));
+}
+
 /** The entry chunk Vite put in the built HTML, e.g. `assets/js/index-8GTr-V14.js`. */
 function entryFile() {
   // app-shell.html is the un-prerendered shell (scripts/prerender.mjs keeps it
@@ -187,6 +219,18 @@ function main() {
   const { sizes, total, fileCount } = measure();
 
   if (process.argv.includes('--update')) {
+    if (!buildIncludesSupabaseSdk()) {
+      console.error(
+        'check-bundle-budget: refusing to write budgets from this build.\n\n' +
+          '  The Supabase SDK was tree-shaken out, which means VITE_SUPABASE_ANON_KEY was\n' +
+          '  missing or was not a JWT when vite ran. The eager closure is ~39 kB smaller\n' +
+          '  than the bundle that actually ships, and a budget measured here is one no\n' +
+          '  real build can meet.\n\n' +
+          '  Rebuild with a JWT-shaped VITE_SUPABASE_ANON_KEY (any value starting "eyJ"\n' +
+          '  is enough to keep the real client), then re-run with --update.\n'
+      );
+      process.exit(1);
+    }
     const budgets = {};
     for (const key of budgetedKeys(sizes)) {
       budgets[key] = budgetFor(sizes.get(key));
@@ -239,7 +283,13 @@ function main() {
   }
 
   const eager = eagerClosure();
-  if (typeof budget.eagerJs === 'number' && eager.bytes > budget.eagerJs) {
+  // A build without the SDK is ~39 kB lighter than the shipped one for reasons
+  // that have nothing to do with the change under test, so comparing it to the
+  // budget answers a question nobody asked. Skipped rather than failed: fork
+  // PRs have no access to the anon key secret and CI falls back to a
+  // placeholder for them, and those builds should not go red over it.
+  const representative = buildIncludesSupabaseSdk();
+  if (representative && typeof budget.eagerJs === 'number' && eager.bytes > budget.eagerJs) {
     failures.push({ key: 'EAGER js', actual: eager.bytes, limit: budget.eagerJs });
   }
 
@@ -289,9 +339,17 @@ function main() {
   );
   console.log(
     `check-bundle-budget: entry pulls ${eager.files.size} chunks eagerly, ${kb(eager.bytes)} gz${
-      typeof budget.eagerJs === 'number' ? ` (budget ${kb(budget.eagerJs)})` : ''
+      representative && typeof budget.eagerJs === 'number' ? ` (budget ${kb(budget.eagerJs)})` : ''
     }; no route-only chunk among them.`
   );
+
+  if (!representative) {
+    console.log(
+      'check-bundle-budget: eager budget NOT enforced -- this build tree-shook the Supabase\n' +
+        '  SDK out (no JWT-shaped VITE_SUPABASE_ANON_KEY), so its eager closure is not the\n' +
+        '  one that ships. Authorized builds are measured against the budget.'
+    );
+  }
 
 }
 

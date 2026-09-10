@@ -134,3 +134,48 @@ describe('the eager budget', () => {
     expect(budget.eagerJs).toBeLessThan(budget.totalJs);
   });
 });
+
+/**
+ * The eagerJs budget is only meaningful if every build measuring against it made
+ * the same decisions.
+ *
+ * `src/integrations/supabase/client.ts` derives `isSupabaseConfigured` from
+ * Vite-inlined env literals and falls back to a mock when the anon key is not a
+ * JWT. With the constant folded to false, Rollup drops the entire createClient
+ * path and the eager closure loses 39 kB. The 280000 budget was measured on such
+ * a build, so every authorized build on main -- which carries the real key --
+ * measured 305.7 kB and failed by 25.7 kB. Two merges went red that way before
+ * anyone looked at the environment rather than the diff.
+ *
+ * These assertions are about the script's shape rather than a built dist/, which
+ * this suite has none of.
+ */
+describe('the budget only measures builds that ship', () => {
+  const script = readFileSync(path.join(process.cwd(), 'scripts', 'ci', 'check-bundle-budget.mjs'), 'utf8');
+
+  it('can tell a tree-shaken build from a real one', () => {
+    expect(script).toContain("SUPABASE_SDK_MARKER = 'GoTrueClient'");
+    expect(script).toContain('function buildIncludesSupabaseSdk()');
+  });
+
+  it('refuses to generate budgets from a build without the SDK', () => {
+    // This is how the wrong number got in.
+    const update = script.slice(script.indexOf("if (process.argv.includes('--update'))"));
+    const guard = update.slice(0, update.indexOf('const budgets = {}'));
+    expect(guard).toContain('!buildIncludesSupabaseSdk()');
+    expect(guard).toContain('process.exit(1)');
+  });
+
+  it('skips rather than fails the eager check on such a build', () => {
+    // Fork PRs have no access to the anon key secret and CI falls back to a
+    // placeholder for them; those builds must not go red over it.
+    expect(script).toContain('representative && typeof budget.eagerJs');
+  });
+
+  it('the committed budget was measured on a real build', () => {
+    // 305.7 kB + the script's 5% headroom. Below ~300000 means somebody
+    // re-measured without the SDK again.
+    const budget = JSON.parse(readFileSync(path.join(process.cwd(), '.ci', 'bundle-budget.json'), 'utf8'));
+    expect(budget.eagerJs).toBeGreaterThan(300000);
+  });
+});
