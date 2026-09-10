@@ -4143,3 +4143,72 @@ US-847 opened (og:image format) -- needs an owner decision.
   - Record what you could not verify AS unverified. US-847 is a strong hunch
     with real evidence for the setup and none for the conclusion, and saying so
     is what makes it useful to the person who picks it up.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 13. US-848: every offline
+navigation hit a dead end the cache could have answered. public/sw.js
+================================================================================
+
+- A FALSE START, AND IT IS THE MOST USEFUL PART OF THIS ENTRY. My first probe
+  said the offline path worked: the worker registered, precached 37 entries
+  including /offline.html, an offline navigation to /faq returned the offline
+  page, and a subsequent navigation to / BOOTED THE APP with 70 JS/CSS chunks
+  cached. I nearly wrote that up as a clean negative.
+
+  It was contaminated. I had reused one browser context across probes, so state
+  from an earlier navigation made a route look cached that was not. Three
+  isolated trials, fresh context each, said the opposite and said it
+  consistently:
+
+      online at /  -> offline /pricing  -> offline page
+      online at /  -> offline /         -> offline page   <- the page you are ON
+      online at /faq -> offline /pricing -> offline page
+
+- THE DEFECT. networkFirstWithOfflineFallback went straight to offline.html and
+  never read the cache. Not the shell precached at install. Not the 70 chunks.
+  Not the navigation responses the same function stores on its success path TWO
+  LINES ABOVE. Everything needed to serve the app was there and none of it was
+  consulted.
+
+- WHICH MADE THE OFFLINE PAGE'S OWN COPY FALSE:
+
+      "Don't worry! TryEatPal works offline. Here's what you can still do:
+       View your saved meal plans / Check your grocery list"
+
+  From a dead-end static page you can do neither. The claim was true of the
+  cache and false of the page the user was actually looking at.
+
+- FIXED IN THE ORDER THAT MATCHES WHAT THE USER ASKED FOR: the exact cached
+  page first (it may be a prerendered route with its own content), then the app
+  shell so client-side routing renders whatever they asked for, then the static
+  page. All three trials boot the app now, and AppContext hydrates from
+  localStorage exactly as the load-precedence contract in CLAUDE.md describes.
+
+- NOT "ALWAYS SERVE THE SHELL". With nothing cached the static page is exactly
+  right, and the test that pins that is what stops the shell case passing
+  vacuously. The mutant that always serves a shell fails it.
+
+- THE TEST DOUBLE WAS WRONG, WHICH LOOKED LIKE THE CODE BEING WRONG. Three
+  cases failed on the first run. The fake Cache API compared raw strings, so
+  `cache.match('/index.html')` missed a store keyed by absolute URL -- the real
+  Cache API resolves a relative path against the worker's scope. Keys go
+  through `new URL(x, scope)` now. Second time this loop a passing
+  implementation looked broken because the double disagreed with the platform
+  (US-835's storage mock exposed `length` as a function).
+
+- Measured: 3515 tests pass (235 files, 1 skipped). Typecheck 813 against
+  baseline 813; lint 1144 against 1144; invisible chars clean. Four mutants,
+  four caught.
+
+- **Learnings for future iterations:**
+  - One browser context across probes is one shared cache, one shared origin
+    and one shared worker. If a result depends on what you did before it, you
+    are measuring your own script. Fresh context per trial, and run the trials
+    in more than one order.
+  - Be most suspicious of a probe that says everything is fine. The clean
+    negative is the cheapest possible outcome and therefore the one worth
+    re-running before you write it down.
+  - A cache you write and never read is not a cache. The success path here had
+    been diligently storing navigations for as long as the worker has existed.
+  - When a test double and the implementation disagree, check which one models
+    the platform. Twice now the double was the liar.

@@ -4385,6 +4385,23 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Opened 2026-09-10 (web platform loop, iteration 12) — NOT DONE, needs an owner decision. All 29 prerendered pages set og:image and twitter:image to https://tryeatpal.com/Cover.webp, and everything around it is right: the file exists in the build, og:image:width (1536), og:image:height (1024), og:image:alt and og:image:secure_url are all set, and twitter:card is summary_large_image. The one gap is the format. Only Cover.webp and Cover.avif exist in public/; there is no JPEG or PNG of the cover anywhere in the repo, so this cannot be fixed by changing a string. Twitter/X renders WebP; Facebook's and LinkedIn's crawlers have historically wanted JPEG/PNG/GIF, which would make every share on those surfaces a text-only card. I did not verify that behaviour from here -- no network to those scrapers -- so the claim is recorded as the reason to look, not as a measured fact. Someone should confirm with the Facebook Sharing Debugger and, if it holds, add a Cover.jpg to public/ and point og:image at it. Deliberately NOT auto-converting the WebP in a build step: a share card is brand surface, and a script-generated recompression is the wrong way to get one."
+    },
+    {
+      "id": "US-848",
+      "title": "Every offline navigation hit a dead-end page the cache could have answered",
+      "description": "As someone whose connection drops, I want the app I already loaded to keep working, so that the offline page's promise that I can check my grocery list is true.",
+      "acceptanceCriteria": [
+        "An offline navigation serves the exact cached page when there is one.",
+        "A route the worker has never cached falls back to the app shell, so client-side routing renders it.",
+        "With nothing cached at all, the static offline page is still served -- the change is not 'always serve the shell'.",
+        "The exact page wins over the shell.",
+        "A successful navigation is unaffected."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-10 (web platform loop, iteration 13) with the browser harness: register the worker against the real build, go offline, navigate. networkFirstWithOfflineFallback went straight to offline.html and never read the cache -- not the shell precached at install, not the 70 JS/CSS chunks, not the navigation responses it stores itself on the success path two lines above. Measured across three clean trials: EVERY offline navigation got the static page, including reloading the page you were already on, whose HTML was in that same cache. That made offline.html's own copy false -- it promises 'View your saved meal plans' and 'Check your grocery list', and from a dead-end static page you can do neither. Fix: try the exact cached page, then the app shell (/index.html, or / which is the same document in this build), then the static page. After: all three trials boot the app, and AppContext hydrates from localStorage as the load-precedence contract describes. A FALSE START WORTH RECORDING: my first read of this said the app booted offline fine. It was contaminated -- I had reused one browser context across probes, so state from an earlier navigation made an unvisited route look cached. Three isolated trials with a fresh context each said the opposite, consistently. Also fixed the test double: the fake Cache API compared raw strings, so cache.match('/index.html') missed a store keyed by absolute URL and the shell fallback looked broken when the double was wrong. Keys are normalised through new URL(x, scope) now, which is what the real Cache API does. Four mutants caught: restore the straight-to-offline fallback (4 fail), drop only the shell fallback (2), serve the shell before the exact page (2), always serve the shell and never the offline page (1)."
     }
   ]
 }

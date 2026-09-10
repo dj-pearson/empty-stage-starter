@@ -11,6 +11,14 @@ const SW_BUILD_ID = '__SW_BUILD_ID__';
 const CACHE_NAME = 'tryeatpal-' + SW_BUILD_ID;
 const OFFLINE_URL = '/offline.html';
 
+/**
+ * US-848: the SPA entry, served for an offline navigation to a route we have
+ * not cached individually. Client-side routing takes it from there. '/' is the
+ * same document in this build; both are tried so a future shell rename does not
+ * silently drop back to the dead-end page.
+ */
+const APP_SHELL_URL = '/index.html';
+
 // The share-target handoff cache is intentionally NOT versioned and must
 // survive activation. It holds a share the user just made, which
 // src/pages/ShareTarget.tsx reads on the very next navigation -- a share that
@@ -314,8 +322,38 @@ async function networkFirstWithOfflineFallback(request) {
 
     return response;
   } catch (error) {
-    console.log('[SW] Navigation offline, showing offline page');
     const cache = await caches.open(CACHE_NAME);
+
+    // US-848: try what we actually have before giving up.
+    //
+    // This used to go straight to offline.html. Everything below was already
+    // in the cache and never read: the shell precached at install, 70 JS and
+    // CSS chunks, and every navigation this function had successfully served
+    // and stored two lines above. Measured in Chromium against the real build,
+    // EVERY offline navigation got the static page -- including reloading the
+    // page you were already on, whose HTML was sitting in that same cache.
+    //
+    // Which made offline.html's own copy false. It promises "View your saved
+    // meal plans" and "Check your grocery list", and from a dead-end static
+    // page you can do neither. With the shell served instead, the app boots,
+    // client-side routing renders the requested path, and AppContext hydrates
+    // from localStorage -- so the promise is one the cache can keep.
+    //
+    // Order: the exact page first (it may be a prerendered route with its own
+    // content), then the app shell, then the static page.
+    const exact = await cache.match(request);
+    if (exact) {
+      console.log('[SW] Navigation offline, serving the cached page');
+      return exact;
+    }
+
+    const shell = (await cache.match(APP_SHELL_URL)) || (await cache.match('/'));
+    if (shell) {
+      console.log('[SW] Navigation offline, serving the app shell');
+      return shell;
+    }
+
+    console.log('[SW] Navigation offline, showing offline page');
     const offlineResponse = await cache.match(OFFLINE_URL);
 
     if (offlineResponse) {
