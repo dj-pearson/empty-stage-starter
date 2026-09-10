@@ -223,8 +223,13 @@ final class AppState: ObservableObject {
 
     // MARK: - Data Loading
 
-    func loadAllData() async {
-        isLoading = true
+    /// Fetches everything and (re)starts the realtime subscriptions.
+    ///
+    /// `showLoadingIndicator` is false for the foreground refresh, which
+    /// happens without the user asking for it. Flipping `isLoading` there
+    /// would replace a screen the user is already reading with a spinner.
+    func loadAllData(showLoadingIndicator: Bool = true) async {
+        if showLoadingIndicator { isLoading = true }
         errorMessage = nil
 
         // US-489: resolve the signed-in user up front so the offline cache and
