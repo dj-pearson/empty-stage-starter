@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 9,
+    "iterationsUsed": 10,
     "completed": [
       {
         "iteration": 1,
@@ -58,6 +58,12 @@
         "iteration": 9,
         "id": "SEO-014",
         "title": "The blog hub linked the 29 URLs it redirects away",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 10,
+        "id": "SEO-015",
+        "title": "isIndexable said yes to /admin, /dashboard and /auth",
         "commit": "see git log on this branch"
       }
     ]
@@ -165,6 +171,21 @@
       "priority": 1,
       "passes": true,
       "notes": "29 duplicate posts keep their published row deliberately: the 301 in public/_redirects is what users and crawlers see, and the row stays so the content is recoverable. Three surfaces honoured that (_redirects, the sitemap generator, the prerenderer) and blog-feed.ts filtered the RSS and Atom feeds. /blog did not -- and /blog is prerendered and indexable, so the site's own blog hub linked 29 URLs it redirects the moment anything follows them, while showing readers a second copy of a title already in the list. BlogPost's related-post block was worse in kind: .limit(3) meant a retired post could take one of only three slots. Both now over-fetch and filter, the way blog-feed.ts does, because PostgREST cannot take a not-in list of 29 slugs in a URL. The contract comment now names five surfaces. src/pages/Blog.retired.test.tsx renders the page; confirmed it fails with the filter removed rather than passing vacuously."
+    },
+    {
+      "id": "SEO-015",
+      "title": "isIndexable said yes to /admin, /dashboard and /auth",
+      "description": "As a developer reaching for a helper called isIndexable, I want it to answer correctly for the routes this app actually declares, so that wiring it up does not invite crawlers into the private surface.",
+      "acceptanceCriteria": [
+        "The bare routes /admin, /dashboard, /auth, /api and the rest return false, not just their sub-paths",
+        "/authors stays indexable, which a bare /auth prefix would break",
+        "Matching is on the pathname, so /blog/how-to-login stays public and ?next=/admin cannot flip the answer",
+        "The path list mirrors the Disallow list in public/robots.txt and drops /_next/",
+        "Tests cover the bare routes, which the old ones never did"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Every entry in the old list carried a trailing slash -- '/admin/', '/dashboard/', '/auth/', '/api/' -- so the function returned true for /admin, /dashboard, /auth and /api, which are the routes src/App.tsx declares. public/robots.txt records this exact mistake and its fix, at length. The tests passed because all four cases were written with a trailing slash or a sub-path, so the one shape that mattered was the one never asserted. The list also carried '/_next/', which is Next.js and has never existed in this Vite app, so it was template boilerplate rather than anything derived from these routes. Unused in app code today, which is the only reason it cost nothing: a helper with this name and a green test is what someone reaches for. Also switched from url.includes to a pathname comparison, because a post at /blog/how-to-login was being called private. 63 tests in the file. Full suite after this: 3612 passing, 3 skipped, 244 files."
     },
     {
       "id": "SEO-002",

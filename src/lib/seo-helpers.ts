@@ -409,23 +409,67 @@ export function calculateReadingTime(
 }
 
 /**
- * Check if URL is indexable
+ * The private surface, as prefixes of a pathname.
  *
- * Determines if a URL should be indexed by search engines
+ * These mirror the Disallow list every group in public/robots.txt repeats, and they
+ * carry no trailing slash for the reason that file spells out: a prefix match means
+ * "/admin/" does NOT cover "/admin", which is the actual route in src/App.tsx. The
+ * list this replaced had exactly that bug on all four of its real entries, plus
+ * "/_next/", which is Next.js and has never existed here.
+ */
+const PRIVATE_PATH_PREFIXES = [
+  '/admin',
+  '/dashboard',
+  '/api',
+  '/oauth',
+  '/seo-dashboard',
+  '/search-traffic',
+  '/checkout/success',
+  '/share',
+  '/join',
+  '/pseo-admin',
+] as const;
+
+/**
+ * Top-level aliases that public/_redirects 302s into /auth, plus the bare
+ * /reset-password that does not resolve to anything. None is a page, so none is a URL
+ * to report as indexable.
+ */
+const AUTH_ALIASES = ['/login', '/signin', '/signup', '/register', '/reset-password'] as const;
+
+/**
+ * Whether a URL on this site should be indexed.
+ *
+ * Two things this gets right that the previous version did not.
+ *
+ * It matches on the pathname rather than searching the whole URL for a substring. A
+ * post at /blog/how-to-login is a public article, and `url.includes('/login')` called
+ * it private; a query string like ?next=/admin would flip it the other way.
+ *
+ * And it treats /auth as robots.txt does, an exact match plus a prefix, rather than as
+ * a bare prefix. "/auth" as a prefix also matches /authors -- a public, prerendered,
+ * sitemapped page -- which is the specific mistake that file records having made and
+ * fixed. Getting it wrong here in the opposite direction is worse: this function
+ * answers "may we index this", so a wrong true invites crawlers into /admin and
+ * /dashboard.
+ *
+ * robots.txt remains the enforcement point. This is for code that needs the same
+ * answer in JavaScript, and it must not drift from it.
  */
 export function isIndexable(url: string): boolean {
-  const noIndexPaths = [
-    '/api/',
-    '/admin/',
-    '/dashboard/',
-    '/_next/',
-    '/auth/',
-    '/login',
-    '/signup',
-    '/reset-password',
-  ];
+  let pathname: string;
+  try {
+    pathname = new URL(url, 'https://tryeatpal.com').pathname;
+  } catch {
+    return false;
+  }
 
-  return !noIndexPaths.some((path) => url.includes(path));
+  if (pathname === '/auth' || pathname.startsWith('/auth/')) return false;
+  if ((AUTH_ALIASES as readonly string[]).includes(pathname)) return false;
+
+  return !PRIVATE_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
 }
 
 /**
