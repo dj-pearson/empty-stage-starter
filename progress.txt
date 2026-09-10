@@ -4063,3 +4063,83 @@ CSP refused the theme script on every page. scripts/build/inject-csp-hashes.mjs
     code.
   - TypeScript resolves `.d.mts` for a `.mjs` import, not `.d.ts`. A declaration
     file with the wrong extension is invisible and silent.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 12. US-846: the pricing page
+scrolled sideways at 320px. tests/responsive/reflow-320.spec.ts
+US-847 opened (og:image format) -- needs an owner decision.
+================================================================================
+
+- THE INSTRUMENT FROM ITERATION 11 PAID AGAIN, and that is the point of having
+  built it. Serve the real dist/ under the production CSP, load ten public
+  routes at a 320px viewport, compare document.scrollWidth to clientWidth. Two
+  failed.
+
+      /pricing        339px  (+19)
+      /accessibility  321px  (+1)
+
+- /PRICING IS THE PAGE WHERE SOMEBODY DECIDES TO PAY. The monthly/yearly
+  billing toggle: two shadcn Buttons -- which carry whitespace-nowrap -- plus
+  the "Save 20%" badge came to 274px, and gap-3 with p-1 pushed the group past
+  the ~288px a 320px screen leaves after the gutter. Fixed with flex-wrap plus
+  a tighter gap below sm: it stays on one line everywhere it fits, and stacks
+  rather than widening the document where it does not.
+
+- THE ONE-PIXEL ONE WAS THE MORE INTERESTING FIX. An email address is a single
+  unbreakable 213px word, and `break-words` DID NOTHING. Rebuilt, re-measured,
+  still 321. The address sits in a flex child, and a flex child defaults to
+  min-width:auto -- it refuses to shrink below its content, so there was no
+  constrained width to break against. `min-w-0` is what actually let it wrap.
+  Worth remembering: overflow-wrap needs something to wrap INSIDE.
+
+- WHAT WAS SUPPOSEDLY CHECKING THIS. One assertion in
+  mobile-responsive.spec.ts: `should not have horizontal scroll`, which loads
+  `/` -- at iPhone 13 width, not 320 -- and `/` is the page that passed. The
+  exact shape the previous loop's iteration 12 recorded ("one viewport is not a
+  layout test") and the previous iteration 13 recorded again (a gate over three
+  hardcoded files out of three hundred). Left in place with a comment saying
+  what it is not, and superseded by a spec over all ten routes.
+
+- THE SPEC REPORTS WHAT IT FOUND, not just that it failed: tag, class, width
+  and the first 40 characters of text for up to five offending elements. That
+  is the difference between a red test and a red test somebody can act on. It
+  also skips elements that scroll themselves or sit inside something that does
+  -- a table or a code block is allowed to be wider than the viewport; the
+  document is not.
+
+- MUTATION-CHECKED THROUGH THE REAL PIPELINE, which meant a full rebuild per
+  mutant. Reverting the toggle fails exactly /pricing; reverting min-w-0 fails
+  exactly /accessibility. One failure each, on the right route.
+
+- VPAT 1.4.10 NOW CITES THE SPEC through the verifiedBy mechanism US-839 added
+  three iterations ago. That row said "Supports -- Content reflows at 320px
+  width. No horizontal scrolling required." while two routes did not. Third
+  false VPAT claim this loop.
+
+- US-847 OPENED AND DELIBERATELY NOT FIXED. All 29 prerendered pages point
+  og:image and twitter:image at Cover.webp. Everything around it is right --
+  the file exists, width/height/alt/secure_url are set, twitter:card is
+  summary_large_image, titles are unique, every page has a canonical. The gap
+  is the format, and there is no JPEG or PNG of the cover in the repo, so it is
+  not a string change. I could not verify the scrapers' behaviour from here, so
+  the story records it as a reason to look rather than as a measured fact, and
+  says not to auto-convert the WebP in a build step: a share card is brand
+  surface.
+
+- Measured: 3508 tests pass (235 files, 1 skipped) plus 11 Playwright tests in
+  the new spec. Typecheck 813 against baseline 813; lint 1144 against 1144;
+  bundle 266.6/280.0 kB eager; invisible chars clean.
+
+- **Learnings for future iterations:**
+  - Reuse the instrument. Iteration 11 spent its budget building a browser
+    harness; iteration 12 spent five minutes pointing it somewhere else and
+    found a defect on the page that takes the money.
+  - `overflow-wrap` cannot wrap text inside a box that will not shrink. In a
+    flex row, min-width:auto is the default and it beats break-words every
+    time. Reach for min-w-0 first.
+  - A test named for a general property that checks one instance is worse than
+    no test: it is the reason nobody looks again. Both times this loop has
+    found one, the instance it checked was the one that passed.
+  - Record what you could not verify AS unverified. US-847 is a strong hunch
+    with real evidence for the setup and none for the conclusion, and saying so
+    is what makes it useful to the person who picks it up.

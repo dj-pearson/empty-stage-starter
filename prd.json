@@ -4352,6 +4352,39 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-09 (web platform loop, iteration 11) by serving the real dist/ from a local server that sets the exact production CSP and loading six routes in Chromium. Every one printed \"Refused to execute inline script because it violates the following Content Security Policy directive: script-src 'self' ...\". The script is next-themes' ThemeProvider blocking script -- the one that reads the stored theme and sets class=\"dark\" on <html> BEFORE first paint -- emitted with an empty nonce=\"\" because none is configured. script-src carries no nonce and no 'unsafe-inline' (US-529 removed it), so Chrome refused it on every page and a dark-theme visitor got a white flash until React hydrated, which after US-844 is still ~260 kB of JS away. That is precisely the flash the script exists to prevent. public/_headers asserted the opposite in a comment -- 'the built index.html carries zero inline <script>' -- which is how it survived: the claim was written once and never executed. Fix: scripts/build/inject-csp-hashes.mjs runs after the prerender and appends a 'sha256-...' source per distinct inline script to script-src in dist/_headers. A nonce is the other answer and cannot work here: Cloudflare Pages serves _headers statically, so there is nothing to generate one per response. public/_headers commits no hash, because a committed one would pin a single build of a single library version and go stale silently. Verified: 30 inline scripts across the build, 2 distinct hashes, and a re-run in Chromium shows zero refusals on all six routes. INSTRUMENT BUG on the first run: the scanner matched a <script> tag quoted inside an HTML comment in index.html and hashed the prose, reporting 4 hashes instead of 2 -- one of which would have changed whenever somebody edited the comment. Five mutants caught. Negatives: prerendering emits real content (109 kB on the landing page, 29 routes), all six font stylesheets carry font-display:swap, and CSS is 26.6 kB gz."
+    },
+    {
+      "id": "US-846",
+      "title": "The pricing page scrolled sideways on a 320px phone",
+      "description": "As someone comparing plans on a small phone, I want the page to fit, so that I am not dragging the layout around to read a price.",
+      "acceptanceCriteria": [
+        "No public route scrolls the document horizontally at 320px, the width WCAG 1.4.10 names.",
+        "The billing toggle stays on one line where it fits and wraps where it does not, rather than widening the page.",
+        "A long unbreakable string such as an email address wraps instead of forcing the document wider.",
+        "Every public route is measured, not just the one that passed.",
+        "An element that scrolls itself, or sits inside one, is allowed to be wider than the viewport; the document is not.",
+        "The VPAT's 1.4.10 row cites the test that checks it."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-10 (web platform loop, iteration 12) with the browser instrument built in iteration 11: serve the real dist/ under the production CSP and measure document.scrollWidth against clientWidth at a 320px viewport. Two of ten public routes failed. /pricing was 339px, 19 over: the monthly/yearly billing toggle, two shadcn Buttons (which carry whitespace-nowrap) plus a 'Save 20%' badge totalling 274px, with gap-3 and p-1 pushing the group past the ~288px a 320px screen leaves after the gutter. That is the page where somebody decides to pay. /accessibility was 321px, 1 over: the contact address, one unbreakable 213px word. THE INTERESTING PART OF THE SECOND FIX is that break-words did nothing on its own -- the address sits in a flex child, whose default min-width:auto refuses to shrink below its content, so there was no constrained width to break against. min-w-0 is what made it wrap. What was checking this before: a single assertion in tests/mobile-responsive.spec.ts that loaded '/' at iPhone 13 width, and '/' was the page that passed. Replaced by tests/responsive/reflow-320.spec.ts, which iterates all ten public routes at 320px, reports the offending elements by tag/class/text when it fails, and skips elements that scroll themselves or sit inside something that does. tests/responsive/ is already wired into CI. Both fixes mutation-checked by reverting each and re-running the real spec: 1 failure each, on the right route. VPAT 1.4.10 now cites the spec through the verifiedBy mechanism from US-839. Negatives: og:image, twitter:image, canonical and title are correct and unique across all 29 prerendered pages, with width, height, alt and secure_url all present."
+    },
+    {
+      "id": "US-847",
+      "title": "Every share card points at a WebP image",
+      "description": "As someone sharing a page, I want the preview card to show the cover image, so that the link does not post as a bare headline.",
+      "acceptanceCriteria": [
+        "og:image points at a format the major scrapers render, with the existing width/height/alt/secure_url metadata kept.",
+        "The referenced file exists in the build, checked rather than assumed.",
+        "Whatever asset is added is produced deliberately, not derived at build time from a WebP by a script nobody reviews."
+      ],
+      "priority": 3,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Opened 2026-09-10 (web platform loop, iteration 12) — NOT DONE, needs an owner decision. All 29 prerendered pages set og:image and twitter:image to https://tryeatpal.com/Cover.webp, and everything around it is right: the file exists in the build, og:image:width (1536), og:image:height (1024), og:image:alt and og:image:secure_url are all set, and twitter:card is summary_large_image. The one gap is the format. Only Cover.webp and Cover.avif exist in public/; there is no JPEG or PNG of the cover anywhere in the repo, so this cannot be fixed by changing a string. Twitter/X renders WebP; Facebook's and LinkedIn's crawlers have historically wanted JPEG/PNG/GIF, which would make every share on those surfaces a text-only card. I did not verify that behaviour from here -- no network to those scrapers -- so the claim is recorded as the reason to look, not as a measured fact. Someone should confirm with the Facebook Sharing Debugger and, if it holds, add a Cover.jpg to public/ and point og:image at it. Deliberately NOT auto-converting the WebP in a build step: a share card is brand surface, and a script-generated recompression is the wrong way to get one."
     }
   ]
 }
