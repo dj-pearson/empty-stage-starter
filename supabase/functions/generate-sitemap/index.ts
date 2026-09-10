@@ -59,9 +59,11 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/compare/eatpal-vs-paprika', changefreq: 'monthly', priority: '0.7' },
   { path: '/compare/eatpal-vs-feeding-therapy-workbooks', changefreq: 'monthly', priority: '0.7' },
   { path: '/faq', changefreq: 'monthly', priority: '0.7' },
-  // /authors self-noindexes while public.blog_authors is empty (see src/pages/Authors.tsx),
-  // so until real author rows exist this URL is submitted and then declined. Populate the
-  // table, or drop this line, rather than leaving it in that state indefinitely.
+  // This line used to carry a warning that /authors self-noindexes while
+  // public.blog_authors is empty, so the URL was submitted and then declined. That is
+  // no longer true: src/pages/Authors.tsx now states the editorial standards and the
+  // sourcing of its clinical claims, which holds whether or not the roster has rows,
+  // and it is indexable unconditionally. Submitting it is correct.
   { path: '/authors', changefreq: 'monthly', priority: '0.6' },
   { path: '/contact', changefreq: 'monthly', priority: '0.6' },
   { path: '/accessibility', changefreq: 'yearly', priority: '0.4' },

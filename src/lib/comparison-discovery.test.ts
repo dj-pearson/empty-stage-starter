@@ -47,8 +47,9 @@ describe('comparison pages are submitted and prerendered (US-647)', () => {
   it('prerenders every route the sitemap declares as static', () => {
     const generated = [...sitemapFn.matchAll(/\{ path: '([^']+)'/g)].map((m) => m[1]);
     const missing = generated.filter((route) => !prerenderRoutes.static.includes(route));
-    // /authors self-noindexes while blog_authors is empty, which the sitemap file
-    // already documents; everything else must be prerendered.
+    // Every route the sitemap declares as static must also be prerendered. /authors
+    // used to be carved out of this because it noindexed itself on an empty roster;
+    // it does not any more, so there is no exception left.
     expect(missing).toEqual([]);
   });
 });

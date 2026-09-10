@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Helmet } from "react-helmet-async";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -359,6 +360,22 @@ const BlogPost = () => {
   if (!post) {
     return (
       <div className="min-h-screen bg-background">
+        {/* Soft 404. The SPA can only answer 200, and this branch runs for any slug the
+            query does not return: a deleted post, a draft, a typo, an old inbound link.
+            Without a head of its own, Helmet left the defaults in index.html standing,
+            so a dead /blog/* URL served the homepage title, the homepage description
+            and <link rel="canonical" href="https://tryeatpal.com/"> on an indexable
+            page. Every one of them was a thin duplicate pointing at the homepage.
+
+            Retired duplicates 301 at the edge (public/_redirects), so nothing that
+            reaches here has a destination worth redirecting to. noindex, follow keeps
+            the outbound links to /blog crawlable while taking the body out of the
+            index, and declaring no canonical is what stops the homepage one applying.
+            Matches NotFoundState in src/pages/pseo/PseoPage.tsx. */}
+        <Helmet>
+          <title>Article not found - EatPal</title>
+          <meta name="robots" content="noindex, follow" />
+        </Helmet>
         <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
             <Link to="/" className="flex items-center gap-2">
