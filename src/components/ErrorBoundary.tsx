@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { logger } from "@/lib/logger";
 import { logError } from "@/lib/sentry";
+import { NoIndexOnError } from "@/components/NoIndexOnError";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -111,6 +112,11 @@ function GlobalErrorFallback({
 }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      {/* The whole app failed, so whatever URL the crawler asked for is now serving
+          this. The inline Card fallback below deliberately does not do this: that one
+          is a single widget failing inside a page that is otherwise fine and still
+          worth indexing. */}
+      <NoIndexOnError />
       <div className="max-w-md w-full">
         <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 space-y-4">
           <div className="flex items-center gap-3">

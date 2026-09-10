@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, ArrowLeft, Home, RefreshCw } from "lucide-react";
 import { logger } from "@/lib/logger";
 import { logError } from "@/lib/sentry";
+import { NoIndexOnError } from "@/components/NoIndexOnError";
 
 interface RouteErrorBoundaryProps {
   children: React.ReactNode;
@@ -89,6 +90,12 @@ class RouteErrorBoundaryInner extends React.Component<
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-[60vh] p-6">
+          {/* Every public route is wrapped in this boundary, so without it a crash on
+              /pricing or /faq is an indexable 200 wearing whatever head was standing.
+              scripts/prerender.mjs already refuses to freeze an error state into static
+              HTML; this covers the same crash happening live, which is the more likely
+              one -- a chunk 404 in the minutes after a deploy is exactly that. */}
+          <NoIndexOnError />
           <Card className="max-w-lg w-full border-destructive/30">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
