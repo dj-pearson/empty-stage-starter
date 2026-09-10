@@ -55,8 +55,12 @@ final class DeepLinkHandler: ObservableObject {
             return
         }
 
-        // Handle universal links: https://tryeatpal.com/app/...
-        if url.host == "tryeatpal.com", url.pathComponents.count > 1 {
+        // Handle universal links: https://tryeatpal.com/... and the www host.
+        // Both are claimed by com.apple.developer.associated-domains, so both
+        // arrive here; matching only the bare host dropped every www link.
+        if let host = url.host?.lowercased(),
+           host == "tryeatpal.com" || host == "www.tryeatpal.com",
+           url.pathComponents.count > 1 {
             handleUniversalLink(url)
             return
         }
@@ -248,46 +252,89 @@ final class DeepLinkHandler: ObservableObject {
         return "unknown"
     }
 
+    /// Routes an https link on an entitled host.
+    ///
+    /// Two prefixes are live, and they are not the same shape:
+    ///
+    /// * `/app/<screen>` -- the app's own link vocabulary. Nothing on the web
+    ///   serves it (there is no `/app` route in `src/App.tsx`), so it only
+    ///   works on a device with the app installed. Kept because widgets,
+    ///   push payloads, and Siri shortcuts from shipped builds emit it.
+    /// * `/dashboard/<screen>` -- the URLs the web app actually has. These are
+    ///   what a link in a text message or an email looks like, and they open
+    ///   in a browser for anyone without the app. This is the pair that makes
+    ///   a Universal Link a Universal Link.
+    ///
+    /// Only the `/dashboard` children with an exact in-app equivalent are
+    /// claimed. `/dashboard/billing` in particular must stay in Safari --
+    /// swallowing it would strand someone in the middle of Stripe checkout.
+    /// `scripts/generate-aasa.mjs` declares exactly this set to Apple; the two
+    /// lists are pinned together by `scripts/generate-aasa.test.ts`.
     private func handleUniversalLink(_ url: URL) {
         let components = url.pathComponents.filter { $0 != "/" }
-        guard components.first == "app", components.count > 1 else { return }
+        guard let prefix = components.first else { return }
 
-        switch components[1] {
-        case "dashboard":
-            activeDestination = .dashboard
-        case "pantry":
-            activeDestination = .pantry
-        case "meal-plan":
-            let date = url.queryValue(for: "date")
-            activeDestination = .mealPlan(date: date)
-        case "recipes":
-            activeDestination = .recipes
-        case "grocery":
-            activeDestination = .grocery
-        case "kid":
-            if components.count > 2 {
-                activeDestination = .kidProfile(id: components[2])
+        switch prefix {
+        case "app":
+            guard components.count > 1 else { return }
+            if components[1] == "kid" {
+                if components.count > 2 {
+                    activeDestination = .kidProfile(id: components[2])
+                }
+                return
             }
-        case "scanner":
-            activeDestination = .scanner
-        case "quiz":
-            activeDestination = .quiz
-        case "food-chaining":
-            activeDestination = .foodChaining
-        case "settings":
-            activeDestination = .settings
-        case "progress":
-            activeDestination = .progress
-        case "food-tracker":
-            activeDestination = .foodTracker
-        case "insights":
-            activeDestination = .insights
-        case "ai-coach":
-            activeDestination = .aiCoach
-        case "budget":
-            activeDestination = .budget
+            activeDestination = appScreenDestination(components[1], url: url)
+
+        case "dashboard":
+            guard components.count > 1 else {
+                activeDestination = .dashboard
+                return
+            }
+            activeDestination = dashboardScreenDestination(components[1], url: url)
+
         default:
+            // Marketing, editorial, and billing routes deliberately fall
+            // through and stay wherever the tap started.
             break
+        }
+    }
+
+    /// `/app/<screen>` -- mirrors the `eatpal://` host vocabulary.
+    private func appScreenDestination(_ screen: String, url: URL) -> Destination? {
+        switch screen {
+        case "dashboard":     return .dashboard
+        case "pantry":        return .pantry
+        case "meal-plan":     return .mealPlan(date: url.queryValue(for: "date"))
+        case "recipes":       return .recipes
+        case "grocery":       return .grocery
+        case "scanner":       return .scanner
+        case "quiz":          return .quiz
+        case "food-chaining": return .foodChaining
+        case "settings":      return .settings
+        case "progress":      return .progress
+        case "food-tracker":  return .foodTracker
+        case "insights":      return .insights
+        case "ai-coach":      return .aiCoach
+        case "budget":        return .budget
+        default:              return nil
+        }
+    }
+
+    /// `/dashboard/<screen>` -- the web app's own route names. `planner` is
+    /// the web name for what the app calls the meal plan; the rest line up.
+    private func dashboardScreenDestination(_ screen: String, url: URL) -> Destination? {
+        switch screen {
+        case "pantry":        return .pantry
+        case "planner":       return .mealPlan(date: url.queryValue(for: "date"))
+        case "recipes":       return .recipes
+        case "grocery":       return .grocery
+        case "food-chaining": return .foodChaining
+        case "settings":      return .settings
+        case "progress":      return .progress
+        case "food-tracker":  return .foodTracker
+        case "insights":      return .insights
+        case "ai-coach":      return .aiCoach
+        default:              return nil
         }
     }
 

@@ -4435,6 +4435,24 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-10 (web platform loop, iteration 15, last). public/manifest.json declared { protocol: 'web+eatpal', url: '/import?url=%s' }. There is no /import route in src/App.tsx and nothing in the repo emits a web+eatpal: link, so an installed PWA registered a handler with the operating system for something the app cannot serve; anything following such a link would reach the 404 page. Removed rather than implemented -- you do not ship a handler for a protocol you do not handle -- with a note in the manifest saying to re-add it in the same change that adds the route. Everything else the manifest points at was already fine (start_url, four shortcuts, share_target.action), and src/lib/manifestRoutes.test.ts now checks all of them, because the manifest is the one file that hands URLs to the OS rather than to the router and nothing else notices when the two disagree. INSTRUMENT BUG: the first resolver held nested routes as a flat set of names, so '/pricing/planner' resolved -- /pricing is a route and 'planner' is a route name somewhere. Nested paths are attributed to the nearest absolute path declared before them now, which gets the parent right for every nested route this app declares. Three mutants caught. NEGATIVES from the last iteration's browser work: focus visibility holds across 132 tab stops on three pages -- every one has an outline or a ring (VPAT 2.4.7). Tab order was measured too: the backward jumps are all explained, by multi-column footers (down one column, up to the next, which is the correct pattern) and by the cookie banner deliberately coming before the header. The accessibility widget's floating trigger is the 5th tab stop while sitting at the bottom-left of the viewport, which is a mild ordering wart rather than a violation, and is recorded here rather than changed."
+    },
+    {
+      "id": "US-851",
+      "title": "Household invite and share links open the app instead of Safari",
+      "description": "As someone handed an EatPal invite or a shared plan link in a text message, I want tapping it on my iPhone to open the app on the accept screen, so that the link I was sent lands where the thing it points at actually lives.",
+      "acceptanceCriteria": [
+        "DeepLinkHandler routes https://tryeatpal.com/join?code=... to an in-app accept-invite flow, reusing the accept_household_invite path that HouseholdSettingsView already calls.",
+        "The invite code survives a cold start and a sign-in round trip, the same way the web /join route survives its /auth redirect.",
+        "DeepLinkHandler routes /share/* to the surface the shared payload names, or falls back to opening the link in Safari rather than doing nothing.",
+        "A signed-out tap lands on sign-in and resumes the invite afterwards, not on a dead screen.",
+        "Only once both are routed, scripts/generate-aasa.mjs adds /join and /share/* to COMPONENTS, and src/lib/appSiteAssociation.test.ts stops exempting them.",
+        "Swift tests cover: invite with a code, invite without a code, share link, and the signed-out resume."
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Split out 2026-09-10 (iOS platform loop, iteration 1). The iteration fixed the Universal Link contract itself: the apple-app-site-association generator claimed /join/*, /share/*, /kids/*, /planner/*, /tracker/* and friends, none of which the Swift handler routed and several of which are not even web routes (kids, planner, grocery, pantry, recipes are nested under /dashboard). handleUniversalLink only ever matched /app/<screen>, which nothing on the web serves. Turning on APPLE_TEAM_ID with that combination would have taken invite links away from Safari and dropped them on the floor. The AASA now claims exactly what the app routes, and a vitest reads the Swift source to keep the two pinned. /join and /share are the two genuinely valuable ones and are deliberately still excluded because routing them in-app is real work: the accept-invite flow, the signed-out resume, and the share payload shapes. That is this story."
     }
   ]
 }

@@ -27,7 +27,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'dist', '.well-known');
@@ -42,18 +42,33 @@ const BUNDLE_ID = process.env.APPLE_BUNDLE_ID?.trim() || 'com.eatpal.app';
  * should land on the page they clicked, not get bounced into an install prompt. That
  * also keeps Universal Links away from every URL the SEO work depends on.
  *
- * "/" entries are path patterns; `exclude: true` wins over any later match.
+ * Every pattern here must have a matching case in
+ * ios/EatPal/EatPal/Utilities/DeepLinkHandler.swift -> handleUniversalLink. A pattern
+ * with no case behind it is worse than no pattern at all: Apple hands the URL to the
+ * app instead of Safari, the handler falls through its `default:`, and the tap does
+ * nothing at all. scripts/generate-aasa.test.ts reads the Swift file and fails the
+ * build when the two drift.
+ *
+ * `/dashboard` children are listed one by one rather than as `/dashboard/*` because
+ * several of them must NOT open the app. `/dashboard/billing` is Stripe checkout;
+ * swallowing it would strand someone mid-payment in a web view the app does not have.
+ *
+ * `/join` and `/share` are the two links most worth opening in the app and are
+ * deliberately absent -- the Swift side has no route for either yet (US-851).
  */
-const COMPONENTS = [
-  { '/': '/join/*', comment: 'household invite links' },
-  { '/': '/share/*', comment: 'shared plans and lists' },
-  { '/': '/dashboard/*', comment: 'signed-in app surface' },
-  { '/': '/kids/*', comment: 'child profiles' },
-  { '/': '/planner/*', comment: 'meal planner' },
-  { '/': '/grocery/*', comment: 'grocery lists' },
-  { '/': '/pantry/*', comment: 'pantry' },
-  { '/': '/recipes/*', comment: 'recipes' },
-  { '/': '/tracker/*', comment: 'food tracker' },
+export const COMPONENTS = [
+  { '/': '/app/*', comment: 'the app-only link vocabulary used by widgets, push, and Siri' },
+  { '/': '/dashboard', comment: 'signed-in home' },
+  { '/': '/dashboard/pantry', comment: 'pantry' },
+  { '/': '/dashboard/planner', comment: 'meal planner (app calls it meal-plan)' },
+  { '/': '/dashboard/recipes', comment: 'recipes' },
+  { '/': '/dashboard/grocery', comment: 'grocery list' },
+  { '/': '/dashboard/food-tracker', comment: 'food tracker' },
+  { '/': '/dashboard/food-chaining', comment: 'food chaining' },
+  { '/': '/dashboard/insights', comment: 'insights' },
+  { '/': '/dashboard/progress', comment: 'progress and achievements' },
+  { '/': '/dashboard/ai-coach', comment: 'AI coach' },
+  { '/': '/dashboard/settings', comment: 'settings' },
 ];
 
 function main() {
@@ -94,4 +109,11 @@ function main() {
     });
 }
 
-await main();
+// Only write when run as a script. Importing the module (the test does, to read
+// COMPONENTS) must not touch dist/.
+const invokedDirectly =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedDirectly) {
+  await main();
+}

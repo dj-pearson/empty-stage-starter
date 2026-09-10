@@ -117,9 +117,58 @@ final class DeepLinkHandlerTests: XCTestCase {
         XCTAssertEqual(route("https://tryeatpal.com/app/progress"), .progress)
     }
 
-    func testUniversalLinkWithoutAppPrefixIsIgnored() {
+    func testUniversalLinkWithoutKnownPrefixIsIgnored() {
         // Marketing pages (e.g. /pricing) must NOT be swallowed by the router.
         XCTAssertNil(route("https://tryeatpal.com/pricing"))
+    }
+
+    // MARK: - Universal links on the web app's own URLs (/dashboard/...)
+    //
+    // These are the links that actually exist: a shared planner link or a
+    // reminder email points at /dashboard/planner, not /app/meal-plan. The
+    // apple-app-site-association file claims exactly this set, so every case
+    // here is a URL Apple hands to the app instead of Safari. Anything that
+    // falls through does nothing at all on the device.
+
+    func testDashboardRootRoutesToDashboard() {
+        XCTAssertEqual(route("https://tryeatpal.com/dashboard"), .dashboard)
+    }
+
+    func testDashboardPantry() {
+        XCTAssertEqual(route("https://tryeatpal.com/dashboard/pantry"), .pantry)
+    }
+
+    func testDashboardPlannerIsTheWebNameForMealPlan() {
+        XCTAssertEqual(
+            route("https://tryeatpal.com/dashboard/planner?date=2026-06-16"),
+            .mealPlan(date: "2026-06-16")
+        )
+    }
+
+    func testDashboardFoodTracker() {
+        XCTAssertEqual(route("https://tryeatpal.com/dashboard/food-tracker"), .foodTracker)
+    }
+
+    func testDashboardBillingStaysInTheBrowser() {
+        // Stripe checkout. Swallowing this strands someone mid-payment in a
+        // screen the app does not have.
+        XCTAssertNil(route("https://tryeatpal.com/dashboard/billing"))
+    }
+
+    func testDashboardUnknownChildIsIgnored() {
+        XCTAssertNil(route("https://tryeatpal.com/dashboard/not-a-real-screen"))
+    }
+
+    // MARK: - Host matching
+
+    func testWwwHostIsAccepted() {
+        // Both hosts are claimed in EatPal.entitlements, so both arrive here.
+        XCTAssertEqual(route("https://www.tryeatpal.com/dashboard/pantry"), .pantry)
+        XCTAssertEqual(route("https://www.tryeatpal.com/app/progress"), .progress)
+    }
+
+    func testHostMatchIsCaseInsensitive() {
+        XCTAssertEqual(route("https://TryEatPal.com/app/dashboard"), .dashboard)
     }
 
     func testForeignHostIsIgnored() {
