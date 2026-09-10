@@ -114,11 +114,13 @@ describe('og:image dimensions match the real file', () => {
     throw new Error(`unsupported WebP chunk: ${fourCC}`);
   }
 
-  it('declares the actual pixel size of public/Cover.webp', () => {
+  it('declares the actual pixel size of public/Cover-og.webp', () => {
     // og:image:width/height are hints scrapers lay the card out from BEFORE fetching the
-    // file. These said 1200x630 (the conventional OG size) while the file is 1536x1024,
-    // so every social preview was laid out against the wrong box.
-    const cover = readFileSync(path.resolve(__dirname, '../../public/Cover.webp'));
+    // file. These once said 1200x630 (the conventional OG size) while the file being
+    // pointed at was 1536x1024, so every social preview was laid out against the wrong
+    // box. The image is now a real 1200x630 export, so the two agree by being true
+    // rather than by coincidence -- this reads the file either way.
+    const cover = readFileSync(path.resolve(__dirname, '../../public/Cover-og.webp'));
     const { width, height } = webpSize(cover);
 
     expect(metaContent('property', 'og:image:width')).toBe(String(width));

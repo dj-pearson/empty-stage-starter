@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 12,
+    "iterationsUsed": 13,
     "completed": [
       {
         "iteration": 1,
@@ -76,6 +76,12 @@
         "iteration": 12,
         "id": "SEO-018",
         "title": "Two contradictory BreadcrumbLists on every article page",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 13,
+        "id": "SEO-019",
+        "title": "A purpose-made 1200x630 social share image",
         "commit": "see git log on this branch"
       }
     ]
@@ -228,6 +234,21 @@
       "priority": 1,
       "passes": true,
       "notes": "Seen on a live blog post: two BreadcrumbList blocks in the head with different item values. ArticleSchema hardcoded its own Home -> Blog -> title, while the page also rendered a real trail -- BlogPost via BreadcrumbNavigation, PseoPage via BreadcrumbSchema. On the guide cluster the hardcoded one was not merely duplicative but false: /guides/foods/<slug> was claiming /blog as its parent. Removed from ArticleSchema, along with the WebPage's breadcrumb @id reference, which would otherwise dangle. The trail belongs to whichever component knows the path, which is never this one. Verified by rendering a post: one BreadcrumbList, absolute items."
+    },
+    {
+      "id": "SEO-019",
+      "title": "A purpose-made 1200x630 social share image",
+      "description": "As a social scraper, I want the default og:image to be the shape the card is laid out in, so that the preview is not cropped differently by every platform.",
+      "acceptanceCriteria": [
+        "public/Cover-og.webp exists at exactly 1200x630",
+        "index.html and SEOHead point at it and declare 1200x630",
+        "The blog post fallback uses it too",
+        "The dimensions test reads the new file",
+        "Regenerating it is a documented, repeatable command"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Implementing a fix the codebase had already written down. SEOHead's own comment said Cover.webp is 1536x1024, that 3:2 is neither Open Graph's ~1.91:1 nor Twitter's 2:1, and that a purpose-made 1200x630 export would render better -- declaring the true size was only the correctness half. scripts/build/generate-og-image.mjs centre-crops to 1.905:1 and resizes; safe for this artwork because the wordmark, spoon and tagline sit in the middle with margin and only the decorative corner blobs are trimmed. Checked the output by eye. Same webp format as before, so no scraper compatibility change. Not wired into npm run build: the output is committed like the other derivatives in public/, and the source art changes about once a year. Cover.webp is untouched for everything wanting the full frame."
     },
     {
       "id": "SEO-002",

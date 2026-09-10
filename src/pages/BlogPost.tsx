@@ -464,7 +464,7 @@ const BlogPost = () => {
         description={post.meta_description || post.excerpt || `Read ${post.title} on the EatPal blog - expert advice on picky eating and family nutrition.`}
         canonicalUrl={articleUrl}
         ogType="article"
-        ogImage={post.og_image_url || post.featured_image_url || "https://tryeatpal.com/Cover.webp"}
+        ogImage={post.og_image_url || post.featured_image_url || "https://tryeatpal.com/Cover-og.webp"}
         ogImageAlt={post.title}
         datePublished={post.published_at}
         dateModified={lastEditedAt}

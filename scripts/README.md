@@ -67,6 +67,20 @@ node optimize-images.js
 
 ---
 
+### 🖼️ Social Share Image
+
+#### `build/generate-og-image.mjs`
+**Builds `public/Cover-og.webp`, the 1200x630 og:image**
+
+```bash
+node scripts/build/generate-og-image.mjs
+```
+
+Not wired into `npm run build`; the output is committed. Run it when
+`public/Cover.webp` changes, and look at the result -- it centre-crops.
+
+---
+
 ### 🗺️ Sitemap Generation
 
 There is no sitemap script here. `/sitemap.xml` is generated at request time by the
