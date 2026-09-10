@@ -228,7 +228,18 @@ const FAQ = () => {
             </p>
           </div>
         ) : (
-          <Accordion type="single" collapsible className="w-full space-y-4">
+          <>
+            {/*
+              US-849: shadcn's AccordionTrigger renders its label inside an h3
+              (Radix's AccordionHeader), and src/components/ui/ is off limits,
+              so the level cannot be changed there. Without a heading between
+              the page h1 and those h3s the outline skips a level, which is
+              what a screen-reader user navigating by heading actually walks.
+              sr-only rather than visible: fixing the outline should not
+              redesign a page nobody asked me to redesign.
+            */}
+            <h2 className="sr-only">Questions and answers</h2>
+            <Accordion type="single" collapsible className="w-full space-y-4">
             {filteredFaqData.map((faq, index) => (
               <AccordionItem key={`item-${index + 1}`} value={`item-${index + 1}`}>
                 <AccordionTrigger className="text-left text-lg font-semibold">
@@ -240,6 +251,7 @@ const FAQ = () => {
               </AccordionItem>
             ))}
           </Accordion>
+          </>
         )}
 
         <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-lg text-center">
@@ -275,7 +287,7 @@ const FAQ = () => {
               </p>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Product</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/#features" className="hover:text-primary transition-colors">Features</Link></li>
                 <li><Link to="/#how-it-works" className="hover:text-primary transition-colors">How It Works</Link></li>
@@ -284,7 +296,7 @@ const FAQ = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Company</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
                 <li><Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
@@ -292,7 +304,7 @@ const FAQ = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Support</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link></li>
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Help Center</Link></li>

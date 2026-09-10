@@ -4212,3 +4212,74 @@ navigation hit a dead end the cache could have answered. public/sw.js
     been diligently storing navigations for as long as the worker has existed.
   - When a test double and the implementation disagree, check which one models
     the platform. Twice now the double was the liar.
+
+================================================================================
+2026-09-10 -- web platform loop (new run), iteration 14. US-849: five prerendered
+pages skipped h1 -> h3. src/lib/headingOutline.test.ts
+================================================================================
+
+- THE INSTRUMENT NEARLY HANDED ME A MUCH BIGGER, ENTIRELY FALSE FINDING. My
+  first scan of the built HTML reported TWO h1 elements on every one of the 29
+  pages, the second identical site-wide:
+
+      "EatPal - Meal Planning for Picky Eaters & ARFID"
+
+  A boilerplate h1 duplicated across the whole site would be a serious SEO and
+  a11y defect, and it was three sentences from being written up as one. It sits
+  inside index.html's <noscript> block. Never rendered when scripts run, never
+  in the accessibility tree, not part of the outline. Excluding <noscript> took
+  29 "failing" pages down to 5 real ones.
+
+- THE REAL FINDING, and it is modest by comparison: /faq, /contact, /guides,
+  /meal-plan and /budget-calculator go from the page h1 straight to h3.
+  Jumping between headings is how many screen-reader users move through a page,
+  so a skipped level makes the outline they are walking wrong. VPAT 1.3.1 says
+  "Supports -- Semantic HTML, ARIA landmarks, proper heading hierarchy ...
+  throughout". Fourth false VPAT row this loop.
+
+- TWO CAUSES. The footer's five column titles were h3 with no h2 anywhere above
+  them -- and on /guides that IS the entire outline, because the page's own
+  content has no sub-headings at all. And the feature cards on the two
+  generator pages were h3. Both are page code; both became h2.
+
+- IN SEVEN FILES, because Footer.tsx's markup is pasted verbatim into
+  Accessibility, BlogPost, Contact, TermsOfService, PrivacyPolicy and FAQ. 23
+  copies of one heading line. Not this story's job to de-duplicate, so the gate
+  instead asserts that none of the six copies drifts back to h3 -- whichever
+  one did would reintroduce the jump on its own page and nowhere else.
+
+- THE LAST TWO PAGES BELONG TO SHADCN. /faq opens with AccordionTrigger and
+  /contact with CardTitle, both of which render h3 from src/components/ui/,
+  which CLAUDE.md puts off limits. So the missing level is supplied from page
+  code as an sr-only h2. Deliberately not visible: correcting a heading level is
+  not a reason to add copy to a page nobody asked me to redesign.
+
+- Measured: 29 pages, 0 with issues, from 5. 3525 tests pass (236 files, 1
+  skipped). Typecheck 813 against baseline 813; lint 1144 against 1144;
+  invisible chars clean. Three mutants, three caught -- two of them requiring a
+  full rebuild, since the gate reads dist/.
+
+- NEGATIVES, and the manifest one is a genuinely clean bill of health. All five
+  PWA icons exist and match their declared sizes; 192 and 512 are present with
+  "any maskable"; name, short_name, start_url, scope and display standalone are
+  all set. share_target declares a multipart POST to /share, and the worker
+  really does implement it -- with an unversioned cache that deliberately
+  survives activation so a pending share is not thrown away -- and
+  tests/pwa-offline.spec.ts already drives it end to end. One dead declaration
+  recorded rather than fixed: protocol_handlers registers web+eatpal ->
+  /import?url=%s, there is no /import route, and nothing in the repo emits such
+  a link.
+
+- **Learnings for future iterations:**
+  - The bigger the finding, the harder to check it before believing it. "Every
+    page has a duplicate boilerplate h1" was exciting, tidy and wrong, and the
+    only thing between it and the commit message was asking where the second
+    one came from.
+  - <noscript> is markup that is never rendered. Any scan of built HTML that
+    reasons about what a user or a screen reader sees has to strip it, the same
+    way code scans strip comments.
+  - When a component you may not edit owns the wrong heading level, add the
+    level above it rather than fighting the component. sr-only is the honest
+    way to fix structure without redesigning.
+  - A gate that reads dist/ needs a full rebuild per mutant. Worth it, and
+    worth saying so: it is why this iteration has three mutants and not six.

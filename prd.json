@@ -4402,6 +4402,23 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Found 2026-09-10 (web platform loop, iteration 13) with the browser harness: register the worker against the real build, go offline, navigate. networkFirstWithOfflineFallback went straight to offline.html and never read the cache -- not the shell precached at install, not the 70 JS/CSS chunks, not the navigation responses it stores itself on the success path two lines above. Measured across three clean trials: EVERY offline navigation got the static page, including reloading the page you were already on, whose HTML was in that same cache. That made offline.html's own copy false -- it promises 'View your saved meal plans' and 'Check your grocery list', and from a dead-end static page you can do neither. Fix: try the exact cached page, then the app shell (/index.html, or / which is the same document in this build), then the static page. After: all three trials boot the app, and AppContext hydrates from localStorage as the load-precedence contract describes. A FALSE START WORTH RECORDING: my first read of this said the app booted offline fine. It was contaminated -- I had reused one browser context across probes, so state from an earlier navigation made an unvisited route look cached. Three isolated trials with a fresh context each said the opposite, consistently. Also fixed the test double: the fake Cache API compared raw strings, so cache.match('/index.html') missed a store keyed by absolute URL and the shell fallback looked broken when the double was wrong. Keys are normalised through new URL(x, scope) now, which is what the real Cache API does. Four mutants caught: restore the straight-to-offline fallback (4 fail), drop only the shell fallback (2), serve the shell before the exact page (2), always serve the shell and never the offline page (1)."
+    },
+    {
+      "id": "US-849",
+      "title": "Five prerendered pages skipped from h1 straight to h3",
+      "description": "As someone who navigates a page by jumping between headings, I want the outline to be complete, so that the structure I am walking matches the page.",
+      "acceptanceCriteria": [
+        "Every prerendered page has exactly one h1 and skips no heading level.",
+        "The check excludes <noscript>, which is not rendered when scripts run and is not in the accessibility tree.",
+        "The levels shadcn ui/ components own are corrected from page code, not by editing src/components/ui/.",
+        "Correcting an outline adds no visible copy to a page nobody asked to redesign.",
+        "The VPAT's 1.3.1 row cites the gate."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-10 (web platform loop, iteration 14) by parsing the built HTML of all 29 prerendered pages. Five skipped h1 -> h3: /faq, /contact, /guides, /meal-plan and /budget-calculator. VPAT 1.3.1 claimed 'Supports -- ... proper heading hierarchy ... throughout', the fourth false VPAT claim this loop. Causes were two: the footer's five column titles were h3 with no h2 above them (which is the whole outline on /guides, whose own content has no sub-headings), and the feature cards on the two generator pages were h3. Both are page code and were promoted to h2 -- in SEVEN files, because Footer.tsx's markup is duplicated verbatim in Accessibility, BlogPost, Contact, TermsOfService, PrivacyPolicy and FAQ; 23 copies of one heading. The remaining two pages open with shadcn AccordionTrigger and CardTitle, which render h3 from src/components/ui/ and are off limits per CLAUDE.md, so the missing level is supplied from page code as an sr-only h2 -- correcting an outline is not a reason to add visible copy to a page. INSTRUMENT BUG, and a big one had I believed it: the first scan reported TWO h1s on every single page, the second being 'EatPal - Meal Planning for Picky Eaters & ARFID' -- identical site-wide, which looked like a serious duplicated-boilerplate finding. It is inside index.html's <noscript> block, so it is never rendered when scripts run and never in the accessibility tree. Excluding noscript took 29 'failing' pages down to 5 real ones. Three mutants caught: footer back to h3, drop the FAQ sr-only h2 and rebuild, stop excluding noscript. Negatives: the PWA manifest is correct (all five icons exist and match their declared sizes, 192 and 512 present with any maskable, share_target's POST is genuinely handled by the worker and already covered end-to-end by tests/pwa-offline.spec.ts). One dead declaration recorded: protocol_handlers registers web+eatpal -> /import?url=%s, there is no /import route and nothing in the repo emits such a link."
     }
   ]
 }

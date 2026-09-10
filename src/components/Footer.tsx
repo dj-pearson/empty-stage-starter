@@ -70,7 +70,7 @@ export const Footer = () => {
             )}
           </div>
           <div>
-            <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
+            <h2 className="font-heading font-semibold mb-4 text-primary">Product</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
                 <Link to="/#features" className="hover:text-primary transition-colors">
@@ -123,7 +123,7 @@ export const Footer = () => {
             </ul>
           </div>
           <div>
-            <h3 className="font-heading font-semibold mb-4 text-primary">Free Tools</h3>
+            <h2 className="font-heading font-semibold mb-4 text-primary">Free Tools</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
                 <Link to="/picky-eater-quiz" className="hover:text-primary transition-colors">
@@ -147,7 +147,7 @@ export const Footer = () => {
               is exactly what happened to /compare and /guides: both shipped finished and
               collected almost no traffic because nothing pointed at them. */}
           <div>
-            <h3 className="font-heading font-semibold mb-4 text-primary">Meal Ideas</h3>
+            <h2 className="font-heading font-semibold mb-4 text-primary">Meal Ideas</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
                 <Link
@@ -192,7 +192,7 @@ export const Footer = () => {
             </ul>
           </div>
           <div>
-            <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
+            <h2 className="font-heading font-semibold mb-4 text-primary">Company</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
                 <Link to="/contact" className="hover:text-primary transition-colors">
@@ -217,7 +217,7 @@ export const Footer = () => {
             </ul>
           </div>
           <div>
-            <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
+            <h2 className="font-heading font-semibold mb-4 text-primary">Support</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
                 <Link to="/faq" className="hover:text-primary transition-colors">

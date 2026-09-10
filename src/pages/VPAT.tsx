@@ -41,7 +41,7 @@ const wcagCriteria: WCAGCriterion[] = [
   { criterion: "1.2.1", name: "Audio-only and Video-only (Prerecorded)", level: "A", conformance: "Not Applicable", remarks: "No audio-only or video-only content." },
   { criterion: "1.2.2", name: "Captions (Prerecorded)", level: "A", conformance: "Not Applicable", remarks: "No prerecorded video content with audio." },
   { criterion: "1.2.3", name: "Audio Description or Media Alternative", level: "A", conformance: "Not Applicable", remarks: "No prerecorded video content." },
-  { criterion: "1.3.1", name: "Info and Relationships", level: "A", conformance: "Supports", remarks: "Semantic HTML, ARIA landmarks, proper heading hierarchy, and table headers used throughout." },
+  { criterion: "1.3.1", name: "Info and Relationships", level: "A", conformance: "Supports", remarks: "Semantic HTML, ARIA landmarks and table headers throughout. Every prerendered page carries exactly one h1 and skips no heading level; five pages jumped h1 to h3 until September 2026 and a gate now checks the built output.", verifiedBy: ["src/lib/headingOutline.test.ts"] },
   { criterion: "1.3.2", name: "Meaningful Sequence", level: "A", conformance: "Supports", remarks: "Reading order matches visual order. Tab sequence is logical." },
   { criterion: "1.3.3", name: "Sensory Characteristics", level: "A", conformance: "Supports", remarks: "Instructions don't rely solely on shape, size, or location. Color is not the only indicator." },
   { criterion: "1.4.1", name: "Use of Color", level: "A", conformance: "Supports", remarks: "Color is never the sole indicator. Icons, text, and patterns supplement color coding." },

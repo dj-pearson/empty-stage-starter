@@ -151,6 +151,13 @@ const Contact = () => {
           </div>
         </div>
 
+        {/*
+          US-849: the cards below open with shadcn CardTitle, which renders an
+          h3, and src/components/ui/ is off limits. Without this the outline
+          jumps h1 -> h3. sr-only, because correcting a heading level is not a
+          reason to add visible copy to a page.
+        */}
+        <h2 className="sr-only">Ways to reach us</h2>
         <div className="grid md:grid-cols-2 gap-8">
           {/* Contact Form */}
           <Card>
@@ -367,7 +374,7 @@ const Contact = () => {
               </p>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Product</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Product</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/#features" className="hover:text-primary transition-colors">Features</Link></li>
                 <li><Link to="/#how-it-works" className="hover:text-primary transition-colors">How It Works</Link></li>
@@ -376,7 +383,7 @@ const Contact = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Company</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Company</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
                 <li><Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
@@ -384,7 +391,7 @@ const Contact = () => {
               </ul>
             </div>
             <div>
-              <h3 className="font-heading font-semibold mb-4 text-primary">Support</h3>
+              <h2 className="font-heading font-semibold mb-4 text-primary">Support</h2>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/faq" className="hover:text-primary transition-colors">FAQ</Link></li>
                 <li><Link to="/contact" className="hover:text-primary transition-colors">Help Center</Link></li>
