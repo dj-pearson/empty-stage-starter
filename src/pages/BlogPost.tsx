@@ -28,6 +28,8 @@ interface BlogPostData {
   featured_image_url: string | null;
   og_image_url: string | null;
   published_at: string;
+  /** Read for the freshness signals; see lastEditedAt below for why it is not used raw. */
+  updated_at: string | null;
   reading_time_minutes: number | null;
   views: number;
   meta_title: string | null;
@@ -73,6 +75,7 @@ const BlogPost = () => {
         featured_image_url,
         og_image_url,
         published_at,
+        updated_at,
         reading_time_minutes,
         views,
         meta_title,
@@ -414,6 +417,29 @@ const BlogPost = () => {
   const baseUrl = "https://tryeatpal.com";
   const articleUrl = `${baseUrl}/blog/${post.slug}`;
 
+  /**
+   * When the post was last actually changed.
+   *
+   * The page said nothing about this before: SEOHead was passed no dates, so no
+   * article:published_time or article:modified_time, and ArticleSchema was passed no
+   * dateModified, so it fell back to datePublished and every post claimed it had never
+   * been touched since the day it went up. The sitemap has been submitting
+   * `updated_at` for these same rows all along (see the generate-sitemap edge
+   * function), so the two were contradicting each other: one saying a post changed last
+   * week, the other saying it has not changed since 2025.
+   *
+   * A row whose updated_at predates publication is a bookkeeping artefact rather than
+   * an edit, so publication wins there. Comparing timestamps rather than trusting the
+   * column keeps this honest in both directions.
+   */
+  const lastEditedAt = (() => {
+    if (!post.updated_at) return post.published_at;
+    const updated = new Date(post.updated_at).getTime();
+    const published = new Date(post.published_at).getTime();
+    if (Number.isNaN(updated) || Number.isNaN(published)) return post.published_at;
+    return updated > published ? post.updated_at : post.published_at;
+  })();
+
   // Normalize category (Supabase may return array for joins)
   const category = Array.isArray(post.category) ? post.category[0] : post.category;
 
@@ -432,6 +458,9 @@ const BlogPost = () => {
         ogType="article"
         ogImage={post.og_image_url || post.featured_image_url || "https://tryeatpal.com/Cover.webp"}
         ogImageAlt={post.title}
+        datePublished={post.published_at}
+        dateModified={lastEditedAt}
+        section={category?.name}
         keywords={articleKeywords.join(", ")}
         aiPurpose={`This article from EatPal discusses ${category?.name || "picky eating and nutrition"}. ${post.excerpt || ""}`}
         aiAudience="Parents of picky eaters, families managing ARFID, caregivers seeking nutrition guidance"
@@ -446,6 +475,7 @@ const BlogPost = () => {
         url={articleUrl}
         imageUrl={post.featured_image_url || undefined}
         datePublished={post.published_at}
+        dateModified={lastEditedAt}
         category={category?.name}
         keywords={articleKeywords}
         wordCount={wordCount}
