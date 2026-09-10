@@ -163,6 +163,19 @@ describe("arfid content", () => {
     }
   });
 
+  it("is linked from the sitewide footer", () => {
+    // Before this, the whole cluster hung off two deep pages: three of the four were
+    // reachable only from /picky-eater-quiz and the fourth only from /budget-calculator.
+    // The pages cross-link each other, which makes them a closed loop, not a cluster
+    // anything points into. The footer renders on every marketing page, so it is the
+    // one link that keeps a cluster out of that state -- see the same assertion for
+    // /compare in src/lib/comparison-discovery.test.ts.
+    const footer = readFileSync(path.join(REPO, "src", "components", "Footer.tsx"), "utf8");
+    for (const route of ARFID_ROUTES) {
+      expect(footer, `the footer does not link ${route}`).toContain(`to="${route}"`);
+    }
+  });
+
   it("has a route registered in App.tsx", () => {
     const app = readFileSync(path.join(REPO, "src", "App.tsx"), "utf8");
     expect(app).toContain('path="/arfid/:slug"');

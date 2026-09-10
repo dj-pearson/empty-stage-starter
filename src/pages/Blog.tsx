@@ -9,6 +9,7 @@ import { ArrowLeft, Search, Calendar, Clock, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { logger } from "@/lib/logger";
+import { isRetiredBlogSlug } from "@/lib/retired-blog-slugs";
 import { CardSkeleton } from "@/components/loading";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
@@ -112,7 +113,15 @@ const Blog = () => {
     if (error) {
       logger.error("Error fetching posts:", error);
     } else {
-      setPosts(data || []);
+      // Retired duplicates keep their published row -- the 301 in public/_redirects is
+      // what users and crawlers see, and the row stays so the content is recoverable.
+      // Listing them here undid that: /blog is prerendered and indexable, so the site's
+      // own blog hub was pointing at 29 URLs it redirects the moment anything follows
+      // them, and showing readers a second copy of a title already in the list. The
+      // sitemap and both feeds already filter; this was the surface that did not.
+      // Filtered after the query rather than in it, for the reason blog-feed.ts gives:
+      // PostgREST cannot take a not-in list this long in a URL.
+      setPosts((data || []).filter((post) => !isRetiredBlogSlug(post.slug)));
     }
     setIsLoading(false);
   };

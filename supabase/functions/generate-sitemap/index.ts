@@ -21,19 +21,12 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+import { isoDate, renderSitemap, type SitemapEntry } from './render.ts';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const BASE_URL = 'https://tryeatpal.com';
-
-interface SitemapEntry {
-  path: string;
-  changefreq: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  priority: string;
-  lastmod?: string;
-}
 
 /** Static routes. Keep in sync with scripts/prerender-routes.json. */
 // The meal-occasion cluster. Hand-written, not pSEO, so it is listed here rather
@@ -66,9 +59,11 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/compare/eatpal-vs-paprika', changefreq: 'monthly', priority: '0.7' },
   { path: '/compare/eatpal-vs-feeding-therapy-workbooks', changefreq: 'monthly', priority: '0.7' },
   { path: '/faq', changefreq: 'monthly', priority: '0.7' },
-  // /authors self-noindexes while public.blog_authors is empty (see src/pages/Authors.tsx),
-  // so until real author rows exist this URL is submitted and then declined. Populate the
-  // table, or drop this line, rather than leaving it in that state indefinitely.
+  // This line used to carry a warning that /authors self-noindexes while
+  // public.blog_authors is empty, so the URL was submitted and then declined. That is
+  // no longer true: src/pages/Authors.tsx now states the editorial standards and the
+  // sourcing of its clinical claims, which holds whether or not the roster has rows,
+  // and it is indexable unconditionally. Submitting it is correct.
   { path: '/authors', changefreq: 'monthly', priority: '0.6' },
   { path: '/contact', changefreq: 'monthly', priority: '0.6' },
   { path: '/accessibility', changefreq: 'yearly', priority: '0.4' },
@@ -76,44 +71,6 @@ const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/privacy', changefreq: 'yearly', priority: '0.3' },
   { path: '/terms', changefreq: 'yearly', priority: '0.3' },
 ];
-
-/**
- * Escape the five XML predefined entities. Slugs come from the database, and a single
- * unescaped `&` makes the whole sitemap unparseable — search engines reject the file
- * outright rather than skipping the bad line.
- */
-export function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function isoDate(value: string | null | undefined, fallback: string): string {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString().split('T')[0];
-}
-
-export function renderSitemap(entries: SitemapEntry[], today: string): string {
-  const urls = entries
-    .map(
-      (entry) => `  <url>
-    <loc>${escapeXml(`${BASE_URL}${entry.path}`)}</loc>
-    <lastmod>${entry.lastmod ?? today}</lastmod>
-    <changefreq>${entry.changefreq}</changefreq>
-    <priority>${entry.priority}</priority>
-  </url>`
-    )
-    .join('\n');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>`;
-}
 
 /**
  * Blog slugs folded into another URL, which public/_redirects 301s away.
@@ -159,8 +116,6 @@ export default async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const today = new Date().toISOString().split('T')[0];
-
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -188,7 +143,7 @@ export default async (req: Request): Promise<Response> => {
         path: `/blog/${post.slug}`,
         changefreq: 'monthly',
         priority: '0.7',
-        lastmod: isoDate(post.updated_at ?? post.published_at, today),
+        lastmod: isoDate(post.updated_at ?? post.published_at),
       });
     }
 
@@ -214,11 +169,11 @@ export default async (req: Request): Promise<Response> => {
         path: `/guides/${guide.slug}`,
         changefreq: 'monthly',
         priority: '0.6',
-        lastmod: isoDate(guide.updated_at, today),
+        lastmod: isoDate(guide.updated_at),
       });
     }
 
-    return new Response(renderSitemap(entries, today), {
+    return new Response(renderSitemap(entries), {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/xml',
@@ -229,7 +184,7 @@ export default async (req: Request): Promise<Response> => {
     // Serve the static routes rather than a 500: an error response tells Search Console
     // the sitemap is broken, while a partial sitemap still gets the core pages crawled.
     console.error('Error generating sitemap:', error);
-    return new Response(renderSitemap(STATIC_ENTRIES, today), {
+    return new Response(renderSitemap(STATIC_ENTRIES), {
       status: 200,
       headers: {
         ...corsHeaders,

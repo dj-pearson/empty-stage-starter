@@ -28,12 +28,19 @@
  * the URL that ranks into the one that does not would throw away the only signal these
  * clusters have.
  *
- * Three things must agree, or the site submits URLs it also redirects:
+ * Five things must agree, or the site points at URLs it also redirects:
  *
  *   1. public/_redirects                             - serves the 301
  *   2. supabase/functions/generate-sitemap/index.ts  - must not submit a retired slug
  *   3. scripts/prerender.mjs                         - must not write static HTML for
  *      one, because a static file at that path can shadow the redirect
+ *   4. src/pages/Blog.tsx                            - must not list one. /blog is
+ *      prerendered and indexable, so its links are the site's own statement about
+ *      which posts exist, and a reader saw the same title twice.
+ *   5. src/pages/BlogPost.tsx                        - must not offer one as a related
+ *      post, where it would spend one of three slots on a URL that 301s.
+ *
+ * src/lib/blog-feed.ts already filters, which is what 4 and 5 were modelled on.
  *
  * src/lib/retired-blog-slugs.test.ts fails the build when they drift apart.
  *

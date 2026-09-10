@@ -352,6 +352,47 @@ describe('isIndexable', () => {
     expect(isIndexable('https://tryeatpal.com/signup')).toBe(false);
     expect(isIndexable('https://tryeatpal.com/reset-password')).toBe(false);
   });
+
+  /**
+   * The cases above all carry a trailing slash or a sub-path, and the list this
+   * function used was written with trailing slashes -- so every one of them passed
+   * while the bare routes, which are the routes src/App.tsx actually declares,
+   * returned true. public/robots.txt records the same mistake and its fix.
+   */
+  it.each([
+    '/admin',
+    '/dashboard',
+    '/api',
+    '/auth',
+    '/oauth',
+    '/seo-dashboard',
+    '/search-traffic',
+    '/pseo-admin',
+    '/join',
+    '/share',
+    '/checkout/success',
+  ])('returns false for the bare route %s, not just its sub-paths', (path) => {
+    expect(isIndexable(`https://tryeatpal.com${path}`)).toBe(false);
+  });
+
+  it('keeps /authors indexable, which a bare /auth prefix would not', () => {
+    // A public, prerendered, sitemapped page. robots.txt had this exact bug.
+    expect(isIndexable('https://tryeatpal.com/authors')).toBe(true);
+  });
+
+  it('reads the pathname rather than searching the whole URL', () => {
+    // A post about logging in is a public article; substring matching called it private.
+    expect(isIndexable('https://tryeatpal.com/blog/how-to-login')).toBe(true);
+    expect(isIndexable('https://tryeatpal.com/guides/food-chaining/admin-of-mealtimes')).toBe(true);
+    // And a query string must not be able to flip the answer the other way.
+    expect(isIndexable('https://tryeatpal.com/pricing?next=/admin')).toBe(true);
+    expect(isIndexable('https://tryeatpal.com/admin?tab=users')).toBe(false);
+  });
+
+  it('accepts a bare path as well as a full URL', () => {
+    expect(isIndexable('/pricing')).toBe(true);
+    expect(isIndexable('/admin')).toBe(false);
+  });
 });
 
 describe('generateHreflangTags', () => {

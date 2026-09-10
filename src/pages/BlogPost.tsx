@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Helmet } from "react-helmet-async";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { logger } from "@/lib/logger";
+import { isRetiredBlogSlug } from "@/lib/retired-blog-slugs";
 import DOMPurify from "dompurify";
 import { SEOHead } from "@/components/SEOHead";
 import { ArticleSchema } from "@/components/schema/ArticleSchema";
@@ -27,6 +29,8 @@ interface BlogPostData {
   featured_image_url: string | null;
   og_image_url: string | null;
   published_at: string;
+  /** Read for the freshness signals; see lastEditedAt below for why it is not used raw. */
+  updated_at: string | null;
   reading_time_minutes: number | null;
   views: number;
   meta_title: string | null;
@@ -72,6 +76,7 @@ const BlogPost = () => {
         featured_image_url,
         og_image_url,
         published_at,
+        updated_at,
         reading_time_minutes,
         views,
         meta_title,
@@ -151,13 +156,20 @@ const BlogPost = () => {
         .eq("status", "published")
         .eq("category.slug", categorySlug)
         .neq("id", currentPostId)
-        .limit(3);
+        // Over-fetched because retired duplicates come out after the query, the same
+        // reason blog-feed.ts over-fetches: PostgREST cannot take a not-in list of 29
+        // slugs in a URL. Asking for exactly 3 meant a retired post could take one of
+        // only three slots and spend it on a URL that 301s.
+        .limit(12);
 
       if (error) {
         logger.error("Error fetching related posts by category:", error);
       } else if (data && data.length > 0) {
-        setRelatedPosts(data);
-        return;
+        const usable = data.filter((post) => !isRetiredBlogSlug(post.slug)).slice(0, 3);
+        if (usable.length > 0) {
+          setRelatedPosts(usable);
+          return;
+        }
       }
     }
 
@@ -170,7 +182,7 @@ const BlogPost = () => {
       .lte("published_at", new Date().toISOString())
       .neq("id", currentPostId)
       .order("published_at", { ascending: false })
-      .limit(3);
+      .limit(12);
 
     if (recentError) {
       logger.error("Error fetching fallback related posts:", recentError);
@@ -178,7 +190,7 @@ const BlogPost = () => {
     }
 
     if (recent) {
-      setRelatedPosts(recent);
+      setRelatedPosts(recent.filter((post) => !isRetiredBlogSlug(post.slug)).slice(0, 3));
     }
   };
 
@@ -359,6 +371,22 @@ const BlogPost = () => {
   if (!post) {
     return (
       <div className="min-h-screen bg-background">
+        {/* Soft 404. The SPA can only answer 200, and this branch runs for any slug the
+            query does not return: a deleted post, a draft, a typo, an old inbound link.
+            Without a head of its own, Helmet left the defaults in index.html standing,
+            so a dead /blog/* URL served the homepage title, the homepage description
+            and <link rel="canonical" href="https://tryeatpal.com/"> on an indexable
+            page. Every one of them was a thin duplicate pointing at the homepage.
+
+            Retired duplicates 301 at the edge (public/_redirects), so nothing that
+            reaches here has a destination worth redirecting to. noindex, follow keeps
+            the outbound links to /blog crawlable while taking the body out of the
+            index, and declaring no canonical is what stops the homepage one applying.
+            Matches NotFoundState in src/pages/pseo/PseoPage.tsx. */}
+        <Helmet>
+          <title>Article not found - EatPal</title>
+          <meta name="robots" content="noindex, follow" />
+        </Helmet>
         <header className="border-b sticky top-0 bg-background/95 backdrop-blur-sm z-50 shadow-sm">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
             <Link to="/" className="flex items-center gap-2">
@@ -397,6 +425,29 @@ const BlogPost = () => {
   const baseUrl = "https://tryeatpal.com";
   const articleUrl = `${baseUrl}/blog/${post.slug}`;
 
+  /**
+   * When the post was last actually changed.
+   *
+   * The page said nothing about this before: SEOHead was passed no dates, so no
+   * article:published_time or article:modified_time, and ArticleSchema was passed no
+   * dateModified, so it fell back to datePublished and every post claimed it had never
+   * been touched since the day it went up. The sitemap has been submitting
+   * `updated_at` for these same rows all along (see the generate-sitemap edge
+   * function), so the two were contradicting each other: one saying a post changed last
+   * week, the other saying it has not changed since 2025.
+   *
+   * A row whose updated_at predates publication is a bookkeeping artefact rather than
+   * an edit, so publication wins there. Comparing timestamps rather than trusting the
+   * column keeps this honest in both directions.
+   */
+  const lastEditedAt = (() => {
+    if (!post.updated_at) return post.published_at;
+    const updated = new Date(post.updated_at).getTime();
+    const published = new Date(post.published_at).getTime();
+    if (Number.isNaN(updated) || Number.isNaN(published)) return post.published_at;
+    return updated > published ? post.updated_at : post.published_at;
+  })();
+
   // Normalize category (Supabase may return array for joins)
   const category = Array.isArray(post.category) ? post.category[0] : post.category;
 
@@ -413,8 +464,11 @@ const BlogPost = () => {
         description={post.meta_description || post.excerpt || `Read ${post.title} on the EatPal blog - expert advice on picky eating and family nutrition.`}
         canonicalUrl={articleUrl}
         ogType="article"
-        ogImage={post.og_image_url || post.featured_image_url || "https://tryeatpal.com/Cover.webp"}
+        ogImage={post.og_image_url || post.featured_image_url || "https://tryeatpal.com/Cover-og.webp"}
         ogImageAlt={post.title}
+        datePublished={post.published_at}
+        dateModified={lastEditedAt}
+        section={category?.name}
         keywords={articleKeywords.join(", ")}
         aiPurpose={`This article from EatPal discusses ${category?.name || "picky eating and nutrition"}. ${post.excerpt || ""}`}
         aiAudience="Parents of picky eaters, families managing ARFID, caregivers seeking nutrition guidance"
@@ -429,6 +483,7 @@ const BlogPost = () => {
         url={articleUrl}
         imageUrl={post.featured_image_url || undefined}
         datePublished={post.published_at}
+        dateModified={lastEditedAt}
         category={category?.name}
         keywords={articleKeywords}
         wordCount={wordCount}

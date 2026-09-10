@@ -1,13 +1,13 @@
 /**
  * Static server over dist/ that resolves URLs the way Cloudflare Pages does.
  *
- * US-570 prerenders each route to `dist/<route>/index.html`, and Pages serves
- * those files directly -- public/_redirects says so in its own closing comment:
+ * US-570 prerenders each route to `dist/<route>.html`, and Pages serves those
+ * files directly -- public/_redirects says so in its own closing comment:
  * "Static files are served first, then index.html for all other routes".
  *
  * `vite preview` does NOT do this. It SPA-falls-back, so a request for /pricing
  * comes back as the 106kb prerendered homepage instead of the 70kb
- * dist/pricing/index.html that production actually serves. Asserting SEO
+ * dist/pricing.html that production actually serves. Asserting SEO
  * against it would compare every route to the homepage's <head> and call it
  * correct. Neither does the prerenderer's own server, which deliberately serves
  * the pre-prerender shell for anything without a file extension -- it has to,
@@ -25,6 +25,15 @@
  *
  * What it does NOT model: _redirects (the 301/302 rules) and _headers. A test
  * that needs those needs `wrangler pages dev`, not this.
+ *
+ * It also does not model the redirect Pages generates on its own. When a route
+ * resolves via rule 2 -- a directory's index.html -- Pages answers the bare URL
+ * with a 308 to the trailing-slash form. This server answers 200 either way, so
+ * for as long as the prerenderer wrote dist/<route>/index.html, no test here or
+ * in CI could see that every route in the sitemap was a redirect in production,
+ * landing on a page whose canonical named the URL that had just redirected.
+ * Verified against production on 2026-09-10, then fixed by writing flat files.
+ * Rule 2 is kept because Pages still walks it; nothing we ship should hit it.
  *
  * Usage: node scripts/dev/serve-dist.mjs [--dist dist] [--port 4173]
  */

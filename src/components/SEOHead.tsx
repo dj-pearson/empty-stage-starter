@@ -6,20 +6,25 @@ import { APP_STORE_APP_ID } from '@/lib/app-store';
 /**
  * The site-wide default social share image, with its REAL dimensions.
  *
- * These were previously hardcoded as 1200x630 for every page and every image — the
- * conventional Open Graph size, but not this file's actual size, and certainly not the
- * size of the per-post images blog articles pass in. Scrapers lay the card out from the
- * declared numbers before fetching, so the mismatch produced cropped or letterboxed
- * previews.
+ * These were once hardcoded as 1200x630 for every page and every image -- the
+ * conventional Open Graph size, but not the size of the file being pointed at, and
+ * certainly not the size of the per-post images blog articles pass in. Scrapers lay the
+ * card out from the declared numbers before fetching, so the mismatch produced cropped
+ * or letterboxed previews. Declaring the truth fixed that, and left the note this
+ * replaces: Cover.webp is 1536x1024, which is 3:2, while Open Graph wants ~1.91:1 and
+ * Twitter's summary_large_image wants 2:1, so the card still got centre-cropped by
+ * whichever scraper was rendering it, differently each time.
  *
- * NOTE: 1536x1024 is 3:2. Open Graph wants ~1.91:1 and Twitter's summary_large_image
- * wants 2:1, so this image still gets centre-cropped in most cards. A purpose-made
- * 1200x630 export would render better; declaring the truth is the correctness fix.
+ * Cover-og.webp is that purpose-made export: the same artwork centre-cropped to
+ * 1.905:1 and resized to exactly 1200x630, so the numbers below are true AND the shape
+ * is the one the card wants. Regenerate it with scripts/build/generate-og-image.mjs if
+ * the source art changes. Cover.webp stays as it is for everything that wants the full
+ * 3:2 frame.
  */
 const DEFAULT_OG_IMAGE = {
-  url: 'https://tryeatpal.com/Cover.webp',
-  width: 1536,
-  height: 1024,
+  url: 'https://tryeatpal.com/Cover-og.webp',
+  width: 1200,
+  height: 630,
 } as const;
 
 export interface SEOProps {

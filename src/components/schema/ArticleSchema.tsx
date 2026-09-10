@@ -29,7 +29,6 @@ export interface ArticleSchemaProps {
  *
  * Schema types included:
  * - Article (primary)
- * - BreadcrumbList (navigation)
  * - WebPage (context)
  */
 export function ArticleSchema({
@@ -115,31 +114,20 @@ export function ArticleSchema({
     copyrightYear: new Date(datePublished).getFullYear(),
   };
 
-  const breadcrumbSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "@id": `${url}#breadcrumb`,
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Home",
-        item: baseUrl,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: "Blog",
-        item: `${baseUrl}/blog`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: title,
-        item: url,
-      },
-    ],
-  };
+  /**
+   * No BreadcrumbList here, deliberately.
+   *
+   * This component used to emit one, hardcoded as Home -> Blog -> title. Every page
+   * that renders it also renders a real breadcrumb -- BlogPost through
+   * BreadcrumbNavigation, PseoPage through BreadcrumbSchema -- so each article shipped
+   * two BreadcrumbList entities that disagreed with each other, and on a programmatic
+   * guide the hardcoded one was simply false: /guides/foods/chicken-nuggets was
+   * claiming /blog as its parent.
+   *
+   * Seen in production on 2026-09-10: a live blog post carried two BreadcrumbList
+   * blocks with different item values. The trail belongs to whichever component knows
+   * the actual path, which is never this one.
+   */
 
   const webPageSchema = {
     "@context": "https://schema.org",
@@ -159,9 +147,6 @@ export function ArticleSchema({
       : undefined,
     datePublished: datePublished,
     dateModified: dateModified || datePublished,
-    breadcrumb: {
-      "@id": `${url}#breadcrumb`,
-    },
     mainEntity: {
       "@id": `${url}#article`,
     },
@@ -176,7 +161,6 @@ export function ArticleSchema({
     "@context": "https://schema.org",
     "@graph": [
       articleSchema,
-      breadcrumbSchema,
       webPageSchema,
     ],
   };

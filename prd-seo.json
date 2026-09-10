@@ -1,0 +1,409 @@
+{
+  "project": "EatPal",
+  "branchName": "claude/seo-iterative-loop-s4aoqh",
+  "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
+  "loop": {
+    "totalIterations": 15,
+    "iterationsUsed": 15,
+    "completed": [
+      {
+        "iteration": 1,
+        "id": "SEO-001",
+        "title": "Stop dating every static sitemap URL with the request date",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 2,
+        "id": "SEO-006",
+        "title": "A missing blog slug served the homepage head on an indexable page",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 3,
+        "id": "SEO-007",
+        "title": "Crashed routes were indexable 200s wearing the homepage head",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 4,
+        "id": "SEO-008",
+        "title": "The ARFID cluster had no sitewide link",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 5,
+        "id": "SEO-003 + SEO-009",
+        "title": "Deleted the unrunnable sitemap script; /guides schema no longer claims noindex pages",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 6,
+        "id": "SEO-010",
+        "title": "Blog posts claimed they had never been edited",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 7,
+        "id": "SEO-011",
+        "title": "Breadcrumb schema used router paths where a URL is required",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 8,
+        "id": "SEO-012",
+        "title": "llms.txt withheld three clusters and reasserted a retired claim",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 9,
+        "id": "SEO-014",
+        "title": "The blog hub linked the 29 URLs it redirects away",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 10,
+        "id": "SEO-015",
+        "title": "isIndexable said yes to /admin, /dashboard and /auth",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 11,
+        "id": "SEO-016",
+        "title": "Every URL in the sitemap was a 308 redirect",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 12,
+        "id": "SEO-018",
+        "title": "Two contradictory BreadcrumbLists on every article page",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 13,
+        "id": "SEO-019",
+        "title": "A purpose-made 1200x630 social share image",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 14,
+        "id": "SEO-020",
+        "title": "The FAQ page declared 15 answers and rendered none of them",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 15,
+        "id": "verification",
+        "title": "Swept the remaining FAQ pages, verified the tree, wrote the handover",
+        "commit": "see git log on this branch"
+      }
+    ],
+    "status": "complete",
+    "handover": {
+      "branch": "claude/seo-iterative-loop-s4aoqh",
+      "needsAPagesPreviewBeforeProduction": [
+        "SEO-016 (iteration 11) changes the prerender output from dist/<route>/index.html to dist/<route>.html. It is the fix for every sitemap URL being a 308, but the serving side cannot be checked from a build. Confirm on a Pages preview that /pricing answers 200 and not a redirect. If Pages needs the other direction, the alternative is moving the canonicals and the sitemap to the trailing-slash form instead, which is larger and entrenches the slashes."
+      ],
+      "needsAHumanDecision": [
+        "SEO-013: HIPAA compliance is asserted five times across llms.txt and llms-full.txt, along with SOC 2 compliant infrastructure and 'the only picky eater platform with a HIPAA-compliant professional tier'. Nothing in the repo supports or contradicts any of it, and it is being fed to AI crawlers. Also: PRICING_PLANS.professional.summary says 'insurance-compatible documentation' where both files say 'insurance billing'.",
+        "SEO-017: any unknown URL returns 200 with meta robots index, follow and the homepage canonical, to any crawler that does not run JavaScript. The fix is a separate noindex shell behind an explicit catch-all in _redirects, which is a second serving-layer change and wants its own verified deploy rather than riding along with SEO-016.",
+        "SEO-005: whether changefreq and priority earn their place in the sitemap. Google has said it ignores both. Removing them would cut roughly a third of the file's bytes and nothing else; left alone deliberately rather than changed on the way out.",
+        "Four page titles run 61 to 68 characters, past where Google truncates: the homepage, /pricing, /blog and /guides. Rewriting them is a brand-voice call."
+      ],
+      "notSeoButFound": [
+        "ci.yml enumerates the six Deno test paths by hand (lines 460-517), so a seventh test added under supabase/functions would never run."
+      ],
+      "verifiedAtClose": {
+        "vitest": "green, see the iteration 15 commit message for counts",
+        "lintRatchet": "1143 errors against a baseline of 1143, lowered from 1144 in iteration 6",
+        "productionChecks": "robots.txt, sitemap.xml (180 URLs, no duplicates, no retired slugs), rss.xml (50 items, well-formed), feed.xml, llms.txt, no stray X-Robots-Tag on public pages, no duplicate head tags across six sampled routes, and 27 FAQ answers across five pages all present in the HTML"
+      }
+    }
+  },
+  "userStories": [
+    {
+      "id": "SEO-001",
+      "title": "Stop dating every static sitemap URL with the request date",
+      "description": "As a search engine, I want <lastmod> to mean something, so that the dates on blog posts and guides are worth acting on.",
+      "acceptanceCriteria": [
+        "renderSitemap emits <lastmod> only for entries that carry one",
+        "The 29 static marketing routes carry no <lastmod>",
+        "Blog posts and pSEO guides keep the real timestamp from their row",
+        "isoDate returns undefined instead of falling back to today",
+        "The Cloudflare Pages fallback sitemap carries no <lastmod> either",
+        "Unit tests cover the rendering, not just the source text"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Pure rendering moved to supabase/functions/generate-sitemap/render.ts so vitest can import it (index.ts imports the Supabase client from esm.sh and reads Deno.env, so it can only ever be asserted as text). Covered by src/lib/sitemap-render.test.ts, 9 tests. functions/sitemap.xml.ts lost all 29 `<lastmod>${today}</lastmod>` lines and the now-unused `today`. STATIC_ENTRIES stayed in index.ts because five other tests read that file as text for the route list."
+    },
+    {
+      "id": "SEO-006",
+      "title": "A missing blog slug served the homepage head on an indexable page",
+      "description": "As a search engine, I want a dead /blog/* URL to say it is a dead URL, so that it is not indexed as a thin duplicate that canonicalises to the homepage.",
+      "acceptanceCriteria": [
+        "The not-found branch of BlogPost declares a head of its own",
+        "It sets robots noindex, follow",
+        "It leaves no canonical standing, so the homepage canonical in index.html does not apply to it",
+        "It carries a title that is not the homepage's",
+        "Tests cover all four"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "src/pages/BlogPost.tsx's `if (!post)` branch rendered a 404 body with no Helmet at all. Because index.html is the SPA fallback document, its data-rh defaults describe the homepage, so every deleted post, draft, typo and stale inbound link under /blog/ answered 200 with the homepage title, the homepage description and <link rel=\"canonical\" href=\"https://tryeatpal.com/\">. Fixed by mirroring NotFoundState in src/pages/pseo/PseoPage.tsx, which already had this right. Covered by src/pages/BlogPost.notFound.test.tsx, 4 tests."
+    },
+    {
+      "id": "SEO-008",
+      "title": "The ARFID cluster had no sitewide link",
+      "description": "As a search engine, I want the site's own links to say which pages matter, so that the cluster closest to what EatPal is for is not the one nothing points at.",
+      "acceptanceCriteria": [
+        "All four /arfid/* pages are linked from the sitewide footer",
+        "The footer's existing layout absorbs it without reflowing",
+        "A test fails if a future ARFID page is added without a footer link"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "/arfid/what-is-arfid, /arfid/arfid-vs-picky-eating and /arfid/arfid-in-adults were reachable from /picky-eater-quiz alone, and /arfid/safe-foods-list from /budget-calculator alone. The four pages cross-link each other, which makes them a closed loop rather than a cluster something points into. Meanwhile the footer already carried all five /picky-eater/* pages, /guides and /compare, each added after exactly this problem was found there. The nav is lg:grid-cols-6 and had five columns, so the ARFID column filled a reserved slot. Pinned by a new assertion in src/lib/arfid-content.test.ts, matching the one /compare has."
+    },
+    {
+      "id": "SEO-009",
+      "title": "/guides claimed noindex guides as the members of its collection",
+      "description": "As a search engine, I want a CollectionPage to name pages the site wants indexed, so that its ItemList is not contradicted by the robots tag on the pages it names.",
+      "acceptanceCriteria": [
+        "The CollectionPage ItemList enumerates only guides at or below MAX_INDEXABLE_TIER",
+        "numberOfItems counts the same set",
+        "The page itself still lists every published guide for readers",
+        "Tests cover the split"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "GuidesIndex selected slug, title, meta_description and page_type -- no tier -- so its CollectionPage/ItemList named whatever came back, including every guide above MAX_INDEXABLE_TIER that PseoPage marks noindex, follow. Listing those for readers is the documented intent (see src/lib/pseo/indexability.ts) and is unchanged; claiming them in schema is a different act, and numberOfItems was counting them too. GuidesIndex is the fourth surface that has to agree with MAX_INDEXABLE_TIER and the only one that can import the rule instead of restating it, which it now does. src/pages/pseo/GuidesIndex.schema.test.tsx, 4 tests."
+    },
+    {
+      "id": "SEO-010",
+      "title": "Blog posts claimed they had never been edited",
+      "description": "As a search engine, I want the page and the sitemap to agree about when a post last changed, so that the freshness signal on updated posts is not thrown away.",
+      "acceptanceCriteria": [
+        "BlogPost fetches blog_posts.updated_at",
+        "ArticleSchema receives dateModified instead of falling back to datePublished",
+        "SEOHead receives datePublished and dateModified, so article:published_time and article:modified_time are emitted",
+        "A row whose updated_at precedes publication does not backdate the post",
+        "An absent or unparseable updated_at falls back to publication",
+        "Tests cover each case"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "BlogPost's query never selected updated_at, so ArticleSchema was passed no dateModified and fell back to datePublished -- every post asserting it had not been touched since the day it went up -- and SEOHead was passed no dates at all, so neither article:published_time nor article:modified_time was emitted. The sitemap has been submitting isoDate(updated_at) for these same rows all along, so the site was contradicting itself: the sitemap saying a post changed last week, the page saying it never changed. lastEditedAt compares the two timestamps rather than trusting the column, because a row touched by a migration before its publish date is bookkeeping, not an edit. src/pages/BlogPost.freshness.test.tsx, 6 tests. Also lowered .ci/lint-baseline.txt from 1144 to 1143, the win from deleting generate-sitemap.js in iteration 5."
+    },
+    {
+      "id": "SEO-012",
+      "title": "llms.txt withheld three clusters and reasserted a retired claim",
+      "description": "As an AI answer engine, I want the file the site points me at to list its topical clusters and describe itself accurately, so that what I repeat as fact is true and complete.",
+      "acceptanceCriteria": [
+        "llms.txt lists the ARFID, meal-occasion and comparison clusters",
+        "llms-full.txt links the same clusters and the guide library",
+        "Neither file describes /authors as a review board",
+        "The citation guidance matches what the Authors page states about sourcing",
+        "A test fails if a cluster page is added without reaching these files"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "robots.txt admits GPTBot, ClaudeBot and PerplexityBot by name and these two files are what they are pointed at, so a stale line here is repeated by an assistant as fact. The Docs list covered the marketing pages and omitted all fourteen cluster URLs -- the ARFID pages, the meal-occasion pages and the whole /compare set -- which are exactly the pages worth being cited for. It also labelled /authors \"Authors and Reviewers\" and told citing assistants to \"note the evidence-based approach and professional backing\", both asserting a review board and in-house credentials that src/pages/Authors.tsx removed on purpose (\"nothing here may imply clinical licensure\"). Prices were already guarded by pricing-plans.test.ts; the link lists and this claim were not. src/lib/llms-txt.test.ts, 19 tests, driven off the content modules so a new cluster page fails until it reaches both files."
+    },
+    {
+      "id": "SEO-014",
+      "title": "The blog hub linked the 29 URLs it redirects away",
+      "description": "As a search engine, I want the blog index and its related-post block to point only at URLs the site serves, so that crawl budget is not spent on redirects and readers do not see the same title twice.",
+      "acceptanceCriteria": [
+        "/blog lists no retired slug",
+        "Related posts offer no retired slug, and still fill three slots",
+        "The contract comment in retired-blog-slugs.ts names all five surfaces, not three",
+        "A behavioural test renders /blog and fails if a retired URL is linked"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "29 duplicate posts keep their published row deliberately: the 301 in public/_redirects is what users and crawlers see, and the row stays so the content is recoverable. Three surfaces honoured that (_redirects, the sitemap generator, the prerenderer) and blog-feed.ts filtered the RSS and Atom feeds. /blog did not -- and /blog is prerendered and indexable, so the site's own blog hub linked 29 URLs it redirects the moment anything follows them, while showing readers a second copy of a title already in the list. BlogPost's related-post block was worse in kind: .limit(3) meant a retired post could take one of only three slots. Both now over-fetch and filter, the way blog-feed.ts does, because PostgREST cannot take a not-in list of 29 slugs in a URL. The contract comment now names five surfaces. src/pages/Blog.retired.test.tsx renders the page; confirmed it fails with the filter removed rather than passing vacuously."
+    },
+    {
+      "id": "SEO-015",
+      "title": "isIndexable said yes to /admin, /dashboard and /auth",
+      "description": "As a developer reaching for a helper called isIndexable, I want it to answer correctly for the routes this app actually declares, so that wiring it up does not invite crawlers into the private surface.",
+      "acceptanceCriteria": [
+        "The bare routes /admin, /dashboard, /auth, /api and the rest return false, not just their sub-paths",
+        "/authors stays indexable, which a bare /auth prefix would break",
+        "Matching is on the pathname, so /blog/how-to-login stays public and ?next=/admin cannot flip the answer",
+        "The path list mirrors the Disallow list in public/robots.txt and drops /_next/",
+        "Tests cover the bare routes, which the old ones never did"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Every entry in the old list carried a trailing slash -- '/admin/', '/dashboard/', '/auth/', '/api/' -- so the function returned true for /admin, /dashboard, /auth and /api, which are the routes src/App.tsx declares. public/robots.txt records this exact mistake and its fix, at length. The tests passed because all four cases were written with a trailing slash or a sub-path, so the one shape that mattered was the one never asserted. The list also carried '/_next/', which is Next.js and has never existed in this Vite app, so it was template boilerplate rather than anything derived from these routes. Unused in app code today, which is the only reason it cost nothing: a helper with this name and a green test is what someone reaches for. Also switched from url.includes to a pathname comparison, because a post at /blog/how-to-login was being called private. 63 tests in the file. Full suite after this: 3612 passing, 3 skipped, 244 files."
+    },
+    {
+      "id": "SEO-016",
+      "title": "Every URL in the sitemap was a 308 redirect",
+      "description": "As a search engine, I want the URL a sitemap submits to be the URL that answers it, so that a crawl does not resolve every page through a redirect onto a page that names the redirecting URL as its canonical.",
+      "acceptanceCriteria": [
+        "The prerenderer writes dist/<route>.html, not dist/<route>/index.html",
+        "The homepage stays at dist/index.html",
+        "Nested routes still nest, with a parent route's file beside its directory",
+        "serve-dist.mjs and the ci.yml comments describe the layout that now ships",
+        "Tests pin the output paths",
+        "VERIFY ON A PAGES PREVIEW before this reaches production"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found by checking production rather than the repo. Every route in the live sitemap except \"/\" answered 308 to its trailing-slash form -- /pricing, /faq, /blog, /compare/eatpal-vs-mealime, /arfid/what-is-arfid, all 180 -- because Cloudflare Pages serves a directory's index.html at the slash URL and redirects the bare one to it. The page each redirect landed on then declared the no-slash URL as its canonical and og:url: /arfid/what-is-arfid/ served canonical=\"https://tryeatpal.com/arfid/what-is-arfid\", which redirects back. Google resolves that by ignoring the declared canonical and files the sitemap under \"Page with redirect\". Nothing local could see it: scripts/dev/serve-dist.mjs models Pages' file resolution but not the redirect Pages generates for a directory index, so CI answered 200 for a URL production answered 308 for. That gap is now written into the file. NOT VERIFIED IN PRODUCTION -- a Pages preview has to confirm /pricing answers 200 rather than a redirect, which cannot be checked from here."
+    },
+    {
+      "id": "SEO-018",
+      "title": "Two contradictory BreadcrumbLists on every article page",
+      "description": "As a search engine, I want one breadcrumb trail per page, naming the path the page actually sits on.",
+      "acceptanceCriteria": [
+        "ArticleSchema emits no BreadcrumbList",
+        "Its WebPage node carries no dangling breadcrumb @id reference",
+        "A rendered blog post carries exactly one BreadcrumbList",
+        "Guides no longer claim /blog as their parent"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Seen on a live blog post: two BreadcrumbList blocks in the head with different item values. ArticleSchema hardcoded its own Home -> Blog -> title, while the page also rendered a real trail -- BlogPost via BreadcrumbNavigation, PseoPage via BreadcrumbSchema. On the guide cluster the hardcoded one was not merely duplicative but false: /guides/foods/<slug> was claiming /blog as its parent. Removed from ArticleSchema, along with the WebPage's breadcrumb @id reference, which would otherwise dangle. The trail belongs to whichever component knows the path, which is never this one. Verified by rendering a post: one BreadcrumbList, absolute items."
+    },
+    {
+      "id": "SEO-019",
+      "title": "A purpose-made 1200x630 social share image",
+      "description": "As a social scraper, I want the default og:image to be the shape the card is laid out in, so that the preview is not cropped differently by every platform.",
+      "acceptanceCriteria": [
+        "public/Cover-og.webp exists at exactly 1200x630",
+        "index.html and SEOHead point at it and declare 1200x630",
+        "The blog post fallback uses it too",
+        "The dimensions test reads the new file",
+        "Regenerating it is a documented, repeatable command"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Implementing a fix the codebase had already written down. SEOHead's own comment said Cover.webp is 1536x1024, that 3:2 is neither Open Graph's ~1.91:1 nor Twitter's 2:1, and that a purpose-made 1200x630 export would render better -- declaring the true size was only the correctness half. scripts/build/generate-og-image.mjs centre-crops to 1.905:1 and resizes; safe for this artwork because the wordmark, spoon and tagline sit in the middle with margin and only the decorative corner blobs are trimmed. Checked the output by eye. Same webp format as before, so no scraper compatibility change. Not wired into npm run build: the output is committed like the other derivatives in public/, and the source art changes about once a year. Cover.webp is untouched for everything wanting the full frame."
+    },
+    {
+      "id": "SEO-020",
+      "title": "The FAQ page declared 15 answers and rendered none of them",
+      "description": "As a search engine, I want the FAQ answers the page marks up to exist on the page, so that the structured data is not describing content no crawler can find.",
+      "acceptanceCriteria": [
+        "Every answer in the FAQPage schema is present in the DOM",
+        "Closed answers stay collapsed, and the disclosure still opens and closes",
+        "The page renders identically to before",
+        "Tests cover what jsdom can see; the layout half is measured in a browser"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Found in production: all 15 questions in the prerendered HTML, none of the 15 answers, because Radix unmounts a closed AccordionContent. Affects every crawler, not only the non-JS ones -- rendering does not click. Three traps on the way to the fix, each caught before shipping. forceMount alone renders all 15 answers OPEN, because Radix computes hidden as `open || isPresent` and the accordion-up keyframe has no forwards fill; measured in Chromium, not guessed. A plain data-[state=closed]: variant never matches, because shadcn puts the className on an inner div with no data-state -- hence `group` on the item. And h-0 alone leaves pb-4's 16px showing, so pb-0 goes with it. Verified in Chromium: 15 panels at 0px, 4794 characters of answer text in the DOM and none visible, one click opens exactly one panel with its real answer, another closes it, and before/after screenshots differ by 0 of 2,970,000 subpixels."
+    },
+    {
+      "id": "SEO-002",
+      "title": "/authors: confirm whether it still self-noindexes (it does not)",
+      "description": "As a site owner, I want the sitemap to stop advertising a URL that serves noindex, so that Search Console stops reporting 'Submitted URL marked noindex' and the E-E-A-T page either counts or is withdrawn.",
+      "acceptanceCriteria": [
+        "Establish whether the page still sets noindex (it does not)",
+        "The sitemap's comment about /authors matches what the page actually does",
+        "The test carve-out comment matches too",
+        "No fabricated author rows"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Closed as already fixed, in iteration 2. src/pages/Authors.tsx no longer noindexes on an empty roster: a later pass replaced the credentials framing with an editorial-standards statement that holds whether or not blog_authors has rows, and the page is indexable unconditionally. Only the warnings were stale, and both now say so -- the STATIC_ENTRIES comment in supabase/functions/generate-sitemap/index.ts and the carve-out comment in src/lib/comparison-discovery.test.ts. Left as written, they would have talked someone into pulling a good URL out of the sitemap."
+    },
+    {
+      "id": "SEO-003",
+      "title": "scripts/generate-sitemap.js is TypeScript in a .js file and cannot run",
+      "description": "As a maintainer, I want one sitemap generator, so that nobody reaches for the broken second one.",
+      "acceptanceCriteria": [
+        "`node scripts/generate-sitemap.js` either runs or the file is gone",
+        "If kept, it agrees with supabase/functions/generate-sitemap on routes, retired slugs and the tier ceiling",
+        "Nothing in package.json or CI references a generator that does not exist"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Deleted in iteration 5. Nothing referenced it, and it could never have run: TypeScript interfaces in a .js file, so node threw a SyntaxError before the first statement. Had it run it would have written /recipes/<id> URLs for a route that only exists behind auth, plus a sitemap-index.xml pointing at a sitemap-dynamic.xml nothing serves. scripts/README.md now says where the real sitemap comes from, and documents/variables.md's two rows for VITE_SUPABASE_URL/ANON_KEY under Scripts were repointed at scripts/prerender.mjs, which is what actually reads them (lines 193-198)."
+    },
+    {
+      "id": "SEO-004",
+      "title": "Edge-function tests: check whether they run (they do)",
+      "description": "As a maintainer, I want the SEO logic that lives in supabase/functions to be covered by the suite, so that a change there is not shipped on inspection alone.",
+      "acceptanceCriteria": [
+        "Establish whether supabase/functions tests run anywhere (they do, under deno test in ci.yml)",
+        "Establish whether vitest could run them (it cannot, they are Deno tests importing over https)",
+        "Record the residual risk: ci.yml lists the six paths by hand"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Closed as a false finding, in iteration 4. The six files under supabase/functions/_shared are Deno tests -- Deno.test, asserts from deno.land/std -- and ci.yml runs every one of them by name in a denoland/setup-deno job (lines 460-517). Widening vitest's include is the wrong fix and does not work anyway: all six fail collection under Node with \"Only URLs with a scheme in: file and data are supported\", because they import over https. Verified separately that the vitest suite itself is green: 3559 passing, 3 skipped, 240 files. One real gap remains and is not SEO: ci.yml enumerates those six paths by hand, so a seventh Deno test added tomorrow would never run. Worth a `deno test` glob, in some other loop."
+    },
+    {
+      "id": "SEO-005",
+      "title": "Reconsider changefreq and priority in the sitemap",
+      "description": "As a search engine, I want a sitemap that carries only fields I use, so that the file is smaller and says nothing misleading.",
+      "acceptanceCriteria": [
+        "Establish whether Bing and the AI crawlers named in robots.txt read either field before removing them",
+        "If removed, the fallback sitemap and the tests that count fields follow"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Google has stated it ignores both. Lower value than SEO-002/003/004 and needs the Bing question answered first, so it sits at the bottom until the loop runs out of higher-value work."
+    },
+    {
+      "id": "SEO-007",
+      "title": "Crashed routes were indexable 200s wearing the homepage head",
+      "description": "As a search engine, I want an error state to say it is one, so that a crash on /pricing is not indexed as the homepage.",
+      "acceptanceCriteria": [
+        "Audit the slug and data-driven pages for a soft 404 with no head",
+        "RouteErrorBoundary's fallback declares noindex, and clears it when the route recovers",
+        "The full-page boundary does the same",
+        "A single failed widget does NOT noindex the page around it",
+        "The mechanism works above <HelmetProvider>, where both global boundaries sit"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "The audit came back clean on the pages it was written for: ComparisonPage, MealIdeasPage and ArfidPage all render <NotFound /> on an unknown slug, and the three /*/results pages, /api/docs, /join and /share already noindex. Blog, GuidesIndex and Authors render their own head unconditionally and are index pages with a purpose independent of their rows. What the audit did turn up sits a level higher: every route in src/App.tsx is wrapped in RouteErrorBoundary, whose fallback had no head at all, so a live crash -- a chunk 404 in the minutes after a deploy is the likely one -- served 'This page encountered an error' as an indexable 200 under the homepage title and canonical. Fixed with src/components/NoIndexOnError.tsx, a DOM write rather than a Helmet because both global boundaries sit above HelmetProvider and a Helmet there throws. scripts/prerender.mjs already refused to freeze an error state into static HTML (see its 'inherited the shell head' checks), so build time was covered and runtime was not. 7 tests."
+    },
+    {
+      "id": "SEO-011",
+      "title": "Breadcrumb schema used router paths where a URL is required",
+      "description": "As a search engine, I want BreadcrumbList item values to be absolute URLs, so that the breadcrumb rich result is not discarded.",
+      "acceptanceCriteria": [
+        "Every BreadcrumbList item is an absolute https://tryeatpal.com URL",
+        "Establish whether BreadcrumbSchema should absolutise defensively or every caller should pass absolute URLs",
+        "Audit all BreadcrumbNavigation and BreadcrumbSchema callers, not just BlogPost",
+        "A test fails if a relative item reaches the schema"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Wider than the blog. Five of the eleven callers passed relative paths, and they had no way to do otherwise: BreadcrumbNavigation renders <Link to={item.url}> from the same items it gives the schema, so a router path is what a Link needs. PseoPage is worse -- it feeds buildBreadcrumbs output straight in, and that is relative by construction, so the entire programmatic guide cluster shipped a BreadcrumbList Google discards. Normalised inside BreadcrumbSchema, the one choke point all eleven go through: visible links stay relative, schema comes out absolute, and the six callers already passing absolute URLs are untouched. Verified end to end on a rendered blog post, not just at the component. 4 new tests, 10 in the file."
+    },
+    {
+      "id": "SEO-013",
+      "title": "Unverified compliance and superlative claims in the AI-facing files",
+      "description": "As the site owner, I want claims fed to AI answer engines to be ones EatPal can support, so that an assistant does not repeat something indefensible.",
+      "acceptanceCriteria": [
+        "Confirm or withdraw: HIPAA compliance for the Professional tier (stated 5 times across llms.txt and llms-full.txt)",
+        "Confirm or withdraw: SOC 2 compliant infrastructure",
+        "Confirm or withdraw: \"the only picky eater platform with a HIPAA-compliant professional tier\"",
+        "Align the Professional plan wording with PRICING_PLANS.professional.summary, which says 'insurance-compatible documentation' rather than 'insurance billing'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Left untouched deliberately in iteration 8. These are product, legal and compliance claims, not SEO defects, and I have no evidence in the repo either way -- which is the point: they are asserted to AI crawlers with nothing behind them that a reader here can check. The superlative (\"the only\") is the weakest of them. Needs a decision from someone who knows whether the audits exist, so it is a question rather than a patch."
+    },
+    {
+      "id": "SEO-017",
+      "title": "Any unknown URL serves an indexable homepage shell to non-JS crawlers",
+      "description": "As a search engine that does not run JavaScript, I want a URL that does not exist to say so, rather than returning 200 with an index directive.",
+      "acceptanceCriteria": [
+        "A nonexistent path stops returning meta robots index, follow to a non-JS client",
+        "Client-only routes that are not prerendered (/dashboard/*, /auth/callback, tier-2 guides) keep working",
+        "Decide between: an explicit catch-all in _redirects pointing at a noindex shell; a Pages Function that sets X-Robots-Tag for unknown paths; or accepting it"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Confirmed in production on 2026-09-10: https://tryeatpal.com/nonexistent-page-xyz returns 200 with <meta name=\"robots\" content=\"index, follow, ...\">, canonical https://tryeatpal.com/, the homepage title, and 11.5 kB of body that is entirely the theme script -- no content. NotFound.tsx sets noindex, but only once React runs, and robots.txt admits GPTBot, ClaudeBot and PerplexityBot by name, none of which do. Not fixed here on purpose. public/_redirects has no catch-all (line 74 says an explicit one caused an infinite-loop warning), so Pages is doing the SPA fallback implicitly from index.html -- which is also the prerendered homepage, which is why the fallback wears the homepage head. Adding dist/404.html would give a real 404 but would break every client-only route. The workable fix is a separate noindex shell behind an explicit catch-all, and that is a second deploy-shaped change stacked on iteration 11's, which is more risk than one iteration should take on an app whose iOS build is live."
+    }
+  ]
+}
