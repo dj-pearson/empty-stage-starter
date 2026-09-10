@@ -397,10 +397,20 @@ private struct FreshlyMintedCodeRow: View {
     let code: String
     let onShare: () -> Void
 
+    /// The code is the one string on this screen someone has to read off the
+    /// display and type on another device, so it has to grow with the user's
+    /// text size. A bare `.system(size: 36)` does not: at AX5 every label
+    /// around it passes 36pt and the code ends up the smallest text on screen.
+    /// The row has no fixed height and the background is a shape, so growing
+    /// is free.
+    @ScaledMetric(relativeTo: .largeTitle) private var codeSize: CGFloat = 36
+
     var body: some View {
         VStack(spacing: 8) {
             Text(code)
-                .font(.system(size: 36, weight: .bold, design: .monospaced))
+                .font(.system(size: codeSize, weight: .bold, design: .monospaced))
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
                 .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))

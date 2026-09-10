@@ -21,6 +21,9 @@ struct PantryView: View {
     @State private var showingDeleteConfirm = false
     // US-416: single-item delete confirmation (parity with bulk delete).
     @State private var foodPendingDeletion: Food?
+    /// Filter-count badge. Pinned to `.caption2` so the circle keeps pace with
+    /// the digit inside it instead of clipping at larger text sizes.
+    @ScaledMetric(relativeTo: .caption2) private var filterBadgeDiameter: CGFloat = 16
     // US-463: advanced filter state persisted across launches (was 5 @State
     // vars reset every session). Quick chips + search remain transient.
     @AppStorage("pantry.filters") private var filters = PantryFilters()
@@ -467,10 +470,14 @@ struct PantryView: View {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "line.3.horizontal.decrease.circle")
                                 if hasActiveFilters {
+                                    // 10pt is under Apple's 11pt floor and did
+                                    // not scale at all. `.caption2` starts at
+                                    // 11pt and grows; the circle grows with it.
                                     Text("\(activeFilterCount)")
-                                        .font(.system(size: 10, weight: .bold))
+                                        .font(.caption2.weight(.bold))
+                                        .minimumScaleFactor(0.7)
                                         .foregroundStyle(.white)
-                                        .frame(width: 16, height: 16)
+                                        .frame(width: filterBadgeDiameter, height: filterBadgeDiameter)
                                         .background(.red, in: Circle())
                                         .offset(x: 6, y: -6)
                                 }
@@ -881,9 +888,13 @@ struct FoodRowView: View {
                             .foregroundStyle(stockColor)
                             .monospacedDigit()
                         if let unit = food.unit, !unit.isEmpty {
+                            // Was a fixed 9pt, which neither scaled nor cleared
+                            // Apple's 11pt floor -- tertiary text that small is
+                            // close to invisible. `.caption2` scales with the
+                            // quantity above it, which is `.subheadline`.
                             Text(unit)
-                                .font(.system(size: 9))
-                                .foregroundStyle(.tertiary)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     .frame(minWidth: 36)

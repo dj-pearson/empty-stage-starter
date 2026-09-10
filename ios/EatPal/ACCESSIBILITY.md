@@ -85,7 +85,28 @@ The five flows from US-246 each completable end-to-end without sight:
 ## Dynamic Type
 
 App-wide text uses semantic `Font.body` / `.headline` / `.caption` so it
-scales automatically under user settings. Two known places force a size:
+scales automatically under user settings.
+
+Fixed point sizes (`.font(.system(size:))`) are allowed on **SF Symbol art**
+inside a fixed frame — empty-state glyphs, the paywall crown, badge icons.
+Those are pictures, and growing them would burst the frame they sit in.
+
+They are **not** allowed on text. `src/lib/iosDynamicType.test.ts` reads
+`Views/` and fails the JS suite on any of:
+
+- a literal point size below 11 (Apple's readability floor), anywhere;
+- a fixed size on something that is not an `Image`, unless the file is in that
+  test's allowlist with a written reason.
+
+Two entries are allowlisted today: avatar initials in `ImagePicker`, sized as
+a fraction of a caller-supplied diameter, and the emoji rating in
+`MealFeedbackSheet`, sized by selection state as a tap affordance.
+
+Where a size genuinely has to be numeric, use `@ScaledMetric` so it still
+tracks the user's setting — `FreshlyMintedCodeRow` does this for the household
+invite code.
+
+Two places deliberately override the user's setting:
 
 - **`ShoppingModeView`** — intentionally pinned to `.dynamicTypeSize(.accessibility1)` so the in-store mode is always large, regardless of the user's everyday setting.
 - **`BadgeTile`** — `.minimumScaleFactor(0.85)` on the title so 3-column grid stays intact under AX5.
