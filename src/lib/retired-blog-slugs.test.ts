@@ -104,4 +104,16 @@ describe("retired blog slugs", () => {
     const prerender = readFileSync(path.join(REPO, "scripts", "prerender.mjs"), "utf8");
     expect(prerender).toContain("retired-blog-slugs");
   });
+
+  it.each([
+    ["the blog index", path.join("src", "pages", "Blog.tsx")],
+    ["related posts", path.join("src", "pages", "BlogPost.tsx")],
+  ])("keeps retired slugs out of %s", (_label, file) => {
+    // These were the two surfaces the original three-way contract missed. /blog is
+    // prerendered and indexable, so its links are the site's own statement about which
+    // posts exist; the related-post block has three slots and a retired slug spent one
+    // of them on a URL that immediately 301s.
+    const source = readFileSync(path.join(REPO, file), "utf8");
+    expect(source).toContain("isRetiredBlogSlug");
+  });
 });

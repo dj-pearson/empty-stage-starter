@@ -12,6 +12,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { logger } from "@/lib/logger";
+import { isRetiredBlogSlug } from "@/lib/retired-blog-slugs";
 import DOMPurify from "dompurify";
 import { SEOHead } from "@/components/SEOHead";
 import { ArticleSchema } from "@/components/schema/ArticleSchema";
@@ -155,13 +156,20 @@ const BlogPost = () => {
         .eq("status", "published")
         .eq("category.slug", categorySlug)
         .neq("id", currentPostId)
-        .limit(3);
+        // Over-fetched because retired duplicates come out after the query, the same
+        // reason blog-feed.ts over-fetches: PostgREST cannot take a not-in list of 29
+        // slugs in a URL. Asking for exactly 3 meant a retired post could take one of
+        // only three slots and spend it on a URL that 301s.
+        .limit(12);
 
       if (error) {
         logger.error("Error fetching related posts by category:", error);
       } else if (data && data.length > 0) {
-        setRelatedPosts(data);
-        return;
+        const usable = data.filter((post) => !isRetiredBlogSlug(post.slug)).slice(0, 3);
+        if (usable.length > 0) {
+          setRelatedPosts(usable);
+          return;
+        }
       }
     }
 
@@ -174,7 +182,7 @@ const BlogPost = () => {
       .lte("published_at", new Date().toISOString())
       .neq("id", currentPostId)
       .order("published_at", { ascending: false })
-      .limit(3);
+      .limit(12);
 
     if (recentError) {
       logger.error("Error fetching fallback related posts:", recentError);
@@ -182,7 +190,7 @@ const BlogPost = () => {
     }
 
     if (recent) {
-      setRelatedPosts(recent);
+      setRelatedPosts(recent.filter((post) => !isRetiredBlogSlug(post.slug)).slice(0, 3));
     }
   };
 
