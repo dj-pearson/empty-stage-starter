@@ -4,7 +4,7 @@
   "description": "Backlog and running state for the 15-iteration SEO loop. Each iteration fixes exactly one SEO element end to end (change + test + commit). Anything found that is too large for a single iteration is written here as a user story and picked up on a later pass. Iterations already spent are recorded in `loop.completed` so a fresh session can resume without re-auditing.",
   "loop": {
     "totalIterations": 15,
-    "iterationsUsed": 7,
+    "iterationsUsed": 8,
     "completed": [
       {
         "iteration": 1,
@@ -46,6 +46,12 @@
         "iteration": 7,
         "id": "SEO-011",
         "title": "Breadcrumb schema used router paths where a URL is required",
+        "commit": "see git log on this branch"
+      },
+      {
+        "iteration": 8,
+        "id": "SEO-012",
+        "title": "llms.txt withheld three clusters and reasserted a retired claim",
         "commit": "see git log on this branch"
       }
     ]
@@ -124,6 +130,21 @@
       "priority": 1,
       "passes": true,
       "notes": "BlogPost's query never selected updated_at, so ArticleSchema was passed no dateModified and fell back to datePublished -- every post asserting it had not been touched since the day it went up -- and SEOHead was passed no dates at all, so neither article:published_time nor article:modified_time was emitted. The sitemap has been submitting isoDate(updated_at) for these same rows all along, so the site was contradicting itself: the sitemap saying a post changed last week, the page saying it never changed. lastEditedAt compares the two timestamps rather than trusting the column, because a row touched by a migration before its publish date is bookkeeping, not an edit. src/pages/BlogPost.freshness.test.tsx, 6 tests. Also lowered .ci/lint-baseline.txt from 1144 to 1143, the win from deleting generate-sitemap.js in iteration 5."
+    },
+    {
+      "id": "SEO-012",
+      "title": "llms.txt withheld three clusters and reasserted a retired claim",
+      "description": "As an AI answer engine, I want the file the site points me at to list its topical clusters and describe itself accurately, so that what I repeat as fact is true and complete.",
+      "acceptanceCriteria": [
+        "llms.txt lists the ARFID, meal-occasion and comparison clusters",
+        "llms-full.txt links the same clusters and the guide library",
+        "Neither file describes /authors as a review board",
+        "The citation guidance matches what the Authors page states about sourcing",
+        "A test fails if a cluster page is added without reaching these files"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "robots.txt admits GPTBot, ClaudeBot and PerplexityBot by name and these two files are what they are pointed at, so a stale line here is repeated by an assistant as fact. The Docs list covered the marketing pages and omitted all fourteen cluster URLs -- the ARFID pages, the meal-occasion pages and the whole /compare set -- which are exactly the pages worth being cited for. It also labelled /authors \"Authors and Reviewers\" and told citing assistants to \"note the evidence-based approach and professional backing\", both asserting a review board and in-house credentials that src/pages/Authors.tsx removed on purpose (\"nothing here may imply clinical licensure\"). Prices were already guarded by pricing-plans.test.ts; the link lists and this claim were not. src/lib/llms-txt.test.ts, 19 tests, driven off the content modules so a new cluster page fails until it reaches both files."
     },
     {
       "id": "SEO-002",
@@ -205,6 +226,20 @@
       "priority": 1,
       "passes": true,
       "notes": "Wider than the blog. Five of the eleven callers passed relative paths, and they had no way to do otherwise: BreadcrumbNavigation renders <Link to={item.url}> from the same items it gives the schema, so a router path is what a Link needs. PseoPage is worse -- it feeds buildBreadcrumbs output straight in, and that is relative by construction, so the entire programmatic guide cluster shipped a BreadcrumbList Google discards. Normalised inside BreadcrumbSchema, the one choke point all eleven go through: visible links stay relative, schema comes out absolute, and the six callers already passing absolute URLs are untouched. Verified end to end on a rendered blog post, not just at the component. 4 new tests, 10 in the file."
+    },
+    {
+      "id": "SEO-013",
+      "title": "Unverified compliance and superlative claims in the AI-facing files",
+      "description": "As the site owner, I want claims fed to AI answer engines to be ones EatPal can support, so that an assistant does not repeat something indefensible.",
+      "acceptanceCriteria": [
+        "Confirm or withdraw: HIPAA compliance for the Professional tier (stated 5 times across llms.txt and llms-full.txt)",
+        "Confirm or withdraw: SOC 2 compliant infrastructure",
+        "Confirm or withdraw: \"the only picky eater platform with a HIPAA-compliant professional tier\"",
+        "Align the Professional plan wording with PRICING_PLANS.professional.summary, which says 'insurance-compatible documentation' rather than 'insurance billing'"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Left untouched deliberately in iteration 8. These are product, legal and compliance claims, not SEO defects, and I have no evidence in the repo either way -- which is the point: they are asserted to AI crawlers with nothing behind them that a reader here can check. The superlative (\"the only\") is the weakest of them. Needs a decision from someone who knows whether the audits exist, so it is a question rather than a patch."
     }
   ]
 }
