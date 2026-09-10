@@ -17,6 +17,7 @@ import { sanitizeTextInput, INPUT_LIMITS } from '../../app/mobile/lib/validation
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 import { useTheme, type ThemeMode } from '../../app/mobile/contexts/ThemeContext';
 import { clearMobileSecureStorage } from '../../app/mobile/lib/secureStorageReset';
+import { deactivatePushToken } from '../../app/mobile/lib/notifications';
 import {
   isBiometricAvailable,
   authenticateBiometric,
@@ -258,6 +259,12 @@ export default function ProfileScreen() {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            // Stop push to this device first: the update is authenticated
+            // and RLS scopes push_tokens to auth.uid(), so it needs the
+            // session that is about to go away. Otherwise the row stays
+            // active against this account and the server keeps pushing meal
+            // and grocery content to a signed-out phone.
+            await deactivatePushToken();
             // US-123: clear everything we own in expo-secure-store before
             // wiping the supabase session. Order matters — supabase's signOut
             // removes its own keys; ours must be removed in the same flow so

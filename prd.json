@@ -4453,6 +4453,23 @@
       "platform": "ios",
       "loopVerifiable": false,
       "notes": "Split out 2026-09-10 (iOS platform loop, iteration 1). The iteration fixed the Universal Link contract itself: the apple-app-site-association generator claimed /join/*, /share/*, /kids/*, /planner/*, /tracker/* and friends, none of which the Swift handler routed and several of which are not even web routes (kids, planner, grocery, pantry, recipes are nested under /dashboard). handleUniversalLink only ever matched /app/<screen>, which nothing on the web serves. Turning on APPLE_TEAM_ID with that combination would have taken invite links away from Safari and dropped them on the floor. The AASA now claims exactly what the app routes, and a vitest reads the Swift source to keep the two pinned. /join and /share are the two genuinely valuable ones and are deliberately still excluded because routing them in-app is real work: the accept-invite flow, the signed-out resume, and the share payload shapes. That is this story."
+    },
+    {
+      "id": "US-852",
+      "title": "Push notifications on the Expo build have never been able to work",
+      "description": "As someone using the Expo build of EatPal, I want the reminders I enabled to actually arrive, so that the notification settings screen is not describing a feature the app cannot perform.",
+      "acceptanceCriteria": [
+        "expo-notifications is a declared dependency at the version Expo 54 pins, and app.config.js registers its plugin.",
+        "registerPushToken returns a real token on a device build, and the push_tokens row it writes carries platform 'ios' or 'android' rather than whatever Platform.OS reports on an unsupported target.",
+        "The dynamic import's catch no longer silently swallows a missing module: a module that should be present and is not is reported, not treated as 'push unavailable on this platform'.",
+        "A test proves registerPushToken and deactivatePushToken drive the client as expected, rather than asserting on their source text.",
+        "The notification settings UI does not offer toggles on a build where push cannot be delivered."
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "ios",
+      "loopVerifiable": false,
+      "notes": "Found 2026-09-10 (iOS platform loop, iteration 3). app/mobile/lib/notifications.ts does `await import('expo-notifications').catch(() => null)` and returns early when that is null. expo-notifications is not in package.json dependencies (expo-camera, expo-haptics, expo-secure-store and the rest are), so the catch fires every time and requestPushPermission / registerPushToken are no-ops on every build. The iteration-3 sign-out fix touches this file and is correct, but on the Expo side it is currently inert for the same reason. The shipped Swift app is unaffected -- it registers with APNs directly. Fixing this needs a dependency add, a plugin entry, a device build to verify against, and a decision about what the settings screen should show when push is unavailable, which is more than one loop iteration."
     }
   ]
 }
