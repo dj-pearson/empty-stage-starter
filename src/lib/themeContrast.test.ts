@@ -120,3 +120,76 @@ describe('tokens used as text read on every surface they are drawn on', () => {
     }
   }
 });
+
+/**
+ * US-858: --safe-food and --try-bite, which nothing here covered.
+ *
+ * Every serious accessibility violation left in the signed-in app is white text
+ * on one of two colours, and both of them are these:
+ *
+ *   #16a249  hsl(142 76% 36%)  --safe-food, and --secondary, which is the SAME
+ *                              COLOUR DEFINED TWICE      3.33:1   9 nodes
+ *   #f97015  hsl(24 95% 53%)   --try-bite                2.85:1   3 nodes
+ *
+ * They are the most repeated coloured elements in the product -- one or two per
+ * food card -- and they were the one part of the palette with no arithmetic
+ * behind it, so the only thing that ever noticed was an axe run that needs a
+ * built site, a fake backend and a browser.
+ *
+ * WHAT WOULD FIX THEM, measured against white text and against the worst
+ * surface each is drawn on as text:
+ *
+ *   --safe-food  36% -> 27%    white 5.50:1, as text 4.53:1
+ *   --try-bite   53% -> 35.5%  white 5.49:1, as text 4.53:1
+ *
+ * Not applied here. --try-bite at 35.5% is hue 24 sat 95% -- which is
+ * --primary, exactly (24 95% 35%, darkened for this same reason in US-822). So
+ * the arithmetic fix collapses "try bite" into the brand primary, and choosing
+ * between that, a new hue, and dark-on-fill badge text is a design decision
+ * with a blast radius, not a test's call. Recorded as ratchets, in the same
+ * spirit as KNOWN_BELOW_AA above: darkening either token tightens the gate on
+ * its own, and lightening one fails.
+ */
+const WHITE: [number, number, number] = [255, 255, 255];
+
+/** Ratios measured 2026-09-11, floors a hundredth below so float rounding alone
+ *  cannot fail the gate. */
+const BADGE_FILL_FLOORS: Record<string, number> = {
+  'safe-food': 3.32, // measured 3.33
+  'try-bite': 2.84, // measured 2.85
+};
+
+describe('the food-status tokens carry the white text drawn on them', () => {
+  for (const name of Object.keys(BADGE_FILL_FLOORS)) {
+    it(`white on --${name}`, () => {
+      // Literal white, not a -foreground token: these badges are written
+      // `bg-safe-food text-white` in the components, so white is what has to be
+      // measured whatever a token might say.
+      const ratio = contrast(WHITE, hslToRgb(token(name)));
+      expect(
+        ratio,
+        `white on --${name} is ${ratio.toFixed(2)}:1 (floor ${BADGE_FILL_FLOORS[name]}, AA wants ${AA_NORMAL_TEXT})`
+      ).toBeGreaterThanOrEqual(BADGE_FILL_FLOORS[name]);
+    });
+  }
+
+  it('says out loud that neither of them meets AA yet', () => {
+    // So a reader of a green run does not take these two for passing. When one
+    // is fixed its floor becomes 4.5 and it comes off this list.
+    for (const [name, floor] of Object.entries(BADGE_FILL_FLOORS)) {
+      expect(floor, `--${name} is listed as below AA but its floor is at or above it`).toBeLessThan(
+        AA_NORMAL_TEXT
+      );
+    }
+  });
+});
+
+describe('--safe-food and --secondary are the same colour', () => {
+  it('so a fix to one that misses the other leaves half the badges failing', () => {
+    // Nine of the twelve remaining violations are #16a249, split across
+    // bg-secondary chips on grocery and recipes and bg-safe-food badges on the
+    // pantry. Whoever darkens one has to darken both, and this is where they
+    // find that out.
+    expect(token('safe-food')).toEqual(token('secondary'));
+  });
+});

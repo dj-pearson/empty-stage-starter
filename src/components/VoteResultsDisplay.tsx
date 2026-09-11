@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
@@ -11,27 +10,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TrendingUp, TrendingDown, Minus, Users } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { logger } from "@/lib/logger";
+import {
+  mealVotesStore,
+  summarizeVotes,
+  type VoteSummary,
+} from "@/lib/mealVotesStore";
 import { Kid } from "@/types";
 import { cn } from "@/lib/utils";
-
-interface VoteResult {
-  kidId: string;
-  kidName: string;
-  vote: 'love_it' | 'okay' | 'no_way';
-  voteEmoji: string;
-  votedAt: string;
-}
-
-interface VoteSummary {
-  totalVotes: number;
-  loveItCount: number;
-  okayCount: number;
-  noWayCount: number;
-  approvalScore: number;
-  votes: VoteResult[];
-}
 
 interface VoteResultsDisplayProps {
   planEntryId?: string;
@@ -55,96 +40,32 @@ export function VoteResultsDisplay({
   const [voteSummary, setVoteSummary] = useState<VoteSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  /*
+   * US-863: the fetch and the realtime subscription are shared.
+   *
+   * This component renders once per meal cell, and it used to do both itself:
+   * measured on the built planner, 8 identical GET /rest/v1/meal_votes per load
+   * with a week on screen, and one supabase.channel() per cell -- 21 of each on
+   * a full week at three slots a day, every channel watching the same table. A
+   * cell with no plan entry subscribed with no filter at all, so any vote
+   * anywhere re-ran its query.
+   *
+   * src/lib/mealVotesStore.ts collects the keys every mounted cell asks for,
+   * issues one query for the union of them, and opens one channel. The props
+   * and the rendering below are unchanged.
+   */
+  const voteKey = useMemo(
+    () => ({ planEntryId, recipeId, mealDate, mealSlot }),
+    [planEntryId, recipeId, mealDate, mealSlot]
+  );
+
   useEffect(() => {
-    loadVotes();
-
-    // Subscribe to real-time updates. The channel name MUST be unique per
-    // subscription — this component renders once per meal cell, and Supabase
-    // keys channels by topic name, so a shared static name made every cell
-    // collide (only one updated live, and unmounting one tore down another).
-    const channelName = `vote-updates-${planEntryId ?? `${recipeId ?? ''}-${mealDate ?? ''}-${mealSlot ?? ''}`}`;
-    logger.debug('Subscribing to vote updates', { channelName, planEntryId });
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'meal_votes',
-          filter: planEntryId ? `plan_entry_id=eq.${planEntryId}` : undefined,
-        },
-        () => {
-          loadVotes();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      logger.debug('Unsubscribing from vote-updates');
-      supabase.removeChannel(channel);
-    };
-  }, [planEntryId, recipeId, mealDate, mealSlot]);
-
-  const loadVotes = async () => {
-    try {
-      let query = (supabase as any).from('meal_votes').select(`
-        kid_id,
-        vote,
-        vote_emoji,
-        voted_at,
-        kids (
-          id,
-          name
-        )
-      `);
-
-      if (planEntryId) {
-        query = query.eq('plan_entry_id', planEntryId);
-      } else if (recipeId && mealDate && mealSlot) {
-        query = query
-          .eq('recipe_id', recipeId)
-          .eq('meal_date', mealDate)
-          .eq('meal_slot', mealSlot);
-      }
-
-      const { data, error } = await query as { data: any[] | null; error: any };
-
-      if (error) throw error;
-
-      // Process votes
-      const votes: VoteResult[] = (data || []).map((v: any) => ({
-        kidId: v.kid_id,
-        kidName: v.kids.name,
-        vote: v.vote,
-        voteEmoji: v.vote_emoji,
-        votedAt: v.voted_at,
-      }));
-
-      const loveItCount = votes.filter(v => v.vote === 'love_it').length;
-      const okayCount = votes.filter(v => v.vote === 'okay').length;
-      const noWayCount = votes.filter(v => v.vote === 'no_way').length;
-      const totalVotes = votes.length;
-
-      // Calculate approval score (love_it=100, okay=50, no_way=0)
-      const approvalScore = totalVotes > 0
-        ? Math.round(((loveItCount * 100) + (okayCount * 50)) / totalVotes)
-        : 0;
-
-      setVoteSummary({
-        totalVotes,
-        loveItCount,
-        okayCount,
-        noWayCount,
-        approvalScore,
-        votes,
-      });
-    } catch (error) {
-      logger.error('Error loading votes:', error);
-    } finally {
+    setIsLoading(true);
+    return mealVotesStore.subscribe(voteKey, (rows) => {
+      setVoteSummary(summarizeVotes(rows));
       setIsLoading(false);
-    }
-  };
+    });
+  }, [voteKey]);
 
   if (isLoading) {
     return null;

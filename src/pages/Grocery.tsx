@@ -49,6 +49,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { logger } from "@/lib/logger";
+import { normalizeHouseholdId } from "@/lib/householdId";
 
 // Extended type for grocery items with additional database properties
 // Type for aisle mapping records
@@ -149,7 +150,7 @@ export default function Grocery() {
             toast.error('Failed to load household data', { description: 'Some features may be unavailable' });
             return;
           }
-          setHouseholdId((hh as string) ?? null);
+          setHouseholdId(normalizeHouseholdId(hh));
         }
       } catch (error) {
         logger.error('Unexpected error loading user data in Grocery:', error);

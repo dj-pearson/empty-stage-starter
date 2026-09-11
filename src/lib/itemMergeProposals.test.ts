@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { proposeMerges, type MergeCandidateItem } from './itemMergeProposals';
 
-const H = 'hh-1';
+const H = '11111111-1111-4111-8111-111111111111';
 const item = (over: Partial<MergeCandidateItem> & { id: string; name: string }): MergeCandidateItem => ({
   household_id: H,
   ...over,
@@ -150,7 +150,7 @@ describe('scope and eligibility', () => {
   it('never groups across households', () => {
     expect(
       proposeMerges([
-        item({ id: 'a', name: 'rice', household_id: 'hh-1' }),
+        item({ id: 'a', name: 'rice', household_id: '11111111-1111-4111-8111-111111111111' }),
         item({ id: 'b', name: 'Rice', household_id: 'hh-2' }),
       ])
     ).toEqual([]);

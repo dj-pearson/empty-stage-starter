@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Select,
   SelectContent,
@@ -41,7 +41,37 @@ export function GroceryListSelector({
   const [lists, setLists] = useState<GroceryList[]>([]);
   const [loading, setLoading] = useState(true);
 
+  /*
+   * US-864: this effect used to re-run because of its own side effect.
+   *
+   * `selectedListId` was in the dependency array, and the effect CHANGES it --
+   * it calls onListChange(defaultList.id) to auto-select the default. So every
+   * mount fetched the lists, selected one, and fetched them again because the
+   * selection had changed. Measured on the built grocery page: 6 x
+   * GET /rest/v1/grocery_lists per load -- three per instance, and Dashboard
+   * mounted the whole routed page twice, once per shell (US-865).
+   *
+   * Which lists exist has nothing to do with which one is selected. The
+   * selection is read through a ref so the effect can see it without being
+   * re-triggered by it.
+   *
+   * THE CALLBACKS ARE HELD IN REFS TOO. `setSelectedListId` and
+   * `setDefaultListId` happen to be stable today, so they were not part of the
+   * measured problem -- but a caller passing an inline arrow would silently
+   * reintroduce a fetch on every parent render, and nothing would catch it.
+   * This component cannot control how it is called; it can control what
+   * re-triggers its query.
+   */
+  const selectedListIdRef = useRef(selectedListId);
+  selectedListIdRef.current = selectedListId;
+  const onListChangeRef = useRef(onListChange);
+  onListChangeRef.current = onListChange;
+  const onDefaultListChangeRef = useRef(onDefaultListChange);
+  onDefaultListChangeRef.current = onDefaultListChange;
+
   useEffect(() => {
+    let cancelled = false;
+
     const loadLists = async () => {
       setLoading(true);
       try {
@@ -60,28 +90,35 @@ export function GroceryListSelector({
         }
 
         const { data, error } = await query;
+        if (cancelled) return;
 
         if (!error && data) {
           const groceryLists = data as unknown as GroceryList[];
           setLists(groceryLists);
 
           const defaultList = groceryLists.find(l => l.is_default) || groceryLists[0];
-          onDefaultListChange?.(defaultList?.id ?? null);
+          onDefaultListChangeRef.current?.(defaultList?.id ?? null);
 
           // Auto-select default list if none selected
-          if (!selectedListId && defaultList) {
-            onListChange(defaultList.id);
+          if (!selectedListIdRef.current && defaultList) {
+            onListChangeRef.current(defaultList.id);
           }
         }
       } catch (err) {
         logger.error('Error loading grocery lists:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     loadLists();
-  }, [userId, householdId, selectedListId, onListChange, onDefaultListChange]);
+
+    return () => {
+      // A household resolving mid-flight would otherwise let the first
+      // response land after the second and overwrite it.
+      cancelled = true;
+    };
+  }, [userId, householdId]);
 
   if (loading) {
     return (

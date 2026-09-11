@@ -331,7 +331,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
           <span className="text-sm font-medium">EatPal Meal Planner</span>
         </m.div>
 
-        <m.h1
+        <m.h2
           initial={{ opacity: shouldReduceMotion ? 1 : 0, y: shouldReduceMotion ? 0 : 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
@@ -341,7 +341,7 @@ export function AnimatedWelcomeBanner({ name, subtitle }: AnimatedWelcomeBannerP
           className="text-4xl md:text-5xl font-bold mb-4 text-foreground"
         >
           Welcome, {name}!
-        </m.h1>
+        </m.h2>
 
         <m.p
           initial={{ opacity: shouldReduceMotion ? 1 : 0, y: shouldReduceMotion ? 0 : 15 }}

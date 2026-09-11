@@ -146,6 +146,8 @@ export default function InsightsDashboard() {
               <Progress 
                 value={item.percentage} 
                 className={item.count < 2 ? "bg-red-100" : ""}
+                aria-label={`${item.category} variety`}
+                aria-valuetext={`${item.count} foods, ${Math.round(item.percentage)} percent`}
               />
             </div>
           ))}
@@ -221,6 +223,8 @@ export default function InsightsDashboard() {
               </div>
               <Progress 
                 value={insights.totalTryBites > 0 ? (insights.successfulTryBites / insights.totalTryBites) * 100 : 0} 
+                aria-label="Successful try bites"
+                aria-valuetext={`${insights.successfulTryBites || 0} of ${insights.totalTryBites || 0}`}
               />
             </div>
             

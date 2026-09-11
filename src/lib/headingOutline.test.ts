@@ -16,11 +16,14 @@
  * accessibility tree and not in the outline.
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
+
+import { outputPathFor } from '../../scripts/prerender.mjs';
 
 const ROOT = process.cwd();
 const DIST = join(ROOT, 'dist');
+const MANIFEST = join(DIST, 'prerender-manifest.json');
 
 export function outlineOf(html: string): number[] {
   const body = html.includes('<body') ? html.slice(html.indexOf('<body')) : html;
@@ -36,18 +39,29 @@ export function skippedLevels(levels: number[]): string[] {
   return [...jumps];
 }
 
-function prerenderedPages(): string[] {
-  if (!existsSync(DIST)) return [];
-  const out: string[] = [];
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir)) {
-      const full = join(dir, entry);
-      if (statSync(full).isDirectory()) walk(full);
-      else if (entry === 'index.html') out.push(full);
-    }
-  };
-  walk(DIST);
-  return out;
+/**
+ * DISCOVERY COMES FROM THE MANIFEST, not from a directory walk.
+ *
+ * The first version of this walked dist/ collecting files named index.html.
+ * The prerenderer does not write those: outputPathFor maps /pricing to
+ * dist/pricing.html and /compare/eatpal-vs-mealime to
+ * dist/compare/eatpal-vs-mealime.html, and
+ * src/lib/prerenderOutputPath.test.ts pins that as an invariant -- "never
+ * writes an index.html below the root" -- because a directory index made every
+ * sitemap URL a 308. So the walk matched exactly one file, dist/index.html,
+ * and this gate read the homepage 29 times over while reporting itself as a
+ * scan of the prerendered pages. Worse, its own floor then failed (1 < 25) on
+ * any checkout that had actually run a build; it only ever came back green
+ * because CI's unit job has no dist/ and takes the skip path.
+ *
+ * Reading the manifest and mapping each route through the writer's own
+ * outputPathFor is what stops discovery from drifting from the writer again:
+ * change the layout and both move together, or the existsSync below fails.
+ */
+function prerenderedPages(): Array<{ route: string; file: string }> {
+  if (!existsSync(MANIFEST)) return [];
+  const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8')) as { rendered?: string[] };
+  return (manifest.rendered ?? []).map((route) => ({ route, file: outputPathFor(route) }));
 }
 
 describe('US-849: the scan', () => {
@@ -80,17 +94,32 @@ describe('US-849: the prerendered pages', () => {
     // The unit job runs without dist/. Skipping silently is how a gate becomes
     // decorative, so the state is asserted either way.
     if (pages.length === 0) {
-      expect(existsSync(DIST), 'no dist/ -- run npm run build before trusting this file').toBe(false);
+      expect(
+        existsSync(MANIFEST),
+        'no dist/prerender-manifest.json -- run npm run build before trusting this file',
+      ).toBe(false);
       return;
     }
     expect(pages.length).toBeGreaterThanOrEqual(25);
   });
 
+  it('every page the manifest claims is on disk where the writer put it', () => {
+    if (pages.length === 0) return;
+    // The assertion that makes the discovery above honest: a route present in
+    // the manifest and absent from disk under the path outputPathFor names is
+    // either a layout change or a half-finished build, and either one would
+    // otherwise shrink this scan silently.
+    const missing = pages
+      .filter(({ file }) => !existsSync(file))
+      .map(({ route, file }) => `${route} -> ${relative(DIST, file).split(sep).join('/')}`);
+    expect(missing, `manifest routes with no file:\n${missing.join('\n')}`).toEqual([]);
+  });
+
   it('every page has exactly one h1, and no page skips a heading level', () => {
     if (pages.length === 0) return;
     const problems: string[] = [];
-    for (const file of pages) {
-      const route = file.slice(DIST.length).replace(/\/index\.html$/, '') || '/';
+    for (const { route, file } of pages) {
+      if (!existsSync(file)) continue; // reported by the test above
       const levels = outlineOf(readFileSync(file, 'utf8'));
       const h1s = levels.filter((l) => l === 1).length;
       const jumps = skippedLevels(levels);

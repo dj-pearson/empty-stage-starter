@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { DataSourceCredit } from "@/components/DataSourceCredit";
 import { logger } from "@/lib/logger";
+import { normalizeHouseholdId } from '@/lib/householdId';
 
 type ScannedFood = {
   name: string;
@@ -270,9 +271,12 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       
       if (targetTable === 'foods') {
         // Get household_id first
-        const { data: householdId } = await supabase
+        const { data: householdIdRaw } = await supabase
           .rpc('get_user_household_id', { _user_id: user.id });
-        
+        // `if (!householdIdRaw)` alone would accept [], which is truthy and not
+        // a household id. See src/lib/householdId.ts.
+        const householdId = normalizeHouseholdId(householdIdRaw);
+
         if (!householdId) throw new Error("No household found");
 
         // Add to user's personal foods or update existing quantity

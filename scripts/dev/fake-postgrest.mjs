@@ -122,6 +122,123 @@ const GROCERY_ITEMS = [
   created_at: `2026-09-0${i + 1}T00:00:00.000Z`,
 }));
 
+/**
+ * A pantry: safe foods, try-bites and neither, across the categories the app
+ * knows. Eight rows is enough for the category sections to render more than one
+ * group without making a scan crawl.
+ */
+const FOODS = [
+  ['Whole milk', 'dairy', true, false, 'Dairy'],
+  ['Sharp cheddar', 'dairy', false, true, 'Dairy'],
+  ['Chicken nuggets', 'protein', true, false, 'Freezer'],
+  ['Broccoli florets', 'vegetable', false, true, 'Produce'],
+  ['Bananas', 'fruit', true, false, 'Produce'],
+  ['Strawberries', 'fruit', false, true, 'Produce'],
+  ['Buttered pasta', 'carb', true, false, 'Pantry'],
+  ['Goldfish crackers', 'snack', true, false, 'Pantry'],
+].map(([name, category, is_safe, is_try_bite, aisle], i) => ({
+  id: `dddddddd-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  user_id: TEST_USER_ID_LITERAL,
+  name,
+  category,
+  is_safe,
+  is_try_bite,
+  needs_review: false,
+  aisle,
+  quantity: 1,
+  unit: 'count',
+  created_at: `2026-09-0${i + 1}T00:00:00.000Z`,
+  updated_at: `2026-09-0${i + 1}T00:00:00.000Z`,
+}));
+
+/**
+ * US-859: two children, and a week of meals for them.
+ *
+ * Four of the seven main dashboard screens -- planner, insights, analytics and
+ * progress -- render "No Child Selected" or "Add a child profile first" when
+ * there are no kids, and that is the state every browser check in CI was
+ * measuring. The a11y scan reported planner: 0, which is 0 violations on a
+ * sentence and a button.
+ *
+ * Dates are RELATIVE TO TODAY. AppContext fetches plan_entries inside a date
+ * window around now, and the planner renders one week of it, so a fixture with
+ * literal dates stops appearing the moment it ages out and quietly returns
+ * every one of these screens to its empty state.
+ */
+const KIDS = [
+  ['Ada', 6, 'cautious'],
+  ['Sam', 4, 'adventurous'],
+].map(([name, age, eating_behavior], i) => ({
+  id: `bbbbbbbb-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  user_id: TEST_USER_ID_LITERAL,
+  name,
+  age,
+  eating_behavior,
+  profile_completed: true,
+  allergens: [],
+  dietary_restrictions: [],
+  favorite_foods: [],
+  disliked_foods: [],
+  created_at: `2026-01-0${i + 1}T00:00:00.000Z`,
+  updated_at: `2026-01-0${i + 1}T00:00:00.000Z`,
+}));
+
+/** yyyy-mm-dd, `offset` days from today in UTC. */
+function isoDay(offset) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+const PLAN_ENTRIES = [
+  [0, 'breakfast', 0, 0, 'ate'],
+  [0, 'lunch', 0, 2, 'tried'],
+  [0, 'dinner', 0, 6, null],
+  [1, 'breakfast', 0, 4, null],
+  [1, 'dinner', 1, 2, null],
+  [2, 'lunch', 1, 7, null],
+  [-1, 'dinner', 1, 3, 'refused'],
+].map(([dayOffset, meal_slot, kidIndex, foodIndex, result], i) => ({
+  id: `eeeeeeee-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  user_id: TEST_USER_ID_LITERAL,
+  kid_id: KIDS[kidIndex].id,
+  food_id: FOODS[foodIndex].id,
+  date: isoDay(dayOffset),
+  meal_slot,
+  result,
+  is_primary_dish: true,
+  created_at: '2026-09-01T00:00:00.000Z',
+  updated_at: '2026-09-01T00:00:00.000Z',
+}));
+
+/**
+ * Votes on the first three plan entries: PostgREST answers the embedded
+ * `kids (id, name)` select as a nested object, which is what the component
+ * reads, so the fixture has to carry it.
+ */
+const MEAL_VOTES = [
+  [0, 0, 'love_it', '\u{1F60D}'],
+  [0, 1, 'okay', '\u{1F610}'],
+  [1, 0, 'no_way', '\u{1F645}'],
+  [2, 1, 'love_it', '\u{1F60D}'],
+].map(([entryIndex, kidIndex, vote, vote_emoji], i) => ({
+  id: `9999aaaa-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  plan_entry_id: PLAN_ENTRIES[entryIndex].id,
+  recipe_id: null,
+  kid_id: KIDS[kidIndex].id,
+  meal_date: PLAN_ENTRIES[entryIndex].date,
+  meal_slot: PLAN_ENTRIES[entryIndex].meal_slot,
+  vote,
+  vote_emoji,
+  voted_at: '2026-09-10T18:00:00.000Z',
+  updated_at: '2026-09-10T18:00:00.000Z',
+  kids: { id: KIDS[kidIndex].id, name: KIDS[kidIndex].name },
+}));
+
 /** PostgREST answers an object rather than an array for .single()/.maybeSingle(). */
 function sendRows(res, req, rows) {
   const single = (req.headers.accept || '').includes('vnd.pgrst.object');
@@ -262,6 +379,30 @@ createServer((req, res) => {
   // Rows are shaped from the real columns the app selects and writes. Reads
   // only: a POST or PATCH still falls through to the empty answer below, which
   // is honest -- this stands in for a backend, it does not implement one.
+  // US-857: the RPC every household-scoped screen actually calls.
+  //
+  // This file answered /rest/v1/households and /rest/v1/household_members but
+  // nothing for /rest/v1/rpc/get_user_household_id, so it fell through to the
+  // generic empty answer -- `[]`, which is TRUTHY. The app stored that as its
+  // household id, and the grocery list selector threw
+  // "Invalid UUID for householdId: " three times a load and rendered no lists.
+  // So every authenticated browser check in CI was measuring a grocery page
+  // whose household was broken, including the a11y baselines.
+  //
+  // The real function RETURNS uuid, so PostgREST answers a bare JSON scalar,
+  // not an array. Matching that shape is the whole point: answering `[...]` here
+  // would reproduce the bug this stands in for.
+  if (url.pathname === '/rest/v1/rpc/get_user_household_id') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(HOUSEHOLD_ID));
+  }
+
+  // Returns the caller's household, creating one if absent. Same scalar shape.
+  if (url.pathname === '/rest/v1/rpc/ensure_user_household') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(HOUSEHOLD_ID));
+  }
+
   if (url.pathname === '/rest/v1/households') {
     return sendRows(res, req, [{ id: HOUSEHOLD_ID, name: 'Test Household', created_by: TEST_USER.id }]);
   }
@@ -277,6 +418,81 @@ createServer((req, res) => {
         profiles: { full_name: 'E2E Parent' },
       },
     ]);
+  }
+
+  // US-858: a pantry with food in it.
+  //
+  // Nothing answered /rest/v1/foods, so every authenticated browser check
+  // measured the pantry EMPTY -- and an empty pantry renders EmptyPantryState,
+  // three cards and a paragraph, not the food cards the screen exists for. The
+  // a11y baseline of 46 for this route was measured against AppContext's
+  // STARTER SEED, which it plants only when nothing loads at all, so the number
+  // described neither an empty pantry nor a real one.
+  //
+  // Columns are the real ones from src/integrations/supabase/types.ts. is_safe
+  // and is_try_bite matter most: they are what draws the two coloured badges on
+  // every food card, which is where this screen's contrast debt lives.
+
+  // US-862: a saved accessibility row, so a load has something to read back.
+  //
+  // With nothing here, every page load found no row and wrote one -- which
+  // looks exactly like the bug this stands in for and hides its fix. The values
+  // are the client's own defaults (DEFAULT_PREFERENCES in
+  // src/contexts/AccessibilityContext.tsx) because headless Chromium reports no
+  // system preference, so a correct client merges this to itself and writes
+  // nothing.
+  if (url.pathname === '/rest/v1/user_accessibility_preferences') {
+    if (req.method !== 'GET') {
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+      return res.end('[]');
+    }
+    return sendRows(res, req, [
+      {
+        id: 'ffffffff-0000-4000-8000-000000000001',
+        user_id: TEST_USER_ID_LITERAL,
+        preferences: {
+          reducedMotion: false,
+          highContrast: false,
+          largeText: false,
+          fontSize: 'default',
+          screenReaderMode: false,
+          announcePageChanges: true,
+          verboseDescriptions: false,
+          enhancedFocus: false,
+          keyboardShortcuts: true,
+          extendedTimeouts: false,
+          disableAutoplay: true,
+          simplifiedUI: false,
+          dyslexiaFont: false,
+        },
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+  }
+
+  // US-863: votes on the planned meals, with the kids row the query embeds.
+  //
+  // VoteResultsDisplay renders once per meal cell and asks for these itself, so
+  // with nothing here the planner's vote row stayed empty and the query count it
+  // makes could not be measured against a screen that shows anything.
+  if (url.pathname === '/rest/v1/meal_votes') {
+    if (req.method !== 'GET') {
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+      return res.end('[]');
+    }
+    return sendRows(res, req, MEAL_VOTES);
+  }
+
+  if (url.pathname === '/rest/v1/kids') {
+    return sendRows(res, req, KIDS);
+  }
+
+  if (url.pathname === '/rest/v1/plan_entries') {
+    return sendRows(res, req, PLAN_ENTRIES);
+  }
+
+  if (url.pathname === '/rest/v1/foods') {
+    return sendRows(res, req, FOODS);
   }
 
   if (url.pathname === '/rest/v1/grocery_lists') {

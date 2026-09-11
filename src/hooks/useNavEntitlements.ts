@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { NavEntitlements } from "@/lib/navigation";
+import { sharedQuery } from "@/lib/sharedQuery";
+import { adminRoleKey, fetchActiveSubscription } from "@/lib/accountQueries";
 
 /**
  * Which gated nav sections this user can see (US-811).
@@ -27,22 +29,25 @@ export function useNavEntitlements(): NavEntitlements {
       } = await supabase.auth.getUser();
       if (!user || cancelled) return;
 
-      const [{ data: adminData }, { data: subscriptionData }] = await Promise.all([
-        supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id)
-          .eq("role", "admin")
-          .maybeSingle(),
-        supabase
-          .from("user_subscriptions")
-          .select(`
-            status,
-            subscription_plans(name)
-          `)
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .maybeSingle(),
+      /*
+       * US-866: both of these are shared.
+       *
+       * This hook is mounted by AppSidebar AND by Dashboard, so each of these
+       * queries used to go out twice per page load -- and useWhiteLabelTheme
+       * issues the subscription one a third time, byte for byte. Nothing was
+       * wrong with either call; there was nowhere for them to meet.
+       */
+      const [adminData, subscriptionData] = await Promise.all([
+        sharedQuery(adminRoleKey(user.id), async () => {
+          const { data } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .eq("role", "admin")
+            .maybeSingle();
+          return data;
+        }),
+        fetchActiveSubscription(user.id),
       ]);
 
       if (cancelled) return;

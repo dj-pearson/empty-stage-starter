@@ -130,6 +130,12 @@ const Landing = () => {
 
       grids.forEach((grid) => {
         const items = grid.querySelectorAll(".animate-item");
+        // A grid whose children were never given .animate-item hands GSAP an
+        // empty NodeList: it warns "GSAP target [object NodeList] not found"
+        // and the section stays unanimated while every other one fades in.
+        // Skipping is the honest response to nothing to animate; the gate in
+        // tests/landing-animation.spec.ts is what catches the missing class.
+        if (items.length === 0) return;
 
         gsap.fromTo(items,
           { y: 30, opacity: 0 },
@@ -910,7 +916,7 @@ const Landing = () => {
 
             <div className="animate-grid grid md:grid-cols-3 gap-6">
               {/* Free Plan */}
-              <Card className="relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
+              <Card className="animate-item relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
                 <CardHeader className="text-center pb-2">
                   <p className="text-sm font-medium text-muted-foreground mb-2">FREE</p>
                   <CardTitle className="text-4xl font-bold">$0</CardTitle>
@@ -934,7 +940,7 @@ const Landing = () => {
               </Card>
 
               {/* Pro Plan - Most Popular */}
-              <Card className="relative border-2 border-primary shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 duration-300">
+              <Card className="animate-item relative border-2 border-primary shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 duration-300">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <Badge className="bg-primary text-white px-4">Most Popular</Badge>
                 </div>
@@ -971,7 +977,7 @@ const Landing = () => {
               </Card>
 
               {/* Family Plan */}
-              <Card className="relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
+              <Card className="animate-item relative hover:shadow-lg transition-all hover:-translate-y-1 duration-300">
                 <CardHeader className="text-center pb-2">
                   <p className="text-sm font-medium text-muted-foreground mb-2">FAMILY</p>
                   <CardTitle className="text-4xl font-bold">{priceLabel("familyPlus")}</CardTitle>

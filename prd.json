@@ -4487,6 +4487,274 @@
       "platform": "ios",
       "loopVerifiable": false,
       "notes": "Found 2026-09-10 (iOS platform loop, iteration 13). The iteration fixed the HealthKit half of this: LogMealResultIntent writes plan_entries.result straight through DataService and skipped everything AppState.updatePlanEntry does afterwards. Health sync now runs from both surfaces via the shared HealthKitService.applyMealResult. Two things are still in-app only: BadgeService.evaluate (so a Siri-logged meal does not advance a streak or earn a badge) and AnalyticsService.track(.mealResultLogged). Badges are the harder one -- evaluate() surfaces a celebration sheet through shared state the intent has no access to, so it needs a decision about what an earned-while-in-Siri badge does, which is more than one loop iteration."
+    },
+    {
+      "id": "US-854",
+      "title": "The pricing cards on the landing page never animated, and said so five times per load",
+      "description": "As a visitor reading down the landing page, I want the pricing section to arrive the way every section above it does, so that the page does not end on the one block that looks unfinished.",
+      "acceptanceCriteria": [
+        "Every .animate-grid on / has at least one .animate-item child to animate.",
+        "Loading / and scrolling to the bottom produces no \"GSAP target ... not found\" console warning.",
+        "No .animate-section or .animate-item is left below opacity 0.95 after being scrolled past, so the fix cannot be 'delete the animation' or leave copy unreadable.",
+        "The grid loop skips a grid with nothing to animate rather than handing GSAP an empty NodeList.",
+        "The check has a floor, so 'every grid has items' cannot be true of an empty list.",
+        "Measured in a browser against the built site, not asserted from source."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 1) by sweeping every public route in a browser for console output, which nothing had done. The landing page logged five \"GSAP target ... not found\" warnings on every load. Cause: src/pages/Landing.tsx staggers `.animate-item` children inside each `.animate-grid`, and the pricing preview grid's three plan Cards were the only grid children in the file never given the class -- the other five grids build theirs in a `.map()` with an `animate-item` wrapper div, this one is static JSX. So `grid.querySelectorAll('.animate-item')` returned an empty NodeList and GSAP was tweening nothing: one warning named the NodeList, four more came out of the stagger timeline built on top of it. Visible result: the last section before the footer, the three plan cards, sat still while the five sections above it faded up. Adding `animate-item` to the three Card classNames took the warnings from 5 to 0 (measured, same build, same scroll) and gave the grid items=3 like its neighbours. Also guarded the loop -- items.length === 0 returns -- because a future grid without the class should be inert and quiet, with the gate being what reports it. THE DIVISION MATTERS: with the guard in and the class out, the warning assertion passes and only the 'every grid has something to animate' assertion fails, which is the one that names the section. Verified by reverting the class, rebuilding, and watching exactly that test fail with the FREE/$0 card in its message. tests/landing-animation.spec.ts runs against E2E_TARGET=dist (the animation only exists in the built chunk) and is already in CI's `tests/*.spec.ts` glob. The third assertion is the one that would catch the worse version of this bug: fromTo starts these elements at opacity 0, so a ScrollTrigger that fires for a section but never completes leaves real copy unreadable. Nothing is currently faded; the assertion exists because nothing was watching that either."
+    },
+    {
+      "id": "US-855",
+      "title": "The heading-outline gate read the homepage 29 times and called it a scan of 29 pages",
+      "description": "As someone relying on the WCAG 1.3.1 claim in the VPAT, I want the gate behind it to read the pages it names, so that the conformance statement is backed by a check that can fail.",
+      "acceptanceCriteria": [
+        "Page discovery comes from dist/prerender-manifest.json mapped through the prerenderer's own outputPathFor, not from a directory walk that can miss the layout.",
+        "A route in the manifest with no file on disk is reported, so the scan cannot shrink silently.",
+        "The scan covers all 29 prerendered pages and names the route in any failure.",
+        "The gate runs in the job that has a built dist, rather than skipping in the job that does not.",
+        "The same applies to the other dist-dependent unit gate, dist/_headers CSP hashes.",
+        "ciGatesWired pins the new step, because the failure mode is silence."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 2) while re-running the unit suite against a real build after iteration 1. src/lib/headingOutline.test.ts discovered pages by walking dist/ for files named index.html. The prerenderer does not write those: outputPathFor maps /pricing to dist/pricing.html and /compare/eatpal-vs-mealime to dist/compare/eatpal-vs-mealime.html, and src/lib/prerenderOutputPath.test.ts pins exactly that -- 'never writes an index.html below the root' -- because a directory index turned every sitemap URL into a 308. So the walk matched one file, dist/index.html, and the gate read the homepage while reporting itself as a scan of the prerendered pages. TWO FAILURES, NOT ONE: its own floor (pages.length >= 25) then failed with 'expected 1 to be greater than or equal to 25' on any checkout that had run a build, and the only reason CI stayed green is that the unit job has no dist/ and took the skip path. A gate that cannot pass where it can run, and does not run where it would pass. Discovery now reads the manifest and maps each route through the writer's own outputPathFor, so a layout change moves both together or the new on-disk assertion fails. With that, all 29 pages are scanned and all 29 are clean -- US-849's fixes do hold, which had never actually been verified past the homepage. Proved the gate bites by injecting <h3> after the h1 in dist/faq.html: 'heading outline problems: /faq: h1->h3'. Before the fix that file was never opened. Wired into ci.yml's e2e job (the one that downloads the dist artifact) together with src/lib/cspInlineScripts.test.ts, whose 'a built dist, if present' assertion was inert for the same reason, and pinned both in src/lib/ciGatesWired.test.ts. NOT FIXED, DELIBERATELY: /pricing's outline opens h2 before its h1. skippedLevels only counts descending jumps, so it passes, and reordering a page's landmarks is not a heading-gate change."
+    },
+    {
+      "id": "US-856",
+      "title": "The pantry screen crashed for every account whose pantry was empty",
+      "description": "As someone who has just signed up, I want the pantry to show me how to fill it, so that the fourth item in the navigation is not a crash on my first visit.",
+      "acceptanceCriteria": [
+        "EmptyPantryState has its own useTranslation(), so its t() calls resolve.",
+        "No signed-in route throws an uncaught exception or renders the route error boundary.",
+        "The check runs against the fake backend with a real session, and fails loudly if it lands on /auth instead.",
+        "It ignores the realtime websocket and Sentry noise the fake backend cannot help, and asserts only on thrown errors and the boundary.",
+        "TS2304 and TS2503 are held at zero by the typecheck ratchet regardless of the backlog baseline.",
+        "The baseline is ratcheted down to match the errors removed.",
+        "Both gates are wired into CI and pinned."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 3) by pointing iteration 1's console sweep at the pages behind the login, which nothing had done. /dashboard/pantry logged 'ReferenceError: t is not defined' and RouteErrorBoundary rendered in place of the page. src/pages/Pantry.tsx:1286 EmptyPantryState is a separate function component from the page and calls t('pantry.emptyTitle') and t('pantry.emptyText') with no useTranslation() of its own -- so the crash fires exactly when the pantry is EMPTY, which is every new account, on the fourth item in the sidebar. The one-line fix is the hook. WHY NOBODY SAW IT: tsc did report it, as 'src/pages/Pantry.tsx(1304,12): error TS2304: Cannot find name t', and the typecheck ratchet passed because the count had not grown past 813. A guaranteed ReferenceError sat inside an 800-error backlog of wrong-but-executing types. So scripts/ci/typecheck-ratchet.sh now fails on any TS2304/TS2503 whatever the baseline says: those two codes mean an identifier is not bound, which is a different thing from a bad type. Fixing the other three occurrences (afterEach missing from a vitest import in src/lib/utils.test.ts, and four `as vi.Mock` type assertions in BarcodeScannerScreen.test.tsx where vi is a value, not a namespace) took the count 813 -> 806, and the baseline is ratcheted to 806. The behavioural half is tests/authenticated/no-route-crash.spec.ts over all 18 signed-in routes. It asserts on pageerror and the boundary's own log line ONLY: against scripts/dev/fake-postgrest.mjs the realtime websocket cannot connect and Sentry's host is unreachable, so every route logs console errors and asserting on all of them would be asserting on the fake backend's shape. Verified against the pre-fix build: 1 failed (/dashboard/pantry), 18 passed; after the fix, 19 passed. NEXT ITERATION: the same sweep showed /dashboard/grocery logging 'Invalid UUID for householdId: ' three times from assertUUID -- GroceryListSelector passes an empty householdId straight into a PostgREST filter guard that throws on it, and the page reports 'Error loading grocery lists'. Not fixed here."
+    },
+    {
+      "id": "US-857",
+      "title": "A household id nobody checked was passed straight into a query, and the grocery list picker came up empty",
+      "description": "As someone opening the grocery list, I want my lists to be there, so that the picker is not an empty box with an error in the console.",
+      "acceptanceCriteria": [
+        "get_user_household_id's result is validated as a uuid before it is stored or used, at all three call sites.",
+        "A truthy-but-wrong shape degrades to no household, so household-scoped screens fall back to their user-scoped branch instead of throwing.",
+        "A shape that is neither null nor a uuid is logged; null and undefined are not.",
+        "The fake backend answers the RPC with the scalar the real function returns, so the authenticated browser gates exercise the household path.",
+        "Test fixtures use a household id that could exist, since the value reaches a uuid-only filter.",
+        "The grocery page loads its lists and its items with no console error, measured."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 4), carried over from iteration 3's sweep: /dashboard/grocery logged 'Invalid UUID for householdId: ' three times a load and 'Error loading grocery lists:'. The message looks truncated and is not -- String([]) is the empty string, and an empty array is what PostgREST answers for a set-returning function AND is truthy. Three call sites took the RPC's untyped result on trust: AuthContext and Grocery with `(hh as string) ?? null` (an assertion, not a check; ?? only catches null/undefined) and BarcodeScannerDialog with `if (!householdId)` (which accepts []). AuthContext is the one that matters -- that value scopes every household query in the app. src/lib/householdId.ts now holds one definition of 'this is a household id', built on a new isUUID export rather than a second regex, and degrades anything else to null so the user-scoped branch runs. It deliberately does NOT unwrap [uuid]: guessing at a shape the RPC does not have is how this started. SECOND HALF, AND THEY HAVE TO LAND TOGETHER: scripts/dev/fake-postgrest.mjs answered /rest/v1/households and /household_members but had no handler for /rest/v1/rpc/get_user_household_id, so it fell through to the generic `[]`. Every authenticated browser gate in CI has therefore been measuring a grocery page whose household was broken -- the same blind spot US-767 recorded for empty fixtures, one layer down. With the client fix alone the grocery list goes EMPTY rather than wrong (householdId correctly becomes null, so the household-scoped load is skipped, and tests/responsive/grocery-phone.spec.ts fails 3 of 5), which is how I learned that spec had only ever passed because a bogus truthy id let a filter-ignoring fake backend return rows. With both halves: 44 authenticated browser checks pass, every AppContext query carries household_id=eq.<uuid>, the picker shows 'Weekly shop (Default)', 14 check-off controls render, zero console errors. FIXTURES: 'hh-1' appeared 44 times across 10 files as a household id. It is not a uuid, so the normalizer rejected it and six context test files failed -- correctly: that value flows into assertUUID, which has always demanded a uuid, so 'hh-1' was a fixture that could not exist. Replaced with a real uuid throughout. NEXT ITERATION: tests/accessibility/authenticated-baseline.json was measured against these degraded screens and is now loose -- pantry read 46 serious violations against the broken household and reads 2 now. The gate is toBeLessThanOrEqual so it passes, but the numbers no longer mean anything. Regenerating them deliberately wants a foods fixture in the fake backend first, since the pantry is still measured empty."
+    },
+    {
+      "id": "US-858",
+      "title": "The accessibility baselines described screens with nothing on them",
+      "description": "As someone relying on the accessibility numbers this project publishes, I want them measured against the app as a parent sees it, so that a green gate means the screens are clean rather than empty.",
+      "acceptanceCriteria": [
+        "The fake backend serves a pantry, so the food cards that carry the coloured badges are what gets scanned.",
+        "Every authenticated route is re-measured and the baseline regenerated, with a note saying what the numbers are of.",
+        "A11Y_BASELINE=update actually regenerates the file, as the spec has always claimed it does.",
+        "The two tokens behind every remaining violation have arithmetic behind them, not only a browser scan.",
+        "The gate says out loud that those two tokens do not meet AA, so a green run is not read as clean.",
+        "--safe-food and --secondary being the same colour is pinned, so a fix to one cannot miss the other."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 5), carried over from iteration 4. tests/accessibility/authenticated-baseline.json read dashboard 3 and pantry 46, and both numbers were of degraded screens: with get_user_household_id answering [] (US-857) the dashboard never resolved its household, and the pantry's 46 was measured against AppContext's STARTER SEED, which it plants only when nothing loads at all -- so that figure described neither an empty pantry nor a real one. scripts/dev/fake-postgrest.mjs had no /rest/v1/foods handler; it now serves eight rows shaped from the real columns, with is_safe and is_try_bite set, because those two flags are what draw the badges this screen's contrast debt lives on. Re-measured: dashboard 3->0, pantry 46->8, grocery 3, recipes 1, planner/kids/settings 0. A11Y_BASELINE=update DID NOT EXIST -- the spec has instructed people to regenerate with it since US-778 and nothing read the variable, so the file was hand-edited; it is now implemented (read-modify-write per route, so --workers=1). THE REAL FINDING is what the 12 remaining nodes are: every single serious violation left in the signed-in app is white text on one of two colours. #16a249 (hsl 142 76% 36%) at 3.33:1 is nine of them, and it is --secondary and --safe-food, THE SAME COLOUR DEFINED TWICE in src/index.css. #f97015 (hsl 24 95% 53%, --try-bite) at 2.85:1 is the other three. Neither token had any arithmetic behind it, though src/lib/themeContrast.test.ts has covered primary, destructive, secondary and accent since US-822; they are now ratchets there with the lightness each needs (--safe-food 36% -> 27%, --try-bite 53% -> 35.5%, both then clearing 4.5:1 as white-on-fill and as text on the worst surface). NOT APPLIED, AND THIS IS THE OWNER'S CALL: --try-bite at 35.5% is hue 24 sat 95%, which is --primary exactly (24 95% 35%, darkened for this same reason in US-822), so the arithmetic fix collapses 'try bite' into the brand primary. The alternatives are a new hue for try-bite or dark text on the fills instead of white. Whoever decides must move --safe-food and --secondary together or half the badges stay broken, which is why that duplication is now pinned by a test."
+    },
+    {
+      "id": "US-859",
+      "title": "The planner had never been scanned with a child in it, and its progress bars announce as \"progressbar\"",
+      "description": "As a parent using a screen reader on the planner, I want each nutrition bar to say what it measures, so that four identical announcements are not the whole reading.",
+      "acceptanceCriteria": [
+        "The fake backend serves children and a week of plan entries, so the screens that need a child are measured with one.",
+        "Plan-entry dates are relative to today, so the fixture cannot age out and silently return those screens to their empty state.",
+        "Every progress bar on the planner and the insights dashboard has an accessible name and a value a parent can act on.",
+        "Unnamed progress bars everywhere else are recorded per file and may only decrease.",
+        "The record cannot outlive the debt: a file that becomes clean fails the gate until its entry is removed.",
+        "The baselines are regenerated against the populated screens."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 6). scripts/dev/fake-postgrest.mjs served no kids, so planner, insights, analytics and progress -- four of the seven main screens -- rendered 'No Children Added' or 'No Child Selected' in every browser check CI has ever run. The a11y scan reported planner: 0, which was 0 violations on one sentence and a button. Added two children and seven plan entries; the dates are computed RELATIVE TO TODAY because AppContext fetches a window around now and the planner renders one week of it, so literal dates would age out and quietly restore the empty state. First scan of the real planner: 8 aria-progressbar-name violations. src/components/DailyMacrosSummary.tsx draws four bars (calories, protein, carbs, fat), twice over on the week grid, each with its label in a SIBLING ROW -- which a sighted reader pairs up by position and nothing else does. Fixed with aria-label plus aria-valuetext, the second because the value is a percentage of a recommendation and '50%' is the one number a parent cannot act on; '14 of 28 grams' is. Planner back to 0. A tree scan then found 57 <Progress> with no name against 3 with one, so src/lib/progressBarNames.test.ts records them per file as a ratchet that may only shrink, and fails on a stale entry too. Two files are fixed here; 18 more are on parent-facing screens and 35 are on admin ones. tagEnd moved out of iconButtonNames.test.ts into src/lib/jsxTagEnd.ts so both scanners share one parser rather than importing a test file for it. WORTH RECORDING: three findings from the pre-fixture sweep turned out to be artefacts of the empty states -- seven routes appeared to have no h1 and three shared the title 'Dashboard - EatPal'; with children present, 13 of 14 have exactly one h1 and every title is distinct. Measuring an app with no data in it invents defects as readily as it hides them. NEXT ITERATION, measured with fixtures in place: /dashboard renders TWO h1 elements ('EatPal Dashboard' and 'Welcome, Parent!'), and 12 of 14 signed-in routes skip h1 -> h3 -- the same WCAG 1.3.1 defect US-849 fixed across the 29 public pages, on the half of the app nobody gated. /dashboard/household also separates its title with '|' where every other page uses '-'."
+    },
+    {
+      "id": "US-860",
+      "title": "The dashboard named itself twice, and three screens not at all",
+      "description": "As someone moving through the app by heading, I want each signed-in page to say what it is once and in the right order, so that the first thing I land on is the name of the page rather than a plan name.",
+      "acceptanceCriteria": [
+        "Every signed-in route has exactly one h1.",
+        "The first heading inside main is that h1, so nothing outranks the page's own name.",
+        "A locked feature screen, which replaces the whole page body, carries the page heading.",
+        "Skipped heading levels are recorded per route and may only decrease.",
+        "A repeated jump is counted once: twenty food cards at h3 under an h1 are one defect, not twenty.",
+        "The gate is proved to fail on the defect it was written for."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 7), carried from iteration 6 with the fixtures in place so the numbers are of real screens. US-849 did this for the 29 public pages; nothing had ever looked behind the login, and it was worse there. /dashboard rendered TWO h1 elements -- an sr-only 'EatPal Dashboard' added by some earlier pass and the visible 'Welcome, Parent!' that AnimatedWelcomeBanner already had -- and its outline OPENED WITH AN H3: SubscriptionStatusBanner sits above the page heading and its title was an h3, so a reader jumping by heading met a plan name before the name of the page. Fixed by moving the sr-only h1 to the top of src/pages/Home.tsx, demoting the greeting to h2 (a greeting is not what the page is called), and raising the banner's five h3 and the onboarding bar's h3 to h2. All three components are used only by Home, so nothing else moved. Separately, /dashboard/ai-coach, /dashboard/meal-builder and /dashboard/food-chaining had NO h1: FeatureGate replaces the entire page body with a lock screen whose heading was an h2, and all three callers wrap their whole body in it with no heading of their own. That h2 is now an h1, with a comment saying what has to change if the gate is ever used on a section rather than a page. tests/authenticated/heading-outline.spec.ts is the gate, with two assertions of deliberately different strength: the h1 count is exact everywhere, and the skipped levels are a per-route ratchet at 11 routes x 1. Proved it bites by putting the greeting back to h1, rebuilding, and watching it fail with [\"EatPal Dashboard\",\"Welcome, Parent!\"]. NEXT ITERATION: the eleven remaining h1 -> h3 skips are nearly all one cause -- shadcn's CardTitle is a hardcoded h3 and src/components/ui/ is out of bounds per CLAUDE.md, so each page has to supply the missing level from its own code, the way US-849 did with an sr-only h2. Eleven pages, mechanical but not one-line; the ratchet means they can be done a few at a time."
+    },
+    {
+      "id": "US-861",
+      "title": "Every screen asked the auth server who you are ten to eighteen times",
+      "description": "As someone opening any screen in the app, I want the page to resolve my identity once, so that a dozen round trips to the auth server are not standing between me and my meal plan.",
+      "acceptanceCriteria": [
+        "Concurrent getUser() callers share one request rather than making one each.",
+        "A caller a moment later is served from memory, within a short window.",
+        "Any auth state change throws the cache away, so a new session is never answered with the previous user.",
+        "A call naming a specific token always goes to the network, and a failure is never cached.",
+        "A failed request does not wedge the in-flight slot.",
+        "A browser gate holds every signed-in route to at most two /auth/v1/user calls per load, with a floor so zero cannot pass."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 8) by counting the backend requests one page load makes, which nothing had done. GET /auth/v1/user fired 18 times on /dashboard, 12 on the grocery list, 10 on the planner and 10 on the pantry, before anything was clicked. supabase.auth.getUser() REVALIDATES THE TOKEN AGAINST GOTRUE on every call -- that is the whole difference between it and getSession(), which reads localStorage -- and 101 call sites in this app reach for it, almost all of them only to read user.id. They mount within a few hundred milliseconds of each other, so what looks like a caching problem is really a stampede. Fixed in ONE place rather than 101: src/lib/cachedGetUser.ts wraps the client's own method to share a single in-flight request between concurrent callers, serve a recent result for 30s, and drop everything on any auth state change. Installed in src/integrations/supabase/client.ts, and deliberately NOT on the mock client, which answers from memory anyway. The dedupe is what does the work; the 30s window is a backstop for a component that mounts a moment later. getUser(jwt) is never answered from cache (a specific token is a different question) and a failed call is never cached (a blip would otherwise become 30 seconds of a signed-out-looking app). Measured after, same build, same fixtures: one call per page, and total backend requests per load dropped /dashboard 61->44, grocery 46->36, planner 45->36, pantry 34->26. tests/authenticated/request-volume.spec.ts holds the budget at 2 per route (supabase-js may legitimately revalidate once during startup, which fires an auth event and clears the cache by design) with a floor of 1 so a page that never resolves a user cannot pass. Deliberately narrow: a budget on TOTAL requests would really be a budget on the fake backend's fixtures. NEXT ITERATION, from the same measurement: POST /rest/v1/rpc/current_user_has_password fires 4 times per load on every screen, and POST /rest/v1/user_accessibility_preferences?on_conflict=user_id fires 3 times -- that one is an UPSERT, so every page load writes the same preferences row three times. /dashboard/planner also fetches meal_votes 8 times and /dashboard/grocery fetches grocery_lists 6 times."
+    },
+    {
+      "id": "US-862",
+      "title": "Every page load wrote the accessibility preferences row three times",
+      "description": "As someone opening a screen, I want the app to read my preferences rather than rewrite them, so that viewing a page is not recorded as changing one.",
+      "acceptanceCriteria": [
+        "Loading any signed-in page writes nothing to the preferences row.",
+        "Changing a preference still saves it.",
+        "A value that arrived from a load is never written back, so a load cannot push a stale local value to the server.",
+        "Saving waits until the server has answered, or until it is known there is nobody to ask.",
+        "A failed write is not remembered as persisted, so the next change retries it.",
+        "The fake backend serves a saved row, since with none every load legitimately creates one and the fix is invisible."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 9), carried from iteration 8's request census. POST /rest/v1/user_accessibility_preferences fired 3 times on every authenticated route before anything was clicked -- an UPSERT, so a page view was a write. AccessibilityContext's save effect depends on `preferences`, and three separate things set it during one load: the system-preference probe, the localStorage read and the Supabase read. The third write sent the server's own answer straight back to the server. BEYOND THE REQUESTS, two things were wrong. updated_at was bumped on every page load, so the column recorded when the row was last READ, not last changed. And writing the merge back makes a load a write: a local value the server did not have was pushed up by whichever tab loaded last, which is the opposite of the server-authoritative load contract the rest of the app follows (US-341). Fix is two parts. lastPersistedRef remembers the value each load produced, so a load is never a change to save; and saving is held until the server has answered (or until getSession shows there is nobody to ask), which is the same hydration guard AppContext uses before persisting its cache. The first part alone took 3 writes to 1 -- the remaining one fired before the server read landed, which is exactly what the guard is for. A failed write is deliberately NOT remembered, so the next change retries it. Measured: 3 -> 0 on load, and 1 on a real toggle. THE FIXTURE MATTERED: with no row in the fake backend every load legitimately created one, so the fix looked like it had not worked; scripts/dev/fake-postgrest.mjs now serves a saved row whose values are the client's own DEFAULT_PREFERENCES, which a correct client merges to itself. tests/authenticated/preference-writes.spec.ts asserts BOTH halves, because a gate that only checked 'no write on load' is passed by a context that has stopped saving at all. Proved against the pre-fix build: all five fail. STILL OPEN, from the same census: POST current_user_has_password fires 4 times a load on every screen, evaluate_feature_flag 2-4 times, get_user_household_id up to 3, and /dashboard/planner fetches meal_votes 8 times. The getUser dedupe from US-861 is the pattern for the first two."
+    },
+    {
+      "id": "US-863",
+      "title": "The planner opened one query and one realtime channel per meal cell",
+      "description": "As someone opening the weekly planner, I want the week's votes fetched once, so that a screen of meal cells is not a screen of identical requests and sockets.",
+      "acceptanceCriteria": [
+        "A week of meal cells costs one meal_votes query, not one per cell.",
+        "One realtime channel watches the table for all of them, opened by the first cell and removed by the last.",
+        "Each cell still shows only its own votes.",
+        "A cell keyed by neither a plan entry nor a full recipe triple matches nothing, rather than every vote in the household.",
+        "A cell that mounts and unmounts inside the collect window costs no query.",
+        "The browser gate has a floor, so a planner rendering no votes cannot pass it by making no requests."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 10), carried from iteration 8's request census: 8 identical GET /rest/v1/meal_votes on one planner load. VoteResultsDisplay renders once per meal cell and did its own fetch AND its own supabase.channel() -- its own comment says 'this component renders once per meal cell' and explains why each channel needs a unique name, which is the tell. A full week at three slots a day is 21 cells: 21 queries and 21 channels, each a separate join round trip, all watching the same table. A cell with no plan entry subscribed with NO FILTER, so any vote anywhere in the household re-ran that cell's query. src/lib/mealVotesStore.ts is the shared half: cells register a key, the store issues one query for the union (two at most -- plan-entry keys and recipe+date+slot keys are different shapes), opens one channel, and groups client-side. Ref counted, so leaving the planner takes the socket with it. The component keeps its props and its markup. Measured on the built app: 8 -> 1. AN UNEXPECTED CORRECTNESS WIN, worth stating precisely: against the filter-ignoring fake backend every cell used to receive all four votes and render the same '63% Mixed'; grouping client-side gives '75% Mixed', '0% Low', '100% Approved' -- the right answer per cell. In production both versions filter correctly, so this is a harness artefact, not a shipped bug that was fixed. THE FIXTURE WAS THE HARD PART: scripts/dev/fake-postgrest.mjs had no meal_votes, so the vote row was empty and the query count was of a screen showing nothing. Adding it exposed that iteration 6's kids and plan_entries fixtures had been declared INSIDE the request handler rather than at module scope, which crashed the server with a TDZ error the moment a meal_votes request arrived; all the fixtures are at module scope now. Lint baseline 1143 -> 1138 (an unused Button import in the file, pre-existing). STILL OPEN from the census: current_user_has_password 4 times a load on every screen, evaluate_feature_flag 2-4, get_user_household_id up to 3, grocery_lists up to 6 on the grocery page. The US-861 dedupe is the pattern for the RPCs."
+    },
+    {
+      "id": "US-864",
+      "title": "The grocery list picker re-fetched because it had just selected a list",
+      "description": "As someone opening the grocery list, I want the picker to load its lists once, so that choosing a default for me is not paid for with a second round trip.",
+      "acceptanceCriteria": [
+        "The picker fetches on mount and does not fetch again because the selection changed.",
+        "It does not fetch again when the parent re-renders with new callback identities.",
+        "It still fetches when the household resolves, since that changes the filter.",
+        "An in-flight response is discarded if the filter changed under it.",
+        "The browser budget has a floor, so a picker that never rendered cannot pass it."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 11), carried from iteration 8's census: 6 x GET /rest/v1/grocery_lists on one grocery page load. Different cause from the other census items -- not a stampede but a SELF-RETRIGGERING EFFECT. GroceryListSelector's effect listed `selectedListId` in its dependencies and changed it, by calling onListChange(defaultList.id) to auto-select the default. So each mount fetched the lists, selected one, and fetched them again because the selection had moved. Which lists exist has nothing to do with which is selected, so the selection is now read through a ref. The two callbacks are held in refs as well: setSelectedListId and setDefaultListId are stable today so they were not part of the measured problem, but a caller passing an inline arrow would have made every parent render a query and nothing would have noticed. Also added a cancelled flag, because a household resolving mid-flight could otherwise let the first response land after the second. Measured 6 -> 4. WHAT THE REMAINING 4 ARE, because the number matters: 2 instances x 2 fetches. The second fetch per instance is real work (the household resolves after mount and a household-scoped query returns a different set; the prop cannot distinguish 'not resolved yet' from 'no household'). The 2 instances are the finding for the next iteration. WORTH RECORDING ABOUT THE TEST: the mount-count assertion PASSES against the old code, because a mocked onListChange does not feed a new selectedListId prop back in. Only the re-render assertions fail (2 of 4), which is the shape of the real bug -- the parent's state change is what closed the loop. NEXT ITERATION, measured: /dashboard/grocery mounts the list picker TWICE -- 2 comboboxes, 1 visible -- because the page renders a mobile tree and a desktop one. That doubles every query and every realtime channel on the page, and half of it is never seen. tests/authenticated/grocery-list-queries.spec.ts pins the count at 2 so removing the duplicate tree fails the test and brings the query budget down with it."
+    },
+    {
+      "id": "US-865",
+      "title": "Every dashboard page mounted twice, once per shell",
+      "description": "As someone using any screen behind the login, I want the page to run once, so that half my requests, half my subscriptions and half the page's state are not going to a copy nobody can see.",
+      "acceptanceCriteria": [
+        "Exactly one shell mounts, so there is one Outlet, one main landmark and one h1 per dashboard route.",
+        "Checked at both desktop and phone width, since the failure is asymmetric.",
+        "Each shell still brings its own chrome: the sidebar on desktop, the bottom nav on a phone.",
+        "useIsMobile answers on the first render, so the wrong shell is never mounted and discarded.",
+        "The breakpoint stays single-sourced from src/lib/breakpoints.ts rather than a second hardcoded 768.",
+        "The skip link has a target on a phone."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 12) by chasing the wrong answer from iteration 11. src/pages/Dashboard.tsx rendered BOTH shells -- a desktop one inside SidebarProvider and a mobile one with a fixed header and bottom nav -- each with its own <main> and its own <Outlet/>. The CSS hid one; React mounted both. So every dashboard page ran TWICE: two React trees with their own state, two of every query and every realtime subscription, two role=main landmarks with the same aria-label, and two h1 elements. This is exactly what US-719 and US-766 describe between the route aliases and the dashboard ('two different React trees with their own state', a filter set on one not existing on the other); it was sitting between the mobile and desktop shells of a single route the whole time, and explains most of the duplicate counts in iteration 8's census -- current_user_has_password x4, evaluate_feature_flag x4, user_roles x2 are 2 per tree. MEASURED /dashboard/grocery before: 2 list pickers (1 visible), 2 mains, 2 h1s, 4 grocery_lists queries. After: 1, 1, 1, 2, and total REST requests per load 36 -> 24 at desktop width and 22 on a phone. Fix is `{isMobile ? mobileShell : desktopShell}` rather than CSS visibility. That REQUIRED fixing src/hooks/use-mobile.tsx first: it started at undefined and coerced to false, so every consumer got 'desktop' for one render -- which would have mounted the desktop shell on a phone, thrown it away and mounted the other, reintroducing the double mount. It now reads matchMedia synchronously on the first render, guarded for an environment without it, and takes its query from below('md') in src/lib/breakpoints.ts instead of a second hardcoded 768 (the exact drift US-825 cleaned up). BONUS FROM THE SAME CHANGE: the mobile main was id='main-content-mobile' because two mounted shells cannot share an id, so 'Skip to main content' had NO TARGET on a phone on any dashboard page. Both shells now carry id='main-content'. I CORRECTED A CLAIM I HAD JUST COMMITTED: iteration 11's spec said the page mounted the list picker twice. It did not -- the whole routed page was mounting twice, and two pickers was the symptom. Comment and budget fixed in tests/authenticated/grocery-list-queries.spec.ts (4 -> 2). tests/authenticated/one-shell.spec.ts checks 6 routes at both widths plus the chrome, because counting mains at one width passes a build that duplicates the other. Note what missed this before: iteration 7's heading gate scoped its query to the FIRST main and to visible headings, so a hidden second tree was invisible to it. 103 browser checks pass, 3756 unit tests, lint at baseline."
+    },
+    {
+      "id": "US-866",
+      "title": "Three hooks asked the same questions about the account, separately",
+      "description": "As someone opening a screen, I want the app to work out who I am and what I pay for once per page, so that the same two rows are not fetched three times before anything renders.",
+      "acceptanceCriteria": [
+        "Concurrent callers asking the same account question share one request.",
+        "Different keys stay apart, and a recent answer is reused for a short window.",
+        "Every cached answer is dropped on any auth event, so one account is never answered with another's roles or plan.",
+        "A rejection is never cached and never wedges its key.",
+        "The reads two hooks need are defined once, so callers share a key rather than each writing the query out.",
+        "A browser budget holds each account question per page, with a floor so a page that fetched nothing cannot pass."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 13) by re-running iteration 8's census after the duplicate shell was removed, so the remaining duplicates were real rather than doubled. Per dashboard page: GET user_subscriptions x3, GET user_roles x2, POST rpc/current_user_has_password x2. useNavEntitlements is mounted by BOTH AppSidebar and Dashboard and fetches a role and a subscription in each; useWhiteLabelTheme then issued the same subscription query a third time, byte for byte; useBindStatus and AccountSettings both ask whether the account has a password. None of the calls is wrong on its own -- there is no query cache in this app for them to meet in. src/lib/sharedQuery.ts is that cache in the smallest useful form: a key, a fetcher, one in-flight request per key, a 30s memory, and NO refetch-on-focus, pagination or subscriptions. Invalidation is the part that matters and is wired to onAuthStateChange in the client module: anything surviving a sign-in as somebody else would be one account's roles answering another's question, which is a leak rather than a stale render. src/lib/accountQueries.ts defines the shared reads once, and the KEY is what makes sharing possible -- two hand-rolled copies of an identical query never can, however identical. After: user_roles and current_user_has_password down to 1, user_subscriptions to 2. Totals per page load, combined with US-865: /dashboard 61 -> 26, /dashboard/grocery 46 -> 21, /dashboard/pantry 34 -> 17, /dashboard/planner 45 -> 19. user_subscriptions is budgeted at 2 rather than 1 on purpose: two DIFFERENT projections are in play, the entitlement read and SubscriptionStatusBanner's wider select, and merging them is a decision about what the banner needs rather than a cache problem. STILL OPEN: /dashboard fetches plan_entries x3 and profiles x3, and evaluate_feature_flag runs 2-3 times per page -- the last of those is probably distinct flags rather than duplicates, since src/lib/featureFlagCache.ts already caches per flag, and would need checking before treating it as waste."
+    },
+    {
+      "id": "US-867",
+      "title": "A recipe's ingredients could fail to save and nothing said so",
+      "description": "As a cook editing a recipe, I want to be told when the ingredients did not save, so that I find out now rather than at the hob.",
+      "acceptanceCriteria": [
+        "persistIngredientRows returns its first failure instead of logging and returning void.",
+        "It stops at the first failure, so a successful delete is not followed by a failed insert.",
+        "Editing a recipe whose ingredients fail to save shows the same failure copy as every other rejected write, with the offline wording when that is the cause.",
+        "Adding a recipe whose ingredients fail says the recipe saved and the ingredients did not, because that is what happened.",
+        "The test drives the real helper and fails against the old one."
+      ],
+      "priority": 1,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 14) by comparing runOptimisticMutation use against raw writes per context file. RecipesContext had 3 optimistic calls against 7 writes; PlanContext 3 against 4; InventoryContext 0 against 1. The recipe gap is the one that loses user data. src/contexts/RecipesContext.tsx persistIngredientRows did a read, a delete, N updates and an insert, logged any error, and RETURNED VOID -- so updateRecipe saved the recipe row through runOptimisticMutation (which rolls back and toasts on failure), the ingredient half failed, and the code then re-read the ingredients from the server and rendered the OLD ones. Nothing was said. The edit was gone and the screen looked like it had never been made. WORSE THAN A LOST EDIT: the shape is delete-then-insert, so a delete that lands followed by an insert that fails leaves a recipe with its old ingredients removed and the new ones absent -- a recipe with no ingredients, from an edit the cook believes succeeded. There is no transaction here to undo that with, which is why the fix stops at the first failure as well as reporting it. The two callers now surface it through writeFailureMessage, the same copy and the same offline wording as every other rejected write in the app; the add path says 'Recipe saved, but its ingredients didn't' because the recipe row DID land and saying 'couldn't save' would be false. Proved by running the new test against the old helper: 3 of 3 fail. CORRECTION, made in iteration 15: the note originally left here said PlanContext and InventoryContext had unguarded writes too. They do not. PlanContext's 'extra' insert is INSIDE runOptimisticInsert (the grep counted the .insert( within it) and InventoryContext rolls back and returns an error result by hand. The optimistic-vs-writes ratio is a way to find candidates, not a finding; each one has to be read. The recipe ingredients were the only real case."
+    },
+    {
+      "id": "US-868",
+      "title": "Three claims in CLAUDE.md were no longer true",
+      "description": "As the next person to work in this repo, I want the file that governs how work is done here to describe the code as it is, so that I plan around the real contract rather than a remembered one.",
+      "acceptanceCriteria": [
+        "The load-precedence section describes the web offline queue that exists, what it covers and what it deliberately does not.",
+        "The ratchet section carries the current baselines and the two error codes held at zero.",
+        "Each claim is checked against the code or the file it describes, not against memory.",
+        "A note left in an earlier story that turned out to be wrong is corrected rather than left standing.",
+        "The whole branch is verified end to end before the loop stops."
+      ],
+      "priority": 3,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Iteration 15 of the web platform loop, 2026-09-11. The recurring lesson of this whole loop has been that a false claim in a document is a defect -- the VPAT's 1.3.1 row, the a11y baselines, the A11Y_BASELINE=update instruction that did nothing, a comment I committed myself in iteration 11 -- so the last iteration spent itself on the file that governs everything else. THREE STALE CLAIMS. (1) The US-341 load-precedence contract said 'the web app has no durable write-queue'. US-823 gave it one: src/lib/webSyncQueue.ts, drained by useOfflineSyncDriver, keyed per user, covering grocery.toggle/update/delete -- ops addressing a row the server already has by id. Offline INSERTS are still not queued and that is deliberate (the database owns id, so a replayed insert returns as a second row), and every other domain still has no web queue, so the corrected text says all three things rather than swapping one absolute for another. (2) The typecheck ratchet section cited a backlog of '1182 against a baseline of 1234'; the file says 806, and lint's says 1138. (3) It described the ratchet as a pure count, which stopped being true in US-856: TS2304 and TS2503 are held at zero whatever the baseline says, because an unbound identifier throws ReferenceError rather than being a wrong type -- the distinction that had hidden a crash on the pantry screen. Also corrected the note I left on US-867: PlanContext and InventoryContext do NOT have unguarded writes. PlanContext's extra insert is inside runOptimisticInsert and InventoryContext rolls back by hand; the optimistic-vs-writes ratio finds candidates, not defects. FINAL VERIFICATION of the whole branch: npm run build exit 0, 3766 unit tests across 268 files, 75 public browser checks, and the authenticated set green."
     }
   ]
 }

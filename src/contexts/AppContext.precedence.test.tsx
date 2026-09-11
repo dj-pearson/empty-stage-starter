@@ -59,8 +59,8 @@ vi.mock('@/integrations/supabase/client', () => ({
     }),
     removeChannel: vi.fn(),
     rpc: vi.fn((fn: string) => {
-      if (fn === 'get_user_household_id') return Promise.resolve({ data: 'hh-1', error: null });
-      if (fn === 'ensure_user_household') return Promise.resolve({ data: 'hh-1', error: null });
+      if (fn === 'get_user_household_id') return Promise.resolve({ data: '11111111-1111-4111-8111-111111111111', error: null });
+      if (fn === 'ensure_user_household') return Promise.resolve({ data: '11111111-1111-4111-8111-111111111111', error: null });
       return Promise.resolve({ data: null, error: null });
     }),
   },
@@ -167,9 +167,9 @@ describe('US-341: load precedence (localStorage vs Supabase)', () => {
     // Server is the source of truth and has different rows.
     sessionUser = { id: 'user-1' };
     tableData['foods'] = [
-      { id: 'srv', name: 'Server Milk', category: 'dairy', is_safe: true, is_try_bite: false, household_id: 'hh-1' },
+      { id: 'srv', name: 'Server Milk', category: 'dairy', is_safe: true, is_try_bite: false, household_id: '11111111-1111-4111-8111-111111111111' },
     ];
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
 
     let latest: string[] = [];
     render(
@@ -192,9 +192,9 @@ describe('US-341: load precedence (localStorage vs Supabase)', () => {
     });
     sessionUser = { id: 'user-1' };
     tableData['foods'] = [
-      { id: 'srv', name: 'Server Milk', category: 'dairy', is_safe: true, is_try_bite: false, household_id: 'hh-1' },
+      { id: 'srv', name: 'Server Milk', category: 'dairy', is_safe: true, is_try_bite: false, household_id: '11111111-1111-4111-8111-111111111111' },
     ];
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
 
     // Make ONLY the mount cache-hydrate's getItem resolve late, so the
     // server-authoritative load applies first and the cache arrives afterward.
@@ -242,10 +242,10 @@ describe('US-671: the ledger slices under the US-341 precedence contract', () =>
       kids: [{ id: 'k1', name: 'Kid', age: 4 }],
       recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
       movements: [
-        { id: 'cached-m1', item_id: 'f1', delta: 500, canonical_unit: 'g', household_id: 'hh-1' },
+        { id: 'cached-m1', item_id: 'f1', delta: 500, canonical_unit: 'g', household_id: '11111111-1111-4111-8111-111111111111' },
       ],
       itemStock: [
-        { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 500, canonical_unit: 'g' },
+        { item_id: 'f1', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 500, canonical_unit: 'g' },
       ],
     });
 
@@ -267,19 +267,19 @@ describe('US-671: the ledger slices under the US-341 precedence contract', () =>
       foods: [], kids: [{ id: 'k1', name: 'Kid', age: 4 }],
       recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
       movements: [
-        { id: 'stale-m', item_id: 'f1', delta: 9999, canonical_unit: 'g', household_id: 'hh-1' },
+        { id: 'stale-m', item_id: 'f1', delta: 9999, canonical_unit: 'g', household_id: '11111111-1111-4111-8111-111111111111' },
       ],
       itemStock: [
-        { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 9999, canonical_unit: 'g' },
+        { item_id: 'f1', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 9999, canonical_unit: 'g' },
       ],
     });
     sessionUser = { id: 'user-1' };
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
     tableData['inventory_movements'] = [
-      { id: 'srv-m1', item_id: 'f1', delta: 500, canonical_unit: 'g', household_id: 'hh-1', reason: 'purchase' },
+      { id: 'srv-m1', item_id: 'f1', delta: 500, canonical_unit: 'g', household_id: '11111111-1111-4111-8111-111111111111', reason: 'purchase' },
     ];
     tableData['item_stock'] = [
-      { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 500, canonical_unit: 'g' },
+      { item_id: 'f1', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 500, canonical_unit: 'g' },
     ];
 
     let latest = { movementIds: [] as string[], stockByItem: {} as Record<string, number>, ledgerReadsEnabled: false };
@@ -296,9 +296,9 @@ describe('US-671: the ledger slices under the US-341 precedence contract', () =>
 
   it('the flag defaults off, so the ledger loads without changing what renders', async () => {
     sessionUser = { id: 'user-1' };
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
     tableData['item_stock'] = [
-      { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 500, canonical_unit: 'g' },
+      { item_id: 'f1', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 500, canonical_unit: 'g' },
     ];
 
     let latest = { movementIds: [] as string[], stockByItem: {} as Record<string, number>, ledgerReadsEnabled: true };
@@ -327,9 +327,9 @@ describe('US-671: the feature-flag gate on pantry quantity', () => {
     for (const k of Object.keys(tableData)) delete tableData[k];
     localStorage.clear();
     sessionUser = { id: 'user-1' };
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
     tableData['item_stock'] = [
-      { item_id: 'f1', household_id: 'hh-1', on_hand_canonical: 2000, canonical_unit: 'g' },
+      { item_id: 'f1', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 2000, canonical_unit: 'g' },
     ];
   });
 

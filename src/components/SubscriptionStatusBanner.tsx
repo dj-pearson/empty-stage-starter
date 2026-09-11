@@ -29,6 +29,15 @@ interface SubscriptionStatus {
   complementary_subscription_id: string | null;
 }
 
+/*
+ * US-860: these are h2, not h3.
+ *
+ * This banner sits above the dashboard's own heading, and its title used to be
+ * an h3 -- so the outline of /dashboard opened h3, h1, and anyone jumping by
+ * heading met a plan name before the name of the page. The page heading moved
+ * to the top of src/pages/Home.tsx in the same change; the banner is a section
+ * under it, which is what h2 means.
+ */
 export function SubscriptionStatusBanner() {
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,9 +160,9 @@ export function SubscriptionStatusBanner() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-lg">
+                  <h2 className="font-semibold text-lg">
                     {subscription?.plan_name} Plan
-                  </h3>
+                  </h2>
                   <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
                     Complementary Access
                   </Badge>
@@ -191,9 +200,9 @@ export function SubscriptionStatusBanner() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-lg">
+                  <h2 className="font-semibold text-lg">
                     {subscription?.plan_name || "Free"} Plan
-                  </h3>
+                  </h2>
                   <Badge variant="secondary">Current</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
@@ -232,11 +241,11 @@ export function SubscriptionStatusBanner() {
                   <Clock className={`h-5 w-5 ${isUrgent ? 'text-orange-600 dark:text-orange-400' : 'text-primary'}`} />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-1">
+                  <h2 className="font-semibold text-lg mb-1">
                     {trialDays === 0 ? "Trial Ends Today!" :
                      trialDays === 1 ? "Trial Ends Tomorrow!" :
                      `${trialDays} ${trialDays === 1 ? "Day" : "Days"} Left in Your Free Trial`}
-                  </h3>
+                  </h2>
                   <p className="text-sm text-muted-foreground">
                     You're on the <strong>{subscription.plan_name}</strong> plan.
                     {isUrgent ? " Don't lose access - upgrade now!" : " Upgrade now to continue enjoying all features after your trial ends."}
@@ -285,9 +294,9 @@ export function SubscriptionStatusBanner() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-lg">
+                    <h2 className="font-semibold text-lg">
                       {subscription.plan_name} Plan
-                    </h3>
+                    </h2>
                     <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
                       Active
                     </Badge>
@@ -348,9 +357,9 @@ export function SubscriptionStatusBanner() {
                 <Clock className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-1">
+                <h2 className="font-semibold text-lg mb-1">
                   {subscription.status === "canceled" ? "Subscription Canceled" : "Payment Issue"}
-                </h3>
+                </h2>
                 <p className="text-sm text-muted-foreground">
                   {urgency.message || (subscription.status === "canceled"
                     ? "Reactivate your subscription to regain access to premium features"

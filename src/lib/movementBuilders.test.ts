@@ -18,7 +18,7 @@ import {
   type MovementResult,
 } from './movementBuilders';
 
-const COMMON = { householdId: 'hh-1', userId: 'user-1' };
+const COMMON = { householdId: '11111111-1111-4111-8111-111111111111', userId: 'user-1' };
 
 /** A pantry item held in grams and displayed in kilograms. */
 const FLOUR: MovementItem = { id: 'flour', unit: 'kg', canonical_unit: 'g' };

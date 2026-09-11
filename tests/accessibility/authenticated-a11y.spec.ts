@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { signIn } from '../helpers/auth';
 
 /**
@@ -117,6 +117,19 @@ test.describe('Accessibility - authenticated pages', () => {
       }
 
       const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Record<string, number>;
+
+      // US-858: the regeneration this file has told people to use since it was
+      // written, which until now did not exist -- A11Y_BASELINE=update read
+      // nothing and the numbers were edited by hand. Read-modify-write per
+      // route, so regenerate with --workers=1 or the routes overwrite each
+      // other's keys.
+      if (process.env.A11Y_BASELINE === 'update') {
+        const current = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Record<string, unknown>;
+        current[name] = nodeCount;
+        writeFileSync(BASELINE_PATH, `${JSON.stringify(current, null, 2)}\n`);
+        console.log(`[a11y] baseline updated: ${name} -> ${nodeCount}`);
+        return;
+      }
 
       expect(
         nodeCount,

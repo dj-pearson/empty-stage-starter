@@ -14,6 +14,7 @@ import { logger } from "@/lib/logger";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { isAppleAccount, isAppleRelayEmail } from "@/lib/apple";
+import { fetchHasPassword } from "@/lib/accountQueries";
 
 export interface BindStatus {
   loading: boolean;
@@ -45,13 +46,14 @@ export function useBindStatus(): BindStatus {
         return;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.rpc as any)("current_user_has_password");
-      if (error) {
-        logger.warn("current_user_has_password failed:", error.message);
+      // US-866: shared. BindEmailBanner is in the dashboard shell and
+      // AccountSettings asks the same question, so this RPC went out twice on
+      // the settings page.
+      try {
+        setHasPassword(await fetchHasPassword());
+      } catch (error) {
+        logger.warn("current_user_has_password failed:", error);
         setHasPassword(false);
-      } else {
-        setHasPassword(Boolean(data));
       }
     } finally {
       setLoading(false);

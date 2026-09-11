@@ -46,6 +46,28 @@ fi
 
 echo "Typecheck errors: ${count} (baseline: ${baseline})"
 
+# US-856: two error codes are held at ZERO, whatever the baseline says.
+#
+# TS2304 "Cannot find name" and TS2503 "Cannot find namespace" are not type
+# nits. They mean an identifier the code evaluates is not bound anywhere, so the
+# line throws ReferenceError the moment it runs. Everything else in the backlog
+# is a wrong type on code that still executes; these do not execute at all.
+#
+# One of them was src/pages/Pantry.tsx calling t('pantry.emptyTitle') in a
+# component with no useTranslation(), which crashed the whole pantry screen to
+# the route error boundary for every user whose pantry was empty -- that is, for
+# every new account. It sat in a backlog of 800+ errors where nobody reads the
+# list, and the ratchet passed because the count had not grown.
+#
+# Held separately rather than by lowering the baseline: the backlog shrinks
+# slowly, and this class must never come back at all.
+fatal="$(grep -E 'error TS(2304|2503)' "$LOG" || true)"
+if [ -n "$fatal" ]; then
+  echo "::error title=Unbound identifier::TS2304/TS2503 mean an identifier is not bound, so the line throws ReferenceError when it runs. These are held at zero regardless of the baseline."
+  echo "$fatal"
+  exit 1
+fi
+
 if [ "$count" -gt "$baseline" ]; then
   echo "::error title=Typecheck regression::${count} type errors exceeds the baseline of ${baseline}. Your change introduced new type errors — fix them. Do NOT raise .ci/typecheck-baseline.txt."
   # Surface a sample of the errors to aid debugging.

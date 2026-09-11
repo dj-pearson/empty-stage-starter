@@ -51,10 +51,17 @@ files first, or you are reading a skipped build as a clean one. CI is honest abo
 only because `npm ci` on a fresh checkout has no buildinfo to skip on.
 
 The actual gate is `scripts/ci/typecheck-ratchet.sh`: it counts `error TS` lines and fails
-if the count exceeds `.ci/typecheck-baseline.txt`. There is a standing backlog (1182
-against a baseline of 1234 as of this commit), so a passing run means "you added no new
-type errors", not "the tree typechecks". `npm run lint` is a ratchet on
-`.ci/lint-baseline.txt` in the same way.
+if the count exceeds `.ci/typecheck-baseline.txt` (806 as of this commit; lint's is 1138).
+There is a standing backlog, so a passing run means "you added no new type errors", not
+"the tree typechecks". `npm run lint` is a ratchet on `.ci/lint-baseline.txt` in the same
+way.
+
+**Two error codes are held at zero whatever the baseline says** (US-856): `TS2304`
+"Cannot find name" and `TS2503` "Cannot find namespace". Those mean an identifier the
+code evaluates is not bound anywhere, so the line throws `ReferenceError` when it runs --
+a different thing from a wrong type on code that still executes. One of them was a
+`t('...')` call with no `useTranslation()` that crashed the whole pantry screen for every
+account with an empty pantry, and it sat in the backlog where nobody reads the list.
 
 `npm run format` rewrites `src/**` with Prettier, which is not a declared dependency and
 which the tree does not currently satisfy, so running it touches hundreds of unrelated
@@ -142,9 +149,9 @@ The web app reads from two stores; precedence is **server-authoritative on load*
 2. **Authenticated → Supabase overwrites.** Once `userId` + `householdId` resolve, the load effect fetches each table and **replaces** the corresponding slice wholesale (`setFoods(serverData)`, etc.) — it does **not** merge stale local rows back in. A successful server fetch always wins, so a cross-device edit (or a deletion) can't be resurrected by a stale local backup.
 3. **Cache is write-through only.** A debounced effect persists the current in-memory state back to storage as a backup; it is read on mount (step 1) and never used to override the server (step 2).
 4. **Realtime → merge by id, last-write-wins.** Live `postgres_changes` events are folded in via the pure per-domain helpers `applyGroceryItemRealtime` / `applyPlanEntryRealtime` / `applyKidRealtime` / `applyRecipeRealtime` (deduped by `id`; normalize snake_case → camelCase). Ordering is the channel's; we do not re-order by `updated_at`.
-5. **Offline durability is mobile-only.** The web app has no durable write-queue — optimistic local writes that never reached Supabase are not replayed (a later server load wins per step 2). Native (Expo) offline durability lives in `app/mobile/lib/syncQueue` (FIFO replay + retry; see `src/lib/syncQueue.test.ts`).
+5. **Offline durability: the whole grocery list on web, everything on native.** US-823 gave the web app a durable write-queue for grocery edits — `src/lib/webSyncQueue.ts`, drained by `useOfflineSyncDriver`, keyed per user so one account cannot replay another's writes. It covers `grocery.toggle`, `grocery.update` and `grocery.delete`: ops that address a row the server already has, by id. **Offline INSERTS are still not queued**, deliberately — the database owns `id`, so a queued insert would replay under an id the optimistic row does not have and come back over realtime as a second row. Every other domain (foods, recipes, kids, plan entries) has no web queue at all: an optimistic write that never reached Supabase is not replayed, and a later server load wins per step 2. Native (Expo) durability is broader and lives in `app/mobile/lib/syncQueue` (FIFO replay + retry; see `src/lib/syncQueue.test.ts`).
 
-Tests pin this contract: `src/contexts/AppContext.precedence.test.tsx` (offline fallback renders cache; server load overwrites stale cache).
+Tests pin this contract: `src/contexts/AppContext.precedence.test.tsx` (offline fallback renders cache; server load overwrites stale cache) and `src/lib/webSyncQueue.test.ts` (what the web queue replays, and what it refuses to).
 
 ## Supabase
 

@@ -40,6 +40,14 @@ const calculateRecommendedIntake = (age?: number, weight?: number) => {
   return { calories, protein, carbs, fat };
 };
 
+/** Spoken units, so aria-valuetext reads as a quantity rather than a bare number. */
+const MACRO_UNITS = {
+  calories: "kilocalories",
+  protein: "grams",
+  carbs: "grams",
+  fat: "grams",
+} as const;
+
 export function DailyMacrosSummary({
   date,
   kidId,
@@ -95,6 +103,16 @@ export function DailyMacrosSummary({
     return Math.min(Math.round((actual / target) * 100), 100);
   };
 
+  /*
+   * US-859: the four bars had no accessible name, so a screen reader announced
+   * "progressbar, 50%" four times over with nothing to tell them apart. The
+   * visible label sits in a sibling row, which a sighted reader pairs up by
+   * position and nothing else does.
+   *
+   * aria-valuetext as well as the label because the value these bars carry is a
+   * PERCENTAGE OF A RECOMMENDATION, and "50%" on its own is the one number a
+   * parent cannot act on -- 14 of 28 grams is.
+   */
   const getProgressColor = (percentage: number) => {
     if (percentage < 50) return "bg-yellow-500";
     if (percentage < 80) return "bg-blue-500";
@@ -135,6 +153,8 @@ export function DailyMacrosSummary({
           <Progress 
             value={getPercentage(macros.calories, recommended.calories)} 
             className={cn("h-2", getProgressColor(getPercentage(macros.calories, recommended.calories)))}
+            aria-label="Calories"
+            aria-valuetext={`${macros.calories} of ${recommended.calories} ${MACRO_UNITS.calories}`}
           />
         </div>
 
@@ -152,6 +172,8 @@ export function DailyMacrosSummary({
           <Progress 
             value={getPercentage(macros.protein, recommended.protein)} 
             className={cn("h-2", getProgressColor(getPercentage(macros.protein, recommended.protein)))}
+            aria-label="Protein"
+            aria-valuetext={`${macros.protein} of ${recommended.protein} ${MACRO_UNITS.protein}`}
           />
         </div>
 
@@ -169,6 +191,8 @@ export function DailyMacrosSummary({
           <Progress 
             value={getPercentage(macros.carbs, recommended.carbs)} 
             className={cn("h-2", getProgressColor(getPercentage(macros.carbs, recommended.carbs)))}
+            aria-label="Carbs"
+            aria-valuetext={`${macros.carbs} of ${recommended.carbs} ${MACRO_UNITS.carbs}`}
           />
         </div>
 
@@ -186,6 +210,8 @@ export function DailyMacrosSummary({
           <Progress 
             value={getPercentage(macros.fat, recommended.fat)} 
             className={cn("h-2", getProgressColor(getPercentage(macros.fat, recommended.fat)))}
+            aria-label="Fat"
+            aria-valuetext={`${macros.fat} of ${recommended.fat} ${MACRO_UNITS.fat}`}
           />
         </div>
       </CardContent>

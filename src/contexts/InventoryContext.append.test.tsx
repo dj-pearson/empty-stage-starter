@@ -58,8 +58,8 @@ vi.mock('@/integrations/supabase/client', () => ({
     }),
     removeChannel: vi.fn(),
     rpc: vi.fn((fn: string) => {
-      if (fn === 'get_user_household_id') return Promise.resolve({ data: 'hh-1', error: null });
-      if (fn === 'ensure_user_household') return Promise.resolve({ data: 'hh-1', error: null });
+      if (fn === 'get_user_household_id') return Promise.resolve({ data: '11111111-1111-4111-8111-111111111111', error: null });
+      if (fn === 'ensure_user_household') return Promise.resolve({ data: '11111111-1111-4111-8111-111111111111', error: null });
       return Promise.resolve({ data: null, error: null });
     }),
   },
@@ -141,7 +141,7 @@ describe('US-672: checkout credits the pantry', () => {
     upsertOptions = [];
     upsertError = null;
     sessionUser = { id: 'user-1' };
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
   });
 
   it('appends one purchase movement per checked row', async () => {
@@ -169,7 +169,7 @@ describe('US-672: checkout credits the pantry', () => {
     expect(flour.ref_id).toBe('row-flour');
     expect(flour.unit_price).toBe(1.5);
     expect(flour.currency).toBe('USD');
-    expect(flour.household_id).toBe('hh-1');
+    expect(flour.household_id).toBe('11111111-1111-4111-8111-111111111111');
     expect(flour.created_by).toBe('user-1');
 
     const eggs = rows.find((r) => r.item_id === 'eggs')!;
@@ -202,7 +202,7 @@ describe('US-672: checkout credits the pantry', () => {
     // the number on screen would not move until realtime caught up.
     enableWrites();
     tableData['item_stock'] = [
-      { item_id: 'flour', household_id: 'hh-1', on_hand_canonical: 1000, canonical_unit: 'g' },
+      { item_id: 'flour', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 1000, canonical_unit: 'g' },
     ];
     const inventory = await mountInventory();
     await waitFor(() => expect(inventory().ledgerWritesEnabled).toBe(true));
@@ -229,7 +229,7 @@ describe('US-672: a second submit cannot credit twice', () => {
     upsertOptions = [];
     upsertError = null;
     sessionUser = { id: 'user-1' };
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
   });
 
   it('sends the same movement ids, so the second insert is a no-op on the primary key', async () => {
@@ -267,7 +267,7 @@ describe('US-672: a second submit cannot credit twice', () => {
   it('does not double the local balance when the same submit is replayed', async () => {
     enableWrites();
     tableData['item_stock'] = [
-      { item_id: 'eggs', household_id: 'hh-1', on_hand_canonical: 6, canonical_unit: 'count' },
+      { item_id: 'eggs', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 6, canonical_unit: 'count' },
     ];
     const inventory = await mountInventory();
     await waitFor(() => expect(inventory().ledgerWritesEnabled).toBe(true));
@@ -295,7 +295,7 @@ describe('US-672: pantry corrections and failure handling', () => {
     upsertOptions = [];
     upsertError = null;
     sessionUser = { id: 'user-1' };
-    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: 'hh-1' }];
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: '11111111-1111-4111-8111-111111111111' }];
   });
 
   it('records an edit as the change, not the new total', async () => {
@@ -333,7 +333,7 @@ describe('US-672: pantry corrections and failure handling', () => {
     enableWrites();
     upsertError = { message: 'permission denied' };
     tableData['item_stock'] = [
-      { item_id: 'eggs', household_id: 'hh-1', on_hand_canonical: 6, canonical_unit: 'count' },
+      { item_id: 'eggs', household_id: '11111111-1111-4111-8111-111111111111', on_hand_canonical: 6, canonical_unit: 'count' },
     ];
     const inventory = await mountInventory();
     await waitFor(() => expect(inventory().ledgerWritesEnabled).toBe(true));

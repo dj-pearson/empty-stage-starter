@@ -36,7 +36,7 @@ const remove = (id: string): Payload =>
 function movement(id: string, delta: number, occurredAt: string, itemId = 'item-1') {
   return {
     id,
-    household_id: 'hh-1',
+    household_id: '11111111-1111-4111-8111-111111111111',
     item_id: itemId,
     delta,
     canonical_unit: 'g',
@@ -131,7 +131,7 @@ describe('applyMovementRealtime: append-only needs no conflict resolution', () =
 describe('applyItemStockRealtime: a row that IS updated in place', () => {
   const stockRow = (itemId: string, onHand: number): Record<string, unknown> => ({
     item_id: itemId,
-    household_id: 'hh-1',
+    household_id: '11111111-1111-4111-8111-111111111111',
     on_hand_canonical: onHand,
     canonical_unit: 'g',
     mirror_unconvertible: false,
@@ -191,7 +191,7 @@ describe('NUMERIC columns arriving as strings', () => {
   it('coerces a string balance on item_stock', () => {
     const state = applyItemStockRealtime([], insert({
       item_id: 'item-1',
-      household_id: 'hh-1',
+      household_id: '11111111-1111-4111-8111-111111111111',
       on_hand_canonical: '2000',
       canonical_unit: 'g',
     }));
