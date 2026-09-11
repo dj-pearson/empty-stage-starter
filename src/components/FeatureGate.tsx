@@ -50,7 +50,15 @@ export function FeatureGate({ feature, label, children }: FeatureGateProps) {
       <div className="p-4 rounded-full bg-primary/10 mb-4">
         <Lock className="w-8 h-8 text-primary" />
       </div>
-      <h2 className="text-2xl font-semibold mb-2">{label} is locked</h2>
+      {/*
+        US-860: h1, because when this renders it IS the page.
+        All three callers (MealBuilder, FoodChaining, AICoach) wrap their entire
+        body in this gate and have no heading of their own, so a locked screen
+        had no h1 at all -- nothing naming the page for anyone navigating by
+        heading. If this is ever used to gate a SECTION of a page that has its
+        own h1, this has to become an h2 there.
+      */}
+      <h1 className="text-2xl font-semibold mb-2">{label} is locked</h1>
       <p className="text-muted-foreground max-w-md mb-6">
         {message ?? `${label} is not available on your current plan.`}
       </p>

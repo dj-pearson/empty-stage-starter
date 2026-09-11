@@ -27,7 +27,7 @@ export function OnboardingProgressBar() {
   return (
     <div className="bg-card border rounded-lg p-4 mx-4 mt-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-sm">Getting Started ({completed}/{steps.length})</h3>
+        <h2 className="font-semibold text-sm">Getting Started ({completed}/{steps.length})</h2>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDismissed(true)} aria-label="Dismiss onboarding">
           <X className="h-4 w-4" />
         </Button>

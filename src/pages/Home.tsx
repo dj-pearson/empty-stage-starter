@@ -232,6 +232,16 @@ export default function Home() {
     </Helmet>
     <div className="min-h-screen pb-20 md:pt-20 bg-background">
       <AnimatedDashboard className="container mx-auto px-4 py-8 max-w-4xl">
+        {/*
+          US-860: the page heading has to come FIRST.
+          It used to sit below the onboarding bar and the subscription banner,
+          both of which open with headings of their own -- so the outline began
+          h3, h1, and a reader jumping by heading met a plan name before the
+          name of the page they were on. The visible "Welcome, <name>!" below is
+          an h2 for the same reason: a greeting is not what this page is called.
+        */}
+        <h1 className="sr-only">EatPal Dashboard</h1>
+
         {/* Guided onboarding progress bar */}
         <Suspense fallback={null}>
           <OnboardingProgressBar />
@@ -242,9 +252,6 @@ export default function Home() {
 
         {/* Subscription Status Banner */}
         <SubscriptionStatusBanner />
-
-        {/* Accessible h1 heading */}
-        <h1 className="sr-only">EatPal Dashboard</h1>
 
         {/* Welcome Banner with Animations */}
         <AnimatedWelcomeBanner
