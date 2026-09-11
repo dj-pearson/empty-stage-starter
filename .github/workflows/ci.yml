@@ -316,6 +316,15 @@ jobs:
       - name: Resolve or install Chromium
         run: node scripts/ensure-chromium.mjs
 
+      # US-855. Two vitest files assert things about a BUILT site -- the heading
+      # outline of every prerendered page, and whether dist/_headers carries the
+      # CSP script hashes -- and both open with "if a dist is present". The unit
+      # job has no dist/, so both took the skip path on every run: present as
+      # coverage, executed never. This is the job that has the artifact, so this
+      # is where they have to run.
+      - name: Dist-dependent unit gates
+        run: npx vitest run src/lib/headingOutline.test.ts src/lib/cspInlineScripts.test.ts
+
       # E2E_TARGET=dist makes playwright.config.ts serve the downloaded dist/
       # through scripts/dev/serve-dist.mjs on 4173, which resolves URLs the way
       # Cloudflare Pages does -- prerendered dist/<route>.html first,

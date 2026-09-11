@@ -79,6 +79,16 @@ describe('the E2E job runs the Playwright suite', () => {
     expect(ci).toContain('tests/responsive/');
   });
 
+  it('runs the unit gates that need a built site, in the job that has one', () => {
+    // US-855. src/lib/headingOutline.test.ts and src/lib/cspInlineScripts.test.ts
+    // both guard their real assertion with "if a dist is present". The unit job
+    // has no dist/, so both skipped on every run -- the heading gate's own floor
+    // could not even be reached. The e2e job downloads the artifact, so it is
+    // the only place these assert anything.
+    expect(ci).toContain('src/lib/headingOutline.test.ts');
+    expect(ci).toContain('src/lib/cspInlineScripts.test.ts');
+  });
+
   it('names the date its continue-on-error expires', () => {
     // A non-blocking job with no end date is a job that never blocks.
     expect(ci).toMatch(/continue-on-error until \d{4}-\d{2}-\d{2}/);
