@@ -79,3 +79,54 @@ test.describe('signed-in pages do not re-ask who you are', () => {
     });
   }
 });
+
+/**
+ * US-866: the account-level questions, asked once.
+ *
+ * Several hooks ask the same thing about the signed-in user from different
+ * components in the same tick. useNavEntitlements is mounted by AppSidebar AND
+ * by Dashboard, and useWhiteLabelTheme repeated its subscription query
+ * byte-for-byte; useBindStatus and AccountSettings both ask whether the account
+ * has a password. Measured per dashboard page load before src/lib/sharedQuery.ts:
+ * user_roles x2, current_user_has_password x2, user_subscriptions x3.
+ *
+ * user_subscriptions is budgeted at 2 rather than 1 because two DIFFERENT
+ * projections are in play -- the entitlement read (status + plan name) and
+ * SubscriptionStatusBanner's own wider select. Sharing those is a separate
+ * decision about what the banner needs, not a cache problem.
+ */
+const ACCOUNT_BUDGETS: Array<{ path: string; max: number; label: string }> = [
+  { path: '/rest/v1/user_roles', max: 1, label: 'admin role' },
+  { path: '/rest/v1/rpc/current_user_has_password', max: 1, label: 'has-password RPC' },
+  { path: '/rest/v1/user_subscriptions', max: 2, label: 'subscription' },
+];
+
+test.describe('account state is fetched once per page', () => {
+  for (const route of ['/dashboard', '/dashboard/grocery', '/dashboard/pantry']) {
+    test(`${route} stays inside the account budgets`, async ({ page, context }) => {
+      await signIn(context);
+
+      const counts = new Map<string, number>();
+      page.on('request', (request) => {
+        const path = new URL(request.url()).pathname;
+        counts.set(path, (counts.get(path) ?? 0) + 1);
+      });
+
+      await page.goto(route, { waitUntil: 'networkidle' });
+      await page.locator('[role="main"]').first().waitFor({ state: 'visible' });
+      await page.waitForTimeout(3000);
+      expect(new URL(page.url()).pathname, `redirected to ${page.url()}`).not.toMatch(/^\/auth/);
+
+      // A page that fetched nothing at all would otherwise pass every budget.
+      const total = [...counts.entries()]
+        .filter(([path]) => path.startsWith('/rest/v1/'))
+        .reduce((sum, [, n]) => sum + n, 0);
+      expect(total, `${route} made no REST requests`).toBeGreaterThan(5);
+
+      for (const { path, max, label } of ACCOUNT_BUDGETS) {
+        const seen = counts.get(path) ?? 0;
+        expect(seen, `${route} asked for the ${label} ${seen} times`).toBeLessThanOrEqual(max);
+      }
+    });
+  }
+});

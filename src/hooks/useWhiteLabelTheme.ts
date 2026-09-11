@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { fetchActiveSubscription } from '@/lib/accountQueries';
 
 interface BrandSettings {
   primary_color: string;
@@ -22,16 +23,10 @@ export function useWhiteLabelTheme() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Check if user has Professional subscription
-        const { data: subscriptionData } = await supabase
-          .from('user_subscriptions')
-          .select(`
-            status,
-            subscription_plans(name)
-          `)
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
+        // US-866: the same read useNavEntitlements needs, shared rather than
+        // written out a second time. This was byte-for-byte identical to that
+        // hook's query and went out as a third copy on every dashboard load.
+        const subscriptionData = await fetchActiveSubscription(user.id);
 
         // Only apply custom theme for Professional users
         const plans = subscriptionData?.subscription_plans as unknown as { name: string } | null;

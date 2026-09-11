@@ -2,6 +2,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { logger } from "@/lib/logger";
 import { installGetUserCache } from "@/lib/cachedGetUser";
+import { installSharedQueryInvalidation } from "@/lib/sharedQuery";
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -235,4 +236,13 @@ export const supabase = createSupabaseClient();
  */
 if (isSupabaseConfigured) {
   installGetUserCache(supabase);
+  /*
+   * US-866: the shared account-query cache is emptied on every auth event, so a
+   * sign-in as somebody else can never be answered with the previous user's
+   * roles or plan. Wired here because this is where the auth subscription
+   * already lives.
+   */
+  installSharedQueryInvalidation((cb) => {
+    supabase.auth.onAuthStateChange(() => cb());
+  });
 }
