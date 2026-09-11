@@ -4487,6 +4487,24 @@
       "platform": "ios",
       "loopVerifiable": false,
       "notes": "Found 2026-09-10 (iOS platform loop, iteration 13). The iteration fixed the HealthKit half of this: LogMealResultIntent writes plan_entries.result straight through DataService and skipped everything AppState.updatePlanEntry does afterwards. Health sync now runs from both surfaces via the shared HealthKitService.applyMealResult. Two things are still in-app only: BadgeService.evaluate (so a Siri-logged meal does not advance a streak or earn a badge) and AnalyticsService.track(.mealResultLogged). Badges are the harder one -- evaluate() surfaces a celebration sheet through shared state the intent has no access to, so it needs a decision about what an earned-while-in-Siri badge does, which is more than one loop iteration."
+    },
+    {
+      "id": "US-854",
+      "title": "The pricing cards on the landing page never animated, and said so five times per load",
+      "description": "As a visitor reading down the landing page, I want the pricing section to arrive the way every section above it does, so that the page does not end on the one block that looks unfinished.",
+      "acceptanceCriteria": [
+        "Every .animate-grid on / has at least one .animate-item child to animate.",
+        "Loading / and scrolling to the bottom produces no \"GSAP target ... not found\" console warning.",
+        "No .animate-section or .animate-item is left below opacity 0.95 after being scrolled past, so the fix cannot be 'delete the animation' or leave copy unreadable.",
+        "The grid loop skips a grid with nothing to animate rather than handing GSAP an empty NodeList.",
+        "The check has a floor, so 'every grid has items' cannot be true of an empty list.",
+        "Measured in a browser against the built site, not asserted from source."
+      ],
+      "priority": 2,
+      "passes": true,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Found 2026-09-11 (web platform loop, iteration 1) by sweeping every public route in a browser for console output, which nothing had done. The landing page logged five \"GSAP target ... not found\" warnings on every load. Cause: src/pages/Landing.tsx staggers `.animate-item` children inside each `.animate-grid`, and the pricing preview grid's three plan Cards were the only grid children in the file never given the class -- the other five grids build theirs in a `.map()` with an `animate-item` wrapper div, this one is static JSX. So `grid.querySelectorAll('.animate-item')` returned an empty NodeList and GSAP was tweening nothing: one warning named the NodeList, four more came out of the stagger timeline built on top of it. Visible result: the last section before the footer, the three plan cards, sat still while the five sections above it faded up. Adding `animate-item` to the three Card classNames took the warnings from 5 to 0 (measured, same build, same scroll) and gave the grid items=3 like its neighbours. Also guarded the loop -- items.length === 0 returns -- because a future grid without the class should be inert and quiet, with the gate being what reports it. THE DIVISION MATTERS: with the guard in and the class out, the warning assertion passes and only the 'every grid has something to animate' assertion fails, which is the one that names the section. Verified by reverting the class, rebuilding, and watching exactly that test fail with the FREE/$0 card in its message. tests/landing-animation.spec.ts runs against E2E_TARGET=dist (the animation only exists in the built chunk) and is already in CI's `tests/*.spec.ts` glob. The third assertion is the one that would catch the worse version of this bug: fromTo starts these elements at opacity 0, so a ScrollTrigger that fires for a section but never completes leaves real copy unreadable. Nothing is currently faded; the assertion exists because nothing was watching that either."
     }
   ]
 }
