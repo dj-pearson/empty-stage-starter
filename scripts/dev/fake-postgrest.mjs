@@ -345,6 +345,76 @@ createServer((req, res) => {
   // Columns are the real ones from src/integrations/supabase/types.ts. is_safe
   // and is_try_bite matter most: they are what draws the two coloured badges on
   // every food card, which is where this screen's contrast debt lives.
+/**
+ * US-859: two children, and a week of meals for them.
+ *
+ * Four of the seven main dashboard screens -- planner, insights, analytics and
+ * progress -- render "No Child Selected" or "Add a child profile first" when
+ * there are no kids, and that is the state every browser check in CI was
+ * measuring. The a11y scan reported planner: 0, which is 0 violations on a
+ * sentence and a button.
+ *
+ * Dates are RELATIVE TO TODAY. AppContext fetches plan_entries inside a date
+ * window around now, and the planner renders one week of it, so a fixture with
+ * literal dates stops appearing the moment it ages out and quietly returns
+ * every one of these screens to its empty state.
+ */
+const KIDS = [
+  ['Ada', 6, 'cautious'],
+  ['Sam', 4, 'adventurous'],
+].map(([name, age, eating_behavior], i) => ({
+  id: `bbbbbbbb-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  user_id: TEST_USER_ID_LITERAL,
+  name,
+  age,
+  eating_behavior,
+  profile_completed: true,
+  allergens: [],
+  dietary_restrictions: [],
+  favorite_foods: [],
+  disliked_foods: [],
+  created_at: `2026-01-0${i + 1}T00:00:00.000Z`,
+  updated_at: `2026-01-0${i + 1}T00:00:00.000Z`,
+}));
+
+/** yyyy-mm-dd, `offset` days from today in UTC. */
+function isoDay(offset) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+const PLAN_ENTRIES = [
+  [0, 'breakfast', 0, 0, 'ate'],
+  [0, 'lunch', 0, 2, 'tried'],
+  [0, 'dinner', 0, 6, null],
+  [1, 'breakfast', 0, 4, null],
+  [1, 'dinner', 1, 2, null],
+  [2, 'lunch', 1, 7, null],
+  [-1, 'dinner', 1, 3, 'refused'],
+].map(([dayOffset, meal_slot, kidIndex, foodIndex, result], i) => ({
+  id: `eeeeeeee-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  user_id: TEST_USER_ID_LITERAL,
+  kid_id: KIDS[kidIndex].id,
+  food_id: FOODS[foodIndex].id,
+  date: isoDay(dayOffset),
+  meal_slot,
+  result,
+  is_primary_dish: true,
+  created_at: '2026-09-01T00:00:00.000Z',
+  updated_at: '2026-09-01T00:00:00.000Z',
+}));
+
+  if (url.pathname === '/rest/v1/kids') {
+    return sendRows(res, req, KIDS);
+  }
+
+  if (url.pathname === '/rest/v1/plan_entries') {
+    return sendRows(res, req, PLAN_ENTRIES);
+  }
+
   if (url.pathname === '/rest/v1/foods') {
     return sendRows(res, req, FOODS);
   }

@@ -17,6 +17,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { tagEnd } from './jsxTagEnd';
+
 const ROOT = process.cwd();
 const SRC = join(ROOT, 'src');
 
@@ -46,21 +48,7 @@ function stripComments(source: string): string {
     .join('\n');
 }
 
-/** Index of the `>` closing the JSX tag opened at `from`, skipping {} and quotes. */
-export function tagEnd(source: string, from: number): number {
-  let depth = 0;
-  for (let i = from; i < source.length; i += 1) {
-    const c = source[i];
-    if (c === '{') depth += 1;
-    else if (c === '}') depth -= 1;
-    else if (depth === 0 && (c === '"' || c === "'")) {
-      const quote = c;
-      i += 1;
-      while (i < source.length && source[i] !== quote) i += 1;
-    } else if (depth === 0 && c === '>') return i;
-  }
-  return -1;
-}
+
 
 export interface IconButton {
   file: string;
