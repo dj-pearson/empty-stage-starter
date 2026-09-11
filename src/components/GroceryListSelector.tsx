@@ -48,8 +48,8 @@ export function GroceryListSelector({
    * it calls onListChange(defaultList.id) to auto-select the default. So every
    * mount fetched the lists, selected one, and fetched them again because the
    * selection had changed. Measured on the built grocery page: 6 x
-   * GET /rest/v1/grocery_lists per load (three per instance, and the page
-   * renders a mobile tree and a desktop one).
+   * GET /rest/v1/grocery_lists per load -- three per instance, and Dashboard
+   * mounted the whole routed page twice, once per shell (US-865).
    *
    * Which lists exist has nothing to do with which one is selected. The
    * selection is read through a ref so the effect can see it without being
