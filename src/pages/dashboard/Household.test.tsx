@@ -59,7 +59,7 @@ vi.mock("@/integrations/supabase/client", () => ({
         // The hook calls this twice: once for the caller's household_id, once
         // for the roster. maybeSingle() takes the first row of whatever is
         // returned, so one array serves both.
-        return builder(members.length ? members : [{ household_id: "hh-1" }], () => del("member"));
+        return builder(members.length ? members : [{ household_id: "11111111-1111-4111-8111-111111111111" }], () => del("member"));
       }
       if (table === "households") return builder({ name: "The Bakers" });
       if (table === "household_invite_codes") return builder(codes, () => del("code"));
@@ -71,7 +71,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 const MEMBERS = [
   {
-    household_id: "hh-1",
+    household_id: "11111111-1111-4111-8111-111111111111",
     id: "m-1",
     user_id: "user-1",
     role: "parent",
@@ -79,7 +79,7 @@ const MEMBERS = [
     profiles: { full_name: "Dana Baker" },
   },
   {
-    household_id: "hh-1",
+    household_id: "11111111-1111-4111-8111-111111111111",
     id: "m-2",
     user_id: "user-2",
     role: "caregiver",

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
+import { normalizeHouseholdId } from '@/lib/householdId';
 interface AuthContextType {
   userId: string | null;
   householdId: string | null;
@@ -27,11 +28,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resolvedUid = uid;
       try {
         let { data: hh } = await supabase.rpc('get_user_household_id', { _user_id: uid });
-        if (!hh) {
+        // A truthy-but-wrong shape (PostgREST answers [] for a set-returning
+        // function) would otherwise skip ensure_user_household and be stored.
+        if (!normalizeHouseholdId(hh)) {
           const { data: newHh } = await supabase.rpc('ensure_user_household');
           hh = newHh;
         }
-        if (mounted) setHouseholdId((hh as string) ?? null);
+        // Not `(hh as string) ?? null`: the RPC's result is untyped JSON and an
+        // `as` cast checks nothing. See src/lib/householdId.ts -- this value
+        // scopes every household query in the app.
+        if (mounted) setHouseholdId(normalizeHouseholdId(hh));
       } catch (error) {
         logger.error('Failed to get household ID:', error);
         resolvedUid = null; // allow a retry on the next auth event

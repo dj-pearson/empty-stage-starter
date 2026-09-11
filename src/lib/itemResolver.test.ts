@@ -11,7 +11,7 @@ import {
 } from './itemResolver';
 import { normalizeItemText } from './itemNormalize';
 
-const HOUSEHOLD = 'hh-1';
+const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
 
 /** Assert a concrete item was resolved and return it narrowed. */
 function resolved(r: ResolveResult) {

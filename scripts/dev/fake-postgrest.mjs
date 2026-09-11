@@ -262,6 +262,30 @@ createServer((req, res) => {
   // Rows are shaped from the real columns the app selects and writes. Reads
   // only: a POST or PATCH still falls through to the empty answer below, which
   // is honest -- this stands in for a backend, it does not implement one.
+  // US-857: the RPC every household-scoped screen actually calls.
+  //
+  // This file answered /rest/v1/households and /rest/v1/household_members but
+  // nothing for /rest/v1/rpc/get_user_household_id, so it fell through to the
+  // generic empty answer -- `[]`, which is TRUTHY. The app stored that as its
+  // household id, and the grocery list selector threw
+  // "Invalid UUID for householdId: " three times a load and rendered no lists.
+  // So every authenticated browser check in CI was measuring a grocery page
+  // whose household was broken, including the a11y baselines.
+  //
+  // The real function RETURNS uuid, so PostgREST answers a bare JSON scalar,
+  // not an array. Matching that shape is the whole point: answering `[...]` here
+  // would reproduce the bug this stands in for.
+  if (url.pathname === '/rest/v1/rpc/get_user_household_id') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(HOUSEHOLD_ID));
+  }
+
+  // Returns the caller's household, creating one if absent. Same scalar shape.
+  if (url.pathname === '/rest/v1/rpc/ensure_user_household') {
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(HOUSEHOLD_ID));
+  }
+
   if (url.pathname === '/rest/v1/households') {
     return sendRows(res, req, [{ id: HOUSEHOLD_ID, name: 'Test Household', created_by: TEST_USER.id }]);
   }

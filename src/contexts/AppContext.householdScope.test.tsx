@@ -34,7 +34,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     removeChannel: vi.fn(),
     rpc: vi.fn((fn: string) =>
       fn === "get_user_household_id" || fn === "ensure_user_household"
-        ? Promise.resolve({ data: "hh-1", error: null })
+        ? Promise.resolve({ data: "11111111-1111-4111-8111-111111111111", error: null })
         : Promise.resolve({ data: null, error: null }),
     ),
   },
@@ -67,7 +67,7 @@ describe("US-550: household-scoped data load", () => {
     render(<AppProvider><div /></AppProvider>);
     await waitFor(() => expect(fromTables).toContain("foods"), { timeout: 2000 });
     await waitFor(
-      () => expect(eqCalls.some(([c, v]) => c === "household_id" && v === "hh-1")).toBe(true),
+      () => expect(eqCalls.some(([c, v]) => c === "household_id" && v === "11111111-1111-4111-8111-111111111111")).toBe(true),
       { timeout: 2000 },
     );
 
@@ -75,7 +75,7 @@ describe("US-550: household-scoped data load", () => {
     for (const table of ["kids", "foods", "recipes", "plan_entries", "grocery_items"]) {
       expect(fromTables, `expected a query on ${table}`).toContain(table);
     }
-    const hhFilters = eqCalls.filter(([c, v]) => c === "household_id" && v === "hh-1");
+    const hhFilters = eqCalls.filter(([c, v]) => c === "household_id" && v === "11111111-1111-4111-8111-111111111111");
     expect(hhFilters.length).toBeGreaterThanOrEqual(5);
   });
 });

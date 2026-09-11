@@ -27,8 +27,8 @@ vi.mock('@/integrations/supabase/client', () => ({
       }),
     },
     rpc: vi.fn((fn: string) => {
-      if (fn === 'get_user_household_id') { getHhCalls++; return Promise.resolve({ data: 'hh-1', error: null }); }
-      if (fn === 'ensure_user_household') { ensureCalls++; return Promise.resolve({ data: 'hh-1', error: null }); }
+      if (fn === 'get_user_household_id') { getHhCalls++; return Promise.resolve({ data: '11111111-1111-4111-8111-111111111111', error: null }); }
+      if (fn === 'ensure_user_household') { ensureCalls++; return Promise.resolve({ data: '11111111-1111-4111-8111-111111111111', error: null }); }
       return Promise.resolve({ data: null, error: null });
     }),
   },
@@ -59,7 +59,7 @@ describe('AuthContext household resolution dedup (US-539)', () => {
       </AuthProvider>
     );
 
-    await waitFor(() => expect(latest).toBe('hh-1'));
+    await waitFor(() => expect(latest).toBe('11111111-1111-4111-8111-111111111111'));
     // Both startup paths ran, but the uid guard collapsed them to one lookup.
     expect(getHhCalls).toBe(1);
     expect(ensureCalls).toBe(0);

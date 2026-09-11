@@ -38,7 +38,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     channel: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis(), unsubscribe: vi.fn() }),
     removeChannel: vi.fn(),
     rpc: vi.fn((fn: string) => {
-      if (fn === "get_user_household_id" || fn === "ensure_user_household") return Promise.resolve({ data: "hh-1", error: null });
+      if (fn === "get_user_household_id" || fn === "ensure_user_household") return Promise.resolve({ data: "11111111-1111-4111-8111-111111111111", error: null });
       return Promise.resolve({ data: null, error: null });
     }),
   },
@@ -74,7 +74,7 @@ describe("US-537: cache PII minimization + sign-out scrub", () => {
     sessionUser = { id: "user-1" };
     authCbs.length = 0;
     tableData["kids"] = [
-      { id: "k1", name: "Sam", age: 5, allergens: ["peanut"], notes: "private", household_id: "hh-1" },
+      { id: "k1", name: "Sam", age: 5, allergens: ["peanut"], notes: "private", household_id: "11111111-1111-4111-8111-111111111111" },
     ];
   });
 
