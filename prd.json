@@ -4755,6 +4755,172 @@
       "platform": "web",
       "loopVerifiable": true,
       "notes": "Iteration 15 of the web platform loop, 2026-09-11. The recurring lesson of this whole loop has been that a false claim in a document is a defect -- the VPAT's 1.3.1 row, the a11y baselines, the A11Y_BASELINE=update instruction that did nothing, a comment I committed myself in iteration 11 -- so the last iteration spent itself on the file that governs everything else. THREE STALE CLAIMS. (1) The US-341 load-precedence contract said 'the web app has no durable write-queue'. US-823 gave it one: src/lib/webSyncQueue.ts, drained by useOfflineSyncDriver, keyed per user, covering grocery.toggle/update/delete -- ops addressing a row the server already has by id. Offline INSERTS are still not queued and that is deliberate (the database owns id, so a replayed insert returns as a second row), and every other domain still has no web queue, so the corrected text says all three things rather than swapping one absolute for another. (2) The typecheck ratchet section cited a backlog of '1182 against a baseline of 1234'; the file says 806, and lint's says 1138. (3) It described the ratchet as a pure count, which stopped being true in US-856: TS2304 and TS2503 are held at zero whatever the baseline says, because an unbound identifier throws ReferenceError rather than being a wrong type -- the distinction that had hidden a crash on the pantry screen. Also corrected the note I left on US-867: PlanContext and InventoryContext do NOT have unguarded writes. PlanContext's extra insert is inside runOptimisticInsert and InventoryContext rolls back by hand; the optimistic-vs-writes ratio finds candidates, not defects. FINAL VERIFICATION of the whole branch: npm run build exit 0, 3766 unit tests across 268 files, 75 public browser checks, and the authenticated set green."
+    },
+    {
+      "id": "US-869",
+      "title": "Kids can actually vote on the week",
+      "description": "As a parent, I want each child to tap love it / okay / no way on the meals planned for them, so that next week's plan is built from what they said and not only from what they refused at the table.",
+      "acceptanceCriteria": [
+        "A voting surface is reachable from the planner week view and from the Today card, per child, one tap per meal; KidMealVoting.tsx and MealVotingCard.tsx are either mounted there or deleted and rewritten, not left orphaned",
+        "A vote writes one meal_votes row keyed by (kid_id, plan_entry_id) and re-voting updates it (the upsert path pinned by KidMealVoting.voteUpsert.test.ts)",
+        "voting_sessions is used for a session per week per household, or the table is retired through the CLAUDE.md deprecation flow; it is not left half-used",
+        "VoteResultsDisplay in the GSAP planner shows the votes the new surface writes, so the read side and the write side agree on the schema",
+        "Votes reach generation: buildWeekPlan's scorer (household-planner US-745 AC 3) and ai-meal-plan's server-side history read both consume meal_votes",
+        "A component test renders the surface for a child with two planned meals, votes on one, and asserts the row written and the result display updated",
+        "npm run test:run passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. The meal_votes and voting_sessions schema (20251110000004_meal_voting.sql) is complete and KidMealVoting.tsx (436 lines) plus MealVotingCard.tsx (255) are referenced only from a test; the only live consumer is the read-only VoteResultsDisplay at GSAPCalendarMealPlanner.tsx:1024. Kids have no way to vote today. Sequenced after US-745 so the votes feed something."
+    },
+    {
+      "id": "US-870",
+      "title": "Nutrition is computed from the catalog and the ingredient amounts, not matched by name",
+      "description": "As a parent looking at a day, I want the calories and macros to come from what was actually planned and eaten, so that the number means something and I stop seeing zeros for foods the app knows.",
+      "acceptanceCriteria": [
+        "One src/lib/nutritionRollup.ts computes nutrition for a recipe (per serving) and for a plan entry or meal from recipe_ingredients quantity and unit converted to grams through canonicalUnits, times the per-100g values on grocery_product_catalog resolved through the effective-food resolver (prd.json US-795); a food with no catalog row contributes an explicit unknown, never zero",
+        "A day total scales each meal by what was eaten: plan_entries.result refused contributes nothing, tasted contributes the exposure bite fraction, ate contributes the planned portion; food_attempts.amount_consumed overrides when present",
+        "DailyMacrosSummary reads the rollup; the lowercased-name match against the nutrition table (DailyMacrosSummary.tsx:77-79) is deleted",
+        "Food.nutrition_info is removed from src/types/index.ts because no such column exists on foods; nutritionCalculator.ts either reads the rollup or is deleted, and DocumentExportManager exports real values or no column",
+        "A recipe with nutrition_info set by hand keeps it; the detail view labels computed versus entered",
+        "Tests cover grams conversion, the unknown case, the eaten-fraction scaling and a recipe with one unresolved ingredient",
+        "npm run test:run passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. Three catalogs today: foods (household, no nutrition columns), nutrition (120-row admin bank, per-serving free-text serving_size, matched by lowercased name) and grocery_product_catalog (2,337 USDA generic rows per 100g since 20260907000000, read by no nutrition UI). src/types/index.ts:24 declares Food.nutrition_info, which the table never had, so calculateRecipeNutrition returns null in practice and RecipeDetailView.tsx:147-156 falls back to the manual JSONB. Depends on US-795 and household-planner US-722 (canonical recipe_ingredients). US-799 owns retiring the nutrition table; this story stops reading it."
+    },
+    {
+      "id": "US-871",
+      "title": "Per-child nutrition targets from the reference intakes, and the nutrients picky eaters actually miss",
+      "description": "As a parent of a picky eater, I want the daily target to reflect my child's age, sex and size and to show iron, calcium, fibre and sodium alongside calories, so that the app tells me the thing a paediatrician would ask about.",
+      "acceptanceCriteria": [
+        "src/lib/nutritionTargets.ts derives daily calorie, protein, carbohydrate, fat, fibre, iron, calcium, vitamin D and sodium targets from age, sex, height and weight using the published DRI/EER tables, pinned by a fixture with one row per age band; the 1000 + 100 x age heuristic and the fixed 50/30/20 split in DailyMacrosSummary.tsx:21-41 are deleted",
+        "A migration adds kid_nutrition_targets(kid_id, nutrient, amount, unit, source check in ('reference','clinician','parent'), updated_at) with RLS scoped to the household, so a clinician or parent override wins over the reference value",
+        "kids.nutrition_concerns and kids.health_goals, collected by ChildIntakeQuestionnaire, are read: a concern such as iron or constipation promotes that nutrient to the top of the day summary",
+        "The day and week summaries show the target nutrients with a covered / short / unknown state per nutrient, never a bare percentage against a number the app invented",
+        "A target is shown only where US-870 can compute the nutrient; a nutrient the catalog lacks reads unknown rather than 0 percent",
+        "Tests cover the fixture bands, the override precedence and the concern promotion",
+        "npm run test:run passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. No per-kid target column exists anywhere. kids carries nutrition_concerns[] and health_goals[] from intake and nothing reads either. DailyMacrosSummary accepts weight and ignores it. Depends on US-870 for the values the targets are compared against. Micronutrients need the catalog to carry them; grocery_product_catalog has fibre, sugar and sodium per 100g today and no iron, calcium or vitamin D, so this story adds those columns additively and backfills from USDA where the seed source has them."
+    },
+    {
+      "id": "US-872",
+      "title": "The weekly report's nutrition and grocery sections query a schema that does not exist",
+      "description": "As a parent who gets the weekly email, I want the nutrition and spending sections to be real numbers or absent, so that a report that always says zero stops training me to ignore it.",
+      "acceptanceCriteria": [
+        "supabase/functions/generate-weekly-report/index.ts no longer selects foods.nutrition_id (no such column), nutrition.protein / carbohydrates / fat (columns are protein_g, carbs_g, fat_g) or the grocery_list table (it is grocery_items); each query is checked against src/integrations/supabase/types.ts in a test that fails on an unknown column",
+        "The nutrition section is computed by the same rollup as the app (US-870) called from the function, or is omitted from the report with a one-line reason until US-870 lands; it never renders a zero that means 'the query failed'",
+        "nutritionGoalsMet reads kid_nutrition_targets (US-871) when present and is omitted otherwise; the 'Would need goals table' placeholder at index.ts:442 is gone",
+        "The grocery spend section reads inventory_movements unit_price where the ledger is on and grocery_items.price_per_unit otherwise",
+        "A Deno test renders a report for a fixture household and asserts every section either has data or is absent, with no section silently zero"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "backend",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. Found reading generate-weekly-report/index.ts:256, :274, :307, :442. The nutrition block has been dead against the schema since it was written; nutritionScore is a three-bucket macro-ratio heuristic over values that are always zero. Can ship the query fix and the omission independently of US-870."
+    },
+    {
+      "id": "US-873",
+      "title": "Allergens and dietary restrictions are enforced on every path, including the deterministic planner and the grocery list",
+      "description": "As a parent of a child with a severe allergy, I want every place the app proposes or lists a food to respect the allergen and restriction lists on the child's profile, so that a swap, a generated week or a grocery suggestion can never put the allergen on the table.",
+      "acceptanceCriteria": [
+        "One src/lib/eaterConstraints.ts exports isAllowedFor(food or ingredient, eaters) using kids.allergens, allergen_severity, cross_contamination_sensitive and dietary_restrictions through the effective-food resolver's allergens; the six existing checks (siblingConstraintSolver.ts:303-341, platePlanner.ts, ladderScheduler.ts:118-141, ai-meal-plan, generate-meal-suggestions, is_food_safe_for_kid) call it or are pinned to the same fixture",
+        "buildWeekPlan in src/lib/mealPlanner.ts and SwapMealDialog never propose a food or recipe that fails isAllowedFor for any eater on the meal; today mealPlanner.ts has no allergen reference at all",
+        "Grocery: SmartRestockSuggestions, the recipe-to-grocery add and the plan projection flag any row whose resolved food fails isAllowedFor for a household member with severity severe, with the reason shown on the row; nothing is silently dropped",
+        "Recipe detail shows a contains badge per eater when any ingredient fails, before the user plans it",
+        "A fixture in tests/fixtures/eater-constraints.json lists allergen, restriction and cross-contamination cases with expected verdicts; web and Swift both assert against it (Swift side recorded as a follow-up if no Mac is available)",
+        "The kid_allergen_change_log audit rule (US-301, assertNoAllergenAutoRemoval) still holds: this story adds readers, never a writer",
+        "npm run test:run passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. Enforcement is real but uneven: the AI and sibling solvers filter allergens; the deterministic week builder and the whole grocery module do not. dietary_restrictions is used by the sibling solver and ignored by ai-meal-plan (index.ts:34-43 reads allergens only)."
+    },
+    {
+      "id": "US-874",
+      "title": "The pantry knows what is about to expire and the planner uses it",
+      "description": "As a parent, I want the app to tell me the yoghurt goes off Thursday and to offer a meal that uses it, so that the pantry stops being a list I maintain and starts being something the planner reads.",
+      "acceptanceCriteria": [
+        "foods.expiry_date (in the DB since 20260425000000, absent from src/types and every UI) is added to the Food type, the pantry row, PantryQuickAdd and the receipt-confirm sheet; a storage location column (fridge, freezer, pantry, other) is added additively to foods and shown as a filter",
+        "The pantry shows an expiring-soon group (3 days, configurable per household) sorted by date; a Use it up action opens the cookable-now query from household-planner US-750 restricted to recipes containing the item",
+        "Tonight Mode and the buildWeekPlan scorer (US-745 AC 3) score recipes higher when they consume an item expiring within the window; the weighting is pinned by a test",
+        "The fridge-photo path is either wired (recognize-fridge-contents has a UI caller that confirms rows into the pantry through the same resolver as the receipt scan) or the function is deleted under prd.json US-774; it does not stay deployed with no caller",
+        "Waste movements (Pantry.tsx:417-437) default the reason to expired when the item is past its date, and the ledger reporting in kitchen-loop US-681 can group waste by that reason",
+        "Tests cover the expiring group, the scorer weight and the location filter",
+        "npm run test:run passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. There is no pantry_items table; the pantry is foods plus the ledger. expiry_date exists only in generated types. recognize-fridge-contents is referenced from two tests and no component. iOS 1.0.9 reads foods directly, so both new columns are additive with NULL defaults."
+    },
+    {
+      "id": "US-875",
+      "title": "Grocery delivery: wire one partner for real or remove the surface",
+      "description": "As a parent finishing the list, I want Order online to either place an order or not exist, so that the app does not advertise a delivery feature that returns a mock.",
+      "acceptanceCriteria": [
+        "A decision is recorded in notes: one partner (Instacart Developer Platform, or none) with the owner's sign-off",
+        "If wired: src/lib/integrations/instacart.ts no longer reads process.env in the browser bundle or hardcodes enabled: false; the partner call moves to an edge function holding the key, the client sends resolved items with quantities and units, and OrderIngredientsDialog shows the partner's real response or a real error",
+        "If wired: process-delivery-order stops being a simulation (index.ts:20) or is deleted; the seven grocery_delivery tables either back the real flow or are retired through the CLAUDE.md deprecation flow",
+        "If removed: OrderIngredientsDialog, GroceryDeliveryPanel, the delivery tables and process-delivery-order are deleted, and prd.json US-648 (partner landing pages) is closed as won't-do or re-scoped",
+        "Either way, no code path in src/ returns a hardcoded mock result to the user",
+        "A test asserts the chosen end state"
+      ],
+      "priority": 3,
+      "passes": false,
+      "platform": "web",
+      "loopVerifiable": false,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. getInstacartConfig at instacart.ts:425-430 returns enabled: false under a 'Mock config for development' comment and reads process.env.INSTACART_API_KEY, which is undefined in a Vite browser bundle. The delivery schema (20251110000007_grocery_delivery.sql) and process-delivery-order are a framework/simulation with no caller in src/. Needs an owner decision and possibly a partner agreement, so not loop-verifiable."
+    },
+    {
+      "id": "US-876",
+      "title": "The AI coach answers from the household's actual pantry, plan and history",
+      "description": "As a parent asking the coach what to make tonight, I want it to know what is in my pantry, what is planned this week and what my child refused last week, so that its answer is about my kitchen and not a generic one.",
+      "acceptanceCriteria": [
+        "supabase/functions/ai-coach-chat reads, server-side and scoped to the caller's household, a bounded context: eaters with allergens and restrictions, the current week's meals, the last 14 days of plan outcomes and meal_votes, pantry items on hand and expiring, and the recipe titles the household owns; the client stops sending kidContext assembled in the browser",
+        "The context is capped by token budget with the most recent and the expiring items kept first; the cap and ordering are pinned by a test on the pure context builder",
+        "The system prompt tells the model to cite which pantry items or planned meals an answer relies on, and the UI renders those as chips that open the item or the meal",
+        "A coach suggestion that names a recipe or food can be planned with one tap through planMeal (household-planner US-724) or added to the list through the merge path, so the conversation closes into the planner rather than ending in text",
+        "The existing no-train and standing-limit guards in _shared/safety.ts still apply; the context builder is unit-tested in Deno",
+        "npm run test:run passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "platform": "backend",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. ai-coach-chat/index.ts:33 receives only { messages, kidContext, maxTokens }; it knows nothing about the pantry, the plan or outcomes. Same shape of fix as household-planner US-745 for the planner: the function reads the household, the client stops shipping state."
+    },
+    {
+      "id": "US-877",
+      "title": "One definition per table: reconcile the duplicated migrations without breaking a database that already ran them",
+      "description": "As the next person adding a column, I want each table defined in one place with one shape, so that I stop discovering that recipe_ingredients or store_layouts means different things depending on which of four files a database happened to run.",
+      "acceptanceCriteria": [
+        "An inventory in docs/migrations-duplicates.md lists every table created in more than one migration file, the column differences and which shape production actually has: at least recipe_ingredients (20251014000000 through 20251014000003 plus 20260430000001, reconciled once already in 20260531000000), grocery_recipe_phase1 in its four copies, and store_layouts in three places",
+        "No migration that may have run in production is edited or deleted; each duplicate file gains a header comment naming the canonical definition and stating it is kept only because it may have been applied",
+        "One additive reconcile migration per table brings every environment to the canonical shape with IF NOT EXISTS and NULL defaults, and a SQL test (the suite under supabase/tests) asserts the final columns",
+        "scripts/ci/check-supabase-config.mjs or a sibling script fails CI when a new migration creates a table that already exists in an earlier file without an explicit reconcile marker",
+        "The generated types are regenerated with the pinned CLI (2.116.0) and the drift job is green",
+        "The migration test and types drift jobs pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "platform": "backend",
+      "loopVerifiable": true,
+      "notes": "Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. The recipe_ingredients divergence has already broken all recipe loading on web once (20260531000000 header) and RecipesContext.tsx:64-102 still carries a runtime fallback that drops structured ingredients when the embed 400s. Ordered last because it is hygiene, but every spine story above touches one of these tables."
     }
   ]
 }

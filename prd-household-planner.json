@@ -341,7 +341,7 @@
       "slice": 2,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items P8, X8."
+      "notes": "Review items P8, X8. || Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. KidMealVoting.tsx and MealVotingCard.tsx are also unreferenced from src/ but are NOT in this story's delete list: prd.json US-869 mounts them (or rewrites them) so kids can vote. Delete only the five files named in AC 1."
     },
     {
       "id": "US-728",
@@ -498,14 +498,15 @@
         "Requirements are grouped by item id (falling back to ingredientMatchKey only for unresolved rows), then requiredAfterStock subtracts item_stock when the ledger flag is on and foods.quantity otherwise",
         "Package rounding uses foods.package_quantity when present",
         "recipeShortfall.computeRecipeShortfall converts units through unitNormalize.convert; the string-equality comparable check is deleted so the planner badge and the grocery dialog agree",
-        "Property-style vitest: for random plans the generated list plus stock covers the requirement"
+        "Property-style vitest: for random plans the generated list plus stock covers the requirement",
+        "The grocery page has a shopping-window picker (this week, next week, custom range) that drives generateGroceryList; the hardcoded startOfWeek(now) at Grocery.tsx:197-203 is removed and the chosen window is shown on the Sync from Meal Plan button"
       ],
       "priority": 28,
       "passes": false,
       "slice": 3,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items G12, G24, P24, R29. This is kitchen-loop US-676 and US-680 from the grocery side; coordinate so one shortfall function exists, not two."
+      "notes": "Review items G12, G24, P24, R29. This is kitchen-loop US-676 and US-680 from the grocery side; coordinate so one shortfall function exists, not two. || Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. Sync from Meal Plan always targets the current week; a parent shopping on Saturday for next week gets this week's list."
     },
     {
       "id": "US-737",
@@ -667,14 +668,17 @@
         "buildWeekPlan becomes a deterministic seeded scorer over varietyFatigue, pantry coverage (depletion forecast) and ladder due-ness from ladderScheduler; Math.random selection is removed",
         "Household settings gain per-weekday max prep minutes and a weekly budget; the planner shows an over budget chip on a day",
         "Generated weeks are written through planMeal (US-724) and are reviewable before commit",
-        "Tests cover the scorer's determinism and the constraint filters"
+        "Tests cover the scorer's determinism and the constraint filters",
+        "The server-side history read includes plan_entries.result for the last 28 days, meal_votes, and the latest variety_fatigue_snapshots row, so a refused or no-way meal is not proposed again inside its cooldown and a fatigued food is rotated out; the weighting is a named constant in the scorer with a test",
+        "generate-meal-suggestions (native-only today, richer input contract: recent, loved and refused meals, expiring ingredients, weekly budget, texture and flavour prefs) is folded into ai-meal-plan's contract or deleted; two AI planners with different inputs do not remain",
+        "Generation never deletes the week first: the current delete-then-insert at Planner.tsx:199 and :279 is replaced by a proposal the user reviews, and only accepted slots are written through planMeal; manual edits in untouched slots survive"
       ],
       "priority": 37,
       "passes": false,
       "slice": 4,
       "platform": "web",
       "loopVerifiable": true,
-      "notes": "Review items P27, P28, P31 (schedule awareness). Edge-function half is loopVerifiable false; the scorer is pure TS."
+      "notes": "Review items P27, P28, P31 (schedule awareness). Edge-function half is loopVerifiable false; the scorer is pure TS. || Platform survey 2026-09-11 (branch claude/platform-improvements-roadmap-2hp4rb): the four modules read against each other, ranked by what makes planner, recipes, nutrition and grocery act as one product. ai-meal-plan/index.ts:25 is client-fed (first 20 recipes, 10 ingredient names each), uses no history, votes, fatigue, budget or dietary_restrictions, and remaps returned names by exact lowercase match at :141-151, dropping misses silently. VarietyFatigueBanner writes variety_fatigue_snapshots and nothing reads them back into generation."
     },
     {
       "id": "US-746",
