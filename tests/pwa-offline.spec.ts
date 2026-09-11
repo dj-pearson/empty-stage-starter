@@ -60,18 +60,70 @@ test.describe('service worker registration', () => {
     expect(cacheNames).not.toContain('tryeatpal-v1');
   });
 
-  test('serves the offline page when the network is gone', async ({ page, context }) => {
+  test('serves the requested page from cache when the network is gone', async ({
+    page,
+    context,
+  }) => {
     await page.goto('/');
     // Must be controlling, not merely active: an uncontrolled page's
     // navigation goes to the network, and offline that lands on Chromium's own
     // error page (an empty body) rather than on the worker's fallback.
     await waitForController(page);
 
+    // Visit it online first. networkFirstWithOfflineFallback stores every
+    // navigation it successfully serves, so this is what puts /pricing in the
+    // cache -- and reloading a page you were already on is the exact case
+    // 18fb2d8 was written for.
+    //
+    // Without this the test is a coin toss between two branches that are both
+    // correct: the exact cached page (title is Pricing at once) and the app
+    // shell (title is the home page's until client-side routing catches up).
+    // Observed failing roughly one run in three before it was pinned down.
+    await page.goto('/pricing');
+    await expect(page).toHaveTitle(/pricing/i);
+
     await context.setOffline(true);
-    const response = await page.goto('/pricing');
+    const response = await page.reload();
 
     // The worker answers from cache, so this is a real 200 rather than a
     // navigation failure -- that is the whole point of the fallback.
+    expect(response?.status()).toBe(200);
+
+    // US-848: the page the user asked for, not a dead end. This test used to
+    // assert the opposite -- a title matching /offline/i -- which was correct
+    // until 18fb2d8 made the fallback read the cache it was already filling.
+    // It went unnoticed because the E2E job downloads the Build artifact, and
+    // Build was failing on an unreachable bundle budget from PR #275 onward, so
+    // this suite was skipped on every run in between.
+    await expect(page).toHaveTitle(/pricing/i);
+    await expect(page).not.toHaveTitle(/offline/i);
+
+    await context.setOffline(false);
+  });
+
+  test('falls back to the offline page when nothing is cached', async ({ page, context }) => {
+    await page.goto('/');
+    await waitForController(page);
+
+    // 18fb2d8 kept offline.html for the case where the cache cannot answer,
+    // and said it was "pinned as such". Nothing pinned it: the only test
+    // covering offline navigation asserted the old dead-end behaviour and is
+    // now the one above. Empty the cache of everything the fallback prefers --
+    // the exact page, the app shell, '/' -- and the static page is what is
+    // left.
+    await page.evaluate(async () => {
+      for (const name of await caches.keys()) {
+        const cache = await caches.open(name);
+        for (const request of await cache.keys()) {
+          const path = new URL(request.url).pathname;
+          if (path !== '/offline.html') await cache.delete(request);
+        }
+      }
+    });
+
+    await context.setOffline(true);
+    const response = await page.goto('/pricing');
+
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle(/offline/i);
     await expect(page.getByRole('heading', { name: /offline/i })).toBeVisible();

@@ -267,10 +267,22 @@ export const Footer = () => {
                   Help Center
                 </Link>
               </li>
-              <li>
+              <li className="min-w-0">
+                {/*
+                  US-846, same shape as the fix on src/pages/Accessibility.tsx:
+                  an email address is one unbreakable 161px word, and in the
+                  footer it pushed /pricing, /blog, /auth and /guides 17px past
+                  a 320px viewport. WCAG 1.4.10 Reflow names exactly this case.
+
+                  break-words needs something to break against, so min-w-0 on
+                  the list item is the half that does the work -- without it the
+                  item refuses to shrink below its content and the address never
+                  wraps. The footer is on every page, which is why four routes
+                  failed for one link.
+                */}
                 <a
                   href="mailto:Support@TryEatPal.com"
-                  className="hover:text-primary transition-colors"
+                  className="hover:text-primary transition-colors break-words"
                 >
                   Support@TryEatPal.com
                 </a>
