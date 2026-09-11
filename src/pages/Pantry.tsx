@@ -1292,6 +1292,12 @@ function EmptyPantryState({
   onLoadStarter: () => void;
   onGetSuggestions: () => void;
 }) {
+  // Its own hook: this is a separate component from Pantry, so the page's `t`
+  // is not in scope here. Without this the two t() calls below are a bare
+  // undefined identifier and the whole screen throws ReferenceError -- which is
+  // what a parent with an empty pantry saw instead of the empty state.
+  const { t } = useTranslation();
+
   return (
     <div
       className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-400"

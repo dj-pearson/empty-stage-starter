@@ -11,7 +11,7 @@ describe('BarcodeScannerScreen', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     // Default mock implementation for useScanner
-    (useScanner as vi.Mock).mockReturnValue({
+    vi.mocked(useScanner).mockReturnValue({
       scannerReady: true,
       scannedData: [],
       handleScan: vi.fn(),
@@ -31,7 +31,7 @@ describe('BarcodeScannerScreen', () => {
   });
 
   it('should show loading scanner message when not ready', () => {
-    (useScanner as vi.Mock).mockReturnValue({
+    vi.mocked(useScanner).mockReturnValue({
       scannerReady: false,
       scannedData: [],
       handleScan: vi.fn(),
@@ -44,7 +44,7 @@ describe('BarcodeScannerScreen', () => {
   });
 
   it('should display scanned data', async () => {
-    (useScanner as vi.Mock).mockReturnValue({
+    vi.mocked(useScanner).mockReturnValue({
       scannerReady: true,
       scannedData: ['12345', '98765'],
       handleScan: vi.fn(),
@@ -58,7 +58,7 @@ describe('BarcodeScannerScreen', () => {
   });
 
   it('should display feedback', () => {
-    (useScanner as vi.Mock).mockReturnValue({
+    vi.mocked(useScanner).mockReturnValue({
       scannerReady: true,
       scannedData: [],
       handleScan: vi.fn(),

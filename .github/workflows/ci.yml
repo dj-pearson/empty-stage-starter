@@ -373,6 +373,20 @@ jobs:
           E2E_TARGET: dist
           E2E_DIST: dist-e2e
 
+      # US-856. Nothing watched the browser console behind the login, and
+      # /dashboard/pantry was throwing ReferenceError into the route error
+      # boundary for every account whose pantry was empty -- every new account,
+      # on the fourth item in the sidebar. This step is the behavioural half of
+      # that fix; the typecheck ratchet holds the error class that caused it.
+      - name: Signed-in routes render without throwing
+        run: |
+          node scripts/dev/fake-postgrest.mjs &
+          sleep 2
+          npx playwright test --project=chromium tests/authenticated/
+        env:
+          E2E_TARGET: dist
+          E2E_DIST: dist-e2e
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

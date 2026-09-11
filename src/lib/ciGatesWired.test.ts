@@ -89,6 +89,12 @@ describe('the E2E job runs the Playwright suite', () => {
     expect(ci).toContain('src/lib/cspInlineScripts.test.ts');
   });
 
+  it('watches the console on the signed-in routes, not only the public ones', () => {
+    // US-856: the pantry screen threw ReferenceError into the route error
+    // boundary for every account with an empty pantry, and no gate looked.
+    expect(ci).toContain('tests/authenticated/');
+  });
+
   it('names the date its continue-on-error expires', () => {
     // A non-blocking job with no end date is a job that never blocks.
     expect(ci).toMatch(/continue-on-error until \d{4}-\d{2}-\d{2}/);
