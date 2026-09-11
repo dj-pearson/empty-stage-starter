@@ -1,6 +1,7 @@
 // Updated to use environment variables for self-hosted Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { logger } from "@/lib/logger";
+import { installGetUserCache } from "@/lib/cachedGetUser";
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -213,3 +214,25 @@ function createSupabaseClient(): SupabaseClient<Database> {
 }
 
 export const supabase = createSupabaseClient();
+
+/*
+ * US-861: one GET /auth/v1/user per page load instead of ten to eighteen.
+ *
+ * 101 call sites reach for supabase.auth.getUser(), almost all of them only to
+ * read user.id, and getUser() revalidates against GoTrue on every call. The
+ * components asking mount within a few hundred milliseconds of each other, so
+ * the measured cost of that was 18 round trips on /dashboard, 12 on the grocery
+ * list, 10 on the planner and the pantry -- before anything was clicked.
+ *
+ * Installed here rather than at the call sites because here is where it is one
+ * change instead of 101, and because a call site that switches to getSession()
+ * is making a different decision (no revalidation at all) that should be taken
+ * deliberately. What this does and does not cache is documented in
+ * src/lib/cachedGetUser.ts.
+ *
+ * Not installed on the mock client: it answers from memory already, and
+ * wrapping it would only make the mock diverge from what it is standing in for.
+ */
+if (isSupabaseConfigured) {
+  installGetUserCache(supabase);
+}
