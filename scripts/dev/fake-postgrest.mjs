@@ -122,6 +122,36 @@ const GROCERY_ITEMS = [
   created_at: `2026-09-0${i + 1}T00:00:00.000Z`,
 }));
 
+/**
+ * A pantry: safe foods, try-bites and neither, across the categories the app
+ * knows. Eight rows is enough for the category sections to render more than one
+ * group without making a scan crawl.
+ */
+const FOODS = [
+  ['Whole milk', 'dairy', true, false, 'Dairy'],
+  ['Sharp cheddar', 'dairy', false, true, 'Dairy'],
+  ['Chicken nuggets', 'protein', true, false, 'Freezer'],
+  ['Broccoli florets', 'vegetable', false, true, 'Produce'],
+  ['Bananas', 'fruit', true, false, 'Produce'],
+  ['Strawberries', 'fruit', false, true, 'Produce'],
+  ['Buttered pasta', 'carb', true, false, 'Pantry'],
+  ['Goldfish crackers', 'snack', true, false, 'Pantry'],
+].map(([name, category, is_safe, is_try_bite, aisle], i) => ({
+  id: `dddddddd-0000-4000-8000-00000000000${i}`,
+  household_id: HOUSEHOLD_ID,
+  user_id: TEST_USER_ID_LITERAL,
+  name,
+  category,
+  is_safe,
+  is_try_bite,
+  needs_review: false,
+  aisle,
+  quantity: 1,
+  unit: 'count',
+  created_at: `2026-09-0${i + 1}T00:00:00.000Z`,
+  updated_at: `2026-09-0${i + 1}T00:00:00.000Z`,
+}));
+
 /** PostgREST answers an object rather than an array for .single()/.maybeSingle(). */
 function sendRows(res, req, rows) {
   const single = (req.headers.accept || '').includes('vnd.pgrst.object');
@@ -301,6 +331,22 @@ createServer((req, res) => {
         profiles: { full_name: 'E2E Parent' },
       },
     ]);
+  }
+
+  // US-858: a pantry with food in it.
+  //
+  // Nothing answered /rest/v1/foods, so every authenticated browser check
+  // measured the pantry EMPTY -- and an empty pantry renders EmptyPantryState,
+  // three cards and a paragraph, not the food cards the screen exists for. The
+  // a11y baseline of 46 for this route was measured against AppContext's
+  // STARTER SEED, which it plants only when nothing loads at all, so the number
+  // described neither an empty pantry nor a real one.
+  //
+  // Columns are the real ones from src/integrations/supabase/types.ts. is_safe
+  // and is_try_bite matter most: they are what draws the two coloured badges on
+  // every food card, which is where this screen's contrast debt lives.
+  if (url.pathname === '/rest/v1/foods') {
+    return sendRows(res, req, FOODS);
   }
 
   if (url.pathname === '/rest/v1/grocery_lists') {

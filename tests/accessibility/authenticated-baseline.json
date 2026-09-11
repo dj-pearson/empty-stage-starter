@@ -1,10 +1,10 @@
 {
-  "_comment": "US-778. Serious+critical axe node counts per authenticated route, measured 2026-09-03 after the primary-colour darkening and four accessible-name fixes. Zero critical violations remain anywhere. What is left is entirely colour-contrast on the FOOD-CATEGORY badge palette (greens, reds and ambers defined per category, e.g. white on #5abc7d at 2.31:1), which is a separate palette problem from the brand primary and needs its own decision. These numbers may only go DOWN: the assertion is <=, so a fix tightens the gate automatically. Regenerate deliberately, never to turn a red run green.",
-  "_measurementNote": "Measured serially with the deterministic wait in the spec. An earlier baseline taken with networkidle alone under parallel load reported pantry at 15 because the scan hit its loading skeleton; the real figure with chips rendered is 46. Trust these numbers, not the pre-change ones.",
-  "dashboard": 3,
+  "_comment": "US-858. Serious+critical axe node counts per authenticated route, re-measured 2026-09-11 against a household that actually resolves and a pantry with food in it. The previous numbers were taken against degraded screens: get_user_household_id answered [] from the fake backend (US-857), so the dashboard read 3 and the pantry read 46 -- and that 46 was AppContext's STARTER SEED, which it plants only when nothing loads at all, so it described neither an empty pantry nor a real one. These numbers may only go DOWN: the assertion is <=, so a fix tightens the gate automatically. Regenerate deliberately with A11Y_BASELINE=update --workers=1, never to turn a red run green.",
+  "_measurementNote": "Every one of the 12 remaining nodes is white text on one of two colours: #16a249 (hsl 142 76% 36%, which is --secondary and --safe-food, the same colour defined twice) at 3.33:1, and #f97015 (hsl 24 95% 53%, --try-bite) at 2.85:1. Both are recorded as ratchets in src/lib/themeContrast.test.ts with the lightness each needs to clear AA. Fixing either token drops several routes at once; see US-858 for why that is an owner's decision rather than a quiet edit.",
+  "dashboard": 0,
   "planner": 0,
   "grocery": 3,
-  "pantry": 46,
+  "pantry": 8,
   "recipes": 1,
   "kids": 0,
   "settings": 0
