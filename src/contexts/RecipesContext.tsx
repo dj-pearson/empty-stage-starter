@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
+import { writeFailureMessage } from "@/lib/networkFailure";
 import {
   diffIngredientRows,
   type IngredientRowPayload,
@@ -224,10 +225,29 @@ async function readIngredientRows(recipeId: string): Promise<RecipeIngredient[]>
   return (data ?? []) as unknown as RecipeIngredient[];
 }
 
-async function persistIngredientRows(
+/**
+ * US-867: these writes used to fail in silence.
+ *
+ * Every branch here logged its error and carried on, and the function returned
+ * void, so the caller could not know. A cook edits a recipe's ingredients, the
+ * recipe row saves (that half goes through runOptimisticMutation and toasts on
+ * failure), this half fails, and the app then re-reads the ingredients from the
+ * server and renders the OLD ones. Nothing is said. The edit is gone, and the
+ * screen looks like it was never made.
+ *
+ * The delete-then-insert shape makes it worse than a lost edit. A delete that
+ * succeeds followed by an insert that fails leaves the recipe with its old
+ * ingredients removed and the new ones absent -- a recipe with no ingredients,
+ * from an edit the user believes succeeded.
+ *
+ * So: stop at the first failure and hand it back. Stopping matters as much as
+ * reporting. Continuing after a failed delete is what turns one failed write
+ * into a half-applied edit, and there is no transaction here to undo it with.
+ */
+export async function persistIngredientRows(
   recipeId: string,
   rows: IngredientRowPayload[],
-): Promise<void> {
+): Promise<{ error: unknown }> {
   const { data: existing, error: readError } = await supabase
     .from('recipe_ingredients')
     .select('id')
@@ -235,7 +255,7 @@ async function persistIngredientRows(
 
   if (readError) {
     logger.error('Supabase recipe_ingredients read error:', readError);
-    return;
+    return { error: readError };
   }
 
   const diff = diffIngredientRows((existing ?? []) as Array<{ id: string }>, rows);
@@ -245,7 +265,10 @@ async function persistIngredientRows(
       .from('recipe_ingredients')
       .delete()
       .in('id', diff.deleteIds);
-    if (error) logger.error('Supabase recipe_ingredients delete error:', error);
+    if (error) {
+      logger.error('Supabase recipe_ingredients delete error:', error);
+      return { error };
+    }
   }
 
   for (const row of diff.updates) {
@@ -254,15 +277,23 @@ async function persistIngredientRows(
       .from('recipe_ingredients')
       .update(fields)
       .eq('id', id as string);
-    if (error) logger.error('Supabase recipe_ingredients update error:', error);
+    if (error) {
+      logger.error('Supabase recipe_ingredients update error:', error);
+      return { error };
+    }
   }
 
   if (diff.inserts.length > 0) {
     const { error } = await supabase
       .from('recipe_ingredients')
       .insert(diff.inserts.map((row) => ({ ...row, recipe_id: recipeId })));
-    if (error) logger.error('Supabase recipe_ingredients insert error:', error);
+    if (error) {
+      logger.error('Supabase recipe_ingredients insert error:', error);
+      return { error };
+    }
   }
+
+  return { error: null };
 }
 
 export function RecipesProvider({ children }: { children: React.ReactNode }) {
@@ -378,7 +409,19 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
           // US-721: the quantity and unit the cook typed, as real rows.
           const rows = recipe.recipe_ingredient_rows;
           if (rows && rows.length > 0) {
-            await persistIngredientRows(newRecipe.id, rows);
+            const { error: rowsError } = await persistIngredientRows(newRecipe.id, rows);
+            if (rowsError) {
+              // The recipe row itself landed, so this is not a failed save --
+              // it is a recipe saved without its ingredients, and saying so is
+              // the difference between a cook re-entering them now and finding
+              // out at the hob.
+              toast.error(
+                writeFailureMessage(
+                  rowsError,
+                  "Recipe saved, but its ingredients didn't. Please add them again.",
+                ),
+              );
+            }
             newRecipe.recipe_ingredients = await readIngredientRows(newRecipe.id);
           }
           setRecipes(prev => upsertById(prev, newRecipe));
@@ -437,7 +480,17 @@ export function RecipesProvider({ children }: { children: React.ReactNode }) {
       const rows = updates.recipe_ingredient_rows;
       if (rows) {
         void (async () => {
-          await persistIngredientRows(id, rows);
+          const { error } = await persistIngredientRows(id, rows);
+          if (error) {
+            // Same copy as every other rejected write in the app, and the same
+            // offline wording when that is the cause.
+            toast.error(
+              writeFailureMessage(
+                error,
+                "Couldn't save those ingredients. Please try again.",
+              ),
+            );
+          }
           const fresh = await readIngredientRows(id);
           setRecipes(prev => prev.map(r => (r.id === id ? { ...r, recipe_ingredients: fresh } : r)));
         })();
