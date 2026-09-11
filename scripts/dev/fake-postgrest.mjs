@@ -407,6 +407,43 @@ const PLAN_ENTRIES = [
   updated_at: '2026-09-01T00:00:00.000Z',
 }));
 
+  // US-862: a saved accessibility row, so a load has something to read back.
+  //
+  // With nothing here, every page load found no row and wrote one -- which
+  // looks exactly like the bug this stands in for and hides its fix. The values
+  // are the client's own defaults (DEFAULT_PREFERENCES in
+  // src/contexts/AccessibilityContext.tsx) because headless Chromium reports no
+  // system preference, so a correct client merges this to itself and writes
+  // nothing.
+  if (url.pathname === '/rest/v1/user_accessibility_preferences') {
+    if (req.method !== 'GET') {
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+      return res.end('[]');
+    }
+    return sendRows(res, req, [
+      {
+        id: 'ffffffff-0000-4000-8000-000000000001',
+        user_id: TEST_USER_ID_LITERAL,
+        preferences: {
+          reducedMotion: false,
+          highContrast: false,
+          largeText: false,
+          fontSize: 'default',
+          screenReaderMode: false,
+          announcePageChanges: true,
+          verboseDescriptions: false,
+          enhancedFocus: false,
+          keyboardShortcuts: true,
+          extendedTimeouts: false,
+          disableAutoplay: true,
+          simplifiedUI: false,
+          dyslexiaFont: false,
+        },
+        updated_at: '2026-09-01T00:00:00.000Z',
+      },
+    ]);
+  }
+
   if (url.pathname === '/rest/v1/kids') {
     return sendRows(res, req, KIDS);
   }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { getStorage } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
@@ -88,6 +88,17 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
   const [preferences, setPreferences] = useState<AccessibilityPreferences>(DEFAULT_PREFERENCES);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  /*
+   * US-862: has the server been asked yet?
+   *
+   * The local read and the server read finish at different times, and the save
+   * effect used to run between them -- so a page load wrote the localStorage
+   * value up before the server's answer had arrived, and then wrote again once
+   * it had. Saving is held until the server has answered (or until we know
+   * there is nobody to ask), which is the same hydration guard AppContext uses
+   * before it persists its own cache.
+   */
+  const [serverSettled, setServerSettled] = useState(false);
 
   // Detect system preferences on mount
   useEffect(() => {
@@ -138,6 +149,32 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     };
   }, []);
 
+  /*
+   * US-862: what has already been persisted, so loading does not write it back.
+   *
+   * The save effect below depends on `preferences`, and three separate things
+   * set it during a single page load -- the system-preference probe, the
+   * localStorage read, and the Supabase read. Each one re-ran the effect, so
+   * every page view sent THREE upserts of an unchanged row, the third of them
+   * writing the server's own answer straight back to the server. Measured on
+   * the built app: 3 x POST /rest/v1/user_accessibility_preferences on every
+   * authenticated route, before anything was clicked.
+   *
+   * Two things were wrong with that beyond the requests. updated_at was bumped
+   * on every page load, so the column recorded when the row was last READ. And
+   * writing the merge back makes a load a write: a local value the server did
+   * not have was pushed up by whichever tab loaded last, which is the opposite
+   * of the server-authoritative contract the rest of the app follows (US-341).
+   *
+   * `rememberPersisted` is called with the value a load produced, so that value
+   * is never a change to save. A genuine edit still differs from it and still
+   * saves.
+   */
+  const lastPersistedRef = useRef<string | null>(null);
+  const rememberPersisted = useCallback((value: AccessibilityPreferences) => {
+    lastPersistedRef.current = JSON.stringify(value);
+  }, []);
+
   // Load preferences from storage
   useEffect(() => {
     const loadPreferences = async () => {
@@ -147,7 +184,13 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
 
         if (stored) {
           const parsed = JSON.parse(stored);
-          setPreferences(prev => ({ ...prev, ...parsed }));
+          setPreferences(prev => {
+            const merged = { ...prev, ...parsed };
+            // Writing a ref inside the updater: deterministic, so running it
+            // twice (StrictMode) produces the same value.
+            rememberPersisted(merged);
+            return merged;
+          });
         }
       } catch (error) {
         logger.error('Error loading accessibility preferences:', error);
@@ -165,6 +208,13 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
       try {
         const { data: { session } } = await supabase.auth.getSession();
 
+        if (!session?.user) {
+          // Nobody to ask. Local preferences are the whole truth, and saving
+          // them is only a localStorage write.
+          setServerSettled(true);
+          return;
+        }
+
         if (session?.user) {
           setUserId(session.user.id);
 
@@ -174,15 +224,19 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
             .single();
 
           if (data && !error) {
-            setPreferences(prev => ({
-              ...prev,
-              ...data.preferences,
-            }));
+            setPreferences(prev => {
+              const merged = { ...prev, ...data.preferences };
+              rememberPersisted(merged);
+              return merged;
+            });
           }
         }
       } catch (error) {
         // Silently fail - table might not exist yet
         logger.debug('Could not load accessibility preferences from Supabase:', error);
+      } finally {
+        // Settled either way: a failed read must not hold saving forever.
+        setServerSettled(true);
       }
     };
 
@@ -205,12 +259,16 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
 
   // Save preferences whenever they change
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !serverSettled) return;
+
+    const serialized = JSON.stringify(preferences);
+    // Nothing changed since the last load or save. A page view is not an edit.
+    if (serialized === lastPersistedRef.current) return;
 
     const savePreferences = async () => {
       try {
         const storage = await getStorage();
-        await storage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+        await storage.setItem(STORAGE_KEY, serialized);
 
         // Also save to Supabase if authenticated
         if (userId) {
@@ -224,13 +282,16 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
               onConflict: 'user_id'
             });
         }
+        lastPersistedRef.current = serialized;
       } catch (error) {
+        // Deliberately NOT remembered on failure: a write that did not land
+        // must be retried by the next change, not treated as persisted.
         logger.error('Error saving accessibility preferences:', error);
       }
     };
 
     savePreferences();
-  }, [preferences, userId, isLoading]);
+  }, [preferences, userId, isLoading, serverSettled, rememberPersisted]);
 
   // Apply CSS classes based on preferences
   useEffect(() => {
