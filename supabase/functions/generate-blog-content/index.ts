@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 import { requireAdmin } from "../_shared/require-admin.ts";
+import { enforceRateLimit } from "../_shared/rate-limit.ts";
 import {
   buildPromptFromContext,
   generateAndStoreImage,
@@ -76,6 +77,13 @@ export default async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // Admin-only: prevents anonymous callers from triggering paid LLM/image calls.
   const gate = await requireAdmin(req);
   if (!gate.ok) {
@@ -83,6 +91,21 @@ export default async (req: Request) => {
       status: gate.status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  // US-773: rate_limit_config has carried a generate-blog-content row (5/hr
+  // free) since 20260613000001 and nothing in the deployed tree read it. An
+  // admin token is not a blank cheque for an image-generating LLM loop; a
+  // leaked one should cost a budget, not a bill. Skipped for service-role
+  // callers, which have no user id to meter.
+  if (gate.userId) {
+    const limited = await enforceRateLimit(
+      gate.admin,
+      gate.userId,
+      "generate-blog-content",
+      corsHeaders,
+    );
+    if (limited) return limited;
   }
 
   try {

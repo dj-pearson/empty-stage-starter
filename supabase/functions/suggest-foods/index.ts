@@ -2,7 +2,7 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { withStandingLimits } from '../_shared/safety.ts';
 
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -13,15 +13,10 @@ export default async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // US-618: this endpoint spends model tokens and the runtime is
-  // --no-verify-jwt, so in-function auth is the only gate.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  // US-618 put auth here; US-773 added the method check and the per-user
+  // budget that had only ever existed in the tree that does not deploy.
+  const gate = await gateAiRequest(req, 'suggest-foods', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { foods, planEntries, childProfile } = await req.json();
@@ -131,7 +126,7 @@ Respond in JSON format with an array called "suggestions".`;
   } catch (error) {
     console.error('Error in suggest-foods function:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -102,7 +102,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function analyzeSecurityHeaders(url: string): Promise<SecurityAnalysis> {
   const urlObj = new URL(url);

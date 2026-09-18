@@ -61,13 +61,16 @@ describe('US-643: which copy of a collided function actually writes', () => {
     expect(bucketOf(entry)).toBe('generated-images');
   });
 
-  it('the legacy update-blog-image writes a different bucket and is not the live one', () => {
-    // Not a failure -- it is the tracked collision. Pinned so that a change to
-    // either copy has to confront the divergence rather than discover it.
-    const dead = 'functions/update-blog-image/index.ts';
-    expect(existsSync(path.join(root, dead))).toBe(true);
-    expect(bucketOf(dead)).toBe('blog-images');
-    expect(resolvedEntrypoint('update-blog-image')).not.toBe(dead);
+  it('there is no second update-blog-image to diverge from', () => {
+    // Until US-773 this asserted the opposite: that the legacy copy existed,
+    // wrote blog-images instead of generated-images, and was not the live one.
+    // That copy is gone. It had the SSRF check and the byte cap the live one
+    // lacked, which is the argument for one tree rather than two -- the guards
+    // were in the copy the server cannot load.
+    expect(existsSync(path.join(root, 'functions/update-blog-image/index.ts'))).toBe(false);
+    expect(resolvedEntrypoint('update-blog-image')).toBe(
+      'supabase/functions/update-blog-image/index.ts',
+    );
   });
 
   it('agent-blog-writer is live from the legacy tree, and is blog-images sole writer', () => {

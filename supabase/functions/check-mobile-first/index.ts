@@ -95,7 +95,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function analyzeMobileFriendliness(url: string): Promise<MobileAnalysis> {
   // Fetch the page

@@ -185,7 +185,7 @@ export default async (req: Request) => {
       { status: 500, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 
 /**
  * Log security audit event

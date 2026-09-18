@@ -201,6 +201,10 @@ export type RecipePageResult =
   | { ok: true; html: string; finalUrl: string }
   | { ok: false; status: number; error: string };
 
+export type GuardedFetchResult =
+  | { ok: true; bytes: Uint8Array; contentType: string; finalUrl: string }
+  | { ok: false; status: number; error: string };
+
 export interface FetchRecipePageOptions {
   timeoutMs?: number;
   maxRedirects?: number;
@@ -209,23 +213,34 @@ export interface FetchRecipePageOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface FetchGuardedOptions extends FetchRecipePageOptions {
+  /** Request headers. Defaults to the browser-ish recipe set. */
+  headers?: Record<string, string>;
+}
+
 /**
- * Fetch a user-supplied recipe page under every guard at once.
+ * Fetch a caller-supplied URL under every guard at once, and return the bytes.
  *
  * Redirects use `redirect: 'manual'` so a Location is re-validated before it is
  * followed; `redirect: 'follow'` would let a public host bounce the request to
  * 169.254.169.254 with nothing to stop it.
  *
  * The `status` on a failure is what the calling function should return: 400 for
- * a URL we refuse, 413 for an oversized body, 502 for an upstream failure.
+ * a URL we refuse, 413 for an oversized body, 502/504 for an upstream failure.
+ *
+ * US-773 lifted this out of fetchRecipePage, which decoded the body as text and
+ * so could only serve the recipe importer. update-blog-image needs the same
+ * guards for an image: it was fetching an arbitrary URL with a bare `fetch()`
+ * and no size cap, while the copy of it in the tree that never deploys had both.
  */
-export async function fetchRecipePage(
+export async function fetchGuardedResource(
   urlString: string,
-  opts: FetchRecipePageOptions = {}
-): Promise<RecipePageResult> {
+  opts: FetchGuardedOptions = {}
+): Promise<GuardedFetchResult> {
   const maxRedirects = opts.maxRedirects ?? MAX_REDIRECTS;
   const maxBytes = opts.maxBytes ?? RECIPE_MAX_BYTES;
   const timeoutMs = opts.timeoutMs ?? FETCH_TIMEOUT_MS;
+  const headers = opts.headers ?? RECIPE_FETCH_HEADERS;
   const doFetch = opts.fetchImpl ?? fetch;
 
   let current = urlString;
@@ -239,7 +254,7 @@ export async function fetchRecipePage(
     let response: Response;
     try {
       response = await doFetch(current, {
-        headers: RECIPE_FETCH_HEADERS,
+        headers,
         redirect: 'manual',
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -274,17 +289,30 @@ export async function fetchRecipePage(
       };
     }
 
+    const contentType = response.headers.get('content-type') ?? '';
     const body = await readCappedBody(response, maxBytes);
     if (!body.ok) {
       return { ok: false, status: 413, error: body.error };
     }
 
-    return {
-      ok: true,
-      html: new TextDecoder().decode(body.bytes),
-      finalUrl: current,
-    };
+    return { ok: true, bytes: body.bytes, contentType, finalUrl: current };
   }
 
   return { ok: false, status: 400, error: 'Too many redirects' };
+}
+
+/**
+ * The recipe importer's view of the same fetch: HTML as text.
+ */
+export async function fetchRecipePage(
+  urlString: string,
+  opts: FetchRecipePageOptions = {}
+): Promise<RecipePageResult> {
+  const result = await fetchGuardedResource(urlString, opts);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    html: new TextDecoder().decode(result.bytes),
+    finalUrl: result.finalUrl,
+  };
 }

@@ -1,5 +1,5 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { getCorsHeaders, noCacheHeaders } from '../common/headers.ts';
 
 /**
@@ -184,15 +184,11 @@ export default async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // US-618: this endpoint spends model tokens and the runtime is
-  // --no-verify-jwt, so in-function auth is the only gate.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  // US-618 put auth here. US-773 added the method check and the per-user
+  // budget: rate_limit_config has carried an identify-product row (10/hr free)
+  // since 20260613000001 and nothing in the deployed tree ever read it.
+  const gate = await gateAiRequest(req, 'identify-product', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { imageBase64 } = (await req.json()) as RequestBody;
@@ -240,9 +236,8 @@ export default async (req: Request) => {
     return new Response(JSON.stringify(product), { headers: noCacheHeaders() });
   } catch (err) {
     console.error('identify-product error:', err);
-    const message = err instanceof Error ? err.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: noCacheHeaders() },
     );
   }

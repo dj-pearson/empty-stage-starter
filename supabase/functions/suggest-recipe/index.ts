@@ -1,6 +1,6 @@
 import { withStandingLimits } from "../_shared/safety.ts";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
-import { requireUser } from "../_shared/require-admin.ts";
+import { gateAiRequest } from '../_shared/ai-gate.ts';
 
 
 const corsHeaders = {
@@ -14,13 +14,9 @@ export default async (req: Request) => {
   }
 
   // Authenticated users only: paid AI call, same gate as parse-recipe.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(JSON.stringify({ error: gate.error ?? 'Unauthorized' }), {
-      status: gate.status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  // US-773 added the method check and the per-user budget alongside it.
+  const gate = await gateAiRequest(req, 'suggest-recipe', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     // US-709: read only the recipe inputs. aiModel used to arrive from the
@@ -133,7 +129,7 @@ Format your response as JSON with these exact fields:
   } catch (error) {
     console.error('Error in suggest-recipe function:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -90,7 +90,7 @@ export default async (req: Request) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 
 async function getUserIntelligence(supabase: any, request: UserIntelligenceRequest) {
   const { userId } = request;

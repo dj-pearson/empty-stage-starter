@@ -256,7 +256,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function quickCrawl(
   startUrl: string,

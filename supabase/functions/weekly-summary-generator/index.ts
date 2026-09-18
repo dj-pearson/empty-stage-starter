@@ -197,7 +197,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 function generateSummaryHtml(
   metrics: Array<{

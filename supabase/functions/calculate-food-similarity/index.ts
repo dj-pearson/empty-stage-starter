@@ -1,5 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
@@ -13,15 +13,10 @@ export default async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // US-618: this endpoint spends model tokens and the runtime is
-  // --no-verify-jwt, so in-function auth is the only gate.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  // US-618 put auth here; US-773 added the method check and the per-user
+  // budget that had only ever existed in the tree that does not deploy.
+  const gate = await gateAiRequest(req, 'calculate-food-similarity', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { sourceFoodId, kidId } = await req.json();
@@ -161,16 +156,15 @@ Format as JSON with this structure:
 
   } catch (error) {
     console.error('Error calculating food similarity:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: 'Internal server error' }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }
-});
+};
 
 function calculateSimilarityScore(food1: any, food2: any): number {
   let score = 0;

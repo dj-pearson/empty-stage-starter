@@ -78,7 +78,10 @@ describe('client-supplied AI config (US-709)', () => {
   });
 
   it('suggest-recipe stays gated to signed-in callers', () => {
-    expect(readFn('suggest-recipe')).toMatch(/await requireUser\(req\)/);
+    // US-773 moved the call behind gateAiRequest, which runs the same
+    // requireUser and adds the method check and the per-user budget. The gate
+    // is what matters here, not which line calls requireUser.
+    expect(readFn('suggest-recipe')).toMatch(/await gateAiRequest\(req, 'suggest-recipe'/);
   });
 
   /**

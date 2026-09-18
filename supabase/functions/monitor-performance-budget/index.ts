@@ -129,7 +129,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function analyzePerformanceBudget(
   url: string,

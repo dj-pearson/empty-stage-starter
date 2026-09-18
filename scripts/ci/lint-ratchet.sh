@@ -15,6 +15,14 @@
 # error-severity.
 set -uo pipefail
 
+# US-773 raised this baseline once, from 1137 to 1172, and the reason is the
+# only one that justifies raising it: 17 handlers under supabase/functions/ did
+# not PARSE, so eslint reported one parse error each and never saw the rest of
+# their contents. Fixing the stray `});` each of them ended with made 56 real
+# errors visible (43 no-explicit-any, 12 no-unused-vars, 1 prefer-const) and
+# retired 17 parse errors. The tree did not get worse; the gate started looking
+# at it. Those 56 are US-870's to clear, and this number only goes down again.
+#
 BASELINE_FILE=".ci/lint-baseline.txt"
 # US-802: a stable path, so the workflow can upload it as an artifact.
 LOG="${LINT_LOG:-/tmp/lint-ratchet.log}"

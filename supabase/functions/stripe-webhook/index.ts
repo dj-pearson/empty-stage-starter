@@ -11,6 +11,12 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 export default async (req: Request) => {
+  // US-773: Stripe only ever POSTs here. Anything else is a probe, and it
+  // should not reach the signature check or the body read.
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
   // Validate webhook secret is configured
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   if (!webhookSecret) {
@@ -82,6 +88,9 @@ export default async (req: Request) => {
       status: 200,
     });
   } catch (err) {
+    // The message stays: this branch is signature verification failing, the
+    // reader is Stripe's dashboard, and `Webhook Error: <reason>` is the
+    // convention its docs use. There is no user on the other end of it.
     console.error("Webhook error:", err);
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
     return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });

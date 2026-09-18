@@ -112,7 +112,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function validateStructuredData(url: string): Promise<ValidationResult> {
   // Fetch the page

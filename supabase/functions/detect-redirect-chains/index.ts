@@ -112,7 +112,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function analyzeRedirectChain(
   startUrl: string,

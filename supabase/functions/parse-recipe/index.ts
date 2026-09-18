@@ -31,6 +31,13 @@ export default async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   // Paid AI call + fetches arbitrary user URLs (SSRF surface), so a signed-in
   // caller is preferred. US-806: anonymous callers are allowed again under a
   // hard budget, because every shipped iOS build sends the anon key from the
@@ -102,10 +109,14 @@ export default async (req: Request) => {
     );
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    // US-773: the message used to be forwarded. It is built from whatever the
+    // remote page or the model threw, so it could carry an internal URL or a
+    // fragment of the upstream response to an anonymous caller (US-806 lets
+    // those in under a budget). Deliberate 4xx replies above still explain
+    // themselves; this is the unexpected path.
     console.error('Error in parse-recipe function:', error);
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -193,7 +193,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function fetchPageContent(url: string): Promise<PageContent> {
   const response = await fetch(url, {

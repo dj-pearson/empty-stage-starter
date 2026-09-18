@@ -110,7 +110,7 @@ export default async (req: Request) => {
       status: 400,
     });
   }
-});
+};
 
 async function handleListInvoices(supabase: any, userId: string, corsHeaders: any) {
   // Get all payments for the user

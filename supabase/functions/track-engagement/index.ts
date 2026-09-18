@@ -199,7 +199,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 function getDeviceType(userAgent: string): string {
   if (/mobile|android|iphone|ipad|ipod/i.test(userAgent)) {
