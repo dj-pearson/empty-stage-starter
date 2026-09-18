@@ -175,3 +175,69 @@ describe('the migration job runs the SQL tests', () => {
     expect(ci.indexOf('Apply migrations')).toBeLessThan(ci.indexOf('supabase/tests/*.test.sql'));
   });
 });
+
+/**
+ * The SQL suites actually gate (US-800).
+ *
+ * The step that runs supabase/tests/*.test.sql carried continue-on-error and a
+ * bare `for` loop, under GitHub's default `bash -e`. us668 failed first
+ * alphabetically, `-e` aborted the loop, and the other fourteen suites never
+ * executed on any run -- the job log shows the step finishing in one second.
+ * So the story recorded "four tests fail" when eleven of the fifteen had no
+ * result at all; the four named were simply the ones someone had run by hand.
+ *
+ * Two things have to hold for that step to mean anything, and neither is
+ * visible from reading a green check:
+ *   1. it must not be continue-on-error, or a failure is a notice;
+ *   2. it must not stop at the first failing file, or one broken suite hides
+ *      every suite behind it.
+ */
+describe('the SQL test step gates (US-800)', () => {
+  const ci = readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'ci.yml'),
+    'utf8',
+  );
+
+  /** The `- name: Run SQL tests` block, up to the next step at the same level. */
+  const step = (() => {
+    const start = ci.indexOf('- name: Run SQL tests');
+    expect(start, 'the Run SQL tests step is gone').toBeGreaterThan(-1);
+    const rest = ci.slice(start + 1);
+    const end = rest.search(/\n {6}- name: /);
+    return end === -1 ? rest : rest.slice(0, end);
+  })();
+
+  it('is not continue-on-error, so a failing suite fails the job', () => {
+    expect(step).not.toContain('continue-on-error');
+  });
+
+  it('runs every suite rather than stopping at the first failure', () => {
+    // `psql ... || failed=...` is what keeps `bash -e` from aborting the loop.
+    expect(step).toMatch(/psql[^\n]*\|\|\s*failed=/);
+    expect(step).toMatch(/exit 1/);
+  });
+
+  it('still points at the whole suite directory', () => {
+    expect(step).toContain('supabase/tests/*.test.sql');
+  });
+
+  /**
+   * A suite that only prints its values next to the word EXPECTED cannot fail
+   * except by erroring, so making the step blocking would gate on "the SQL
+   * ran". Every suite has to assert.
+   */
+  it('has an assertion in every suite, not just a printed EXPECTED', () => {
+    const testsDir = path.join(process.cwd(), 'supabase', 'tests');
+    const silent = readdirSync(testsDir)
+      .filter((f) => f.endsWith('.test.sql'))
+      .filter((f) => {
+        const body = readFileSync(path.join(testsDir, f), 'utf8');
+        return !/\bASSERT\b/i.test(body) && !/RAISE\s+EXCEPTION/i.test(body);
+      });
+
+    expect(
+      silent,
+      'These print values and leave the comparison to a person, so they can only fail by erroring.',
+    ).toEqual([]);
+  });
+});
