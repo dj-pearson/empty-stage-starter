@@ -36,6 +36,7 @@ import { ApplyTemplateDialog } from "@/components/ApplyTemplateDialog";
 import { VoteResultsDisplay } from "@/components/VoteResultsDisplay";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import { TRUSTED_VERIFICATION } from "@/lib/catalogNutrition";
 
 interface CalendarMealPlannerProps {
   weekStart: Date;
@@ -99,10 +100,23 @@ export const CalendarMealPlanner = memo(function CalendarMealPlanner({
   // Load nutrition data
   useEffect(() => {
     const loadNutritionData = async () => {
+      // US-799: the canonical catalog, and named columns rather than `*`.
+      // This selected the whole nutrition table unbounded on every mount of
+      // the planner; the catalog is the shared table and grows faster, so the
+      // row cap is not optional. The columns are the ones DailyMacrosSummary
+      // reads -- per 100g, converted per serving by perServingFromCatalog.
+      //
+      // Verified rows only (US-797): a barcode scan promotes itself into the
+      // shared catalog unchecked, and the planner's numbers go into a day's
+      // totals. perServingFromCatalog refuses an unverified row anyway; doing
+      // it in SQL too means the 2000-row cap is spent on rows that count.
       const { data, error } = await supabase
-        .from('nutrition')
-        .select('*');
-      
+        .from('grocery_product_catalog')
+        .select('name, name_normalized, verification, calories_kcal_100, protein_g_100, carbs_g_100, fat_g_100, fiber_g_100, sodium_mg_100, serving_size_g, serving_size_text, ingredients')
+        .eq('verification', TRUSTED_VERIFICATION)
+        .not('calories_kcal_100', 'is', null)
+        .limit(2000);
+
       if (!error && data) {
         setNutritionData(data);
       }

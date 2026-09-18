@@ -41,16 +41,10 @@ const KNOWN: Record<string, Record<string, string>> = {
     'supabase/functions/generate-weekly-report/index.ts':
       'Reads nutrition for the weekly email. The second and last edge-function reader.',
     // Web. The story did not count these at all, and there are three times as
-    // many of them as there are edge functions.
-    'src/components/AddFoodDialog.tsx':
-      'ilike search over nutrition names when adding a food. Wants the catalog, whose ' +
-      'name_normalized exists for exactly this.',
-    'src/components/CalendarMealPlanner.tsx':
-      'Selects the whole nutrition table to offer foods for a meal slot. Unbounded, and the ' +
-      'catalog is the right source.',
-    'src/components/GSAPCalendarMealPlanner.tsx':
-      'The same unbounded select as CalendarMealPlanner; the two planners disagree about ' +
-      'nothing here and should move together.',
+    // many of them as there are edge functions. AC2 moved the three READERS
+    // (AddFoodDialog and the two planners) to grocery_product_catalog; what is
+    // left below are the three admin screens that WRITE, which cannot move
+    // until the catalog has somewhere to put an operator's edit.
     'src/components/admin/BarcodeScannerDialog.tsx':
       'Writes a scanned product into nutrition. The catalog already gets the same product via ' +
       'lookup-barcode promotion, so this write is the duplicate to remove.',

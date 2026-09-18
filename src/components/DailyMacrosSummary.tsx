@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Food, PlanEntry, NutritionData } from "@/types";
+import { perServingFromCatalog } from "@/lib/catalogNutrition";
 import { Apple, Droplets, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -73,16 +74,25 @@ export function DailyMacrosSummary({
       const food = foods.find(f => f.id === entry.food_id);
       if (!food) return;
 
-      // Try to find nutrition data for this food
+      // US-799: the catalog stores PER 100g and this panel adds up a day, so
+      // every row has to come back through the serving mass.
+      // perServingFromCatalog returns null when that mass is unknown -- the
+      // parser refuses "2 cookies" and "1 cup (240 ml)" rather than guess --
+      // and such a row is counted as MISSING here, not as zero.
+      //
+      // That distinction is the point of the panel. Five unmeasured foods
+      // summed as zeroes read "0 calories, 5 items tracked", which looks like
+      // an answer; "0 of 5 items have nutrition data" is the truth.
       const nutrition = nutritionData.find(
         n => n.name.toLowerCase() === food.name.toLowerCase()
       );
+      const perServing = perServingFromCatalog(nutrition);
 
-      if (nutrition) {
-        totalCalories += nutrition.calories || 0;
-        totalProtein += parseFloat(nutrition.protein_g) || 0;
-        totalCarbs += parseFloat(nutrition.carbs_g) || 0;
-        totalFat += parseFloat(nutrition.fat_g) || 0;
+      if (perServing) {
+        totalCalories += perServing.calories;
+        totalProtein += perServing.protein_g;
+        totalCarbs += perServing.carbs_g;
+        totalFat += perServing.fat_g;
         itemsWithData++;
       }
     });

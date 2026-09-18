@@ -52,6 +52,7 @@ import { TwistMealSheet } from "@/components/TwistMealSheet";
 import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { analytics } from "@/lib/analytics";
 import { parseIsoDate } from "@/lib/date-utils";
+import { TRUSTED_VERIFICATION } from "@/lib/catalogNutrition";
 
 /// US-298: threshold for surfacing the amber "try a twist?" chip. Tuned
 /// to match the AC: a recipe scoring >= 0.4 is far enough above the
@@ -730,7 +731,24 @@ export const GSAPCalendarMealPlanner = memo(function GSAPCalendarMealPlanner({
   // Load nutrition data
   useEffect(() => {
     const loadNutritionData = async () => {
-      const { data, error } = await supabase.from("nutrition").select("*");
+      // US-799: the canonical catalog, named columns, and a row cap. This
+      // selected the whole nutrition table unbounded on every mount. The
+      // figures are per 100g; DailyMacrosSummary converts them per serving
+      // through perServingFromCatalog, which refuses rows whose serving mass
+      // could not be read.
+      //
+      // Verified rows only (US-797): a barcode scan promotes itself into the
+      // shared catalog unchecked, and these numbers go into a day's totals.
+      // perServingFromCatalog refuses an unverified row anyway; doing it in
+      // SQL too means the 2000-row cap is spent on rows that count.
+      const { data, error } = await supabase
+        .from("grocery_product_catalog")
+        .select(
+          "name, name_normalized, verification, calories_kcal_100, protein_g_100, carbs_g_100, fat_g_100, fiber_g_100, sodium_mg_100, serving_size_g, serving_size_text, ingredients",
+        )
+        .eq("verification", TRUSTED_VERIFICATION)
+        .not("calories_kcal_100", "is", null)
+        .limit(2000);
       if (!error && data) {
         setNutritionData(data);
       }

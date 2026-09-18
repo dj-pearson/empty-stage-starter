@@ -106,6 +106,49 @@ const TEST_USER_ID_LITERAL = '00000000-0000-4000-8000-000000000001';
 // groupItems put all eight rows in "Uncategorized" and every measurement of
 // the grouped list was of a list with one group in it. The categories were
 // display strings ('Dairy', 'Meat') rather than the enum categoryLabel reads,
+
+/**
+ * grocery_product_catalog (US-799). Until this existed the stub answered []
+ * for it, exactly as it had answered [] for `nutrition` before -- so a browser
+ * check could not tell the two apart and the migration off one onto the other
+ * was unobservable. That is the same shape as the empty grocery list this file
+ * already carries a note about.
+ *
+ * Figures are PER 100g, which is the point. The last row deliberately has NO
+ * serving mass: parse_serving_grams refuses "1 cup (240 ml)", so there is no
+ * honest per-serving number for it and perServingFromCatalog returns null.
+ * Anything that sums it as zero is wrong, and now something can catch that.
+ */
+const CATALOG = [
+  ['Whole milk', 'dairy', 61, 3.2, 4.8, 3.3, 244, '1 cup (244g)', 'milk, vitamin d3'],
+  ['Chicken breast', 'protein', 165, 31, 0, 3.6, 172, '6 oz (172g)', 'chicken breast'],
+  ['Bananas', 'fruit', 89, 1.1, 22.8, 0.3, 118, '1 medium (118g)', 'banana'],
+  ['Sharp cheddar', 'dairy', 403, 24.9, 1.3, 33.1, 28, '1 oz (28g)', 'milk, salt, cultures, enzymes'],
+  ['US799 Unmeasured Soup', 'protein', 45, 2, 6, 1.5, null, '1 cup (240 ml)', 'water, tomato, salt'],
+].map(([name, category, kcal, protein, carbs, fat, servingG, servingText, ingredients], i) => ({
+  id: `catalog-${i + 1}`,
+  name,
+  name_normalized: name.toLowerCase(),
+  default_category: category,
+  default_aisle_section: null,
+  barcode: null,
+  kind: 'generic',
+  source: 'seed',
+  verification: 'verified',
+  calories_kcal_100: kcal,
+  protein_g_100: protein,
+  carbs_g_100: carbs,
+  fat_g_100: fat,
+  fiber_g_100: null,
+  sodium_mg_100: null,
+  serving_size_g: servingG,
+  serving_size_text: servingText,
+  servings_per_container: null,
+  package_quantity_text: null,
+  ingredients,
+  allergens: null,
+}));
+
 // which is the same kind of quiet mismatch.
 const GROCERY_ITEMS = [
   ['Whole milk', 'dairy', 'Dairy', 2, 'gal', false],
@@ -521,6 +564,22 @@ createServer((req, res) => {
         created_at: '2026-09-01T00:00:00.000Z',
       },
     ]);
+  }
+
+  if (url.pathname === '/rest/v1/grocery_product_catalog') {
+    // Enough of PostgREST's filter grammar for what the app sends here:
+    // ilike on name_normalized (AddFoodDialog's search) and `not.is.null`
+    // on calories_kcal_100 (the planners' macro load).
+    let rows = CATALOG;
+    const like = url.searchParams.get('name_normalized');
+    if (like?.startsWith('ilike.')) {
+      const needle = like.slice('ilike.'.length).replace(/^%|%$/g, '').toLowerCase();
+      rows = rows.filter((r) => r.name_normalized.includes(needle));
+    }
+    if (url.searchParams.get('calories_kcal_100') === 'not.is.null') {
+      rows = rows.filter((r) => r.calories_kcal_100 !== null);
+    }
+    return sendRows(res, req, rows);
   }
 
   if (url.pathname === '/rest/v1/grocery_items') {
