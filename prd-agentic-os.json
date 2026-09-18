@@ -1,0 +1,663 @@
+{
+  "project": "EatPal",
+  "branchName": "epic/agentic-os",
+  "description": "Agentic OS - the autonomous multi-agent operations layer, converted from the markdown PRD on 2026-09-18 (US-788), which is archived at archive/2026-09-18-agentic-os-markdown/. Agents run as Deno edge functions under functions/ (the serve() tree, deployed through explicit entrypoint lines in supabase/config.toml), invoked by the dispatcher and backed by the agent_* table family with RLS. Tier-1 work runs autonomously; every outward-facing action is drafted through requestApproval/escalate into the approval queue; tier-3 items escalate to the Command Center under /admin/agents. ALL 41 STORIES ARE MARKED passes: true, AND THAT IS THE POINT OF THE CONVERSION. Each one was checked against the artefact it named -- 30 edge functions, 16 tables, 33 shared logic modules and 6 Command Center tabs -- and every one exists. The markdown read as a backlog of work to do while being a record of work already done, which is what made it a shadow backlog rather than a plan. The mapping is in each story notes field; see prd-agentic-os.json history and src/lib/agenticOsPrd.test.ts, which re-checks the artefacts on every run so a deletion cannot leave a story quietly claiming to pass. New agentic OS work goes here rather than in the markdown. The prd-verify workflow already globs prd-*.json, so this file is picked up with no workflow change.",
+  "userStories": [
+    {
+      "id": "US-475",
+      "title": "Core agent schema — definitions and runs",
+      "description": "Migration creating `agent_definitions` (name, domain, description, system_prompt, model, schedule_cron, autonomy_policy jsonb, daily_cost_cap_usd, enabled) and `agent_runs` (agent_id, trigger, status, input/output jsonb, tokens_in/out, cost_usd, error, started/finished_at). RLS admin-only. Regenerate types.",
+      "acceptanceCriteria": [
+        "Ships what the story names: table:agent_definitions, table:agent_runs",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "sql",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: table:agent_definitions, table:agent_runs."
+    },
+    {
+      "id": "US-476",
+      "title": "Approval, escalation, and audit schema",
+      "description": "Migration creating `agent_approvals` (run_id, action_type, payload jsonb, status draft/approved/rejected/executed/expired, reviewed_by, expires_at), `agent_escalations` (tier, severity, domain, title, context jsonb, status, assigned_to, resolved_at), `agent_audit_log` (append-only; revoke UPDATE/DELETE). RLS admin-only.",
+      "acceptanceCriteria": [
+        "Ships what the story names: table:agent_approvals, table:agent_escalations, table:agent_audit_log",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "sql",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: table:agent_approvals, table:agent_escalations, table:agent_audit_log."
+    },
+    {
+      "id": "US-477",
+      "title": "Shared agent runtime",
+      "description": "`functions/_shared/agent-runtime.ts`: Claude API client (model per agent_definition), agentic tool-use loop, structured-output helper (Zod), retry w/ backoff, and automatic `agent_runs` bookkeeping incl. token/cost accounting.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/_shared/agent-runtime.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/_shared/agent-runtime.ts."
+    },
+    {
+      "id": "US-478",
+      "title": "Dispatcher + pg_cron",
+      "description": "`agent-dispatcher` edge function reads enabled `agent_definitions` whose schedule is due, checks kill switch + cost caps, invokes handlers, records skips. pg_cron every 5 min.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-dispatcher, functions/_shared/agent-dispatch-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-dispatcher, functions/_shared/agent-dispatch-logic.ts."
+    },
+    {
+      "id": "US-479",
+      "title": "Draft-first enforcement",
+      "description": "Runtime helpers `requestApproval()` and `escalate()` — the only paths to external effects. Runtime exposes no direct email/webhook capability to handlers; policy checked against `autonomy_policy` (an allowlisted action type may auto-execute).",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/_shared/agent-runtime.ts, functions/_shared/agent-approval-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/_shared/agent-runtime.ts, functions/_shared/agent-approval-logic.ts."
+    },
+    {
+      "id": "US-480",
+      "title": "Budget guardrails + kill switch",
+      "description": "Per-agent daily spend enforced pre-run and mid-loop; `agent_system_settings` row for global pause; tripped caps create a tier-2 escalation.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/_shared/agent-budget-logic.ts, table:agent_system_settings",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/_shared/agent-budget-logic.ts, table:agent_system_settings."
+    },
+    {
+      "id": "US-481",
+      "title": "Knowledge base with pgvector",
+      "description": "`agent_knowledge` table (source, title, content, embedding vector) + `agent-knowledge-ingest` edge function (chunk, embed, upsert) + `match_agent_knowledge()` RPC. Seed with FAQ/help content.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-knowledge-ingest, table:agent_knowledge, functions/_shared/agent-knowledge-chunk.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-knowledge-ingest, table:agent_knowledge, functions/_shared/agent-knowledge-chunk.ts."
+    },
+    {
+      "id": "US-482",
+      "title": "Approval execution engine",
+      "description": "`approval-executor` edge function: on approve, executes payload by action_type (send_email via Resend, social_webhook, github_issue), marks executed, writes audit; idempotent; expiry sweep.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/approval-executor, functions/_shared/approval-execution-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 1,
+      "passes": true,
+      "slice": 1,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/approval-executor, functions/_shared/approval-execution-logic.ts."
+    },
+    {
+      "id": "US-483",
+      "title": "Command Center shell + agent registry",
+      "description": "`/admin/agents` page: agent cards w/ enable toggles, last run, today's spend vs cap, global kill switch. Lazy route, ProtectedRoute + admin gate.",
+      "acceptanceCriteria": [
+        "Ships what the story names: src/components/admin/agents/AgentRegistryTab.tsx",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 2,
+      "passes": true,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: src/components/admin/agents/AgentRegistryTab.tsx."
+    },
+    {
+      "id": "US-484",
+      "title": "Approval queue UI",
+      "description": "List pending drafts w/ preview per action_type, inline edit-before-approve, approve/reject with reason, bulk approve for same-type templated items.",
+      "acceptanceCriteria": [
+        "Ships what the story names: src/components/admin/agents/ApprovalsTab.tsx",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 2,
+      "passes": true,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: src/components/admin/agents/ApprovalsTab.tsx."
+    },
+    {
+      "id": "US-485",
+      "title": "Escalation queue UI",
+      "description": "Tier/severity-sorted queue, context viewer, assign/resolve with notes, tier-3 highlighted.",
+      "acceptanceCriteria": [
+        "Ships what the story names: src/components/admin/agents/EscalationsTab.tsx",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 2,
+      "passes": true,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: src/components/admin/agents/EscalationsTab.tsx."
+    },
+    {
+      "id": "US-486",
+      "title": "Runs + cost dashboard",
+      "description": "Run history with filters, per-run detail (input/output/error), daily cost by agent chart, cap utilization.",
+      "acceptanceCriteria": [
+        "Ships what the story names: src/components/admin/agents/RunsTab.tsx",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 2,
+      "passes": true,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: src/components/admin/agents/RunsTab.tsx."
+    },
+    {
+      "id": "US-487",
+      "title": "Audit log viewer",
+      "description": "Filterable append-only audit trail (who/what/when incl. human approvals), CSV export.",
+      "acceptanceCriteria": [
+        "Ships what the story names: src/components/admin/agents/AuditTab.tsx",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 2,
+      "passes": true,
+      "slice": 2,
+      "platform": "web",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: src/components/admin/agents/AuditTab.tsx."
+    },
+    {
+      "id": "US-488",
+      "title": "Email digests",
+      "description": "`agent-digest` edge fn + cron: instant email on tier-3 escalation; daily digest of tier-2 items + pending approvals + spend summary via Resend to admin list.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-digest, functions/_shared/agent-digest-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 2,
+      "passes": true,
+      "slice": 2,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-digest, functions/_shared/agent-digest-logic.ts."
+    },
+    {
+      "id": "US-489",
+      "title": "Support ticket intake",
+      "description": "`support_tickets` + `support_messages` tables (RLS: users own, admins all), contact-form wiring, `support-intake` edge function, statuses new→triaged→awaiting_reply→resolved.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/support-intake, table:support_tickets, functions/_shared/support-intake-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "slice": 3,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/support-intake, table:support_tickets, functions/_shared/support-intake-logic.ts."
+    },
+    {
+      "id": "US-490",
+      "title": "Triage agent",
+      "description": "Classifies new tickets (category, sentiment, priority, suggested tier), writes triage to ticket, tier-1 logs only; refund/legal/security/angry → escalation per rules.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-support-triage",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "slice": 3,
+      "platform": "edge",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-support-triage."
+    },
+    {
+      "id": "US-491",
+      "title": "RAG answer agent",
+      "description": "Drafts replies for how-to/known-issue tickets using `match_agent_knowledge()` + ticket thread; cites sources; low-confidence → tier-2 escalation instead of a draft; drafts → approval queue.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-support-answer, functions/_shared/support-answer-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "slice": 3,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-support-answer, functions/_shared/support-answer-logic.ts."
+    },
+    {
+      "id": "US-492",
+      "title": "Escalation rules engine",
+      "description": "Declarative rules (jsonb in agent_definitions or table): billing/refund→tier2, legal/data-deletion/security→tier3, sentiment threshold→tier2, SLA breach (no reply 24h)→tier2. Unit-tested pure function.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/_shared/escalation-rules.ts, table:agent_escalation_rules",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "slice": 3,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/_shared/escalation-rules.ts, table:agent_escalation_rules."
+    },
+    {
+      "id": "US-493",
+      "title": "Bug-to-GitHub agent",
+      "description": "Bug-category tickets get a structured GitHub issue draft (repro, device, severity, linked ticket) → approval queue → executor files it via GitHub API and links back.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-bug-reporter, functions/_shared/bug-report-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "slice": 3,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-bug-reporter, functions/_shared/bug-report-logic.ts."
+    },
+    {
+      "id": "US-494",
+      "title": "Reply lifecycle",
+      "description": "Approved replies sent via Resend with ticket threading (reply-to token), ticket status transitions, user reply reopens ticket and re-enters triage.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/support-reply-webhook, functions/_shared/support-status-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "slice": 3,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/support-reply-webhook, functions/_shared/support-status-logic.ts."
+    },
+    {
+      "id": "US-495",
+      "title": "CSAT follow-up agent",
+      "description": "24h after resolve, sends 1–5 rating email (templated → eligible for auto-send policy); score stored; ≤2 → tier-2 escalation.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-csat, functions/csat-rate, functions/_shared/csat-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 3,
+      "passes": true,
+      "slice": 3,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-csat, functions/csat-rate, functions/_shared/csat-logic.ts."
+    },
+    {
+      "id": "US-496",
+      "title": "Lifecycle event detection",
+      "description": "`agent_events` table + detection job: signup, first_kid_added, first_plan_created, first_grocery_list, inactive_7d/14d/30d, subscription_started/canceled. Idempotent (no duplicate events).",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-event-detector, table:agent_events, functions/_shared/event-detector-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 4,
+      "passes": true,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-event-detector, table:agent_events, functions/_shared/event-detector-logic.ts."
+    },
+    {
+      "id": "US-497",
+      "title": "Churn-risk scoring agent",
+      "description": "Weekly score per active household from activity signals; writes score + reasons; high-risk crossings → tier-2 escalation with suggested action.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-churn-score, table:agent_churn_scores, functions/_shared/churn-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 4,
+      "passes": true,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-churn-score, table:agent_churn_scores, functions/_shared/churn-logic.ts."
+    },
+    {
+      "id": "US-498",
+      "title": "Nurture sequence engine",
+      "description": "`nurture_sequences` + `nurture_enrollments` tables: event-triggered enrollment, step delays, exit conditions, global suppression (unsubscribed, active ticket, recently emailed). Unsubscribe link honored everywhere.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-nurture-engine, table:nurture_sequences, table:nurture_enrollments, functions/_shared/nurture-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 4,
+      "passes": true,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-nurture-engine, table:nurture_sequences, table:nurture_enrollments, functions/_shared/nurture-logic.ts."
+    },
+    {
+      "id": "US-499",
+      "title": "Onboarding sequence agent",
+      "description": "4-step onboarding sequence (welcome → add-a-kid nudge → first-plan nudge → week-1 recap), personalized by actual usage; drafts → approval queue; templated steps flagged for future auto-send.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/_shared/nurture-templates.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 4,
+      "passes": true,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/_shared/nurture-templates.ts."
+    },
+    {
+      "id": "US-500",
+      "title": "Win-back agent",
+      "description": "inactive_14d/30d triggers personalized re-engagement drafts referencing the household's own data (kids' safe foods, past plans); caps frequency; → approval queue.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/_shared/winback-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 4,
+      "passes": true,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/_shared/winback-logic.ts."
+    },
+    {
+      "id": "US-501",
+      "title": "Weekly digest email",
+      "description": "\"Your week in EatPal\" per opted-in household (plans made, new foods tried, streaks) — templated render, agent writes only the 1-2 sentence encouragement; → approval queue as bulk-approvable batch.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-weekly-digest, functions/_shared/weekly-digest-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 4,
+      "passes": true,
+      "slice": 4,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-weekly-digest, functions/_shared/weekly-digest-logic.ts."
+    },
+    {
+      "id": "US-502",
+      "title": "Content calendar agent",
+      "description": "Weekly plan of blog + social topics from seed keyword list + existing post inventory (no duplicates); writes `content_calendar` rows as tier-2 drafts (approve topics before generation).",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-content-calendar, table:content_calendar, functions/_shared/content-calendar-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 5,
+      "passes": true,
+      "slice": 5,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-content-calendar, table:content_calendar, functions/_shared/content-calendar-logic.ts."
+    },
+    {
+      "id": "US-503",
+      "title": "Blog pipeline integration",
+      "description": "Approved calendar topics flow through existing `generate-blog-content` + image pipeline; full draft (post + hero image) → approval queue; publish on approve.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-blog-writer, functions/_shared/blog-writer-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 5,
+      "passes": true,
+      "slice": 5,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-blog-writer, functions/_shared/blog-writer-logic.ts."
+    },
+    {
+      "id": "US-504",
+      "title": "Social post agent",
+      "description": "Drafts Instagram/Pinterest posts (caption + image via existing pipeline + webhooks) from calendar topics and published blogs; → approval queue; executor posts via existing webhooks.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-social-writer, functions/_shared/social-writer-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 5,
+      "passes": true,
+      "slice": 5,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-social-writer, functions/_shared/social-writer-logic.ts."
+    },
+    {
+      "id": "US-505",
+      "title": "SEO audit agent",
+      "description": "Weekly crawl of own sitemap: missing/duplicate meta, broken links, missing JSON-LD on recipe/blog pages; report as tier-2 escalation with per-page fixes.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-seo-audit, functions/_shared/seo-audit-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 5,
+      "passes": true,
+      "slice": 5,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-seo-audit, functions/_shared/seo-audit-logic.ts."
+    },
+    {
+      "id": "US-506",
+      "title": "Sentry triage agent",
+      "description": "Sentry webhook → dedupe against known issues → severity/user-impact assessment → GitHub issue draft (tier 2) or tier-3 escalation for crash spikes.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-sentry-triage, functions/_shared/sentry-triage-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 6,
+      "passes": true,
+      "slice": 6,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-sentry-triage, functions/_shared/sentry-triage-logic.ts."
+    },
+    {
+      "id": "US-507",
+      "title": "Dependency update agent",
+      "description": "Weekly `npm audit` + outdated report; groups safe minor/patch bumps; drafts a GitHub issue (or PR description) with risk notes → approval queue.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-dependency-audit, functions/_shared/dependency-audit-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 6,
+      "passes": true,
+      "slice": 6,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-dependency-audit, functions/_shared/dependency-audit-logic.ts."
+    },
+    {
+      "id": "US-508",
+      "title": "CI failure triage agent",
+      "description": "GitHub Actions failure webhook → classify (flake vs real, which commit) → comment draft on the PR or tier-2 escalation with suggested fix.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-ci-triage, functions/_shared/ci-triage-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 6,
+      "passes": true,
+      "slice": 6,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-ci-triage, functions/_shared/ci-triage-logic.ts."
+    },
+    {
+      "id": "US-509",
+      "title": "Migration safety checker",
+      "description": "Lints migration SQL in PRs against CLAUDE.md backward-compat rules (DROP/RENAME/NOT NULL/type changes); violations → PR comment draft + tier-2 escalation.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-migration-check, functions/_shared/migration-lint.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 6,
+      "passes": true,
+      "slice": 6,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-migration-check, functions/_shared/migration-lint.ts."
+    },
+    {
+      "id": "US-510",
+      "title": "Auth anomaly agent",
+      "description": "Periodic scan of auth logs: credential-stuffing patterns, impossible travel, mass signup bursts → tier-3 escalation with evidence (detection only, no auto-blocking).",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-auth-anomaly, functions/_shared/auth-anomaly-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 7,
+      "passes": true,
+      "slice": 7,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-auth-anomaly, functions/_shared/auth-anomaly-logic.ts."
+    },
+    {
+      "id": "US-511",
+      "title": "RLS audit agent",
+      "description": "Weekly: tables w/o RLS, permissive policies, new tables since last audit vs migration files → tier-2 report.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-rls-audit, table:agent_rls_snapshots, functions/_shared/rls-audit-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 7,
+      "passes": true,
+      "slice": 7,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-rls-audit, table:agent_rls_snapshots, functions/_shared/rls-audit-logic.ts."
+    },
+    {
+      "id": "US-512",
+      "title": "Health + cost anomaly agent",
+      "description": "Extends `system_health`: error-rate/latency baselines, Supabase + Claude spend anomalies → tier-2 (tier-3 if sustained outage signal).",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-health-watch, functions/_shared/health-anomaly-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 7,
+      "passes": true,
+      "slice": 7,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-health-watch, functions/_shared/health-anomaly-logic.ts."
+    },
+    {
+      "id": "US-513",
+      "title": "Weekly business report agent",
+      "description": "Monday KPI email: signups, activation, retention, MRR (from user_subscriptions), support volume/CSAT, content output, agent costs; narrative summary + week-over-week deltas.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-kpi-report, functions/_shared/kpi-report-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 7,
+      "passes": true,
+      "slice": 7,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-kpi-report, functions/_shared/kpi-report-logic.ts."
+    },
+    {
+      "id": "US-514",
+      "title": "Feedback loop",
+      "description": "Every approve/reject/edit is scored feedback on `agent_runs`; weekly self-eval report per agent (approval rate, edit distance, rejection reasons) → tier-2 report suggesting prompt changes.",
+      "acceptanceCriteria": [
+        "Ships what the story names: functions/agent-self-eval, table:agent_feedback, functions/_shared/self-eval-logic.ts",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 8,
+      "passes": true,
+      "slice": 8,
+      "platform": "edge",
+      "loopVerifiable": true,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: functions/agent-self-eval, table:agent_feedback, functions/_shared/self-eval-logic.ts."
+    },
+    {
+      "id": "US-515",
+      "title": "Prompt versioning + config UI",
+      "description": "Version history for `agent_definitions.system_prompt` w/ rollback; admin UI to edit prompt/schedule/policy/caps; changes audited.",
+      "acceptanceCriteria": [
+        "Ships what the story names: table:agent_prompt_versions, src/components/admin/agents/AgentDetailDialog.tsx",
+        "The handler runs through the shared runtime, so its cost and outcome land in agent_runs",
+        "Every outward-facing action goes through requestApproval/escalate rather than sending directly"
+      ],
+      "priority": 8,
+      "passes": true,
+      "slice": 8,
+      "platform": "web",
+      "loopVerifiable": false,
+      "notes": "Converted from tasks/prd-agentic-os.md 2026-09-18 (US-788). Built: table:agent_prompt_versions, src/components/admin/agents/AgentDetailDialog.tsx."
+    }
+  ]
+}
