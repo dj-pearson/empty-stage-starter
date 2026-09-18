@@ -230,3 +230,37 @@ and `fetchAllRows` into the entry chunk — 124.9 kB against a 124.0 kB budget,
 something they have not done yet. Every call site is a user action, so
 `src/lib/trackActivation.ts` now loads it with a dynamic import.
 
+
+## 2026-09-18 — `index` 124000 → 131000, and the number above was measured wrong
+
+The paragraph above says `index` "came back under its budget". It did not, and
+the reason is the trap this file already documents for `eagerJs`: **a build with
+no JWT-shaped `VITE_SUPABASE_ANON_KEY` tree-shakes the Supabase client out.**
+That build is ~39 kB lighter in the eager closure and smaller in the entry
+chunk, and it is not the build that ships. The 124.9 → under-124.0 measurement
+was taken on one, so the win was real but smaller than recorded, and the branch
+stayed red on the build CI actually makes. It took CI to say so, because nothing
+local was measuring the right artifact.
+
+Measure with the credentials in place, the way ci.yml's Build job does:
+
+```bash
+VITE_SUPABASE_URL=https://api.tryeatpal.com \
+VITE_SUPABASE_ANON_KEY=placeholder-for-ci-build \
+npm run build && node scripts/ci/check-bundle-budget.mjs
+```
+
+The real number is 124.4 kB, and what put it there is `src/lib/webSyncQueue.ts`
+— US-823's durable grocery write-queue. It has to be in the entry chunk.
+`AppContext` folds the queue over loaded rows on mount (step 6 of the load
+precedence contract in CLAUDE.md), `GroceryContext` queues every write, and
+`OfflineIndicator` reads the pending count. The `trackActivation.ts` treatment
+does not transfer: a dynamic import fetches a chunk over the network, and this
+queue exists for the moment there is no network. A lazily-loaded offline queue
+fails exactly when it is needed.
+
+So the budget moves, deliberately, and **only this key**. `--update` rewrites
+every budget from the current build, which lifts chunks that are nowhere near
+their limit — `vendor-react` 63000 → 65000, `totalJs` 2510000 → 2552000 — and
+that is how a ratchet becomes a ceiling. Everything else stays at the number it
+earned.
