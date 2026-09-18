@@ -141,11 +141,17 @@ describe('the derived columns are derived in one place', () => {
  * (240 ml)", and a client that divides anyway writes a number nothing
  * downstream can tell from a correct one.
  */
-describe('the per-serving writers go through the conversion RPC', () => {
-  const WRITERS = [
-    'src/components/admin/NutritionImportDialog.tsx',
-    'src/components/admin/BarcodeScannerDialog.tsx',
-  ];
+describe('the per-serving writer goes through the conversion RPC', () => {
+  /**
+   * Just the CSV import.
+   *
+   * The barcode scanner was listed here in the round that wrote this, on the
+   * premise that lookup-barcode answers in per-serving units. It does not --
+   * all three of its external providers return per-100g figures under
+   * per-serving key names -- so the scanner writes the catalog directly and
+   * has its own rule at the bottom of this file.
+   */
+  const WRITERS = ['src/components/admin/NutritionImportDialog.tsx'];
 
   it.each(WRITERS)('%s writes through catalog_upsert_from_serving', (rel) => {
     const src = read(rel);
@@ -207,5 +213,91 @@ describe('the per-serving writers go through the conversion RPC', () => {
     expect(src).toMatch(/veg:\s*"vegetable"/);
     expect(src).toMatch(/vegetable:\s*"vegetable"/);
     expect(src).not.toMatch(/charAt\(0\)\.toUpperCase\(\)/);
+  });
+});
+
+/**
+ * US-799 AC2: the two edge functions, the last readers of `nutrition`.
+ *
+ * Static source checks: the tree they guard is Deno, this gate is vitest under
+ * Node, and what matters is which table a query names and what units a number
+ * is in. Both are visible in the source and neither is visible at runtime
+ * without a database.
+ */
+describe('the edge functions read the catalog', () => {
+  const FUNCTIONS = [
+    'supabase/functions/lookup-barcode/index.ts',
+    'supabase/functions/generate-weekly-report/index.ts',
+  ];
+
+  it.each(FUNCTIONS)('%s names no nutrition table', (rel) => {
+    const src = read(rel);
+    expect(src).not.toMatch(/\bfrom\((['"`])nutrition\1\)/);
+  });
+
+  it('lookup-barcode no longer caches into the table being retired', () => {
+    // The removed write stored the same product the catalog promotion stores,
+    // under per-serving column names holding per-100g values -- so every
+    // cached row was wrong by whatever its serving weighed.
+    const src = read('supabase/functions/lookup-barcode/index.ts');
+    expect(src).not.toMatch(/Cached in nutrition database/);
+    expect(src).toMatch(/promoteToCatalog\(/);
+  });
+
+  it('lookup-barcode answers a catalog hit with the four columns 20260918000008 added', () => {
+    // These are what the deleted `nutrition` step existed to supply. Without
+    // them the scanner shows a product with no serving and no ingredients.
+    const src = read('supabase/functions/lookup-barcode/index.ts');
+    for (const column of [
+      'catalogFood.serving_size_text',
+      'catalogFood.servings_per_container',
+      'catalogFood.ingredients',
+      'catalogFood.package_quantity_text',
+    ]) {
+      expect(src, `${column} should be returned`).toContain(column);
+    }
+  });
+
+  it('the weekly report joins through canonical_id, not a column that does not exist', () => {
+    // The defect: it embedded `foods ( nutrition_id )`. foods has no
+    // nutrition_id -- only canonical_id -- so PostgREST answered an error and
+    // the loop never ran. See the block comment for the second reason.
+    // Comments stripped: the block comment names the column it removed, and
+    // a comment explaining an absence must not read as the thing it explains.
+    const src = read('supabase/functions/generate-weekly-report/index.ts');
+    const code = src.replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(/nutrition_id/);
+    expect(code).toMatch(/canonical_id/);
+    expect(code).toMatch(/grocery_product_catalog/);
+  });
+
+  it('the weekly report reports no score rather than inventing one', () => {
+    // With every total at zero, each macro percentage fell outside its ideal
+    // band, each scored 70, and every household got nutrition_score: 70
+    // written into weekly_reports as their week's nutrition.
+    const src = read('supabase/functions/generate-weekly-report/index.ts');
+    expect(src).toMatch(/let nutritionScore: number \| null = null/);
+    expect(src).toMatch(/if \(nutritionCount > 0 && totalCalories > 0\)/);
+    // And a null is not a trend point.
+    expect(src).toMatch(/trend\.value === null/);
+  });
+
+  it('the weekly report excludes unverified rows and unweighed servings', () => {
+    // US-797 for the first, and the per-100g conversion for the second: a row
+    // whose serving mass could not be read has no honest per-serving figure,
+    // so it counts as missing rather than as zero.
+    const src = read('supabase/functions/generate-weekly-report/index.ts');
+    expect(src).toMatch(/row\.verification !== 'verified'/);
+    expect(src).toMatch(/grams <= 0\) continue/);
+  });
+
+  it('the scanner does not divide per-100g figures by a serving mass', () => {
+    // lookup-barcode answers in per 100 g, so routing its numbers through
+    // catalog_upsert_from_serving would make every one wrong by whatever the
+    // serving weighed. The RPC stays for the CSV import, which is per serving.
+    const src = read('src/components/admin/BarcodeScannerDialog.tsx');
+    const write = src.slice(src.indexOf('US-799 AC2: the shared catalog'));
+    expect(write).not.toMatch(/rpc\("catalog_upsert_from_serving"/);
+    expect(write).toMatch(/calories_kcal_100: scannedFood\.calories/);
   });
 });

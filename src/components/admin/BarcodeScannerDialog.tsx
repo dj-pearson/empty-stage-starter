@@ -332,46 +332,66 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
         onFoodAdded?.();
       } else {
-        // US-799 AC2: the shared catalog, through the one function that knows
-        // how to turn a per-serving figure into a per-100g one.
+        // US-799 AC2: the shared catalog, written directly.
         //
-        // lookup-barcode answers in PER SERVING units and cannot stop doing so
-        // -- shipped iOS builds read that response -- so the conversion has to
-        // happen somewhere, and catalog_upsert_from_serving is where
-        // parse_serving_grams lives. A serving it cannot read ("1 cup
-        // (240 ml)") produces a row with the name, barcode, ingredients and
-        // allergens and NO figures, rather than a plausible wrong number in a
-        // catalog other families read.
+        // lookup-barcode answers in PER 100 G. The previous round asserted the
+        // opposite and it was wrong on both halves: iOS never calls that
+        // function -- BarcodeService.swift reads Open Food Facts directly --
+        // and all three of its external providers already return per-100g
+        // figures under the per-serving key names (OFF reads
+        // `energy-kcal_100g`; USDA and FoodRepo feed identical values into
+        // `food.calories` and `catalogInput.caloriesKcal100`). The one
+        // genuinely per-serving path was the `nutrition` read, which US-799
+        // has now removed from that function.
         //
-        // The row lands unverified: this is one household's scan of one label,
-        // checked by nobody. US-797 keeps it out of totals until an admin
-        // looks at it in NutritionManager.
-        const { error } = await supabase.rpc("catalog_upsert_from_serving", {
-          p_name: scannedFood.name,
-          p_category: scannedFood.category,
-          p_barcode: scannedBarcode || undefined,
-          p_serving_size_text: scannedFood.serving_size ?? undefined,
-          p_package_quantity_text: scannedFood.package_quantity ?? undefined,
-          p_servings_per_container: scannedFood.servings_per_container ?? undefined,
-          p_ingredients: scannedFood.ingredients ?? undefined,
-          p_calories: scannedFood.calories ?? undefined,
-          p_protein_g: scannedFood.protein_g ?? undefined,
-          p_carbs_g: scannedFood.carbs_g ?? undefined,
-          p_fat_g: scannedFood.fat_g ?? undefined,
-          p_allergens: scannedFood.allergens ?? undefined,
-          p_source: "user",
-        });
+        // So there is nothing to convert, and routing these through
+        // catalog_upsert_from_serving -- which divides by a serving mass --
+        // would have made every scanned figure wrong by whatever the serving
+        // weighed. That RPC stays for the CSV import, whose columns really are
+        // per serving.
+        //
+        // The row lands unverified: one household's scan of one label, checked
+        // by nobody. US-797 keeps it out of totals until an admin looks at it
+        // in NutritionManager. name_normalized and serving_size_g are omitted
+        // because 20260918000009 derives both.
+        const { error } = await supabase
+          .from("grocery_product_catalog")
+          .upsert(
+            {
+              name: scannedFood.name,
+              default_category: scannedFood.category,
+              barcode: scannedBarcode || null,
+              // A barcode means a specific manufactured product; without one
+              // it is a generic name somebody typed. Same rule as the backfill.
+              kind: scannedBarcode ? "branded" : "generic",
+              source: "user",
+              source_ref: scannedBarcode || null,
+              // Stated rather than inherited from the column default. US-797
+              // keeps unverified figures out of totals and the ladder, and a
+              // file that writes the per-100g columns should say which side of
+              // that line its rows land on -- src/components/FoodCard.catalog.
+              // test.tsx fails any that does not.
+              verification: "unverified",
+              serving_size_text: scannedFood.serving_size ?? null,
+              package_quantity_text: scannedFood.package_quantity ?? null,
+              servings_per_container: scannedFood.servings_per_container ?? null,
+              ingredients: scannedFood.ingredients ?? null,
+              calories_kcal_100: scannedFood.calories ?? null,
+              protein_g_100: scannedFood.protein_g ?? null,
+              carbs_g_100: scannedFood.carbs_g ?? null,
+              fat_g_100: scannedFood.fat_g ?? null,
+              allergens: scannedFood.allergens ?? null,
+            },
+            // Two admins scanning the same product is a re-scan, not an error.
+            // ignoreDuplicates so a row somebody corrected by hand is not
+            // overwritten by the provider copy it came from.
+            { onConflict: "name_normalized", ignoreDuplicates: true },
+          );
 
         if (error) throw error;
 
-        // Say which of the two things happened. A scan whose serving has no
-        // readable weight adds a product and no nutrition, and an operator
-        // who is not told that will scan it again.
-        const weighed = /\d\s*(g|kg|mg|oz|gram|ounce)/i.test(scannedFood.serving_size ?? '');
         toast.success("Added to catalog", {
-          description: weighed || scannedFood.calories == null
-            ? `${scannedFood.name} added, unverified.`
-            : `${scannedFood.name} added without nutrition: "${scannedFood.serving_size}" has no weight to convert from.`,
+          description: `${scannedFood.name} added, unverified. Verify it in the catalog list to make its figures count.`,
         });
 
         onFoodAdded?.();

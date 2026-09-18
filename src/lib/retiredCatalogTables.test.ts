@@ -32,21 +32,11 @@ const RETIRED = {
  */
 const KNOWN: Record<string, Record<string, string>> = {
   nutrition: {
-    // Edge functions. The story counted these and said eighteen; eighteen
-    // files mention the WORD nutrition, and two query the table.
-    'supabase/functions/lookup-barcode/index.ts':
-      'Reads the barcode cache and writes back to it, and already promotes to the catalog ' +
-      'alongside. Migrating the read is US-799 AC2; it cannot stop writing in the same release ' +
-      'the table is dropped.',
-    'supabase/functions/generate-weekly-report/index.ts':
-      'Reads nutrition for the weekly email. The second and last edge-function reader.',
-    // The web side is empty. The story did not count it at all and it was
-    // six files: three readers (AddFoodDialog and the two planners) and three
-    // writers (NutritionManager, the bulk import, the barcode scanner). The
-    // writers needed two things the catalog did not have -- somewhere to put
-    // an operator's edit (verification, set by NutritionManager) and a
-    // per-serving to per-100g conversion that refuses to guess
-    // (catalog_upsert_from_serving). Only the two edge functions below remain.
+    // EMPTY. Every reference is gone: three web readers, three web writers and
+    // the two edge functions the story did count. `nutrition` itself is still
+    // there and still populated, which is AC3's whole point -- the table is
+    // retired in a LATER release, after one where both it and the catalog are
+    // live, per the deprecation flow in CLAUDE.md.
   },
   canonical_products: {
     'src/integrations/supabase/types.ts': 'Generated from the schema; it goes when the table goes.',
