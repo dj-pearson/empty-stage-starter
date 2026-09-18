@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { logger } from "@/lib/logger";
 import { PHOTO_AI_NOTICE } from "@/lib/aiSafety";
+import { ACQUIRED_FOOD_IS_SAFE } from "@/lib/foodSafetyDefault";
 
 export interface FoodIdentification {
   name: string;
@@ -223,7 +224,9 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       name: finalName,
       servingSize: editedServingSize,
       quantity: qtyNum,
-      is_safe: true, // Default to Safe Foods
+      // US-803: identifying a food from a photo says what it is, not
+      // whether the child eats it.
+      is_safe: ACQUIRED_FOOD_IS_SAFE,
     });
     handleClose();
   };

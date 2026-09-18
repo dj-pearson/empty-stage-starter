@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useFoods, useRecipes } from "@/contexts/AppContext";
 import type { FoodCategory } from "@/types";
+import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
 
 const VALID_CATEGORIES: FoodCategory[] = ["protein", "carb", "dairy", "fruit", "vegetable", "snack"];
 
@@ -101,8 +102,10 @@ export function DataImport() {
           return {
             name: row.data.name,
             category,
-            is_safe: true,
-            is_try_bite: false,
+            // US-803: the CSV has no is_safe column, so defaulting to
+            // true asserts something the file never said.
+            is_safe: ACQUIRED_FOOD_IS_SAFE,
+            is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
             allergens: row.data.allergens ? row.data.allergens.split(";").map((a) => a.trim()) : undefined,
           };
         });

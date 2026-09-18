@@ -91,6 +91,7 @@ import { logger } from "@/lib/logger";
 import type { MovementItem } from "@/lib/movementBuilders";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
+import { ACQUIRED_FOOD_IS_SAFE } from "@/lib/foodSafetyDefault";
 
 interface FoodSuggestion {
   name: string;
@@ -344,7 +345,9 @@ export default function Pantry() {
         category: parse.category,
         quantity: parse.quantity,
         unit: parse.unit || undefined,
-        is_safe: true,
+        // US-803: the parent typed a name and a quantity, not a judgement
+        // about whether their child eats it.
+        is_safe: ACQUIRED_FOOD_IS_SAFE,
         is_try_bite: false,
       });
       if (added) {
@@ -364,7 +367,8 @@ export default function Pantry() {
           category: p.category,
           quantity: p.quantity,
           unit: p.unit || undefined,
-          is_safe: true,
+          // US-803, as above: quick-add is entry, not a safety decision.
+          is_safe: ACQUIRED_FOOD_IS_SAFE,
           is_try_bite: false,
         }))
       );

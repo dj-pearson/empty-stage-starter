@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { separateMeasureNotes } from "@/lib/groceryMerge";
+import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
@@ -360,8 +361,9 @@ export default function Grocery() {
         pantryUpdated = await addFood({
           name: item.name,
           category: item.category,
-          is_safe: true,
-          is_try_bite: false,
+          // US-803: buying a food is not the same as a child accepting it.
+          is_safe: ACQUIRED_FOOD_IS_SAFE,
+          is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
           aisle: item.aisle,
           quantity: item.quantity,
           unit: item.unit
@@ -480,8 +482,10 @@ export default function Grocery() {
           await addFood({
             name: item.name,
             category: item.category,
-            is_safe: true,
-            is_try_bite: false,
+            // US-803, same as the check-off path above: finishing the shop
+            // means these are in the house, not that anyone eats them.
+            is_safe: ACQUIRED_FOOD_IS_SAFE,
+            is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
             aisle: item.aisle,
             quantity: item.quantity,
             unit: item.unit,

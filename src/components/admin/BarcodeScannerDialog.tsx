@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataSourceCredit } from "@/components/DataSourceCredit";
 import { logger } from "@/lib/logger";
 import { normalizeHouseholdId } from '@/lib/householdId';
+import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
 
 type ScannedFood = {
   name: string;
@@ -309,8 +310,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             category: mapToAllowedCategory(scannedFood.category, scannedFood.name),
             aisle: scannedFood.category,
             allergens: scannedFood.allergens || [],
-            is_safe: true, // Default to Safe Foods
-            is_try_bite: false,
+            // US-803: a scanned product is a product, not a safe food.
+            is_safe: ACQUIRED_FOOD_IS_SAFE,
+            is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
             quantity: quantity,
             unit: unit,
             package_quantity: scannedFood.package_quantity,
