@@ -89,3 +89,47 @@ export async function gateAiRequest(
 
   return { response: null, userId: gate.userId };
 }
+
+/**
+ * The budget half of the gate, for endpoints that keep `requireAdmin`
+ * (US-870).
+ *
+ * `gateAiRequest` authenticates ANY signed-in user, so swapping it in for an
+ * admin gate would widen the endpoint -- the opposite of the point. These call
+ * requireAdmin themselves and then meter the result through here.
+ *
+ * An admin token is not a blank cheque for a model. A leaked one, or an admin
+ * account with a stuck retry loop behind it, should cost a budget rather than
+ * a bill. Service-role callers (cron, function-to-function) are not metered:
+ * there is no user to bill it to and the key never leaves the server.
+ */
+export async function meterAdminRequest(
+  gate: { ok: boolean; userId?: string; admin?: unknown },
+  endpoint: string,
+  headers: Record<string, string>,
+): Promise<Response | null> {
+  if (!gate.ok || !gate.userId) return null;
+
+  // requireAdmin hands back a service-role client; check_rate_limit_with_tier
+  // is SECURITY DEFINER and takes the user id explicitly.
+  // deno-lint-ignore no-explicit-any
+  const supabase = gate.admin as any;
+  if (!supabase) return null;
+
+  return enforceRateLimit(supabase, gate.userId, endpoint, headers);
+}
+
+/**
+ * 405 for anything but POST, or null to continue.
+ *
+ * A GET reaching an LLM handler is a crawler or a probe and costs the same
+ * tokens as a real request. Kept separate from the gate above because the
+ * admin endpoints run their own auth between the two.
+ */
+export function rejectNonPost(
+  req: Request,
+  headers: Record<string, string>,
+): Response | null {
+  if (req.method === 'POST') return null;
+  return json({ error: 'Method not allowed' }, 405, headers);
+}

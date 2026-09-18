@@ -1,6 +1,7 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { getCorsHeaders, noCacheHeaders } from '../common/headers.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 /**
  * US-311: identify-product
@@ -237,7 +238,7 @@ export default async (req: Request) => {
   } catch (err) {
     console.error('identify-product error:', err);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(err) }),
       { status: 500, headers: noCacheHeaders() },
     );
   }

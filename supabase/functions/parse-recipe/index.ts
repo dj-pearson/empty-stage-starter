@@ -2,6 +2,9 @@ import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { requireUser } from '../_shared/require-admin.ts';
 import { accessDeniedResponse, resolveAccess } from '../_shared/parse-recipe-access.ts';
 import { fetchRecipePage } from '../_shared/url-validator.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,6 +49,28 @@ export default async (req: Request) => {
   const access = await resolveAccess(req, () => requireUser(req));
   if (!access.allowed) {
     return accessDeniedResponse(access, corsHeaders);
+  }
+
+  // US-870: the anon path is budgeted by parse-recipe-access.ts (per address
+  // and globally, in module memory). A SIGNED-IN caller went through none of
+  // that -- requireUser said yes and the handler went straight to a model. One
+  // account in a retry loop was the whole of the limit. check_rate_limit_with_tier
+  // has no parse-recipe row, so this takes the RPC's 50/hr default, which is a
+  // budget rather than none.
+  if (access.mode === 'user' && access.userId) {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    if (supabaseUrl && serviceKey) {
+      const limited = await enforceRateLimit(
+        createClient(supabaseUrl, serviceKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        }),
+        access.userId,
+        'parse-recipe',
+        corsHeaders,
+      );
+      if (limited) return limited;
+    }
   }
 
   try {
@@ -116,7 +141,7 @@ export default async (req: Request) => {
     // themselves; this is the unexpected path.
     console.error('Error in parse-recipe function:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

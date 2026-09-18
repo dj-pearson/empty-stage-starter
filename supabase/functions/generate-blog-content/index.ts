@@ -7,6 +7,7 @@ import {
   buildPromptFromContext,
   generateAndStoreImage,
 } from "../_shared/image-gen.ts";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -530,7 +531,7 @@ Format:
         .single();
 
       if (postError) throw postError;
-      if (!postResult) throw new Error("No post data returned");
+      if (!postResult) throw new PublicError("No post data returned");
 
       postData = postResult;
       console.log("Blog post saved:", postData.id);
@@ -725,7 +726,7 @@ STRICT OUTPUT: Return ONLY valid JSON, no markdown, no code fences:
       console.error("Error saving blog post:", saveError);
       return new Response(
         JSON.stringify({
-          error: `Failed to save blog post: ${saveError?.message || "Unknown error"}`,
+          error: publicMessage(saveError),
         }),
         {
           status: 500,
@@ -747,7 +748,7 @@ STRICT OUTPUT: Return ONLY valid JSON, no markdown, no code fences:
   } catch (error: any) {
     console.error("Error in generate-blog-content:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: publicMessage(error) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

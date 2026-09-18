@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +15,7 @@ export default async (req: Request) => {
     const { email, fullName, referralSource, utmCampaign, utmSource, utmMedium } = await req.json();
 
     if (!email) {
-      throw new Error('Email is required');
+      throw new PublicError('Email is required');
     }
 
     const supabase = createClient(
@@ -38,7 +39,7 @@ export default async (req: Request) => {
 
     if (insertError) {
       if (insertError.code === '23505') {
-        throw new Error('You are already on the waitlist!');
+        throw new PublicError('You are already on the waitlist!');
       }
       throw insertError;
     }
@@ -58,7 +59,7 @@ export default async (req: Request) => {
   } catch (error: any) {
     console.error('Error in join-waitlist function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: publicMessage(error) }),
       {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

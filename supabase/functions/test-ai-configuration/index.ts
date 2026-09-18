@@ -14,6 +14,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { requireAdmin } from '../_shared/require-admin.ts';
+import { meterAdminRequest } from '../_shared/ai-gate.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,6 +46,11 @@ export default async (req: Request) => {
         }
       );
     }
+
+    // US-870: the budget the rate_limit_config rows describe and nothing in
+    // the deployed tree enforced. Skipped for service-role callers.
+    const limited = await meterAdminRequest(gate, 'test-ai-configuration', corsHeaders);
+    if (limited) return limited;
     const supabase = gate.admin!;
 
     // Parse request
@@ -98,7 +105,7 @@ export default async (req: Request) => {
     console.error('[test-ai-configuration] Error:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: publicMessage(error),
         details: error.toString(),
       }),
       { 

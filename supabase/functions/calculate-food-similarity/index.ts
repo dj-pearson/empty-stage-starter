@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,7 +23,7 @@ export default async (req: Request) => {
     const { sourceFoodId, kidId } = await req.json();
     
     if (!sourceFoodId) {
-      throw new Error('Source food ID is required');
+      throw new PublicError('Source food ID is required');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -157,7 +158,7 @@ Format as JSON with this structure:
   } catch (error) {
     console.error('Error calculating food similarity:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -166,7 +167,7 @@ Format as JSON with this structure:
   }
 };
 
-function calculateSimilarityScore(food1: any, food2: any): number {
+function calculateSimilarityScore(food1: Record<string, unknown>, food2: Record<string, unknown>): number {
   let score = 0;
   const props1 = food1.food_properties?.[0];
   const props2 = food2.food_properties?.[0];
@@ -210,7 +211,7 @@ function calculateSimilarityScore(food1: any, food2: any): number {
   return Math.min(score, 100);
 }
 
-function generateSimilarityReasons(food1: any, food2: any): string[] {
+function generateSimilarityReasons(food1: Record<string, unknown>, food2: Record<string, unknown>): string[] {
   const reasons = [];
   const props1 = food1.food_properties?.[0];
   const props2 = food2.food_properties?.[0];

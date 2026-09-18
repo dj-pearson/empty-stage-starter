@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from '../common/headers.ts';
 import { requireUser } from '../_shared/require-admin.ts';
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 /**
  * Minimal structural type for the two authorization lookups below. The rest of
@@ -168,7 +169,7 @@ export default async (req: Request) => {
   } catch (error) {
     console.error('Error processing delivery order:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: publicMessage(error) }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
@@ -181,7 +182,7 @@ async function estimateCosts(supabase: any, request: ProcessOrderRequest) {
   const { items, providerId } = request;
 
   if (!items || items.length === 0) {
-    throw new Error('Items are required for estimate');
+    throw new PublicError('Items are required for estimate');
   }
 
   // Get provider details
@@ -192,7 +193,7 @@ async function estimateCosts(supabase: any, request: ProcessOrderRequest) {
     .single();
 
   if (!provider) {
-    throw new Error('Provider not found');
+    throw new PublicError('Provider not found');
   }
 
   /**
@@ -260,7 +261,7 @@ async function createDraftOrder(supabase: any, request: ProcessOrderRequest) {
   const { householdId, userId, providerId } = request;
 
   if (!householdId || !userId || !providerId) {
-    throw new Error('householdId, userId, and providerId are required');
+    throw new PublicError('householdId, userId, and providerId are required');
   }
 
   // Create order from grocery list
@@ -290,7 +291,7 @@ async function submitOrderToProvider(supabase: any, request: ProcessOrderRequest
   const { orderId } = request;
 
   if (!orderId) {
-    throw new Error('orderId is required');
+    throw new PublicError('orderId is required');
   }
 
   // Get order details
@@ -394,7 +395,7 @@ async function checkOrderStatus(supabase: any, request: ProcessOrderRequest) {
   const { orderId } = request;
 
   if (!orderId) {
-    throw new Error('orderId is required');
+    throw new PublicError('orderId is required');
   }
 
   // Get order
@@ -405,7 +406,7 @@ async function checkOrderStatus(supabase: any, request: ProcessOrderRequest) {
     .single();
 
   if (!order) {
-    throw new Error('Order not found');
+    throw new PublicError('Order not found');
   }
 
   /**
@@ -471,7 +472,7 @@ async function cancelOrder(supabase: any, request: ProcessOrderRequest) {
   const { orderId } = request;
 
   if (!orderId) {
-    throw new Error('orderId is required');
+    throw new PublicError('orderId is required');
   }
 
   // Get order
@@ -482,7 +483,7 @@ async function cancelOrder(supabase: any, request: ProcessOrderRequest) {
     .single();
 
   if (!order) {
-    throw new Error('Order not found');
+    throw new PublicError('Order not found');
   }
 
   if (['delivered', 'cancelled'].includes(order.status)) {

@@ -21,7 +21,11 @@ set -uo pipefail
 # their contents. Fixing the stray `});` each of them ended with made 56 real
 # errors visible (43 no-explicit-any, 12 no-unused-vars, 1 prefer-const) and
 # retired 17 parse errors. The tree did not get worse; the gate started looking
-# at it. Those 56 are US-870's to clear, and this number only goes down again.
+# at it.
+#
+# US-870 cleared all 56 and the baseline came back down past where it started:
+# 1172 -> 1118. That is the only direction this number is allowed to move
+# without the paragraph above.
 #
 BASELINE_FILE=".ci/lint-baseline.txt"
 # US-802: a stable path, so the workflow can upload it as an artifact.

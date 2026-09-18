@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -112,7 +113,7 @@ export default async (req: Request) => {
         console.error(`Error publishing post ${post.id}:`, err);
         results.failed.push({
           id: post.id,
-          error: err.message || "Unknown error",
+          error: publicMessage(err),
         });
 
         // Log the failure
@@ -143,7 +144,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "Internal server error",
+        error: publicMessage(error),
       }),
       {
         status: 500,

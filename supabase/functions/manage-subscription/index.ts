@@ -1,6 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, securityHeaders } from "../common/headers.ts";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -24,7 +25,7 @@ export default async (req: Request) => {
     // Get user from auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("No authorization header");
+      throw new PublicError("No authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -34,7 +35,7 @@ export default async (req: Request) => {
     } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      throw new Error("Unauthorized");
+      throw new PublicError("Unauthorized");
     }
 
     const { action, planId, billingCycle } = await req.json();
@@ -57,7 +58,7 @@ export default async (req: Request) => {
       case "upgrade":
       case "change": {
         if (!planId || !billingCycle) {
-          throw new Error("Missing planId or billingCycle");
+          throw new PublicError("Missing planId or billingCycle");
         }
 
         return await handleUpgradeOrChange(
@@ -91,7 +92,7 @@ export default async (req: Request) => {
     }
   } catch (error) {
     console.error("Subscription management error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: publicMessage(error) }), {
       headers: { ...corsHeaders, ...securityHeaders, "Content-Type": "application/json" },
       status: 400,
     });
@@ -114,7 +115,7 @@ async function handleUpgradeOrChange(
     .single();
 
   if (planError || !newPlan) {
-    throw new Error("Plan not found");
+    throw new PublicError("Plan not found");
   }
 
   // Get the correct price ID
@@ -173,7 +174,7 @@ async function handleUpgradeOrChange(
       );
     } catch (error) {
       console.error("Error updating Stripe subscription:", error);
-      throw new Error("Failed to update subscription in Stripe");
+      throw new PublicError("Failed to update subscription in Stripe");
     }
   } else {
     // No active subscription, create a new checkout session
@@ -199,7 +200,7 @@ async function handleUpgradeOrChange(
 
 async function handleCancel(supabase: any, currentSub: any) {
   if (!currentSub?.stripe_subscription_id) {
-    throw new Error("No active subscription found");
+    throw new PublicError("No active subscription found");
   }
 
   try {
@@ -251,17 +252,17 @@ async function handleCancel(supabase: any, currentSub: any) {
     );
   } catch (error) {
     console.error("Error canceling subscription:", error);
-    throw new Error("Failed to cancel subscription");
+    throw new PublicError("Failed to cancel subscription");
   }
 }
 
 async function handleReactivate(supabase: any, currentSub: any) {
   if (!currentSub?.stripe_subscription_id) {
-    throw new Error("No subscription found");
+    throw new PublicError("No subscription found");
   }
 
   if (!currentSub.cancel_at_period_end) {
-    throw new Error("Subscription is not scheduled for cancellation");
+    throw new PublicError("Subscription is not scheduled for cancellation");
   }
 
   try {
@@ -307,7 +308,7 @@ async function handleReactivate(supabase: any, currentSub: any) {
     );
   } catch (error) {
     console.error("Error reactivating subscription:", error);
-    throw new Error("Failed to reactivate subscription");
+    throw new PublicError("Failed to reactivate subscription");
   }
 }
 
@@ -317,7 +318,7 @@ async function handleChangeBillingCycle(
   newBillingCycle: string
 ) {
   if (!currentSub?.stripe_subscription_id) {
-    throw new Error("No active subscription found");
+    throw new PublicError("No active subscription found");
   }
 
   try {
@@ -329,7 +330,7 @@ async function handleChangeBillingCycle(
       .single();
 
     if (!plan) {
-      throw new Error("Plan not found");
+      throw new PublicError("Plan not found");
     }
 
     // Get new price ID
@@ -379,7 +380,7 @@ async function handleChangeBillingCycle(
     );
   } catch (error) {
     console.error("Error changing billing cycle:", error);
-    throw new Error("Failed to change billing cycle");
+    throw new PublicError("Failed to change billing cycle");
   }
 }
 

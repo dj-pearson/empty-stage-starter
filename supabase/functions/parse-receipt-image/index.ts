@@ -1,6 +1,7 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { getCorsHeaders, noCacheHeaders } from '../common/headers.ts';
 import { gateAiRequest } from '../_shared/ai-gate.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 /**
  * US-310: parse-receipt-image
@@ -241,7 +242,7 @@ export default async (req: Request) => {
   } catch (err) {
     console.error('parse-receipt-image error:', err);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(err) }),
       { status: 500, headers: noCacheHeaders() },
     );
   }

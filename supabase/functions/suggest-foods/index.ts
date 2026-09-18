@@ -3,6 +3,7 @@ import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { withStandingLimits } from '../_shared/safety.ts';
 
 import { gateAiRequest } from '../_shared/ai-gate.ts';
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -104,7 +105,7 @@ Respond in JSON format with an array called "suggestions".`;
         const parsed = JSON.parse(jsonMatch[0]);
         suggestions = parsed.suggestions || [];
       } else {
-        throw new Error('No JSON found in response');
+        throw new PublicError('No JSON found in response');
       }
     } catch (parseError) {
       console.error('Failed to parse AI response:', parseError);
@@ -126,7 +127,7 @@ Respond in JSON format with an array called "suggestions".`;
   } catch (error) {
     console.error('Error in suggest-foods function:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -1,6 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, noCacheHeaders } from "../common/headers.ts";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -34,7 +35,7 @@ export default async (req: Request) => {
     // Get user from auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("No authorization header");
+      throw new PublicError("No authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -44,7 +45,7 @@ export default async (req: Request) => {
     } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      throw new Error("Unauthorized");
+      throw new PublicError("Unauthorized");
     }
 
     const { action, paymentMethodId } = await req.json();
@@ -83,7 +84,7 @@ export default async (req: Request) => {
 
       case "attach": {
         if (!paymentMethodId) {
-          throw new Error("Missing paymentMethodId");
+          throw new PublicError("Missing paymentMethodId");
         }
         customerId = await ensureCustomer(supabase, stripe, user, customerId);
         return await handleAttachPaymentMethod(customerId, paymentMethodId, corsHeaders);
@@ -91,27 +92,27 @@ export default async (req: Request) => {
 
       case "detach": {
         if (!paymentMethodId) {
-          throw new Error("Missing paymentMethodId");
+          throw new PublicError("Missing paymentMethodId");
         }
         if (!customerId) {
-          throw new Error("No customer found");
+          throw new PublicError("No customer found");
         }
         return await handleDetachPaymentMethod(customerId, paymentMethodId, corsHeaders);
       }
 
       case "set-default": {
         if (!paymentMethodId) {
-          throw new Error("Missing paymentMethodId");
+          throw new PublicError("Missing paymentMethodId");
         }
         if (!customerId) {
-          throw new Error("No customer found");
+          throw new PublicError("No customer found");
         }
         return await handleSetDefaultPaymentMethod(customerId, paymentMethodId, corsHeaders);
       }
 
       case "get-portal-url": {
         if (!customerId) {
-          throw new Error("No subscription found. Please subscribe first.");
+          throw new PublicError("No subscription found. Please subscribe first.");
         }
         return await handleGetPortalUrl(customerId, corsHeaders);
       }
@@ -123,7 +124,7 @@ export default async (req: Request) => {
     console.error("Payment method management error:", error);
     const corsHeaders = getCorsHeaders(req);
     const message = error instanceof Error ? error.message : String(error);
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: publicMessage(error) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });

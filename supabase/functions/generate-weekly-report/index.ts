@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from '../common/headers.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 interface ReportMetrics {
   // Planning metrics
@@ -207,7 +208,7 @@ export default async (req: Request) => {
     });
   } catch (error) {
     console.error('Error generating report:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: publicMessage(error) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     });

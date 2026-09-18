@@ -1,5 +1,6 @@
 import { requireAdmin } from "../_shared/require-admin.ts";
 import { corsHeadersFor } from "../_shared/cors.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 export default async (req: Request) => {
   // Web-admin-only endpoint: restrict CORS to the app origins.
@@ -85,7 +86,7 @@ export default async (req: Request) => {
   } catch (error: any) {
     console.error('Error in list-users function:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

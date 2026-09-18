@@ -5,6 +5,7 @@
 // =====================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,7 +50,7 @@ async function sendEmail(
     return { success: true };
   } catch (error) {
     console.error("Email error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicMessage(error) };
   }
 }
 
@@ -95,7 +96,7 @@ async function sendSlackNotification(
     return { success: true };
   } catch (error) {
     console.error("Slack error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicMessage(error) };
   }
 }
 
@@ -410,7 +411,7 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("Error in send-seo-notification:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

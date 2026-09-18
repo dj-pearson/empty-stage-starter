@@ -1,6 +1,7 @@
 import { withStandingLimits } from "../_shared/safety.ts";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 import { gateAiRequest } from '../_shared/ai-gate.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 
 const corsHeaders = {
@@ -129,7 +130,7 @@ Format your response as JSON with these exact fields:
   } catch (error) {
     console.error('Error in suggest-recipe function:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

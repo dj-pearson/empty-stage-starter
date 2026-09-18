@@ -1,3 +1,4 @@
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +15,7 @@ export default async (req: Request) => {
     const { url } = await req.json();
 
     if (!url) {
-      throw new Error("URL is required");
+      throw new PublicError("URL is required");
     }
 
     // Fetch the URL
@@ -316,7 +317,7 @@ export default async (req: Request) => {
     console.error("Error in seo-audit function:", error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: publicMessage(error),
       }),
       {
         status: 400,

@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, noCacheHeaders } from '../common/headers.ts';
 import { enforceRateLimit } from '../_shared/rate-limit.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 /**
  * US-312: tonight-mode
@@ -342,7 +343,7 @@ export default async (req: Request) => {
     console.error('tonight-mode error:', err);
     const message = err instanceof Error ? err.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: publicMessage(err) }),
       { status: 500, headers: noCacheHeaders() },
     );
   }

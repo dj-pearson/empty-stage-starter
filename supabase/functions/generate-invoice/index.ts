@@ -1,6 +1,16 @@
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
-import { getCorsHeaders, noCacheHeaders } from "../common/headers.ts";
+import { getCorsHeaders } from "../common/headers.ts";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
+
+/**
+ * The supabase-js client, named rather than `any` (US-870).
+ *
+ * This tree has no generated Database types -- `supabase gen types` writes
+ * them for src/, and the Deno handlers import the client straight from esm.sh
+ * -- so the honest type is "whatever createClient returns".
+ */
+type SupabaseClientLike = ReturnType<typeof createClient>;
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -56,7 +66,7 @@ export default async (req: Request) => {
     // Get user from auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("No authorization header");
+      throw new PublicError("No authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -66,7 +76,7 @@ export default async (req: Request) => {
     } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      throw new Error("Unauthorized");
+      throw new PublicError("Unauthorized");
     }
 
     const { action, paymentId, invoiceId } = await req.json();
@@ -80,21 +90,21 @@ export default async (req: Request) => {
 
       case "generate": {
         if (!paymentId) {
-          throw new Error("Missing paymentId");
+          throw new PublicError("Missing paymentId");
         }
         return await handleGenerateInvoice(supabase, user.id, paymentId, corsHeaders);
       }
 
       case "send": {
         if (!paymentId) {
-          throw new Error("Missing paymentId");
+          throw new PublicError("Missing paymentId");
         }
         return await handleSendInvoice(supabase, user, paymentId, corsHeaders);
       }
 
       case "download-stripe": {
         if (!invoiceId) {
-          throw new Error("Missing invoiceId (Stripe invoice ID)");
+          throw new PublicError("Missing invoiceId (Stripe invoice ID)");
         }
         return await handleDownloadStripeInvoice(supabase, user.id, invoiceId, corsHeaders);
       }
@@ -105,14 +115,14 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("Invoice generation error:", error);
     const corsHeaders = getCorsHeaders(req);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: publicMessage(error) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }
 };
 
-async function handleListInvoices(supabase: any, userId: string, corsHeaders: any) {
+async function handleListInvoices(supabase: SupabaseClientLike, userId: string, corsHeaders: Record<string, string>) {
   // Get all payments for the user
   const { data: payments, error } = await supabase
     .from("payment_history")
@@ -138,7 +148,7 @@ async function handleListInvoices(supabase: any, userId: string, corsHeaders: an
   }
 
   // Transform to invoice format
-  const invoices = (payments || []).map((payment: any, index: number) => ({
+  const invoices = (payments || []).map((payment: Record<string, unknown>, index: number) => ({
     id: payment.id,
     invoiceNumber: `INV-${new Date(payment.created_at).getFullYear()}-${String(payments.length - index).padStart(4, '0')}`,
     date: payment.created_at,
@@ -160,10 +170,10 @@ async function handleListInvoices(supabase: any, userId: string, corsHeaders: an
 }
 
 async function handleGenerateInvoice(
-  supabase: any,
+  supabase: SupabaseClientLike,
   userId: string,
   paymentId: string,
-  corsHeaders: any
+  corsHeaders: Record<string, string>
 ) {
   // Get payment details
   const { data: payment, error: paymentError } = await supabase
@@ -180,7 +190,7 @@ async function handleGenerateInvoice(
     .single();
 
   if (paymentError || !payment) {
-    throw new Error("Payment not found or access denied");
+    throw new PublicError("Payment not found or access denied");
   }
 
   // Get user profile
@@ -245,10 +255,10 @@ async function handleGenerateInvoice(
 }
 
 async function handleSendInvoice(
-  supabase: any,
-  user: any,
+  supabase: SupabaseClientLike,
+  user: Record<string, unknown>,
   paymentId: string,
-  corsHeaders: any
+  corsHeaders: Record<string, string>
 ) {
   // Generate the invoice first
   const { data: payment, error: paymentError } = await supabase
@@ -265,7 +275,7 @@ async function handleSendInvoice(
     .single();
 
   if (paymentError || !payment) {
-    throw new Error("Payment not found or access denied");
+    throw new PublicError("Payment not found or access denied");
   }
 
   // Get user profile
@@ -334,7 +344,7 @@ async function handleSendInvoice(
 
   if (emailError) {
     console.error("Failed to queue invoice email:", emailError);
-    throw new Error("Failed to queue invoice email");
+    throw new PublicError("Failed to queue invoice email");
   }
 
   return new Response(
@@ -350,10 +360,10 @@ async function handleSendInvoice(
 }
 
 async function handleDownloadStripeInvoice(
-  supabase: any,
+  supabase: SupabaseClientLike,
   userId: string,
   stripeInvoiceId: string,
-  corsHeaders: any
+  corsHeaders: Record<string, string>
 ) {
   // Verify the user owns this invoice
   const { data: payment, error } = await supabase
@@ -364,7 +374,7 @@ async function handleDownloadStripeInvoice(
     .single();
 
   if (error || !payment) {
-    throw new Error("Invoice not found or access denied");
+    throw new PublicError("Invoice not found or access denied");
   }
 
   try {
@@ -372,7 +382,7 @@ async function handleDownloadStripeInvoice(
     const invoice = await stripe.invoices.retrieve(stripeInvoiceId);
 
     if (!invoice.invoice_pdf) {
-      throw new Error("Invoice PDF not available from Stripe");
+      throw new PublicError("Invoice PDF not available from Stripe");
     }
 
     return new Response(
@@ -386,7 +396,7 @@ async function handleDownloadStripeInvoice(
         status: 200,
       }
     );
-  } catch (stripeError: any) {
+  } catch (stripeError) {
     console.error("Stripe error fetching invoice:", stripeError);
     throw new Error(`Failed to fetch invoice from Stripe: ${stripeError.message}`);
   }

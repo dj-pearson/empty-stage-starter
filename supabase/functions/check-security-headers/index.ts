@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,7 +40,7 @@ export default async (req: Request) => {
     const { url } = await req.json();
 
     if (!url) {
-      throw new Error("URL is required");
+      throw new PublicError("URL is required");
     }
 
     console.log(`Checking security headers for ${url}...`);
@@ -94,7 +95,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -156,7 +157,7 @@ async function analyzeSecurityHeaders(url: string): Promise<SecurityAnalysis> {
   } else if (hsts) {
     const maxAge = hsts.match(/max-age=(\d+)/);
     const includesSubDomains = hsts.includes("includeSubDomains");
-    const preload = hsts.includes("preload");
+    const _preload = hsts.includes("preload");
 
     let score = 10;
     let severity: "pass" | "low" = "pass";
@@ -359,7 +360,7 @@ async function analyzeSecurityHeaders(url: string): Promise<SecurityAnalysis> {
   }
 
   // Calculate overall score
-  const maxScore = 100;
+  const _maxScore = 100;
   const overallScore = Math.round(
     checks.reduce((sum, check) => sum + check.score, 0)
   );

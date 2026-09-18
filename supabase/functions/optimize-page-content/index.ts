@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { requireAdmin } from '../_shared/require-admin.ts';
+import { meterAdminRequest, rejectNonPost } from '../_shared/ai-gate.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,6 +62,9 @@ export default async (req: Request) => {
 
   // US-618: this endpoint spends model tokens and the runtime is
   // --no-verify-jwt, so in-function auth is the only gate.
+  const notPost = rejectNonPost(req, corsHeaders);
+  if (notPost) return notPost;
+
   const gate = await requireAdmin(req);
   if (!gate.ok) {
     return new Response(
@@ -67,6 +72,11 @@ export default async (req: Request) => {
       { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
+
+  // US-870: the budget the rate_limit_config rows describe and nothing in
+  // the deployed tree enforced. Skipped for service-role callers.
+  const limited = await meterAdminRequest(gate, 'optimize-page-content', corsHeaders);
+  if (limited) return limited;
 
   try {
     const {
@@ -77,7 +87,7 @@ export default async (req: Request) => {
     } = await req.json();
 
     if (!url) {
-      throw new Error("URL is required");
+      throw new PublicError("URL is required");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -301,7 +311,7 @@ Provide optimization suggestions in strict JSON format:
     });
 
     if (!content) {
-      throw new Error("No content received from AI");
+      throw new PublicError("No content received from AI");
     }
 
     // Parse AI response
@@ -326,7 +336,7 @@ Provide optimization suggestions in strict JSON format:
     } catch (e) {
       console.error("Failed to parse AI response:", e);
       console.error("Raw content:", sanitized.substring(0, 500));
-      throw new Error("Failed to parse AI optimization suggestions");
+      throw new PublicError("Failed to parse AI optimization suggestions");
     }
 
     // Save optimization results to database
@@ -387,7 +397,7 @@ Provide optimization suggestions in strict JSON format:
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || "Internal server error",
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +36,7 @@ export default async (req: Request) => {
     const { url } = await req.json();
 
     if (!url) {
-      throw new Error("URL is required");
+      throw new PublicError("URL is required");
     }
 
     console.log(`Checking mobile-first compliance for ${url}...`);
@@ -87,7 +88,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -416,7 +417,7 @@ async function analyzeMobileFriendliness(url: string): Promise<MobileAnalysis> {
   }
 
   // Calculate overall score
-  const maxScore = 100;
+  const _maxScore = 100;
   const overallScore = Math.round(
     checks.reduce((sum, check) => sum + check.score, 0)
   );

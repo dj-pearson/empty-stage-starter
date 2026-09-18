@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +32,7 @@ export default async (req: Request) => {
     const isCronJob = cronSecret && req.headers.get("X-Cron-Secret") === cronSecret;
 
     if (!isServiceRole && !isCronJob) {
-      throw new Error("Unauthorized: Scheduled jobs only");
+      throw new PublicError("Unauthorized: Scheduled jobs only");
     }
 
     // Create Supabase client with service role
@@ -150,7 +151,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : "Processing failed",
+        error: publicMessage(error),
       }),
       {
         status: 500,

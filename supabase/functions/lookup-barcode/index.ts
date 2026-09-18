@@ -16,6 +16,7 @@ import {
   usableName,
   usdaFirstFood,
 } from '../_shared/barcodeProviderShape.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -738,7 +739,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+        error: publicMessage(error) 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );

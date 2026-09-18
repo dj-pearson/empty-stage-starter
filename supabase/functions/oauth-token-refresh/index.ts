@@ -1,5 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
+import { publicMessage } from '../_shared/errors.ts';
+
+/**
+ * The supabase-js client, named rather than `any` (US-870).
+ *
+ * This tree has no generated Database types -- `supabase gen types` writes
+ * them for src/, and the Deno handlers import the client straight from esm.sh
+ * -- so the honest type is "whatever createClient returns".
+ */
+type SupabaseClientLike = ReturnType<typeof createClient>;
 
 /**
  * OAuth Token Refresh Edge Function
@@ -78,7 +88,7 @@ export default async (req: Request) => {
       );
     }
 
-    const { provider, refreshToken, forceRotation = false } = await req.json();
+    const { provider, refreshToken, _forceRotation = false } = await req.json();
 
     // Validate provider
     const providerConfig = PROVIDERS[provider];
@@ -181,7 +191,7 @@ export default async (req: Request) => {
   } catch (error) {
     console.error('Token refresh error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, ...securityHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -191,7 +201,7 @@ export default async (req: Request) => {
  * Log security audit event
  */
 async function logSecurityEvent(
-  supabase: any,
+  supabase: SupabaseClientLike,
   userId: string,
   eventType: string,
   metadata: Record<string, unknown>

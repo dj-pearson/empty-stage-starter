@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,7 +78,7 @@ class ResendProvider implements EmailProvider {
       console.error("Resend error:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: publicMessage(error),
       };
     }
   }
@@ -197,7 +198,7 @@ class SmtpProvider implements EmailProvider {
 
           return {
             success: false,
-            error: smtpError instanceof Error ? smtpError.message : "SMTP connection failed"
+            error: publicMessage(smtpError)
           };
         }
       }
@@ -205,7 +206,7 @@ class SmtpProvider implements EmailProvider {
       console.error("SMTP error:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown SMTP error",
+        error: publicMessage(error),
       };
     }
   }
@@ -270,7 +271,7 @@ export default async (req: Request) => {
     const isCronJob = cronSecret && req.headers.get("X-Cron-Secret") === cronSecret;
 
     if (!isServiceRole && !isCronJob) {
-      throw new Error("Unauthorized: Scheduled jobs only");
+      throw new PublicError("Unauthorized: Scheduled jobs only");
     }
 
     // Create Supabase client with service role
@@ -426,7 +427,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : "Email sending failed",
+        error: publicMessage(error),
       }),
       {
         status: 500,

@@ -73,6 +73,121 @@ describe('every deployed edge function is loadable', () => {
 });
 
 /**
+ * The guards hold across the whole tree (US-870).
+ *
+ * US-773 ported them into the twelve functions that had existed in both trees
+ * and pinned those twelve by name. A list is a snapshot: the 94th function
+ * added tomorrow is not on it. These read the tree instead.
+ *
+ * Measured before US-870: 21 functions call a model and 15 of them metered
+ * nothing (tonight-mode was the only caller of enforceRateLimit in 93
+ * functions), and 92 sites across 76 functions answered a `catch` with
+ * `error.message`.
+ */
+describe('every model-calling function meters its caller', () => {
+  const handlers = handlerFiles();
+
+  /** The shared service every LLM call in this tree goes through. */
+  const callsAModel = ({ source }: { source: string }) =>
+    /AIServiceV2|ai-service-v2/.test(source);
+
+  it('finds the model-calling functions at all', () => {
+    expect(handlers.filter(callsAModel).length).toBeGreaterThan(15);
+  });
+
+  it('gates every one of them', () => {
+    // gateAiRequest for a signed-in user (method check, auth and budget in
+    // one), enforceRateLimit or meterAdminRequest for the admin-only ones --
+    // gateAiRequest would WIDEN those to any signed-in caller.
+    const ungated = handlers
+      .filter(callsAModel)
+      .filter(({ source }) => !/gateAiRequest|enforceRateLimit|meterAdminRequest/.test(source))
+      .map(({ name }) => name);
+
+    expect(ungated, 'these spend model tokens with no per-caller budget').toEqual([]);
+  });
+});
+
+describe('no handler forwards a caught error to the caller', () => {
+  const handlers = handlerFiles();
+
+  /**
+   * stripe-webhook is the one exception and it is documented in place: that
+   * branch is signature verification, the reader is Stripe's dashboard, and
+   * `Webhook Error: <reason>` is the shape its docs specify.
+   */
+  const EXEMPT = new Set(['stripe-webhook']);
+
+  /**
+   * Parsed rather than grepped. `{ error: publicMessage(error) }` contains the
+   * message and `{ error: error.message }` forwards it, and both contain the
+   * word "error" twice -- a regex that tells them apart is a regex nobody can
+   * read six months from now.
+   */
+  function forwardedMessages(source: string, file: string): string[] {
+    const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+    const found: string[] = [];
+
+    const inspect = (clause: ts.CatchClause) => {
+      const param = clause.variableDeclaration?.name?.getText(sourceFile);
+      if (!param) return;
+      const tainted = new Set([param]);
+      const collectLocals = (node: ts.Node) => {
+        if (ts.isVariableDeclaration(node) && node.initializer && ts.isIdentifier(node.name)) {
+          if (node.initializer.getText(sourceFile).includes(param)) tainted.add(node.name.getText(sourceFile));
+        }
+        ts.forEachChild(node, collectLocals);
+      };
+      collectLocals(clause.block);
+
+      const findAssignments = (node: ts.Node) => {
+        if (ts.isPropertyAssignment(node) && node.name.getText(sourceFile) === 'error') {
+          const text = node.initializer.getText(sourceFile);
+          const mentionsCaught = [...tainted].some((n) => new RegExp(`\\b${n}\\b`).test(text));
+          const contained = /^publicMessage\(/.test(text);
+          if (mentionsCaught && !contained) found.push(text.replace(/\s+/g, ' ').slice(0, 60));
+        }
+        ts.forEachChild(node, findAssignments);
+      };
+      findAssignments(clause.block);
+    };
+
+    const walk = (node: ts.Node) => {
+      if (ts.isCatchClause(node)) inspect(node);
+      ts.forEachChild(node, walk);
+    };
+    walk(sourceFile);
+    return found;
+  }
+
+  it('returns a contained message instead', () => {
+    const forwarding = handlers
+      .filter(({ name }) => !EXEMPT.has(name))
+      .map(({ name, source, file }) => ({ name, sites: forwardedMessages(source, file) }))
+      .filter(({ sites }) => sites.length > 0)
+      .map(({ name, sites }) => `${name}: ${sites.join(' | ')}`);
+
+    expect(forwarding, 'these put a thrown message in the response body').toEqual([]);
+  });
+
+  it('keeps a way to say something on purpose', () => {
+    // Containment without an exception turns every fixable 400 into a shrug,
+    // so PublicError exists and the deliberate throws use it.
+    const errors = readFileSync(path.join(FUNCTIONS_DIR, '_shared', 'errors.ts'), 'utf8');
+    expect(errors).toContain('export class PublicError');
+    expect(errors).toContain('error instanceof PublicError');
+
+    const users = handlers.filter(({ source }) => source.includes('throw new PublicError'));
+    expect(users.length, 'nothing throws a PublicError, so the escape hatch is theatre').toBeGreaterThan(10);
+    for (const { name, source } of users) {
+      expect(source, `${name} throws PublicError without importing it`).toMatch(
+        /import \{[^}]*PublicError[^}]*\} from ['"]\.\.\/_shared\/errors\.ts['"]/,
+      );
+    }
+  });
+});
+
+/**
  * The guards US-773 ported out of the tree that never deploys stay ported.
  *
  * Scoped to the twelve names that used to exist in both trees. The wider tree

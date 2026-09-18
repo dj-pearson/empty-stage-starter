@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 
 const corsHeaders = {
@@ -36,7 +37,7 @@ export default async (req: Request) => {
     } = await supabaseClient.auth.getUser();
 
     if (authError || !user) {
-      throw new Error("Unauthorized");
+      throw new PublicError("Unauthorized");
     }
 
     const { userId, backupType = "manual" }: BackupRequest = await req.json();
@@ -53,7 +54,7 @@ export default async (req: Request) => {
         .single();
 
       if (roleData?.role !== "admin") {
-        throw new Error("Unauthorized: Admin access required");
+        throw new PublicError("Unauthorized: Admin access required");
       }
     }
 
@@ -65,7 +66,7 @@ export default async (req: Request) => {
       .single();
 
     if (config && !config.enabled && backupType !== "manual" && backupType !== "export") {
-      throw new Error("Backups are disabled for this user");
+      throw new PublicError("Backups are disabled for this user");
     }
 
     const retentionDays = config?.retention_days || 30;
@@ -84,7 +85,7 @@ export default async (req: Request) => {
       .single();
 
     if (logError || !backupLog) {
-      throw new Error("Failed to create backup log entry");
+      throw new PublicError("Failed to create backup log entry");
     }
 
     try {
@@ -197,7 +198,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : "Backup failed",
+        error: publicMessage(error),
       }),
       {
         status: 400,

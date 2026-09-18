@@ -2,6 +2,7 @@ import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/heade
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 import { withStandingLimits } from "../_shared/safety.ts";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -125,7 +126,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
                      mealPlanText.match(/(\{[\s\S]*\})/);
 
     if (!jsonMatch) {
-      throw new Error('No JSON found in AI response');
+      throw new PublicError('No JSON found in AI response');
     }
 
     const mealPlan = JSON.parse(jsonMatch[1] || jsonMatch[0]);
@@ -165,7 +166,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
   } catch (error) {
     console.error('[ai-meal-plan] Error:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       {
         status: 500,
         headers: {

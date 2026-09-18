@@ -6,6 +6,7 @@
 // =====================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,7 +103,7 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("Error in analyze-blog-posts-seo:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
@@ -111,6 +112,13 @@ export default async (req: Request) => {
 // =====================================================
 // HELPER FUNCTIONS
 // =====================================================
+
+/** One finding from the SEO pass, typed rather than `any` (US-870). */
+interface SeoIssue {
+  type: string;
+  severity: string;
+  message: string;
+}
 
 interface PostAnalysis {
   overall_score: number;
@@ -122,14 +130,14 @@ interface PostAnalysis {
   has_meta_description: boolean;
   has_h1: boolean;
   has_og_tags: boolean;
-  issues: any[];
+  issues: SeoIssue[];
   high_priority_issues: number;
   medium_priority_issues: number;
   low_priority_issues: number;
 }
 
-function analyzePostSEO(post: any, pageUrl: string): PostAnalysis {
-  const issues: any[] = [];
+function analyzePostSEO(post: Record<string, unknown>, _pageUrl: string): PostAnalysis {
+  const issues: SeoIssue[] = [];
   let technicalChecks = 0;
   let technicalPassed = 0;
   let onPageChecks = 0;

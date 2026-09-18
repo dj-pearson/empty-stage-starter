@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +32,7 @@ export default async (req: Request) => {
     const isCronJob = cronSecret && req.headers.get("X-Cron-Secret") === cronSecret;
 
     if (!isServiceRole && !isCronJob) {
-      throw new Error("Unauthorized: Scheduled jobs only");
+      throw new PublicError("Unauthorized: Scheduled jobs only");
     }
 
     const supabaseClient = createClient(
@@ -140,7 +141,7 @@ export default async (req: Request) => {
               kid_name: kid.name,
               meals_logged: mealsLogged || 0,
               successful_attempts: successfulAttempts || 0,
-              new_foods: newFoods?.map((f: any) => f.foods?.name).filter(Boolean) || [],
+              new_foods: newFoods?.map((f: Record<string, unknown>) => (f.foods as { name?: string } | undefined)?.name).filter(Boolean) || [],
               achievements: achievements || [],
             };
           })
@@ -189,7 +190,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : "Summary generation failed",
+        error: publicMessage(error),
       }),
       {
         status: 500,

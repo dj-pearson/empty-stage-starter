@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { requireAdmin } from "../_shared/require-admin.ts";
 import { fetchGuardedResource } from "../_shared/url-validator.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 /** Blog artwork. Generous, but not "stream me a DVD into memory". */
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -133,7 +134,7 @@ export default async (req: Request) => {
   } catch (error: any) {
     console.error('Error in update-blog-image:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

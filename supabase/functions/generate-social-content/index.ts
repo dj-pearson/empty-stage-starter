@@ -7,6 +7,7 @@ import {
   buildPromptFromContext,
   generateAndStoreImage,
 } from "../_shared/image-gen.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -399,7 +400,7 @@ STRICT OUTPUT: Return ONLY valid JSON (RFC 8259), no markdown, no code fences, n
   } catch (error: any) {
     console.error("Error in generate-social-content:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: publicMessage(error) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
