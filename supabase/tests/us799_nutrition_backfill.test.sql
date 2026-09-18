@@ -167,4 +167,106 @@ BEGIN
   RAISE NOTICE 'assertion 7 ok (nutrition still present, as the deprecation flow requires)';
 END $a7$;
 
+-- 8. The catalog can hold what nutrition holds (20260918000008).
+--
+--    AC2 asks for the readers to move to the catalog. They cannot move without
+--    losing a field until this is true: lookup-barcode/index.ts:583 prefers
+--    the nutrition row precisely because the catalog had nowhere to put
+--    ingredients, the serving TEXT, or the servings per container.
+DO $a8$
+DECLARE missing TEXT[] := '{}';
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema='public' AND table_name='grocery_product_catalog'
+                    AND column_name='ingredients') THEN missing := array_append(missing, 'ingredients'); END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema='public' AND table_name='grocery_product_catalog'
+                    AND column_name='serving_size_text') THEN missing := array_append(missing, 'serving_size_text'); END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema='public' AND table_name='grocery_product_catalog'
+                    AND column_name='servings_per_container') THEN missing := array_append(missing, 'servings_per_container'); END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema='public' AND table_name='grocery_product_catalog'
+                    AND column_name='package_quantity_text') THEN missing := array_append(missing, 'package_quantity_text'); END IF;
+
+  IF array_length(missing, 1) > 0 THEN
+    RAISE EXCEPTION 'assertion 8: the catalog still cannot carry %. A reader moved off nutrition '
+      'would silently drop those fields.', array_to_string(missing, ', ');
+  END IF;
+  RAISE NOTICE 'assertion 8 ok (the catalog carries ingredients, the serving text, servings per container and the package text)';
+END $a8$;
+
+-- 9. The serving TEXT survives even when the serving MASS cannot be parsed.
+--    This is the case that makes the text column load-bearing rather than
+--    decorative: for "1 cup (240 ml)" the text is the only serving
+--    information that exists, because parse_serving_grams refuses to guess it.
+INSERT INTO public.nutrition (name, category, serving_size, ingredients, servings_per_container, package_quantity)
+VALUES ('US799 Text Only', 'protein', '1 cup (240 ml)', 'water, salt, yeast extract', 4, '6 x 250ml');
+
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification)
+VALUES ('US799 Text Only', public.normalize_product_name('US799 Text Only'), 'generic', 'user', 'unverified');
+
+UPDATE public.grocery_product_catalog c
+   SET ingredients            = COALESCE(c.ingredients, n.ingredients),
+       serving_size_text      = COALESCE(c.serving_size_text, n.serving_size),
+       servings_per_container = COALESCE(c.servings_per_container, n.servings_per_container),
+       package_quantity_text  = COALESCE(c.package_quantity_text, n.package_quantity)
+  FROM public.nutrition n
+ WHERE c.name_normalized = public.normalize_product_name(n.name)
+   AND n.name = 'US799 Text Only';
+
+DO $a9$
+DECLARE v RECORD;
+BEGIN
+  SELECT * INTO v FROM public.grocery_product_catalog
+   WHERE name_normalized = public.normalize_product_name('US799 Text Only');
+
+  IF v.serving_size_g IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 9: a millilitre serving produced a gram mass (%). The parser must '
+      'still refuse this; the text column is not a licence to guess.', v.serving_size_g;
+  END IF;
+  IF v.serving_size_text IS DISTINCT FROM '1 cup (240 ml)' THEN
+    RAISE EXCEPTION 'assertion 9: the serving text was lost, got %', coalesce(v.serving_size_text, '<null>');
+  END IF;
+  IF v.ingredients IS DISTINCT FROM 'water, salt, yeast extract' THEN
+    RAISE EXCEPTION 'assertion 9: the ingredient list was lost, got %', coalesce(v.ingredients, '<null>');
+  END IF;
+  IF v.servings_per_container IS DISTINCT FROM 4 THEN
+    RAISE EXCEPTION 'assertion 9: servings per container was lost, got %', coalesce(v.servings_per_container::text, '<null>');
+  END IF;
+  IF v.package_quantity_text IS DISTINCT FROM '6 x 250ml' THEN
+    RAISE EXCEPTION 'assertion 9: the package text was lost, got %', coalesce(v.package_quantity_text, '<null>');
+  END IF;
+  RAISE NOTICE 'assertion 9 ok (text survives a serving the parser refuses, and allergens are not derived from it)';
+END $a9$;
+
+-- 10. The carry does not overwrite a correction made in the catalog.
+--     The catalog is canonical and nutrition is the cache it came from, so a
+--     value someone fixed by hand must win over a re-run of the backfill.
+INSERT INTO public.nutrition (name, category, serving_size, ingredients)
+VALUES ('US799 Corrected', 'protein', '30 g', 'the cached, wrong list');
+
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification, ingredients)
+VALUES ('US799 Corrected', public.normalize_product_name('US799 Corrected'), 'generic', 'user', 'unverified',
+        'the corrected list');
+
+UPDATE public.grocery_product_catalog c
+   SET ingredients = COALESCE(c.ingredients, n.ingredients)
+  FROM public.nutrition n
+ WHERE c.name_normalized = public.normalize_product_name(n.name)
+   AND n.name = 'US799 Corrected';
+
+DO $a10$
+DECLARE v TEXT;
+BEGIN
+  SELECT ingredients INTO v FROM public.grocery_product_catalog
+   WHERE name_normalized = public.normalize_product_name('US799 Corrected');
+
+  IF v IS DISTINCT FROM 'the corrected list' THEN
+    RAISE EXCEPTION 'assertion 10: the backfill overwrote a catalog correction with the cached '
+      'value (%). COALESCE fills a gap; it does not get to win an argument.', v;
+  END IF;
+  RAISE NOTICE 'assertion 10 ok (a catalog correction survives a re-run)';
+END $a10$;
+
 ROLLBACK;

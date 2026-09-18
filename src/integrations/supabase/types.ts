@@ -6356,16 +6356,20 @@ export type Database = {
           fat_g_100: number | null
           fiber_g_100: number | null
           id: string
+          ingredients: string | null
           kind: string
           last_added_at: string
           metadata: Json | null
           name: string
           name_normalized: string
           package_size: number | null
+          package_quantity_text: string | null
           package_unit: string | null
           parent_food_id: string | null
           protein_g_100: number | null
           serving_size_g: number | null
+          serving_size_text: string | null
+          servings_per_container: number | null
           sodium_mg_100: number | null
           source: string | null
           source_ref: string | null
@@ -6391,16 +6395,20 @@ export type Database = {
           fat_g_100?: number | null
           fiber_g_100?: number | null
           id?: string
+          ingredients?: string | null
           kind?: string
           last_added_at?: string
           metadata?: Json | null
           name: string
           name_normalized: string
           package_size?: number | null
+          package_quantity_text?: string | null
           package_unit?: string | null
           parent_food_id?: string | null
           protein_g_100?: number | null
           serving_size_g?: number | null
+          serving_size_text?: string | null
+          servings_per_container?: number | null
           sodium_mg_100?: number | null
           source?: string | null
           source_ref?: string | null
@@ -6426,16 +6434,20 @@ export type Database = {
           fat_g_100?: number | null
           fiber_g_100?: number | null
           id?: string
+          ingredients?: string | null
           kind?: string
           last_added_at?: string
           metadata?: Json | null
           name?: string
           name_normalized?: string
           package_size?: number | null
+          package_quantity_text?: string | null
           package_unit?: string | null
           parent_food_id?: string | null
           protein_g_100?: number | null
           serving_size_g?: number | null
+          serving_size_text?: string | null
+          servings_per_container?: number | null
           sodium_mg_100?: number | null
           source?: string | null
           source_ref?: string | null
