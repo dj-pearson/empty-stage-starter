@@ -102,6 +102,8 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
     'device-level service-worker kill switch that support sets by hand; a sign-out must not undo it',
   'route-error-chunk-reload-at':
     'cooldown that stops a broken deploy reload-looping the browser, and is about the build rather than the account',
+  'eatpal.activation.fired':
+    'US-707: which activation events each user id has already reported. Holds no account data -- event names and ids -- and clearing it would re-fire food_added and meal_planned on the next sign-in, inflating a funnel step above the signups it is measured against',
 };
 
 /** Key prefixes that survive sign-out on purpose. */

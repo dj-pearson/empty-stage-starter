@@ -17,6 +17,15 @@ const navigate = vi.fn();
 const addKid = vi.fn().mockResolvedValue(true);
 const trackEvent = vi.fn();
 const profileUpdate = vi.fn();
+const trackOnboardingStart = vi.fn();
+const trackOnboardingComplete = vi.fn();
+const trackOnboardingSkip = vi.fn();
+
+vi.mock("@/lib/conversion-tracking", () => ({
+  trackOnboardingStart: () => trackOnboardingStart(),
+  trackOnboardingComplete: (...a: unknown[]) => trackOnboardingComplete(...a),
+  trackOnboardingSkip: (...a: unknown[]) => trackOnboardingSkip(...a),
+}));
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigate,
@@ -62,6 +71,71 @@ async function renderOnboarding() {
     </HelmetProvider>
   );
 }
+
+/**
+ * US-707: the activation funnel.
+ *
+ * These events went to GA4 alone through analytics.trackEvent, and GA4 carries
+ * no id that joins back to Supabase -- so funnel_events held 2020 landing
+ * views, 29 signups, and then nothing. "Of the people who signed up, how many
+ * finished setup" was unanswerable. GA4 is still called; what changed is that
+ * funnel_events is called too, with the same user_id the domain tables use.
+ */
+describe("Onboarding route -- activation events", () => {
+  it("records the start on arrival, not on the first choice", async () => {
+    // A visitor who opens setup and leaves is a start. Without that the
+    // completion rate has nothing to be a rate of.
+    await renderOnboarding();
+    expect(trackOnboardingStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a completion with the answer to the first question", async () => {
+    const user = userEvent.setup();
+    await renderOnboarding();
+
+    await user.click(screen.getByText("Just me"));
+
+    await waitFor(() => expect(trackOnboardingComplete).toHaveBeenCalledWith("just_me", false));
+    expect(trackOnboardingSkip).not.toHaveBeenCalled();
+  });
+
+  it("records that a child was added on the family branch", async () => {
+    const user = userEvent.setup();
+    await renderOnboarding();
+
+    await user.click(screen.getByText("My family"));
+    await user.type(await screen.findByLabelText(/child's first name/i), "Sam");
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+
+    await waitFor(() => expect(trackOnboardingComplete).toHaveBeenCalledWith("my_family", true));
+  });
+
+  it("records a skip as a skip rather than a completion", async () => {
+    const user = userEvent.setup();
+    await renderOnboarding();
+
+    await user.click(screen.getByText("My family"));
+    await screen.findByLabelText(/child's first name/i);
+    await user.click(screen.getByRole("button", { name: /skip/i }));
+
+    await waitFor(() => expect(trackOnboardingSkip).toHaveBeenCalledWith("my_family"));
+    expect(trackOnboardingComplete).not.toHaveBeenCalled();
+  });
+
+  it("keeps sending GA4 as well, because that is where marketing reads", async () => {
+    const user = userEvent.setup();
+    await renderOnboarding();
+
+    await user.click(screen.getByText("Just me"));
+
+    await waitFor(() =>
+      expect(trackEvent).toHaveBeenCalledWith(
+        "onboarding_completed",
+        expect.objectContaining({ planning_for: "just_me" }),
+      ),
+    );
+  });
+});
 
 describe("Onboarding route", () => {
   it("asks who you are planning for before anything else", async () => {

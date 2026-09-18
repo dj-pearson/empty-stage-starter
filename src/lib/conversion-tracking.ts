@@ -150,7 +150,30 @@ export async function trackPageView(
 }
 
 /**
- * Funnel event types
+ * Funnel event types.
+ *
+ * The first seven are the ACQUISITION funnel: they run from an anonymous
+ * landing view to a payment, and most of them fire before there is a user to
+ * attribute them to, so they are counted per event.
+ *
+ * The last six are ACTIVATION (US-707). They happen after signup, to a
+ * signed-in user, and they are what tells you whether an account that was
+ * created ever became an account that is used. Before this the funnel stopped
+ * dead at `signup` -- 2020 landing views, 29 signups, and then nothing -- while
+ * onboarding went to GA4 through analytics.trackEvent, a system with no id that
+ * joins back to Supabase, so no one could ask "of the people who signed up, how
+ * many planned a meal".
+ *
+ * An activation event fires ONCE PER USER, not once per action: see
+ * src/lib/activationFunnel.ts. `food_added` on every add would put hundreds of
+ * rows per household into a table whose other rows are one-per-visitor, and a
+ * funnel step that can exceed the step above it is not a funnel.
+ *
+ * `funnel_events.event_type` is plain TEXT with no CHECK constraint and no
+ * enum -- only a comment listing the values -- so adding a type needs no
+ * migration and cannot break an older client. See
+ * supabase/migrations/20260918000005_funnel_activation_events.sql, which
+ * extends the reporting VIEW (that part is real) and says the same thing.
  */
 export type FunnelEventType =
   | 'landing_view'
@@ -159,7 +182,25 @@ export type FunnelEventType =
   | 'email_capture'
   | 'signup'
   | 'trial_start'
-  | 'paid_conversion';
+  | 'paid_conversion'
+  | 'onboarding_start'
+  | 'onboarding_complete'
+  | 'onboarding_skip'
+  | 'child_created'
+  | 'food_added'
+  | 'meal_planned';
+
+/** The subset that is once-per-user activation rather than per-visit acquisition. */
+export const ACTIVATION_EVENT_TYPES = [
+  'onboarding_start',
+  'onboarding_complete',
+  'onboarding_skip',
+  'child_created',
+  'food_added',
+  'meal_planned',
+] as const satisfies ReadonlyArray<FunnelEventType>;
+
+export type ActivationEventType = (typeof ACTIVATION_EVENT_TYPES)[number];
 
 /**
  * Track a funnel event
@@ -244,6 +285,49 @@ export function trackTrialStart(planId?: string): void {
  */
 export function trackPaidConversion(planId?: string, amount?: number): void {
   trackFunnelEvent('paid_conversion', { plan_id: planId, amount });
+}
+
+/*
+ * The activation trackers (US-707).
+ *
+ * Thin on purpose, exactly like the seven above. The once-per-user rule is not
+ * here -- it is a policy, and it belongs with the thing that remembers what
+ * already fired (src/lib/activationFunnel.ts). Calling one of these directly
+ * emits an event unconditionally, which is what the onboarding route wants for
+ * a step it can only reach once anyway.
+ */
+
+/** The setup flow was opened. */
+export function trackOnboardingStart(): void {
+  trackFunnelEvent('onboarding_start');
+}
+
+/** The setup flow was finished. `planningFor` is US-770's first question. */
+export function trackOnboardingComplete(planningFor?: string, addedChild?: boolean): void {
+  trackFunnelEvent('onboarding_complete', {
+    planning_for: planningFor,
+    added_child: addedChild,
+  });
+}
+
+/** The setup flow was dismissed. Still an answer, and still the end of it. */
+export function trackOnboardingSkip(planningFor?: string): void {
+  trackFunnelEvent('onboarding_skip', { planning_for: planningFor });
+}
+
+/** A child profile was created -- the first real object in a family account. */
+export function trackChildCreated(): void {
+  trackFunnelEvent('child_created');
+}
+
+/** A food reached the pantry. */
+export function trackFoodAdded(category?: string): void {
+  trackFunnelEvent('food_added', { category });
+}
+
+/** A meal was put on the planner, which is the thing the app is for. */
+export function trackMealPlanned(mealSlot?: string): void {
+  trackFunnelEvent('meal_planned', { meal_slot: mealSlot });
 }
 
 /**

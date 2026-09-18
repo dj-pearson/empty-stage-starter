@@ -7,6 +7,7 @@ import { runOptimisticInsert, runOptimisticMutation } from "@/lib/optimisticMuta
 import { useAuth } from "./AuthContext";
 import { parsePlanEntryRow, parsePlanEntryRows } from "@/lib/normalizeEntities";
 import { addIsoDays } from "@/lib/date-utils";
+import { trackActivationOnce } from "@/lib/activationFunnel";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -132,7 +133,13 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
           logLabel: 'Supabase addPlanEntry error:',
           toastMessage: "Couldn't save that meal — it's been removed. Please try again.",
         },
-      );
+      // US-707: a meal on the planner is the activation step -- it is the
+      // thing the app is for. Fired only on a landed insert: a meal the server
+      // refused was rolled back off the screen, and counting it would be
+      // counting a thing that did not happen.
+      ).then(({ error }) => {
+        if (!error) trackActivationOnce('meal_planned', userId, { meal_slot: entry.meal_slot });
+      });
     } else {
       setPlanEntriesRaw(prev => [...prev, { ...entry, id: generateId() }]);
     }
@@ -153,7 +160,10 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
           logLabel: 'Supabase addPlanEntries error:',
           toastMessage: "Couldn't save those meals — they've been removed. Please try again.",
         },
-      );
+      ).then(({ error }) => {
+        // A generated week is one activation, not seven.
+        if (!error) trackActivationOnce('meal_planned', userId, { meal_slot: entries[0]?.meal_slot });
+      });
     } else {
       const newEntries = entries.map(e => ({ ...e, id: generateId() }));
       setPlanEntriesRaw(prev => [...prev, ...newEntries]);

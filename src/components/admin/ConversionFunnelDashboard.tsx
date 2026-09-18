@@ -30,11 +30,20 @@ import {
   Eye,
   UserPlus,
   ClipboardCheck,
+  PlayCircle,
+  Baby,
+  Apple,
+  CalendarCheck,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase-platform';
 import { format, subDays } from 'date-fns';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import {
+  totalsFromFunnelEvents,
+  type FunnelEventRow,
+  type FunnelEventTotals,
+} from '@/lib/funnelTotals';
 
 interface FunnelStep {
   name: string;
@@ -53,6 +62,12 @@ interface ConversionMetrics {
   onboardingCompleted: number;
   paidConversions: number;
   trialStarts: number;
+  // US-707's activation steps, counted by DISTINCT user rather than by event:
+  // an account is activated once however many foods it adds.
+  onboardingStarts: number;
+  childrenCreated: number;
+  foodsAdded: number;
+  mealsPlanned: number;
 }
 
 interface RecentConversion {
@@ -75,6 +90,10 @@ export function ConversionFunnelDashboard() {
     onboardingCompleted: 0,
     paidConversions: 0,
     trialStarts: 0,
+    onboardingStarts: 0,
+    childrenCreated: 0,
+    foodsAdded: 0,
+    mealsPlanned: 0,
   });
   const [recentConversions, setRecentConversions] = useState<RecentConversion[]>([]);
 
@@ -85,32 +104,20 @@ export function ConversionFunnelDashboard() {
       const startDate = subDays(new Date(), days);
 
       // Try to fetch from new funnel_events table first (for accurate page views)
-      let funnelMetrics: {
-        pageViews: number;
-        quizStarts: number;
-        quizCompletes: number;
-        emailCaptures: number;
-        signups: number;
-        trialStarts: number;
-        paidConversions: number;
-      } | null = null;
+      let funnelMetrics: FunnelEventTotals | null = null;
 
       try {
+        // user_id as well as event_type: the activation steps are counted by
+        // distinct account, not by row. A household that adds forty foods
+        // activated once, and a step that can exceed the step above it is not
+        // a funnel.
         const { data: funnelEvents, error: funnelError } = await supabase
           .from('funnel_events')
-          .select('event_type')
+          .select('event_type, user_id')
           .gte('created_at', startDate.toISOString());
 
         if (!funnelError && funnelEvents && funnelEvents.length > 0) {
-          funnelMetrics = {
-            pageViews: funnelEvents.filter(e => e.event_type === 'landing_view').length,
-            quizStarts: funnelEvents.filter(e => e.event_type === 'quiz_start').length,
-            quizCompletes: funnelEvents.filter(e => e.event_type === 'quiz_complete').length,
-            emailCaptures: funnelEvents.filter(e => e.event_type === 'email_capture').length,
-            signups: funnelEvents.filter(e => e.event_type === 'signup').length,
-            trialStarts: funnelEvents.filter(e => e.event_type === 'trial_start').length,
-            paidConversions: funnelEvents.filter(e => e.event_type === 'paid_conversion').length,
-          };
+          funnelMetrics = totalsFromFunnelEvents(funnelEvents as FunnelEventRow[]);
         }
       } catch {
         // funnel_events table may not exist yet, fall through to legacy data
@@ -209,16 +216,21 @@ export function ConversionFunnelDashboard() {
       // Use actual page views if available, otherwise estimate (typically 3-5x quiz starts)
       const pageViews = funnelMetrics?.pageViews || Math.max(quizStarts * 4, legacyQuizStarts * 4);
 
-      // Count users who completed onboarding
-      let onboardingCompleted = 0;
-      try {
-        const { count } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('onboarding_completed', true)
-          .gte('created_at', startDate.toISOString());
-        onboardingCompleted = count || 0;
-      } catch { /* profiles may not have onboarding_completed */ }
+      // Count users who completed onboarding. funnel_events is the better
+      // source once it has rows -- it is the same user_id the domain tables
+      // carry -- but profiles.onboarding_completed covers every account from
+      // before US-707 started emitting the event, so it stays as the fallback.
+      let onboardingCompleted = funnelMetrics?.onboardingCompletes ?? 0;
+      if (onboardingCompleted === 0) {
+        try {
+          const { count } = await supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .eq('onboarding_completed', true)
+            .gte('created_at', startDate.toISOString());
+          onboardingCompleted = count || 0;
+        } catch { /* profiles may not have onboarding_completed */ }
+      }
 
       setMetrics({
         pageViews,
@@ -229,6 +241,10 @@ export function ConversionFunnelDashboard() {
         onboardingCompleted,
         paidConversions,
         trialStarts,
+        onboardingStarts: funnelMetrics?.onboardingStarts ?? 0,
+        childrenCreated: funnelMetrics?.childrenCreated ?? 0,
+        foodsAdded: funnelMetrics?.foodsAdded ?? 0,
+        mealsPlanned: funnelMetrics?.mealsPlanned ?? 0,
       });
 
       // Format recent conversions
@@ -295,6 +311,13 @@ export function ConversionFunnelDashboard() {
       description: `${calculateConversionRate(metrics.signups, metrics.emailCaptures)}% signup rate`,
     },
     {
+      name: 'Onboarding Started',
+      count: metrics.onboardingStarts,
+      icon: <PlayCircle className="w-5 h-5" />,
+      color: 'bg-cyan-500',
+      description: `${calculateConversionRate(metrics.onboardingStarts, metrics.signups)}% of signups open setup`,
+    },
+    {
       name: 'Onboarding Completed',
       count: metrics.onboardingCompleted,
       icon: <ClipboardCheck className="w-5 h-5" />,
@@ -302,11 +325,32 @@ export function ConversionFunnelDashboard() {
       description: `${calculateConversionRate(metrics.onboardingCompleted, metrics.signups)}% onboarding rate`,
     },
     {
+      name: 'Child Added',
+      count: metrics.childrenCreated,
+      icon: <Baby className="w-5 h-5" />,
+      color: 'bg-emerald-500',
+      description: `${calculateConversionRate(metrics.childrenCreated, metrics.onboardingCompleted)}% of finishers add a child`,
+    },
+    {
+      name: 'Pantry Started',
+      count: metrics.foodsAdded,
+      icon: <Apple className="w-5 h-5" />,
+      color: 'bg-lime-500',
+      description: `${calculateConversionRate(metrics.foodsAdded, metrics.onboardingCompleted)}% add a first food`,
+    },
+    {
+      name: 'Meal Planned',
+      count: metrics.mealsPlanned,
+      icon: <CalendarCheck className="w-5 h-5" />,
+      color: 'bg-amber-500',
+      description: `${calculateConversionRate(metrics.mealsPlanned, metrics.foodsAdded)}% go on to plan a meal`,
+    },
+    {
       name: 'Paid Conversions',
       count: metrics.paidConversions,
       icon: <CreditCard className="w-5 h-5" />,
       color: 'bg-green-500',
-      description: `${calculateConversionRate(metrics.paidConversions, metrics.onboardingCompleted)}% paid conversion`,
+      description: `${calculateConversionRate(metrics.paidConversions, metrics.mealsPlanned || metrics.onboardingCompleted)}% paid conversion`,
     },
   ];
 
