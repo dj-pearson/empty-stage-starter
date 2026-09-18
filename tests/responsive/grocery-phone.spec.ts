@@ -198,3 +198,68 @@ test.describe('Grocery aisles fold at phone width', () => {
     expect(hidden).toBe(0);
   });
 });
+
+/**
+ * US-767 AC1: dialogs are bottom sheets at phone width.
+ *
+ * A centred modal on a 390px screen is the wrong shape twice over -- its
+ * controls float in the middle of the display, away from a thumb wrapped
+ * around the phone, and its close button sits at the top right, the furthest
+ * point from that thumb. src/components/ResponsiveDialog.tsx picks a Sheet
+ * below `md:` and a Dialog above it; both are thin wrappers over the same
+ * Radix primitive, so nothing in src/components/ui/ changed.
+ */
+test.describe('Grocery dialogs are bottom sheets at phone width', () => {
+  test.beforeEach(async ({ context, page }) => {
+    await signIn(context);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+  });
+
+  /**
+   * By accessible name, not by `[role="dialog"]`. The cookie consent banner is
+   * a legitimate non-modal dialog (role="dialog" aria-modal="false") pinned to
+   * the bottom edge at full width -- so an unnamed locator picks IT, and at
+   * phone width that happens to satisfy every "anchored to the bottom, full
+   * width" assertion below while testing nothing.
+   */
+  async function openAddItem(page: import('@playwright/test').Page) {
+    await page.getByRole('button', { name: /^Add Item$/i }).first().click();
+    const panel = page.getByRole("dialog", { name: /Add Grocery Item/i });
+    await expect(panel).toBeVisible();
+    return panel;
+  }
+
+  test('the add-item panel is anchored to the bottom edge, full width', async ({ page }) => {
+    const panel = await openAddItem(page);
+    const box = (await panel.boundingBox())!;
+    const viewport = page.viewportSize()!;
+
+    // Anchored to the bottom: its lower edge is the viewport's.
+    expect(Math.round(box.y + box.height)).toBeGreaterThanOrEqual(viewport.height - 2);
+    // Full width, rather than a centred card with a gutter either side.
+    expect(Math.round(box.width)).toBe(viewport.width);
+    // And it does not swallow the whole screen.
+    expect(box.height).toBeLessThan(viewport.height);
+  });
+
+  test('opening it does not make the page pan sideways', async ({ page }) => {
+    await openAddItem(page);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `the sheet overflows by ${overflow}px`).toBeLessThanOrEqual(0);
+  });
+
+  test('a desktop still gets a centred dialog', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(300);
+    const panel = await openAddItem(page);
+    const box = (await panel.boundingBox())!;
+
+    // Centred with a gutter, not edge to edge.
+    expect(box.width).toBeLessThan(1280);
+    expect(box.y).toBeGreaterThan(0);
+    expect(Math.round(box.y + box.height)).toBeLessThan(900);
+  });
+});
