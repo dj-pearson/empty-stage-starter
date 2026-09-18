@@ -423,3 +423,69 @@ export function planGroceryMerge(
 
   return { inserts, updates };
 }
+
+/**
+ * Which rows are a second MEASURE of an ingredient rather than a duplicate of
+ * it (US-820).
+ *
+ * planGroceryMerge deliberately keeps "2 lb flour" and "3 cups flour" as two
+ * rows, because there is no honest way to add a mass to a volume without
+ * knowing the ingredient's density -- summing them gave "5 lb", which is worse
+ * than two rows. But two rows both reading Flour look like a mess the shopper
+ * should tidy, and the obvious tidy-up is deleting one, which silently drops a
+ * real requirement from a recipe.
+ *
+ * So the list has to say it meant this. This returns, per row id, the other
+ * measures of the same ingredient, already formatted, for the row to show.
+ *
+ * The predicate is the merge's own: `recognised` and a different family, which
+ * is exactly what splitByUnitFamily uses to decide there had to be two rows.
+ * Mirroring it rather than re-deriving it is the point -- a row is told it is a
+ * separate measure if and only if that is why it exists.
+ *
+ * So two rows both in mass are NOT reported. The merge would have combined
+ * them, so two of them existing means a person made them that way; calling that
+ * deliberate would be a lie, and the shopper should tidy it. An UNRECOGNISED
+ * unit is not reported either: a bare "2" beside "1 lb" is sloppy entry, and
+ * splitByUnitFamily folds it into the first real bucket rather than giving it a
+ * row. Note that "bag" IS recognised, as family `package`, so "2 lb flour" and
+ * "1 bag flour" genuinely are two rows and do get the note.
+ */
+export function separateMeasureNotes(
+  items: ReadonlyArray<ExistingGroceryItem>
+): Map<string, string[]> {
+  const byIngredient = new Map<string, ExistingGroceryItem[]>();
+  for (const item of items) {
+    const key = ingredientMatchKey(item.name ?? '');
+    if (!key) continue;
+    const bucket = byIngredient.get(key);
+    if (bucket) bucket.push(item);
+    else byIngredient.set(key, [item]);
+  }
+
+  const notes = new Map<string, string[]>();
+  for (const bucket of byIngredient.values()) {
+    if (bucket.length < 2) continue;
+
+    // One entry per row, so a row is only ever told about families other than
+    // its own.
+    const norms = bucket.map((item) => normalize(item.quantity ?? 1, item.unit));
+    for (let i = 0; i < bucket.length; i++) {
+      if (!norms[i].recognised) continue;
+      const others: string[] = [];
+      for (let j = 0; j < bucket.length; j++) {
+        if (i === j || !norms[j].recognised || norms[j].family === norms[i].family) continue;
+        others.push(describeMeasure(bucket[j]));
+      }
+      if (others.length > 0) notes.set(bucket[i].id, others);
+    }
+  }
+  return notes;
+}
+
+/** "2 lb", or just "2" when the row carries no unit. */
+function describeMeasure(item: ExistingGroceryItem): string {
+  const qty = formatQuantity(Number.isFinite(item.quantity as number) ? (item.quantity as number) : 0);
+  const unit = (item.unit ?? '').trim();
+  return unit ? `${qty} ${unit}` : qty;
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { separateMeasureNotes } from "@/lib/groceryMerge";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
@@ -182,6 +183,18 @@ export default function Grocery() {
     () => splitByChecked(filteredGroceryItems),
     [filteredGroceryItems]
   );
+
+  /**
+   * US-820: which rows are a second MEASURE rather than a duplicate.
+   *
+   * The merge keeps "2 lb flour" and "3 cups flour" apart because adding a mass
+   * to a volume needs the ingredient's density -- the old code guessed and
+   * turned that into "5 lb". On screen they just read as Flour twice, and the
+   * obvious tidy-up is deleting one, which drops a requirement a recipe has.
+   * Computed over the ACTIVE rows only: a purchased row is not something the
+   * shopper is about to delete by mistake.
+   */
+  const measureNotes = useMemo(() => separateMeasureNotes(activeItems), [activeItems]);
 
   // Progress calculation
   const totalItems = filteredGroceryItems.length;
@@ -1092,6 +1105,14 @@ export default function Grocery() {
                               {item.notes}
                             </p>
                           )}
+                          {measureNotes.has(item.id) && (
+                            // Stacked under the name rather than beside the
+                            // quantity, so it survives the phone layout where
+                            // name and quantity already share a line.
+                            <p className="text-xs text-secondary truncate">
+                              also needed: {measureNotes.get(item.id)!.join(', ')}
+                            </p>
+                          )}
                           {item.barcode && (
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Barcode className="h-3 w-3" />
@@ -1195,6 +1216,15 @@ export default function Grocery() {
                               {item.notes && (
                                 <p className="text-xs text-muted-foreground italic truncate">
                                   {item.notes}
+                                </p>
+                              )}
+                              {measureNotes.has(item.id) && (
+                                // Same note as the virtualised row above. Both
+                                // renderers need it: the list switches between
+                                // them on size, and a shopper does not know
+                                // which one they are looking at.
+                                <p className="text-xs text-secondary truncate">
+                                  also needed: {measureNotes.get(item.id)!.join(', ')}
                                 </p>
                               )}
                               {item.barcode && (
