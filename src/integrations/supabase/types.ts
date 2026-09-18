@@ -6362,8 +6362,8 @@ export type Database = {
           metadata: Json | null
           name: string
           name_normalized: string
-          package_size: number | null
           package_quantity_text: string | null
+          package_size: number | null
           package_unit: string | null
           parent_food_id: string | null
           protein_g_100: number | null
@@ -6401,8 +6401,8 @@ export type Database = {
           metadata?: Json | null
           name: string
           name_normalized?: string
-          package_size?: number | null
           package_quantity_text?: string | null
+          package_size?: number | null
           package_unit?: string | null
           parent_food_id?: string | null
           protein_g_100?: number | null
@@ -6440,8 +6440,8 @@ export type Database = {
           metadata?: Json | null
           name?: string
           name_normalized?: string
-          package_size?: number | null
           package_quantity_text?: string | null
+          package_size?: number | null
           package_unit?: string | null
           parent_food_id?: string | null
           protein_g_100?: number | null
@@ -18891,16 +18891,6 @@ export type Database = {
         Returns: number
       }
       can_add_child: { Args: { user_uuid: string }; Returns: boolean }
-      check_ai_budget: {
-        Args: { p_budget_type?: string; p_user_id: string }
-        Returns: {
-          alert_level: string
-          budget_limit_cents: number
-          current_spend_cents: number
-          percentage_used: number
-          within_budget: boolean
-        }[]
-      }
       catalog_upsert_from_serving: {
         Args: {
           p_allergens?: string[]
@@ -18918,6 +18908,16 @@ export type Database = {
           p_source?: string
         }
         Returns: string
+      }
+      check_ai_budget: {
+        Args: { p_budget_type?: string; p_user_id: string }
+        Returns: {
+          alert_level: string
+          budget_limit_cents: number
+          current_spend_cents: number
+          percentage_used: number
+          within_budget: boolean
+        }[]
       }
       check_and_unlock_achievements: {
         Args: {
@@ -19596,6 +19596,7 @@ export type Database = {
       normalize_product_name: { Args: { p_name: string }; Returns: string }
       normalize_title: { Args: { title_text: string }; Returns: string }
       parse_quantity: { Args: { quantity_str: string }; Returns: number }
+      parse_serving_grams: { Args: { p_serving: string }; Returns: number }
       plan_name_for_apple_product: {
         Args: { p_product_id: string }
         Returns: string

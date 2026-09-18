@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import path from 'path';
 import { buildGroceryRow } from './groceryRow';
 import { createGroceryExecutor } from './webSyncQueue';
@@ -105,10 +105,16 @@ describe('the mobile queue replays every kind it declares', () => {
   it('nothing enqueues a kind that cannot be replayed', () => {
     const callers: string[] = [];
     const walk = (dir: string) => {
-      for (const entry of readdirSync(dir)) {
+      // readdirSync with withFileTypes, not readdir + statSync: the second
+      // form stats a path it has already been told about, which is a
+      // check-then-use on the file system (CodeQL js/file-system-race). It is
+      // also a syscall per entry for information the directory read already
+      // carried.
+      for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+        const entry = dirent.name;
         if (entry === 'node_modules' || entry === '.git') continue;
         const full = path.join(dir, entry);
-        if (statSync(full).isDirectory()) {
+        if (dirent.isDirectory()) {
           walk(full);
           continue;
         }

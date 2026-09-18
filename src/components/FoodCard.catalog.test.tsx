@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import path from 'path';
 import { FoodCard } from './FoodCard';
 import type { CatalogEntry } from '@/lib/effectiveFood';
@@ -120,9 +120,15 @@ describe('unverified nutrition stays out of totals and the ladder', () => {
   it('no product file reads catalog nutrition without checking verification', () => {
     const offenders: string[] = [];
     const walk = (dir: string) => {
-      for (const entry of readdirSync(dir)) {
+      // readdirSync with withFileTypes, not readdir + statSync: the second
+      // form stats a path it has already been told about, which is a
+      // check-then-use on the file system (CodeQL js/file-system-race). It is
+      // also a syscall per entry for information the directory read already
+      // carried.
+      for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+        const entry = dirent.name;
         const full = path.join(dir, entry);
-        if (statSync(full).isDirectory()) {
+        if (dirent.isDirectory()) {
           walk(full);
           continue;
         }

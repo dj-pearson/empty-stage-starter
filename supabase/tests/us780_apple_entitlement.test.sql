@@ -256,6 +256,22 @@ BEGIN
     CREATE ROLE us780_client NOLOGIN;
   EXCEPTION WHEN duplicate_object THEN NULL;
   END;
+
+  -- PostgreSQL 16 changed what CREATE ROLE hands its creator. A CREATEROLE
+  -- user now gets ADMIN on the new role but NOT SET, so the `SET LOCAL ROLE`
+  -- below fails with "permission denied to set role". A superuser is exempt,
+  -- which is exactly why this case passes under a psql running as a real
+  -- superuser and fails in CI, where Supabase's `postgres` is not one. The
+  -- suite was only ever run the first way until the CI gate started running
+  -- it, so the difference had never shown up.
+  BEGIN
+    EXECUTE format('GRANT us780_client TO %I WITH SET TRUE', current_user);
+  EXCEPTION
+    -- PG15 and earlier have no WITH SET clause, and grant the creator full
+    -- membership on creation anyway, so there is nothing to grant there.
+    WHEN syntax_error OR invalid_grant_operation THEN NULL;
+  END;
+
   GRANT USAGE ON SCHEMA public TO us780_client;
   GRANT SELECT, INSERT ON public.professional_custom_domains TO us780_client;
   GRANT SELECT ON public.subscription_plans, public.user_subscriptions,

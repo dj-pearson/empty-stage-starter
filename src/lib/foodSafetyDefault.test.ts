@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from './foodSafetyDefault';
 import { acceptedRowsToFoods } from './receiptParse';
@@ -79,9 +79,15 @@ describe('no acquisition path hardcodes a safe food', () => {
     // Product code only. A test fixture saying is_safe: true is a test fixture.
     const offenders: string[] = [];
     const walk = (dir: string) => {
-      for (const entry of readdirSync(dir)) {
+      // readdirSync with withFileTypes, not readdir + statSync: the second
+      // form stats a path it has already been told about, which is a
+      // check-then-use on the file system (CodeQL js/file-system-race). It is
+      // also a syscall per entry for information the directory read already
+      // carried.
+      for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+        const entry = dirent.name;
         const full = path.join(dir, entry);
-        if (statSync(full).isDirectory()) walk(full);
+        if (dirent.isDirectory()) walk(full);
         else if (
           /\.tsx?$/.test(entry) &&
           !/\.test\.|\.spec\./.test(entry) &&
