@@ -499,7 +499,7 @@ jobs:
             echo "::error::SQL suites failed:$failed"
             exit 1
           fi
-          echo "All SQL suites passed.
+          echo "All SQL suites passed."
 
       - name: Stop local Supabase
         if: always()
