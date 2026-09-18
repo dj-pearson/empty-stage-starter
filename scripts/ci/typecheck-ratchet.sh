@@ -15,7 +15,61 @@
 set -uo pipefail
 
 BASELINE_FILE=".ci/typecheck-baseline.txt"
-LOG=/tmp/typecheck-ratchet.log
+# US-802: a stable path, so the workflow can upload it as an artifact and a
+# developer can read the whole thing without reproducing the build.
+LOG="${TYPECHECK_LOG:-/tmp/typecheck-ratchet.log}"
+
+# ---------------------------------------------------------------------------
+# US-802: on a regression, show what THIS branch added.
+#
+# The old answer was `grep ... | tail -40`. Errors sort by path and this repo's
+# backlog lives in src/pages/*, so that tail is a CONSTANT -- the same forty
+# pre-existing errors print every time and the ones the branch added are
+# earlier in the walk, never shown. It cost two round trips once.
+#
+# The merge-base run is expensive, so it is paid ONLY when the ratchet is about
+# to fail. On the happy path nothing extra runs. node_modules is symlinked into
+# the worktree rather than reinstalled -- a second `npm ci` would cost more than
+# the answer is worth, and the dependency tree is the same commit-to-commit for
+# the overwhelming majority of PRs (if it is not, the base run simply fails and
+# we fall back to the grouped listing).
+#
+# $1 = kind (typecheck|lint)   $2 = head log   $3 = command to run in the base
+explain_regression() {
+  local kind="$1" head_log="$2" base_cmd="$3"
+  local base_ref="${GITHUB_BASE_REF:-}" base_sha="" worktree base_log
+
+  if [ -n "$base_ref" ]; then
+    git fetch --quiet --depth=50 origin "$base_ref" 2>/dev/null || true
+    base_sha="$(git merge-base HEAD "origin/${base_ref}" 2>/dev/null || true)"
+  fi
+  if [ -z "$base_sha" ]; then
+    base_sha="$(git merge-base HEAD origin/main 2>/dev/null || true)"
+  fi
+
+  if [ -z "$base_sha" ]; then
+    echo "No merge base available, so the list below is every error, grouped by file."
+    node scripts/ci/new-errors.mjs --kind="$kind" --head="$head_log" --head-root="$(pwd)"
+    return 0
+  fi
+
+  worktree="$(mktemp -d)/base"
+  base_log="$(mktemp)"
+  if ! git worktree add --quiet --detach "$worktree" "$base_sha" 2>/dev/null; then
+    echo "Could not check out the merge base ${base_sha}; listing every error by file instead."
+    node scripts/ci/new-errors.mjs --kind="$kind" --head="$head_log" --head-root="$(pwd)"
+    return 0
+  fi
+
+  ln -s "$(pwd)/node_modules" "$worktree/node_modules" 2>/dev/null || true
+  echo "Re-running ${kind} on the merge base (${base_sha}) to isolate what this branch added..."
+  ( cd "$worktree" && eval "$base_cmd" ) > "$base_log" 2>&1 || true
+
+  node scripts/ci/new-errors.mjs --kind="$kind" --head="$head_log" --base="$base_log" \
+    --head-root="$(pwd)" --base-root="$worktree"
+
+  git worktree remove --force "$worktree" 2>/dev/null || true
+}
 
 baseline="$(tr -dc '0-9' < "$BASELINE_FILE" 2>/dev/null)"
 if [ -z "${baseline}" ]; then
@@ -70,8 +124,9 @@ fi
 
 if [ "$count" -gt "$baseline" ]; then
   echo "::error title=Typecheck regression::${count} type errors exceeds the baseline of ${baseline}. Your change introduced new type errors — fix them. Do NOT raise .ci/typecheck-baseline.txt."
-  # Surface a sample of the errors to aid debugging.
-  grep -E 'error TS' "$LOG" | tail -40
+  explain_regression typecheck "$LOG" "npm run typecheck"
+  echo ""
+  echo "The full log is at ${LOG} and is uploaded as the 'typecheck-log' artifact."
   exit 1
 fi
 

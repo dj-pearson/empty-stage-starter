@@ -23,10 +23,28 @@ describe('CI gates are wired into a workflow', () => {
       .map((f) => readFileSync(path.join(workflowsDir, f), 'utf8'))
       .join('\n');
 
-    const unwired = readdirSync(ciDir)
-      .filter((f) => f.endsWith('.sh') || f.endsWith('.mjs'))
-      .filter((f) => !workflows.includes(`scripts/ci/${f}`));
+    const entries = readdirSync(ciDir).filter((f) => f.endsWith('.sh') || f.endsWith('.mjs'));
 
+    // A script can be reached through another one rather than straight from a
+    // step -- new-errors.mjs (US-802) is called by both ratchets, not by the
+    // workflow. Reachability is computed rather than assumed, so a genuinely
+    // orphaned script is still caught: it has to be named by a workflow, or by
+    // a scripts/ci entry that is itself reachable.
+    const wired = new Set(entries.filter((f) => workflows.includes(`scripts/ci/${f}`)));
+    for (let pass = 0; pass < entries.length; pass++) {
+      const before = wired.size;
+      for (const reached of [...wired]) {
+        const body = readFileSync(path.join(ciDir, reached), 'utf8');
+        for (const candidate of entries) {
+          if (!wired.has(candidate) && body.includes(`scripts/ci/${candidate}`)) {
+            wired.add(candidate);
+          }
+        }
+      }
+      if (wired.size === before) break;
+    }
+
+    const unwired = entries.filter((f) => !wired.has(f));
     expect(unwired).toEqual([]);
   });
 });

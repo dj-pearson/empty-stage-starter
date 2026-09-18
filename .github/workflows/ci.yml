@@ -164,6 +164,20 @@ jobs:
       # hard gate.
       - name: Lint ratchet
         run: bash scripts/ci/lint-ratchet.sh
+        env:
+          LINT_LOG: ${{ runner.temp }}/lint-ratchet.log
+
+      # US-802: the whole log, so a developer can read it without reproducing
+      # the build. `if: always()` because the interesting case is the failing
+      # one -- a log uploaded only on success is a log nobody needs.
+      - name: Upload the lint log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-log
+          path: ${{ runner.temp }}/lint-ratchet.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # Real type-check (the old `tsc --noEmit` checked zero files — root
       # tsconfig has files:[]). `npm run typecheck` runs `tsc -b` over the
@@ -180,6 +194,18 @@ jobs:
       # tsconfig-bypass.json: docs/typecheck-backlog.md.)
       - name: Typecheck ratchet
         run: bash scripts/ci/typecheck-ratchet.sh
+        env:
+          TYPECHECK_LOG: ${{ runner.temp }}/typecheck-ratchet.log
+
+      # US-802, same reasoning as the lint log above.
+      - name: Upload the typecheck log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-log
+          path: ${{ runner.temp }}/typecheck-ratchet.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # US-545: fail on newly-introduced explicit `any` in changed src/ files
       # (diff-scoped; the pre-existing backlog is untouched).
