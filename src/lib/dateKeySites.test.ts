@@ -151,9 +151,14 @@ describe('the sites a wrong day actually costs someone', () => {
   it('the streak walks ISO keys instead of stepping a Date', () => {
     // Two bugs in one line before: the UTC shift, and setDate() across a DST
     // boundary landing on the same calendar day twice.
-    const src = read('src/pages/Home.tsx');
-    expect(src).toMatch(/addIsoDays\(todayKey, -d\)/);
-    expect(src).not.toMatch(/date\.setDate\(date\.getDate\(\) - d\)/);
+    //
+    // The walk moved out of Home.tsx in US-781, which collapsed four streak
+    // rules into one. The property is the same and it is asserted where the
+    // code now is.
+    const src = read('src/lib/streakRules.ts');
+    expect(src).toMatch(/addIsoDays\(todayKey, -offset\)/);
+    expect(src).not.toMatch(/\.setDate\(/);
+    expect(read('src/pages/Home.tsx')).not.toMatch(/date\.setDate\(date\.getDate\(\) - d\)/);
   });
 
   it('the generated plan steps the key, not a Date', () => {

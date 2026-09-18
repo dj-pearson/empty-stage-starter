@@ -95,17 +95,29 @@ describe("the call sites follow those rules", () => {
     "src/components/AchievementsView.tsx",
   ];
 
-  it.each(STREAK_FILES)("%s buckets entry dates locally", (file) => {
+  /**
+   * These two used to walk the calendar themselves, each parsing entry dates
+   * into Dates and taking a rounded day difference -- rounded because a DST
+   * day is 23 or 25 hours and Math.floor read two consecutive days as one.
+   *
+   * US-781 collapsed four streak rules into src/lib/streakRules.ts, which
+   * sidesteps the arithmetic entirely: it walks ISO day KEYS with addIsoDays
+   * and never builds a Date to subtract. So the property these asserted is
+   * still held, one level down, and the assertion follows the code.
+   */
+  it.each(STREAK_FILES)("%s does not do day arithmetic of its own", (file) => {
     const src = read(file);
-    expect(src).toMatch(/parseIsoDate\(entry\.date\)/);
-    // The raw form is the bug; it must not come back.
+    expect(src).toMatch(/currentStreak\(/);
+    expect(src).not.toMatch(/dayDiff/);
+    // The raw form is the bug; it must not come back anywhere.
     expect(src).not.toMatch(/new Date\(entry\.date\)/);
   });
 
-  it.each(STREAK_FILES)("%s rounds its day difference", (file) => {
-    const src = read(file);
-    expect(src).toMatch(/dayDiff = Math\.round\(/);
-    expect(src).not.toMatch(/dayDiff = Math\.floor\(/);
+  it("the shared streak rule steps day keys rather than Dates", () => {
+    const src = read("src/lib/streakRules.ts");
+    expect(src).toMatch(/addIsoDays\(todayKey, -offset\)/);
+    expect(src).not.toMatch(/setDate\(/);
+    expect(src).not.toMatch(/dayDiff/);
   });
 
   it("TodayMeals asks isToday about a locally-parsed key", () => {
