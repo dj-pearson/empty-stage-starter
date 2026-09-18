@@ -77,6 +77,31 @@ if [ -z "${baseline}" ]; then
   exit 1
 fi
 
+# A polluted node_modules is not this tree.
+#
+# `deno` with the default DENO_DIR writes its package store to
+# node_modules/.deno INSIDE the repo -- 1.3 GB of a second dependency tree,
+# the US-813 second-React problem. tsc walks it for @types and the count comes
+# back HIGHER than the tree's own: measured 838 against a true 805 on the same
+# commit, and the merge-base worktree this script builds symlinks the same
+# node_modules, so even the "what did this branch add" isolation below reports
+# phantom regressions.
+#
+# That is a whole afternoon if you do not know to look, and the shape of it is
+# a local number nobody can reproduce later -- which is exactly the discrepancy
+# US-790 exists to explain. src/test/reactEnvironment.test.tsx catches the
+# directory for the vitest run; this catches it for the count.
+#
+# Refuse rather than report. A number measured against the wrong dependency
+# tree is worse than no number, because it looks like a number.
+if [ -d "node_modules/.deno" ]; then
+  echo "::error title=Polluted node_modules::node_modules/.deno exists, so tsc is reading a second dependency tree layered under this one and the count would be wrong (measured +33 on a tree whose true count was 805)."
+  echo "    Deno wrote it because DENO_DIR was left at its default inside the repo."
+  echo "    Fix:   rm -rf node_modules/.deno && npm ci"
+  echo "    Avoid: export DENO_DIR=\"\${TMPDIR:-/tmp}/deno-cache\" before running deno."
+  exit 1
+fi
+
 npm run typecheck > "$LOG" 2>&1
 status=$?
 count="$(grep -cE 'error TS' "$LOG" || true)"
