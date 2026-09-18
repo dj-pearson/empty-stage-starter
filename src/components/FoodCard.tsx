@@ -120,7 +120,15 @@ export const FoodCard = memo(function FoodCard({
         "transition-all duration-200 hover:shadow-md group relative overflow-hidden",
         config.border,
         hasAllergen && "ring-2 ring-destructive/50",
-        stockStatus === "out" && "opacity-70",
+        // US-817: a muted surface, not opacity-70. Dimming the whole card
+        // composites every colour inside it toward the page background, and
+        // axe measured the result: the "Safe" badge's white label read 3.13:1
+        // on a washed #579f70 that is really #117937 at 5.51:1, and the
+        // quantity line read 3.23:1. Out-of-stock is already carried by the
+        // destructive "Out" badge, the icon and the red quantity, so the dim
+        // was decoration paid for in contrast. Matches how `low` marks itself
+        // one line down.
+        stockStatus === "out" && "bg-muted/40 dark:bg-muted/20",
         stockStatus === "low" && "bg-amber-50/50 dark:bg-amber-950/10"
       )}
     >

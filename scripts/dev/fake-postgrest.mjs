@@ -126,17 +126,24 @@ const GROCERY_ITEMS = [
  * A pantry: safe foods, try-bites and neither, across the categories the app
  * knows. Eight rows is enough for the category sections to render more than one
  * group without making a scan crawl.
+ *
+ * US-817: quantities now span all three stock states. Every row used to be
+ * quantity 1, which getStockStatus reads as "low" -- so the accessibility scan
+ * had never once rendered an out-of-stock card, and the whole-card dim
+ * FoodCard applied to those (opacity-70, since replaced with a muted surface)
+ * washed every colour on it toward the page background without any gate
+ * noticing. 0 is out, 1-2 is low, above that is ok.
  */
 const FOODS = [
-  ['Whole milk', 'dairy', true, false, 'Dairy'],
-  ['Sharp cheddar', 'dairy', false, true, 'Dairy'],
-  ['Chicken nuggets', 'protein', true, false, 'Freezer'],
-  ['Broccoli florets', 'vegetable', false, true, 'Produce'],
-  ['Bananas', 'fruit', true, false, 'Produce'],
-  ['Strawberries', 'fruit', false, true, 'Produce'],
-  ['Buttered pasta', 'carb', true, false, 'Pantry'],
-  ['Goldfish crackers', 'snack', true, false, 'Pantry'],
-].map(([name, category, is_safe, is_try_bite, aisle], i) => ({
+  ['Whole milk', 'dairy', true, false, 'Dairy', 4],
+  ['Sharp cheddar', 'dairy', false, true, 'Dairy', 1],
+  ['Chicken nuggets', 'protein', true, false, 'Freezer', 0],
+  ['Broccoli florets', 'vegetable', false, true, 'Produce', 6],
+  ['Bananas', 'fruit', true, false, 'Produce', 2],
+  ['Strawberries', 'fruit', false, true, 'Produce', 0],
+  ['Buttered pasta', 'carb', true, false, 'Pantry', 3],
+  ['Goldfish crackers', 'snack', true, false, 'Pantry', 1],
+].map(([name, category, is_safe, is_try_bite, aisle, quantity], i) => ({
   id: `dddddddd-0000-4000-8000-00000000000${i}`,
   household_id: HOUSEHOLD_ID,
   user_id: TEST_USER_ID_LITERAL,
@@ -146,7 +153,7 @@ const FOODS = [
   is_try_bite,
   needs_review: false,
   aisle,
-  quantity: 1,
+  quantity,
   unit: 'count',
   created_at: `2026-09-0${i + 1}T00:00:00.000Z`,
   updated_at: `2026-09-0${i + 1}T00:00:00.000Z`,

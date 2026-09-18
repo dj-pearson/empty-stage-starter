@@ -107,11 +107,31 @@ p {
 
 /* Small text (captions, helper text) - minimum 14px */
 small,
-.text-small,
-.text-xs {
+.text-small {
   font-size: 14px !important;
   line-height: 1.5;
   color: hsl(var(--foreground));
+}
+
+/*
+  US-817: size only, never colour.
+
+  `.text-xs` is Tailwind's font-size utility, not a class this file owns, and
+  this stylesheet is imported after index.css -- so a `color` declared here
+  lands later in the bundle than every Tailwind text-colour utility and beats
+  all of them at equal specificity. The Badge base class list carries
+  `text-xs`, which is why `<Badge variant="secondary">` rendered #0f1729 (light
+  --foreground) instead of the white its own `text-secondary-foreground` asked
+  for -- 3.24:1 on the darkened green, and the same story for
+  `text-primary-foreground` on /pricing. It also silently flattened the ~490
+  `text-xs text-muted-foreground` helper labels in src/ to full foreground.
+
+  The 14px floor is the point of the rule and stays. The colour was redundant
+  with `body` on a plain surface and wrong on any tinted one, so it goes.
+*/
+.text-xs {
+  font-size: 14px !important;
+  line-height: 1.5;
 }
 
 /* Links - follow design system tokens */
@@ -152,9 +172,18 @@ nav a:hover,
   opacity: 0.85;
 }
 
-/* Muted text - uses theme token for proper light/dark contrast */
+/*
+  Muted text - uses theme token for proper light/dark contrast.
+
+  US-817: `.text-secondary` was in this list and is not ours -- it is
+  Tailwind's utility for the brand green, and forcing it to grey with
+  !important turned all four call sites (Analytics.tsx:181, Home.tsx:508,
+  Grocery.tsx:1116 and :1230) into muted text that no one asked for. Same
+  mistake as `.text-xs` above, one selector along. `.text-muted` and the
+  `.text-gray-*` pair stay: the first is this file's own class, and the second
+  is a guard on a palette value that reads 2.8:1 on white.
+*/
 .text-muted,
-.text-secondary,
 .text-gray-500 {
   color: hsl(var(--muted-foreground)) !important;
 }

@@ -1073,12 +1073,16 @@ const Landing = () => {
                     Start Free Trial <ArrowRight className="h-5 w-5" aria-hidden="true" />
                   </Button>
                 </Link>
+                {/* US-817: bg-transparent is load-bearing. The `outline`
+                    variant ships `bg-background`, so without it this button
+                    painted #faf8f5 under its own white label -- 1.06:1, white
+                    on off-white, sitting on the orange section. */}
                 <Link to="/pricing">
                   <Button
                     size="lg"
                     variant="outline"
                     aria-label="View EatPal pricing plans"
-                    className="border-2 border-white/30 text-white hover:bg-white/10 text-lg px-10 py-7 rounded-full"
+                    className="bg-transparent border-2 border-white/30 text-white hover:bg-white/10 text-lg px-10 py-7 rounded-full"
                   >
                     View Pricing
                   </Button>

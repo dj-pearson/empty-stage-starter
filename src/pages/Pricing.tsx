@@ -598,16 +598,24 @@ export default function Pricing() {
               <p className="text-xs text-primary font-medium mt-2">Free, Pro & Family Plus plans</p>
             </div>
           </div>
-          <div className="flex items-start gap-4 p-6 rounded-2xl bg-secondary/50 border border-border/50">
-            <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center shrink-0">
-              <ShieldCheck className="h-6 w-6 text-foreground" />
+          {/*
+            US-817: this card used to sit on bg-secondary/50 -- a 50% wash of
+            the brand green, #86b996 -- and set its body copy in
+            text-muted-foreground, which is tuned against --background and
+            measured 2.78:1 there. It now mirrors the "For Families" card
+            beside it: a 5% tint is a surface you can set text on, and the
+            accent line takes the green itself rather than a grey.
+          */}
+          <div className="flex items-start gap-4 p-6 rounded-2xl bg-secondary/5 border border-secondary/10">
+            <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+              <ShieldCheck className="h-6 w-6 text-secondary" />
             </div>
             <div>
               <h2 className="text-xl font-heading font-bold text-foreground mb-1">For Therapists & Clinics</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Multi-client management, food chain design tools, shared progress data, and insurance-compatible documentation for feeding professionals
               </p>
-              <p className="text-xs text-muted-foreground font-medium mt-2">Professional plan — start with 3 families</p>
+              <p className="text-xs text-secondary font-medium mt-2">Professional plan — start with 3 families</p>
             </div>
           </div>
         </div>
