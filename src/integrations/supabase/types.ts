@@ -18272,11 +18272,17 @@ export type Database = {
       }
       conversion_funnel_summary: {
         Row: {
+          children_created: number | null
           date: string | null
           email_capture_rate: number | null
           email_captures: number | null
+          foods_added: number | null
           landing_to_quiz_rate: number | null
           landing_views: number | null
+          meals_planned: number | null
+          onboarding_completes: number | null
+          onboarding_skips: number | null
+          onboarding_starts: number | null
           overall_conversion_rate: number | null
           paid_conversions: number | null
           quiz_completes: number | null
