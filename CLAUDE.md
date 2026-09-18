@@ -169,6 +169,18 @@ const channel = supabase.channel('changes').on('postgres_changes',
 
 Migrations: `supabase migration new <name>` → edit SQL → `supabase db push` → `supabase gen types typescript --local > src/integrations/supabase/types.ts`.
 
+**Checking migrations without Docker.** `bash scripts/dev/local-sql-suite.sh` builds a
+throwaway Postgres from `scripts/dev/supabase-shim.sql` (the roles, `auth.uid()`,
+`storage.*`, `cron.schedule` and the `supabase_realtime` publication that migrations
+assume exist), applies all of `supabase/migrations` in order, then runs every
+`supabase/tests/*.test.sql` -- which is the content of CI's Migration Test job, the one
+that needs `supabase start` and therefore Docker. It is not a replacement: pgvector is
+not packaged, so `20260709000004_agent_knowledge.sql` is skipped, and the roles are
+stand-ins. It answers the question that actually bites, which is whether the history
+applies in order and the suites pass against what it builds. Run it from scratch rather
+than incrementally: a re-run against a half-built database fails on `CREATE POLICY`
+conflicts and hides the real error underneath.
+
 CLI version is **pinned to 2.116.0** in both Supabase jobs in `ci.yml` (US-760); use the
 same one locally or the generated `types.ts` will differ cosmetically from CI's. Paths
 inside `supabase/config.toml` are checked by `scripts/ci/check-supabase-config.mjs`, which
