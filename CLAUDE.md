@@ -204,6 +204,32 @@ The DB is shared by every shipped iOS version still on users' phones. Min-suppor
 
 If a migration cannot be made backward-compatible (e.g. urgent security fix), it must be paired with a force-update screen in the app *and* with a min-version bump shipped at least one release before the migration lands.
 
+**`REVOKE ... FROM PUBLIC` does not revoke anything here (US-804).** Supabase sets a
+schema-level default ACL on `public`
+(`{anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}`), so every function
+you create gets EXECUTE granted *directly* to those three roles at creation. Revoking
+PUBLIC removes a grant that was never what made the function callable, and the function
+stays reachable over PostgREST RPC. Fourteen functions in this repo carried that statement
+and were still callable by `anon`; thirteen were SECURITY DEFINER, and one of them
+(`rpc_merge_items`) rewrites a household's pantry with no `auth.uid()` check.
+
+Name the roles:
+
+```sql
+-- private: cron, triggers, internal helpers
+REVOKE ALL ON FUNCTION public.my_fn(uuid) FROM PUBLIC, anon, authenticated;
+
+-- a signed-in user calls it
+REVOKE ALL ON FUNCTION public.my_fn(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.my_fn(uuid) TO authenticated;
+```
+
+Then assert the privilege, not the statement: `has_function_privilege('anon', 'public.my_fn(uuid)',
+'EXECUTE')` must be false. A test that greps for the word REVOKE is what produced the false
+confidence in the first place -- see `supabase/tests/us804_function_privileges.test.sql`. Not
+everything wants locking: the signup flow runs before a session exists, so
+`is_disposable_email_domain` is deliberately callable by `anon`.
+
 **Always enable RLS on new tables**:
 ```sql
 ALTER TABLE public.my_table ENABLE ROW LEVEL SECURITY;
