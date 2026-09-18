@@ -22,11 +22,33 @@ const CSS = readFileSync(path.join(process.cwd(), 'src', 'index.css'), 'utf8');
 /** The `:root` block, i.e. the light theme. Dark overrides live under .dark. */
 const LIGHT_BLOCK = CSS.slice(0, CSS.indexOf('.dark'));
 
-function token(name: string): [number, number, number] {
+/**
+ * The `.dark` block, up to the first theme that follows it.
+ *
+ * US-822 only ever checked the light block, and the dark theme turned out to
+ * be the worse of the two: white on the dark --secondary measured 2.32:1,
+ * against 3.35:1 for the light one that prompted the story.
+ */
+const DARK_BLOCK = (() => {
+  const start = CSS.indexOf('.dark {');
+  const rest = CSS.slice(start);
+  const end = rest.indexOf('.high-contrast');
+  return end === -1 ? rest : rest.slice(0, end);
+})();
+
+function readToken(block: string, name: string, where: string): [number, number, number] {
   const pattern = `--${name}:\\s*(\\d+(?:\\.\\d+)?)\\s+(\\d+(?:\\.\\d+)?)%\\s+(\\d+(?:\\.\\d+)?)%`;
-  const match = LIGHT_BLOCK.match(new RegExp(pattern));
-  if (!match) throw new Error(`token --${name} not found in the light theme block`);
+  const match = block.match(new RegExp(pattern));
+  if (!match) throw new Error(`token --${name} not found in the ${where} theme block`);
   return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function token(name: string): [number, number, number] {
+  return readToken(LIGHT_BLOCK, name, 'light');
+}
+
+function darkToken(name: string): [number, number, number] {
+  return readToken(DARK_BLOCK, name, 'dark');
 }
 
 function hslToRgb([h, s, l]: [number, number, number]): [number, number, number] {
@@ -68,48 +90,74 @@ const SURFACES: Record<string, [number, number, number]> = {
 
 const AA_NORMAL_TEXT = 4.5;
 
-/**
- * Tokens that do NOT meet AA yet, with the ratio measured the day this test
- * landed (US-822).
- *
- * A ratchet rather than a skip, in the same spirit as the lint and typecheck
- * baselines: the assertion is >=, so darkening either colour tightens the gate
- * on its own and lightening one fails. Both are brand colours used across the
- * app, and changing them is a design decision with a blast radius, which is
- * why they are recorded here instead of being quietly adjusted.
- */
-const KNOWN_BELOW_AA: Record<string, number> = {
-  // Floors sit a hundredth below the measurement so a float that rounds to the
-  // same displayed value does not fail the gate on arithmetic alone.
-  secondary: 3.34, // measured 3.35
-  accent: 4.32, // measured 4.33
-};
-
 describe('light-theme tokens carry their own text', () => {
   for (const name of ['primary', 'destructive', 'secondary', 'accent']) {
     it(`${name} reads against its foreground`, () => {
       const bg = hslToRgb(token(name));
       const fg = hslToRgb(token(`${name}-foreground`));
       const ratio = contrast(fg, bg);
-      const floor = KNOWN_BELOW_AA[name] ?? AA_NORMAL_TEXT;
       expect(
         ratio,
-        `--${name}-foreground on --${name} is ${ratio.toFixed(2)}:1 (floor ${floor})`
-      ).toBeGreaterThanOrEqual(floor);
+        `--${name}-foreground on --${name} is ${ratio.toFixed(2)}:1`
+      ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    });
+  }
+});
+
+/**
+ * The dark theme, which this test did not cover until US-822 closed.
+ *
+ * It was the worse of the two. White on the dark --secondary measured 2.32:1
+ * and on --accent 3.66:1, so a secondary button in dark mode was close to
+ * unreadable while the light-theme version that prompted the story sat at
+ * 3.35:1.
+ *
+ * The fix is not always to darken. A fill and the same colour used as text
+ * pull in opposite directions on a dark background: darkening helps white on
+ * the fill and hurts the colour as text. For --secondary and --accent no
+ * lightness satisfies both with a white foreground, so the foreground moved to
+ * slate instead -- which is what --primary already does here, for exactly this
+ * reason.
+ */
+const DARK_SURFACES: Record<string, [number, number, number]> = {
+  '--background': hslToRgb([222, 47, 11]),
+  '--card': hslToRgb([217, 33, 17]),
+  '--muted': hslToRgb([217, 33, 25]),
+};
+
+describe('dark-theme tokens carry their own text', () => {
+  for (const name of ['primary', 'destructive', 'secondary', 'accent']) {
+    it(`${name} reads against its foreground`, () => {
+      const bg = hslToRgb(darkToken(name));
+      const fg = hslToRgb(darkToken(`${name}-foreground`));
+      const ratio = contrast(fg, bg);
+      expect(
+        ratio,
+        `dark --${name}-foreground on --${name} is ${ratio.toFixed(2)}:1`
+      ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
     });
   }
 
-  it('lists only the tokens still known to be below AA', () => {
-    // So the exception list cannot outlive the exception. When secondary or
-    // accent is fixed, this fails and the entry comes out.
-    expect(Object.keys(KNOWN_BELOW_AA).sort()).toEqual(['accent', 'secondary']);
-  });
+  for (const name of ['secondary', 'accent']) {
+    for (const [surfaceName, surface] of Object.entries(DARK_SURFACES)) {
+      it(`${name} on the dark ${surfaceName}`, () => {
+        const ratio = contrast(hslToRgb(darkToken(name)), surface);
+        expect(
+          ratio,
+          `dark --${name} on ${surfaceName} is ${ratio.toFixed(2)}:1`
+        ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+      });
+    }
+  }
 });
 
 describe('tokens used as text read on every surface they are drawn on', () => {
   // primary and destructive both render as text -- links, active nav labels,
-  // inline error copy -- not only as button fills.
-  for (const name of ['primary', 'destructive']) {
+  // inline error copy -- not only as button fills. So do secondary (2 sites)
+  // and accent (13, mostly icons beside a heading), which is why US-822 could
+  // not be closed by fixing the fill alone: the light --accent cleared 4.33:1
+  // on white and still read 3.57:1 as text on the warm callout tint.
+  for (const name of ['primary', 'destructive', 'secondary', 'accent']) {
     for (const [surfaceName, surface] of Object.entries(SURFACES)) {
       it(`${name} on the ${surfaceName}`, () => {
         const ratio = contrast(hslToRgb(token(name)), surface);
@@ -153,13 +201,30 @@ describe('tokens used as text read on every surface they are drawn on', () => {
 const WHITE: [number, number, number] = [255, 255, 255];
 
 /** Ratios measured 2026-09-11, floors a hundredth below so float rounding alone
- *  cannot fail the gate. */
+ *  cannot fail the gate.
+ *
+ *  --safe-food came off this list when US-822 closed: it is the same green as
+ *  --secondary, so darkening that to 27% moved it too, and white on it now
+ *  measures 5.50:1. It is asserted at the full AA floor below. --try-bite is
+ *  still here because its arithmetic fix collapses it into --primary, which is
+ *  a design decision rather than a darkening. */
 const BADGE_FILL_FLOORS: Record<string, number> = {
-  'safe-food': 3.32, // measured 3.33
   'try-bite': 2.84, // measured 2.85
 };
 
+/** Food-status tokens now held to the full AA floor. */
+const BADGE_FILLS_AT_AA = ['safe-food'];
+
 describe('the food-status tokens carry the white text drawn on them', () => {
+  for (const name of BADGE_FILLS_AT_AA) {
+    it(`white on --${name} meets AA`, () => {
+      const ratio = contrast(WHITE, hslToRgb(token(name)));
+      expect(ratio, `white on --${name} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(
+        AA_NORMAL_TEXT
+      );
+    });
+  }
+
   for (const name of Object.keys(BADGE_FILL_FLOORS)) {
     it(`white on --${name}`, () => {
       // Literal white, not a -foreground token: these badges are written
@@ -173,9 +238,10 @@ describe('the food-status tokens carry the white text drawn on them', () => {
     });
   }
 
-  it('says out loud that neither of them meets AA yet', () => {
-    // So a reader of a green run does not take these two for passing. When one
-    // is fixed its floor becomes 4.5 and it comes off this list.
+  it('says out loud which of them still does not meet AA', () => {
+    // So a reader of a green run does not take a listed token for passing.
+    // When one is fixed its floor becomes 4.5 and it comes off this list --
+    // which is what happened to --safe-food when US-822 closed.
     for (const [name, floor] of Object.entries(BADGE_FILL_FLOORS)) {
       expect(floor, `--${name} is listed as below AA but its floor is at or above it`).toBeLessThan(
         AA_NORMAL_TEXT
