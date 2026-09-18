@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
-import { createWebSyncQueue, createGroceryExecutor } from "@/lib/webSyncQueue";
+import { createWebSyncQueue,
+  purgeForeignQueuesFromBrowser, createGroceryExecutor } from "@/lib/webSyncQueue";
 
 /**
  * US-823: replay the web app's queued writes.
@@ -25,6 +26,16 @@ export function useOfflineSyncDriver(userId: string | null | undefined): void {
 
   useEffect(() => {
     if (!userId) return;
+
+    // US-823: a shared tablet accumulates one queue per person who has ever
+    // signed in on it, because sign-out deliberately KEEPS the signed-out
+    // user's queue (their unsent writes are the thing this story protects).
+    // Dropping the other accounts' queues here bounds that growth without
+    // touching the one that is about to be drained.
+    const purged = purgeForeignQueuesFromBrowser(userId);
+    if (purged.length > 0) {
+      logger.info(`[webSyncQueue] purged ${purged.length} queue(s) belonging to other accounts`);
+    }
 
     let cancelled = false;
 

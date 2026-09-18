@@ -76,6 +76,59 @@ const localQueueStorage = {
   },
 };
 
+/**
+ * Forget the queues that belong to nobody who is going to come back (US-823).
+ *
+ * THIS IS NOT "clear on sign-out", and the difference is the point. AC5 asks
+ * for the queue to be cleared when a user signs out, and the reason it gives is
+ * that "a queue drained into the wrong household is worse than losing the
+ * write". The per-user key already makes that impossible -- a drain only ever
+ * reads `eatpal.web.syncQueue.<the signed-in user>` -- and clearing on sign-out
+ * would destroy exactly what this story exists to protect: a parent who adds
+ * items in a shop with no signal, signs out on a shared tablet, and signs back
+ * in later would lose them. src/lib/signOutScrub.ts records the same decision
+ * and keeps the key.
+ *
+ * What is left over is growth. A queue belonging to an account that never
+ * returns sits in localStorage forever. So on sign-in, drop every OTHER user's
+ * queue and keep the current one: the owner's writes survive a sign-out, and a
+ * shared device does not accumulate one queue per person who ever used it.
+ *
+ * Household scoping does not apply. Every op the web queue accepts addresses a
+ * row the server already has, by id (grocery.toggle, grocery.update,
+ * grocery.delete) -- a row id names its own household, and RLS refuses a user
+ * who is not a member. There is no "drain into the wrong household" to prevent.
+ */
+export function purgeForeignQueues(
+  currentUserId: string,
+  keys: readonly string[]
+): string[] {
+  const keep = webQueueKey(currentUserId);
+  return keys.filter((key) => key.startsWith(`${WEB_QUEUE_KEY_PREFIX}.`) && key !== keep);
+}
+
+/**
+ * Apply purgeForeignQueues to localStorage. Never throws: a browser blocking
+ * storage must not break sign-in.
+ */
+export function purgeForeignQueuesFromBrowser(currentUserId: string): string[] {
+  let keys: string[] = [];
+  try {
+    keys = Object.keys(localStorage);
+  } catch {
+    return [];
+  }
+  const doomed = purgeForeignQueues(currentUserId, keys);
+  for (const key of doomed) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* blocked; nothing to do */
+    }
+  }
+  return doomed;
+}
+
 export function createWebSyncQueue(userId: string, storage: QueueStorage = localQueueStorage) {
   return createOfflineQueue<WebQueuedOpKind>(storage, webQueueKey(userId));
 }

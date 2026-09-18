@@ -15,6 +15,8 @@ import {
   pendingWriteCount,
   webQueueKey,
   type WebQueuedOp,
+  purgeForeignQueues,
+  WEB_QUEUE_KEY_PREFIX,
 } from "./webSyncQueue";
 
 /** A chainable stand-in for the PostgREST builder, recording what it was told. */
@@ -166,5 +168,59 @@ describe("end to end", () => {
     const result = await createWebSyncQueue("user-a").drain(createGroceryExecutor(client));
     expect(result.failed).toBe(1);
     expect(await pendingWriteCount("user-a")).toBe(1);
+  });
+});
+
+describe('queues belonging to other accounts', () => {
+  /**
+   * US-823 AC5, read carefully. It asks for the queue to be "cleared on sign
+   * out", and the reason it gives is that "a queue drained into the wrong
+   * household is worse than losing the write". The per-user key already makes
+   * that impossible, and clearing on sign-out would destroy exactly what this
+   * story protects: a parent who adds items in a shop with no signal, signs
+   * out on a shared tablet and signs back in later. signOutScrub.ts records
+   * the same decision and keeps the key.
+   *
+   * What is actually left is growth, so the purge runs on SIGN-IN and keeps
+   * the current user's queue.
+   */
+  const keyFor = (id: string) => `${WEB_QUEUE_KEY_PREFIX}.${id}`;
+
+  it('keeps the signed-in user their own queue', () => {
+    const keys = [keyFor('user-a'), keyFor('user-b')];
+    expect(purgeForeignQueues('user-a', keys)).toEqual([keyFor('user-b')]);
+  });
+
+  it('drops every other account, not just the first', () => {
+    const keys = [keyFor('a'), keyFor('b'), keyFor('c'), keyFor('d')];
+    expect(purgeForeignQueues('c', keys).sort()).toEqual(
+      [keyFor('a'), keyFor('b'), keyFor('d')].sort()
+    );
+  });
+
+  it('touches nothing that is not a sync queue', () => {
+    // The scrub policy in signOutScrub.ts owns every other key, and a purge
+    // that reached past its own prefix would be deleting app state nobody
+    // asked it to.
+    const keys = [
+      'kid-meal-planner',
+      'eatpal_feature_flags',
+      'cookie-consent',
+      keyFor('other'),
+    ];
+    expect(purgeForeignQueues('me', keys)).toEqual([keyFor('other')]);
+  });
+
+  it('is a no-op when the only queue is the current one', () => {
+    expect(purgeForeignQueues('me', [keyFor('me')])).toEqual([]);
+  });
+
+  it('is a no-op on an empty storage', () => {
+    expect(purgeForeignQueues('me', [])).toEqual([]);
+  });
+
+  it('does not mistake a prefix for a match', () => {
+    // A key that merely starts with the same characters is not one of ours.
+    expect(purgeForeignQueues('me', ['eatpal.web.syncQueueBackup'])).toEqual([]);
   });
 });
