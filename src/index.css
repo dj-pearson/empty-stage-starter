@@ -1017,3 +1017,100 @@ a[target="_blank"][aria-label]::after {
     to { transform: scale(1); }
   }
 }
+/*
+  US-772: the landing page's entrance animations, in CSS instead of GSAP.
+  See src/lib/scrollReveal.ts for why the hidden state is scoped to .js-reveal
+  rather than applied directly -- these routes are prerendered, and a crawler
+  running no JavaScript would otherwise read the page at opacity 0.
+*/
+.js-reveal .animate-section,
+.js-reveal .animate-item {
+  opacity: 0;
+  transform: translateY(2rem);
+  transition:
+    opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.js-reveal .animate-item {
+  transform: translateY(1.25rem);
+}
+
+.js-reveal .animate-section.is-visible,
+.js-reveal .animate-item.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+  A second guard, independent of the script. observeReveal already declines to
+  add .js-reveal under reduced motion, but if the class is on the element for
+  any other reason -- a stale render, a future caller -- the copy still has to
+  be readable.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .js-reveal .animate-section,
+  .js-reveal .animate-item {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}
+
+/*
+  US-772: the hero's entrance and its two ambient blobs, in CSS instead of GSAP.
+
+  The entrance runs on first paint rather than after requestIdleCallback. The
+  GSAP version deferred to idle and then used `fromTo`, which set opacity 0 on
+  a headline the prerendered HTML had already painted -- so the visible
+  behaviour was the H1 appearing, disappearing, and fading back in. Running it
+  as a CSS animation with `backwards` fill removes that flash and keeps the
+  work off the main thread.
+*/
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--hero-rise-from, 3rem));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero-rise {
+  animation: hero-rise 900ms cubic-bezier(0.215, 0.61, 0.355, 1) backwards;
+}
+
+/* The GSAP timeline's "-=0.6" offsets, as delays: 0s, 0.4s, 0.6s. */
+.hero-rise-1 { animation-delay: 0ms; }
+.hero-rise-2 { animation-delay: 400ms; --hero-rise-from: 1.875rem; }
+.hero-rise-3 { animation-delay: 600ms; --hero-rise-from: 1.25rem; }
+
+@keyframes blob-drift-a {
+  from { transform: scale(1) rotate(0deg); }
+  to { transform: scale(1.1) rotate(10deg); }
+}
+
+@keyframes blob-drift-b {
+  from { transform: scale(1) rotate(0deg); }
+  to { transform: scale(1.2) rotate(-10deg); }
+}
+
+.bg-blob-1 {
+  animation: blob-drift-a 15s ease-in-out infinite alternate;
+}
+
+.bg-blob-2 {
+  animation: blob-drift-b 18s ease-in-out 2s infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise,
+  .bg-blob-1,
+  .bg-blob-2 {
+    animation: none;
+  }
+}

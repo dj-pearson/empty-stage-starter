@@ -200,3 +200,33 @@ real refactor rather than a budget change: `supabase` is imported synchronously
 across the app, and vite.config.ts's chunking is, per the header of the check
 script, empirically derived scar tissue. Worth doing, not worth smuggling into
 a CI fix.
+
+## 2026-09-18 — GSAP leaves the landing route (US-772)
+
+`vendor-gsap` 62000 -> 43000, `vendor-animation` 41000 -> 44000. Total
+2398.0 kB gz -> 2388.2 kB.
+
+The chunk sizes are the small half of it. GSAP was used in four places: the
+planner's draggable calendar, and three on the marketing page — Landing's
+scroll reveals, EnhancedHero's entrance timeline, and ParallaxBackground's
+ScrollTrigger scrub. The three marketing ones are a transition, a keyframe
+animation and `useScroll`/`useTransform` from framer-motion, which is already
+in the bundle. So `vendor-gsap` measured 58.3 kB gz before and 40.1 kB after
+(ScrollTrigger and `@gsap/react` are gone; `@gsap/react` had no importers left
+and came out of package.json), and — the point — **no chunk reachable from `/`
+imports it any more.** Only `GSAPCalendarMealPlanner` and `Planner` do.
+`tests/landing-animation.spec.ts` fails if a request for it appears on the
+landing page again.
+
+`vendor-animation` grew 0.3 kB for the two framer-motion hooks, on a chunk the
+landing route already loads. Budgeted at 44000 rather than the measured 41.2 kB
+so the next hook does not need a budget edit.
+
+`index` came back under its budget in the same change, and that one was a
+regression this branch had already shipped: `src/lib/activationFunnel.ts` is
+imported by three contexts, which are eager, so it pulled `conversion-tracking`
+and `fetchAllRows` into the entry chunk — 124.9 kB against a 124.0 kB budget,
+0.9 kB of analytics downloaded before a visitor can read anything, to describe
+something they have not done yet. Every call site is a user action, so
+`src/lib/trackActivation.ts` now loads it with a dynamic import.
+

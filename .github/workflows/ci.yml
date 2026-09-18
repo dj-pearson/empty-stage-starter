@@ -349,7 +349,7 @@ jobs:
       # coverage, executed never. This is the job that has the artifact, so this
       # is where they have to run.
       - name: Dist-dependent unit gates
-        run: npx vitest run src/lib/headingOutline.test.ts src/lib/cspInlineScripts.test.ts
+        run: npx vitest run src/lib/headingOutline.test.ts src/lib/cspInlineScripts.test.ts src/lib/scrollReveal.test.ts
 
       # E2E_TARGET=dist makes playwright.config.ts serve the downloaded dist/
       # through scripts/dev/serve-dist.mjs on 4173, which resolves URLs the way

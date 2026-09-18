@@ -11,7 +11,7 @@ import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { parseKidRow, parseKidRows, upsertById } from "@/lib/normalizeEntities";
 import { deleteStorageObject } from '@/lib/storageCleanup';
-import { trackActivationOnce } from "@/lib/activationFunnel";
+import { trackActivationOnce } from "@/lib/trackActivation";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';

@@ -11,7 +11,7 @@ import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtim
 import { parseFoodRow, parseFoodRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
 import { resolveFood, type CatalogEntry, type EffectiveFood } from "@/lib/effectiveFood";
-import { trackActivationOnce } from "@/lib/activationFunnel";
+import { trackActivationOnce } from "@/lib/trackActivation";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';

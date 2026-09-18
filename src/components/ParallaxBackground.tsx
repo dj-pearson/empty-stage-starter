@@ -1,9 +1,20 @@
 import { useRef } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { useGSAP } from "@gsap/react";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 
-gsap.registerPlugin(ScrollTrigger, useGSAP);
+/**
+ * US-772: the same parallax, on framer-motion instead of GSAP ScrollTrigger.
+ *
+ * This component was the only importer of @gsap/react in the tree, and one of
+ * two importers of gsap. framer-motion is already a dependency and already
+ * animates eighteen other files here, so the parallax costs nothing extra;
+ * ScrollTrigger cost a chunk the landing page fetched to move eight decorative
+ * blobs.
+ *
+ * `useScroll` with `offset` gives the same window GSAP's
+ * `start: "top top", end: "bottom top"` described, and `useTransform` is the
+ * scrub. What is new is `useReducedMotion`: the GSAP version moved these for
+ * everyone, including the people who asked their operating system not to.
+ */
 
 interface ParallaxElement {
   icon?: string;
@@ -30,54 +41,76 @@ const DEFAULT_ELEMENTS: ParallaxElement[] = [
   { shape: "circle", color: "bg-accent/10", size: 150, top: "85%", left: "60%", depth: 0.25 },
 ];
 
-export function ParallaxBackground({ className = "" }: { className?: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+/** How far a depth-1 element travels across the container's scroll window. */
+const TRAVEL_PX = 500;
 
-  useGSAP(() => {
-    if (!containerRef.current) return;
+/** GSAP added 45 degrees to each element's resting rotation over the scrub. */
+const ROTATION_SWEEP_DEG = 45;
 
-    const elements = gsap.utils.toArray<HTMLElement>(".parallax-item");
-
-    elements.forEach((el) => {
-      const depth = parseFloat(el.dataset.depth || "0.1");
-      const rotation = parseFloat(el.dataset.rotation || "0");
-
-      // Create a smoother parallax effect with scrub
-      gsap.to(el, {
-        y: -(depth * 500), // Move up as we scroll down
-        rotation: rotation + 45,
-        ease: "none",
-        scrollTrigger: {
-          trigger: containerRef.current,
-          start: "top top",
-          end: "bottom top",
-          scrub: 1, // Smooth scrubbing
-        },
-      });
-    });
-  }, { scope: containerRef });
+function ParallaxItem({
+  element,
+  progress,
+  still,
+}: {
+  element: ParallaxElement;
+  progress: ReturnType<typeof useScroll>["scrollYProgress"];
+  still: boolean;
+}) {
+  const resting = element.rotation ?? 0;
+  const y = useTransform(progress, [0, 1], [0, -(element.depth * TRAVEL_PX)]);
+  const rotate = useTransform(progress, [0, 1], [resting, resting + ROTATION_SWEEP_DEG]);
 
   return (
-    <div ref={containerRef} className={`absolute inset-0 overflow-hidden pointer-events-none ${className}`}>
-      {DEFAULT_ELEMENTS.map((el, i) => (
+    <motion.div
+      className={`parallax-item flex items-center justify-center absolute ${element.color || ""}`}
+      style={{
+        top: element.top,
+        left: element.left,
+        // Held at the resting transform under reduced motion rather than
+        // unmounted: the blobs are part of the composition, it is the movement
+        // that was not asked for.
+        y: still ? 0 : y,
+        rotate: still ? resting : rotate,
+      }}
+      data-depth={element.depth}
+      data-rotation={element.rotation}
+    >
+      {element.icon && <span style={{ fontSize: element.size }}>{element.icon}</span>}
+      {element.shape === "circle" && (
         <div
+          className={`rounded-full ${element.color}`}
+          style={{ width: element.size, height: element.size, filter: "blur(40px)" }}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+export function ParallaxBackground({ className = "" }: { className?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useReducedMotion();
+
+  // "start start" to "end start" is GSAP's top-top/bottom-top window: the
+  // scrub runs from the container's top meeting the viewport's top until its
+  // bottom does.
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end start"],
+  });
+
+  return (
+    <div
+      ref={containerRef}
+      className={`absolute inset-0 overflow-hidden pointer-events-none ${className}`}
+      aria-hidden="true"
+    >
+      {DEFAULT_ELEMENTS.map((element, i) => (
+        <ParallaxItem
           key={i}
-          className={`parallax-item flex items-center justify-center absolute ${el.color || ""}`}
-          style={{
-            top: el.top,
-            left: el.left,
-          }}
-          data-depth={el.depth}
-          data-rotation={el.rotation}
-        >
-          {el.icon && <span style={{ fontSize: el.size }}>{el.icon}</span>}
-          {el.shape === "circle" && (
-            <div
-              className={`rounded-full ${el.color}`}
-              style={{ width: el.size, height: el.size, filter: "blur(40px)" }}
-            />
-          )}
-        </div>
+          element={element}
+          progress={scrollYProgress}
+          still={Boolean(prefersReducedMotion)}
+        />
       ))}
     </div>
   );

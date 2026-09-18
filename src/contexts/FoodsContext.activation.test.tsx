@@ -93,6 +93,17 @@ async function mountFoods(): Promise<FoodsCtx> {
 
 const FOOD = { name: 'Oat milk', category: 'dairy' as const, is_safe: true, is_try_bite: false };
 
+/**
+ * Settle the `import('./activationFunnel')` inside trackActivation, so a
+ * negative assertion is about the event and not about module loading.
+ * Importing it here resolves the same module registry entry the wrapper hits.
+ */
+async function flushActivationImport() {
+  await import('@/lib/activationFunnel');
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 beforeEach(() => {
   localStorage.clear();
   trackFunnelEvent.mockClear();
@@ -107,8 +118,12 @@ describe('food_added', () => {
     await ctx.addFood({ ...FOOD, name: 'Bananas', category: 'fruit' });
     await ctx.addFood({ ...FOOD, name: 'Pasta', category: 'carb' });
 
+    // US-772 made the funnel a dynamic import, so the call lands a microtask
+    // after addFood resolves rather than inside it. waitFor, not a bare read.
+    await waitFor(() =>
+      expect(trackFunnelEvent.mock.calls.filter((c) => c[0] === 'food_added')).toHaveLength(1),
+    );
     const activation = trackFunnelEvent.mock.calls.filter((c) => c[0] === 'food_added');
-    expect(activation).toHaveLength(1);
     expect(activation[0][1]).toEqual({ category: 'dairy' });
   });
 
@@ -118,6 +133,10 @@ describe('food_added', () => {
     const ctx = await mountFoods();
 
     await ctx.addFood(FOOD);
+
+    // Flush the dynamic import the happy path takes, or "never fired" and
+    // "has not finished importing yet" look identical here.
+    await flushActivationImport();
 
     expect(trackFunnelEvent.mock.calls.filter((c) => c[0] === 'food_added')).toHaveLength(0);
   });

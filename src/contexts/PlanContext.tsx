@@ -7,7 +7,7 @@ import { runOptimisticInsert, runOptimisticMutation } from "@/lib/optimisticMuta
 import { useAuth } from "./AuthContext";
 import { parsePlanEntryRow, parsePlanEntryRows } from "@/lib/normalizeEntities";
 import { addIsoDays } from "@/lib/date-utils";
-import { trackActivationOnce } from "@/lib/activationFunnel";
+import { trackActivationOnce } from "@/lib/trackActivation";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
