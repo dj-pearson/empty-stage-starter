@@ -9,6 +9,13 @@ import {
   toCatalogRow,
   type BarcodeLookupResult,
 } from '../_shared/catalogPromotion.ts';
+import {
+  foodRepoProduct,
+  openFoodFactsProduct,
+  readJsonBody,
+  usableName,
+  usdaFirstFood,
+} from '../_shared/barcodeProviderShape.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -108,10 +115,11 @@ async function lookupOpenFoodFacts(barcode: string): Promise<LookupResult | null
   
   try {
     const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-    const data = await response.json();
-    
-    if (data.status === 1 && data.product) {
-      const product = data.product;
+    // US-805: a 200 is not a hit. OFF answers 200 with {status: 0} for an
+    // unknown barcode, and can answer with a body that is not an object at all.
+    const product = openFoodFactsProduct(await readJsonBody(response));
+
+    if (product) {
       const nutriments = product.nutriments || {};
       
       // Determine category from OFF categories
@@ -154,7 +162,16 @@ async function lookupOpenFoodFacts(barcode: string): Promise<LookupResult | null
       }
       
       const brand = (product.brands || product.brand_owner || "").split(",")[0]?.trim();
-      const displayName = [brand, product.product_name || product.generic_name].filter(Boolean).join(" ");
+      const displayName = [brand, usableName(product.product_name) ?? usableName(product.generic_name)]
+        .filter(Boolean)
+        .join(" ");
+      // US-805: no name is a miss, not a food called "Unknown Product". A
+      // parent mid-shop needs the add-it-yourself path, and a nameless row
+      // reads as a successful scan.
+      if (!usableName(displayName)) {
+        console.log(`Open Food Facts returned a product with no usable name for ${barcode}`);
+        return null;
+      }
 
       // catalog promotion (US-797) reads the same nutriments object but keeps
       // the confirmed-kcal field (`energy-kcal_100g`) separate from the
@@ -169,7 +186,7 @@ async function lookupOpenFoodFacts(barcode: string): Promise<LookupResult | null
 
       return {
         food: {
-          name: displayName || "Unknown Product",
+          name: displayName,
           category,
           serving_size: product.serving_size || product.quantity || undefined,
           package_quantity: product.quantity || product.product_quantity_unit || undefined,
@@ -229,10 +246,11 @@ async function lookupUSDA(barcode: string): Promise<LookupResult | null> {
     // Search by GTIN (barcode)
     const searchUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${barcode}&api_key=${USDA_API_KEY}`;
     const response = await fetch(searchUrl);
-    const data = await response.json();
-    
-    if (data.foods && data.foods.length > 0) {
-      const food = data.foods[0];
+    // US-805: USDA answers 200 with {error: {...}} and has been seen to answer
+    // with a non-array `foods`. Either is a miss, not a food.
+    const food = usdaFirstFood(await readJsonBody(response));
+
+    if (food) {
       const nutrients = food.foodNutrients || [];
       
       // Only the three fields we read. These are USDA's claims about its own
@@ -274,9 +292,17 @@ async function lookupUSDA(barcode: string): Promise<LookupResult | null> {
         return typeof value === 'number' ? value : null;
       };
 
+      // US-805: same rule as OFF above -- a food with no description is a
+      // miss, and the chain moves on to the next provider.
+      const usdaName = usableName(food.description);
+      if (!usdaName) {
+        console.log(`USDA returned a food with no description for ${barcode}`);
+        return null;
+      }
+
       return {
         food: {
-          name: food.description || "Unknown Product",
+          name: usdaName,
           category: food.foodCategory || "Snack",
           serving_size: food.servingSize ? `${food.servingSize}${food.servingSizeUnit || ''}` : undefined,
           ingredients: food.ingredients || undefined,
@@ -289,7 +315,7 @@ async function lookupUSDA(barcode: string): Promise<LookupResult | null> {
         },
         catalogInput: {
           source: 'usda',
-          name: food.description || null,
+          name: usdaName,
           brand: food.brandOwner || food.brandName || null,
           allergens: null,
           caloriesKcal100: getKcalNutrient('energy'),
@@ -326,15 +352,22 @@ async function lookupFoodRepo(barcode: string): Promise<LookupResult | null> {
     // FoodRepo API endpoint (may need adjustment based on actual API)
     const response = await fetch(`https://www.foodrepo.org/api/v3/products/${barcode}`);
 
-    if (response.ok) {
-      const data = await response.json();
+    // US-805: this was the worst of the three -- response.ok and then an
+    // optimistic read, so a 200 carrying {error: ...} produced a food called
+    // "Unknown Product" with no nutrition and handed it to the parent as a hit.
+    // The endpoint also carries a "may need adjustment based on actual API"
+    // note and has never been run against live data, which is exactly when a
+    // shape guard earns its keep.
+    const data = foodRepoProduct(await readJsonBody(response));
+    const foodRepoName = usableName(data?.display_name);
 
+    if (data && foodRepoName) {
       const numberOrNull = (value: unknown): number | null =>
         typeof value === 'number' && Number.isFinite(value) ? value : null;
 
       return {
         food: {
-          name: data.display_name || "Unknown Product",
+          name: foodRepoName,
           category: "Snack",
           serving_size: data.portion_quantity ? `${data.portion_quantity}${data.portion_unit || ''}` : undefined,
           ingredients: undefined,
@@ -347,7 +380,7 @@ async function lookupFoodRepo(barcode: string): Promise<LookupResult | null> {
         },
         catalogInput: {
           source: 'foodrepo',
-          name: data.display_name || null,
+          name: foodRepoName,
           brand: data.brand || null,
           allergens: null,
           // FoodRepo names this field for the unit -- already confirmed kcal.
