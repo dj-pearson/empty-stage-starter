@@ -34,6 +34,12 @@ function supabaseStub(result: { error: unknown }) {
       calls.push({ op: "delete" });
       return builder;
     },
+    // Resolves rather than chaining: an insert names its row in the payload,
+    // so there is no .eq() after it and the executor awaits this directly.
+    insert(row: Record<string, unknown>) {
+      calls.push({ op: "insert", row });
+      return Promise.resolve(result) as unknown as typeof builder;
+    },
     eq(col: string, val: unknown) {
       calls.push({ op: "eq", col, val });
       return Promise.resolve(result) as unknown as typeof builder;
@@ -120,6 +126,35 @@ describe("grocery executor", () => {
     const ok = await createGroceryExecutor(client)(op("grocery.delete", { id: "r1" }));
     expect(ok).toBe(true);
     expect(calls[1]).toEqual({ op: "delete" });
+  });
+
+  it("replays an insert with the row it was given, id and all", async () => {
+    const { client, calls } = supabaseStub({ error: null });
+    const row = { id: "r1", name: "Oat milk", category: "dairy", household_id: "h1" };
+    const ok = await createGroceryExecutor(client)(op("grocery.insert", { row }));
+
+    expect(ok).toBe(true);
+    expect(calls).toEqual([
+      { op: "from", table: "grocery_items" },
+      { op: "insert", row },
+    ]);
+  });
+
+  it("reads a duplicate key on an insert replay as the write having landed", async () => {
+    // The first attempt reached Postgres and the response did not. The row is
+    // there; retrying until the drain discards it would tell the user their
+    // item was lost while it sits in their list.
+    const { client } = supabaseStub({ error: { code: "23505", message: "duplicate key value" } });
+    expect(await createGroceryExecutor(client)(op("grocery.insert", { row: { id: "r1" } }))).toBe(
+      true,
+    );
+  });
+
+  it("still reports failure for an insert the server refused for any other reason", async () => {
+    const { client } = supabaseStub({ error: { code: "42501", message: "row-level security" } });
+    expect(await createGroceryExecutor(client)(op("grocery.insert", { row: { id: "r1" } }))).toBe(
+      false,
+    );
   });
 
   it("reports failure when the server rejects, so the op is retried not lost", async () => {
@@ -340,6 +375,57 @@ describe('projecting the unsent queue onto a server load', () => {
     expect(applyPendingOpsToGroceryItems(server, [op('grocery.teleport', { id: 'a' })])).toEqual(
       server,
     );
+  });
+
+  it('appends a row inserted offline that the load knows nothing about', () => {
+    // The story's own sentence: a parent ADDING items with no signal. Until
+    // US-823's second half the insert was the one write the queue refused.
+    const out = applyPendingOpsToGroceryItems(
+      [item('g1')],
+      [
+        op('grocery.insert', {
+          row: { id: 'g2', name: 'Oat milk', quantity: 2, unit: 'l', category: 'dairy', checked: false },
+        }),
+      ],
+    );
+    expect(out.map((i) => i.id)).toEqual(['g1', 'g2']);
+    expect(out[1].name).toBe('Oat milk');
+    expect(out[1].quantity).toBe(2);
+  });
+
+  it('does not append an insert the load already returned', () => {
+    // The insert landed and the server's copy is in the load. Appending would
+    // be the duplicate row the client-generated id exists to prevent.
+    const server = [item('g2', { name: 'Oat milk' })];
+    const out = applyPendingOpsToGroceryItems(server, [
+      op('grocery.insert', { row: { id: 'g2', name: 'Oat milk', category: 'dairy' } }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].name).toBe('Oat milk');
+  });
+
+  it('applies a later op to a row the same queue inserted', () => {
+    // Added and then ticked off, both offline, in that order.
+    const out = applyPendingOpsToGroceryItems(
+      [],
+      [
+        op('grocery.insert', { row: { id: 'g2', name: 'Oat milk', category: 'dairy' } }),
+        op('grocery.toggle', { id: 'g2', checked: true }),
+      ],
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].checked).toBe(true);
+  });
+
+  it('skips an insert whose row cannot be read as a grocery item', () => {
+    const server = [item('g1')];
+    expect(
+      applyPendingOpsToGroceryItems(server, [
+        op('grocery.insert', { row: null }),
+        op('grocery.insert', { row: 'not an object' }),
+        op('grocery.insert', { row: { id: 'g9' } }),
+      ]),
+    ).toEqual(server);
   });
 
   it('reads the real queue for a user, in order, and nothing for a signed-out visitor', async () => {

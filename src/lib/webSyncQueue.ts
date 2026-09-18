@@ -6,6 +6,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import type { GroceryItem } from "@/types";
+import { parseGroceryItemRow } from "@/lib/normalizeEntities";
 
 /**
  * US-823: the web app's offline write queue.
@@ -19,13 +20,14 @@ import type { GroceryItem } from "@/types";
  * The mechanism is src/lib/offlineQueue.ts, shared with native (US-127). This
  * file is the web binding: which storage, which key, which ops, how to replay.
  *
- * WHAT IS QUEUED, AND WHY NOT INSERTS. Every op here addresses a row the server
- * already has, by id, so replaying it is a plain last-write-wins update that
- * needs no reconciliation. An offline INSERT is a different problem: the id is
- * assigned by the database (see groceryRow.ts -- "the database owns id"), so a
- * queued insert would replay under an id the optimistic row does not have and
- * arrive back over realtime as a second row. That wants a client-generated id
- * and is deliberately not bolted on here.
+ * WHAT IS QUEUED. Every op names its row by id, so replaying it is a plain
+ * last-write-wins write that needs no reconciliation. Inserts were the one
+ * exception for as long as the database owned the id: a queued insert would
+ * replay under an id the optimistic row did not have and arrive back over
+ * realtime as a second row. buildGroceryRow now generates the uuid on the
+ * client (the column keeps its gen_random_uuid default, so nothing older
+ * breaks), which makes the optimistic row and the server row the same row and
+ * a duplicate replay a primary-key violation the executor reads as success.
  *
  * SCOPING. The key carries the user id, so signing in as somebody else cannot
  * drain the previous account's writes into the new one's household. There is no
@@ -33,6 +35,7 @@ import type { GroceryItem } from "@/types";
  */
 
 export type WebQueuedOpKind =
+  | "grocery.insert"
   | "grocery.toggle"
   | "grocery.update"
   | "grocery.delete";
@@ -159,6 +162,22 @@ export function createGroceryExecutor(client: typeof supabase = supabase) {
   return async function executeOp(op: WebQueuedOp): Promise<boolean> {
     try {
       switch (op.kind) {
+        case "grocery.insert": {
+          const { row } = op.payload as { row: Record<string, unknown> };
+          const { error } = await client
+            .from("grocery_items")
+            .insert(row as never);
+          // 23505 is unique_violation: the row is already there, which is the
+          // answer this op wanted. It happens whenever the first attempt
+          // reached Postgres and the response did not -- exactly the case a
+          // retry exists for -- and treating it as a failure would replay a
+          // landed write until the drain dropped it and told the user their
+          // item was discarded while it sat in their list.
+          const duplicate =
+            typeof error === "object" && error !== null && (error as { code?: string }).code === "23505";
+          if (error && !duplicate) logger.warn("[webSyncQueue] insert replay failed", error);
+          return !error || duplicate;
+        }
         case "grocery.toggle": {
           const { id, checked } = op.payload as { id: string; checked: boolean };
           const { error } = await client
@@ -239,6 +258,17 @@ export function applyPendingOpsToGroceryItems(
   for (const op of ops) {
     try {
       switch (op.kind) {
+        case "grocery.insert": {
+          const { row } = op.payload as { row?: unknown };
+          if (!row || typeof row !== "object" || Array.isArray(row)) break;
+          const parsed = parseGroceryItemRow(row as Record<string, unknown>);
+          // An id the load already returned means the insert landed and the
+          // server's copy is the better one; appending would be the duplicate
+          // row this whole design exists to avoid.
+          if (!parsed || next.some((item) => item.id === parsed.id)) break;
+          next = [...next, parsed];
+          break;
+        }
         case "grocery.toggle": {
           const { id, checked } = op.payload as { id?: unknown; checked?: unknown };
           if (typeof id !== "string" || typeof checked !== "boolean") break;

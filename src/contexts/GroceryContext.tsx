@@ -2,9 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
-import { toast } from "sonner";
-import { writeFailureMessage } from "@/lib/networkFailure";
-import { logger } from "@/lib/logger";
 import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtimeSubscription";
 import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { queueWrite, queueWrites } from "@/lib/webSyncQueue";
@@ -119,21 +116,43 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         inferCategory: inferFoodCategory,
       });
 
-      supabase.from('grocery_items').insert(newItem).select().single()
-        .then(({ data, error }) => {
-          if (error) {
-            // US-717: a rejected insert used to append a locally-generated row
-            // anyway, so the item looked added, reached the localStorage
-            // backup, and existed nowhere else.
-            logger.error('Supabase addGroceryItem error:', error);
-            toast.error(
-              writeFailureMessage(error, "Couldn't add that item. Please try again."),
-            );
-          } else if (data) {
-            const inserted = parseGroceryItemRow(data as Record<string, unknown>);
-            if (inserted) setGroceryItemsRaw(prev => upsertById(prev, inserted));
-          }
-        });
+      // US-823: the row is on screen before the request goes out, and it
+      // carries the id the insert is about to use, so the server's copy
+      // REPLACES it rather than arriving beside it. US-717 still holds -- a
+      // rejection that is not an offline failure rolls the row back off the
+      // list, because an item that looks added and exists nowhere else is
+      // worse than one that never appeared.
+      const optimistic: GroceryItem = {
+        ...item,
+        id: newItem.id as string,
+        unit: item.unit ?? '',
+        category: newItem.category as GroceryItem['category'],
+        checked: false,
+      };
+      let inserted: GroceryItem | null = null;
+
+      void runOptimisticMutation<GroceryItem>(
+        setGroceryItemsRaw,
+        prev => [...prev, optimistic],
+        async () => {
+          const { data, error } = await supabase
+            .from('grocery_items')
+            .insert(newItem)
+            .select()
+            .single();
+          if (!error && data) inserted = parseGroceryItemRow(data as Record<string, unknown>);
+          return { error };
+        },
+        {
+          logLabel: 'Supabase addGroceryItem error:',
+          toastMessage: "Couldn't add that item. Please try again.",
+          offlineQueue: () => queueWrite(userId, 'grocery.insert', { row: newItem }),
+        },
+      ).then(() => {
+        // Server defaults (created_at, and any column the table fills in) fold
+        // over the optimistic row by id.
+        if (inserted) setGroceryItemsRaw(prev => upsertById(prev, inserted as GroceryItem));
+      });
     } else {
       setGroceryItemsRaw(prev => [...prev, { ...item, id: generateId(), checked: false }]);
     }
@@ -266,18 +285,39 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         const rows = plan.inserts.map((item) =>
           buildGroceryRow(item, { userId, householdId, inferCategory: inferFoodCategory })
         );
-        supabase.from('grocery_items').insert(rows).select()
-          .then(({ data, error }) => {
-            if (error) {
-              // US-717: no phantom rows for a rejected bulk insert.
-              logger.error('Supabase addGroceryItemsMerged error:', error);
-              toast.error(
-                writeFailureMessage(error, "Couldn't add those items. Please try again."),
-              );
-            } else if (data) {
-              setGroceryItemsRaw(prev => upsertManyById(prev, parseGroceryItemRows(data as unknown[])));
-            }
-          });
+        // US-823: same shape as the single add. The rows carry their own ids,
+        // so they go on screen first and the server's copies replace them by
+        // id; offline, each row is queued as its own op so one the server
+        // later refuses cannot take the rest of the shop with it.
+        const optimisticRows: GroceryItem[] = plan.inserts.map((item, i) => ({
+          ...item,
+          id: rows[i].id as string,
+          unit: item.unit ?? '',
+          category: rows[i].category as GroceryItem['category'],
+          checked: false,
+        }) as GroceryItem);
+        let insertedRows: GroceryItem[] = [];
+
+        void runOptimisticMutation<GroceryItem>(
+          setGroceryItemsRaw,
+          prev => [...prev, ...optimisticRows],
+          async () => {
+            const { data, error } = await supabase.from('grocery_items').insert(rows).select();
+            if (!error && data) insertedRows = parseGroceryItemRows(data as unknown[]);
+            return { error };
+          },
+          {
+            // US-717: no phantom rows for a rejected bulk insert.
+            logLabel: 'Supabase addGroceryItemsMerged error:',
+            toastMessage: "Couldn't add those items. Please try again.",
+            offlineQueue: () =>
+              queueWrites(userId, 'grocery.insert', rows.map((row) => ({ row }))),
+          },
+        ).then(() => {
+          if (insertedRows.length > 0) {
+            setGroceryItemsRaw(prev => upsertManyById(prev, insertedRows));
+          }
+        });
       } else {
         setGroceryItemsRaw(prev => [
           ...prev,

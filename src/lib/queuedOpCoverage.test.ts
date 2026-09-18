@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
+import { buildGroceryRow } from './groceryRow';
+import { createGroceryExecutor } from './webSyncQueue';
 
 /**
  * Every queued op kind has somewhere to be replayed (US-823).
@@ -156,11 +158,52 @@ describe('the web queue replays every kind it declares', () => {
     ).toBe(true);
   });
 
-  it('does not claim a kind the web app cannot queue', () => {
-    // Inserts are deliberately absent: the database owns `id`, so a queued
-    // insert replays under an id the optimistic row does not have and comes
-    // back over realtime as a second row. Declaring one here would invite
-    // exactly that.
-    expect(declared.some((kind) => kind.endsWith('.insert'))).toBe(false);
+  /**
+   * This used to assert the opposite -- that no `.insert` kind was declared at
+   * all -- because while the DATABASE owned `id`, a queued insert would replay
+   * under an id the optimistic row did not have and come back over realtime as
+   * a second row. US-823 closed that by generating the uuid in
+   * buildGroceryRow, so the assertion moves to the thing that now keeps it
+   * safe: a queued insert must carry its own id.
+   *
+   * If buildGroceryRow ever stops setting one, a queued insert becomes the
+   * duplicate-row bug again, and nothing in the type system would notice --
+   * `id` is optional on the generated Insert row precisely because the column
+   * has a default.
+   */
+  it('gives every insert an id on the client, which is what makes queueing one safe', () => {
+    const rows = [1, 2].map(() =>
+      buildGroceryRow(
+        { name: 'Oat milk' },
+        { userId: 'u1', householdId: 'h1', inferCategory: () => 'dairy' },
+      ),
+    );
+
+    for (const row of rows) {
+      expect(typeof row.id).toBe('string');
+      expect(row.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    }
+    // Two adds in the same millisecond are two rows, not one (US-549).
+    expect(rows[0].id).not.toBe(rows[1].id);
+  });
+
+  it('replays an insert idempotently, so a landed write is not dropped as a failure', async () => {
+    // The retry that matters: the first attempt reached Postgres and the
+    // response did not. Replaying it hits the primary key, and reading that as
+    // a failure would retry a landed write until the drain discarded it and
+    // told the user their item was lost while it sat in their list.
+    const executor = createGroceryExecutor({
+      from: () => ({ insert: () => Promise.resolve({ error: { code: '23505' } }) }),
+    } as never);
+
+    const landed = await executor({
+      id: 'op-1',
+      kind: 'grocery.insert',
+      enqueuedAt: 0,
+      attempts: 0,
+      payload: { row: { id: 'row-1', name: 'Oat milk' } },
+    });
+
+    expect(landed).toBe(true);
   });
 });
