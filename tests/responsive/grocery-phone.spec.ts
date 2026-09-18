@@ -263,3 +263,136 @@ test.describe('Grocery dialogs are bottom sheets at phone width', () => {
     expect(Math.round(box.y + box.height)).toBeLessThan(900);
   });
 });
+
+/**
+ * US-767 AC1: the list picker and the add bar stay put while the list scrolls.
+ *
+ * Standing in the frozen aisle with the list scrolled down, both the control
+ * that says WHICH list you are on and the button that adds the thing you just
+ * remembered were off the top of the screen. Getting either back was a scroll
+ * up and a scroll back, one-handed, over a trolley.
+ *
+ * The first version of this stuck the bar at `top-0` and every assertion about
+ * it passed -- it WAS at y=0 and it WAS on screen by the DOM's reckoning. A
+ * screenshot showed it parked underneath Dashboard's fixed mobile <nav>, which
+ * is z-50 and, at this viewport, 97px tall rather than the 56 the shell
+ * reserves for it. Hence the offset test below: "stuck at the top" has to mean
+ * "stuck below the thing that is already there".
+ */
+test.describe('The grocery list picker and add bar stay put while scrolling', () => {
+  const PICKER = '[aria-label="Grocery list"]';
+
+  test.beforeEach(async ({ context, page }) => {
+    await signIn(context);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(750);
+  });
+
+  /** Far enough that both controls would be well off-screen without sticky. */
+  async function scrollDown(page: import('@playwright/test').Page) {
+    await page.evaluate(() => window.scrollTo(0, 900));
+    await page.waitForTimeout(400);
+    expect(await page.evaluate(() => window.scrollY), 'the page did not scroll').toBeGreaterThan(300);
+  }
+
+  test('the picker is still on screen after scrolling the list', async ({ page }) => {
+    const before = (await page.locator(PICKER).boundingBox())!;
+    expect(before.y).toBeGreaterThan(100);
+    await scrollDown(page);
+
+    const after = (await page.locator(PICKER).boundingBox())!;
+    // Without position:sticky this would be a large negative number.
+    expect(after.y).toBeGreaterThan(0);
+    expect(after.y).toBeLessThan(before.y);
+  });
+
+  test('Add Item is still on screen after scrolling the list', async ({ page }) => {
+    await scrollDown(page);
+    const add = page.getByRole('button', { name: /^Add Item$/i }).first();
+    const box = (await add.boundingBox())!;
+    const viewport = page.viewportSize()!;
+
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    // And it still opens the sheet from where it is stuck.
+    await add.click();
+    await expect(page.getByRole('dialog', { name: /Add Grocery Item/i })).toBeVisible();
+  });
+
+  test('the stuck bar sits below the mobile header, not behind it', async ({ page }) => {
+    await scrollDown(page);
+    const gap = await page.evaluate((sel) => {
+      const picker = document.querySelector(sel)!;
+      let bar = picker.parentElement as HTMLElement;
+      while (bar && getComputedStyle(bar).position !== 'sticky') bar = bar.parentElement as HTMLElement;
+      const nav = document.querySelector('nav[aria-label="Mobile header navigation"]')!;
+      return Math.round(bar.getBoundingClientRect().top - nav.getBoundingClientRect().bottom);
+    }, PICKER);
+
+    // This is what pins the 97px offset to something real. A `top-0` bar
+    // reports gap = -97 here and passes every other test in this block.
+    expect(gap, `the sticky bar is ${gap}px from the header's bottom edge`).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThanOrEqual(4);
+  });
+
+  test('the bar does not eat the screen', async ({ page }) => {
+    await scrollDown(page);
+    const share = await page.evaluate((sel) => {
+      const picker = document.querySelector(sel)!;
+      let bar = picker.parentElement as HTMLElement;
+      while (bar && getComputedStyle(bar).position !== 'sticky') bar = bar.parentElement as HTMLElement;
+      const nav = document.querySelector('nav[aria-label="Mobile header navigation"]')!;
+      return (bar.getBoundingClientRect().height + nav.getBoundingClientRect().height) / window.innerHeight;
+    }, PICKER);
+
+    // Measured: a 97px header and a 120px bar on a 664px viewport, 33%, which
+    // leaves about 450px of list. The whole Quick Actions row was the obvious
+    // thing to stick instead -- at 390px each of its four buttons takes a line,
+    // 225px, and sticking it would have put this at 49%. The ceiling is here so
+    // that a third row added to the bar later fails rather than creeps.
+    expect(share, `header plus sticky bar is ${Math.round(share * 100)}% of the viewport`).toBeLessThan(0.36);
+  });
+
+  test('scrolling with the bar stuck still does not pan the page sideways', async ({ page }) => {
+    await scrollDown(page);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    // The bar bleeds -mx-4 to span the gutter, and the picker's own row is
+    // 352px of content in a 270px box: without min-w-0 it pushed the page 38px
+    // wide, which is a sideways pan on every screen of the list.
+    expect(overflow, `the page pans sideways by ${overflow}px`).toBeLessThanOrEqual(0);
+  });
+
+  test('a desktop gets no sticky bar', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(300);
+    const position = await page.evaluate((sel) => {
+      const picker = document.querySelector(sel)!;
+      let el = picker.parentElement as HTMLElement;
+      while (el && el.tagName !== 'MAIN' && el.tagName !== 'BODY') {
+        if (getComputedStyle(el).position === 'sticky') return 'sticky';
+        el = el.parentElement as HTMLElement;
+      }
+      return 'static';
+    }, PICKER);
+
+    expect(position, 'the picker is pinned on a screen with room to spare').toBe('static');
+  });
+
+  test('the mobile header is still the only thing above it', async ({ page }) => {
+    // Guards the assumption the offset is built on: one fixed bar at the top.
+    const fixedAtTop = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('*'))
+        .filter((el) => {
+          const cs = getComputedStyle(el as HTMLElement);
+          const r = el.getBoundingClientRect();
+          return cs.position === 'fixed' && r.height > 0 && r.top <= 0 && r.bottom > 0;
+        })
+        .map((el) => el.getAttribute('aria-label') ?? el.tagName);
+    });
+
+    expect(fixedAtTop).toEqual(['Mobile header navigation']);
+  });
+});

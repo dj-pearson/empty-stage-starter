@@ -828,8 +828,8 @@ export default function Grocery() {
       <div className="container mx-auto px-4 py-6 max-w-3xl">
 
         {/* ─── Header ─── */}
-        <div className="mb-6">
-          <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="mb-3">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <ShoppingCart className="h-5 w-5 text-primary" />
@@ -885,10 +885,51 @@ export default function Grocery() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
 
-          {/* List Selector */}
-          {userId && (
-            <div className="mb-4">
+        {/*
+          US-767 AC1: the list picker and the add bar stay put while the list
+          scrolls under them, at phone width only.
+
+          A shopper works down the list with one hand over a trolley. Scroll to
+          the frozen aisle and both the control saying WHICH list you are on and
+          the button that adds the thing you just remembered are off the top of
+          the screen; getting either back is a scroll up and a scroll back.
+
+          Add Item lives here rather than in Quick Actions below, on every
+          viewport. A phone-only copy of it would be a second duplicate subtree
+          on a route that already carries one (tests/responsive/grocery-phone
+          .spec.ts documents half the checkboxes rendering 0x0 because of it),
+          and sticking the whole Quick Actions row is not an option: measured at
+          390px, its content box is 270px and its narrowest button is 130px, so
+          all four wrap to their own line and the row is 225px tall -- 43% of a
+          664px screen, pinned.
+
+          top-[97px] is the mobile header's measured bottom edge, not a round
+          number and not `top-0`: Dashboard's mobile <nav> is fixed at z-50, so
+          a bar stuck at 0 parks underneath it and is invisible for the whole
+          scroll. 97 rather than the 56 the shell declares (`main` pads pt-14)
+          because mobile-first.css:243 gives `[class*="card"]` 20px of padding
+          below 768px and that attribute selector matches `bg-card` -- the nav
+          carries it, so it renders 41px taller than the space reserved for it.
+          The number is measured, and a test asserts the stuck bar's top equals
+          the nav's bottom, so it fails loudly rather than drifting.
+
+          `md:static` reverts above 768px: a control that can only ever do one
+          thing on a screen with room to spare is a control in the way. The
+          -mx-4/px-4 bleed spans the container gutter, or rows scroll visibly
+          through the 16px either side.
+        */}
+        {userId && (
+          <div className="sticky top-[97px] z-30 bg-background border-b border-border -mx-4 px-4 py-2 mb-4 flex flex-wrap items-center gap-2 md:static md:z-auto md:top-auto md:border-0 md:mx-0 md:px-0 md:py-0">
+            {/*
+              min-w-0 flex-1, or the selector's own `flex items-center gap-2`
+              row sits at its max-content width as a flex item and pushes the
+              page 38px wide at 390px: min-width:auto stops a flex item
+              shrinking below its content, and the w-64 trigger plus two icon
+              buttons is 352px against a 270px content box.
+            */}
+            <div className="min-w-0 flex-1">
               <GroceryListSelector
                 userId={userId}
                 householdId={householdId || undefined}
@@ -899,52 +940,72 @@ export default function Grocery() {
                 onDefaultListChange={setDefaultListId}
               />
             </div>
-          )}
+            {/*
+              Its own line below md:, alongside the picker above it. The bar's
+              content box is 270px at 390px wide and the picker's row -- a w-64
+              trigger plus a create-list and a manage-lists button -- already
+              wants all of it. Both alternatives were built and looked at:
+              sharing the line wraps the list name to two lines and paints this
+              button over the other two, and shrinking it to an icon still
+              overlaps them. Two rows costs 44px and nothing else.
+            */}
+            <Button
+              onClick={() => setShowAddDialog(true)}
+              size="sm"
+              className="w-full md:w-auto"
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Item
+            </Button>
+          </div>
+        )}
 
-          {/* Progress Bar - only show when shopping */}
-          {totalItems > 0 && (
-            <div className="mb-4" aria-live="polite">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-muted-foreground">
-                  Shopping progress
-                </span>
-                <span className="text-sm font-semibold">
-                  {purchasedCount} of {totalItems} items ({progressPercent}%)
-                </span>
-              </div>
-              {/*
-                US-778: a progressbar with no accessible name. Radix renders
-                role="progressbar", and a screen reader announced a percentage
-                attached to nothing. The visible "Shopping progress" text above
-                is a sibling, not a label, so it does not name the bar.
-              */}
-              <Progress
-                value={progressPercent}
-                className="h-2"
-                aria-label={`Shopping progress: ${purchasedCount} of ${totalItems} items purchased`}
-              />
-              <div className="flex items-center justify-between mt-2">
-                {milestone && (
-                  <p className={`text-sm font-medium ${progressPercent >= 100 ? "text-primary" : "text-muted-foreground"}`}>
-                    {milestone}
-                  </p>
-                )}
-                {progressPercent === 100 && (
-                  <p className="text-sm text-primary font-medium">
-                    Tap "Done Shopping" below to clear your list.
-                  </p>
-                )}
-              </div>
+        {/* Progress Bar - only show when shopping */}
+        {totalItems > 0 && (
+          <div className="mb-4" aria-live="polite">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-muted-foreground">
+                Shopping progress
+              </span>
+              <span className="text-sm font-semibold">
+                {purchasedCount} of {totalItems} items ({progressPercent}%)
+              </span>
             </div>
-          )}
-        </div>
+            {/*
+              US-778: a progressbar with no accessible name. Radix renders
+              role="progressbar", and a screen reader announced a percentage
+              attached to nothing. The visible "Shopping progress" text above
+              is a sibling, not a label, so it does not name the bar.
+            */}
+            <Progress
+              value={progressPercent}
+              className="h-2"
+              aria-label={`Shopping progress: ${purchasedCount} of ${totalItems} items purchased`}
+            />
+            <div className="flex items-center justify-between mt-2">
+              {milestone && (
+                <p className={`text-sm font-medium ${progressPercent >= 100 ? "text-primary" : "text-muted-foreground"}`}>
+                  {milestone}
+                </p>
+              )}
+              {progressPercent === 100 && (
+                <p className="text-sm text-primary font-medium">
+                  Tap "Done Shopping" below to clear your list.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
-        {/* ─── Quick Actions ─── */}
+        {/*
+          ─── Quick Actions ───
+
+          Add Item moved up into the sticky bar with the list picker; these
+          three stay in flow. At 390px each of them takes a full line -- the
+          content box is 270px and the narrowest is 130px wide -- so the row is
+          225px tall, and sticking it would pin 43% of a 664px screen.
+        */}
         <div className="flex gap-2 flex-wrap mb-6">
-          <Button onClick={() => setShowAddDialog(true)} size="sm">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Item
-          </Button>
           <Button onClick={() => setShowImportRecipeDialog(true)} variant="secondary" size="sm">
             <FileText className="h-4 w-4 mr-1.5" />
             From Recipe
