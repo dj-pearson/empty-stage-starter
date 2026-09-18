@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, Scan } from "lucide-react";
 import { NutritionImportDialog } from "./NutritionImportDialog";
 import { BarcodeScannerDialog } from "./BarcodeScannerDialog";
+import { PromotionCandidateQueue } from "./PromotionCandidateQueue";
 
 type NutritionItem = {
   id: string;
@@ -192,6 +193,11 @@ export const NutritionManager = () => {
 
   return (
     <div className="space-y-4">
+      {/* US-798: foods several families typed independently, waiting for a
+          human. Above the item list because it is the thing that needs a
+          decision; the list below is reference. */}
+      <PromotionCandidateQueue />
+
       <div className="flex gap-4 items-center">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />

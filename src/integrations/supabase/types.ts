@@ -19154,6 +19154,14 @@ export type Database = {
       generate_content_hash: { Args: { content_text: string }; Returns: string }
       generate_invite_code: { Args: never; Returns: string }
       generate_referral_code: { Args: never; Returns: string }
+      generic_promotion_candidates: {
+        Args: { p_limit?: number; p_min_households?: number }
+        Returns: {
+          household_count: number
+          name_normalized: string
+          sample_name: string
+        }[]
+      }
       get_active_alerts_count: { Args: { p_user_id: string }; Returns: number }
       get_active_campaign_for_plan: {
         Args: { p_plan_id: string }
