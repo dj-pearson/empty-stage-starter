@@ -40,18 +40,13 @@ const KNOWN: Record<string, Record<string, string>> = {
       'the table is dropped.',
     'supabase/functions/generate-weekly-report/index.ts':
       'Reads nutrition for the weekly email. The second and last edge-function reader.',
-    // Web. The story did not count these at all, and there are three times as
-    // many of them as there are edge functions. AC2 moved the three READERS
-    // (AddFoodDialog and the two planners) to grocery_product_catalog; what is
-    // left below are the two admin screens that WRITE. NutritionManager was
-    // the third and moved once the catalog gained somewhere to put an
-    // operator's edit: saving there sets verification='verified', which is
-    // what US-797 reads.
-    'src/components/admin/BarcodeScannerDialog.tsx':
-      'Writes a scanned product into nutrition. The catalog already gets the same product via ' +
-      'lookup-barcode promotion, so this write is the duplicate to remove.',
-    'src/components/admin/NutritionImportDialog.tsx':
-      'Bulk import writes rows into nutrition. Must target the catalog before the table goes.',
+    // The web side is empty. The story did not count it at all and it was
+    // six files: three readers (AddFoodDialog and the two planners) and three
+    // writers (NutritionManager, the bulk import, the barcode scanner). The
+    // writers needed two things the catalog did not have -- somewhere to put
+    // an operator's edit (verification, set by NutritionManager) and a
+    // per-serving to per-100g conversion that refuses to guess
+    // (catalog_upsert_from_serving). Only the two edge functions below remain.
   },
   canonical_products: {
     'src/integrations/supabase/types.ts': 'Generated from the schema; it goes when the table goes.',

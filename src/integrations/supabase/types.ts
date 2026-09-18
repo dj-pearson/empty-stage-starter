@@ -18901,6 +18901,24 @@ export type Database = {
           within_budget: boolean
         }[]
       }
+      catalog_upsert_from_serving: {
+        Args: {
+          p_allergens?: string[]
+          p_barcode?: string
+          p_calories?: number
+          p_carbs_g?: number
+          p_category?: string
+          p_fat_g?: number
+          p_ingredients?: string
+          p_name: string
+          p_package_quantity_text?: string
+          p_protein_g?: number
+          p_serving_size_text?: string
+          p_servings_per_container?: number
+          p_source?: string
+        }
+        Returns: string
+      }
       check_and_unlock_achievements: {
         Args: {
           p_attempt_outcome?: string

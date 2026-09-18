@@ -510,7 +510,7 @@ export const NutritionManager = () => {
         open={scannerOpen}
         onOpenChange={setScannerOpen}
         onFoodAdded={fetchNutritionItems}
-        targetTable="nutrition"
+        targetTable="catalog"
       />
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

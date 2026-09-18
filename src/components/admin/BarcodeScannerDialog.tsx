@@ -55,10 +55,15 @@ interface BarcodeScannerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onFoodAdded?: (food?: Record<string, unknown>) => void;
-  targetTable?: 'nutrition' | 'foods';
+  /**
+   * 'foods' adds to the signed-in household's pantry; 'catalog' adds to the
+   * shared grocery_product_catalog from the admin screen. The third value
+   * used to be 'nutrition', the table US-799 is retiring.
+   */
+  targetTable?: 'catalog' | 'foods';
 }
 
-export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTable = 'nutrition' }: BarcodeScannerDialogProps) {
+export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTable = 'catalog' }: BarcodeScannerDialogProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
@@ -327,28 +332,47 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
         onFoodAdded?.();
       } else {
-        // Add to admin nutrition table
-        const { error } = await supabase
-          .from("nutrition")
-          .insert({
-            name: scannedFood.name,
-            category: scannedFood.category,
-            serving_size: scannedFood.serving_size,
-            package_quantity: scannedFood.package_quantity,
-            servings_per_container: scannedFood.servings_per_container,
-            ingredients: scannedFood.ingredients,
-            calories: scannedFood.calories,
-            protein_g: scannedFood.protein_g,
-            carbs_g: scannedFood.carbs_g,
-            fat_g: scannedFood.fat_g,
-            allergens: scannedFood.allergens,
-            barcode: scannedBarcode || undefined,
-            created_by: user?.id,
-          });
+        // US-799 AC2: the shared catalog, through the one function that knows
+        // how to turn a per-serving figure into a per-100g one.
+        //
+        // lookup-barcode answers in PER SERVING units and cannot stop doing so
+        // -- shipped iOS builds read that response -- so the conversion has to
+        // happen somewhere, and catalog_upsert_from_serving is where
+        // parse_serving_grams lives. A serving it cannot read ("1 cup
+        // (240 ml)") produces a row with the name, barcode, ingredients and
+        // allergens and NO figures, rather than a plausible wrong number in a
+        // catalog other families read.
+        //
+        // The row lands unverified: this is one household's scan of one label,
+        // checked by nobody. US-797 keeps it out of totals until an admin
+        // looks at it in NutritionManager.
+        const { error } = await supabase.rpc("catalog_upsert_from_serving", {
+          p_name: scannedFood.name,
+          p_category: scannedFood.category,
+          p_barcode: scannedBarcode || undefined,
+          p_serving_size_text: scannedFood.serving_size ?? undefined,
+          p_package_quantity_text: scannedFood.package_quantity ?? undefined,
+          p_servings_per_container: scannedFood.servings_per_container ?? undefined,
+          p_ingredients: scannedFood.ingredients ?? undefined,
+          p_calories: scannedFood.calories ?? undefined,
+          p_protein_g: scannedFood.protein_g ?? undefined,
+          p_carbs_g: scannedFood.carbs_g ?? undefined,
+          p_fat_g: scannedFood.fat_g ?? undefined,
+          p_allergens: scannedFood.allergens ?? undefined,
+          p_source: "user",
+        });
 
         if (error) throw error;
 
-        toast.success("Success", { description: `${scannedFood.name} added to nutrition database` });
+        // Say which of the two things happened. A scan whose serving has no
+        // readable weight adds a product and no nutrition, and an operator
+        // who is not told that will scan it again.
+        const weighed = /\d\s*(g|kg|mg|oz|gram|ounce)/i.test(scannedFood.serving_size ?? '');
+        toast.success("Added to catalog", {
+          description: weighed || scannedFood.calories == null
+            ? `${scannedFood.name} added, unverified.`
+            : `${scannedFood.name} added without nutrition: "${scannedFood.serving_size}" has no weight to convert from.`,
+        });
 
         onFoodAdded?.();
       }
@@ -672,7 +696,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                 <div className="sticky bottom-0 -mx-4 bg-background/85 backdrop-blur-md border-t p-3 flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={handleClose}>Cancel</Button>
                   <Button className="flex-1" onClick={addToDatabase}>
-                    {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Nutrition Database'}
+                    {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Catalog'}
                   </Button>
                 </div>
               </div>

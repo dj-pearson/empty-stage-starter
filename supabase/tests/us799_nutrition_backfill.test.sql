@@ -414,4 +414,151 @@ BEGIN
   RAISE NOTICE 'assertion 15 ok (a caller-supplied name_normalized survives)';
 END $a15$;
 
+-- 16. catalog_upsert_from_serving converts, and only when it can.
+--     The remaining writers hold PER SERVING figures against free-text
+--     servings. 520 kcal per 100 g at a 25 g serving is the 130 kcal on the
+--     packet; this is assertion 5 read the other way round.
+DO $a16$
+DECLARE v_id UUID; v RECORD;
+BEGIN
+  v_id := public.catalog_upsert_from_serving(
+    p_name => 'US799 RPC Converts',
+    p_category => 'snack',
+    p_serving_size_text => '2 cookies (25g)',
+    p_calories => 130, p_protein_g => 10, p_carbs_g => 15, p_fat_g => 5,
+    p_source => 'user');
+
+  SELECT * INTO v FROM public.grocery_product_catalog WHERE id = v_id;
+
+  IF v.calories_kcal_100 IS DISTINCT FROM 520 THEN
+    RAISE EXCEPTION 'assertion 16: 130 kcal per 25 g serving should be 520 per 100 g, got %. '
+      'A client doing this arithmetic itself is three chances to get it wrong.',
+      coalesce(v.calories_kcal_100::text, '<null>');
+  END IF;
+  IF v.protein_g_100 IS DISTINCT FROM 40 OR v.carbs_g_100 IS DISTINCT FROM 60 OR v.fat_g_100 IS DISTINCT FROM 20 THEN
+    RAISE EXCEPTION 'assertion 16: macros converted wrong, got %/%/%',
+      coalesce(v.protein_g_100::text,'<null>'), coalesce(v.carbs_g_100::text,'<null>'), coalesce(v.fat_g_100::text,'<null>');
+  END IF;
+  IF v.serving_size_g IS DISTINCT FROM 25 THEN
+    RAISE EXCEPTION 'assertion 16: the serving mass was not derived, got %', coalesce(v.serving_size_g::text,'<null>');
+  END IF;
+  IF v.verification IS DISTINCT FROM 'unverified' THEN
+    RAISE EXCEPTION 'assertion 16: a scan verified itself (%). Nobody checked this label.', v.verification;
+  END IF;
+  RAISE NOTICE 'assertion 16 ok (per-serving figures converted to per 100 g, row left unverified)';
+END $a16$;
+
+-- 17. An unreadable serving yields a row with no figures, not guessed ones.
+--     This is the whole design decision. The row still carries everything
+--     that is not arithmetic, so someone can fill in the rest.
+DO $a17$
+DECLARE v_id UUID; v RECORD;
+BEGIN
+  v_id := public.catalog_upsert_from_serving(
+    p_name => 'US799 RPC Refuses',
+    p_category => 'snack',
+    p_barcode => '5000000000017',
+    p_serving_size_text => '1 cup (240 ml)',
+    p_ingredients => 'water, tomato, salt',
+    p_allergens => ARRAY['celery'],
+    p_calories => 45, p_protein_g => 2, p_carbs_g => 6, p_fat_g => 1.5,
+    p_source => 'user');
+
+  SELECT * INTO v FROM public.grocery_product_catalog WHERE id = v_id;
+
+  IF v.calories_kcal_100 IS NOT NULL OR v.protein_g_100 IS NOT NULL
+     OR v.carbs_g_100 IS NOT NULL OR v.fat_g_100 IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 17: figures were stored for a serving with no readable mass '
+      '(kcal %). 240 ml of oil is not 240 g, and a guessed number in a shared catalog looks '
+      'exactly like a right one.', coalesce(v.calories_kcal_100::text, '<null>');
+  END IF;
+  IF v.ingredients IS DISTINCT FROM 'water, tomato, salt' OR v.allergens IS DISTINCT FROM ARRAY['celery'] THEN
+    RAISE EXCEPTION 'assertion 17: the row lost what is not arithmetic. Missing nutrition is '
+      'fillable; a missing allergen list is not the same thing.';
+  END IF;
+  IF v.kind IS DISTINCT FROM 'branded' THEN
+    RAISE EXCEPTION 'assertion 17: a row with a barcode should be branded, got %', v.kind;
+  END IF;
+  RAISE NOTICE 'assertion 17 ok (no readable serving mass yields no figures, and the rest survives)';
+END $a17$;
+
+-- 18. The catalog wins. A second call completes gaps and replaces nothing.
+DO $a18$
+DECLARE v_id UUID; v RECORD;
+BEGIN
+  -- A row somebody corrected by hand, with figures already right.
+  INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification,
+                                              calories_kcal_100, ingredients)
+  VALUES ('US799 RPC Existing', public.normalize_product_name('US799 RPC Existing'),
+          'generic', 'admin', 'unverified', 300, 'the corrected list');
+
+  v_id := public.catalog_upsert_from_serving(
+    p_name => 'US799 RPC Existing',
+    p_serving_size_text => '50 g',
+    p_ingredients => 'the cached, wrong list',
+    p_package_quantity_text => '6 x 250ml',
+    p_calories => 999);
+
+  SELECT * INTO v FROM public.grocery_product_catalog WHERE id = v_id;
+
+  IF v.calories_kcal_100 IS DISTINCT FROM 300 THEN
+    RAISE EXCEPTION 'assertion 18: a scan overwrote figures the catalog already held (% -> ). '
+      'The catalog is canonical; an incoming copy fills gaps and does not win arguments.',
+      v.calories_kcal_100;
+  END IF;
+  IF v.ingredients IS DISTINCT FROM 'the corrected list' THEN
+    RAISE EXCEPTION 'assertion 18: a correction was overwritten, got %', v.ingredients;
+  END IF;
+  IF v.package_quantity_text IS DISTINCT FROM '6 x 250ml' THEN
+    RAISE EXCEPTION 'assertion 18: a genuinely missing column was not filled, got %',
+      coalesce(v.package_quantity_text, '<null>');
+  END IF;
+  RAISE NOTICE 'assertion 18 ok (gaps filled, held values untouched)';
+END $a18$;
+
+-- 19. Macros never come from two different products.
+--     Filling one missing figure from a scan while keeping another from
+--     somewhere else builds a row whose calories and protein describe
+--     different foods, and nothing downstream could tell.
+DO $a19$
+DECLARE v_id UUID; v RECORD;
+BEGIN
+  INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification,
+                                              protein_g_100)
+  VALUES ('US799 RPC Partial', public.normalize_product_name('US799 RPC Partial'),
+          'generic', 'admin', 'unverified', 12);
+
+  v_id := public.catalog_upsert_from_serving(
+    p_name => 'US799 RPC Partial',
+    p_serving_size_text => '50 g',
+    p_calories => 100, p_fat_g => 4);
+
+  SELECT * INTO v FROM public.grocery_product_catalog WHERE id = v_id;
+
+  IF v.calories_kcal_100 IS NOT NULL OR v.fat_g_100 IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 19: figures were merged into a row that already had some '
+      '(kcal %, fat %). A row whose protein and calories come from two products is wrong in '
+      'a way nothing downstream can see.',
+      coalesce(v.calories_kcal_100::text,'<null>'), coalesce(v.fat_g_100::text,'<null>');
+  END IF;
+  IF v.protein_g_100 IS DISTINCT FROM 12 THEN
+    RAISE EXCEPTION 'assertion 19: the figure the row already had was lost, got %',
+      coalesce(v.protein_g_100::text,'<null>');
+  END IF;
+  RAISE NOTICE 'assertion 19 ok (an all-or-nothing fill, so macros share a source)';
+END $a19$;
+
+-- 20. A nameless row is an error, not a row.
+DO $a20$
+DECLARE v_id UUID;
+BEGIN
+  BEGIN
+    v_id := public.catalog_upsert_from_serving(p_name => '   ');
+    RAISE EXCEPTION 'assertion 20: a blank name produced a catalog row (%)', v_id;
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+  RAISE NOTICE 'assertion 20 ok (a blank name is refused)';
+END $a20$;
+
 ROLLBACK;
