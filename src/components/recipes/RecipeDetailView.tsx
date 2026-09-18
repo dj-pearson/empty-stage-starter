@@ -45,6 +45,7 @@ import { calculateRecipeNutrition, perServingNutrition } from "@/lib/nutritionCa
 import { RecipeShareButton } from "./RecipeShareButton";
 import { HideVeggiesDialog } from "@/components/HideVeggiesDialog";
 import { Helmet } from "react-helmet-async";
+import { toISODate } from "@/lib/date-utils";
 
 interface RecipeDetailViewProps {
   recipe: Recipe | null;
@@ -176,7 +177,8 @@ export function RecipeDetailView({
     const newTimesMade = (recipe.times_made ?? 0) + 1;
     onUpdateRecipe(recipe.id, {
       times_made: newTimesMade,
-      last_made_date: new Date().toISOString().split("T")[0],
+      // US-818: the day the cook happened where the cook is, not in UTC.
+      last_made_date: toISODate(new Date()),
     });
     toast.success("Nice! Recipe logged as made", {
       description: `You've made "${recipe.name}" ${newTimesMade} time${newTimesMade !== 1 ? "s" : ""}`,

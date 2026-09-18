@@ -14,6 +14,7 @@ import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
 import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
 import { fetchAllRows, ROW_CEILING } from "@/lib/fetchAllRows";
+import { toISODate, addIsoDays } from "@/lib/date-utils";
 import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
@@ -275,10 +276,15 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
 
     const loadUserData = async (retried = false): Promise<void> => {
       try {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const ninetyDaysFromNow = new Date();
-        ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
+        // US-818: the plan window as ISO KEYS, computed once and used by both
+        // the query and the merge below. It was setDate() on a Date formatted
+        // through toISOString(), which is the pattern this story removes: the
+        // UTC conversion moves the edge a day for everyone west of Greenwich,
+        // and stepping 30 or 90 days across a DST boundary moves it again.
+        // plan_entries.date is a local calendar day, so the bounds must be too.
+        const todayKey = toISODate(new Date());
+        const windowStart = addIsoDays(todayKey, -30);
+        const windowEnd = addIsoDays(todayKey, 90);
 
         // US-550: this effect is gated on householdId above, so every query is
         // always household-scoped (the previous unscoped ternary branches were
@@ -312,8 +318,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             )
           ),
           supabase.from('plan_entries').select('*').eq('household_id', householdId)
-            .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
-            .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
+            .gte('date', windowStart)
+            .lte('date', windowEnd)
             .order('date', { ascending: true }),
           // US-819 AC2: no cap, so oldest-first no longer decides which items a
           // household is allowed to see. The order is kept because the list
@@ -462,8 +468,6 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           // with existing state so cached history OUTSIDE the window is not
           // truncated (and then persisted-away by the write-through cache). The
           // in-window slice remains server-authoritative.
-          const windowStart = thirtyDaysAgo.toISOString().split('T')[0];
-          const windowEnd = ninetyDaysFromNow.toISOString().split('T')[0];
           const serverEntries = parsePlanEntryRows(planRes.data as unknown[]);
           setPlanEntriesState((prev) => mergeWindowedPlanEntries(prev, serverEntries, windowStart, windowEnd));
         }

@@ -11,6 +11,7 @@ import { KidSelector } from "@/components/KidSelector";
 import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
 import { QuickLogModal } from "@/components/QuickLogModal";
 import { performQuickLog, type QuickLogResult } from "@/lib/quickLog";
+import { toISODate } from "@/lib/date-utils";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, LogOut } from "lucide-react";
@@ -130,7 +131,11 @@ const Dashboard = () => {
    */
   const todaysMeals = useMemo(() => {
     if (!activeKidId) return [];
-    const today = new Date().toISOString().split("T")[0];
+    // US-818: the LOCAL calendar day. toISOString() converts to UTC first, so
+    // west of Greenwich this flipped to tomorrow in the evening and the
+    // dashboard started showing tomorrow's meals -- and the quick-log FAB
+    // logged results against them.
+    const today = toISODate(new Date());
 
     return planEntries
       .filter((entry) => entry.kid_id === activeKidId && entry.date === today)

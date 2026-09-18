@@ -40,6 +40,7 @@ import { SafeFoodInsuranceSection } from "@/components/SafeFoodInsuranceSection"
 import { MostRepeatedMealsCard } from "@/components/MostRepeatedMealsCard";
 import { SeasonalRecallCard } from "@/components/SeasonalRecallCard";
 import { KidBirthdayCard } from "@/components/KidBirthdayCard";
+import { toISODate, addIsoDays } from "@/lib/date-utils";
 
 const OnboardingProgressBar = lazy(() =>
   import("@/components/OnboardingProgressBar").then(m => ({ default: m.OnboardingProgressBar }))
@@ -115,12 +116,15 @@ export default function Home() {
   // see PLATFORMS.md. This one counts any day carrying a result, breaks on the
   // first gap, and forgives today.
   const streak = useMemo(() => {
-    const today = new Date();
+    // US-818: walk the keys as STRINGS. The old loop did
+    // setDate(getDate() - d) on a Date and formatted with toISOString(), which
+    // is both bugs at once: the UTC conversion shifts the day for everyone west
+    // of Greenwich, and stepping a Date across a DST boundary lands on the same
+    // calendar day twice, so a streak could count one day as two.
+    const todayKey = toISODate(new Date());
     let count = 0;
     for (let d = 0; d <= 365; d++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - d);
-      const dateStr = date.toISOString().split("T")[0];
+      const dateStr = addIsoDays(todayKey, -d);
       const hasResult = kidPlanEntries.some(e => e.date === dateStr && e.result);
       if (hasResult) count++;
       else if (d > 0) break; // Break on first gap (but not today)

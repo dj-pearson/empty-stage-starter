@@ -1,6 +1,7 @@
 import { Food, PlanEntry, MealSlot } from "@/types";
 import { resolveFood, type EffectiveFood } from "./effectiveFood";
 import { generateId } from "./utils";
+import { toISODate, addIsoDays } from "./date-utils";
 
 const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack2"];
 
@@ -33,10 +34,13 @@ export function buildWeekPlan(
 
   const today = startDate;
 
+  // US-818: step the ISO key, not a Date. setDate + toISOString shifted the
+  // whole generated week for anyone west of Greenwich, and stepping a Date
+  // across a DST boundary repeats or skips a calendar day.
+  const startKey = toISODate(today);
+
   for (let d = 0; d < days; d++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + d);
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = addIsoDays(startKey, d);
 
     // Regular meal slots
     MEAL_SLOTS.forEach(slot => {
