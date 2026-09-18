@@ -2,9 +2,12 @@ name: Web CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    # US-763 retired `develop` as an integration branch; `main` is the only one.
+    # Leaving develop here would keep advertising a branch the table no longer
+    # describes, and it has had no pushes since 2026-07-02.
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
     inputs:
       run_edge_tests:

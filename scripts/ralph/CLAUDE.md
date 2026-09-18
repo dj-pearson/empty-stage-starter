@@ -11,7 +11,7 @@ You are an autonomous coding agent working on a software project.
    file. Start the loop on one with `./ralph.sh --tool claude --prd prd-household-planner.json`,
    list its open stories with `PRD_FILE=prd-household-planner.json npm run prd:list`.
 2. Read the progress log at `progress.txt` (check Codebase Patterns section first)
-3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
+3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from `main` -- US-763 retired `develop`, so `main` is the integration branch and the only place to branch from.
 4. Pick the **highest priority** user story where `passes: false`
 5. Implement that single user story
 6. Run quality checks (e.g., typecheck, lint, test - use whatever your project requires)

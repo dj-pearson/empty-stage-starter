@@ -85,12 +85,26 @@ iOS is live, so branch choice is now a deploy decision. **Always confirm the tar
 
 | Branch              | Source from   | Merges to             | Auto-deploys to                                                   |
 | ------------------- | ------------- | --------------------- | ----------------------------------------------------------------- |
-| `develop`           | `main`        | `release/*`           | TestFlight **internal** build (EAS `preview` profile)             |
-| `release/x.y.z`     | `develop`     | `main` + tag          | TestFlight **external** + App Store Connect submission            |
-| `hotfix/<slug>`     | `main`        | `main` + `develop`    | Expedited App Store submission with auto-filled review notes      |
 | `main`              | (merge only)  | —                     | Tagged commits (`ios/v*`, `web/v*`) trigger production deploys    |
+| `claude/*`          | `main`        | `main` via PR         | Nothing — feature work only                                       |
+| `release/x.y.z`     | `main`        | `main` + tag          | TestFlight **external** + App Store Connect submission            |
+| `hotfix/<slug>`     | `main`        | `main`                | Expedited App Store submission with auto-filled review notes      |
 | `web/v*` tag        | `main`        | —                     | Cloudflare Pages production (only when web ships with iOS)        |
-| `claude/*`          | `develop`     | `develop` via PR      | Nothing — feature work only                                       |
+
+**`develop` is gone (US-763).** The table above used to route `claude/*` and
+`release/*` through it, and that stopped being true on 2026-07-02: `origin/develop`
+has not been touched since, every PR from #241 to #280 merged straight to `main`, and
+merging `main` into `develop` would change 1249 files and delete about 290,000 lines.
+A branching rule nobody follows is worse than none, because "branch first, code
+second" then means guessing. Decision recorded 2026-09-18: **`main` is the integration
+branch.** Branch from it, PR back into it.
+
+The one thing this cost: `develop` was the trigger for the TestFlight *internal*
+build, so `ios-app-store-deploy.yml` now fires on a push to `main` touching `ios/**`
+instead. `workflow_dispatch` is unchanged and remains the way to cut a build by hand.
+`origin/develop` itself is still there, untouched; deleting it or fast-forwarding it
+to `main` is a destructive operation on a shared branch and is the repository owner's
+to run, not a step to fold into a feature PR.
 
 **The web deploy path (US-762): Cloudflare Pages, and only Cloudflare Pages.**
 Pages builds this repo from its own Git integration, configured in the Cloudflare
@@ -105,17 +119,18 @@ Details and the emergency manual path: `docs/deployment-checklist.md`.
 
 **Rules of thumb:**
 
-- New feature → branch from `develop`, PR back to `develop`.
-- App Store release candidate → cut `release/x.y.z` from `develop`, freeze, only fix-forward commits land there.
-- Production bug → branch `hotfix/<slug>` **from `main`**, NOT from `develop`. Keeps the hotfix free of un-reviewed feature work so Apple's expedited review only sees the fix. Cherry-pick or merge back into `develop` after.
-- Web-only change while iOS is mid-review → ship from `develop` to a `web/*` tag; do **not** advance the iOS bundle.
-- Never force-push `main`, `develop`, or any `release/*`. Never merge `develop` → `main` directly; it must go through a `release/*` or `hotfix/*`.
+- New feature → branch from `main`, PR back to `main`.
+- App Store release candidate → cut `release/x.y.z` from `main`, freeze, only fix-forward commits land there.
+- Production bug → branch `hotfix/<slug>` from `main`. It is off the integration branch either way now; what still matters is keeping the branch to the fix alone, so Apple's expedited review sees nothing else.
+- Web-only change while iOS is mid-review → ship from `main` to a `web/*` tag; do **not** advance the iOS bundle.
+- Never force-push `main` or any `release/*`.
 
 The `hotfix:` commit prefix and the expedited-submission column above describe intent, not
 wiring: no workflow in `.github/workflows/` reads either. `ios-app-store-deploy.yml` fires
-only on a push to `develop` touching `ios/**`, or on a manual `workflow_dispatch`. So a
-`hotfix/*` branch carrying web-only changes cannot trigger an App Store submission, and
-nothing auto-fills review notes today. Keep using the prefix sparingly anyway, both because
+only on a push to `main` touching `ios/**` (it was `develop` until US-763 retired that
+branch), or on a manual `workflow_dispatch`. So a `hotfix/*` branch carrying web-only
+changes cannot trigger an App Store submission, and nothing auto-fills review notes
+today. Keep using the prefix sparingly anyway, both because
 Apple revokes expedited privileges if abused and because someone will eventually implement
 the column as written.
 

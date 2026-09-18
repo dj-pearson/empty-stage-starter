@@ -1,16 +1,27 @@
 name: iOS App Store Deploy
 
 # Two ways in:
-#   * push to `develop` touching ios/**  → automatic TestFlight internal build,
+#   * push to `main` touching ios/**     → automatic TestFlight internal build,
 #     matching the branch table in CLAUDE.md. Version comes from
 #     MARKETING_VERSION in project.yml since a push carries no inputs.
 #   * workflow_dispatch                  → deliberate release with an explicit
 #     version, release notes, and the option to tag.
-# `main` is intentionally NOT auto-triggered: it is merge-only, and production
-# ships from a deliberate dispatch or a release/* branch.
+#
+# US-763: this said `develop` until 2026-09-18. That branch had taken no pushes
+# since 2026-07-02, so the automatic path had been dead for two months and an
+# iOS change could only reach TestFlight by hand. `main` is the integration
+# branch now and inherits the trigger.
+#
+# An internal TestFlight upload is not a production deploy, so this does not
+# collide with CLAUDE.md's rule that production ships from a tagged commit: the
+# tag-release job below stays workflow_dispatch-only and no push can claim an
+# `ios/v*` tag.
 on:
   push:
-    branches: [develop]
+    # US-763: was [develop], which stopped being an integration branch on
+    # 2026-07-02 -- nothing has pushed to it since, so this trigger had been
+    # dead for two months and an iOS change could only ship by workflow_dispatch.
+    branches: [main]
     paths:
       - 'ios/**'
       - '.github/workflows/ios-app-store-deploy.yml'
@@ -763,9 +774,9 @@ jobs:
   tag-release:
     name: Tag Release
     needs: [validate, build-and-deploy]
-    # Only deliberate releases claim an `ios/v*` tag. Automatic develop builds
-    # upload to TestFlight without polluting the release tag namespace, which
-    # CLAUDE.md reserves for production deploys.
+    # Only deliberate releases claim an `ios/v*` tag. The automatic build on a
+    # push to `main` uploads to TestFlight without polluting the release tag
+    # namespace, which CLAUDE.md reserves for production deploys.
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:

@@ -2,7 +2,8 @@ name: android-native-ci
 
 on:
   push:
-    branches: [main, develop]
+    # US-763: was [main, develop]; develop is no longer an integration branch.
+    branches: [main]
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-ci.yml'
