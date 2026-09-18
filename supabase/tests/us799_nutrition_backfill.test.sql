@@ -269,4 +269,149 @@ BEGIN
   RAISE NOTICE 'assertion 10 ok (a catalog correction survives a re-run)';
 END $a10$;
 
+-- 11. The catalog derives its own serving mass (20260918000009).
+--     Four writers would otherwise each need a copy of parse_serving_grams,
+--     and the shipped iOS build cannot be given one at all. A row inserted
+--     with serving text and no mass comes back with the mass.
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification, serving_size_text)
+VALUES ('US799 Trigger Fills', public.normalize_product_name('US799 Trigger Fills'), 'generic', 'admin', 'unverified',
+        '2 cookies (25g)');
+
+DO $a11$
+DECLARE v NUMERIC;
+BEGIN
+  SELECT serving_size_g INTO v FROM public.grocery_product_catalog
+   WHERE name_normalized = public.normalize_product_name('US799 Trigger Fills');
+
+  IF v IS DISTINCT FROM 25 THEN
+    RAISE EXCEPTION 'assertion 11: the trigger did not derive the serving mass from "2 cookies (25g)", got %. '
+      'Reading the 2 instead of the 25 would divide every nutrient by twelve and a half.',
+      coalesce(v::text, '<null>');
+  END IF;
+  RAISE NOTICE 'assertion 11 ok (serving mass derived from serving text on insert)';
+END $a11$;
+
+-- 12. A mass the caller supplied wins, and the refusal still refuses.
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification, serving_size_text, serving_size_g)
+VALUES ('US799 Caller Knows', public.normalize_product_name('US799 Caller Knows'), 'generic', 'admin', 'unverified',
+        '1 scoop', 31.5);
+
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification, serving_size_text)
+VALUES ('US799 Trigger Refuses', public.normalize_product_name('US799 Trigger Refuses'), 'generic', 'admin', 'unverified',
+        '1 cup (240 ml)');
+
+DO $a12$
+DECLARE v_kept NUMERIC; v_refused NUMERIC;
+BEGIN
+  SELECT serving_size_g INTO v_kept FROM public.grocery_product_catalog
+   WHERE name_normalized = public.normalize_product_name('US799 Caller Knows');
+  SELECT serving_size_g INTO v_refused FROM public.grocery_product_catalog
+   WHERE name_normalized = public.normalize_product_name('US799 Trigger Refuses');
+
+  IF v_kept IS DISTINCT FROM 31.5 THEN
+    RAISE EXCEPTION 'assertion 12: the trigger overwrote a mass the caller supplied for text the '
+      'parser cannot read ("1 scoop"), got %. A caller weighing the scoop knows more than the parser.',
+      coalesce(v_kept::text, '<null>');
+  END IF;
+  IF v_refused IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 12: the trigger produced a gram mass (%) for a millilitre serving. '
+      'Putting the parser behind a trigger must not make it start guessing.', v_refused;
+  END IF;
+  RAISE NOTICE 'assertion 12 ok (caller-supplied mass wins; a volume still yields no mass)';
+END $a12$;
+
+-- 13. Correcting the text refreshes a mass that now describes the old text.
+--     This is the case that goes wrong quietly: the row keeps a number that
+--     disagrees with the words printed next to it.
+UPDATE public.grocery_product_catalog
+   SET serving_size_text = '1 cup (245 g)'
+ WHERE name_normalized = public.normalize_product_name('US799 Trigger Refuses');
+
+UPDATE public.grocery_product_catalog
+   SET serving_size_text = '3 cookies (40g)'
+ WHERE name_normalized = public.normalize_product_name('US799 Trigger Fills');
+
+DO $a13$
+DECLARE v_was_null NUMERIC; v_was_stale NUMERIC;
+BEGIN
+  SELECT serving_size_g INTO v_was_null FROM public.grocery_product_catalog
+   WHERE name_normalized = public.normalize_product_name('US799 Trigger Refuses');
+  SELECT serving_size_g INTO v_was_stale FROM public.grocery_product_catalog
+   WHERE name_normalized = public.normalize_product_name('US799 Trigger Fills');
+
+  IF v_was_null IS DISTINCT FROM 245 THEN
+    RAISE EXCEPTION 'assertion 13: correcting "1 cup (240 ml)" to "1 cup (245 g)" left the mass at %. '
+      'The operator fixed the text; the derived column has to follow it.', coalesce(v_was_null::text, '<null>');
+  END IF;
+  IF v_was_stale IS DISTINCT FROM 40 THEN
+    RAISE EXCEPTION 'assertion 13: the mass stayed at % after the text changed to "3 cookies (40g)". '
+      'A stale 25 beside a text saying 40 is worse than no number at all.', coalesce(v_was_stale::text, '<null>');
+  END IF;
+  RAISE NOTICE 'assertion 13 ok (a corrected serving text refreshes the derived mass)';
+END $a13$;
+
+-- 14. A writer that omits name_normalized gets the right one, not an error.
+--     It is NOT NULL with no default, which is why every writer computed it,
+--     which is how a value the shipped app cannot find gets written.
+INSERT INTO public.grocery_product_catalog (name, kind, source, verification)
+VALUES ('  US799   Derived   Name  ', 'generic', 'admin', 'unverified');
+
+DO $a14$
+DECLARE v TEXT;
+BEGIN
+  SELECT name_normalized INTO v FROM public.grocery_product_catalog
+   WHERE name = '  US799   Derived   Name  ';
+
+  IF v IS DISTINCT FROM public.normalize_product_name('  US799   Derived   Name  ') THEN
+    RAISE EXCEPTION 'assertion 14: name_normalized was not derived from name, got %. '
+      'A hand-rolled normalizer that collapses whitespace differently produces a row '
+      'the iOS matcher joins against and never finds.', coalesce(v, '<null>');
+  END IF;
+  IF v IS DISTINCT FROM 'us799 derived name' THEN
+    RAISE EXCEPTION 'assertion 14: expected "us799 derived name", got %', coalesce(v, '<null>');
+  END IF;
+  RAISE NOTICE 'assertion 14 ok (name_normalized derived when the writer omits it)';
+END $a14$;
+
+-- 14b. The empty-string default is treated as "not supplied", not stored.
+--      The default exists so `supabase gen types` marks the column optional;
+--      if the trigger read '' as a real value, every typed client insert would
+--      land under a name_normalized nothing can match.
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification)
+VALUES ('US799 Empty Normalized', '', 'generic', 'admin', 'unverified');
+
+DO $a14b$
+DECLARE v TEXT;
+BEGIN
+  SELECT name_normalized INTO v FROM public.grocery_product_catalog
+   WHERE name = 'US799 Empty Normalized';
+
+  IF v IS DISTINCT FROM 'us799 empty normalized' THEN
+    RAISE EXCEPTION 'assertion 14b: an empty name_normalized was stored as-is (%), so the row '
+      'is unreachable by name. The default is a placeholder, not a value.', coalesce(v, '<null>');
+  END IF;
+  RAISE NOTICE 'assertion 14b ok (the empty-string default is filled, not stored)';
+END $a14b$;
+
+-- 15. A caller that sends name_normalized keeps it.
+--     The shipped iOS build computes this with ProductNameNormalizer and
+--     matches on the result. Forcing the SQL answer over a client's would
+--     change which rows that build can find, which is the one thing a
+--     migration may not do.
+INSERT INTO public.grocery_product_catalog (name, name_normalized, kind, source, verification)
+VALUES ('US799 Client Normalized', 'a value only the client would produce', 'generic', 'admin', 'unverified');
+
+DO $a15$
+DECLARE v TEXT;
+BEGIN
+  SELECT name_normalized INTO v FROM public.grocery_product_catalog
+   WHERE name = 'US799 Client Normalized';
+
+  IF v IS DISTINCT FROM 'a value only the client would produce' THEN
+    RAISE EXCEPTION 'assertion 15: the trigger overwrote a name_normalized the caller supplied, got %. '
+      'Fill a NULL; do not win an argument with a shipped build.', coalesce(v, '<null>');
+  END IF;
+  RAISE NOTICE 'assertion 15 ok (a caller-supplied name_normalized survives)';
+END $a15$;
+
 ROLLBACK;

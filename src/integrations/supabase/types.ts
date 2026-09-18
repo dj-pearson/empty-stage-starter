@@ -6400,7 +6400,7 @@ export type Database = {
           last_added_at?: string
           metadata?: Json | null
           name: string
-          name_normalized: string
+          name_normalized?: string
           package_size?: number | null
           package_quantity_text?: string | null
           package_unit?: string | null

@@ -43,16 +43,15 @@ const KNOWN: Record<string, Record<string, string>> = {
     // Web. The story did not count these at all, and there are three times as
     // many of them as there are edge functions. AC2 moved the three READERS
     // (AddFoodDialog and the two planners) to grocery_product_catalog; what is
-    // left below are the three admin screens that WRITE, which cannot move
-    // until the catalog has somewhere to put an operator's edit.
+    // left below are the two admin screens that WRITE. NutritionManager was
+    // the third and moved once the catalog gained somewhere to put an
+    // operator's edit: saving there sets verification='verified', which is
+    // what US-797 reads.
     'src/components/admin/BarcodeScannerDialog.tsx':
       'Writes a scanned product into nutrition. The catalog already gets the same product via ' +
       'lookup-barcode promotion, so this write is the duplicate to remove.',
     'src/components/admin/NutritionImportDialog.tsx':
       'Bulk import writes rows into nutrition. Must target the catalog before the table goes.',
-    'src/components/admin/NutritionManager.tsx':
-      'The admin CRUD screen for nutrition: list, update, delete. The last thing to migrate, ' +
-      'because it is how an operator fixes a row today.',
   },
   canonical_products: {
     'src/integrations/supabase/types.ts': 'Generated from the schema; it goes when the table goes.',
