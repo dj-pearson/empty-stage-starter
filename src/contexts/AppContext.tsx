@@ -56,7 +56,7 @@ interface AppContextType {
   setPlanEntries: (entries: PlanEntry[]) => void;
   addPlanEntry: (entry: Omit<PlanEntry, "id">) => void;
   addPlanEntries: (entries: Omit<PlanEntry, "id">[]) => void;
-  updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => void;
+  updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => Promise<{ error: unknown }>;
   setGroceryItems: (items: GroceryItem[]) => void;
   addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
   addGroceryItemsMerged: (items: GroceryAddInput[]) => number;

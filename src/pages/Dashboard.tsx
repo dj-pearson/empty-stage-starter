@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { KidSelector } from "@/components/KidSelector";
 import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
 import { QuickLogModal } from "@/components/QuickLogModal";
+import { performQuickLog, type QuickLogResult } from "@/lib/quickLog";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun, LogOut } from "lucide-react";
@@ -179,27 +180,43 @@ const Dashboard = () => {
    * record a meal result was also the only one that discarded it.
    */
   const handleQuickLog = async (
-    result: 'ate' | 'tasted' | 'refused',
+    result: QuickLogResult,
     notes?: string,
     mealId?: string
   ) => {
-    // An explicit id has to match. Falling back to the first meal when the
-    // named one is missing would log a result against the wrong dinner.
-    const entry = mealId ? todaysMeals.find((meal) => meal.id === mealId) : todaysMeals[0];
-    if (!entry) {
-      toast.error("Nothing planned for today", {
-        description: "Add a meal to today's plan first.",
-      });
-      return;
-    }
+    // Which entry, and whether the write landed, are decided in
+    // src/lib/quickLog.ts so both can be tested without mounting this page.
+    const outcome = await performQuickLog({
+      meals: todaysMeals,
+      result,
+      notes,
+      mealId,
+      save: (entryId, patch) => updatePlanEntry(entryId, patch),
+    });
 
-    try {
-      await updatePlanEntry(entry.id, { result, notes: notes ?? entry.notes });
-      toast.success(`Logged as ${result}`, { description: entry.label });
-    } catch {
-      // The write is optimistic locally, so a failure here means it did not
-      // reach Supabase. Saying so beats a success toast over a lost result.
-      toast.error("Couldn't log that meal", { description: "Please try again." });
+    switch (outcome.status) {
+      case "saved":
+        toast.success(`Logged as ${result}`, { description: outcome.entry.label });
+        return;
+      case "nothing-planned":
+        toast.error("Nothing planned for today", {
+          description: "Add a meal to today's plan first.",
+        });
+        return;
+      case "unknown-meal":
+        // The modal named an entry that has since gone. Logging against
+        // whichever meal happened to be first would be the wrong dinner.
+        toast.error("That meal is no longer on today's plan", {
+          description: "Reopen the planner and try again.",
+        });
+        return;
+      case "failed":
+        // Deliberately silent. updatePlanEntry rolls the row back and toasts
+        // the rejection itself (runOptimisticMutation), so a second toast here
+        // would be the same failure reported twice. What this case exists for
+        // is the success toast above NOT firing -- the old handler announced
+        // "Meal logged!" whatever the server said.
+        return;
     }
   };
 
