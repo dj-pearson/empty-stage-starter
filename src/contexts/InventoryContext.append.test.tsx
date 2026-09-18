@@ -24,7 +24,7 @@ let upsertError: unknown = null;
 function makeBuilder(table: string) {
   const builder: Record<string, unknown> = {};
   const chain = () => builder;
-  for (const m of ['select', 'eq', 'order', 'limit', 'gte', 'lte', 'insert', 'update', 'delete']) {
+  for (const m of ['select', 'eq', 'order', 'range', 'limit', 'gte', 'lte', 'insert', 'update', 'delete']) {
     builder[m] = vi.fn(chain);
   }
   builder.upsert = vi.fn((rows: Record<string, unknown>[], options: unknown) => {

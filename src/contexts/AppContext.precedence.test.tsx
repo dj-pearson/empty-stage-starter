@@ -19,7 +19,7 @@
 import { render, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { AppProvider, useFoods, useInventory } from './AppContext';
+import { AppProvider, useApp, useFoods, useInventory } from './AppContext';
 import { writeFlag } from '@/lib/featureFlagCache';
 
 // ---- Supabase mock: a chainable, thenable query builder per table ----------
@@ -29,14 +29,37 @@ let sessionUser: { id: string } | null = null;
 function makeBuilder(table: string) {
   const builder: Record<string, unknown> = {};
   const chain = () => builder;
-  for (const m of ['select', 'eq', 'order', 'limit', 'gte', 'lte', 'insert', 'update', 'delete']) {
+  for (const m of ['select', 'eq', 'order', 'gte', 'lte', 'insert', 'update', 'delete']) {
     builder[m] = vi.fn(chain);
   }
+  // limit is honoured for the same reason range is: a stub that chains it away
+  // would let a revert to `.limit(500)` pass the paging assertions below.
+  let cap: number | null = null;
+  builder.limit = vi.fn((n: number) => {
+    cap = n;
+    return builder;
+  });
+  // US-819: range is honoured rather than chained away, so a fixture larger
+  // than one page exercises the paging instead of quietly returning
+  // everything on the first call and proving nothing.
+  let window: { from: number; to: number } | null = null;
+  builder.range = vi.fn((from: number, to: number) => {
+    window = { from, to };
+    rangeCalls.push([table, from, to]);
+    return builder;
+  });
   // thenable: awaiting the builder resolves to the table's dataset.
-  builder.then = (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
-    resolve({ data: tableData[table] ?? [], error: null });
+  builder.then = (resolve: (v: { data: unknown[]; error: null }) => unknown) => {
+    let rows = tableData[table] ?? [];
+    if (window) rows = rows.slice(window.from, window.to + 1);
+    if (cap !== null) rows = rows.slice(0, cap);
+    return resolve({ data: rows, error: null });
+  };
   return builder;
 }
+
+/** Every .range() the loader asked for, so a test can see it paged. */
+const rangeCalls: Array<[string, number, number]> = [];
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
@@ -135,6 +158,7 @@ describe('US-341: load precedence (localStorage vs Supabase)', () => {
     vi.clearAllMocks();
     for (const k of Object.keys(storageBacking)) delete storageBacking[k];
     for (const k of Object.keys(tableData)) delete tableData[k];
+    rangeCalls.length = 0;
     sessionUser = null;
   });
 
@@ -378,5 +402,110 @@ describe('US-671: the feature-flag gate on pantry quantity', () => {
     await waitFor(() => expect(latest.enabled).toBe(true));
     // A stale number beats a blank one while the backfill is still landing.
     expect(latest.rendered).toBe(1);
+  });
+});
+
+/**
+ * US-819. The initial load took the first 500 foods, 200 recipes and 500
+ * grocery items and wrote each slice into state wholesale, so a household over
+ * any of those numbers saw a partial catalogue that looked complete. Worse for
+ * grocery_items, which came back oldest-first: the items just added were
+ * exactly the ones cut.
+ *
+ * src/lib/fetchAllRows.test.ts pins the walk. This pins that the loader
+ * actually does it -- a household past the old cap gets all of its rows.
+ */
+describe('US-819: the load reaches past the old row caps', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    rangeCalls.length = 0;
+    sessionUser = null;
+  });
+
+  const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
+
+  it('loads a catalogue larger than the 500 it used to stop at', async () => {
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+    tableData['foods'] = Array.from({ length: 1500 }, (_, i) => ({
+      id: `f${i}`,
+      // Zero-padded so the names sort the way the ids do and the assertion
+      // below can name the last row.
+      name: `Food ${String(i).padStart(4, '0')}`,
+      category: 'fruit',
+      is_safe: true,
+      is_try_bite: false,
+      household_id: HOUSEHOLD,
+    }));
+
+    let latest: string[] = [];
+    render(
+      <AppProvider>
+        <FoodsProbe onFoods={(n) => { latest = n; }} />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(latest.length).toBe(1500));
+    // Not just the count: the row past the old cap is present, and so is the
+    // last one, which two pages of 1000 only reach by asking twice.
+    expect(latest).toContain('Food 0500');
+    expect(latest).toContain('Food 1499');
+  });
+
+  it('pages rather than asking for one enormous window', async () => {
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+    tableData['foods'] = Array.from({ length: 1500 }, (_, i) => ({
+      id: `f${i}`, name: `Food ${String(i).padStart(4, '0')}`, category: 'fruit',
+      is_safe: true, is_try_bite: false, household_id: HOUSEHOLD,
+    }));
+
+    let latest: string[] = [];
+    render(
+      <AppProvider>
+        <FoodsProbe onFoods={(n) => { latest = n; }} />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(latest.length).toBe(1500));
+
+    const foodPages = rangeCalls.filter(([t]) => t === 'foods').map(([, from, to]) => [from, to]);
+    expect(foodPages).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+  });
+
+  it('gives a household every grocery item, not the oldest 500', async () => {
+    // The ordering is what made this a bug people would report rather than
+    // "some rows are missing": ascending created_at meant the 500 shown were
+    // the oldest, so a household over the cap stopped seeing what it just added.
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+    tableData['grocery_items'] = Array.from({ length: 1200 }, (_, i) => ({
+      id: `g${i}`,
+      name: `Item ${String(i).padStart(4, '0')}`,
+      quantity: 1,
+      checked: false,
+      household_id: HOUSEHOLD,
+    }));
+
+    let names: string[] = [];
+    function GroceryProbe() {
+      const { groceryItems } = useApp();
+      names = groceryItems.map((g) => g.name);
+      return null;
+    }
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(names.length).toBe(1200));
+    expect(names).toContain('Item 1199');
   });
 });

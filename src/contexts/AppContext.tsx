@@ -13,6 +13,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
 import { KidsProvider, useKids } from "./KidsContext";
 import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
+import { fetchAllRows, ROW_CEILING } from "@/lib/fetchAllRows";
 import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
@@ -90,37 +91,12 @@ const LEDGER_DIVERGENCE_LOG_LIMIT = 50;
 const LEDGER_COMPARISON_DEBOUNCE_MS = 1000;
 
 /**
- * Row caps on the initial load, and the reason they are named rather than
- * inline (US-819).
- *
- * Each of these queries returns at most this many rows and says nothing when
- * there are more. The slice is then written into state wholesale, so a
- * household over the cap sees a partial catalogue that looks complete --
- * nothing is missing from the database, but nothing on screen says so either.
- *
- * The ORDER makes it worse than "some are missing". grocery_items is ordered
- * by created_at ascending, so the 500 a household sees are its OLDEST items
- * and the ones it just added are the ones cut. foods is ordered by name, so
- * the catalogue stops partway through the alphabet.
- *
- * Pagination is the actual fix and is US-819. Until then these are at least
- * detected: reachedRowCap below reports a slice that came back exactly full,
- * which is the only signal PostgREST gives without a count query.
+ * The caps are gone (US-819). foods, recipes and grocery_items are each read to
+ * completion by fetchAllRows, so a household past any of these numbers now sees
+ * all of its own data. ROW_CEILING in src/lib/fetchAllRows.ts is the remaining
+ * backstop, twenty times the largest of the old caps.
  */
-export const FOODS_ROW_CAP = 500;
-export const RECIPES_ROW_CAP = 200;
-export const GROCERY_ROW_CAP = 500;
-
-/**
- * True when a result came back exactly at its cap.
- *
- * Exactly-at-the-cap is ambiguous -- a household with precisely 500 foods
- * reports as truncated -- so this drives a message about what is shown, not a
- * claim that rows were dropped.
- */
-export function reachedRowCap(rows: unknown[] | null | undefined, cap: number): boolean {
-  return Array.isArray(rows) && rows.length >= cap;
-}
+export const RETIRED_ROW_CAPS = { foods: 500, recipes: 200, groceryItems: 500 } as const;
 
 const STARTER_FOODS: Omit<Food, "id">[] = [
   { name: "Chicken Nuggets", category: "protein", is_safe: true, is_try_bite: false },
@@ -219,9 +195,16 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // clobber a valid cache backup before the server responds (US-537).
   const hydratedRef = useRef(false);
 
+  // US-819 AC4: set when a load stopped at ROW_CEILING. State then holds less
+  // than the household owns, and writing it through would replace a possibly
+  // fuller cache with a short one -- turning a display limit into data the
+  // user cannot get back offline.
+  const incompleteLoadRef = useRef(false);
+
   const persistSnapshot = useCallback((snapshot: Record<string, unknown>) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (signedOutRef.current) return;
+    if (incompleteLoadRef.current) return;
     saveTimerRef.current = setTimeout(async () => {
       if (signedOutRef.current) return; // scrubbed since we were scheduled
       try {
@@ -309,15 +292,37 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
 
         const [kidsRes, foodsRes, recipesRes, planRes, groceryRes, movementsRes, stockRes] = await Promise.all([
           supabase.from('kids').select('*').eq('household_id', householdId).order('created_at', { ascending: true }),
-          supabase.from('foods').select('*').eq('household_id', householdId).order('name', { ascending: true }).limit(FOODS_ROW_CAP),
+          // US-819: paged to completion. `id` is the last sort key on every
+          // paged query and is not decoration -- .range() is only coherent over
+          // a TOTAL order, and two foods with the same name can swap places
+          // between requests, which fetches one twice and never fetches the
+          // other.
+          fetchAllRows((from, to) =>
+            supabase.from('foods').select('*').eq('household_id', householdId)
+              .order('name', { ascending: true }).order('id', { ascending: true })
+              .range(from, to)
+          ),
           // US-323: degrade to a plain select if the recipe_ingredients embed
           // isn't deployed in this environment, so recipes still load.
-          selectRecipesWithFallback((sel) => supabase.from('recipes').select(sel).eq('household_id', householdId).order('created_at', { ascending: true }).limit(RECIPES_ROW_CAP)),
+          fetchAllRows((from, to) =>
+            selectRecipesWithFallback((sel) =>
+              supabase.from('recipes').select(sel).eq('household_id', householdId)
+                .order('created_at', { ascending: true }).order('id', { ascending: true })
+                .range(from, to)
+            )
+          ),
           supabase.from('plan_entries').select('*').eq('household_id', householdId)
             .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
             .lte('date', ninetyDaysFromNow.toISOString().split('T')[0])
             .order('date', { ascending: true }),
-          supabase.from('grocery_items').select('*').eq('household_id', householdId).order('created_at', { ascending: true }).limit(GROCERY_ROW_CAP),
+          // US-819 AC2: no cap, so oldest-first no longer decides which items a
+          // household is allowed to see. The order is kept because the list
+          // renders in it.
+          fetchAllRows((from, to) =>
+            supabase.from('grocery_items').select('*').eq('household_id', householdId)
+              .order('created_at', { ascending: true }).order('id', { ascending: true })
+              .range(from, to)
+          ),
           supabase.from('inventory_movements').select('*').eq('household_id', householdId)
             .gte('occurred_at', movementWindowStart.toISOString())
             .order('occurred_at', { ascending: true })
@@ -428,23 +433,29 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             setRecipes(dbRecipes);
           }
         }
-        // US-819: say so when a slice came back at its cap, instead of
-        // rendering a partial catalogue that looks like the whole thing. The
-        // toast fires once per load, not once per slice, because three of them
-        // at once reads as breakage rather than as information.
-        const cappedSlices = [
-          reachedRowCap(foodsRes.data, FOODS_ROW_CAP) ? `${FOODS_ROW_CAP} foods` : null,
-          reachedRowCap(recipesRes.data as unknown[], RECIPES_ROW_CAP) ? `${RECIPES_ROW_CAP} recipes` : null,
-          reachedRowCap(groceryRes.data, GROCERY_ROW_CAP) ? `${GROCERY_ROW_CAP} grocery items` : null,
+        // US-819: the caps are gone and each of these is paged to completion,
+        // so the message that used to fire at 500 foods no longer has anything
+        // to report. What is left is the ROW_CEILING backstop, which only a
+        // pathological household reaches, and which is confirmed against the
+        // row past it rather than guessed from a full last page.
+        const truncatedSlices = [
+          foodsRes.truncated ? 'foods' : null,
+          recipesRes.truncated ? 'recipes' : null,
+          groceryRes.truncated ? 'grocery items' : null,
         ].filter(Boolean) as string[];
-        if (cappedSlices.length > 0) {
+        if (truncatedSlices.length > 0) {
           logger.warn(
-            `US-819: load hit a row cap (${cappedSlices.join(', ')}). Anything past the cap is in the database but not in this session.`
+            `US-819: load stopped at the ${ROW_CEILING}-row ceiling for ${truncatedSlices.join(', ')}. ` +
+              'Rows past it are in the database but not in this session, and the cache will not be overwritten with this snapshot.'
           );
-          toast.info(`Showing your first ${cappedSlices.join(' and ')}.`, {
-            description: 'You have more saved than fits in one load. Nothing has been deleted.',
+          toast.info(`Showing the first ${ROW_CEILING.toLocaleString()} of your ${truncatedSlices.join(' and ')}.`, {
+            description: 'You have more saved than one load can hold. Nothing has been deleted.',
           });
         }
+        // AC4: a snapshot short of the full slice must not be written over a
+        // fuller cached one. The write-through effect persists whatever is in
+        // state, so the only way to keep it honest is to stop it.
+        incompleteLoadRef.current = truncatedSlices.length > 0;
 
         if (planRes.data) {
           // US-538: the plan_entries fetch is windowed (-30d..+90d). Merge it

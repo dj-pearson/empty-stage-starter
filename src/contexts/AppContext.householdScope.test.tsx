@@ -14,7 +14,7 @@ const fromTables: string[] = [];
 function makeBuilder() {
   const builder: Record<string, unknown> = {};
   const chain = () => builder;
-  for (const m of ["select", "order", "limit", "gte", "lte", "insert", "update", "delete"]) {
+  for (const m of ["select", "order", "range", "limit", "gte", "lte", "insert", "update", "delete"]) {
     builder[m] = vi.fn(chain);
   }
   builder.eq = vi.fn((col: string, val: unknown) => { eqCalls.push([col, val]); return builder; });
