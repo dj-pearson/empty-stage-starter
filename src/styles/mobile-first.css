@@ -238,9 +238,26 @@ h4 {
     gap: 16px;
   }
 
-  /* Card spacing */
-  .card,
-  [class*="card"] {
+  /*
+    Card spacing, scoped to content (US-869).
+
+    `[class*="card"]` is an attribute SUBSTRING match, so in a Tailwind tree it
+    hits every element carrying the card colour token -- `bg-card`,
+    `text-card-foreground` -- and not only cards. Dashboard's two fixed <nav>
+    bars carry `bg-card`, so both were rendering 20px taller than the space the
+    shell reserves for them: the header measured 97px against `main`'s pt-14
+    (56px), and the bottom tab bar 101px against pb-20 (80px). The top and
+    bottom of every dashboard screen sat behind chrome.
+
+    Scoped to `main` rather than narrowed, because the substring is doing real
+    work: measured across 8 routes at 390px, every element it matches is either
+    a shadcn Card inside `main` (23 on the landing page, 20 on the pantry) or
+    one of those two navs. There is no class that separates a Card from the nav
+    -- both are just `bg-card` -- but "content, not chrome" separates them
+    exactly, and it leaves the padding on every card that had it.
+  */
+  main .card,
+  main [class*="card"] {
     padding: 20px;
     margin-bottom: 16px;
   }

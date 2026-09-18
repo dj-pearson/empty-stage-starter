@@ -330,9 +330,15 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
       return Math.round(bar.getBoundingClientRect().top - nav.getBoundingClientRect().bottom);
     }, PICKER);
 
-    // This is what pins the 97px offset to something real. A `top-0` bar
-    // reports gap = -97 here and passes every other test in this block.
-    expect(gap, `the sticky bar is ${gap}px from the header's bottom edge`).toBeGreaterThanOrEqual(0);
+    // This is what pins the offset to something real. A `top-0` bar reports
+    // gap = -97 here and passes every other test in this block.
+    //
+    // -1 rather than 0 is the nav's 1px bottom border: the bar sticks at
+    // top-14, the same 56px the shell reserves with `main`'s pt-14, and the
+    // nav draws its border into the first pixel of that. `main`'s own content
+    // sits under the same pixel. The nav is z-50 and the bar z-30, so the
+    // border stays visible.
+    expect(gap, `the sticky bar is ${gap}px from the header's bottom edge`).toBeGreaterThanOrEqual(-1);
     expect(gap).toBeLessThanOrEqual(4);
   });
 

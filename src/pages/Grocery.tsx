@@ -905,15 +905,15 @@ export default function Grocery() {
           all four wrap to their own line and the row is 225px tall -- 43% of a
           664px screen, pinned.
 
-          top-[97px] is the mobile header's measured bottom edge, not a round
-          number and not `top-0`: Dashboard's mobile <nav> is fixed at z-50, so
+          top-14 and not `top-0`: Dashboard's mobile <nav> is fixed at z-50, so
           a bar stuck at 0 parks underneath it and is invisible for the whole
-          scroll. 97 rather than the 56 the shell declares (`main` pads pt-14)
-          because mobile-first.css:243 gives `[class*="card"]` 20px of padding
-          below 768px and that attribute selector matches `bg-card` -- the nav
-          carries it, so it renders 41px taller than the space reserved for it.
-          The number is measured, and a test asserts the stuck bar's top equals
-          the nav's bottom, so it fails loudly rather than drifting.
+          scroll. 14 is 56px, the same `pt-14` the shell reserves for that nav.
+          This was `top-[97px]` for one commit, because the nav really did
+          render 41px taller than its own reservation: mobile-first.css gave
+          `[class*="card"]` 20px of padding below 768px and that attribute
+          selector matched `bg-card`. US-869 scoped that rule to `main`. A test
+          asserts the stuck bar's top meets the nav's bottom, so the two cannot
+          drift apart again quietly.
 
           `md:static` reverts above 768px: a control that can only ever do one
           thing on a screen with room to spare is a control in the way. The
@@ -921,7 +921,7 @@ export default function Grocery() {
           through the 16px either side.
         */}
         {userId && (
-          <div className="sticky top-[97px] z-30 bg-background border-b border-border -mx-4 px-4 py-2 mb-4 flex flex-wrap items-center gap-2 md:static md:z-auto md:top-auto md:border-0 md:mx-0 md:px-0 md:py-0">
+          <div className="sticky top-14 z-30 bg-background border-b border-border -mx-4 px-4 py-2 mb-4 flex flex-wrap items-center gap-2 md:static md:z-auto md:top-auto md:border-0 md:mx-0 md:px-0 md:py-0">
             {/*
               min-w-0 flex-1, or the selector's own `flex items-center gap-2`
               row sits at its max-content width as a flex item and pushes the
