@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { compareLedgerToLegacy, summarizeDivergences, type ComparableItem } from "@/lib/stockComparison";
 import { buildStockComparisonSample, sampleSignature, type StockComparisonSample } from "@/lib/stockComparisonSample";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
+import { applyPendingOpsToGroceryItems, pendingWebOps } from "@/lib/webSyncQueue";
 
 // US-331: re-export the narrow domain hooks so components can subscribe to only
 // the slice they use (e.g. `import { useFoods } from "@/contexts/AppContext"`)
@@ -471,7 +472,21 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           const serverEntries = parsePlanEntryRows(planRes.data as unknown[]);
           setPlanEntriesState((prev) => mergeWindowedPlanEntries(prev, serverEntries, windowStart, windowEnd));
         }
-        if (groceryRes.data) setGroceryItemsState(parseGroceryItemRows(groceryRes.data as unknown[]));
+        if (groceryRes.data) {
+          // US-823 AC4: server-authoritative, then the unsent queue projected
+          // back on top. The wholesale replace is what stops a stale cache
+          // resurrecting another device's deletion, and it is also what wipes a
+          // write still sitting in localStorage waiting to be sent -- a shopper
+          // who ticked six items off with no signal would watch the list load
+          // and the ticks vanish. Folding the queue in FIFO order lands on what
+          // the server will hold once the drain finishes. Nothing here reads
+          // the cached copy of a row, only the ops, so precedence is intact.
+          const serverGrocery = parseGroceryItemRows(groceryRes.data as unknown[]);
+          const unsent = await pendingWebOps(userId);
+          setGroceryItemsState(
+            unsent.length > 0 ? applyPendingOpsToGroceryItems(serverGrocery, unsent) : serverGrocery,
+          );
+        }
         // US-671: server-authoritative, same as every slice above. Append-only
         // makes the wholesale overwrite trivially safe for movements: there is
         // no local edit to a movement that an overwrite could discard, because

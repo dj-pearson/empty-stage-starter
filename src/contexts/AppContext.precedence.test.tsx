@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { AppProvider, useApp, useFoods, useInventory } from './AppContext';
 import { writeFlag } from '@/lib/featureFlagCache';
+import { queueWrite } from '@/lib/webSyncQueue';
 
 // ---- Supabase mock: a chainable, thenable query builder per table ----------
 const tableData: Record<string, unknown[]> = {};
@@ -422,6 +423,9 @@ describe('US-819: the load reaches past the old row caps', () => {
     for (const k of Object.keys(tableData)) delete tableData[k];
     rangeCalls.length = 0;
     sessionUser = null;
+    // The offline write queue lives in the real localStorage, not the mocked
+    // platform storage, so a queue left by one test would colour the next.
+    localStorage.clear();
   });
 
   const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
@@ -507,5 +511,75 @@ describe('US-819: the load reaches past the old row caps', () => {
 
     await waitFor(() => expect(names.length).toBe(1200));
     expect(names).toContain('Item 1199');
+  });
+
+  /**
+   * US-823 AC4. Steps 2 and 5 of the contract meet here: the load REPLACES the
+   * grocery slice, and the offline write queue holds writes that have not
+   * reached the server yet. Without the projection, the replace is what erases
+   * them from the screen -- a shopper ticks items off in an aisle with no
+   * signal, closes the tab, opens it at home, and the list arrives with every
+   * tick undone while the ops are still sitting in localStorage.
+   *
+   * This reads the real localStorage queue that src/lib/webSyncQueue.ts writes,
+   * not a stub, so a regression in either half reds it.
+   */
+  it('re-applies writes still queued offline on top of the server load (US-823)', async () => {
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+    tableData['grocery_items'] = [
+      { id: 'g1', name: 'Milk', quantity: 1, checked: false, household_id: HOUSEHOLD },
+      { id: 'g2', name: 'Bread', quantity: 1, checked: false, household_id: HOUSEHOLD },
+      { id: 'g3', name: 'Eggs', quantity: 1, checked: false, household_id: HOUSEHOLD },
+    ];
+
+    // Ticked off and deleted in the aisle; never sent.
+    await queueWrite('user-1', 'grocery.toggle', { id: 'g1', checked: true });
+    await queueWrite('user-1', 'grocery.delete', { id: 'g3' });
+
+    let rows: Array<{ id: string; checked: boolean }> = [];
+    function GroceryProbe() {
+      const { groceryItems } = useApp();
+      rows = groceryItems.map((g) => ({ id: g.id, checked: g.checked }));
+      return null;
+    }
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(rows.length).toBe(2));
+    expect(rows.find((r) => r.id === 'g1')?.checked).toBe(true);
+    expect(rows.find((r) => r.id === 'g2')?.checked).toBe(false);
+    expect(rows.find((r) => r.id === 'g3')).toBeUndefined();
+  });
+
+  it('leaves the server load untouched when another account owns the queue (US-823)', async () => {
+    // The queue is keyed by user. A write belonging to somebody else on this
+    // device must not colour what this account sees.
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+    tableData['grocery_items'] = [
+      { id: 'g1', name: 'Milk', quantity: 1, checked: false, household_id: HOUSEHOLD },
+    ];
+    await queueWrite('someone-else', 'grocery.toggle', { id: 'g1', checked: true });
+
+    let rows: Array<{ id: string; checked: boolean }> = [];
+    function GroceryProbe() {
+      const { groceryItems } = useApp();
+      rows = groceryItems.map((g) => ({ id: g.id, checked: g.checked }));
+      return null;
+    }
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(rows.length).toBe(1));
+    expect(rows[0].checked).toBe(false);
   });
 });

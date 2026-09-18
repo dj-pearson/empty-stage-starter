@@ -17,7 +17,10 @@ import {
   type WebQueuedOp,
   purgeForeignQueues,
   WEB_QUEUE_KEY_PREFIX,
+  applyPendingOpsToGroceryItems,
+  pendingWebOps,
 } from "./webSyncQueue";
+import type { GroceryItem } from "@/types";
 
 /** A chainable stand-in for the PostgREST builder, recording what it was told. */
 function supabaseStub(result: { error: unknown }) {
@@ -222,5 +225,135 @@ describe('queues belonging to other accounts', () => {
   it('does not mistake a prefix for a match', () => {
     // A key that merely starts with the same characters is not one of ours.
     expect(purgeForeignQueues('me', ['eatpal.web.syncQueueBackup'])).toEqual([]);
+  });
+});
+
+/**
+ * US-823 AC4. A server load REPLACES the grocery slice wholesale, so the only
+ * thing standing between a queued write and the screen is this projection.
+ */
+describe('projecting the unsent queue onto a server load', () => {
+  const item = (id: string, over: Partial<GroceryItem> = {}): GroceryItem => ({
+    id,
+    name: id,
+    quantity: 1,
+    unit: 'count',
+    checked: false,
+    category: 'snack',
+    ...over,
+  });
+
+  it('re-applies a tick the load would otherwise have wiped', () => {
+    const server = [item('a'), item('b')];
+    const out = applyPendingOpsToGroceryItems(server, [
+      op('grocery.toggle', { id: 'a', checked: true }),
+    ]);
+    expect(out.find((i) => i.id === 'a')?.checked).toBe(true);
+    expect(out.find((i) => i.id === 'b')?.checked).toBe(false);
+  });
+
+  it('leaves the server rows alone when nothing is queued', () => {
+    const server = [item('a', { checked: true }), item('b')];
+    expect(applyPendingOpsToGroceryItems(server, [])).toEqual(server);
+  });
+
+  it('applies ops in FIFO order, so the last write wins the same way the drain will', () => {
+    const out = applyPendingOpsToGroceryItems(
+      [item('a')],
+      [
+        op('grocery.toggle', { id: 'a', checked: true }),
+        op('grocery.toggle', { id: 'a', checked: false }),
+        op('grocery.toggle', { id: 'a', checked: true }),
+      ],
+    );
+    expect(out[0].checked).toBe(true);
+  });
+
+  it('is idempotent, so racing a drain that already sent the op is harmless', () => {
+    // The drain can land between reading the queue and applying the fold. An
+    // op replayed onto a server row that already carries its effect has to be
+    // a no-op, or the projection would be its own source of drift.
+    const server = [item('a', { checked: true })];
+    const ops = [op('grocery.toggle', { id: 'a', checked: true })];
+    expect(applyPendingOpsToGroceryItems(server, ops)).toEqual(
+      applyPendingOpsToGroceryItems(applyPendingOpsToGroceryItems(server, ops), ops),
+    );
+  });
+
+  it('carries a queued field update onto the loaded row', () => {
+    const out = applyPendingOpsToGroceryItems(
+      [item('a', { quantity: 1, notes: 'old' })],
+      [op('grocery.update', { id: 'a', updates: { quantity: 4, notes: 'the big bag' } })],
+    );
+    expect(out[0].quantity).toBe(4);
+    expect(out[0].notes).toBe('the big bag');
+    expect(out[0].name).toBe('a');
+  });
+
+  it('removes a row deleted offline rather than showing it back', () => {
+    const out = applyPendingOpsToGroceryItems(
+      [item('a'), item('b')],
+      [op('grocery.delete', { id: 'a' })],
+    );
+    expect(out.map((i) => i.id)).toEqual(['b']);
+  });
+
+  it('skips an op naming a row the load did not return, rather than resurrecting it', () => {
+    // Deleted on another device. The server is right and the drain's own write
+    // will be refused for the same reason.
+    const server = [item('b')];
+    expect(applyPendingOpsToGroceryItems(server, [
+      op('grocery.toggle', { id: 'gone', checked: true }),
+      op('grocery.update', { id: 'gone', updates: { quantity: 9 } }),
+      op('grocery.delete', { id: 'gone' }),
+    ])).toEqual(server);
+  });
+
+  it('does not mutate the array or the rows it was handed', () => {
+    const rows = [item('a'), item('b')];
+    const snapshot = JSON.parse(JSON.stringify(rows));
+    applyPendingOpsToGroceryItems(rows, [
+      op('grocery.toggle', { id: 'a', checked: true }),
+      op('grocery.delete', { id: 'b' }),
+    ]);
+    expect(rows).toEqual(snapshot);
+  });
+
+  it('costs one malformed op its own effect, never the whole load', () => {
+    const server = [item('a'), item('b')];
+    const out = applyPendingOpsToGroceryItems(server, [
+      op('grocery.toggle', { id: 'a' }),
+      op('grocery.toggle', { checked: true }),
+      op('grocery.update', { id: 'a', updates: null }),
+      op('grocery.update', { id: 'a', updates: ['not', 'an', 'object'] }),
+      op('grocery.delete', { id: 42 }),
+      op('grocery.toggle', { id: 'b', checked: true }),
+    ]);
+    // Only the one well-formed op did anything.
+    expect(out.find((i) => i.id === 'a')?.checked).toBe(false);
+    expect(out.find((i) => i.id === 'b')?.checked).toBe(true);
+    expect(out).toHaveLength(2);
+  });
+
+  it('ignores a kind this build cannot replay, matching what the drain does with it', () => {
+    const server = [item('a')];
+    expect(applyPendingOpsToGroceryItems(server, [op('grocery.teleport', { id: 'a' })])).toEqual(
+      server,
+    );
+  });
+
+  it('reads the real queue for a user, in order, and nothing for a signed-out visitor', async () => {
+    await queueWrite('user-a', 'grocery.toggle', { id: 'a', checked: true });
+    await queueWrite('user-a', 'grocery.delete', { id: 'b' });
+
+    const ops = await pendingWebOps('user-a');
+    expect(ops.map((o) => o.kind)).toEqual(['grocery.toggle', 'grocery.delete']);
+    expect(await pendingWebOps('user-b')).toEqual([]);
+    expect(await pendingWebOps(null)).toEqual([]);
+  });
+
+  it('survives a queue that cannot be parsed instead of wedging the load', async () => {
+    localStorage.setItem(webQueueKey('user-a'), '{ not json');
+    expect(await pendingWebOps('user-a')).toEqual([]);
   });
 });
