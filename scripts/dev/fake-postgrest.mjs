@@ -100,22 +100,30 @@ const LIST_ID = '00000000-0000-4000-8000-00000000bbb1';
  */
 const TEST_USER_ID_LITERAL = '00000000-0000-4000-8000-000000000001';
 
+// US-767: `aisle` and a real FoodCategory on every row. The comment above has
+// promised "several aisles so the By Aisle grouping has something to group"
+// since this fixture was written, and there was no aisle field at all -- so
+// groupItems put all eight rows in "Uncategorized" and every measurement of
+// the grouped list was of a list with one group in it. The categories were
+// display strings ('Dairy', 'Meat') rather than the enum categoryLabel reads,
+// which is the same kind of quiet mismatch.
 const GROCERY_ITEMS = [
-  ['Whole milk', 'Dairy', 2, 'gal', false],
-  ['Sharp cheddar', 'Dairy', 1, 'block', false],
-  ['Chicken breast', 'Meat', 6, 'count', false],
-  ['Broccoli florets', 'Produce', 1, 'bag', true],
-  ['Bananas', 'Produce', 6, 'count', false],
-  ['Organic rolled oats, old fashioned, large container', 'Pantry', 1, 'box', false],
-  ['Olive oil', 'Pantry', 1, 'bottle', false],
-  ['Frozen peas', 'Frozen', 2, 'bag', false],
-].map(([name, category, quantity, unit, checked], i) => ({
+  ['Whole milk', 'dairy', 'Dairy', 2, 'gal', false],
+  ['Sharp cheddar', 'dairy', 'Dairy', 1, 'block', false],
+  ['Chicken breast', 'protein', 'Meat & Deli', 6, 'count', false],
+  ['Broccoli florets', 'vegetable', 'Produce', 1, 'bag', true],
+  ['Bananas', 'fruit', 'Produce', 6, 'count', false],
+  ['Organic rolled oats, old fashioned, large container', 'carb', 'Rice & Grains', 1, 'box', false],
+  ['Olive oil', 'snack', 'Condiments & Sauces', 1, 'bottle', false],
+  ['Frozen peas', 'vegetable', 'Frozen Vegetables', 2, 'bag', false],
+].map(([name, category, aisle, quantity, unit, checked], i) => ({
   id: `cccccccc-0000-4000-8000-00000000000${i}`,
   household_id: HOUSEHOLD_ID,
   user_id: TEST_USER_ID_LITERAL,
   list_id: LIST_ID,
   name,
   category,
+  aisle,
   quantity,
   unit,
   checked,

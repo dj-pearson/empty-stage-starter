@@ -46,6 +46,16 @@ test.describe('Grocery list at phone width', () => {
       });
     await page.waitForTimeout(750);
     expect(new URL(page.url()).pathname, `redirected to ${page.url()}`).not.toMatch(/^\/auth/);
+
+    // US-767: the aisles fold at this width and only the first is open, so
+    // every check below would otherwise measure one aisle instead of eight.
+    // Opening them all is the stronger assertion anyway -- a control that is
+    // 40px wide inside a folded aisle is still 40px wide when the shopper
+    // opens it. The folding itself is asserted in its own describe below.
+    const folded = page.locator('button[aria-controls^="grocery-group-"][aria-expanded="false"]');
+    for (let guard = 0; guard < 20 && (await folded.count()) > 0; guard++) {
+      await folded.first().click();
+    }
   });
 
   test('the fixture actually rendered a list', async ({ page }) => {
@@ -113,5 +123,78 @@ test.describe('Grocery list at phone width', () => {
     });
 
     expect(panned, `the list pans sideways to x=${panned}`).toBe(0);
+  });
+});
+
+/**
+ * US-767 AC2: the By Aisle grouping folds at phone width.
+ *
+ * Eleven aisle headers between a shopper and the aisle they are standing in is
+ * eleven scrolls with one hand over a trolley. One group is open and the rest
+ * are a tap away.
+ *
+ * Kept as its own describe because it asserts across TWO viewports: the whole
+ * point is that a desktop is unchanged, and a collapsing control that also
+ * appeared there would be a control in the way.
+ */
+test.describe('Grocery aisles fold at phone width', () => {
+  const GROUP_BUTTON = 'button[aria-controls^="grocery-group-"]';
+
+  test.beforeEach(async ({ context, page }) => {
+    await signIn(context);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('opens the first aisle and folds the rest', async ({ page }) => {
+    const headers = page.locator(GROUP_BUTTON);
+    // The fixture serves six aisles. One group would prove nothing, which is
+    // what this measured before the fake backend carried an `aisle` at all.
+    await expect(headers).toHaveCount(6);
+
+    await expect(headers.first()).toHaveAttribute('aria-expanded', 'true');
+    for (let i = 1; i < 6; i++) {
+      await expect(headers.nth(i)).toHaveAttribute('aria-expanded', 'false');
+    }
+  });
+
+  test('every header controls a panel that exists', async ({ page }) => {
+    // US-778 fixed exactly this bug on this page: two toggles advertised
+    // aria-controls for panel ids Radix had never rendered, and axe rates a
+    // dangling aria-controls critical. So the panel stays mounted and is
+    // hidden, rather than being removed.
+    const dangling = await page.evaluate((sel) => {
+      return [...document.querySelectorAll(sel)]
+        .map((h) => h.getAttribute('aria-controls') || '')
+        .filter((id) => !document.getElementById(id));
+    }, GROUP_BUTTON);
+
+    expect(dangling, `aria-controls pointing at nothing: ${dangling.join(', ')}`).toEqual([]);
+  });
+
+  test('a folded aisle opens on a tap, and its items appear', async ({ page }) => {
+    const second = page.locator(GROUP_BUTTON).nth(1);
+    const panelId = await second.getAttribute('aria-controls');
+
+    await expect(page.locator(`#${panelId}`)).toBeHidden();
+    await second.click();
+    await expect(second).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(`#${panelId}`)).toBeVisible();
+  });
+
+  test('the header itself meets the touch floor', async ({ page }) => {
+    const box = await page.locator(GROUP_BUTTON).first().boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET_PX);
+  });
+
+  test('a desktop gets no collapsing control and nothing hidden', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(300);
+
+    await expect(page.locator(GROUP_BUTTON)).toHaveCount(0);
+    const hidden = await page.evaluate(
+      () => [...document.querySelectorAll('[id^="grocery-group-"]')].filter((p) => (p as HTMLElement).hidden).length,
+    );
+    expect(hidden).toBe(0);
   });
 });

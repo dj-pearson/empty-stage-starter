@@ -8,6 +8,8 @@ import {
   groupItems,
   flattenGroupedRows,
   buildFoodByDisplayNameIndex,
+  initialExpandedGroups,
+  reconcileExpandedGroups,
 } from './groceryData';
 import type { CatalogEntry } from '@/lib/effectiveFood';
 import type { Food, GroceryItem } from '@/types';
@@ -142,5 +144,107 @@ describe('buildFoodByDisplayNameIndex (US-795 fix round)', () => {
     const index = buildFoodByDisplayNameIndex([linked], catalogById);
     expect(index.get('milk')).toBe(linked);
     expect(index.get('whole milk')).toBe(linked);
+  });
+});
+
+/**
+ * US-767: which aisles are open when a shopper opens the list on a phone.
+ */
+describe('initialExpandedGroups', () => {
+  it('opens only the first group at phone width', () => {
+    const open = initialExpandedGroups(['Produce', 'Dairy', 'Frozen'], true);
+    expect([...open]).toEqual(['Produce']);
+  });
+
+  it('opens everything on a desktop, so that view is unchanged', () => {
+    const open = initialExpandedGroups(['Produce', 'Dairy', 'Frozen'], false);
+    expect([...open].sort()).toEqual(['Dairy', 'Frozen', 'Produce']);
+  });
+
+  it('copes with an empty list rather than opening a group that is not there', () => {
+    expect([...initialExpandedGroups([], true)]).toEqual([]);
+    expect([...initialExpandedGroups([], false)]).toEqual([]);
+  });
+
+  it('follows the render order, because a shopper works down the list', () => {
+    // groupItems preserves insertion order, so "first" means the aisle at the
+    // top of the page -- not alphabetically first.
+    expect([...initialExpandedGroups(['Frozen', 'Produce'], true)]).toEqual(['Frozen']);
+  });
+});
+
+describe('reconcileExpandedGroups', () => {
+  it('keeps a group the shopper opened when the list re-groups', () => {
+    // Checking an item off re-runs groupItems. Slamming Dairy shut because of
+    // that would undo a deliberate tap.
+    const open = reconcileExpandedGroups(new Set(['Dairy']), ['Produce', 'Dairy'], true);
+    expect([...open]).toEqual(['Dairy']);
+  });
+
+  it('keeps several open groups', () => {
+    const open = reconcileExpandedGroups(
+      new Set(['Produce', 'Dairy']),
+      ['Produce', 'Dairy', 'Frozen'],
+      true,
+    );
+    expect([...open].sort()).toEqual(['Dairy', 'Produce']);
+  });
+
+  it('drops a group that no longer exists instead of remembering it forever', () => {
+    const open = reconcileExpandedGroups(new Set(['Produce', 'Gone']), ['Produce'], true);
+    expect([...open]).toEqual(['Produce']);
+  });
+
+  it('falls back to the default rather than leaving everything shut', () => {
+    // The shopper finished the only aisle they had open.
+    const open = reconcileExpandedGroups(new Set(['Produce']), ['Dairy', 'Frozen'], true);
+    expect([...open]).toEqual(['Dairy']);
+  });
+
+  it('opens everything again when the viewport grows past phone width', () => {
+    const open = reconcileExpandedGroups(new Set(['Dairy']), ['Produce', 'Dairy'], false);
+    expect([...open].sort()).toEqual(['Dairy', 'Produce']);
+  });
+
+  it('returns an empty set for an empty list at either width', () => {
+    expect([...reconcileExpandedGroups(new Set(['Old']), [], true)]).toEqual([]);
+    expect([...reconcileExpandedGroups(new Set(['Old']), [], false)]).toEqual([]);
+  });
+});
+
+/**
+ * The loop this prevents is not visible in review. The caller runs
+ * reconcileExpandedGroups in an effect, and groupItems returns a fresh object
+ * every render -- so a new Set each time sets state, re-renders, re-groups and
+ * runs the effect again. It presented as a vitest worker dying with
+ * "Ineffective mark-compacts near heap limit", with 9.9GB free.
+ */
+describe('reconcileExpandedGroups is identity-stable', () => {
+  it('returns the SAME set object when nothing changed', () => {
+    const previous = new Set(['Produce', 'Dairy']);
+    expect(reconcileExpandedGroups(previous, ['Produce', 'Dairy'], true)).toBe(previous);
+  });
+
+  it('is stable regardless of the order the groups arrive in', () => {
+    const previous = new Set(['Produce', 'Dairy']);
+    expect(reconcileExpandedGroups(previous, ['Dairy', 'Produce'], true)).toBe(previous);
+  });
+
+  it('is stable on the desktop branch too', () => {
+    const previous = new Set(['Produce', 'Dairy']);
+    expect(reconcileExpandedGroups(previous, ['Produce', 'Dairy'], false)).toBe(previous);
+  });
+
+  it('returns a NEW set when something actually changed', () => {
+    const previous = new Set(['Produce']);
+    const next = reconcileExpandedGroups(previous, ['Produce', 'Dairy'], false);
+    expect(next).not.toBe(previous);
+    expect([...next].sort()).toEqual(['Dairy', 'Produce']);
+  });
+
+  it('settles after one application, so a second pass changes nothing', () => {
+    const first = reconcileExpandedGroups(new Set(['Gone']), ['Produce', 'Dairy'], true);
+    const second = reconcileExpandedGroups(first, ['Produce', 'Dairy'], true);
+    expect(second).toBe(first);
   });
 });

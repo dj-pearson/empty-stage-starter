@@ -146,6 +146,91 @@ export function groupItems(items: GroceryItem[], groupBy: GroupBy): Record<strin
   return groups;
 }
 
+/**
+ * Which groups start expanded on the grocery list (US-767).
+ *
+ * At phone width the By Aisle view is the shopping view: a parent standing in
+ * an aisle holding a phone in one hand wants the aisle they are IN, not eleven
+ * headers they have to scroll past to reach it. So one group is open and the
+ * rest are a tap away.
+ *
+ * WHICH ONE. The first group with items left to buy. `groupItems` preserves
+ * the order the list is rendered in, and a shopper works down it, so the first
+ * unfinished group is the one they are standing in. Anything cleverer -- a
+ * store layout, the last aisle they checked something off in -- is a guess
+ * dressed as help, and guessing wrong costs a tap on a phone they are holding
+ * over a trolley.
+ *
+ * On a desktop there is room for all of it, so nothing collapses and the view
+ * is exactly what it was. That asymmetry is the point: this is a phone-width
+ * affordance, not a new interaction everyone has to learn.
+ */
+/**
+ * A DOM-id-safe form of a group name, for aria-controls.
+ *
+ * Aisle names are operator-typed ("Meat & Deli", "Frozen / Freezer"), so they
+ * carry spaces, ampersands and slashes. An id with those in it is legal in
+ * HTML5 but a minefield for anything that later needs to select it, and two
+ * aisles differing only in punctuation must not collide -- hence the fallback
+ * on an empty result rather than an id of "".
+ */
+export function slugifyGroupId(group: string): string {
+  const slug = group
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || `g${[...group].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 100000, 7)}`;
+}
+
+export function initialExpandedGroups(
+  groupNames: readonly string[],
+  isPhoneWidth: boolean,
+): Set<string> {
+  if (!isPhoneWidth) return new Set(groupNames);
+  const first = groupNames[0];
+  return first === undefined ? new Set() : new Set([first]);
+}
+
+/**
+ * Carry the open/closed state across a re-group.
+ *
+ * Checking the last item off an aisle removes that group, and adding an item
+ * can introduce one. Recomputing from scratch would slam shut a group the
+ * shopper had deliberately opened, so what they have already chosen is kept
+ * and only genuinely new groups take the default.
+ *
+ * A group that has gone is dropped rather than remembered: if it comes back it
+ * is a new aisle to them, and a set that only ever grows is a leak.
+ */
+export function reconcileExpandedGroups(
+  previous: ReadonlySet<string>,
+  groupNames: readonly string[],
+  isPhoneWidth: boolean,
+): ReadonlySet<string> {
+  const known = new Set(groupNames);
+  const kept = [...previous].filter((name) => known.has(name));
+
+  const next = !isPhoneWidth
+    ? new Set(groupNames)
+    // Nothing survived -- a fresh list, or every open group was finished. Fall
+    // back to the default so the shopper is never left with everything shut.
+    : kept.length === 0
+      ? initialExpandedGroups(groupNames, true)
+      : new Set(kept);
+
+  // IDENTITY-STABLE WHEN NOTHING CHANGED, and this is not a micro-optimisation.
+  // The caller runs this in an effect keyed on the grouped items, and
+  // `groupItems` returns a fresh object on every render -- so returning a new
+  // Set each time sets state, re-renders, re-groups and runs the effect again,
+  // forever. It does not look like an infinite loop in review; it looks like a
+  // vitest worker dying with "Ineffective mark-compacts near heap limit", which
+  // is how this was found.
+  if (next.size === previous.size && [...next].every((name) => previous.has(name))) {
+    return previous;
+  }
+  return next;
+}
+
 export type VirtualRow =
   | { type: 'header'; group: string; count: number }
   | { type: 'item'; item: GroceryItem; group: string };

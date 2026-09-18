@@ -47,10 +47,15 @@ import {
   flattenGroupedRows,
   planRegenerationFromPlan,
   buildFoodByDisplayNameIndex,
+  initialExpandedGroups,
+  reconcileExpandedGroups,
+  slugifyGroupId,
 } from "@/lib/groceryData";
 import { supabase } from "@/integrations/supabase/client";
 import { parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { logger } from "@/lib/logger";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { normalizeHouseholdId } from "@/lib/householdId";
 
 // Extended type for grocery items with additional database properties
@@ -750,6 +755,40 @@ export default function Grocery() {
     [activeItems, groupBy]
   );
 
+  /*
+    US-767: at phone width the aisles fold, and the one the shopper is working
+    through stays open. The policy lives in src/lib/groceryData.ts so it can be
+    tested without a viewport; this holds the state and reconciles it whenever
+    the grouping changes -- checking the last item off an aisle removes that
+    group, and recomputing from scratch would slam shut a group the shopper had
+    deliberately opened.
+  */
+  const isPhoneWidth = useIsMobile();
+  const groupNames = useMemo(
+    () => Object.keys(activeItemsByGroup).filter((g) => activeItemsByGroup[g].length > 0),
+    [activeItemsByGroup]
+  );
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() =>
+    initialExpandedGroups(groupNames, isPhoneWidth)
+  );
+  // Keyed on the NAMES, not the array: groupItems returns a fresh object every
+  // render, so an effect depending on the array identity re-runs every time.
+  const groupKey = groupNames.join('\u0000');
+  useEffect(() => {
+    setExpandedGroups((prev) =>
+      reconcileExpandedGroups(prev, groupKey ? groupKey.split('\u0000') : [], isPhoneWidth)
+    );
+  }, [groupKey, isPhoneWidth]);
+
+  const toggleGroup = useCallback((group: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  }, []);
+
   // Virtualization for large grocery lists (>50 items): flatten grouped items
   // into rows (each row is either a group header or an item).
   const flattenedRows = useMemo(
@@ -1177,17 +1216,57 @@ export default function Grocery() {
                 {Object.entries(activeItemsByGroup).map(([group, items]) => {
                   if (items.length === 0) return null;
 
+                  const panelId = `grocery-group-${slugifyGroupId(group)}`;
+                  const isOpen = expandedGroups.has(group);
+
                   return (
                     <Card key={group} className="overflow-hidden">
-                      <div className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-sm">{group}</span>
-                          <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                            {items.length}
-                          </Badge>
+                      {/*
+                        US-767: the header is a real button at phone width, so
+                        an aisle can be folded away. On a desktop it is a plain
+                        heading and nothing collapses -- there is room for the
+                        whole list, and a control that only ever does one thing
+                        is a control in the way.
+
+                        The panel stays MOUNTED and is hidden with `hidden`
+                        rather than being removed. aria-controls has to name an
+                        element that exists: US-778 fixed exactly that bug on
+                        this page, where two toggles pointed at panel ids Radix
+                        had never rendered and axe rated it critical.
+                      */}
+                      {isPhoneWidth ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(group)}
+                          aria-expanded={isOpen}
+                          aria-controls={panelId}
+                          className="w-full min-h-11 px-4 py-3 bg-muted/30 border-b flex items-center justify-between text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{group}</span>
+                            <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                              {items.length}
+                            </Badge>
+                          </span>
+                          <ChevronDown
+                            className={cn(
+                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                              isOpen && "rotate-180",
+                            )}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      ) : (
+                        <div className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{group}</span>
+                            <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                              {items.length}
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                      <div className="divide-y">
+                      )}
+                      <div id={panelId} hidden={!isOpen} className="divide-y">
                         {items.map(item => (
                           <div
                             key={item.id}
