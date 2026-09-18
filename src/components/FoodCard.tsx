@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, AlertTriangle, Plus, Minus, PackageOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG, getStockStatus } from "@/components/pantry/pantryConstants";
+import { resolveFood, type CatalogEntry } from "@/lib/effectiveFood";
+import { DataSourceCredit } from "@/components/DataSourceCredit";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +32,16 @@ interface FoodCardProps {
    */
   onWaste?: (id: string, quantity: number) => void;
   kidAllergens?: string[];
+  /**
+   * The catalog row this food is linked to, when it is linked (US-797).
+   *
+   * A product promoted from a barcode scan lands `verification = 'unverified'`
+   * -- nobody has checked it, it is one household's scan of one label. It is
+   * deliberately usable for shopping, so the card says where the data came
+   * from rather than hiding it. Optional, so a FoodCard rendered somewhere
+   * without the catalog keeps working.
+   */
+  catalog?: CatalogEntry | null;
 }
 
 export const FoodCard = memo(function FoodCard({
@@ -39,10 +51,16 @@ export const FoodCard = memo(function FoodCard({
   onQuantityChange,
   onWaste,
   kidAllergens,
+  catalog,
 }: FoodCardProps) {
   const [showZeroQuantityDialog, setShowZeroQuantityDialog] = useState(false);
 
   const config = CATEGORY_CONFIG[food.category];
+  // US-797: provenance for a catalog-linked food. `catalog` is undefined
+  // wherever a FoodCard is rendered without it, and resolveFood treats that
+  // the same as an unlinked food, so both cases render nothing extra.
+  const effective = resolveFood(food, catalog);
+  const showUnverified = effective.isCanonical && !effective.isVerified;
   const CategoryIcon = config.icon;
   const stockStatus = getStockStatus(food.quantity);
 
@@ -119,6 +137,7 @@ export const FoodCard = memo(function FoodCard({
             </h3>
             {/* The icon is the category; say so for anyone not seeing it. */}
             <span className="sr-only">{config.label}</span>
+
           </div>
           <div className="flex gap-0.5 shrink-0 transition-opacity md:opacity-40 md:group-hover:opacity-100">
             <Button
@@ -182,6 +201,21 @@ export const FoodCard = memo(function FoodCard({
               Try Bite
             </Badge>
           )}
+          {showUnverified && (
+            // US-797: a scanned product promotes itself into the shared
+            // catalog as `unverified` -- one household's scan of one label,
+            // checked by nobody. It is fine to shop from, and should not be
+            // presented as a confirmed fact, so the card says which it is.
+            // Deliberately not a warning colour: this is provenance, not a
+            // problem with the food.
+            <Badge
+              variant="outline"
+              className="text-[11px] px-1.5 py-0 h-5 font-normal"
+              title="Added from a scanned barcode and not yet checked by anyone"
+            >
+              Unverified
+            </Badge>
+          )}
           {stockStatus === "out" && (
             <Badge
               variant="destructive"
@@ -200,6 +234,13 @@ export const FoodCard = memo(function FoodCard({
             </Badge>
           )}
         </div>
+
+        {/* US-797 / US-633: Open Food Facts and FoodRepo are ODbL, and the
+            licence wants the credit visible wherever the data is shown. Once a
+            household food is linked to a promoted row that is here, not only
+            the scanner dialog it arrived through. Renders nothing for our own
+            sources. */}
+        <DataSourceCredit source={effective.source} className="text-[11px] text-muted-foreground mt-1.5" />
 
         {/* Quantity stepper */}
         {onQuantityChange && (

@@ -19,6 +19,14 @@ export interface CatalogEntry {
   default_category: string | null;
   default_aisle_section: string | null;
   verification: string;
+  /**
+   * Which database the row was promoted from (US-797). Needed by the UI, not
+   * by the merge: Open Food Facts and FoodRepo are ODbL, and the licence wants
+   * the credit visible wherever the data is shown -- which, once a household
+   * food is linked, is the pantry card, not only the scanner dialog it
+   * arrived through.
+   */
+  source?: string | null;
 }
 
 /**
@@ -37,6 +45,8 @@ export interface EffectiveFood {
   aisleRaw: string | null;
   isCanonical: boolean;
   isVerified: boolean;
+  /** The catalog row's source, for attribution. Null when not catalog-linked. */
+  source: string | null;
 }
 
 const FOOD_CATEGORIES: readonly FoodCategory[] = ['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'];
@@ -134,6 +144,7 @@ export function resolveFood(food: Food, catalog?: CatalogEntry | null): Effectiv
       aisleRaw: null,
       isCanonical: false,
       isVerified: false,
+      source: null,
     };
   }
 
@@ -163,5 +174,6 @@ export function resolveFood(food: Food, catalog?: CatalogEntry | null): Effectiv
     aisleRaw,
     isCanonical: true,
     isVerified: catalog.verification === 'verified',
+    source: catalog.source ?? null,
   };
 }

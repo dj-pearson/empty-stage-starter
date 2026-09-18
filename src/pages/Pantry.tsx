@@ -1068,6 +1068,10 @@ export default function Pantry() {
                         onQuantityChange={handleQuantityChange}
                         onWaste={handleWaste}
                         kidAllergens={uniqueKidAllergens}
+                        // US-797: the card says where a catalog-linked food
+                        // came from. catalogById holds stable references, so
+                        // this does not defeat FoodCard's memo.
+                        catalog={food.canonical_id ? catalogById[food.canonical_id] : null}
                       />
                     </div>
                   ))}
