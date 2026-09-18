@@ -158,13 +158,18 @@ END $a9$;
 -- 10. An admin CAN verify. Every assertion above tests the deny path; without
 --     this, a broken has_role() (or an inverted condition) would leave the
 --     suite green while no row could ever legitimately reach 'verified'.
---     on_auth_user_created / on_user_created_create_referral_code are
---     unrelated pre-existing schema drift on this DB (a broken
---     create_default_notification_preferences() referencing a column that
---     doesn't exist on its trigger row) that this fix round does not touch;
---     the test role isn't the table owner so it can't ALTER TABLE ... DISABLE
---     TRIGGER, but it can flip session_replication_role, which every catalog
---     assertion below needs back at its default to exercise gpc_guard_verification.
+--     session_replication_role = replica keeps this admin fixture from firing
+--     on_auth_user_created, which would create a profile, a household, a
+--     membership and a preferences row this file has no use for. It was
+--     originally a workaround: create_default_notification_preferences() read
+--     NEW.user_id off a profiles row that has no such column, so any insert
+--     into auth.users aborted (US-801, fixed in
+--     20260918000000_fix_notification_preferences_signup.sql). The suppression
+--     stays because the side effects are still unwanted here, not because the
+--     chain is still broken. The test role isn't the table owner so it can't
+--     ALTER TABLE ... DISABLE TRIGGER, but it can flip
+--     session_replication_role, which every catalog assertion below needs back
+--     at its default to exercise gpc_guard_verification.
 SET LOCAL session_replication_role = replica;
 INSERT INTO auth.users (id) VALUES ('93930000-0000-0000-0000-00000000ad33')
   ON CONFLICT (id) DO NOTHING;
