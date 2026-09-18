@@ -37,6 +37,22 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default is `tools platform-tools`, and Google removed
+          # `tools` from the SDK repository -- it has been deprecated in favour
+          # of cmdline-tools for years. sdkmanager answers "Failed to find
+          # package 'tools'" and exits 1, which fails the whole job before
+          # Gradle starts.
+          #
+          # This job last ran green on 2026-08-14 and then did not run at all
+          # until now, because its path filters only fire on android-native/**
+          # or on this file. So the breakage is upstream and has been latent
+          # for a month; nothing in this PR's Android code caused it, and
+          # nothing on main would have reported it either.
+          #
+          # platform-tools still exists and is kept. Gradle downloads the
+          # platform and build-tools it needs on its own.
+          packages: 'platform-tools'
 
       - name: Cache Gradle
         uses: actions/cache@v4
