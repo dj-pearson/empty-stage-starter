@@ -149,4 +149,35 @@ final class SignupVerificationPolicyTests: XCTestCase {
         XCTAssertTrue(message.contains("Wait"), message)
         XCTAssertFalse(message.contains("over_email_send_rate_limit"), message)
     }
+
+    // MARK: - Snake_case codes and spaced prose are the same condition
+
+    /// This is the case CI caught and nothing local could have: the first
+    /// version matched "rate limit" with a space, so `over_email_send_rate_limit`
+    /// -- the single likeliest resend failure -- fell past the rate-limit branch
+    /// into the generic "try again in a moment". The pair below fixes the
+    /// spelling in place, so a matcher that handles only one form fails here
+    /// rather than in front of a parent.
+    func testBothSpellingsOfARateLimitReadTheSame() {
+        XCTAssertEqual(
+            SignupVerificationPolicy.resendFailureMessage(for: "over_email_send_rate_limit"),
+            SignupVerificationPolicy.resendFailureMessage(for: "email send rate limit exceeded")
+        )
+    }
+
+    /// The same hazard on the verify path, which has its own rate-limit branch.
+    func testVerifyRateLimitMatchesTheSnakeCaseCode() {
+        let message = SignupVerificationPolicy.verificationFailureMessage(
+            for: "over_request_rate_limit"
+        )
+        XCTAssertTrue(message.contains("Too many attempts"), message)
+    }
+
+    func testUnconfirmedEmailMatchesEitherSpelling() {
+        XCTAssertEqual(
+            SignupVerificationPolicy.isUnconfirmedEmail("email_not_confirmed"),
+            SignupVerificationPolicy.isUnconfirmedEmail("Email not confirmed")
+        )
+        XCTAssertTrue(SignupVerificationPolicy.isUnconfirmedEmail("email_not_confirmed"))
+    }
 }

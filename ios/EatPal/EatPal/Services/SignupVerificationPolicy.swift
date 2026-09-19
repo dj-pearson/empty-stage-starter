@@ -46,12 +46,25 @@ enum SignupVerificationPolicy {
     ///
     /// Matched on the message because GoTrue's `email_not_confirmed` arrives as
     /// an `AuthError` whose payload shape has changed across SDK versions,
-    /// while the string has not. Both the code and the sentence are accepted so
-    /// neither spelling regresses this silently.
+    /// while the string has not. `matchable` flattens the underscores, so the
+    /// code and the prose both land on one branch.
     static func isUnconfirmedEmail(_ message: String) -> Bool {
-        let lowered = message.lowercased()
-        return lowered.contains("email not confirmed")
-            || lowered.contains("email_not_confirmed")
+        matchable(message).contains("email not confirmed")
+    }
+
+    /// Lowercased, with underscores flattened to spaces.
+    ///
+    /// GoTrue names a condition twice: a snake_case code
+    /// (`over_email_send_rate_limit`, `email_not_confirmed`) and spaced prose,
+    /// and which one reaches `localizedDescription` depends on the SDK version
+    /// and on whether the body decoded. The first version of this file matched
+    /// only the spaced form, so `over_email_send_rate_limit` -- the single most
+    /// likely resend failure -- fell past the rate-limit branch into the generic
+    /// fallback. CI caught it; nothing local could have, since the string only
+    /// appears in a live GoTrue response. Flattening underscores matches both
+    /// spellings with one branch.
+    private static func matchable(_ message: String) -> String {
+        message.lowercased().replacingOccurrences(of: "_", with: " ")
     }
 
     // MARK: - What the parent reads
@@ -65,7 +78,7 @@ enum SignupVerificationPolicy {
     /// that still tells the reader what to do, because a message this function
     /// has not seen is exactly when a parent is most stuck.
     static func verificationFailureMessage(for message: String) -> String {
-        let lowered = message.lowercased()
+        let lowered = matchable(message)
 
         if lowered.contains("expired") {
             return "That code has expired. Tap Resend to get a new one."
@@ -84,7 +97,7 @@ enum SignupVerificationPolicy {
 
     /// The same treatment for a failed resend.
     static func resendFailureMessage(for message: String) -> String {
-        let lowered = message.lowercased()
+        let lowered = matchable(message)
 
         if lowered.contains("rate limit") || lowered.contains("too many") || lowered.contains("429") {
             return "A code was sent recently. Wait a minute before asking for another."
