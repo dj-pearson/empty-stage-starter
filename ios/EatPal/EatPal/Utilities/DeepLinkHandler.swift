@@ -43,6 +43,11 @@ final class DeepLinkHandler: ObservableObject {
         /// right place. `recipeName` is the parsed name (best-effort) so the
         /// router can surface "Imported <name>" without re-reading the queue.
         case recipeImport(recipeName: String)
+        /// US-851: `https://tryeatpal.com/join?code=...`, the link a parent is
+        /// handed in a text message. `code` is nil when the link arrived
+        /// without one, which is a real case -- a truncated paste -- and has
+        /// to say so rather than silently doing nothing.
+        case joinHousehold(code: String?)
     }
 
     private init() {}
@@ -292,9 +297,29 @@ final class DeepLinkHandler: ObservableObject {
             }
             activeDestination = dashboardScreenDestination(components[1], url: url)
 
+        case "join":
+            // US-851. Parked before the destination is set, so the code
+            // survives a cold start and a sign-in round trip. The web route
+            // gets this for free by letting `?code=` ride through its /auth
+            // redirect; the app has no redirect to ride.
+            let code = HouseholdInviteLink.parseCode(from: url)
+            if let code { HouseholdInviteLink.storePending(code: code) }
+            activeDestination = .joinHousehold(code: code)
+
         default:
             // Marketing, editorial, and billing routes deliberately fall
             // through and stay wherever the tap started.
+            //
+            // `/share` is in that set on purpose (US-851 AC3). It is not a
+            // shareable link: it is the PWA's `share_target` action
+            // (public/manifest.json), handled by a POST in public/sw.js, which
+            // stashes the payload in a `share-target-cache` entry and
+            // redirects to `/share?source=sw` INSIDE that browser. The only
+            // /share URLs that exist carry no payload, and the data they refer
+            // to is in a cache the app cannot read. Claiming it would take the
+            // web share target away from any device with the app installed and
+            // land the user on an empty screen. iOS already has its own share
+            // path -- the share extension (US-143).
             break
         }
     }

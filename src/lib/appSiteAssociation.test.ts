@@ -55,6 +55,7 @@ describe('apple-app-site-association', () => {
     const unroutable = patterns.filter((pattern) => {
       if (pattern === '/app/*') return !SWIFT.includes('case "app":');
       if (pattern === '/dashboard') return !SWIFT.includes('case "dashboard":');
+      if (pattern === '/join') return !SWIFT.includes('case "join":');
       const screen = pattern.replace('/dashboard/', '');
       return !dashboardScreens.includes(screen);
     });
@@ -77,15 +78,39 @@ describe('apple-app-site-association', () => {
     expect(patterns).not.toContain('/dashboard/billing');
   });
 
-  it('does not claim /join or /share until the app routes them', () => {
-    // Both are worth opening in-app and both are tracked in prd.json (US-851).
-    // Claiming them before the Swift side handles them turns a working web
-    // invite into a tap that does nothing.
-    const joinOrShare = patterns.filter(
-      (pattern) => pattern.startsWith('/join') || pattern.startsWith('/share'),
+  it('claims /join only while the app routes it', () => {
+    // US-851. The rule has not changed, only which side of it /join is on:
+    // claiming a path the Swift does not handle turns a working web invite
+    // into a tap that does nothing at all, because Safari no longer gets it
+    // either.
+    if (patterns.includes('/join')) {
+      expect(SWIFT, '/join is claimed but DeepLinkHandler does not route it').toContain(
+        'case "join":',
+      );
+      // The code is what makes the link worth opening in-app.
+      expect(SWIFT).toContain('HouseholdInviteLink.parseCode(from: url)');
+    }
+  });
+
+  it('leaves /share to the browser', () => {
+    // US-851 AC3 turned out to rest on a wrong premise, and this pins the
+    // correction. /share is not a shareable link: it is the PWA share_target
+    // action (public/manifest.json), handled by a POST in public/sw.js that
+    // stashes the payload in a `share-target-cache` entry and redirects to
+    // /share?source=sw INSIDE that browser. Every /share URL that exists
+    // carries no payload, and the data it refers to is in a cache the app
+    // cannot read. Claiming it would break the web share target on any device
+    // with the app installed. iOS has the share extension (US-143) instead.
+    expect(patterns.filter((pattern) => pattern.startsWith('/share'))).toEqual([]);
+    expect(SWIFT, 'the app started routing /share').not.toContain('case "share":');
+
+    // The premise, verified rather than asserted: the manifest points at it
+    // and the service worker answers a POST there.
+    const manifest = JSON.parse(
+      readFileSync(path.resolve(__dirname, '../../public/manifest.json'), 'utf8'),
     );
-    const routed = SWIFT.includes('case "join":') && SWIFT.includes('case "share":');
-    if (!routed) expect(joinOrShare).toEqual([]);
+    expect(manifest.share_target?.action).toBe('/share');
+    expect(manifest.share_target?.method?.toUpperCase?.()).toBe('POST');
   });
 
   it('keeps the app-only vocabulary in sync with the eatpal:// scheme', () => {

@@ -52,6 +52,37 @@ final class AppState: ObservableObject {
     /// Observes the @Published collections that feed the home/Lock Screen
     /// widget and pushes a debounced snapshot into App Group UserDefaults
     /// any time they change. Widget timeline reloads follow automatically.
+    // MARK: - Pending household invite (US-851)
+
+    /// US-851: accept an invite that was tapped before there was anyone to
+    /// accept it as.
+    ///
+    /// The tap can land on a cold app or on a signed-out one, and signed-out
+    /// is the common case -- an invite is usually the first EatPal link
+    /// someone ever receives. `DeepLinkHandler` parks the code; this runs from
+    /// the authenticated load, so by the time it fires there is a session and
+    /// the RPC has someone to attribute the membership to.
+    ///
+    /// Not a queue: an invite is single-use and a second pending one would
+    /// mean the person tapped two links, of which only the newest can be what
+    /// they meant.
+    func drainPendingHouseholdInvite() async {
+        guard let code = HouseholdInviteLink.takePending() else { return }
+
+        do {
+            _ = try await HouseholdService.acceptInvite(code: code)
+            toast.success("You're in", message: "You've joined the household.")
+            HapticManager.success()
+        } catch {
+            // Spent either way: the RPC raises on an expired or already-used
+            // code, and takePending() has already cleared it, so this does not
+            // come back on the next launch showing the same error.
+            toast.error("Couldn't join", message: HouseholdInviteLink.errorMessage(for: error))
+            HapticManager.error()
+            SentryService.capture(error, extras: ["context": "drainPendingHouseholdInvite"])
+        }
+    }
+
     // MARK: - Pending recipe imports (US-143)
 
     /// Drains the share-extension-fed recipe queue. Each pending import is
@@ -236,6 +267,14 @@ final class AppState: ObservableObject {
         // the pending-mutation queue can be scoped to this account.
         currentUserId = (try? await SupabaseManager.client.auth.session)?
             .user.id.uuidString.lowercased() ?? ""
+
+        // US-851: BEFORE the fetches, not after. Accepting an invite changes
+        // which household the user belongs to, and every query below is scoped
+        // by RLS through that membership -- so joining afterwards would load
+        // the old household's rows and need a second full load to correct
+        // itself. Runs inside loadAllData rather than calling it, because a
+        // drain that re-entered here would resubscribe realtime.
+        await drainPendingHouseholdInvite()
 
         do {
             async let fetchedFoods = dataService.fetchFoods()

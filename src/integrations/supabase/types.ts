@@ -7348,6 +7348,45 @@ export type Database = {
           },
         ]
       }
+      kid_badges: {
+        Row: {
+          badge_id: string
+          created_at: string
+          earned_at: string
+          id: string
+          kid_id: string
+        }
+        Insert: {
+          badge_id: string
+          created_at?: string
+          earned_at?: string
+          id?: string
+          kid_id: string
+        }
+        Update: {
+          badge_id?: string
+          created_at?: string
+          earned_at?: string
+          id?: string
+          kid_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kid_badges_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["kid_id"]
+          },
+          {
+            foreignKeyName: "kid_badges_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kid_food_ladder: {
         Row: {
           consecutive_holds: number

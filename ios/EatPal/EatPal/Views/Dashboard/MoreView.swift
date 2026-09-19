@@ -22,6 +22,11 @@ enum MoreRoute: Hashable {
     case aiCoach
     // US-470: Budget promoted out of Settings into the Tools section.
     case budget
+    // US-851: household membership, which is where a /join link points. It is
+    // reachable by hand through Settings; a tapped invite pushes straight to
+    // it so the person sees the household they just joined rather than a
+    // settings list they now have to read.
+    case household
 }
 
 struct MoreView: View {
@@ -225,6 +230,8 @@ struct MoreView: View {
                 AICoachView()
             case .budget:
                 BudgetView()
+            case .household:
+                HouseholdSettingsView()
             }
         }
     }

@@ -129,7 +129,15 @@ final class OfflineStoreReplayRoutingTests: XCTestCase {
     /// operation. Routing a plain update to it would skip the re-derivation
     /// the conflict rule needs, so its absence from `decodeUpdate` is the
     /// design rather than an omission.
-    private static let updateExemptTables: Set<OfflineStore.Table> = [.foodAttempts]
+    ///
+    /// US-871: `kid_badges` is append-only. There is nothing about "this child
+    /// earned this badge on this day" that a later write should revise, and
+    /// the migration gives it no UPDATE policy, so a queued update would be
+    /// refused by RLS rather than doing anything.
+    private static let updateExemptTables: Set<OfflineStore.Table> = [
+        .foodAttempts,
+        .kidBadges,
+    ]
 
     /// A minimal valid payload per table.
     ///
@@ -183,6 +191,19 @@ final class OfflineStoreReplayRoutingTests: XCTestCase {
         XCTAssertEqual(state.rung, .licking)
         XCTAssertEqual(state.consecutiveSuccesses, 1)
         XCTAssertEqual(state.status, .active)
+    }
+
+    func testAPlainUpdateToKidBadgesIsRefused() {
+        // US-871. The exemption above is only safe while the omission is loud:
+        // a silent return here would clear the queued write as though it had
+        // landed, which is the exact failure this whole file exists for.
+        XCTAssertThrowsError(
+            try OfflineStore.decodeUpdate(
+                table: "kid_badges",
+                data: data("{}"),
+                decoder: decoder
+            )
+        )
     }
 
     func testAPlainUpdateToFoodAttemptsIsRefused() {
