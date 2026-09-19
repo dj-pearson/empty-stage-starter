@@ -75,17 +75,32 @@ export function VoteResultsDisplay({
     return null; // No votes yet
   }
 
+  /**
+   * Both badges name a foreground, because neither background can carry the
+   * default one.
+   *
+   * Badge's base class list includes `text-xs`, and src/styles/mobile-first.css
+   * used to declare a `color` on that selector -- so every Badge in the tree was
+   * being painted dark slate by a font-size utility. US-821 removed that (it was
+   * overriding Tailwind's own text colours), which left these two falling back
+   * to the default variant's white: 1.91:1 on yellow-500 and 2.28:1 on
+   * green-500, against the 4.5:1 that WCAG AA asks for. axe caught the yellow
+   * one on the planner; the green one is the same bug on a score of 80.
+   *
+   * Darkening the text rather than the background keeps the colour these badges
+   * have always been. The `*-950` foregrounds measure about 9:1.
+   */
   const getApprovalBadge = (score: number) => {
     if (score >= 80) {
       return (
-        <Badge className="bg-green-500 hover:bg-green-600">
+        <Badge className="bg-green-500 hover:bg-green-600 text-green-950">
           <TrendingUp className="h-3 w-3 mr-1" />
           {score}% Approved
         </Badge>
       );
     } else if (score >= 50) {
       return (
-        <Badge className="bg-yellow-500 hover:bg-yellow-600">
+        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-yellow-950">
           <Minus className="h-3 w-3 mr-1" />
           {score}% Mixed
         </Badge>
