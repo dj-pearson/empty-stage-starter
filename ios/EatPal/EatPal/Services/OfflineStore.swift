@@ -213,6 +213,55 @@ final class OfflineStore: ObservableObject {
         case recipes
         case planEntries = "plan_entries"
         case groceryItems = "grocery_items"
+        /// US-809: keyed by the auth user id, because on `profiles` the primary
+        /// key IS `auth.users.id`. Update-only -- the row is created by the
+        /// `handle_new_user` trigger at signup, so a client never inserts one.
+        case profiles
+    }
+
+    /// The decoded payload of an update replay, and the table it belongs to.
+    ///
+    /// US-809: extracted from the switch inside `replay` so the table-to-type
+    /// routing can be tested. `replay` needs a live Supabase client and is
+    /// private; this is the part that decides whether a queued write is
+    /// understood at all, which is the part that was silently dropping
+    /// mutations.
+    enum DecodedUpdate {
+        case groceryItem(GroceryItemUpdate)
+        case food(FoodUpdate)
+        case planEntry(PlanEntryUpdate)
+        case kid(KidUpdate)
+        case recipe(RecipeUpdate)
+        case profile(ProfileUpdate)
+    }
+
+    /// Decode a queued update payload, or throw `ReplayError.unsupported`.
+    ///
+    /// Throwing rather than returning nil on an unknown table is the point of
+    /// US-809 AC3: the caller treats a non-throwing return as "landed on the
+    /// server" and clears the row, so anything that quietly succeeds here is a
+    /// user's edit deleted with no error and nothing in Sentry.
+    static func decodeUpdate(
+        table: String,
+        data: Data,
+        decoder: JSONDecoder
+    ) throws -> DecodedUpdate {
+        switch table {
+        case Table.groceryItems.rawValue:
+            return .groceryItem(try decoder.decode(GroceryItemUpdate.self, from: data))
+        case Table.foods.rawValue:
+            return .food(try decoder.decode(FoodUpdate.self, from: data))
+        case Table.planEntries.rawValue:
+            return .planEntry(try decoder.decode(PlanEntryUpdate.self, from: data))
+        case Table.kids.rawValue:
+            return .kid(try decoder.decode(KidUpdate.self, from: data))
+        case Table.recipes.rawValue:
+            return .recipe(try decoder.decode(RecipeUpdate.self, from: data))
+        case Table.profiles.rawValue:
+            return .profile(try decoder.decode(ProfileUpdate.self, from: data))
+        default:
+            throw ReplayError.unsupported(table: table, operation: Operation.update.rawValue)
+        }
     }
 
     private init() {
@@ -594,27 +643,22 @@ final class OfflineStore: ObservableObject {
                 throw ReplayError.missingPayload(table: table, operation: mutation.operation)
             }
 
-            switch table {
-            case Table.groceryItems.rawValue:
-                let update = try decoder.decode(GroceryItemUpdate.self, from: data)
+            // Routing lives in `decodeUpdate` so it can be tested without a
+            // client; this switch only picks which concrete type to hand to
+            // PostgREST, which needs the static type at the call site.
+            switch try Self.decodeUpdate(table: table, data: data, decoder: decoder) {
+            case .groceryItem(let update):
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
-            case Table.foods.rawValue:
-                let update = try decoder.decode(FoodUpdate.self, from: data)
+            case .food(let update):
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
-            case Table.planEntries.rawValue:
-                let update = try decoder.decode(PlanEntryUpdate.self, from: data)
+            case .planEntry(let update):
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
-            // Both of these were missing while `enqueueUpdate` is generic over
-            // `Table`, so an offline edit to a child's profile or a recipe was
-            // accepted, "replayed" as a no-op, and cleared.
-            case Table.kids.rawValue:
-                let update = try decoder.decode(KidUpdate.self, from: data)
+            case .kid(let update):
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
-            case Table.recipes.rawValue:
-                let update = try decoder.decode(RecipeUpdate.self, from: data)
+            case .recipe(let update):
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
-            default:
-                throw ReplayError.unsupported(table: table, operation: mutation.operation)
+            case .profile(let update):
+                try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
             }
 
         default:
