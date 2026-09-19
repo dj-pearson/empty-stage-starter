@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildWeekPlan } from './mealPlanner';
+import { toISODate } from './date-utils';
 import type { Food, PlanEntry } from '@/types';
 
 /**
@@ -80,7 +81,14 @@ describe('buildWeekPlan (US-715)', () => {
   });
 
   it('still defaults to today when no week is given', () => {
-    const todayKey = new Date().toISOString().split('T')[0];
+    // toISODate, not toISOString().split('T')[0]. The suite runs in
+    // America/Los_Angeles on purpose (US-828, vitest.config.ts) and buildWeekPlan
+    // keys the LOCAL calendar day (US-818), so the UTC key this used to compare
+    // against is a different day for the seven hours between 5pm Pacific and
+    // midnight UTC. It passed for seventeen hours out of twenty-four and failed
+    // in CI at 00:02 UTC, which reads as a flake and is not one: it is the exact
+    // off-by-one that TZ setting exists to expose, asserted from the wrong side.
+    const todayKey = toISODate(new Date());
     const plan = buildWeekPlan('kid-1', FOODS, []);
     expect(dateKeys(plan)[0]).toBe(todayKey);
   });
