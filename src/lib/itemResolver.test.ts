@@ -125,7 +125,7 @@ describe('step 3 — household alias, fuzzy above threshold', () => {
   });
 });
 
-describe('step 4 — canonical_products seed', () => {
+describe('step 4 — the shared product seed', () => {
   const seeds = [
     { barcode: '5051234567890', normalized_name: normalizeItemText('greek yogurt'), category: 'dairy', default_unit: 'g', default_aisle: 'Dairy' },
   ];

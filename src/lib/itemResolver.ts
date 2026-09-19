@@ -56,7 +56,14 @@ export interface ResolverItem {
   merged_into_id?: string | null;
 }
 
-/** A row of `item_aliases`. */
+/**
+ * A confirmed mapping from a normalized string to an item.
+ *
+ * Passed in by the caller. US-799 retired the table this shape was written
+ * against: it was never written to and never read, while the resolver itself is
+ * the shared specification the Swift mirror answers to (US-682), so the type
+ * outlived the storage. Whatever eventually persists these supplies this shape.
+ */
 export interface ResolverAlias {
   item_id: string;
   normalized_text: string;
@@ -64,7 +71,13 @@ export interface ResolverAlias {
   confidence?: number | null;
 }
 
-/** A row of the shared `canonical_products` seed. */
+/**
+ * A shared, non-household product the resolver can fall back to.
+ *
+ * As with ResolverAlias: US-799 retired the seed table this mirrored, because
+ * no migration ever inserted a row into it. The canonical table is
+ * `grocery_product_catalog`; this stays an input shape the caller fills.
+ */
 export interface ResolverCanonicalProduct {
   barcode?: string | null;
   normalized_name: string;
@@ -172,8 +185,8 @@ export function resolveMergeRedirect(itemId: string, items: ResolverItem[]): str
  *   1. barcode exact       — the one globally unambiguous identifier
  *   2. alias exact         — this household already confirmed this phrase
  *   3. alias fuzzy         — above FUZZY_CONFIDENCE_THRESHOLD only
- *   4. canonical_products  — the shared seed recognises it, but no row exists
- *                            here yet, so this is a provisional WITH defaults
+ *   4. shared seed         — a non-household product recognises it, but no row
+ *                            exists here yet, so this is a provisional WITH defaults
  *   5. propose new         — provisional with nothing known
  *
  * Steps 4 and 5 both return `provisional`, distinguished by `matchedBy` and by

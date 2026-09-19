@@ -4065,36 +4065,6 @@ export type Database = {
         }
         Relationships: []
       }
-      canonical_products: {
-        Row: {
-          barcode: string | null
-          category: string | null
-          created_at: string
-          default_aisle: string | null
-          default_unit: string | null
-          id: string
-          normalized_name: string
-        }
-        Insert: {
-          barcode?: string | null
-          category?: string | null
-          created_at?: string
-          default_aisle?: string | null
-          default_unit?: string | null
-          id?: string
-          normalized_name: string
-        }
-        Update: {
-          barcode?: string | null
-          category?: string | null
-          created_at?: string
-          default_aisle?: string | null
-          default_unit?: string | null
-          id?: string
-          normalized_name?: string
-        }
-        Relationships: []
-      }
       chain_network_aggregates: {
         Row: {
           first_observed_at: string
@@ -7204,51 +7174,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventory_movements"
             referencedColumns: ["id"]
-          },
-        ]
-      }
-      item_aliases: {
-        Row: {
-          confidence: number
-          created_at: string
-          household_id: string
-          id: string
-          item_id: string
-          normalized_text: string
-          source: string
-        }
-        Insert: {
-          confidence?: number
-          created_at?: string
-          household_id: string
-          id?: string
-          item_id: string
-          normalized_text: string
-          source: string
-        }
-        Update: {
-          confidence?: number
-          created_at?: string
-          household_id?: string
-          id?: string
-          item_id?: string
-          normalized_text?: string
-          source?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "item_aliases_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "foods"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "item_aliases_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "kid_food_success_stats"
-            referencedColumns: ["food_id"]
           },
         ]
       }

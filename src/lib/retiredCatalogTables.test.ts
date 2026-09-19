@@ -39,16 +39,15 @@ const KNOWN: Record<string, Record<string, string>> = {
     // live, per the deprecation flow in CLAUDE.md.
   },
   canonical_products: {
-    'src/integrations/supabase/types.ts': 'Generated from the schema; it goes when the table goes.',
-    'src/lib/itemResolver.ts':
-      'Row shapes and a resolver with NO production consumer -- only its own test and ' +
-      'kitchenLoopFixtures.test.ts import it. Goes with the table.',
-    'src/lib/itemResolver.test.ts': 'Tests the resolver named above, and goes with it.',
+    // EMPTY, and now permanently so: 20260919000000 dropped the table. It was
+    // never seeded by any migration, so nothing was lost. The resolver in
+    // src/lib/itemResolver.ts stays -- it is the cross-platform specification
+    // the Swift mirror answers to (US-682) and it never queried the table, only
+    // mirrored its shape. Its input types are now described as input types.
   },
   item_aliases: {
-    'src/integrations/supabase/types.ts': 'Generated from the schema; it goes when the table goes.',
-    'src/lib/itemResolver.ts': 'As above: row shapes in a resolver with no production consumer.',
-    'src/lib/itemNormalize.ts': 'Row shape only, no query. Goes with the resolver.',
+    // EMPTY for the same reason: dropped by 20260919000000, never written to by
+    // anything. A mention here is now a bug rather than a step in a sequence.
   },
 };
 
