@@ -404,6 +404,29 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Badges (US-871)
+
+    /// Every badge the signed-in user can see. RLS scopes it to their
+    /// household's children, so there is no filter to get wrong here.
+    func fetchKidBadges() async throws -> [KidBadge] {
+        try await client.from("kid_badges")
+            .select()
+            .execute()
+            .value
+    }
+
+    /// Record an earned badge.
+    ///
+    /// Upsert rather than insert: the unique index on (kid_id, badge_id) is
+    /// the dedupe key, and both parents' phones can evaluate the same earn
+    /// from the same logged meal. A second write is the same badge, not a
+    /// second one.
+    func insertKidBadge(_ badge: KidBadgeInsert) async throws {
+        try await client.from("kid_badges")
+            .upsert(badge, onConflict: "kid_id,badge_id")
+            .execute()
+    }
+
     // MARK: - Exposure Ladder (US-596 / US-606)
 
     func fetchKidFoodLadder() async throws -> [KidFoodLadder] {

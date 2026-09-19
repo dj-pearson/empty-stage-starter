@@ -61,6 +61,18 @@ const UPDATE_ONLY_TABLES = ['profiles'];
  */
 const ATTEMPT_ONLY_TABLES = ['foodAttempts'];
 
+/**
+ * Tables a client inserts into but never updates (US-871).
+ *
+ * `kid_badges` is append-only: there is nothing about "this child earned this
+ * badge on this day" that a later write should revise, and the migration gives
+ * it no UPDATE policy, so a queued update would be refused by RLS rather than
+ * doing anything. Its absence from `decodeUpdate` is the design -- and the
+ * case below pins that the omission still throws rather than clearing the
+ * write.
+ */
+const INSERT_ONLY_TABLES = ['kidBadges'];
+
 /** The body of `replay`, split into its per-operation arms. */
 const replayBody = (() => {
   const start = SOURCE.indexOf('private func replay(');
@@ -129,15 +141,15 @@ describe('offline replay coverage', () => {
     // kids and recipes were the two that were missing; profiles was added by
     // US-809 so a finished onboarding survives a reconnect.
     const missing = tables
-      .filter((t) => !ATTEMPT_ONLY_TABLES.includes(t))
+      .filter((t) => ![...ATTEMPT_ONLY_TABLES, ...INSERT_ONLY_TABLES].includes(t))
       .filter((t) => !updateRouting.includes(`case Table.${t}.rawValue:`));
     expect(missing).toEqual([]);
   });
 
-  it('throws rather than dropping an update queued for an attempt-only table', () => {
+  it('throws rather than dropping an update queued for a table with no update route', () => {
     // Same shape as the profiles case: the exemption is only safe while the
     // omission is loud.
-    for (const table of ATTEMPT_ONLY_TABLES) {
+    for (const table of [...ATTEMPT_ONLY_TABLES, ...INSERT_ONLY_TABLES]) {
       expect(tables, `${table} is exempted but is not a Table case`).toContain(table);
       expect(updateRouting).not.toContain(`case Table.${table}.rawValue:`);
     }

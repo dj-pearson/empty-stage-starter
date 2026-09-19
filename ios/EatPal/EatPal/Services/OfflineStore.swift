@@ -233,6 +233,10 @@ final class OfflineStore: ObservableObject {
         /// insert here would skip the re-derivation the conflict rule needs,
         /// so `replay`'s insert arm deliberately does not route it.
         case foodAttempts = "food_attempts"
+        /// US-871. Insert-only: an earn is append-only, and the table has no
+        /// UPDATE policy, so a queued update would be refused by RLS rather
+        /// than doing anything.
+        case kidBadges = "kid_badges"
     }
 
     /// The decoded payload of an update replay, and the table it belongs to.
@@ -677,6 +681,13 @@ final class OfflineStore: ObservableObject {
                 var recipe = try decoder.decode(Recipe.self, from: data)
                 recipe.userId = userId
                 try await client.from(table).upsert(recipe, onConflict: "id").execute()
+            case Table.kidBadges.rawValue:
+                // US-871. No user stamping: like the ladder, ownership derives
+                // through kid_id. Deduped on (kid_id, badge_id) because that
+                // is what "earned once" means -- both parents' phones evaluate
+                // the same earn from the same logged meal.
+                let badge = try decoder.decode(KidBadgeInsert.self, from: data)
+                try await client.from(table).upsert(badge, onConflict: "kid_id,badge_id").execute()
             case Table.kidFoodLadder.rawValue:
                 // US-609. No user stamping: the table has no user_id or
                 // household_id and derives ownership through kid_id. The

@@ -293,6 +293,13 @@ final class AppState: ObservableObject {
             // neither should hold up the planner rendering.
             Task { await loadKidFoodLadder() }
 
+            // US-871: badges used to live only in UserDefaults, so a new phone
+            // showed an empty grid for a child with a year of progress. Seeded
+            // here rather than in BadgeService's init because it needs the kid
+            // list and a session, and both exist by this point.
+            let kidIdsForBadges = kids.map(\.id)
+            Task { await BadgeService.shared.seedFromServer(kidIds: kidIdsForBadges) }
+
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
             await drainPendingRecipeImports()
