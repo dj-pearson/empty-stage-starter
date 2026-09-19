@@ -11,7 +11,7 @@ COPY supabase/config.toml ./config.toml
 COPY edge-functions-server.ts ./server.ts
 
 # Cache dependencies by running deno cache.
-# `server.ts` only covers what it directly imports — the 82 functions are
+# `server.ts` only covers what it directly imports — the handlers are
 # loaded via dynamic `await import()`, so their deps (esm.sh/supabase-js,
 # AIServiceV2, etc.) won't be cached unless we explicitly walk them.
 # Without this, the first request after every container restart spends

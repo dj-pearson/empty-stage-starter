@@ -1044,23 +1044,31 @@ them names an edge function. So "nothing in the repo calls this" is the claim;
 
 ### What the routing table says
 
-`edge-functions-server.ts` maps 82 names to `./functions/<name>/index.ts`, and
-that path resolves inside the deployed container, not against this repo's root
-`functions/` directory — all 82 exist under `supabase/functions/`. Two facts
-fall out of the comparison and both belong to US-773:
+`edge-functions-server.ts` builds its routing table at boot by reading the
+`./functions` directory, which is where `Dockerfile:8` mounts
+`supabase/functions/`. A directory holding an `index.ts` is a route; `_shared/`
+and `common/` hold none and are excluded by that same rule.
 
-- **Six mapped functions are missing from the committed deploy package.**
+It used to be a hand-written literal of 82 names, and it had drifted. Two facts
+fell out of comparing it against the tree:
+
+- **Eleven functions under `supabase/functions/` were not in the map at all**:
+  `app-store-notifications`, `bind-email-request`, `bind-email-verify`,
+  `delete-account`, `generate-image`, `identify-product`, `parse-receipt-image`,
+  `recognize-fridge-contents`, `schedule-trial-reminders`, `tonight-mode` and
+  `_health`. Every one answered 404. Nine have live callers in `src/` or in the
+  shipped Swift app -- `delete-account` is the account-deletion path Apple
+  requires, and `bind-email-request`/`bind-email-verify` are the email-binding
+  flow. **Fixed in US-774** by deriving the table from the tree, so a new
+  function is routed by existing rather than by someone remembering a second
+  file. `_health` stays shadowed by the server's own unauthenticated health
+  branch, which is answered before routing.
+- **Six functions are missing from the committed deploy package.**
   `coolify-migration/eatpal-functions-package/` holds 79 directories and lacks
   `ai-coach-chat`, `generate-pseo-content`, `oauth-token-refresh`,
   `process-pseo-queue`, `send-webhook` and `test-ai-configuration`. Either that
-  package is a stale snapshot or those six routes 500 in production.
-- **Eleven functions under `supabase/functions/` are not in the map at all**:
-  `app-store-notifications`, `bind-email-request`, `bind-email-verify`,
-  `common`, `delete-account`, `generate-image`, `identify-product`,
-  `parse-receipt-image`, `recognize-fridge-contents`, `schedule-trial-reminders`
-  and `tonight-mode`. Some are deliberate (Apple is handed a direct URL), but
-  `delete-account` and the two `bind-email-*` functions are user-facing flows
-  and are worth checking against a live deploy.
+  package is a stale snapshot or those six routes 500 in production. Belongs to
+  US-773.
 
 Deletion (AC 2) is deliberately not done in the same pass as the audit. Removing
 a function from the repo changes what the next deploy serves, and three of the

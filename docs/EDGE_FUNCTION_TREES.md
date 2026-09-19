@@ -20,8 +20,8 @@ US-773 removed the duplication: no endpoint exists in both trees any more.
 **`supabase/functions/` is what serves production traffic.** All 93 handlers
 there use `export default`, which is exactly the contract
 `edge-functions-server.ts` calls (`module.default(req)`). Inside the container
-that tree is mounted at `./functions`, which is why `FUNCTIONS_MAP` entries read
-`./functions/<name>/index.ts` and still mean the deployed tree.
+that tree is mounted at `./functions`, which is why the server discovers its
+routes under `./functions/<name>/index.ts` and still means the deployed tree.
 
 **`functions/` is not dead, and it is not internal-only.** It holds the Agentic
 OS and its unit tests, and `supabase/config.toml` gives ~30 of those an explicit
@@ -71,8 +71,12 @@ compare capabilities, not tokens.
 
 `scripts/ci/check-function-trees.sh` runs in the `quality` job and fails on:
 
-1. a `FUNCTIONS_MAP` entry in `edge-functions-server.ts` with no matching
-   directory in `supabase/functions/` — an unroutable name;
+1. a routing table in `edge-functions-server.ts` that does not reach every
+   handler in `supabase/functions/`, or that names a directory which does not
+   exist. The table is derived from the tree (US-774), so the first direction is
+   satisfied by construction and the check fails if it ever reverts to a list --
+   a hand-maintained one had drifted by eleven names, `delete-account` and both
+   `bind-email-*` among them, each answering 404;
 2. **any** cross-tree name collision. `_shared` is the single exception, and it
    is a different kind of thing: a directory of helper modules per tree, not two
    implementations of one endpoint. Do not add a name to that list to silence a
@@ -89,9 +93,10 @@ file that cannot be parsed into a silent skip.
 
 ## Adding a function
 
-Put it in `supabase/functions/`, use `export default async (req: Request)`, add
-an entry to `FUNCTIONS_MAP` in `edge-functions-server.ts`, and gate it: the
-runtime runs with `--no-verify-jwt`, so **in-function auth is the only gate**.
+Put it in `supabase/functions/<name>/index.ts`, use
+`export default async (req: Request)`, and gate it. The route needs no second
+edit -- `edge-functions-server.ts` finds the directory at boot. The runtime runs
+with `--no-verify-jwt`, so **in-function auth is the only gate**.
 
 - Spends model tokens → `gateAiRequest` from `_shared/ai-gate.ts` (method check,
   `requireUser`, per-user budget in one call).

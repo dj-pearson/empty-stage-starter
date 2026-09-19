@@ -28,7 +28,8 @@
 # month. US-773 resolved the last twelve; only `_shared` remains, deliberately.
 #
 # Three checks below:
-#   1. HARD  — every FUNCTIONS_MAP entry must resolve in the deployed tree.
+#   1. HARD  — the router reaches every deployed handler, and routes nothing that
+#             does not exist.
 #   2. HARD  — no cross-tree name collisions at all, bar `_shared`.
 #   3. HARD  — no remaining collision has a newer copy in the non-deployed tree.
 set -uo pipefail
@@ -55,14 +56,34 @@ fail=0
 # Do NOT add a name here to silence a collision. Put the function in one tree.
 KNOWN_COLLISIONS="_shared"
 
-echo "1/3 FUNCTIONS_MAP entries resolve in ${DEPLOYED}/ ..."
+echo "1/3 ${SERVER} routes every handler in ${DEPLOYED}/ ..."
+# Both directions. A mapped name with no directory is a route that 500s; a
+# directory with no route is a function that 404s, which is what US-774 found:
+# ten handlers, delete-account and both bind-email-* among them, shipped in the
+# deployed tree and were missing from a hand-written FUNCTIONS_MAP. The server
+# now derives the table with Deno.readDirSync, so the second direction is
+# satisfied by construction -- this check fails if that ever goes back to a list.
 while IFS= read -r name; do
   [ -n "$name" ] || continue
   if [ ! -d "${DEPLOYED}/${name}" ]; then
     echo "::error title=Unroutable function::${SERVER} maps \"${name}\" but ${DEPLOYED}/${name}/ does not exist."
     fail=1
   fi
-done < <(grep -oE '^\s*"[a-z0-9.-]+":' "$SERVER" | tr -d ' ":' )
+done < <(grep -oE '^\s*"[a-z0-9.-]+":\s*"\./functions/' "$SERVER" | grep -oE '"[a-z0-9.-]+":' | tr -d ' ":' )
+
+if grep -qE 'Deno\.readDirSync\(' "$SERVER"; then
+  : # table is derived from the tree, so no handler can be left out of it
+else
+  while IFS= read -r dir; do
+    name="$(basename "$dir")"
+    [ -f "${DEPLOYED}/${name}/index.ts" ] || continue
+    if ! grep -qE "^\s*\"${name}\":" "$SERVER"; then
+      echo "::error title=Unrouted function::${DEPLOYED}/${name}/ ships but ${SERVER} has no route for it, so it answers 404."
+      echo "    Derive FUNCTIONS_MAP from the directory instead of listing names -- see US-774."
+      fail=1
+    fi
+  done < <(find "$DEPLOYED" -maxdepth 1 -mindepth 1 -type d | sort)
+fi
 
 echo "2/3 no NEW cross-tree name collisions ..."
 if [ -d "$LEGACY" ]; then

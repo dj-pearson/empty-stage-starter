@@ -11,91 +11,37 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-// Map of available functions
-const FUNCTIONS_MAP: { [key: string]: string } = {
-  "ai-coach-chat": "./functions/ai-coach-chat/index.ts",
-  "ai-meal-plan": "./functions/ai-meal-plan/index.ts",
-  "analyze-blog-posts-seo": "./functions/analyze-blog-posts-seo/index.ts",
-  "analyze-blog-quality": "./functions/analyze-blog-quality/index.ts",
-  "analyze-content": "./functions/analyze-content/index.ts",
-  "analyze-images": "./functions/analyze-images/index.ts",
-  "analyze-internal-links": "./functions/analyze-internal-links/index.ts",
-  "analyze-semantic-keywords": "./functions/analyze-semantic-keywords/index.ts",
-  "analyze-support-ticket": "./functions/analyze-support-ticket/index.ts",
-  "apply-seo-fixes": "./functions/apply-seo-fixes/index.ts",
-  "backup-scheduler": "./functions/backup-scheduler/index.ts",
-  "backup-user-data": "./functions/backup-user-data/index.ts",
-  "bing-webmaster-oauth": "./functions/bing-webmaster-oauth/index.ts",
-  "calculate-food-similarity": "./functions/calculate-food-similarity/index.ts",
-  "check-broken-links": "./functions/check-broken-links/index.ts",
-  "check-core-web-vitals": "./functions/check-core-web-vitals/index.ts",
-  "check-keyword-positions": "./functions/check-keyword-positions/index.ts",
-  "check-mobile-first": "./functions/check-mobile-first/index.ts",
-  "check-security-headers": "./functions/check-security-headers/index.ts",
-  "crawl-site": "./functions/crawl-site/index.ts",
-  "create-checkout": "./functions/create-checkout/index.ts",
-  "detect-duplicate-content": "./functions/detect-duplicate-content/index.ts",
-  "detect-redirect-chains": "./functions/detect-redirect-chains/index.ts",
-  "enrich-barcodes": "./functions/enrich-barcodes/index.ts",
-  "ga4-oauth": "./functions/ga4-oauth/index.ts",
-  "generate-blog-content": "./functions/generate-blog-content/index.ts",
-  "generate-pseo-content": "./functions/generate-pseo-content/index.ts",
-  "generate-invoice": "./functions/generate-invoice/index.ts",
-  "generate-meal-suggestions": "./functions/generate-meal-suggestions/index.ts",
-  "generate-schema-markup": "./functions/generate-schema-markup/index.ts",
-  "generate-sitemap": "./functions/generate-sitemap/index.ts",
-  "generate-social-content": "./functions/generate-social-content/index.ts",
-  "generate-weekly-report": "./functions/generate-weekly-report/index.ts",
-  "gsc-fetch-core-web-vitals": "./functions/gsc-fetch-core-web-vitals/index.ts",
-  "gsc-fetch-properties": "./functions/gsc-fetch-properties/index.ts",
-  "gsc-oauth": "./functions/gsc-oauth/index.ts",
-  "gsc-sync-data": "./functions/gsc-sync-data/index.ts",
-  "identify-food-image": "./functions/identify-food-image/index.ts",
-  "join-waitlist": "./functions/join-waitlist/index.ts",
-  "list-users": "./functions/list-users/index.ts",
-  "lookup-barcode": "./functions/lookup-barcode/index.ts",
-  "manage-blog-titles": "./functions/manage-blog-titles/index.ts",
-  "manage-meal-plan-templates": "./functions/manage-meal-plan-templates/index.ts",
-  "manage-payment-methods": "./functions/manage-payment-methods/index.ts",
-  "manage-subscription": "./functions/manage-subscription/index.ts",
-  "monitor-performance-budget": "./functions/monitor-performance-budget/index.ts",
-  "oauth-token-refresh": "./functions/oauth-token-refresh/index.ts",
-  "oauth-proxy": "./functions/oauth-proxy/index.ts",
-  "optimize-page-content": "./functions/optimize-page-content/index.ts",
-  "parse-recipe": "./functions/parse-recipe/index.ts",
-  "parse-recipe-grocery": "./functions/parse-recipe-grocery/index.ts",
-  "process-delivery-order": "./functions/process-delivery-order/index.ts",
-  "process-email-sequences": "./functions/process-email-sequences/index.ts",
-  "process-pseo-queue": "./functions/process-pseo-queue/index.ts",
-  "process-notification-queue": "./functions/process-notification-queue/index.ts",
-  "publish-scheduled-posts": "./functions/publish-scheduled-posts/index.ts",
-  "register-push-token": "./functions/register-push-token/index.ts",
-  "repurpose-content": "./functions/repurpose-content/index.ts",
-  "run-scheduled-audit": "./functions/run-scheduled-audit/index.ts",
-  "schedule-meal-reminders": "./functions/schedule-meal-reminders/index.ts",
-  "schedule-weekly-reports": "./functions/schedule-weekly-reports/index.ts",
-  "send-emails": "./functions/send-emails/index.ts",
-  "send-seo-notification": "./functions/send-seo-notification/index.ts",
-  "send-webhook": "./functions/send-webhook/index.ts",
-  "seo-audit": "./functions/seo-audit/index.ts",
-  "stripe-webhook": "./functions/stripe-webhook/index.ts",
-  "suggest-foods": "./functions/suggest-foods/index.ts",
-  "suggest-recipe": "./functions/suggest-recipe/index.ts",
-  "suggest-recipes-from-pantry": "./functions/suggest-recipes-from-pantry/index.ts",
-  "sync-analytics-data": "./functions/sync-analytics-data/index.ts",
-  "sync-backlinks": "./functions/sync-backlinks/index.ts",
-  "test-ai-configuration": "./functions/test-ai-configuration/index.ts",
-  "test-ai-model": "./functions/test-ai-model/index.ts",
-  "test-blog-webhook": "./functions/test-blog-webhook/index.ts",
-  "track-engagement": "./functions/track-engagement/index.ts",
-  "track-serp-positions": "./functions/track-serp-positions/index.ts",
-  "update-blog-image": "./functions/update-blog-image/index.ts",
-  "update-user": "./functions/update-user/index.ts",
-  "user-intelligence": "./functions/user-intelligence/index.ts",
-  "validate-structured-data": "./functions/validate-structured-data/index.ts",
-  "weekly-summary-generator": "./functions/weekly-summary-generator/index.ts",
-  "yandex-webmaster-oauth": "./functions/yandex-webmaster-oauth/index.ts",
-};
+// Routing table, derived from the tree at boot (US-774).
+//
+// This used to be a hand-written literal, and it had drifted: ten functions
+// that ship in supabase/functions/ were missing from it, so the server
+// answered 404 for delete-account, bind-email-request, bind-email-verify,
+// tonight-mode, parse-receipt-image, recognize-fridge-contents,
+// identify-product, generate-image, schedule-trial-reminders and
+// app-store-notifications. Nine of those ten have live callers in src/ and in
+// the shipped Swift app. Adding a function meant remembering to add a second
+// line in a second file, and nothing failed when you didn't.
+//
+// A directory holding an index.ts is a function. _shared/ and common/ hold no
+// index.ts, so they are excluded by the same rule rather than by a name list.
+const FUNCTIONS_ROOT = new URL("./functions/", import.meta.url);
+
+function discoverFunctions(root: URL): { [key: string]: string } {
+  const map: { [key: string]: string } = {};
+  for (const entry of Deno.readDirSync(root)) {
+    if (!entry.isDirectory || entry.name.startsWith(".")) continue;
+    const handler = new URL(`${entry.name}/index.ts`, root);
+    try {
+      if (!Deno.statSync(handler).isFile) continue;
+    } catch {
+      continue;
+    }
+    map[entry.name] = handler.href;
+  }
+  return map;
+}
+
+const FUNCTIONS_MAP: { [key: string]: string } = discoverFunctions(FUNCTIONS_ROOT);
 
 async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -175,6 +121,11 @@ async function handler(req: Request): Promise<Response> {
 
 console.log("🚀 Edge Functions Server starting on port 8000...");
 console.log(`📦 Loaded ${Object.keys(FUNCTIONS_MAP).length} functions`);
+if (Object.keys(FUNCTIONS_MAP).length === 0) {
+  // Discovery found nothing, which means the tree is not where the server
+  // expects it. Every route would 404 while the health check still said ok.
+  console.error(`\u274C No functions found under ${FUNCTIONS_ROOT.href} - every route will 404.`);
+}
 console.log(`🔗 Supabase URL: ${SUPABASE_URL || "(not configured)"}`);
 
 // Fail loudly at boot rather than per request. Every handler builds a Supabase
