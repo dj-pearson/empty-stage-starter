@@ -170,11 +170,14 @@ struct MealPlanView: View {
                     }
                     .padding(.horizontal)
                 } else {
-                    ContentUnavailableView(
-                        "No Child Selected",
-                        systemImage: "person.crop.circle.badge.plus",
-                        description: Text("Add a child profile to start planning meals.")
-                    )
+                    // US-705: the empty state can now do the thing it asks for.
+                    ContentUnavailableView {
+                        Label("No child yet", systemImage: "person.crop.circle.badge.plus")
+                    } description: {
+                        Text("Meal plans are built per child, so there is nobody to plan for yet.")
+                    } actions: {
+                        AddFirstChildCard(style: .action)
+                    }
                     .padding(.top, 40)
                 }
             }
