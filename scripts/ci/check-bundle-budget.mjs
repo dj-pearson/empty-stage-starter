@@ -215,6 +215,51 @@ function eagerClosure() {
  * never ran a single assertion, and reported as a failing FILE rather than as
  * a failing test, which is easy to read past (US-787).
  */
+
+/**
+ * What a prerendered page tells the browser to download before it does
+ * anything else (US-816).
+ *
+ * The eager closure above walks the ENTRY chunk's static imports, which is the
+ * right measure for app-shell.html and the wrong one for a prerendered route.
+ * Those are serialised from a live DOM, so every <link rel="modulepreload">
+ * __vitePreload injected while the page rendered is frozen into the static
+ * HTML -- chunks the runtime would have fetched on demand, or not at all,
+ * become eager downloads for every visitor. The entry graph knows nothing
+ * about them, which is why this is measured separately: AC4, and the reason
+ * the same class of bug was found twice by hand.
+ */
+function preloadedBytes(htmlPath) {
+  if (!existsSync(htmlPath)) return null;
+  const html = readFileSync(htmlPath, 'utf8');
+  const hrefs = new Set();
+  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+    if (!/rel\s*=\s*["']?modulepreload["']?/i.test(tag)) continue;
+    const href = tag.match(/href\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (href) hrefs.add(href);
+  }
+
+  let bytes = 0;
+  const missing = [];
+  for (const href of hrefs) {
+    const file = path.join(ROOT, 'dist', href.replace(/^\//, ''));
+    if (!existsSync(file)) {
+      // A preload pointing at nothing is its own bug: the browser fetches a
+      // 404 on every visit. Worth failing rather than silently scoring 0.
+      missing.push(href);
+      continue;
+    }
+    bytes += gzipSync(readFileSync(file)).length;
+  }
+  return { bytes, count: hrefs.size, missing };
+}
+
+/** The prerendered pages worth budgeting, and why each one. */
+const BUDGETED_HTML = {
+  'app-shell.html': 'the document served for every non-prerendered route',
+  'index.html': 'the marketing home page, and the first thing a new visitor loads',
+};
+
 function main() {
   const { sizes, total, fileCount } = measure();
 
@@ -247,12 +292,28 @@ function main() {
       // moved while two whole vendor libraries were being dragged into this
       // number, which is the reason it exists.
       eagerJs: budgetFor(eager.bytes),
+      // US-816 AC4: app-shell and the prerendered routes drift, so they are
+      // budgeted apart rather than rolled into one number.
+      preloadedHtml: Object.fromEntries(
+        Object.keys(BUDGETED_HTML)
+          .map((name) => [name, preloadedBytes(path.join(ROOT, 'dist', name))])
+          .filter(([, measured]) => measured !== null)
+          .map(([name, measured]) => [name, budgetFor(measured.bytes)])
+      ),
       chunks: budgets,
     };
     writeFileSync(BUDGET_FILE, JSON.stringify(payload, null, 2) + '\n');
     console.log(`check-bundle-budget: wrote ${BUDGET_FILE}`);
     console.log(`  total js ${total} gz across ${fileCount} files -> budget ${payload.totalJs}`);
     console.log(`  eager js ${eager.bytes} gz across ${eager.files.size} chunks -> budget ${payload.eagerJs}`);
+    for (const name of Object.keys(BUDGETED_HTML)) {
+      const measured = preloadedBytes(path.join(ROOT, 'dist', name));
+      if (measured) {
+        console.log(
+          `  ${name} preloads ${measured.count} chunks, ${measured.bytes} gz -> budget ${payload.preloadedHtml[name]}`
+        );
+      }
+    }
     process.exit(0);
   }
 
@@ -291,6 +352,30 @@ function main() {
   const representative = buildIncludesSupabaseSdk();
   if (representative && typeof budget.eagerJs === 'number' && eager.bytes > budget.eagerJs) {
     failures.push({ key: 'EAGER js', actual: eager.bytes, limit: budget.eagerJs });
+  }
+
+  // US-816 AC3/AC4: what each prerendered page preloads before it paints,
+  // budgeted per page because app-shell and the per-route HTML drift. The
+  // eager closure above cannot see these: they are modulepreload links the
+  // runtime injected and the prerenderer froze into the saved document.
+  for (const [name, why] of Object.entries(BUDGETED_HTML)) {
+    const limit = budget.preloadedHtml?.[name];
+    if (typeof limit !== 'number') continue;
+    const measured = preloadedBytes(path.join(ROOT, 'dist', name));
+    if (!measured) {
+      missing.push(`${name} (preloadedHtml)`);
+      continue;
+    }
+    if (measured.missing.length > 0) {
+      failures.push({
+        key: `${name} preloads a file that is not in the build (${measured.missing.join(', ')})`,
+        actual: measured.missing.length,
+        limit: 0,
+      });
+    }
+    if (representative && measured.bytes > limit) {
+      failures.push({ key: `PRELOADED ${name} -- ${why}`, actual: measured.bytes, limit });
+    }
   }
 
   // Reported separately from the byte budget because the diagnosis differs.
@@ -342,6 +427,18 @@ function main() {
       representative && typeof budget.eagerJs === 'number' ? ` (budget ${kb(budget.eagerJs)})` : ''
     }; no route-only chunk among them.`
   );
+  // US-816: say what each prerendered page preloads, so a green run is a
+  // measurement rather than a silence. These are invisible to the eager
+  // closure above -- they are link tags, not static imports.
+  for (const [name] of Object.entries(BUDGETED_HTML)) {
+    const measured = preloadedBytes(path.join(ROOT, 'dist', name));
+    const limit = budget.preloadedHtml?.[name];
+    if (!measured) continue;
+    console.log(
+      `check-bundle-budget: ${name} preloads ${measured.count} chunks, ${kb(measured.bytes)} gz` +
+        (typeof limit === 'number' ? ` (budget ${kb(limit)})` : ' (no budget recorded)')
+    );
+  }
 
   if (!representative) {
     console.log(

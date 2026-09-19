@@ -7,7 +7,8 @@ name: Lighthouse SEO Audit
 
 on:
   pull_request:
-    branches: [main, develop]
+    # US-763: was [main, develop]; develop is no longer an integration branch.
+    branches: [main]
     paths:
       - 'src/**'
       - 'index.html'

@@ -10,6 +10,7 @@ import {
 import { CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Recipe, Kid, MealSlot } from "@/types";
+import { toISODate } from "@/lib/date-utils";
 
 interface AddToPlannerPopoverProps {
   recipe: Recipe;
@@ -63,7 +64,10 @@ export function AddToPlannerPopover({
       return;
     }
 
-    const dateStr = date.toISOString().split("T")[0];
+    // US-818: the calendar picker hands back LOCAL midnight, and
+    // toISOString() converted that to the previous day for every user west
+    // of Greenwich -- pick Tuesday, get Monday on the planner.
+    const dateStr = toISODate(date);
     const entries = selectedKids.flatMap((kidId) =>
       recipe.food_ids.map((foodId) => ({
         kid_id: kidId,

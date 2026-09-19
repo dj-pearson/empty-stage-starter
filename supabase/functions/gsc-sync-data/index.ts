@@ -8,6 +8,7 @@
 // =====================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -131,7 +132,7 @@ export default async (req: Request) => {
         // Save keyword performance data
         for (const row of keywordData) {
           // Find or create keyword in seo_keywords
-          let { data: keyword, error: kwError } = await supabaseClient
+          const { data: keyword, error: kwError } = await supabaseClient
             .from("seo_keywords")
             .select("*")
             .eq("keyword", row.keys[0])
@@ -284,11 +285,11 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("Error in gsc-sync-data:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+};
 
 // =====================================================
 // HELPER FUNCTIONS
@@ -299,7 +300,7 @@ async function fetchGSCKeywordPerformance(
   siteUrl: string,
   startDate: string,
   endDate: string
-): Promise<any[]> {
+): Promise<unknown[]> {
   const encodedSiteUrl = encodeURIComponent(siteUrl);
   const url = `${GSC_API_BASE}/sites/${encodedSiteUrl}/searchAnalytics/query`;
 
@@ -334,7 +335,7 @@ async function fetchGSCPagePerformance(
   siteUrl: string,
   startDate: string,
   endDate: string
-): Promise<any[]> {
+): Promise<unknown[]> {
   const encodedSiteUrl = encodeURIComponent(siteUrl);
   const url = `${GSC_API_BASE}/sites/${encodedSiteUrl}/searchAnalytics/query`;
 

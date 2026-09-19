@@ -93,3 +93,28 @@ export function otpFailureMessageKey(failure: OtpFailure): string {
       return 'auth.otpUnknown';
   }
 }
+
+/**
+ * The same copy, as literal English, for clients with no i18next (US-791).
+ *
+ * The Expo tree under app/ never mounts <I18nextProvider>, so it cannot call
+ * t() -- and hardcoding a second, slightly different wording there is how the
+ * signup screen and the web one end up telling a user two different things
+ * about the same GoTrue failure. The test beside this file asserts each string
+ * equals the en.json value that otpFailureMessageKey() points at, so the two
+ * cannot drift apart silently.
+ */
+export function otpFailureFallbackMessage(failure: OtpFailure): string {
+  switch (failure) {
+    case 'expired':
+      return 'That code has expired. Send yourself a new one and enter it within the hour.';
+    case 'invalid':
+      return 'That code is not right. Check the six digits in your most recent email.';
+    case 'already_confirmed':
+      return 'This address is already verified. Sign in with your password.';
+    case 'rate_limited':
+      return 'Too many attempts. Wait a few minutes before asking for another code.';
+    default:
+      return 'We could not verify that code. Send yourself a new one and try again.';
+  }
+}

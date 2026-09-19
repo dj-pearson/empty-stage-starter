@@ -1,6 +1,7 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 /**
  * US-238: recognize-fridge-contents
  *
@@ -77,13 +78,13 @@ function parseItems(rawText: string): DetectedItem[] {
     const objMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!objMatch) {
       console.error("Failed to parse model JSON:", cleaned.slice(0, 200));
-      throw new Error("Model returned malformed JSON");
+      throw new PublicError("Model returned malformed JSON");
     }
     try {
       parsed = JSON.parse(objMatch[0]);
     } catch {
       console.error("Failed to parse model JSON:", cleaned.slice(0, 200));
-      throw new Error("Model returned malformed JSON");
+      throw new PublicError("Model returned malformed JSON");
     }
   }
 
@@ -128,13 +129,8 @@ export default async (req: Request) => {
   // US-618: denial-of-wallet gate. This endpoint spends real model tokens, and
   // the runtime is --no-verify-jwt, so in-function auth is the only thing
   // standing between an anonymous script and our AI bill.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  const gate = await gateAiRequest(req, 'recognize-fridge-contents', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { imageBase64 } = (await req.json()) as RequestBody;
@@ -178,7 +174,7 @@ export default async (req: Request) => {
     console.error("recognize-fridge-contents error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: publicMessage(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, writeFileSync } from 'fs';
 import { signIn } from '../helpers/auth';
+import { settleAnimations } from './settle';
 
 /**
  * Accessibility of the pages behind the login (US-778).
@@ -73,6 +74,11 @@ test.describe('Accessibility - authenticated pages', () => {
           // No skeleton on this page, or it never mounted. Either is fine.
         });
       await page.waitForTimeout(750);
+      // ...and then wait for the entrance animations, which the 750ms above
+      // does not reliably outlast. See settle.ts: a pantry scanned mid-fade
+      // reported 61 contrast nodes that are the real colours washed toward the
+      // page background.
+      await settleAnimations(page);
 
       // Fail loudly rather than scanning the login screen and calling it clean.
       expect(new URL(page.url()).pathname, `${name} redirected to ${page.url()}`).not.toMatch(

@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from '../common/headers.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 interface ReportMetrics {
   // Planning metrics
@@ -16,7 +17,8 @@ interface ReportMetrics {
   avgProteinPerDay: number;
   avgCarbsPerDay: number;
   avgFatPerDay: number;
-  nutritionScore: number;
+  /** null when no planned meal had readable nutrition: no score, not a 70. */
+  nutritionScore: number | null;
 
   // Grocery metrics
   groceryItemsAdded: number;
@@ -207,7 +209,7 @@ export default async (req: Request) => {
     });
   } catch (error) {
     console.error('Error generating report:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: publicMessage(error) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     });
@@ -247,18 +249,50 @@ async function collectMetrics(
   const templatesUsed = templateApplies?.reduce((sum: number, t: any) => sum + (t.times_used || 0), 0) || 0;
   const timeSavedMinutes = templatesUsed * 25; // Estimate 25 minutes saved per template use
 
-  // Nutrition metrics
-  const { data: nutritionData } = await supabase
+  // Nutrition metrics (US-799 AC2).
+  //
+  // THIS BLOCK HAD NEVER PRODUCED A NUMBER, and it was reporting one anyway.
+  // It embedded `foods ( nutrition_id )` -- foods has no nutrition_id column,
+  // only canonical_id (20260906000000) -- so PostgREST answered an error and
+  // `nutritionData` came back null. Even past that, the inner query named
+  // `protein, carbohydrates, fat`, and the nutrition table's columns are
+  // `protein_g, carbs_g, fat_g`. Two independent reasons for the loop never to
+  // run, either of which is invisible: no throw, no log, just zeroes.
+  //
+  // The zeroes then became a SCORE. The averages were gated on
+  // nutritionCount > 0 and correctly reported 0, but the score below was not:
+  // with every total at zero, each macro percentage was 0, each fell outside
+  // its ideal band, each scored 70, and every household in the product got
+  // `nutrition_score: 70` written into weekly_reports and shown as their
+  // week's nutrition. A fabricated number from no data, stored as a fact.
+  //
+  // So: join through canonical_id to the catalog, in one query rather than one
+  // per plan entry, and report NO SCORE when there is nothing to score.
+  const { data: nutritionData, error: nutritionError } = await supabase
     .from('plan_entries')
     .select(`
       food_id,
       foods (
-        nutrition_id
+        canonical_id,
+        grocery_product_catalog (
+          verification,
+          serving_size_g,
+          calories_kcal_100,
+          protein_g_100,
+          carbs_g_100,
+          fat_g_100
+        )
       )
     `)
     .eq('household_id', householdId)
     .gte('date', weekStart)
     .lte('date', weekEnd);
+
+  if (nutritionError) {
+    // Loud, because the silent version of this bug shipped a 70 to everyone
+    // for as long as the function has existed.
+    console.error('weekly report: catalog nutrition query failed', nutritionError.message);
+  }
 
   let totalCalories = 0;
   let totalProtein = 0;
@@ -266,24 +300,35 @@ async function collectMetrics(
   let totalFat = 0;
   let nutritionCount = 0;
 
-  if (nutritionData) {
-    for (const entry of nutritionData) {
-      if (entry.foods?.nutrition_id) {
-        const { data: nutrition } = await supabase
-          .from('nutrition')
-          .select('calories, protein, carbohydrates, fat')
-          .eq('id', entry.foods.nutrition_id)
-          .single();
+  for (const entry of nutritionData ?? []) {
+    const row = entry.foods?.grocery_product_catalog;
+    if (!row) continue;
 
-        if (nutrition) {
-          totalCalories += nutrition.calories || 0;
-          totalProtein += nutrition.protein || 0;
-          totalCarbs += nutrition.carbohydrates || 0;
-          totalFat += nutrition.fat || 0;
-          nutritionCount++;
-        }
-      }
-    }
+    // US-797: an unverified row is one household's scan of one label, checked
+    // by nobody. It does not go into a total a parent reads.
+    if (row.verification !== 'verified') continue;
+
+    // The catalog stores PER 100 G; a meal is a serving. parse_serving_grams
+    // refuses to guess a mass for "2 cookies" or "1 cup (240 ml)", so a row
+    // without one has no honest per-serving figure and is counted as MISSING,
+    // not as zero. This mirrors perServingFromCatalog in
+    // src/lib/catalogNutrition.ts; the two trees cannot share a module.
+    const grams = Number(row.serving_size_g);
+    if (!Number.isFinite(grams) || grams <= 0) continue;
+
+    const per = (value: unknown) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? (n * grams) / 100 : 0;
+    };
+
+    if (row.calories_kcal_100 == null && row.protein_g_100 == null
+        && row.carbs_g_100 == null && row.fat_g_100 == null) continue;
+
+    totalCalories += per(row.calories_kcal_100);
+    totalProtein += per(row.protein_g_100);
+    totalCarbs += per(row.carbs_g_100);
+    totalFat += per(row.fat_g_100);
+    nutritionCount++;
   }
 
   const daysInWeek = 7;
@@ -292,16 +337,22 @@ async function collectMetrics(
   const avgCarbsPerDay = nutritionCount > 0 ? totalCarbs / daysInWeek : 0;
   const avgFatPerDay = nutritionCount > 0 ? totalFat / daysInWeek : 0;
 
-  // Simple nutrition score based on balanced macros
-  const proteinPercent = totalProtein * 4 / (totalCalories || 1);
-  const carbsPercent = totalCarbs * 4 / (totalCalories || 1);
-  const fatPercent = totalFat * 9 / (totalCalories || 1);
+  // No meals with readable nutrition means no score. weekly_reports.nutrition_score
+  // is nullable, and a null renders as "not enough data" while a 70 renders as
+  // a judgement of a week nobody measured.
+  let nutritionScore: number | null = null;
 
-  // Ideal ranges: Protein 20-30%, Carbs 45-65%, Fat 20-35%
-  const proteinScore = proteinPercent >= 0.20 && proteinPercent <= 0.30 ? 100 : 70;
-  const carbsScore = carbsPercent >= 0.45 && carbsPercent <= 0.65 ? 100 : 70;
-  const fatScore = fatPercent >= 0.20 && fatPercent <= 0.35 ? 100 : 70;
-  const nutritionScore = (proteinScore + carbsScore + fatScore) / 3;
+  if (nutritionCount > 0 && totalCalories > 0) {
+    const proteinPercent = (totalProtein * 4) / totalCalories;
+    const carbsPercent = (totalCarbs * 4) / totalCalories;
+    const fatPercent = (totalFat * 9) / totalCalories;
+
+    // Ideal ranges: Protein 20-30%, Carbs 45-65%, Fat 20-35%
+    const proteinScore = proteinPercent >= 0.20 && proteinPercent <= 0.30 ? 100 : 70;
+    const carbsScore = carbsPercent >= 0.45 && carbsPercent <= 0.65 ? 100 : 70;
+    const fatScore = fatPercent >= 0.20 && fatPercent <= 0.35 ? 100 : 70;
+    nutritionScore = (proteinScore + carbsScore + fatScore) / 3;
+  }
 
   // Grocery metrics
   const { data: groceryItems } = await supabase
@@ -578,7 +629,7 @@ function generateInsights(metrics: ReportMetrics, weekStart: string): Insight[] 
   }
 
   // Nutrition win
-  if (metrics.nutritionScore >= 85) {
+  if (metrics.nutritionScore !== null && metrics.nutritionScore >= 85) {
     insights.push({
       insightType: 'nutrition_win',
       title: 'Excellent Nutrition! 🥗',
@@ -719,6 +770,12 @@ async function saveTrendData(
   ];
 
   for (const trend of trends) {
+    // A null is not a data point. nutrition_score is null for a week with no
+    // planned meal carrying readable nutrition, and recording that as a trend
+    // value plots it as a zero or a gap depending on who reads the series --
+    // neither of which means "we did not measure this week".
+    if (trend.value === null || trend.value === undefined) continue;
+
     await supabase.rpc('save_report_trend', {
       p_household_id: householdId,
       p_metric_name: trend.metric_name,

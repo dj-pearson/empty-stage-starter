@@ -7,6 +7,7 @@ import { runOptimisticInsert, runOptimisticMutation } from "@/lib/optimisticMuta
 import { useAuth } from "./AuthContext";
 import { parsePlanEntryRow, parsePlanEntryRows } from "@/lib/normalizeEntities";
 import { addIsoDays } from "@/lib/date-utils";
+import { trackActivationOnce } from "@/lib/trackActivation";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -53,7 +54,13 @@ interface PlanContextType {
   setPlanEntriesState: React.Dispatch<React.SetStateAction<PlanEntry[]>>;
   addPlanEntry: (entry: Omit<PlanEntry, "id">) => void;
   addPlanEntries: (entries: Omit<PlanEntry, "id">[]) => Promise<void>;
-  updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => void;
+  /**
+   * US-812: resolves once the server has answered, with the error if there was
+   * one. It used to return void, so a caller had no way to tell a saved write
+   * from a rejected one and the quick-log path toasted success either way.
+   * Callers that do not care can keep ignoring the result.
+   */
+  updatePlanEntry: (id: string, updates: Partial<PlanEntry>) => Promise<{ error: unknown }>;
   copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<void>;
   deleteWeekPlan: (weekStart: string, kidId: string) => Promise<void>;
 }
@@ -126,7 +133,13 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
           logLabel: 'Supabase addPlanEntry error:',
           toastMessage: "Couldn't save that meal — it's been removed. Please try again.",
         },
-      );
+      // US-707: a meal on the planner is the activation step -- it is the
+      // thing the app is for. Fired only on a landed insert: a meal the server
+      // refused was rolled back off the screen, and counting it would be
+      // counting a thing that did not happen.
+      ).then(({ error }) => {
+        if (!error) trackActivationOnce('meal_planned', userId, { meal_slot: entry.meal_slot });
+      });
     } else {
       setPlanEntriesRaw(prev => [...prev, { ...entry, id: generateId() }]);
     }
@@ -147,25 +160,32 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
           logLabel: 'Supabase addPlanEntries error:',
           toastMessage: "Couldn't save those meals — they've been removed. Please try again.",
         },
-      );
+      ).then(({ error }) => {
+        // A generated week is one activation, not seven.
+        if (!error) trackActivationOnce('meal_planned', userId, { meal_slot: entries[0]?.meal_slot });
+      });
     } else {
       const newEntries = entries.map(e => ({ ...e, id: generateId() }));
       setPlanEntriesRaw(prev => [...prev, ...newEntries]);
     }
   }, [userId, householdId]);
 
-  const updatePlanEntry = useCallback((id: string, updates: Partial<PlanEntry>) => {
+  const updatePlanEntry = useCallback(async (id: string, updates: Partial<PlanEntry>) => {
     if (userId) {
       // US-320: optimistic update with rollback + toast on server rejection.
-      void runOptimisticMutation<PlanEntry>(
+      // US-812: the result is returned rather than discarded, so a caller can
+      // avoid announcing a success the server never gave it. The toast and the
+      // rollback still happen in here either way.
+      return runOptimisticMutation<PlanEntry>(
         setPlanEntriesRaw,
         prev => prev.map(e => (e.id === id ? { ...e, ...updates } : e)),
         () => supabase.from('plan_entries').update(updates).eq('id', id),
         { logLabel: 'Supabase updatePlanEntry error:' }
       );
-    } else {
-      setPlanEntriesRaw(prev => prev.map(e => (e.id === id ? { ...e, ...updates } : e)));
     }
+    // Signed out, so local state is the whole story and it cannot fail.
+    setPlanEntriesRaw(prev => prev.map(e => (e.id === id ? { ...e, ...updates } : e)));
+    return { error: null };
   }, [userId]);
 
   const copyWeekPlan = useCallback(async (fromDate: string, toDate: string, kidId: string) => {

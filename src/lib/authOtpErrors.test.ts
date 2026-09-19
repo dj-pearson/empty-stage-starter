@@ -3,6 +3,7 @@ import {
   classifyOtpError,
   isUnconfirmedEmailError,
   otpFailureMessageKey,
+  otpFailureFallbackMessage,
 } from './authOtpErrors';
 import en from '@/i18n/locales/en.json';
 
@@ -78,5 +79,29 @@ describe('otpFailureMessageKey', () => {
 
   it('gives expired and invalid different copy, since that is the whole point', () => {
     expect(otpFailureMessageKey('expired')).not.toBe(otpFailureMessageKey('invalid'));
+  });
+});
+
+/**
+ * US-791: the Expo tree has no i18next, so it renders these strings directly.
+ * Two wordings for one GoTrue failure is the drift this pins shut.
+ */
+describe('otpFailureFallbackMessage', () => {
+  const outcomes = ['expired', 'invalid', 'already_confirmed', 'rate_limited', 'unknown'] as const;
+
+  it('is word for word the en.json copy the web client renders', () => {
+    for (const outcome of outcomes) {
+      const leaf = otpFailureMessageKey(outcome).slice('auth.'.length);
+      expect(otpFailureFallbackMessage(outcome)).toBe(
+        (en.auth as Record<string, string>)[leaf],
+      );
+    }
+  });
+
+  it('carries no interpolation placeholder, since nothing substitutes them here', () => {
+    // t() would fill {{email}}; a raw string renders the braces to the user.
+    for (const outcome of outcomes) {
+      expect(otpFailureFallbackMessage(outcome)).not.toContain('{{');
+    }
   });
 });

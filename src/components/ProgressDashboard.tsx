@@ -6,6 +6,7 @@ import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { TrendingUp, TrendingDown, Target, Award, Calendar, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parseIsoDate } from "@/lib/date-utils";
+import { currentStreak } from "@/lib/streakRules";
 
 export function ProgressDashboard() {
   const { planEntries } = usePlan();
@@ -58,33 +59,12 @@ export function ProgressDashboard() {
       }
     });
 
-    // Streak calculation
-    const sortedEntries = [...kidEntries]
-      .sort((a, b) => parseIsoDate(b.date).getTime() - parseIsoDate(a.date).getTime());
-
-    let currentStreak = 0;
-    let lastDate: Date | null = null;
-
-    for (const entry of sortedEntries) {
-      const entryDate = parseIsoDate(entry.date);
-      entryDate.setHours(0, 0, 0, 0);
-
-      if (!lastDate) {
-        lastDate = entryDate;
-        currentStreak = 1;
-      } else {
-        // Math.round, not floor: these are LOCAL midnights, and a DST day is
-        // 23 or 25 hours. floor(23h / 24h) is 0, which reads two consecutive
-        // days as the same day and silently breaks the streak every spring.
-        const dayDiff = Math.round((lastDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (dayDiff === 1) {
-          currentStreak++;
-          lastDate = entryDate;
-        } else if (dayDiff > 1) {
-          break;
-        }
-      }
-    }
+    // US-781: one rule, shared with Home.tsx and matching the phone.
+    //
+    // This block counted any day that had an ENTRY, never reading `result`, so
+    // a week of pure refusals showed a seven-day streak here and a broken one
+    // on the phone. See src/lib/streakRules.ts for the rule and the decision.
+    const streak = activeKidId ? currentStreak(kidEntries, activeKidId) : 0;
 
     return {
       thisWeek: {
@@ -104,7 +84,7 @@ export function ProgressDashboard() {
         tryBite: tryBiteFoods.length,
         byCategory: foodsByCategory,
       },
-      streak: currentStreak,
+      streak,
     };
   }, [planEntries, foods, activeKidId]);
 

@@ -42,19 +42,34 @@
 \pset tuples_only on
 
 -- ---------------------------------------------------------------- fixtures --
-TRUNCATE kids, foods, apple_subscriptions, user_subscriptions,
-         complementary_subscriptions CASCADE;
-DELETE FROM auth.users;
+--
+-- US-800: SCOPED TO THIS SUITE'S OWN ROWS. This used to
+-- `TRUNCATE kids, foods, apple_subscriptions, user_subscriptions,
+-- complementary_subscriptions CASCADE` and `DELETE FROM auth.users`, with no
+-- WHERE anywhere -- which was harmless while nothing ran these files and is
+-- sabotage now that CI runs all of them against one database: it deleted every
+-- other suite's fixture. It also fails outright once any suite leaves a
+-- household_members.invited_by reference behind.
+DELETE FROM apple_subscriptions           WHERE user_id::text LIKE '00000000-0000-0000-0000-0000000000f%';
+DELETE FROM user_subscriptions            WHERE user_id::text LIKE '00000000-0000-0000-0000-0000000000f%';
+DELETE FROM complementary_subscriptions   WHERE user_id::text LIKE '00000000-0000-0000-0000-0000000000f%'
+                                             OR granted_by::text LIKE '00000000-0000-0000-0000-0000000000f%';
+DELETE FROM kids                          WHERE user_id::text LIKE '00000000-0000-0000-0000-0000000000f%';
+DELETE FROM foods                         WHERE user_id::text LIKE '00000000-0000-0000-0000-0000000000f%';
+DELETE FROM auth.users                    WHERE id::text LIKE '00000000-0000-0000-0000-0000000000f%';
 
-INSERT INTO auth.users (id) VALUES
-  ('00000000-0000-0000-0000-0000000000f1'),  -- no entitlement
-  ('00000000-0000-0000-0000-0000000000f2'),  -- Stripe Pro
-  ('00000000-0000-0000-0000-0000000000f3'),  -- Apple Family Plus
-  ('00000000-0000-0000-0000-0000000000f4'),  -- Apple, expired
-  ('00000000-0000-0000-0000-0000000000f5'),  -- Apple, revoked (refund)
-  ('00000000-0000-0000-0000-0000000000f6'),  -- admin comp, Family Plus
-  ('00000000-0000-0000-0000-0000000000f7'),  -- Stripe, canceled
-  ('00000000-0000-0000-0000-0000000000f8');  -- Apple Professional, no expiry
+-- Emails, because every account this suite is about has one. auth.users.email
+-- is nullable and an emailless signup is allowed through since US-800's
+-- 20260918000006, but a fixture that omits it tests the wrong shape.
+INSERT INTO auth.users (id, email) VALUES
+  ('00000000-0000-0000-0000-0000000000f1', 'us780-f1@example.test'),  -- no entitlement
+  ('00000000-0000-0000-0000-0000000000f2', 'us780-f2@example.test'),  -- Stripe Pro
+  ('00000000-0000-0000-0000-0000000000f3', 'us780-f3@example.test'),  -- Apple Family Plus
+  ('00000000-0000-0000-0000-0000000000f4', 'us780-f4@example.test'),  -- Apple, expired
+  ('00000000-0000-0000-0000-0000000000f5', 'us780-f5@example.test'),  -- Apple, revoked (refund)
+  ('00000000-0000-0000-0000-0000000000f6', 'us780-f6@example.test'),  -- admin comp, Family Plus
+  ('00000000-0000-0000-0000-0000000000f7', 'us780-f7@example.test'),  -- Stripe, canceled
+  ('00000000-0000-0000-0000-0000000000f8', 'us780-f8@example.test');  -- Apple Professional, no expiry
 
 INSERT INTO user_subscriptions (user_id, plan_id, status)
 SELECT '00000000-0000-0000-0000-0000000000f2', id, 'active'
@@ -77,19 +92,37 @@ FROM subscription_plans WHERE name = 'Family Plus';
 
 -- How many kids can this user actually insert before the trigger stops them?
 -- Rolls its own rows back, so the suite is re-runnable.
+-- US-800: the household is the one the signup chain made for this user, not a
+-- gen_random_uuid(). kids.household_id has a foreign key to households, so a
+-- made-up id fails on the FIRST insert -- and because this helper catches
+-- WHEN OTHERS, that read as "capacity 0" for every user, which looks exactly
+-- like the entitlement bug this suite exists to catch. The helper reports the
+-- error it swallowed for the same reason.
 CREATE OR REPLACE FUNCTION pg_temp.kid_capacity(p_user UUID, p_probe INTEGER DEFAULT 6)
 RETURNS TEXT LANGUAGE plpgsql AS $$
-DECLARE i INTEGER; hh UUID := gen_random_uuid();
+DECLARE i INTEGER; hh UUID; err TEXT;
 BEGIN
+  SELECT household_id INTO hh FROM public.household_members WHERE user_id = p_user LIMIT 1;
+  IF hh IS NULL THEN
+    RETURN 'no household (the signup chain did not run for this user)';
+  END IF;
+
+  DELETE FROM kids WHERE user_id = p_user;
   FOR i IN 1..p_probe LOOP
     BEGIN
       INSERT INTO kids (user_id, household_id, name) VALUES (p_user, hh, 'k' || i);
     EXCEPTION WHEN OTHERS THEN
-      DELETE FROM kids WHERE household_id = hh;
+      GET STACKED DIAGNOSTICS err = MESSAGE_TEXT;
+      DELETE FROM kids WHERE user_id = p_user;
+      -- A plan limit is the answer we are probing for. Anything else is a
+      -- broken fixture wearing the same clothes, so it says which it was.
+      IF err NOT ILIKE '%limit%' AND err NOT ILIKE '%upgrade%' AND err NOT ILIKE '%plan%' THEN
+        RETURN format('%s (stopped by: %s)', i - 1, err);
+      END IF;
       RETURN (i - 1)::TEXT;
     END;
   END LOOP;
-  DELETE FROM kids WHERE household_id = hh;
+  DELETE FROM kids WHERE user_id = p_user;
   RETURN p_probe || '+ (unlimited)';
 END;
 $$;
@@ -223,6 +256,22 @@ BEGIN
     CREATE ROLE us780_client NOLOGIN;
   EXCEPTION WHEN duplicate_object THEN NULL;
   END;
+
+  -- PostgreSQL 16 changed what CREATE ROLE hands its creator. A CREATEROLE
+  -- user now gets ADMIN on the new role but NOT SET, so the `SET LOCAL ROLE`
+  -- below fails with "permission denied to set role". A superuser is exempt,
+  -- which is exactly why this case passes under a psql running as a real
+  -- superuser and fails in CI, where Supabase's `postgres` is not one. The
+  -- suite was only ever run the first way until the CI gate started running
+  -- it, so the difference had never shown up.
+  BEGIN
+    EXECUTE format('GRANT us780_client TO %I WITH SET TRUE', current_user);
+  EXCEPTION
+    -- PG15 and earlier have no WITH SET clause, and grant the creator full
+    -- membership on creation anyway, so there is nothing to grant there.
+    WHEN syntax_error OR invalid_grant_operation THEN NULL;
+  END;
+
   GRANT USAGE ON SCHEMA public TO us780_client;
   GRANT SELECT, INSERT ON public.professional_custom_domains TO us780_client;
   GRANT SELECT ON public.subscription_plans, public.user_subscriptions,
@@ -255,3 +304,113 @@ BEGIN
   DELETE FROM public.professional_custom_domains WHERE domain_name LIKE 'case11-%';
 END
 $case11$;
+
+-- ---------------------------------------------------------------------------
+-- US-800: the assertions.
+--
+-- The eleven cases above print their answers next to the word EXPECTED. Run by
+-- hand that is readable; as a CI gate it is nothing, because under
+-- `psql -v ON_ERROR_STOP=1` the file can only fail by erroring. An App Store
+-- subscriber silently treated as free -- the exact regression this suite was
+-- written for -- would have printed "1" where it says EXPECTED 6+ and the step
+-- would have gone green. The CI step is blocking now, so every number above is
+-- asserted here.
+-- ---------------------------------------------------------------------------
+SELECT '';
+SELECT '=== ASSERTIONS ===';
+DO $$
+DECLARE
+  free_u    uuid := '00000000-0000-0000-0000-0000000000f1';
+  stripe_u  uuid := '00000000-0000-0000-0000-0000000000f2';
+  apple_u   uuid := '00000000-0000-0000-0000-0000000000f3';
+  expired_u uuid := '00000000-0000-0000-0000-0000000000f4';
+  revoked_u uuid := '00000000-0000-0000-0000-0000000000f5';
+  comp_u    uuid := '00000000-0000-0000-0000-0000000000f6';
+  cancel_u  uuid := '00000000-0000-0000-0000-0000000000f7';
+  prof_u    uuid := '00000000-0000-0000-0000-0000000000f8';
+  cap       text;
+  plan_name text;
+  n         int;
+BEGIN
+  -- CASE 1 + 2: a paid entitlement that did not come from Stripe is still paid.
+  cap := pg_temp.kid_capacity(apple_u);
+  ASSERT cap LIKE '%unlimited%', format('an App Store Family Plus buyer got kid capacity %s', cap);
+  SELECT name INTO plan_name FROM subscription_plans WHERE id = effective_plan_id(apple_u);
+  ASSERT plan_name = 'Family Plus', format('the App Store buyer resolved to %s', plan_name);
+  ASSERT (check_feature_limit(apple_u, 'children', 1) ->> 'allowed')::boolean,
+    'check_feature_limit refused a child to an App Store Family Plus buyer';
+
+  cap := pg_temp.kid_capacity(comp_u);
+  ASSERT cap LIKE '%unlimited%', format('an admin comp got kid capacity %s', cap);
+
+  -- CASE 3: no regression for the path that already worked.
+  cap := pg_temp.kid_capacity(stripe_u);
+  ASSERT cap = '3', format('a Stripe Pro subscriber should cap at 3 kids, got %s', cap);
+  SELECT name INTO plan_name FROM subscription_plans WHERE id = effective_plan_id(stripe_u);
+  ASSERT plan_name = 'Pro', format('the Stripe subscriber resolved to %s', plan_name);
+
+  -- CASE 4: free is still capped, and resolves to no plan row.
+  cap := pg_temp.kid_capacity(free_u);
+  ASSERT cap = '1', format('a free user should cap at 1 kid, got %s', cap);
+  ASSERT effective_plan_id(free_u) IS NULL,
+    'a user with no entitlement should resolve to NULL so callers fall back to Free';
+
+  -- CASE 5: a lapsed entitlement grants nothing. Three ways to lapse.
+  cap := pg_temp.kid_capacity(expired_u);
+  ASSERT cap = '1', format('an EXPIRED App Store subscription still granted capacity %s', cap);
+  cap := pg_temp.kid_capacity(revoked_u);
+  ASSERT cap = '1', format('a REVOKED (refunded) subscription still granted capacity %s', cap);
+  cap := pg_temp.kid_capacity(cancel_u);
+  ASSERT cap = '1', format('a CANCELED Stripe subscription still granted capacity %s', cap);
+
+  -- CASE 7: every StoreKit product id maps to a plan. An unmapped one silently
+  -- downgrades a paying customer, which is the whole point of this suite.
+  SELECT count(*) INTO n
+    FROM (VALUES
+      ('com.eatpal.app.pro.monthly'),
+      ('com.eatpal.app.pro.yearly'),
+      ('com.eatpal.app.familyplus.monthly'),
+      ('com.eatpal.app.familyplus.yearly'),
+      ('com.eatpal.app.professional.yearly')
+    ) AS p(product_id)
+   WHERE public.plan_name_for_apple_product(p.product_id) IS NULL;
+  ASSERT n = 0, format('%s StoreKit product id(s) map to no plan', n);
+
+  -- CASE 8: holding two entitlements never returns the smaller one.
+  ASSERT (SELECT name FROM subscription_plans WHERE id = effective_plan_id(apple_u)) = 'Family Plus',
+    'a user holding two entitlements was resolved to the smaller one';
+
+  -- CASE 9: the verbatim branches.
+  ASSERT NOT (check_feature_limit(free_u, 'ai_coach') ->> 'allowed')::boolean,
+    'a free user was allowed the AI coach';
+  -- The print above says EXPECTED false for this one, and that expectation is
+  -- wrong: food_tracker is a QUANTITY limit, not a boolean gate, and the same
+  -- call returns {"limit": 10, "current": 0, "allowed": true}. A free user who
+  -- may never add a first entry would make that limit of 10 meaningless. What
+  -- actually distinguishes the tiers is the ceiling, so that is what is
+  -- asserted -- 10 for free, none for a paid entitlement.
+  ASSERT (check_feature_limit(free_u, 'food_tracker') ->> 'limit')::int = 10,
+    format('a free user should have a food-tracker ceiling of 10, got %s',
+           check_feature_limit(free_u, 'food_tracker') ->> 'limit');
+  ASSERT (check_feature_limit(apple_u, 'food_tracker') ->> 'limit') IS NULL,
+    'an App Store buyer should have no food-tracker ceiling';
+  ASSERT NOT (check_feature_limit(free_u, 'food_chaining') ->> 'allowed')::boolean,
+    'a free user was allowed food chaining';
+  ASSERT (check_feature_limit(apple_u, 'food_chaining') ->> 'allowed')::boolean,
+    'an App Store buyer was refused food chaining';
+  ASSERT NOT (check_feature_limit(free_u, 'pantry_foods', 50) ->> 'allowed')::boolean,
+    'a free user was allowed a 51st pantry food';
+  ASSERT (check_feature_limit(apple_u, 'pantry_foods', 50) ->> 'allowed')::boolean,
+    'an App Store buyer was refused a 51st pantry food';
+  ASSERT (check_feature_limit(free_u, 'not_a_feature') ->> 'allowed')::boolean,
+    'an unknown feature should not be gated by accident';
+
+  -- CASE 10: effective_plan_id takes a user id, so a client that could call it
+  -- could report on anybody. It must not be reachable by anon or authenticated.
+  ASSERT NOT has_function_privilege('anon', 'public.effective_plan_id(uuid)', 'EXECUTE'),
+    'anon can call effective_plan_id(uuid) and read any user''s plan';
+  ASSERT NOT has_function_privilege('authenticated', 'public.effective_plan_id(uuid)', 'EXECUTE'),
+    'authenticated can call effective_plan_id(uuid) and read any user''s plan';
+
+  RAISE NOTICE 'us780: every case asserted and passed';
+END $$;

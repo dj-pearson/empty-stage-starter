@@ -1,7 +1,8 @@
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 import { withStandingLimits } from "../_shared/safety.ts";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -12,14 +13,10 @@ export default async (req: Request) => {
 
   // US-618: denial-of-wallet gate. This endpoint spends real model tokens, and
   // the runtime is --no-verify-jwt, so in-function auth is the only thing
-  // standing between an anonymous script and our AI bill.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  // standing between an anonymous script and our AI bill. US-773 added the
+  // method check and the per-user budget that only the serve() copy had.
+  const gate = await gateAiRequest(req, 'ai-meal-plan', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { kid, foods, recipes, days = 7, startDate: startDateInput } = await req.json();
@@ -129,7 +126,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
                      mealPlanText.match(/(\{[\s\S]*\})/);
 
     if (!jsonMatch) {
-      throw new Error('No JSON found in AI response');
+      throw new PublicError('No JSON found in AI response');
     }
 
     const mealPlan = JSON.parse(jsonMatch[1] || jsonMatch[0]);
@@ -169,7 +166,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
   } catch (error) {
     console.error('[ai-meal-plan] Error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       {
         status: 500,
         headers: {

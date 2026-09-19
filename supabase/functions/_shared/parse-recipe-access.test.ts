@@ -21,6 +21,7 @@ import {
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 
 import {
+  accessDeniedResponse,
   ANON_GLOBAL_LIMIT,
   ANON_PER_IP_LIMIT,
   ANON_WINDOW_MS,
@@ -232,4 +233,50 @@ Deno.test('clientIp reads the left-most forwarded address, then Cloudflare, then
   assertEquals(clientIp(req({ 'cf-connecting-ip': '203.0.113.3' })), '203.0.113.3');
   assertEquals(clientIp(req({ 'x-forwarded-for': '', 'cf-connecting-ip': '203.0.113.4' })), '203.0.113.4');
   assertEquals(clientIp(req({})), null);
+});
+
+/**
+ * The refusal on the wire. resolveAccess deciding 429 is only half of it --
+ * what the share extension acts on is the status and the header, and an
+ * exhausted budget answered as 401 would have it tell the user to sign in,
+ * which is both untrue and no help.
+ */
+const CORS = { 'Access-Control-Allow-Origin': '*' };
+
+Deno.test('an exhausted budget is a 429 carrying Retry-After', async () => {
+  setup();
+  const gate = gateStub(unauthorized);
+
+  let refusal!: Awaited<ReturnType<typeof resolveAccess>>;
+  for (let i = 0; i <= ANON_PER_IP_LIMIT; i++) {
+    refusal = await resolveAccess(fromIp('203.0.113.9'), gate.gate, { anonKey: ANON_KEY });
+  }
+
+  assert(!refusal.allowed, 'the per-address budget should be spent by now');
+  const response = accessDeniedResponse(refusal, CORS);
+
+  assertEquals(response.status, 429);
+  const retryAfter = response.headers.get('Retry-After');
+  assert(retryAfter !== null, 'a 429 with no Retry-After leaves the client guessing');
+  assert(
+    Number(retryAfter) > 0,
+    `Retry-After should be a positive number of seconds, got ${retryAfter}`,
+  );
+  assertEquals(response.headers.get('Access-Control-Allow-Origin'), '*');
+  assertEquals((await response.json()).error, refusal.error);
+});
+
+Deno.test('a refusal that is not a budget carries no Retry-After', async () => {
+  setup();
+  // No Authorization header at all: nothing to retry later, so a Retry-After
+  // here would promise the caller that waiting helps.
+  const refusal = await resolveAccess(req({}), gateStub(unauthorized).gate, {
+    anonKey: ANON_KEY,
+  });
+
+  assert(!refusal.allowed);
+  const response = accessDeniedResponse(refusal, CORS);
+
+  assertEquals(response.status, 401);
+  assertEquals(response.headers.get('Retry-After'), null);
 });

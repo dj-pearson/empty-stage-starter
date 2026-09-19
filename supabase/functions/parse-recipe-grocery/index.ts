@@ -1,7 +1,8 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import type { AIImageSource } from '../_shared/ai-service-v2.ts';
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { fetchRecipePage } from '../_shared/url-validator.ts';
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,13 +23,8 @@ export default async (req: Request) => {
   }
 
   // Authenticated users only: paid AI call + fetches arbitrary user URLs (SSRF surface).
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(JSON.stringify({ error: gate.error ?? 'Unauthorized' }), {
-      status: gate.status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  const gate = await gateAiRequest(req, 'parse-recipe-grocery', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { url, imageBase64 } = await req.json();
@@ -59,7 +55,7 @@ export default async (req: Request) => {
 
       recipeContent = visionResponse.content;
       if (!recipeContent) {
-        throw new Error('Failed to analyze recipe image');
+        throw new PublicError('Failed to analyze recipe image');
       }
       console.log('Vision extracted text length:', recipeContent.length);
     }
@@ -145,7 +141,7 @@ export default async (req: Request) => {
         console.log('Extracted text content length:', recipeContent.length);
       }
     } else {
-      throw new Error('Either url or imageBase64 must be provided');
+      throw new PublicError('Either url or imageBase64 must be provided');
     }
 
     // Parse with structured output
@@ -179,7 +175,7 @@ export default async (req: Request) => {
     }, 'lightweight'); // Fast parsing
     
     if (!aiResponse || !aiResponse.content) {
-      throw new Error('No recipe data extracted');
+      throw new PublicError('No recipe data extracted');
     }
 
     console.log('AI Response:', aiResponse.content.substring(0, 500));
@@ -194,7 +190,7 @@ export default async (req: Request) => {
     const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error('Could not find JSON in response:', aiResponse.content);
-      throw new Error('No valid JSON in AI response');
+      throw new PublicError('No valid JSON in AI response');
     }
     
     let recipe;
@@ -216,7 +212,7 @@ export default async (req: Request) => {
   } catch (error: any) {
     console.error('Error in parse-recipe-grocery function:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Failed to parse recipe' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

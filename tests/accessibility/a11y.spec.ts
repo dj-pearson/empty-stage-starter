@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'fs';
 import path from 'path';
+import { settleAnimations } from './settle';
 
 /**
  * Accessibility Tests using axe-core
@@ -44,6 +45,7 @@ test.describe('Accessibility Tests - Public Pages', () => {
   test('Landing page should have no critical accessibility violations', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -67,6 +69,7 @@ test.describe('Accessibility Tests - Public Pages', () => {
   test('Auth page should have no critical accessibility violations', async ({ page }) => {
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -88,6 +91,7 @@ test.describe('Accessibility Tests - Public Pages', () => {
   test('Pricing page should have no critical accessibility violations', async ({ page }) => {
     await page.goto('/pricing');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -121,6 +125,7 @@ test.describe('Accessibility Tests - Public Pages', () => {
     test(`${name} page should have no serious/critical accessibility violations`, async ({ page }) => {
       await page.goto(pagePath);
       await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
       const accessibilityScanResults = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -155,6 +160,7 @@ test.describe('Accessibility Tests - Component Focus', () => {
   test('Forms should have proper labels and ARIA attributes', async ({ page }) => {
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .include('form')
@@ -174,6 +180,7 @@ test.describe('Accessibility Tests - Component Focus', () => {
   test('Navigation should be keyboard accessible', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     // Test keyboard navigation
     await page.keyboard.press('Tab');
@@ -205,6 +212,7 @@ test.describe('Accessibility Tests - Component Focus', () => {
   test('Images should have alt text', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a'])
@@ -223,6 +231,7 @@ test.describe('Accessibility Tests - Component Focus', () => {
   test('Color contrast should meet WCAG AA standards', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2aa'])
@@ -249,14 +258,24 @@ test.describe('Accessibility Tests - Interactive Elements', () => {
   test('Buttons should be accessible', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
-    // Check all buttons have accessible names
+    // Check all buttons have accessible names.
+    //
+    // US-817: this used to read innerText, which is a *rendered* text query --
+    // it returns '' inside a `content-visibility: auto` subtree that the
+    // browser has skipped. Landing.tsx marks its lower sections `cv-auto`, so
+    // "Take the Quiz", "Calculate Budget", "Generate Plan" and "See Therapist
+    // Plans" all reported no accessible name while being perfectly labelled.
+    // textContent is not layout-dependent and is what the accessibility tree
+    // computes the name from here.
     const buttons = await page.locator('button').all();
 
     for (const button of buttons) {
-      const accessibleName = await button.getAttribute('aria-label') ||
-                            await button.innerText() ||
-                            await button.getAttribute('title');
+      const accessibleName =
+        (await button.getAttribute('aria-label')) ||
+        (await button.textContent()) ||
+        (await button.getAttribute('title'));
 
       // Each button should have some accessible name
       expect(accessibleName?.trim().length).toBeGreaterThan(0);
@@ -266,6 +285,7 @@ test.describe('Accessibility Tests - Interactive Elements', () => {
   test('Links should have descriptive text', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
@@ -284,6 +304,7 @@ test.describe('Accessibility Tests - Interactive Elements', () => {
   test('Focus indicators should be visible', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     // Tab through a few elements
     await page.keyboard.press('Tab');
@@ -318,6 +339,7 @@ test.describe('Accessibility Tests - Dynamic Content', () => {
   test('Modal dialogs should trap focus', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     // Look for a button that opens a modal
     const modalTrigger = page.locator('[data-testid="modal-trigger"], button:has-text("Sign"), button:has-text("Get Started")').first();
@@ -370,6 +392,7 @@ test.describe('Accessibility Tests - Responsive Design', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
@@ -388,6 +411,7 @@ test.describe('Accessibility Tests - Responsive Design', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
     // Check button sizes (WCAG recommends 44x44px minimum)
     const buttons = await page.locator('button, a[href], [role="button"]').all();
@@ -419,6 +443,7 @@ test('Generate accessibility summary report', async ({ page }) => {
     try {
       await page.goto(url);
       await page.waitForLoadState('networkidle');
+    await settleAnimations(page);
 
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])

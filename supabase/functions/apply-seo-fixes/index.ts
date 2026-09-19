@@ -7,6 +7,16 @@
 // =====================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
+
+/**
+ * The supabase-js client, named rather than `any` (US-870).
+ *
+ * This tree has no generated Database types -- `supabase gen types` writes
+ * them for src/, and the Deno handlers import the client straight from esm.sh
+ * -- so the honest type is "whatever createClient returns".
+ */
+type SupabaseClientLike = ReturnType<typeof createClient>;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,7 +53,7 @@ interface FixSuggestion {
     field: string;
     oldValue?: string;
     newValue: string;
-    condition?: Record<string, any>;
+    condition?: Record<string, unknown>;
   };
   aiConfidence?: number;
   priority: number;
@@ -87,8 +97,8 @@ export default async (req: Request) => {
     // Sort by priority (high impact first)
     fixSuggestions.sort((a, b) => b.priority - a.priority);
 
-    const appliedFixes: any[] = [];
-    const failedFixes: any[] = [];
+    const appliedFixes: Record<string, unknown>[] = [];
+    const failedFixes: Record<string, unknown>[] = [];
 
     // Apply fixes if autoApply is enabled
     if (autoApply) {
@@ -124,7 +134,7 @@ export default async (req: Request) => {
             console.error(`Failed to apply fix for ${suggestion.item}:`, error);
             failedFixes.push({
               ...suggestion,
-              error: error.message,
+              error: publicMessage(error),
             });
           }
         }
@@ -149,11 +159,11 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("Error in apply-seo-fixes:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-});
+};
 
 // =====================================================
 // HELPER FUNCTIONS
@@ -205,7 +215,7 @@ async function generateFixSuggestion(result: AuditResult): Promise<FixSuggestion
   else if (item === "Open Graph" && message.includes("Missing")) {
     suggestion.fixType = "database_update";
     suggestion.canAutoApply = true;
-    const missing = extractMissingOGTags(message);
+    const _missing = extractMissingOGTags(message);
     suggestion.databaseChanges = {
       table: "seo_settings",
       field: "og_title", // Would need to handle multiple fields
@@ -286,11 +296,11 @@ function extractMissingOGTags(message: string): string[] {
 }
 
 async function applyDatabaseFix(
-  supabaseClient: any,
+  supabaseClient: SupabaseClientLike,
   suggestion: FixSuggestion
-): Promise<any> {
+): Promise<unknown> {
   if (!suggestion.databaseChanges) {
-    throw new Error("No database changes defined");
+    throw new PublicError("No database changes defined");
   }
 
   const { table, field, newValue, condition } = suggestion.databaseChanges;

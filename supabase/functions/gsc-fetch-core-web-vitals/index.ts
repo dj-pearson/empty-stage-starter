@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,7 @@ export default async (req: Request) => {
     const { siteUrl } = await req.json();
 
     if (!siteUrl) {
-      throw new Error("Site URL is required");
+      throw new PublicError("Site URL is required");
     }
 
     // Initialize Supabase client
@@ -26,14 +27,14 @@ export default async (req: Request) => {
     // Get the user's access token from the request
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("No authorization header");
+      throw new PublicError("No authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      throw new Error("Unauthorized");
+      throw new PublicError("Unauthorized");
     }
 
     console.log(`Fetching Core Web Vitals from GSC for ${siteUrl}...`);
@@ -46,7 +47,7 @@ export default async (req: Request) => {
       .single();
 
     if (credError || !credentials) {
-      throw new Error("No Google Search Console credentials found. Please connect GSC first.");
+      throw new PublicError("No Google Search Console credentials found. Please connect GSC first.");
     }
 
     let accessToken = credentials.access_token;
@@ -70,7 +71,7 @@ export default async (req: Request) => {
       });
 
       if (!refreshResponse.ok) {
-        throw new Error("Failed to refresh access token");
+        throw new PublicError("Failed to refresh access token");
       }
 
       const refreshData = await refreshResponse.json();
@@ -305,7 +306,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

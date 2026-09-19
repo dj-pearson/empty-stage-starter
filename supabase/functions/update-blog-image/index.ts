@@ -1,5 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { requireAdmin } from "../_shared/require-admin.ts";
+import { fetchGuardedResource } from "../_shared/url-validator.ts";
+import { publicMessage } from '../_shared/errors.ts';
+
+/** Blog artwork. Generous, but not "stream me a DVD into memory". */
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +14,13 @@ const corsHeaders = {
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   // Admin/service only: mutates blog content and fetches arbitrary URLs (SSRF surface).
@@ -39,15 +51,28 @@ export default async (req: Request) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Download the image from the URL
+    // US-773: download under the SSRF guards, not a bare fetch().
+    //
+    // The comment on the admin gate above has said "fetches arbitrary URLs
+    // (SSRF surface)" since it was written, and the line below it called the
+    // global fetch on that URL directly, with no host validation, no redirect
+    // re-validation and no size cap -- so an admin-supplied URL, or anything
+    // that could reach this endpoint with an admin token, could point the
+    // container at 169.254.169.254 or at a body large enough to exhaust it.
+    // The guards existed the whole time, in the copy of this function under
+    // functions/, which the server cannot load. Same shape as US-710.
     console.log('Downloading image from:', imageUrl);
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download image: ${imageResponse.statusText}`);
+    const fetched = await fetchGuardedResource(imageUrl, {
+      headers: { Accept: 'image/*' },
+      maxBytes: MAX_IMAGE_BYTES,
+    });
+    if (!fetched.ok) {
+      return new Response(
+        JSON.stringify({ error: fetched.error, max_bytes: MAX_IMAGE_BYTES }),
+        { status: fetched.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
-
-    const imageBlob = await imageResponse.blob();
-    const imageBuffer = await imageBlob.arrayBuffer();
+    const imageBuffer = fetched.bytes;
 
     // Generate unique filename. US-627: blog artwork lives in the
     // generated-images bucket, which is deliberately world-readable. It used to
@@ -64,7 +89,7 @@ export default async (req: Request) => {
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('generated-images')
       .upload(filename, imageBuffer, {
-        contentType: imageBlob.type || 'image/png',
+        contentType: fetched.contentType || 'image/png',
         upsert: true
       });
 
@@ -109,7 +134,7 @@ export default async (req: Request) => {
   } catch (error: any) {
     console.error('Error in update-blog-image:', error);
     return new Response(
-      JSON.stringify({ error: error?.message || 'Unknown error occurred' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

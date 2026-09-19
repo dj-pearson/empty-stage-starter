@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 
 /**
@@ -59,6 +59,28 @@ async function type(value: string) {
 beforeEach(() => {
   pending.length = 0;
   vi.useFakeTimers({ shouldAdvanceTime: true });
+});
+
+/**
+ * Restore the clock, or this file poisons the run after it.
+ *
+ * `shouldAdvanceTime` drives the fake clock from a REAL interval, and fake
+ * timers are global. Without this the interval keeps ticking after vitest has
+ * torn the environment down, and the next thing it fires is Radix's
+ * focus-scope timer, which dispatches a jsdom event into a document that no
+ * longer exists. Every test still passes and vitest still exits 1:
+ *
+ *   Tests  4300 passed | 3 skipped
+ *   Errors 1 error
+ *   This error was caught after test environment was torn down.
+ *
+ * It only showed up in CI, because the window between the last test and
+ * teardown is wider on a slower machine -- so a local run exits 0 and reports
+ * the same 4300. Worth knowing that `npm run test:run`'s EXIT CODE is the
+ * gate, not the passed-count it prints.
+ */
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("food search under a fast typist", () => {

@@ -11,8 +11,9 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { supabase } from '@/integrations/supabase/client.mobile';
+import { classifyOtpError, otpFailureFallbackMessage } from '@/lib/authOtpErrors';
 import {
   isEmailValid,
   isPasswordValid,
@@ -21,21 +22,32 @@ import {
 } from '../../app/mobile/lib/validation';
 import { colors, spacing, fontSize, borderRadius } from '../../app/mobile/lib/theme';
 
+/** GoTrue's signup token, same length as the recovery one. */
+const CODE_LENGTH = 6;
+
 export default function SignupScreen() {
-  // This screen navigates via the <Link> in its success state, so it doesn't
-  // need useRouter(). The previous `const router = useRouter()` crashed the
-  // screen on mount because useRouter was never imported from expo-router.
+  const router = useRouter();
+
+  // Two stages, mirroring app/(auth)/reset-password.tsx: create the account,
+  // then verify the 6-digit code GoTrue emails. US-791: the screen used to end
+  // on "we sent you a confirmation link", and that link cannot work here --
+  // Coolify pins GOTRUE_SITE_URL to the Kong gateway, which answers 401
+  // application/json, and it is not a setting this deployment owns. The mail
+  // carries a code as well, so the code is what the client uses.
+  const [stage, setStage] = useState<'form' | 'verify'>('form');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const reqs = checkPasswordRequirements(password);
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
   const isFormValid = isEmailValid(email) && isPasswordValid(password) && passwordsMatch;
+  const canVerify = code.length === CODE_LENGTH;
 
   const handleSignup = async () => {
     setError(null);
@@ -68,7 +80,8 @@ export default function SignupScreen() {
         return;
       }
 
-      setSuccess(true);
+      setNotice(null);
+      setStage('verify');
     } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
@@ -76,25 +89,157 @@ export default function SignupScreen() {
     }
   };
 
-  if (success) {
+  const handleVerify = async () => {
+    setError(null);
+    setNotice(null);
+
+    if (!canVerify) {
+      setError('Enter the 6-digit code from your email.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: sanitizeTextInput(email).toLowerCase(),
+        token: code,
+        type: 'signup',
+      });
+
+      if (verifyError) {
+        // A wrong code and an expired one arrive with the same GoTrue string
+        // and need opposite remedies, so classify rather than forward it.
+        setCode('');
+        setError(otpFailureFallbackMessage(classifyOtpError(verifyError)));
+        return;
+      }
+
+      // verifyOtp returns a session, so the user is signed in already.
+      router.replace('/(tabs)/');
+    } catch {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError(null);
+    setNotice(null);
+    setIsLoading(true);
+
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: sanitizeTextInput(email).toLowerCase(),
+      });
+
+      if (resendError) {
+        setError(otpFailureFallbackMessage(classifyOtpError(resendError)));
+        return;
+      }
+
+      setNotice('We sent another code. It can take a minute to arrive.');
+    } catch {
+      setError('Could not send a new code. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (stage === 'verify') {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.successContainer}>
-          <Text style={styles.successIcon}>✓</Text>
-          <Text style={styles.successTitle}>Check your email</Text>
-          <Text style={styles.successText}>
-            We've sent a confirmation link to {email}. Please verify your email to complete signup.
-          </Text>
-          <Link href="/(auth)/login" asChild>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              accessibilityLabel="Back to login"
-              accessibilityRole="button"
-            >
-              <Text style={styles.primaryButtonText}>Back to Login</Text>
-            </TouchableOpacity>
-          </Link>
-        </View>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.header}>
+              <Text style={styles.logo}>EatPal</Text>
+              <Text style={styles.tagline}>Verify your email</Text>
+            </View>
+
+            <View style={styles.form}>
+              {error && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
+              {notice && (
+                <View style={styles.noticeBanner}>
+                  <Text style={styles.noticeText}>{notice}</Text>
+                </View>
+              )}
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Verification code</Text>
+                <Text style={styles.helperText}>
+                  We sent a 6-digit code to {email}. The email contains a code, not a link -- type
+                  the six digits below.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={code}
+                  onChangeText={(text) => {
+                    setCode(text.replace(/[^0-9]/g, '').slice(0, CODE_LENGTH));
+                    setError(null);
+                  }}
+                  placeholder="123456"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="number-pad"
+                  autoComplete="one-time-code"
+                  textContentType="oneTimeCode"
+                  maxLength={CODE_LENGTH}
+                  accessibilityLabel="Six digit verification code"
+                  editable={!isLoading}
+                />
+                <Text style={styles.helperText}>
+                  The code expires in 1 hour. Check your spam folder if it has not arrived.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, (!canVerify || isLoading) && styles.primaryButtonDisabled]}
+                onPress={handleVerify}
+                disabled={!canVerify || isLoading}
+                accessibilityLabel="Verify email"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canVerify || isLoading }}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={colors.background} size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Verify Email</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.linkButton}
+                onPress={handleResendCode}
+                disabled={isLoading}
+                accessibilityLabel="Send me a new code"
+                accessibilityRole="button"
+              >
+                <Text style={styles.linkTextBold}>Send me a new code</Text>
+              </TouchableOpacity>
+
+              <Link href="/(auth)/login" asChild>
+                <TouchableOpacity
+                  style={styles.linkButton}
+                  accessibilityLabel="Back to login"
+                  accessibilityRole="link"
+                >
+                  <Text style={styles.footerText}>Back to Login</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -307,18 +452,10 @@ const styles = StyleSheet.create({
   footerText: { fontSize: fontSize.sm, color: colors.textSecondary },
   linkButton: { minHeight: 48, justifyContent: 'center', alignItems: 'center' },
   linkTextBold: { fontSize: fontSize.md, fontWeight: '600', color: colors.primary },
-  successContainer: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    paddingHorizontal: spacing.lg,
+  helperText: { fontSize: fontSize.xs, color: colors.textSecondary, lineHeight: 18 },
+  noticeBanner: {
+    backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0',
+    borderRadius: borderRadius.md, padding: spacing.md,
   },
-  successIcon: {
-    fontSize: 48, color: colors.success, marginBottom: spacing.md,
-    width: 80, height: 80, textAlign: 'center', lineHeight: 80,
-    backgroundColor: '#ecfdf5', borderRadius: 40, overflow: 'hidden',
-  },
-  successTitle: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  successText: {
-    fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'center',
-    marginBottom: spacing.xl, lineHeight: 22,
-  },
+  noticeText: { fontSize: fontSize.sm, color: colors.success },
 });

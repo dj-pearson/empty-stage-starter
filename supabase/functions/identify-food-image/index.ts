@@ -1,6 +1,7 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -41,13 +42,8 @@ export default async (req: Request) => {
   // US-618: denial-of-wallet gate. This endpoint spends real model tokens, and
   // the runtime is --no-verify-jwt, so in-function auth is the only thing
   // standing between an anonymous script and our AI bill.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  const gate = await gateAiRequest(req, 'identify-food-image', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { imageBase64 } = await req.json();
@@ -84,7 +80,7 @@ export default async (req: Request) => {
 
     const content = aiResponse?.content;
     if (!content) {
-      throw new Error('No response from AI');
+      throw new PublicError('No response from AI');
     }
 
     // Parse the JSON response from AI (strip ```json fences if present)
@@ -103,7 +99,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to identify food'
+        error: publicMessage(error)
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

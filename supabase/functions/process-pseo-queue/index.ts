@@ -1,7 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { requireAdmin } from '../_shared/require-admin.ts';
+import { meterAdminRequest } from '../_shared/ai-gate.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -162,6 +164,11 @@ export default async (req: Request) => {
       { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
+
+  // US-870: the budget the rate_limit_config rows describe and nothing in
+  // the deployed tree enforced. Skipped for service-role callers.
+  const limited = await meterAdminRequest(gate, 'process-pseo-queue', corsHeaders);
+  if (limited) return limited;
 
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
@@ -479,7 +486,7 @@ export default async (req: Request) => {
           pageType,
           slug,
           status: "failed",
-          error: errorMessage,
+          error: publicMessage(genError),
         });
       }
     }
@@ -542,7 +549,7 @@ export default async (req: Request) => {
   } catch (error: any) {
     console.error("[process-pseo-queue] Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: publicMessage(error) }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

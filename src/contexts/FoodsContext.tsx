@@ -11,6 +11,7 @@ import { registerSubscription, unregisterSubscription } from "@/hooks/useRealtim
 import { parseFoodRow, parseFoodRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 import { useAuth } from "./AuthContext";
 import { resolveFood, type CatalogEntry, type EffectiveFood } from "@/lib/effectiveFood";
+import { trackActivationOnce } from "@/lib/trackActivation";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -183,6 +184,9 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
         const inserted = parseFoodRow(data as Record<string, unknown>);
         if (inserted) setFoods(prev => upsertById(prev, inserted));
       }
+      // US-707: a pantry with something in it is the activation step. Once per
+      // user -- a household adds hundreds of foods and activates once.
+      trackActivationOnce('food_added', userId, { category: food.category });
       return true;
     }
 
@@ -254,6 +258,9 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
       } else if (data) {
         setFoods(prev => upsertManyById(prev, parseFoodRows(data as unknown[])));
       }
+      // A batch is one activation, not one per row -- and a receipt scan or a
+      // quiz-seeded pantry is how a lot of people get their first food in.
+      trackActivationOnce('food_added', userId, { category: foodsToAdd[0]?.category });
       return true;
     }
 

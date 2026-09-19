@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const BATCH_SIZE = 100; // Process 100 notifications per run
@@ -195,7 +196,7 @@ export default async (req: Request) => {
   } catch (error) {
     console.error('Error in process-notification-queue:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }
@@ -263,7 +264,7 @@ async function sendPushNotification(supabaseAdmin: any, notification: any) {
 
   } catch (error) {
     console.error('Error sending push notification:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicMessage(error) };
   }
 }
 
@@ -278,7 +279,7 @@ async function sendEmailNotification(supabaseAdmin: any, notification: any) {
 
   } catch (error) {
     console.error('Error sending email notification:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicMessage(error) };
   }
 }
 
@@ -292,7 +293,7 @@ async function sendSMSNotification(supabaseAdmin: any, notification: any) {
 
   } catch (error) {
     console.error('Error sending SMS notification:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicMessage(error) };
   }
 }
 
@@ -305,6 +306,6 @@ async function saveInAppNotification(supabaseAdmin: any, notification: any) {
 
   } catch (error) {
     console.error('Error saving in-app notification:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicMessage(error) };
   }
 }

@@ -33,6 +33,7 @@ import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import { isTrustedForTotals } from "@/lib/catalogNutrition";
 
 interface AddFoodDialogProps {
   open: boolean;
@@ -50,18 +51,23 @@ const categories: { value: FoodCategory; label: string }[] = [
   { value: "snack", label: "Snack" },
 ];
 
+/**
+ * A row from the canonical catalog (US-799). This dialog reads no nutrition
+ * FIGURES -- only the name, the category and the two serving/package strings
+ * it prefills the form with -- so moving it off the `nutrition` table loses
+ * nothing, now that 20260918000008 gave the catalog somewhere to keep the
+ * free text.
+ */
 type NutritionItem = {
   id: string;
   name: string;
-  category: string;
-  serving_size?: string;
-  package_quantity?: string;
-  servings_per_container?: number;
-  allergens?: string[];
-  calories?: number;
-  protein_g?: number;
-  carbs_g?: number;
-  fat_g?: number;
+  default_category: string | null;
+  serving_size_text?: string | null;
+  package_quantity_text?: string | null;
+  servings_per_container?: number | null;
+  allergens?: string[] | null;
+  /** 'verified' | 'unverified' | 'rejected' (gpc_verification_check). */
+  verification?: string | null;
 };
 
 export function AddFoodDialog({
@@ -108,10 +114,17 @@ export function AddFoodDialog({
 
       setIsSearching(true);
       try {
+        // US-799: the canonical catalog. name_normalized is what US-796's
+        // matcher and the trigram index are built on, so the search hits the
+        // index rather than scanning every name.
         const { data, error } = await supabase
-          .from('nutrition')
-          .select('*')
-          .ilike('name', `%${searchQuery}%`)
+          .from('grocery_product_catalog')
+          .select('id, name, default_category, serving_size_text, package_quantity_text, servings_per_container, allergens, verification')
+          // Normalized the same way the column is (lower, trim, collapse
+          // whitespace runs -- normalize_product_name in
+          // 20260908000000). Searching the raw string would miss
+          // "chicken  breast" against a stored "chicken breast".
+          .ilike('name_normalized', `%${searchQuery.toLowerCase().trim().replace(/\s+/g, ' ')}%`)
           .limit(10);
 
         if (error) throw error;
@@ -172,9 +185,9 @@ export function AddFoodDialog({
   const handleSelectNutrition = (item: NutritionItem) => {
     setSelectedNutrition(item);
     setName(item.name);
-    setCategory(mapCategoryToFoodCategory(item.category));
-    setPackageQuantity(item.package_quantity || "");
-    setServingsPerContainer(item.servings_per_container);
+    setCategory(mapCategoryToFoodCategory(item.default_category ?? ''));
+    setPackageQuantity(item.package_quantity_text || "");
+    setServingsPerContainer(item.servings_per_container ?? undefined);
     setSearchQuery("");
     setSearchResults([]);
     setShowConfirmation(true);
@@ -263,9 +276,9 @@ export function AddFoodDialog({
                           <div className="flex-1">
                             <div className="font-medium">{item.name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {item.category}
-                              {item.serving_size && ` • ${item.serving_size}`}
-                              {item.package_quantity && ` • ${item.package_quantity}`}
+                              {item.default_category}
+                              {item.serving_size_text && ` • ${item.serving_size_text}`}
+                              {item.package_quantity_text && ` • ${item.package_quantity_text}`}
                             </div>
                           </div>
                         </CommandItem>
@@ -286,8 +299,11 @@ export function AddFoodDialog({
               <AlertDescription>
                 <div className="space-y-2">
                   <p className="font-medium">Found in database: {selectedNutrition.name}</p>
-                  {selectedNutrition.package_quantity && (
-                    <p className="text-sm">Package: {selectedNutrition.package_quantity}</p>
+                  {/* The catalog column is package_quantity_text; the old
+                      `nutrition` table's was package_quantity, and this line
+                      kept the old name, so the Package row never rendered. */}
+                  {selectedNutrition.package_quantity_text && (
+                    <p className="text-sm">Package: {selectedNutrition.package_quantity_text}</p>
                   )}
                   {selectedNutrition.servings_per_container && (
                     <p className="text-sm">Servings per container: {selectedNutrition.servings_per_container}</p>
@@ -300,6 +316,20 @@ export function AddFoodDialog({
                         </Badge>
                       ))}
                     </div>
+                  )}
+                  {/*
+                    US-797: a barcode scan promotes itself into the shared
+                    catalog as 'unverified', checked by nobody. The search still
+                    finds those rows -- a product you just scanned should be
+                    findable -- but an allergen badge from one is somebody's
+                    photo of a label, and an EMPTY allergen list from one is not
+                    a statement that the food is safe. Say which it is.
+                  */}
+                  {!isTrustedForTotals(selectedNutrition) && (
+                    <p className="text-xs">
+                      Added by another household and not checked yet. Confirm the
+                      details against the packet.
+                    </p>
                   )}
                 </div>
               </AlertDescription>

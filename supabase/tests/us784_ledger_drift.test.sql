@@ -34,15 +34,48 @@
 \pset tuples_only on
 
 -- ---------------------------------------------------------------- fixtures --
-TRUNCATE public.inventory_movements, public.item_stock, public.admin_alerts CASCADE;
-DELETE FROM public.foods;
-DELETE FROM auth.users;
+--
+-- US-800: SCOPED TO THIS SUITE'S OWN ROWS. This used to TRUNCATE three tables
+-- CASCADE and `DELETE FROM public.foods` and `DELETE FROM auth.users` with no
+-- WHERE, which was harmless while nothing ran these files and is sabotage now
+-- that CI runs all fifteen against one database. The unscoped auth delete also
+-- fails outright once any suite leaves a household_members.invited_by
+-- reference behind.
+DELETE FROM public.inventory_movements
+  WHERE household_id IN ('b0000000-0000-0000-0000-000000000001',
+                         'b0000000-0000-0000-0000-000000000002');
+DELETE FROM public.item_stock
+  WHERE item_id IN ('f00d0000-0000-0000-0000-000000000001',
+                    'f00d0000-0000-0000-0000-000000000002',
+                    'f00d0000-0000-0000-0000-000000000003');
+DELETE FROM public.admin_alerts WHERE alert_type = 'ledger_drift';
+DELETE FROM public.foods
+  WHERE id IN ('f00d0000-0000-0000-0000-000000000001',
+               'f00d0000-0000-0000-0000-000000000002',
+               'f00d0000-0000-0000-0000-000000000003');
+DELETE FROM auth.users WHERE id = 'aaaa0000-0000-0000-0000-000000000001';
 
-INSERT INTO auth.users (id) VALUES ('aaaa0000-0000-0000-0000-000000000001');
-INSERT INTO public.foods (id, household_id, name) VALUES
-  ('f00d0000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'chicken breast'),
-  ('f00d0000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'milk'),
-  ('f00d0000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000002', 'rice');
+-- US-800: the auth user carries an email. auth.users.email is nullable and a
+-- real emailless signup is now allowed through (20260918000006), but a fixture
+-- that omits it is testing the wrong shape -- every account this suite is
+-- about has one.
+INSERT INTO auth.users (id, email) VALUES
+  ('aaaa0000-0000-0000-0000-000000000001', 'us784@example.test');
+
+-- US-800: the households the foods hang off. foods.household_id has a real FK
+-- and this fixture never created them, because it had never been run.
+INSERT INTO public.households (id, name) VALUES
+  ('b0000000-0000-0000-0000-000000000001', 'US-784 household one'),
+  ('b0000000-0000-0000-0000-000000000002', 'US-784 household two')
+  ON CONFLICT (id) DO NOTHING;
+
+-- US-800: foods.user_id is NOT NULL (no FK, so any uuid will do). The fixture
+-- predates that constraint and had never been executed, so the omission sat
+-- here unnoticed -- which is the whole reason this story exists.
+INSERT INTO public.foods (id, household_id, user_id, name, category) VALUES
+  ('f00d0000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'aaaa0000-0000-0000-0000-000000000001', 'chicken breast', 'protein'),
+  ('f00d0000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'aaaa0000-0000-0000-0000-000000000001', 'milk', 'dairy'),
+  ('f00d0000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000002', 'aaaa0000-0000-0000-0000-000000000001', 'rice', 'carb');
 
 -- Honest movements. The trigger folds these into item_stock, so the invariant
 -- holds until something below breaks it deliberately.
@@ -187,3 +220,24 @@ BEGIN
   END IF;
 END
 $case10$;
+
+-- ---------------------------------------------------------------------------
+-- US-800: leave the database as we found it. See the note in us668 -- these
+-- foods would otherwise land in us796's global match count.
+-- ---------------------------------------------------------------------------
+DELETE FROM public.inventory_movements
+  WHERE household_id IN ('b0000000-0000-0000-0000-000000000001',
+                         'b0000000-0000-0000-0000-000000000002');
+DELETE FROM public.item_stock
+  WHERE item_id IN ('f00d0000-0000-0000-0000-000000000001',
+                    'f00d0000-0000-0000-0000-000000000002',
+                    'f00d0000-0000-0000-0000-000000000003');
+DELETE FROM public.admin_alerts WHERE alert_type = 'ledger_drift';
+DELETE FROM public.foods
+  WHERE id IN ('f00d0000-0000-0000-0000-000000000001',
+               'f00d0000-0000-0000-0000-000000000002',
+               'f00d0000-0000-0000-0000-000000000003');
+DELETE FROM public.households
+  WHERE id IN ('b0000000-0000-0000-0000-000000000001',
+               'b0000000-0000-0000-0000-000000000002');
+DELETE FROM auth.users WHERE id = 'aaaa0000-0000-0000-0000-000000000001';

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,7 +29,7 @@ export default async (req: Request) => {
     const { crawlId, startUrl, maxPages = 100 } = await req.json();
 
     if (!crawlId && !startUrl) {
-      throw new Error("Either crawlId or startUrl is required");
+      throw new PublicError("Either crawlId or startUrl is required");
     }
 
     console.log(`Analyzing internal link structure...`);
@@ -50,7 +51,7 @@ export default async (req: Request) => {
         .single();
 
       if (error || !crawlData) {
-        throw new Error("Crawl not found");
+        throw new PublicError("Crawl not found");
       }
 
       const linkGraphData = JSON.parse(crawlData.link_graph || "{}");
@@ -86,7 +87,7 @@ export default async (req: Request) => {
     }
 
     // Calculate inbound links
-    for (const [fromUrl, toUrls] of linkGraph.entries()) {
+    for (const [_fromUrl, toUrls] of linkGraph.entries()) {
       for (const toUrl of toUrls) {
         const toPage = pageData.get(toUrl);
         if (toPage) {
@@ -248,7 +249,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -256,7 +257,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function quickCrawl(
   startUrl: string,
@@ -321,7 +322,7 @@ async function quickCrawl(
               toVisit.push(normalized);
             }
           }
-        } catch (e) {
+        } catch (_e) {
           // Invalid URL
         }
       }

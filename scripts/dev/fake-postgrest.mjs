@@ -100,22 +100,73 @@ const LIST_ID = '00000000-0000-4000-8000-00000000bbb1';
  */
 const TEST_USER_ID_LITERAL = '00000000-0000-4000-8000-000000000001';
 
+// US-767: `aisle` and a real FoodCategory on every row. The comment above has
+// promised "several aisles so the By Aisle grouping has something to group"
+// since this fixture was written, and there was no aisle field at all -- so
+// groupItems put all eight rows in "Uncategorized" and every measurement of
+// the grouped list was of a list with one group in it. The categories were
+// display strings ('Dairy', 'Meat') rather than the enum categoryLabel reads,
+
+/**
+ * grocery_product_catalog (US-799). Until this existed the stub answered []
+ * for it, exactly as it had answered [] for `nutrition` before -- so a browser
+ * check could not tell the two apart and the migration off one onto the other
+ * was unobservable. That is the same shape as the empty grocery list this file
+ * already carries a note about.
+ *
+ * Figures are PER 100g, which is the point. The last row deliberately has NO
+ * serving mass: parse_serving_grams refuses "1 cup (240 ml)", so there is no
+ * honest per-serving number for it and perServingFromCatalog returns null.
+ * Anything that sums it as zero is wrong, and now something can catch that.
+ */
+const CATALOG = [
+  ['Whole milk', 'dairy', 61, 3.2, 4.8, 3.3, 244, '1 cup (244g)', 'milk, vitamin d3'],
+  ['Chicken breast', 'protein', 165, 31, 0, 3.6, 172, '6 oz (172g)', 'chicken breast'],
+  ['Bananas', 'fruit', 89, 1.1, 22.8, 0.3, 118, '1 medium (118g)', 'banana'],
+  ['Sharp cheddar', 'dairy', 403, 24.9, 1.3, 33.1, 28, '1 oz (28g)', 'milk, salt, cultures, enzymes'],
+  ['US799 Unmeasured Soup', 'protein', 45, 2, 6, 1.5, null, '1 cup (240 ml)', 'water, tomato, salt'],
+].map(([name, category, kcal, protein, carbs, fat, servingG, servingText, ingredients], i) => ({
+  id: `catalog-${i + 1}`,
+  name,
+  name_normalized: name.toLowerCase(),
+  default_category: category,
+  default_aisle_section: null,
+  barcode: null,
+  kind: 'generic',
+  source: 'seed',
+  verification: 'verified',
+  calories_kcal_100: kcal,
+  protein_g_100: protein,
+  carbs_g_100: carbs,
+  fat_g_100: fat,
+  fiber_g_100: null,
+  sodium_mg_100: null,
+  serving_size_g: servingG,
+  serving_size_text: servingText,
+  servings_per_container: null,
+  package_quantity_text: null,
+  ingredients,
+  allergens: null,
+}));
+
+// which is the same kind of quiet mismatch.
 const GROCERY_ITEMS = [
-  ['Whole milk', 'Dairy', 2, 'gal', false],
-  ['Sharp cheddar', 'Dairy', 1, 'block', false],
-  ['Chicken breast', 'Meat', 6, 'count', false],
-  ['Broccoli florets', 'Produce', 1, 'bag', true],
-  ['Bananas', 'Produce', 6, 'count', false],
-  ['Organic rolled oats, old fashioned, large container', 'Pantry', 1, 'box', false],
-  ['Olive oil', 'Pantry', 1, 'bottle', false],
-  ['Frozen peas', 'Frozen', 2, 'bag', false],
-].map(([name, category, quantity, unit, checked], i) => ({
+  ['Whole milk', 'dairy', 'Dairy', 2, 'gal', false],
+  ['Sharp cheddar', 'dairy', 'Dairy', 1, 'block', false],
+  ['Chicken breast', 'protein', 'Meat & Deli', 6, 'count', false],
+  ['Broccoli florets', 'vegetable', 'Produce', 1, 'bag', true],
+  ['Bananas', 'fruit', 'Produce', 6, 'count', false],
+  ['Organic rolled oats, old fashioned, large container', 'carb', 'Rice & Grains', 1, 'box', false],
+  ['Olive oil', 'snack', 'Condiments & Sauces', 1, 'bottle', false],
+  ['Frozen peas', 'vegetable', 'Frozen Vegetables', 2, 'bag', false],
+].map(([name, category, aisle, quantity, unit, checked], i) => ({
   id: `cccccccc-0000-4000-8000-00000000000${i}`,
   household_id: HOUSEHOLD_ID,
   user_id: TEST_USER_ID_LITERAL,
   list_id: LIST_ID,
   name,
   category,
+  aisle,
   quantity,
   unit,
   checked,
@@ -126,17 +177,24 @@ const GROCERY_ITEMS = [
  * A pantry: safe foods, try-bites and neither, across the categories the app
  * knows. Eight rows is enough for the category sections to render more than one
  * group without making a scan crawl.
+ *
+ * US-817: quantities now span all three stock states. Every row used to be
+ * quantity 1, which getStockStatus reads as "low" -- so the accessibility scan
+ * had never once rendered an out-of-stock card, and the whole-card dim
+ * FoodCard applied to those (opacity-70, since replaced with a muted surface)
+ * washed every colour on it toward the page background without any gate
+ * noticing. 0 is out, 1-2 is low, above that is ok.
  */
 const FOODS = [
-  ['Whole milk', 'dairy', true, false, 'Dairy'],
-  ['Sharp cheddar', 'dairy', false, true, 'Dairy'],
-  ['Chicken nuggets', 'protein', true, false, 'Freezer'],
-  ['Broccoli florets', 'vegetable', false, true, 'Produce'],
-  ['Bananas', 'fruit', true, false, 'Produce'],
-  ['Strawberries', 'fruit', false, true, 'Produce'],
-  ['Buttered pasta', 'carb', true, false, 'Pantry'],
-  ['Goldfish crackers', 'snack', true, false, 'Pantry'],
-].map(([name, category, is_safe, is_try_bite, aisle], i) => ({
+  ['Whole milk', 'dairy', true, false, 'Dairy', 4],
+  ['Sharp cheddar', 'dairy', false, true, 'Dairy', 1],
+  ['Chicken nuggets', 'protein', true, false, 'Freezer', 0],
+  ['Broccoli florets', 'vegetable', false, true, 'Produce', 6],
+  ['Bananas', 'fruit', true, false, 'Produce', 2],
+  ['Strawberries', 'fruit', false, true, 'Produce', 0],
+  ['Buttered pasta', 'carb', true, false, 'Pantry', 3],
+  ['Goldfish crackers', 'snack', true, false, 'Pantry', 1],
+].map(([name, category, is_safe, is_try_bite, aisle, quantity], i) => ({
   id: `dddddddd-0000-4000-8000-00000000000${i}`,
   household_id: HOUSEHOLD_ID,
   user_id: TEST_USER_ID_LITERAL,
@@ -146,7 +204,7 @@ const FOODS = [
   is_try_bite,
   needs_review: false,
   aisle,
-  quantity: 1,
+  quantity,
   unit: 'count',
   created_at: `2026-09-0${i + 1}T00:00:00.000Z`,
   updated_at: `2026-09-0${i + 1}T00:00:00.000Z`,
@@ -506,6 +564,22 @@ createServer((req, res) => {
         created_at: '2026-09-01T00:00:00.000Z',
       },
     ]);
+  }
+
+  if (url.pathname === '/rest/v1/grocery_product_catalog') {
+    // Enough of PostgREST's filter grammar for what the app sends here:
+    // ilike on name_normalized (AddFoodDialog's search) and `not.is.null`
+    // on calories_kcal_100 (the planners' macro load).
+    let rows = CATALOG;
+    const like = url.searchParams.get('name_normalized');
+    if (like?.startsWith('ilike.')) {
+      const needle = like.slice('ilike.'.length).replace(/^%|%$/g, '').toLowerCase();
+      rows = rows.filter((r) => r.name_normalized.includes(needle));
+    }
+    if (url.searchParams.get('calories_kcal_100') === 'not.is.null') {
+      rows = rows.filter((r) => r.calories_kcal_100 !== null);
+    }
+    return sendRows(res, req, rows);
   }
 
   if (url.pathname === '/rest/v1/grocery_items') {

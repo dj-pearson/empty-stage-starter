@@ -7,7 +7,7 @@ import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { AchievementBadge, type Achievement } from './AchievementBadge';
 import { Trophy, Lock, Star, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
-import { parseIsoDate } from "@/lib/date-utils";
+import { currentStreak } from "@/lib/streakRules";
 
 export function AchievementsView() {
   const { planEntries } = usePlan();
@@ -25,36 +25,14 @@ export function AchievementsView() {
       e => e.result === 'ate' || e.result === 'tasted'
     );
 
-    // Calculate streak
-    const sortedEntries = [...kidEntries]
-      .filter(e => e.result)
-      .sort((a, b) => parseIsoDate(b.date).getTime() - parseIsoDate(a.date).getTime());
-
-    let currentStreak = 0;
-    let lastDate: Date | null = null;
-
-    for (const entry of sortedEntries) {
-      const entryDate = parseIsoDate(entry.date);
-      entryDate.setHours(0, 0, 0, 0);
-
-      if (!lastDate) {
-        lastDate = entryDate;
-        currentStreak = 1;
-      } else {
-        // Math.round, not floor: these are LOCAL midnights, and a DST day is
-        // 23 or 25 hours. floor(23h / 24h) is 0, which reads two consecutive
-        // days as the same day and silently breaks the streak every spring.
-        const dayDiff = Math.round(
-          (lastDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        if (dayDiff === 1) {
-          currentStreak++;
-          lastDate = entryDate;
-        } else if (dayDiff > 1) {
-          break;
-        }
-      }
-    }
+    // US-781: the shared rule, not a fourth copy.
+    //
+    // This one was missed when the story counted three: it filtered to
+    // entries WITH a result, unlike ProgressDashboard, but still never read
+    // what the result was -- so a week of refusals unlocked a streak badge
+    // here while the phone showed nothing. The badges a parent sees on the
+    // web are computed from this number.
+    const streak = activeKidId ? currentStreak(kidEntries, activeKidId) : 0;
 
     // Count consecutive successful try bites
     let consecutiveSuccessful = 0;
@@ -93,11 +71,11 @@ export function AchievementsView() {
         title: 'Week Warrior',
         description: '7 days of consistent meal logging',
         icon: 'flame',
-        unlocked: currentStreak >= 7,
-        progress: currentStreak,
+        unlocked: streak >= 7,
+        progress: streak,
         total: 7,
         unlockedDate:
-          currentStreak >= 7 ? format(new Date(), 'MMM d, yyyy') : undefined,
+          streak >= 7 ? format(new Date(), 'MMM d, yyyy') : undefined,
         rarity: 'rare',
       },
       {
@@ -141,11 +119,11 @@ export function AchievementsView() {
         title: 'Progress Pro',
         description: '30 days of tracking',
         icon: 'trending',
-        unlocked: currentStreak >= 30,
-        progress: currentStreak,
+        unlocked: streak >= 30,
+        progress: streak,
         total: 30,
         unlockedDate:
-          currentStreak >= 30 ? format(new Date(), 'MMM d, yyyy') : undefined,
+          streak >= 30 ? format(new Date(), 'MMM d, yyyy') : undefined,
         rarity: 'rare',
       },
       {
@@ -165,11 +143,11 @@ export function AchievementsView() {
         title: 'Consistency Champion',
         description: '30 day logging streak',
         icon: 'flame',
-        unlocked: currentStreak >= 30,
-        progress: currentStreak,
+        unlocked: streak >= 30,
+        progress: streak,
         total: 30,
         unlockedDate:
-          currentStreak >= 30 ? format(new Date(), 'MMM d, yyyy') : undefined,
+          streak >= 30 ? format(new Date(), 'MMM d, yyyy') : undefined,
         rarity: 'legendary',
       },
       {

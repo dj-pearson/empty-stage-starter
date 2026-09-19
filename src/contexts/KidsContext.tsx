@@ -11,6 +11,7 @@ import { runOptimisticMutation } from "@/lib/optimisticMutation";
 import { useAuth } from "./AuthContext";
 import { parseKidRow, parseKidRows, upsertById } from "@/lib/normalizeEntities";
 import { deleteStorageObject } from '@/lib/storageCleanup';
+import { trackActivationOnce } from "@/lib/trackActivation";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -123,6 +124,9 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
         const inserted = parseKidRow(data as Record<string, unknown>);
         if (inserted) setKids(prev => upsertById(prev, inserted));
       }
+      // US-707: the first child is the activation step for a family account.
+      // Once per user -- the tenth child is not a tenth activation.
+      trackActivationOnce('child_created', userId);
       return true;
     }
 

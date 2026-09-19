@@ -221,13 +221,35 @@ export interface ShoppingSession {
   created_at: string;
 }
 
+/**
+ * A nutrition row as the canonical catalog stores it: PER 100g (US-799).
+ *
+ * This used to describe the `nutrition` table, whose figures are per SERVING.
+ * Nothing about the shape said which, and the two are not interchangeable --
+ * put one where the other is expected and a screen shows a parent a number
+ * four times too large. The column names now say it, and
+ * `perServingFromCatalog` in src/lib/catalogNutrition.ts is the only sanctioned
+ * way back to a per-serving figure -- and the only place US-797's verification
+ * rule is applied, which is why `verification` is part of the shape rather
+ * than something a caller may leave out of its select().
+ */
 export interface NutritionData {
   name: string;
-  calories: number;
-  protein_g: string;
-  carbs_g: string;
-  fat_g: string;
-  fiber_g?: string;
-  calcium_mg?: string;
-  iron_mg?: string;
+  name_normalized?: string;
+  /**
+   * 'verified' | 'unverified' | 'rejected' (gpc_verification_check). A barcode
+   * scan promotes itself into the shared catalog as 'unverified': US-797 keeps
+   * those figures out of totals and out of the ladder.
+   */
+  verification?: string | null;
+  calories_kcal_100: number | string | null;
+  protein_g_100: number | string | null;
+  carbs_g_100: number | string | null;
+  fat_g_100: number | string | null;
+  fiber_g_100?: number | string | null;
+  sodium_mg_100?: number | string | null;
+  /** NULL when the serving could not be read without guessing. */
+  serving_size_g: number | string | null;
+  serving_size_text?: string | null;
+  ingredients?: string | null;
 }

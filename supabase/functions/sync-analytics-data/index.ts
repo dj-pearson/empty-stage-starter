@@ -9,6 +9,7 @@
 // =====================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,7 +79,7 @@ async function syncGA4Data(
   let accessToken = connection.access_token;
   if (new Date(connection.token_expires_at) < new Date()) {
     accessToken = await refreshGoogleToken(connection.refresh_token);
-    if (!accessToken) throw new Error("Failed to refresh GA4 token");
+    if (!accessToken) throw new PublicError("Failed to refresh GA4 token");
 
     await supabase
       .from("analytics_platform_connections")
@@ -454,7 +455,7 @@ async function syncGSCData(
   let accessToken = connection.access_token;
   if (new Date(connection.token_expires_at) < new Date()) {
     accessToken = await refreshGoogleToken(connection.refresh_token);
-    if (!accessToken) throw new Error("Failed to refresh GSC token");
+    if (!accessToken) throw new PublicError("Failed to refresh GSC token");
 
     await supabase
       .from("analytics_platform_connections")
@@ -574,7 +575,7 @@ async function syncBingData(
   let accessToken = connection.access_token;
   if (new Date(connection.token_expires_at) < new Date()) {
     accessToken = await refreshMicrosoftToken(connection.refresh_token);
-    if (!accessToken) throw new Error("Failed to refresh Bing token");
+    if (!accessToken) throw new PublicError("Failed to refresh Bing token");
 
     await supabase
       .from("analytics_platform_connections")
@@ -821,7 +822,7 @@ export default async (req: Request) => {
           connectionId: connection.id,
           platform: connection.platform,
           status: "error",
-          error: error.message,
+          error: publicMessage(error),
         });
       }
     }
@@ -841,7 +842,7 @@ export default async (req: Request) => {
   } catch (error) {
     console.error("Error in sync-analytics-data:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

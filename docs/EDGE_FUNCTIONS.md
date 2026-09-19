@@ -30,31 +30,60 @@ This document provides comprehensive documentation for all Supabase Edge Functio
 
 ## Overview
 
-All Edge Functions are located in `supabase/functions/` and follow a consistent pattern:
+Deployed functions live in `supabase/functions/`. There is a second tree at
+`functions/`, for the Agentic OS and for three Cloudflare Pages routes; no
+endpoint exists in both any more, and `docs/EDGE_FUNCTION_TREES.md` says which
+is which and why it matters. A handler written for the wrong one loads on
+nothing and fails silently -- that is US-616, a month of un-deduplicated Stripe
+redeliveries.
+
+The shape `edge-functions-server.ts` calls is `module.default(req)`:
 
 ```typescript
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { getCorsHeaders, securityHeaders } from "../_shared/headers.ts";
+import { getCorsHeaders } from "../common/headers.ts";
+import { gateAiRequest } from "../_shared/ai-gate.ts";
 
-serve(async (req) => {
+export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // POST-only, authenticated, and metered, in one call. The runtime runs with
+  // --no-verify-jwt, so in-function auth is the only gate there is.
+  const gate = await gateAiRequest(req, 'my-function', corsHeaders);
+  if (gate.response) return gate.response;
+
   try {
     // Function logic here
   } catch (error) {
+    console.error('my-function error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 ```
 
----
+Three things in that template used to be the other way round, and each was a
+defect rather than a style preference:
+
+- **`export default`, not `serve(...)`.** This page taught `serve()` until
+  US-773. 17 of the 93 handlers still carry the scar: they were converted by
+  deleting the `serve(` and leaving the closing `)`, so they did not parse at
+  all and their routes were dead. `src/lib/edgeFunctionHandlers.test.ts` now
+  parses every one of them on each run.
+- **A gate before the work.** `gateAiRequest` for anything spending model
+  tokens; `requireAdmin` plus `enforceRateLimit` for admin-only endpoints
+  (`gateAiRequest` admits any signed-in user, so it would widen them);
+  `fetchGuardedResource` from `_shared/url-validator.ts` for anything fetching
+  a caller-supplied URL.
+- **`Internal server error`, not `error.message`.** The thrown message is built
+  from upstream responses and can carry an internal URL or a fragment of a
+  provider's reply. Deliberate 4xx replies should still explain themselves; it
+  is the unexpected path that must not.
 
 ## Shared Utilities
 

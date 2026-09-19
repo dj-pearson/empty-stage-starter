@@ -5,30 +5,32 @@
 #
 # THE LAYOUT (nothing else in the repo stated this, which is the root problem):
 #
-#   supabase/functions/   93 dirs. Handlers are `export default async (req) =>`.
+#   supabase/functions/   95 dirs (93 with an index.ts). Handlers are `export default async (req) =>`.
 #                         This is the contract edge-functions-server.ts expects,
 #                         and BOTH Dockerfiles copy this tree
 #                         (Dockerfile:11, Dockerfile.functions:18). This is what
 #                         actually serves production traffic.
 #
-#   functions/            48 dirs. Handlers are `serve(...)` (Deno std / Supabase
-#                         CLI style). Holds the Agentic OS — agent-* functions,
-#                         the dispatcher, approval-executor, support intake,
-#                         CSAT, nurture — plus ~75 shared logic modules with Deno
-#                         tests. CI runs `deno test functions/_shared/...`
-#                         (ci.yml:182,187), so this tree is NOT dead.
+#   functions/            35 dirs after US-773 removed the twelve duplicates.
+#                         Handlers are `serve(...)` (Deno std / Supabase CLI
+#                         style). Holds the Agentic OS — agent-* functions, the
+#                         dispatcher, approval-executor, support intake, CSAT,
+#                         nurture — plus ~75 shared logic modules with Deno
+#                         tests. CI runs `deno test functions/_shared/...`, and
+#                         config.toml gives some of these an explicit
+#                         entrypoint (agent-blog-writer is live from here), so
+#                         this tree is NOT dead and is NOT merely internal.
 #
-# 13 function names exist in BOTH trees as parallel implementations for the two
-# runtimes. That ambiguity is what let the US-519 Stripe idempotency work be
-# written into the tree the live server cannot even load: it used serve(), so it
-# was never deployed, and the dedup table shipped empty for a month.
+# 13 function names used to exist in BOTH trees as parallel implementations for
+# the two runtimes. That ambiguity is what let the US-519 Stripe idempotency
+# work be written into the tree the live server cannot even load: it used
+# serve(), so it was never deployed, and the dedup table shipped empty for a
+# month. US-773 resolved the last twelve; only `_shared` remains, deliberately.
 #
-# Two checks below:
+# Three checks below:
 #   1. HARD  — every FUNCTIONS_MAP entry must resolve in the deployed tree.
-#   2. HARD  — no NEW cross-tree name collisions. The 13 existing ones are
-#              listed explicitly, mirroring how check-migration-prefixes.sh
-#              grandfathers its known duplicates. Resolving them is tracked
-#              work; adding a 14th is not allowed.
+#   2. HARD  — no cross-tree name collisions at all, bar `_shared`.
+#   3. HARD  — no remaining collision has a newer copy in the non-deployed tree.
 set -uo pipefail
 
 DEPLOYED="supabase/functions"
@@ -36,24 +38,22 @@ LEGACY="functions"
 SERVER="edge-functions-server.ts"
 fail=0
 
-# The 13 names that exist in both trees today. Do NOT add to this list to
-# silence a new collision — put the function in one tree only.
+# US-773 resolved the last of them. `_shared` is the ONE name that stays in
+# both trees, and it is not the same kind of thing: it is a directory of helper
+# modules per tree, not two implementations of one endpoint. Both trees need
+# somewhere to put shared code, and the 75 modules under functions/_shared back
+# the Agentic OS functions that config.toml still deploys from that tree.
 #
-# create-checkout came off this list in US-626: the two copies answered
-# different contracts, only supabase/functions/ was ever called, and the
-# non-deployed copy was deleted after its method check, its
-# Stripe-not-configured branch, its status codes and its US-532 error-detail
-# containment were ported into the deployed one.
+# Everything else came off this list by the same route, one function at a time:
+# diff the pair, port what the deployed copy lacks, delete the copy that does
+# not ship. create-checkout (US-626) and tonight-mode went first. The remaining
+# twelve went in US-773, which found that the guards were consistently in the
+# copy that never runs -- a method check on eleven of them, a per-user budget on
+# nine, and on update-blog-image an SSRF check and a byte cap on a `fetch()` of
+# an admin-supplied URL, which is the US-710 story over again.
 #
-# tonight-mode came off it the same way. Check 3 below has failed on main since
-# it was added, because the June US-324/US-325 hardening went into the serve()
-# copy: the IDOR check the deployed copy already did natively, and a rate limit
-# it did not. rate_limit_config had carried a tonight-mode budget since that
-# same commit with no code reading it. enforceRateLimit is now in
-# supabase/functions/_shared/rate-limit.ts and called by the deployed handler;
-# the serve() copy (index.ts + its private scoring.ts, imported by nothing else,
-# covered by no Deno test) is deleted.
-KNOWN_COLLISIONS="_shared ai-meal-plan calculate-food-similarity generate-blog-content generate-sitemap generate-social-content identify-product parse-receipt-image parse-recipe stripe-webhook suggest-foods suggest-recipe update-blog-image"
+# Do NOT add a name here to silence a collision. Put the function in one tree.
+KNOWN_COLLISIONS="_shared"
 
 echo "1/3 FUNCTIONS_MAP entries resolve in ${DEPLOYED}/ ..."
 while IFS= read -r name; do

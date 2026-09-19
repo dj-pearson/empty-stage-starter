@@ -1,3 +1,4 @@
+import { publicMessage } from '../_shared/errors.ts';
 // Health check endpoint for Edge Functions runtime
 
 const corsHeaders = {
@@ -38,7 +39,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({ 
         status: 'unhealthy', 
-        error: error.message 
+        error: publicMessage(error) 
       }),
       { 
         status: 500,

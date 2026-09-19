@@ -200,3 +200,28 @@ export async function resolveAccess(
     error: result.error ?? 'Unauthorized',
   };
 }
+
+/**
+ * The response a refused caller gets.
+ *
+ * Here rather than inline in the handler so the one thing the client actually
+ * reads -- a 429 carrying Retry-After, never a 401 -- is pinned by a test. A
+ * share extension that sees 401 tells the user to sign in; on an exhausted
+ * budget that is the wrong advice, and signing in would not have helped.
+ */
+export function accessDeniedResponse(
+  access: Extract<Access, { allowed: false }>,
+  corsHeaders: Record<string, string>,
+): Response {
+  const headers: Record<string, string> = {
+    ...corsHeaders,
+    'Content-Type': 'application/json',
+  };
+  if (access.retryAfterSeconds !== undefined) {
+    headers['Retry-After'] = String(access.retryAfterSeconds);
+  }
+  return new Response(JSON.stringify({ error: access.error }), {
+    status: access.status,
+    headers,
+  });
+}

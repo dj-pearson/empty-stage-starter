@@ -2,9 +2,12 @@ name: Web CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    # US-763 retired `develop` as an integration branch; `main` is the only one.
+    # Leaving develop here would keep advertising a branch the table no longer
+    # describes, and it has had no pushes since 2026-07-02.
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
     inputs:
       run_edge_tests:
@@ -164,6 +167,20 @@ jobs:
       # hard gate.
       - name: Lint ratchet
         run: bash scripts/ci/lint-ratchet.sh
+        env:
+          LINT_LOG: ${{ runner.temp }}/lint-ratchet.log
+
+      # US-802: the whole log, so a developer can read it without reproducing
+      # the build. `if: always()` because the interesting case is the failing
+      # one -- a log uploaded only on success is a log nobody needs.
+      - name: Upload the lint log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-log
+          path: ${{ runner.temp }}/lint-ratchet.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # Real type-check (the old `tsc --noEmit` checked zero files — root
       # tsconfig has files:[]). `npm run typecheck` runs `tsc -b` over the
@@ -180,6 +197,18 @@ jobs:
       # tsconfig-bypass.json: docs/typecheck-backlog.md.)
       - name: Typecheck ratchet
         run: bash scripts/ci/typecheck-ratchet.sh
+        env:
+          TYPECHECK_LOG: ${{ runner.temp }}/typecheck-ratchet.log
+
+      # US-802, same reasoning as the lint log above.
+      - name: Upload the typecheck log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-log
+          path: ${{ runner.temp }}/typecheck-ratchet.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # US-545: fail on newly-introduced explicit `any` in changed src/ files
       # (diff-scoped; the pre-existing backlog is untouched).
@@ -323,7 +352,7 @@ jobs:
       # coverage, executed never. This is the job that has the artifact, so this
       # is where they have to run.
       - name: Dist-dependent unit gates
-        run: npx vitest run src/lib/headingOutline.test.ts src/lib/cspInlineScripts.test.ts
+        run: npx vitest run src/lib/headingOutline.test.ts src/lib/cspInlineScripts.test.ts src/lib/scrollReveal.test.ts
 
       # E2E_TARGET=dist makes playwright.config.ts serve the downloaded dist/
       # through scripts/dev/serve-dist.mjs on 4173, which resolves URLs the way
@@ -435,30 +464,42 @@ jobs:
       - name: Apply migrations
         run: supabase db push --local
 
-      # US-793: supabase/tests/*.test.sql existed for months with nothing
-      # running them (US-780's notes record its 11 cases as never executed,
-      # blocked on "no Postgres in the container"). US-760 fixed
-      # `supabase start`, so they can run here now. \set ON_ERROR_STOP makes
-      # each file fail the step rather than print and continue.
+      # supabase/tests/*.test.sql, blocking (US-800).
       #
-      # continue-on-error: true for now. Measured against a fresh `supabase db
-      # reset` schema: us793 passes, but us668, us711, us780 and us784 all
-      # fail. Running each one's .bootstrap.sql first does not help -- the
-      # bootstraps themselves fail with "permission denied for schema auth"
-      # because the local `postgres` role is not a superuser (usesuper = f),
-      # and CI connects with the same DB_URL. Turning this blocking now would
-      # red the Migration Test job -- only repaired today -- on failures owned
-      # by other stories. Tracked as US-800; drop continue-on-error once those
-      # four pass. This mirrors what US-764 already does for the E2E job.
+      # IT RAN ONE FILE. The step used to carry continue-on-error and a bare
+      # loop, under GitHub's default `bash -e`: us668 failed first
+      # alphabetically, `-e` aborted the loop, and the other fourteen suites
+      # never executed on any run. The job logs show the step finishing in one
+      # second. So "four tests fail" was never the whole picture -- eleven of
+      # the fifteen had no result at all, and the four that were named were
+      # simply the ones someone had run by hand.
+      #
+      # The loop now runs every file and fails at the END with a list, so one
+      # broken suite cannot hide the rest. `|| failed=...` keeps `-e` from
+      # aborting on a non-zero psql.
+      #
+      # Each suite is self-sufficient against a schema built only from
+      # migrations: nothing here runs the .bootstrap.sql files beside them
+      # (those build a tiny standalone schema for running a suite by hand, and
+      # collide with a real one). Suites that need a signed-in role SET ROLE
+      # authenticated rather than inventing one, because a fresh role has no
+      # USAGE on schema auth and every policy calling auth.uid() then fails
+      # with "permission denied for schema auth" -- the wall this story
+      # originally recorded.
       - name: Run SQL tests
-        continue-on-error: true
         run: |
           DB_URL="$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')"
           shopt -s nullglob
+          failed=""
           for f in supabase/tests/*.test.sql; do
             echo "--- $f"
-            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$f"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$f" || failed="$failed $f"
           done
+          if [ -n "$failed" ]; then
+            echo "::error::SQL suites failed:$failed"
+            exit 1
+          fi
+          echo "All SQL suites passed."
 
       - name: Stop local Supabase
         if: always()
@@ -538,6 +579,14 @@ jobs:
       # check time; the test stubs fetch and reaches no provider.
       - name: Deno image generation helper
         run: deno test --allow-env --allow-net supabase/functions/_shared/image-gen.test.ts
+
+      # US-805: every barcode provider answers 200 for things that are not a
+      # product -- OFF's {status: 0}, USDA's {error: ...}, FoodRepo's error
+      # body -- and all three used to fall back to a food named "Unknown
+      # Product". Pins that each 200-shaped failure degrades to a miss so the
+      # parent gets the add-it-yourself path. Pure, no network.
+      - name: Deno barcode provider shapes
+        run: deno test supabase/functions/_shared/barcodeProviderShape.test.ts
 
       - uses: supabase/setup-cli@v1
         with:

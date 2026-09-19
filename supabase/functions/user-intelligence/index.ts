@@ -1,4 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { publicMessage } from '../_shared/errors.ts';
+
+/**
+ * The supabase-js client, named rather than `any` (US-870).
+ *
+ * This tree has no generated Database types -- `supabase gen types` writes
+ * them for src/, and the Deno handlers import the client straight from esm.sh
+ * -- so the honest type is "whatever createClient returns".
+ */
+type SupabaseClientLike = ReturnType<typeof createClient>;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +24,7 @@ interface UserIntelligenceRequest {
   offset?: number;
   quickAction?: {
     type: 'send_email' | 'grant_comp_sub' | 'add_note' | 'create_ticket';
-    data: any;
+    data: unknown;
   };
 }
 
@@ -83,16 +93,16 @@ export default async (req: Request) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in user-intelligence function:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 
-async function getUserIntelligence(supabase: any, request: UserIntelligenceRequest) {
+async function getUserIntelligence(supabase: SupabaseClientLike, request: UserIntelligenceRequest) {
   const { userId } = request;
 
   if (!userId) {
@@ -175,7 +185,7 @@ async function getUserIntelligence(supabase: any, request: UserIntelligenceReque
   );
 }
 
-async function searchUsers(supabase: any, request: UserIntelligenceRequest) {
+async function searchUsers(supabase: SupabaseClientLike, request: UserIntelligenceRequest) {
   const { searchTerm = '', filter, limit = 20 } = request;
 
   // Use the search function
@@ -200,7 +210,7 @@ async function searchUsers(supabase: any, request: UserIntelligenceRequest) {
   );
 }
 
-async function getUserTimeline(supabase: any, request: UserIntelligenceRequest) {
+async function getUserTimeline(supabase: SupabaseClientLike, request: UserIntelligenceRequest) {
   const { userId, limit = 50, offset = 0 } = request;
 
   if (!userId) {
@@ -232,7 +242,7 @@ async function getUserTimeline(supabase: any, request: UserIntelligenceRequest) 
   );
 }
 
-async function performQuickAction(supabase: any, request: UserIntelligenceRequest, adminUserId: string) {
+async function performQuickAction(supabase: SupabaseClientLike, request: UserIntelligenceRequest, adminUserId: string) {
   const { userId, quickAction } = request;
 
   if (!userId || !quickAction) {

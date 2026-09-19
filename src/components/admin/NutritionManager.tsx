@@ -22,21 +22,76 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, Scan } from "lucide-react";
 import { NutritionImportDialog } from "./NutritionImportDialog";
 import { BarcodeScannerDialog } from "./BarcodeScannerDialog";
+import { PromotionCandidateQueue } from "./PromotionCandidateQueue";
 
+/**
+ * US-799 AC2: this screen is the catalog's CRUD, not `nutrition`'s.
+ *
+ * TWO THINGS CHANGED FOR THE OPERATOR, both of them in the columns.
+ *
+ * The figures are PER 100 G, not per serving. grocery_product_catalog stores
+ * per 100 because USDA and Open Food Facts both publish that way and because
+ * per-serving figures against a free-text serving cannot be summed -- which is
+ * the whole reason the catalog exists. The form says so on every field; typing
+ * a per-serving number into a per-100 field is the one mistake that produces a
+ * plausible wrong answer rather than an error.
+ *
+ * And saving VERIFIES the row. An admin editing a row is what verification
+ * means here: the trigger in 20260906000000 stamps verified_at/verified_by from
+ * the actual actor, and US-797 keeps unverified figures out of totals and the
+ * ladder. So a row an operator has looked at starts counting, and that is the
+ * "somewhere to put an operator's edit" this screen was waiting for.
+ *
+ * serving_size_g is not a field. It is derived from the serving text by the
+ * trigger in 20260918000009, which refuses to guess at "2 cookies" or
+ * "1 cup (240 ml)" -- so the screen shows what the database read rather than
+ * asking an operator to do the parser's job.
+ */
 type NutritionItem = {
   id: string;
   name: string;
-  category: string;
-  serving_size: string | null;
+  default_category: string | null;
+  serving_size_text: string | null;
+  serving_size_g: number | null;
   ingredients: string | null;
-  calories: number | null;
-  protein_g: number | null;
-  carbs_g: number | null;
-  fat_g: number | null;
+  calories_kcal_100: number | null;
+  protein_g_100: number | null;
+  carbs_g_100: number | null;
+  fat_g_100: number | null;
   allergens: string[] | null;
+  verification: string;
 };
 
-const categories = ["Protein", "Carb", "Fruit", "Veg", "Dairy", "Snack"];
+/**
+ * The catalog's default_category values, which are the lowercase set
+ * BarcodeScannerDialog already maps onto (mapToAllowedCategory) and the set
+ * FoodCategory uses. `nutrition.category` was capitalised and free-form.
+ */
+const categories = ["protein", "carb", "fruit", "vegetable", "dairy", "snack"];
+
+/**
+ * The one write failure an operator can act on, said plainly.
+ *
+ * gpc_guard_verification raises insufficient_privilege when a non-admin tries
+ * to change `verification`, and this screen sets it on every save. Without
+ * this the operator gets "Failed to update" and no idea that the problem is
+ * their role rather than their data.
+ */
+function describeWriteFailure(error: { code?: string; message?: string }): string {
+  if (error.code === "42501" || /verification state/.test(error.message ?? "")) {
+    return "Only an admin can verify a catalog row. Your changes were not saved.";
+  }
+  return error.message || "The catalog write failed.";
+}
+
+/**
+ * One literal, not a concatenation: supabase-js parses this string at the TYPE
+ * level to work out the row shape, and it cannot read `"a, b" + "c"` -- the
+ * query then types as GenericStringError[] and the error lands on setItems,
+ * three lines away from the cause.
+ */
+const CATALOG_COLUMNS =
+  "id, name, default_category, serving_size_text, serving_size_g, ingredients, calories_kcal_100, protein_g_100, carbs_g_100, fat_g_100, allergens, verification" as const;
 
 export const NutritionManager = () => {
   const [items, setItems] = useState<NutritionItem[]>([]);
@@ -49,7 +104,7 @@ export const NutritionManager = () => {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
-    category: "Protein",
+    category: "protein",
     serving_size: "",
     ingredients: "",
     calories: "",
@@ -69,7 +124,7 @@ export const NutritionManager = () => {
         items.filter(
           (item) =>
             item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.category.toLowerCase().includes(searchTerm.toLowerCase())
+            (item.default_category ?? "").toLowerCase().includes(searchTerm.toLowerCase())
         )
       );
     } else {
@@ -79,12 +134,15 @@ export const NutritionManager = () => {
 
   const fetchNutritionItems = async () => {
     const { data, error } = await supabase
-      .from("nutrition")
-      .select("*")
-      .order("name");
+      .from("grocery_product_catalog")
+      .select(CATALOG_COLUMNS)
+      // The catalog is the shared table and grows without bound; the admin
+      // list is a list, not an export.
+      .order("name")
+      .limit(500);
 
     if (error) {
-      toast.error("Error", { description: "Failed to fetch nutrition items" });
+      toast.error("Error", { description: "Failed to fetch catalog items" });
     } else {
       setItems(data || []);
     }
@@ -93,44 +151,52 @@ export const NutritionManager = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const nutritionData = {
+    const catalogData = {
       name: formData.name,
-      category: formData.category,
-      serving_size: formData.serving_size || null,
+      default_category: formData.category,
+      // serving_size_g is deliberately absent: the trigger derives it from
+      // this text and returns NULL rather than guess at "2 cookies".
+      serving_size_text: formData.serving_size || null,
       ingredients: formData.ingredients || null,
-      calories: formData.calories ? parseInt(formData.calories) : null,
-      protein_g: formData.protein_g ? parseFloat(formData.protein_g) : null,
-      carbs_g: formData.carbs_g ? parseFloat(formData.carbs_g) : null,
-      fat_g: formData.fat_g ? parseFloat(formData.fat_g) : null,
+      calories_kcal_100: formData.calories ? parseFloat(formData.calories) : null,
+      protein_g_100: formData.protein_g ? parseFloat(formData.protein_g) : null,
+      carbs_g_100: formData.carbs_g ? parseFloat(formData.carbs_g) : null,
+      fat_g_100: formData.fat_g ? parseFloat(formData.fat_g) : null,
       allergens: formData.allergens
         ? formData.allergens.split(",").map((a) => a.trim()).filter(Boolean)
         : null,
+      // An admin saving a row is the verification. gpc_guard_verification
+      // rejects this from anyone who is not one, and stamps verified_at and
+      // verified_by from the actual actor rather than from anything sent here.
+      verification: "verified",
     };
 
     if (editingItem) {
       const { error } = await supabase
-        .from("nutrition")
-        .update(nutritionData)
+        .from("grocery_product_catalog")
+        .update(catalogData)
         .eq("id", editingItem.id);
 
       if (error) {
-        toast.error("Error", { description: "Failed to update nutrition item" });
+        toast.error("Error", { description: describeWriteFailure(error) });
       } else {
-        toast.success("Success", { description: "Nutrition item updated successfully" });
+        toast.success("Saved", { description: `${formData.name} is verified and counts towards totals.` });
         fetchNutritionItems();
         handleCloseDialog();
       }
     } else {
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       const { error } = await supabase
-        .from("nutrition")
-        .insert({ ...nutritionData, created_by: user?.id });
+        .from("grocery_product_catalog")
+        // name_normalized is omitted on purpose: the trigger derives it with
+        // the same normalizer the iOS matcher uses.
+        .insert({ ...catalogData, kind: "generic", source: "admin", created_by_user_id: user?.id });
 
       if (error) {
-        toast.error("Error", { description: "Failed to create nutrition item" });
+        toast.error("Error", { description: describeWriteFailure(error) });
       } else {
-        toast.success("Success", { description: "Nutrition item created successfully" });
+        toast.success("Created", { description: `${formData.name} added to the catalog, verified.` });
         fetchNutritionItems();
         handleCloseDialog();
       }
@@ -148,12 +214,12 @@ export const NutritionManager = () => {
     setShowDeleteConfirm(false);
     setPendingDeleteId(null);
 
-    const { error } = await supabase.from("nutrition").delete().eq("id", id);
+    const { error } = await supabase.from("grocery_product_catalog").delete().eq("id", id);
 
     if (error) {
-      toast.error("Error", { description: "Failed to delete nutrition item" });
+      toast.error("Error", { description: describeWriteFailure(error) });
     } else {
-      toast.success("Success", { description: "Nutrition item deleted successfully" });
+      toast.success("Deleted", { description: "Catalog item deleted." });
       fetchNutritionItems();
     }
   };
@@ -162,13 +228,13 @@ export const NutritionManager = () => {
     setEditingItem(item);
     setFormData({
       name: item.name,
-      category: item.category,
-      serving_size: item.serving_size || "",
+      category: item.default_category ?? "protein",
+      serving_size: item.serving_size_text || "",
       ingredients: item.ingredients || "",
-      calories: item.calories?.toString() || "",
-      protein_g: item.protein_g?.toString() || "",
-      carbs_g: item.carbs_g?.toString() || "",
-      fat_g: item.fat_g?.toString() || "",
+      calories: item.calories_kcal_100?.toString() || "",
+      protein_g: item.protein_g_100?.toString() || "",
+      carbs_g: item.carbs_g_100?.toString() || "",
+      fat_g: item.fat_g_100?.toString() || "",
       allergens: item.allergens?.join(", ") || "",
     });
     setIsDialogOpen(true);
@@ -179,7 +245,7 @@ export const NutritionManager = () => {
     setEditingItem(null);
     setFormData({
       name: "",
-      category: "Protein",
+      category: "protein",
       serving_size: "",
       ingredients: "",
       calories: "",
@@ -192,11 +258,16 @@ export const NutritionManager = () => {
 
   return (
     <div className="space-y-4">
+      {/* US-798: foods several families typed independently, waiting for a
+          human. Above the item list because it is the thing that needs a
+          decision; the list below is reference. */}
+      <PromotionCandidateQueue />
+
       <div className="flex gap-4 items-center">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search nutrition items..."
+            placeholder="Search catalog items..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -217,9 +288,10 @@ export const NutritionManager = () => {
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{editingItem ? "Edit" : "Add"} Nutrition Item</DialogTitle>
+                <DialogTitle>{editingItem ? "Edit" : "Add"} Catalog Item</DialogTitle>
                 <DialogDescription>
-                  {editingItem ? "Update" : "Create"} nutrition information for the community database
+                  Figures are per 100 g, the way USDA and Open Food Facts publish them.
+                  Saving marks the row verified, so it starts counting towards nutrition totals.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit}>
@@ -260,8 +332,14 @@ export const NutritionManager = () => {
                       id="serving_size"
                       value={formData.serving_size}
                       onChange={(e) => setFormData({ ...formData, serving_size: e.target.value })}
-                      placeholder="e.g., 1 cup, 2 slices"
+                      placeholder="e.g., 2 cookies (25g), 1 cup (240 ml)"
+                      aria-describedby="serving_size_help"
                     />
+                    <p id="serving_size_help" className="text-xs text-muted-foreground mt-1">
+                      Include the weight in brackets if the packet gives one. A serving with
+                      no readable weight still shows on screen, but per-serving figures
+                      cannot be worked out from it.
+                    </p>
                   </div>
 
                   <div>
@@ -276,16 +354,17 @@ export const NutritionManager = () => {
 
                   <div className="grid grid-cols-4 gap-4">
                     <div>
-                      <Label htmlFor="calories">Calories</Label>
+                      <Label htmlFor="calories">Calories /100g</Label>
                       <Input
                         id="calories"
                         type="number"
+                        step="0.1"
                         value={formData.calories}
                         onChange={(e) => setFormData({ ...formData, calories: e.target.value })}
                       />
                     </div>
                     <div>
-                      <Label htmlFor="protein_g">Protein (g)</Label>
+                      <Label htmlFor="protein_g">Protein g/100g</Label>
                       <Input
                         id="protein_g"
                         type="number"
@@ -295,7 +374,7 @@ export const NutritionManager = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="carbs_g">Carbs (g)</Label>
+                      <Label htmlFor="carbs_g">Carbs g/100g</Label>
                       <Input
                         id="carbs_g"
                         type="number"
@@ -305,7 +384,7 @@ export const NutritionManager = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="fat_g">Fat (g)</Label>
+                      <Label htmlFor="fat_g">Fat g/100g</Label>
                       <Input
                         id="fat_g"
                         type="number"
@@ -345,17 +424,18 @@ export const NutritionManager = () => {
               <TableHead>Name</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Serving</TableHead>
-              <TableHead>Cal</TableHead>
-              <TableHead>P/C/F</TableHead>
+              <TableHead>Cal /100g</TableHead>
+              <TableHead>P/C/F per 100g</TableHead>
               <TableHead>Allergens</TableHead>
+              <TableHead>Checked</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No nutrition items found. Add your first item to get started.
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  No catalog items found. Add your first item to get started.
                 </TableCell>
               </TableRow>
             ) : (
@@ -363,14 +443,21 @@ export const NutritionManager = () => {
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{item.category}</Badge>
+                    <Badge variant="outline">{item.default_category ?? "-"}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {item.serving_size || "-"}
+                    {item.serving_size_text || "-"}
+                    {/* What the parser read, so an operator can see that
+                        "1 cup (240 ml)" produced nothing and fix the text. */}
+                    {item.serving_size_text && item.serving_size_g === null && (
+                      <span className="block text-xs">no readable weight</span>
+                    )}
                   </TableCell>
-                  <TableCell>{item.calories || "-"}</TableCell>
+                  <TableCell>{item.calories_kcal_100 ?? "-"}</TableCell>
                   <TableCell className="text-sm">
-                    {item.protein_g || 0}g / {item.carbs_g || 0}g / {item.fat_g || 0}g
+                    {/* Not `|| 0`: a row with no protein recorded is not a row
+                        with no protein, and 0g reads as a measurement. */}
+                    {item.protein_g_100 ?? "-"}g / {item.carbs_g_100 ?? "-"}g / {item.fat_g_100 ?? "-"}g
                   </TableCell>
                   <TableCell>
                     {item.allergens && item.allergens.length > 0 ? (
@@ -385,10 +472,17 @@ export const NutritionManager = () => {
                       <span className="text-muted-foreground">none</span>
                     )}
                   </TableCell>
+                  <TableCell>
+                    {/* US-797: an unverified row is somebody's scan of a
+                        label. It shows in search; its figures do not count. */}
+                    <Badge variant={item.verification === "verified" ? "secondary" : "outline"}>
+                      {item.verification}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button
-                        aria-label="Edit this nutrition entry"
+                        aria-label="Edit this catalog entry"
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(item)}
@@ -396,7 +490,7 @@ export const NutritionManager = () => {
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
-                        aria-label="Delete this nutrition entry"
+                        aria-label="Delete this catalog entry"
                         variant="ghost"
                         size="sm"
                         onClick={() => requestDelete(item.id)}
@@ -416,7 +510,7 @@ export const NutritionManager = () => {
         open={scannerOpen}
         onOpenChange={setScannerOpen}
         onFoodAdded={fetchNutritionItems}
-        targetTable="nutrition"
+        targetTable="catalog"
       />
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

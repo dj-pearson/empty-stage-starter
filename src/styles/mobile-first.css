@@ -107,11 +107,31 @@ p {
 
 /* Small text (captions, helper text) - minimum 14px */
 small,
-.text-small,
-.text-xs {
+.text-small {
   font-size: 14px !important;
   line-height: 1.5;
   color: hsl(var(--foreground));
+}
+
+/*
+  US-817: size only, never colour.
+
+  `.text-xs` is Tailwind's font-size utility, not a class this file owns, and
+  this stylesheet is imported after index.css -- so a `color` declared here
+  lands later in the bundle than every Tailwind text-colour utility and beats
+  all of them at equal specificity. The Badge base class list carries
+  `text-xs`, which is why `<Badge variant="secondary">` rendered #0f1729 (light
+  --foreground) instead of the white its own `text-secondary-foreground` asked
+  for -- 3.24:1 on the darkened green, and the same story for
+  `text-primary-foreground` on /pricing. It also silently flattened the ~490
+  `text-xs text-muted-foreground` helper labels in src/ to full foreground.
+
+  The 14px floor is the point of the rule and stays. The colour was redundant
+  with `body` on a plain surface and wrong on any tinted one, so it goes.
+*/
+.text-xs {
+  font-size: 14px !important;
+  line-height: 1.5;
 }
 
 /* Links - follow design system tokens */
@@ -152,9 +172,18 @@ nav a:hover,
   opacity: 0.85;
 }
 
-/* Muted text - uses theme token for proper light/dark contrast */
+/*
+  Muted text - uses theme token for proper light/dark contrast.
+
+  US-817: `.text-secondary` was in this list and is not ours -- it is
+  Tailwind's utility for the brand green, and forcing it to grey with
+  !important turned all four call sites (Analytics.tsx:181, Home.tsx:508,
+  Grocery.tsx:1116 and :1230) into muted text that no one asked for. Same
+  mistake as `.text-xs` above, one selector along. `.text-muted` and the
+  `.text-gray-*` pair stay: the first is this file's own class, and the second
+  is a guard on a palette value that reads 2.8:1 on white.
+*/
 .text-muted,
-.text-secondary,
 .text-gray-500 {
   color: hsl(var(--muted-foreground)) !important;
 }
@@ -209,9 +238,26 @@ h4 {
     gap: 16px;
   }
 
-  /* Card spacing */
-  .card,
-  [class*="card"] {
+  /*
+    Card spacing, scoped to content (US-869).
+
+    `[class*="card"]` is an attribute SUBSTRING match, so in a Tailwind tree it
+    hits every element carrying the card colour token -- `bg-card`,
+    `text-card-foreground` -- and not only cards. Dashboard's two fixed <nav>
+    bars carry `bg-card`, so both were rendering 20px taller than the space the
+    shell reserves for them: the header measured 97px against `main`'s pt-14
+    (56px), and the bottom tab bar 101px against pb-20 (80px). The top and
+    bottom of every dashboard screen sat behind chrome.
+
+    Scoped to `main` rather than narrowed, because the substring is doing real
+    work: measured across 8 routes at 390px, every element it matches is either
+    a shadcn Card inside `main` (23 on the landing page, 20 on the pantry) or
+    one of those two navs. There is no class that separates a Card from the nav
+    -- both are just `bg-card` -- but "content, not chrome" separates them
+    exactly, and it leaves the padding on every card that had it.
+  */
+  main .card,
+  main [class*="card"] {
     padding: 20px;
     margin-bottom: 16px;
   }

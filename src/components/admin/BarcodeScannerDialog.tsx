@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataSourceCredit } from "@/components/DataSourceCredit";
 import { logger } from "@/lib/logger";
 import { normalizeHouseholdId } from '@/lib/householdId';
+import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
 
 type ScannedFood = {
   name: string;
@@ -54,10 +55,15 @@ interface BarcodeScannerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onFoodAdded?: (food?: Record<string, unknown>) => void;
-  targetTable?: 'nutrition' | 'foods';
+  /**
+   * 'foods' adds to the signed-in household's pantry; 'catalog' adds to the
+   * shared grocery_product_catalog from the admin screen. The third value
+   * used to be 'nutrition', the table US-799 is retiring.
+   */
+  targetTable?: 'catalog' | 'foods';
 }
 
-export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTable = 'nutrition' }: BarcodeScannerDialogProps) {
+export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTable = 'catalog' }: BarcodeScannerDialogProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
@@ -309,8 +315,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             category: mapToAllowedCategory(scannedFood.category, scannedFood.name),
             aisle: scannedFood.category,
             allergens: scannedFood.allergens || [],
-            is_safe: true, // Default to Safe Foods
-            is_try_bite: false,
+            // US-803: a scanned product is a product, not a safe food.
+            is_safe: ACQUIRED_FOOD_IS_SAFE,
+            is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
             quantity: quantity,
             unit: unit,
             package_quantity: scannedFood.package_quantity,
@@ -325,28 +332,67 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
 
         onFoodAdded?.();
       } else {
-        // Add to admin nutrition table
+        // US-799 AC2: the shared catalog, written directly.
+        //
+        // lookup-barcode answers in PER 100 G. The previous round asserted the
+        // opposite and it was wrong on both halves: iOS never calls that
+        // function -- BarcodeService.swift reads Open Food Facts directly --
+        // and all three of its external providers already return per-100g
+        // figures under the per-serving key names (OFF reads
+        // `energy-kcal_100g`; USDA and FoodRepo feed identical values into
+        // `food.calories` and `catalogInput.caloriesKcal100`). The one
+        // genuinely per-serving path was the `nutrition` read, which US-799
+        // has now removed from that function.
+        //
+        // So there is nothing to convert, and routing these through
+        // catalog_upsert_from_serving -- which divides by a serving mass --
+        // would have made every scanned figure wrong by whatever the serving
+        // weighed. That RPC stays for the CSV import, whose columns really are
+        // per serving.
+        //
+        // The row lands unverified: one household's scan of one label, checked
+        // by nobody. US-797 keeps it out of totals until an admin looks at it
+        // in NutritionManager. name_normalized and serving_size_g are omitted
+        // because 20260918000009 derives both.
         const { error } = await supabase
-          .from("nutrition")
-          .insert({
-            name: scannedFood.name,
-            category: scannedFood.category,
-            serving_size: scannedFood.serving_size,
-            package_quantity: scannedFood.package_quantity,
-            servings_per_container: scannedFood.servings_per_container,
-            ingredients: scannedFood.ingredients,
-            calories: scannedFood.calories,
-            protein_g: scannedFood.protein_g,
-            carbs_g: scannedFood.carbs_g,
-            fat_g: scannedFood.fat_g,
-            allergens: scannedFood.allergens,
-            barcode: scannedBarcode || undefined,
-            created_by: user?.id,
-          });
+          .from("grocery_product_catalog")
+          .upsert(
+            {
+              name: scannedFood.name,
+              default_category: scannedFood.category,
+              barcode: scannedBarcode || null,
+              // A barcode means a specific manufactured product; without one
+              // it is a generic name somebody typed. Same rule as the backfill.
+              kind: scannedBarcode ? "branded" : "generic",
+              source: "user",
+              source_ref: scannedBarcode || null,
+              // Stated rather than inherited from the column default. US-797
+              // keeps unverified figures out of totals and the ladder, and a
+              // file that writes the per-100g columns should say which side of
+              // that line its rows land on -- src/components/FoodCard.catalog.
+              // test.tsx fails any that does not.
+              verification: "unverified",
+              serving_size_text: scannedFood.serving_size ?? null,
+              package_quantity_text: scannedFood.package_quantity ?? null,
+              servings_per_container: scannedFood.servings_per_container ?? null,
+              ingredients: scannedFood.ingredients ?? null,
+              calories_kcal_100: scannedFood.calories ?? null,
+              protein_g_100: scannedFood.protein_g ?? null,
+              carbs_g_100: scannedFood.carbs_g ?? null,
+              fat_g_100: scannedFood.fat_g ?? null,
+              allergens: scannedFood.allergens ?? null,
+            },
+            // Two admins scanning the same product is a re-scan, not an error.
+            // ignoreDuplicates so a row somebody corrected by hand is not
+            // overwritten by the provider copy it came from.
+            { onConflict: "name_normalized", ignoreDuplicates: true },
+          );
 
         if (error) throw error;
 
-        toast.success("Success", { description: `${scannedFood.name} added to nutrition database` });
+        toast.success("Added to catalog", {
+          description: `${scannedFood.name} added, unverified. Verify it in the catalog list to make its figures count.`,
+        });
 
         onFoodAdded?.();
       }
@@ -670,7 +716,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                 <div className="sticky bottom-0 -mx-4 bg-background/85 backdrop-blur-md border-t p-3 flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={handleClose}>Cancel</Button>
                   <Button className="flex-1" onClick={addToDatabase}>
-                    {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Nutrition Database'}
+                    {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Catalog'}
                   </Button>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { getCorsHeaders, noCacheHeaders } from '../common/headers.ts';
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 /**
  * US-310: parse-receipt-image
@@ -193,16 +194,11 @@ export default async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // US-618: denial-of-wallet gate. This endpoint spends real model tokens, and
-  // the runtime is --no-verify-jwt, so in-function auth is the only thing
-  // standing between an anonymous script and our AI bill.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  // US-618 put auth here. US-773 added the method check and the per-user
+  // budget: rate_limit_config has carried a parse-receipt-image row (10/hr
+  // free) since 20260613000001 and nothing in the deployed tree read it.
+  const gate = await gateAiRequest(req, 'parse-receipt-image', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { imageBase64 } = (await req.json()) as RequestBody;
@@ -245,9 +241,8 @@ export default async (req: Request) => {
     return new Response(JSON.stringify(receipt), { headers: noCacheHeaders() });
   } catch (err) {
     console.error('parse-receipt-image error:', err);
-    const message = err instanceof Error ? err.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: publicMessage(err) }),
       { status: 500, headers: noCacheHeaders() },
     );
   }

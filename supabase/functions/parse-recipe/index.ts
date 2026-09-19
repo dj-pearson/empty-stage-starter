@@ -1,7 +1,10 @@
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { requireUser } from '../_shared/require-admin.ts';
-import { resolveAccess } from '../_shared/parse-recipe-access.ts';
+import { accessDeniedResponse, resolveAccess } from '../_shared/parse-recipe-access.ts';
 import { fetchRecipePage } from '../_shared/url-validator.ts';
+import { enforceRateLimit } from '../_shared/rate-limit.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +34,13 @@ export default async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
   // Paid AI call + fetches arbitrary user URLs (SSRF surface), so a signed-in
   // caller is preferred. US-806: anonymous callers are allowed again under a
   // hard budget, because every shipped iOS build sends the anon key from the
@@ -38,12 +48,29 @@ export default async (req: Request) => {
   // _shared/parse-recipe-access.ts for why, and for when to delete this.
   const access = await resolveAccess(req, () => requireUser(req));
   if (!access.allowed) {
-    const headers: Record<string, string> = { ...corsHeaders, 'Content-Type': 'application/json' };
-    if (access.retryAfterSeconds) headers['Retry-After'] = String(access.retryAfterSeconds);
-    return new Response(JSON.stringify({ error: access.error }), {
-      status: access.status,
-      headers,
-    });
+    return accessDeniedResponse(access, corsHeaders);
+  }
+
+  // US-870: the anon path is budgeted by parse-recipe-access.ts (per address
+  // and globally, in module memory). A SIGNED-IN caller went through none of
+  // that -- requireUser said yes and the handler went straight to a model. One
+  // account in a retry loop was the whole of the limit. check_rate_limit_with_tier
+  // has no parse-recipe row, so this takes the RPC's 50/hr default, which is a
+  // budget rather than none.
+  if (access.mode === 'user' && access.userId) {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    if (supabaseUrl && serviceKey) {
+      const limited = await enforceRateLimit(
+        createClient(supabaseUrl, serviceKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        }),
+        access.userId,
+        'parse-recipe',
+        corsHeaders,
+      );
+      if (limited) return limited;
+    }
   }
 
   try {
@@ -107,10 +134,14 @@ export default async (req: Request) => {
     );
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    // US-773: the message used to be forwarded. It is built from whatever the
+    // remote page or the model threw, so it could carry an internal URL or a
+    // fragment of the upstream response to an anonymous caller (US-806 lets
+    // those in under a budget). Deliberate 4xx replies above still explain
+    // themselves; this is the unexpected path.
     console.error('Error in parse-recipe function:', error);
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

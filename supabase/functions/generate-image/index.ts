@@ -5,6 +5,7 @@ import {
   generateAndStoreImage,
   type ImageSource,
 } from '../_shared/image-gen.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -97,7 +98,7 @@ export default async (req: Request) => {
       });
     } catch (genErr: any) {
       console.error('generateAndStoreImage error:', genErr);
-      return json({ error: genErr?.message || 'Image generation failed' }, 502);
+      return json({ error: publicMessage(genErr) }, 502);
     }
 
     const publicUrl = result.imageUrl;
@@ -161,6 +162,6 @@ export default async (req: Request) => {
     });
   } catch (error: any) {
     console.error('Error in generate-image:', error);
-    return json({ error: error?.message || 'Unknown error occurred' }, 500);
+    return json({ error: publicMessage(error) }, 500);
   }
 };

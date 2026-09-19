@@ -1,4 +1,5 @@
 import type { Database } from '@/integrations/supabase/types';
+import { generateId } from '@/lib/utils';
 
 /**
  * One place that turns a draft item into a grocery_items insert (US-777).
@@ -26,8 +27,8 @@ export type GroceryItemInsert = Database['public']['Tables']['grocery_items']['I
 
 /**
  * What a caller may supply. Everything the table accepts except the columns
- * this builder owns (user_id, household_id) or the database owns (id,
- * created_at, updated_at).
+ * this builder owns (id, user_id, household_id) or the database owns
+ * (created_at, updated_at).
  */
 export interface GroceryRowDraft {
   name: string;
@@ -79,11 +80,29 @@ const PASSTHROUGH_KEYS = [
   'auto_generated',
 ] as const satisfies ReadonlyArray<keyof GroceryRowDraft & keyof GroceryItemInsert>;
 
+/**
+ * US-823: the id is generated here rather than left to the database.
+ *
+ * `grocery_items.id` is `UUID PRIMARY KEY DEFAULT gen_random_uuid()`, so
+ * sending one is additive -- an older iOS build that omits it still gets a
+ * server id, and no migration is involved. What it buys is an offline INSERT.
+ * While the database owned the id, a queued insert would replay under an id the
+ * optimistic row on screen did not have and come back over realtime as a second
+ * row, which is why inserts were the one write the web queue refused. With the
+ * client naming the row, the optimistic row and the server row are the same
+ * row, a replay is recognisable, and a duplicate replay is a primary-key
+ * violation the executor can read as "already done".
+ *
+ * generateId() is crypto.randomUUID where it exists and an RFC4122-v4-shaped
+ * fallback where it does not (US-549), so the value always satisfies the
+ * column's type.
+ */
 export function buildGroceryRow(
   draft: GroceryRowDraft,
   ctx: GroceryRowContext
 ): GroceryItemInsert {
   const row: GroceryItemInsert = {
+    id: generateId(),
     name: draft.name,
     // `?? 1` rather than `|| 1`: a legitimate 0 (a row zeroed before removal)
     // should not silently become 1.

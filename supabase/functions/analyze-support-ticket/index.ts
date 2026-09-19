@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { requireAdmin } from '../_shared/require-admin.ts';
+import { meterAdminRequest, rejectNonPost } from '../_shared/ai-gate.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,38 +32,36 @@ export default async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const notPost = rejectNonPost(req, corsHeaders);
+  if (notPost) return notPost;
+
+  /*
+    US-870: this said "Verify admin user" and did not.
+    
+    It read the caller's row from user_roles into `isAdmin` and then never
+    denied on it -- the only thing that flag gated was the auto-resolve WRITE
+    further down. So any signed-in account could name any ticket id and have a
+    service-role client read it (past RLS) and spend model tokens summarising
+    it. The sole caller is src/components/admin/AITicketAnalysis.tsx, an admin
+    screen, so requiring the role breaks nothing; requireAdmin also accepts the
+    service key, which is what the "auto-analysis on ticket creation" comment
+    was reaching for.
+  */
+  const gate = await requireAdmin(req);
+  if (!gate.ok) {
+    return new Response(
+      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
+      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const limited = await meterAdminRequest(gate, 'analyze-support-ticket', corsHeaders);
+  if (limited) return limited;
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Verify admin user
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Check if user is admin (or allow for auto-analysis on ticket creation)
-    const { data: userRole } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single();
-
-    const isAdmin = userRole?.role === 'admin';
 
     const requestData: TicketAnalysisRequest = await req.json();
     const { ticketId, autoResolve = false } = requestData;
@@ -108,8 +109,8 @@ export default async (req: Request) => {
         auto_resolvable: analysis.autoResolvable,
         auto_resolution_confidence: analysis.autoResolutionConfidence,
         suggested_response: analysis.suggestedResponse,
-        similar_ticket_ids: similarTickets?.map((t: any) => t.similar_ticket_id) || [],
-        similarity_scores: similarTickets?.map((t: any) => t.similarity_score) || [],
+        similar_ticket_ids: similarTickets?.map((t: Record<string, unknown>) => t.similar_ticket_id) || [],
+        similarity_scores: similarTickets?.map((t: Record<string, unknown>) => t.similarity_score) || [],
         auto_gathered_context: userContext || {},
         sentiment: analysis.sentiment,
         sentiment_score: analysis.sentimentScore,
@@ -123,7 +124,10 @@ export default async (req: Request) => {
     }
 
     // Auto-resolve if conditions are met
-    if (autoResolve && isAdmin && analysis.autoResolvable && analysis.autoResolutionConfidence >= 0.85) {
+    // `isAdmin` used to guard this line and nothing else; the gate at the top
+    // of the handler now guarantees it, so the flag is gone rather than left
+    // as a condition that is always true.
+    if (autoResolve && analysis.autoResolvable && analysis.autoResolutionConfidence >= 0.85) {
       // Update ticket status
       await supabase
         .from('support_tickets')
@@ -167,19 +171,19 @@ export default async (req: Request) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in analyze-support-ticket function:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+};
 
 async function analyzeTicketWithAI(
-  ticket: any,
-  userContext: any,
-  similarTickets: any[]
+  ticket: Record<string, unknown>,
+  userContext: Record<string, unknown>,
+  similarTickets: Record<string, unknown>[]
 ): Promise<AIAnalysisResult> {
   const aiService = new AIServiceV2();
 
@@ -212,7 +216,7 @@ Consider the user context and similar past tickets when generating your response
 - Account Age: ${userContext?.account_age_days || 'Unknown'} days
 
 **Similar Resolved Tickets:**
-${similarTickets?.map((t: any, i: number) => `
+${similarTickets?.map((t: Record<string, unknown>, i: number) => `
 ${i + 1}. Resolution: ${t.resolution_summary}
    Time to resolve: ${t.resolution_time_hours?.toFixed(1)} hours
    Similarity: ${(t.similarity_score * 100).toFixed(0)}%
@@ -259,7 +263,7 @@ Provide your analysis in JSON format:
   }
 }
 
-function ruleBasedAnalysis(ticket: any, userContext: any): AIAnalysisResult {
+function ruleBasedAnalysis(ticket: Record<string, unknown>, userContext: Record<string, unknown>): AIAnalysisResult {
   const subject = ticket.subject?.toLowerCase() || '';
   const description = ticket.description?.toLowerCase() || '';
   const combined = `${subject} ${description}`;

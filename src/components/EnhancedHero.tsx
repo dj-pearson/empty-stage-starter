@@ -1,4 +1,4 @@
-import { useRef, useEffect, lazy, Suspense } from 'react';
+import { useRef, lazy, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -8,16 +8,6 @@ const LazyFoodOrbit = lazy(() =>
   import('@/components/LazyFoodOrbit').then(m => ({ default: m.LazyFoodOrbit }))
 );
 
-// Dynamically import GSAP only when needed (deferred loading)
-let gsapModule: typeof import("gsap") | null = null;
-
-const loadGSAP = async () => {
-  if (!gsapModule) {
-    gsapModule = await import("gsap");
-  }
-  return gsapModule.gsap;
-};
-
 
 /**
  * Enhanced Hero Section with Trust Signals and 3D Elements
@@ -25,73 +15,21 @@ const loadGSAP = async () => {
  */
 export function EnhancedHero() {
   const containerRef = useRef<HTMLElement>(null);
-  const headlineRef = useRef<HTMLHeadingElement>(null);
-  const subheadlineRef = useRef<HTMLParagraphElement>(null);
-  const ctaRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let mounted = true;
 
-    const initAnimations = async () => {
-      const gsap = await loadGSAP();
-      if (!mounted || !containerRef.current) return;
-
-      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
-
-      // Use fromTo to ensure consistent starting state
-      tl.fromTo(headlineRef.current,
-        { y: 50, opacity: 0 },
-        { y: 0, opacity: 1, duration: 1 }
-      )
-        .fromTo(subheadlineRef.current,
-          { y: 30, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.8 },
-          "-=0.6"
-        )
-        .fromTo(ctaRef.current,
-          { y: 20, opacity: 0 },
-          { y: 0, opacity: 1, duration: 0.8 },
-          "-=0.6"
-        );
-
-      // Ambient background animation - optimized 2D
-      gsap.to(".bg-blob-1", {
-        scale: 1.1,
-        rotation: 10,
-        duration: 15,
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut"
-      });
-
-      gsap.to(".bg-blob-2", {
-        scale: 1.2,
-        rotation: -10,
-        duration: 18,
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut",
-        delay: 2
-      });
-    };
-
-    // Defer animation initialization until browser is idle to avoid blocking LCP
-    let idleHandle: number | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    if ('requestIdleCallback' in window) {
-      idleHandle = (window as any).requestIdleCallback(initAnimations, { timeout: 3000 });
-    } else {
-      timer = setTimeout(initAnimations, 1000);
-    }
-
-    return () => {
-      mounted = false;
-      if (idleHandle !== undefined && 'cancelIdleCallback' in window) {
-        (window as any).cancelIdleCallback(idleHandle);
-      }
-      if (timer !== undefined) clearTimeout(timer);
-    };
-  }, []);
+  /*
+   * US-772: the entrance timeline and the two ambient blobs are CSS now
+   * (.hero-rise-* and .bg-blob-* in src/index.css), so this component no
+   * longer pulls GSAP onto the landing route.
+   *
+   * It also fixes what the old code did rather than reproducing it. GSAP was
+   * loaded inside requestIdleCallback and then ran `fromTo`, which sets
+   * opacity 0 at the start of the tween -- on a headline the prerendered HTML
+   * had already painted. So the H1 appeared, vanished, and faded back in, up
+   * to 3 seconds later on a slow connection. The CSS animation starts at first
+   * paint with `backwards` fill, so the hidden state is never a state the
+   * reader sees, and `prefers-reduced-motion` turns all of it off -- which the
+   * GSAP version did not.
+   */
 
   /*
    * The animated trust-signal row that used to sit here is gone. It counted up to
@@ -114,7 +52,7 @@ export function EnhancedHero() {
         </Suspense>
       </div>
 
-      {/* Decorative background elements - Optimized CSS/GSAP */}
+      {/* Decorative background elements - CSS keyframes, see src/index.css */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <div className="bg-blob-1 absolute -top-1/4 -left-1/4 w-[800px] h-[800px] bg-trust-softPink/20 rounded-full blur-[120px]" />
         <div className="bg-blob-2 absolute -bottom-1/4 -right-1/4 w-[800px] h-[800px] bg-trust-warmOrange/20 rounded-full blur-[120px]" />
@@ -123,8 +61,7 @@ export function EnhancedHero() {
       <div className="container mx-auto text-center max-w-5xl relative z-10">
         {/* Main Headline */}
         <h1
-          ref={headlineRef}
-          className="text-5xl md:text-7xl font-heading font-bold mb-8 leading-tight tracking-tight"
+          className="hero-rise hero-rise-1 text-5xl md:text-7xl font-heading font-bold mb-8 leading-tight tracking-tight"
         >
           {/*
             The H1 is the strongest on-page relevance signal a page has, and this one
@@ -145,8 +82,7 @@ export function EnhancedHero() {
 
         {/* Subheadline */}
         <p
-          ref={subheadlineRef}
-          className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed font-light"
+          className="hero-rise hero-rise-2 text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed font-light"
         >
           An AI-powered meal planning app built on{' '}
           <span className="text-foreground font-medium">food chaining science</span>{' '}
@@ -155,8 +91,7 @@ export function EnhancedHero() {
 
         {/* CTA Buttons */}
         <div
-          ref={ctaRef}
-          className="flex gap-6 justify-center flex-wrap items-start"
+          className="hero-rise hero-rise-3 flex gap-6 justify-center flex-wrap items-start"
         >
           <div className="hover:scale-105 transition-transform duration-300 text-center">
             <Link to="/meal-plan">

@@ -59,16 +59,31 @@ All colors MUST be HSL.
     --primary: 24 95% 35%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 142 76% 36%;
-    /* Fresh Broccoli Green (HSL 142, 76%, 36%) */
+    /*
+      Darkened 36% -> 27% for WCAG AA (US-822). White on the 36% green was
+      3.35:1, and the green as TEXT was 2.76:1 on the warm callout tint --
+      worse than the fill, which is the same trap --primary fell into when it
+      was set against --background alone. 27% is the lightest value that clears
+      4.5:1 both ways: white on the fill 5.50:1, and the green as text 4.53:1
+      on the worst surface it is drawn on. Hue and saturation are untouched, so
+      it is the same green.
+    */
+    --secondary: 142 76% 27%;
+    /* Fresh Broccoli Green (HSL 142, 76%, 27%) */
     --secondary-foreground: 0 0% 100%;
 
     --muted: 36 20% 90%;
     --muted-foreground: 215 25% 40%;
     /* Darker for better readability */
 
-    --accent: 340 82% 52%;
-    /* Berry Pink (HSL 340, 82%, 52%) */
+    /*
+      Darkened 52% -> 44% for WCAG AA (US-822). White on the 52% pink was
+      4.33:1 and it read 3.57:1 as text on the warm callout. 44% is the
+      lightest value clearing both: 5.53:1 on the fill, 4.56:1 as text. Same
+      hue and saturation.
+    */
+    --accent: 340 82% 44%;
+    /* Berry Pink (HSL 340, 82%, 44%) */
     --accent-foreground: 0 0% 100%;
 
     /*
@@ -105,7 +120,14 @@ All colors MUST be HSL.
     /* Slightly rounder for friendlier feel */
 
     /* Custom semantic colors */
-    --safe-food: 142 76% 36%;
+    /*
+      Moves with --secondary (US-822): this is the same green defined twice,
+      and nine of the twelve remaining contrast violations were this value
+      split across bg-secondary chips and bg-safe-food badges. Darkening one
+      and not the other would have left half of them failing. White on it is
+      now 5.50:1, and it reads 4.53:1 as text on the worst surface.
+    */
+    --safe-food: 142 76% 27%;
     /* Broccoli Green */
     --try-bite: 24 95% 53%;
     /* Carrot Orange */
@@ -167,17 +189,33 @@ All colors MUST be HSL.
     --primary: 24 95% 60%;
     --primary-foreground: 222 47% 11%;
 
+    /*
+      US-822, and the dark theme was the worse of the two. White on this green
+      is 2.32:1 -- every secondary button in dark mode was close to unreadable.
+      Darkening it would be wrong for the same reason it was wrong for
+      --primary above: at 45% the green already reads 4.88:1 as TEXT on the
+      dark surfaces, and the two pull in opposite directions. No lightness
+      satisfies both with a white foreground. So the colour stays and the
+      foreground changes, exactly as --primary does: slate on this green is
+      7.71:1.
+    */
     --secondary: 142 70% 45%;
     /* Lighter Broccoli Green */
-    --secondary-foreground: 0 0% 100%;
+    --secondary-foreground: 222 47% 11%;
 
     --muted: 217 33% 25%;
     --muted-foreground: 215 20% 75%;
     /* Lighter for dark mode */
 
-    --accent: 340 82% 60%;
+    /*
+      US-822. This one failed both ways: white on the 60% pink was 3.66:1, and
+      the pink as text was 3.10:1 on --muted. Lightening to 73% fixes the text
+      side (4.60:1) and a slate foreground fixes the fill (7.27:1). Darkening
+      instead would have traded one failure for the other.
+    */
+    --accent: 340 82% 73%;
     /* Lighter Berry Pink */
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
@@ -977,5 +1015,102 @@ a[target="_blank"][aria-label]::after {
   @keyframes scale {
     from { transform: scale(0.95); }
     to { transform: scale(1); }
+  }
+}
+/*
+  US-772: the landing page's entrance animations, in CSS instead of GSAP.
+  See src/lib/scrollReveal.ts for why the hidden state is scoped to .js-reveal
+  rather than applied directly -- these routes are prerendered, and a crawler
+  running no JavaScript would otherwise read the page at opacity 0.
+*/
+.js-reveal .animate-section,
+.js-reveal .animate-item {
+  opacity: 0;
+  transform: translateY(2rem);
+  transition:
+    opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.js-reveal .animate-item {
+  transform: translateY(1.25rem);
+}
+
+.js-reveal .animate-section.is-visible,
+.js-reveal .animate-item.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+  A second guard, independent of the script. observeReveal already declines to
+  add .js-reveal under reduced motion, but if the class is on the element for
+  any other reason -- a stale render, a future caller -- the copy still has to
+  be readable.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .js-reveal .animate-section,
+  .js-reveal .animate-item {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}
+
+/*
+  US-772: the hero's entrance and its two ambient blobs, in CSS instead of GSAP.
+
+  The entrance runs on first paint rather than after requestIdleCallback. The
+  GSAP version deferred to idle and then used `fromTo`, which set opacity 0 on
+  a headline the prerendered HTML had already painted -- so the visible
+  behaviour was the H1 appearing, disappearing, and fading back in. Running it
+  as a CSS animation with `backwards` fill removes that flash and keeps the
+  work off the main thread.
+*/
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--hero-rise-from, 3rem));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero-rise {
+  animation: hero-rise 900ms cubic-bezier(0.215, 0.61, 0.355, 1) backwards;
+}
+
+/* The GSAP timeline's "-=0.6" offsets, as delays: 0s, 0.4s, 0.6s. */
+.hero-rise-1 { animation-delay: 0ms; }
+.hero-rise-2 { animation-delay: 400ms; --hero-rise-from: 1.875rem; }
+.hero-rise-3 { animation-delay: 600ms; --hero-rise-from: 1.25rem; }
+
+@keyframes blob-drift-a {
+  from { transform: scale(1) rotate(0deg); }
+  to { transform: scale(1.1) rotate(10deg); }
+}
+
+@keyframes blob-drift-b {
+  from { transform: scale(1) rotate(0deg); }
+  to { transform: scale(1.2) rotate(-10deg); }
+}
+
+.bg-blob-1 {
+  animation: blob-drift-a 15s ease-in-out infinite alternate;
+}
+
+.bg-blob-2 {
+  animation: blob-drift-b 18s ease-in-out 2s infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise,
+  .bg-blob-1,
+  .bg-blob-2 {
+    animation: none;
   }
 }

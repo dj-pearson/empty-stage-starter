@@ -6,6 +6,7 @@
  * assertions" with vitest without spinning up the dialog under jsdom.
  */
 import type { Food, FoodCategory } from '@/types';
+import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from './foodSafetyDefault';
 
 export interface ParsedLineItem {
   rawText: string;
@@ -103,8 +104,10 @@ export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): Omit<Food, 
     .map((r) => ({
       name: r.parsedName,
       category: categoryFromString(r.category),
-      is_safe: true,
-      is_try_bite: false,
+      // US-803: a receipt says what was bought. Nothing on it says a
+      // child accepted any of it.
+      is_safe: ACQUIRED_FOOD_IS_SAFE,
+      is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
       quantity: r.qty,
       unit: r.unit || undefined,
     }));

@@ -9,6 +9,7 @@ import {
   assertStringIncludes,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+  fetchGuardedResource,
   fetchRecipePage,
   isPrivateHost,
   readCappedBody,
@@ -191,4 +192,85 @@ Deno.test('fetchRecipePage reports an upstream error as 502', async () => {
   });
   assert(!result.ok);
   assertEquals(result.status, 502);
+});
+
+// ─── the same guards, for a non-HTML resource (US-773) ───────────────────────
+//
+// update-blog-image downloads an admin-supplied image URL. Until this landed it
+// used a bare `fetch(imageUrl)` with no SSRF check and no size cap, while the
+// copy of that function in the tree which never deploys had both. These cases
+// are the recipe ones re-aimed at the byte-returning entry point, because that
+// is the one an image path reaches.
+
+Deno.test('fetchGuardedResource refuses the metadata service before any fetch', async () => {
+  let called = false;
+  const result = await fetchGuardedResource('http://169.254.169.254/latest/meta-data/', {
+    fetchImpl: () => {
+      called = true;
+      return Promise.resolve(page('never'));
+    },
+  });
+  assert(!result.ok);
+  assertEquals(result.ok ? 0 : result.status, 400);
+  assertEquals(called, false);
+});
+
+Deno.test('fetchGuardedResource refuses a private address reached by redirect', async () => {
+  const result = await fetchGuardedResource(PUBLIC, {
+    fetchImpl: (input) => {
+      const url = String(input);
+      if (url === PUBLIC) return Promise.resolve(redirectTo('http://127.0.0.1/admin'));
+      return Promise.resolve(page('should never be reached'));
+    },
+  });
+  assert(!result.ok);
+  assertEquals(result.ok ? 0 : result.status, 400);
+});
+
+Deno.test('fetchGuardedResource caps the body and reports 413', async () => {
+  const result = await fetchGuardedResource(PUBLIC, {
+    maxBytes: 8,
+    fetchImpl: () => Promise.resolve(page('x'.repeat(64))),
+  });
+  assert(!result.ok);
+  assertEquals(result.ok ? 0 : result.status, 413);
+});
+
+Deno.test('fetchGuardedResource returns bytes and the content type, not text', async () => {
+  const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG magic
+  const result = await fetchGuardedResource(PUBLIC, {
+    headers: { Accept: 'image/*' },
+    fetchImpl: () =>
+      Promise.resolve(new Response(bytes, { status: 200, headers: { 'content-type': 'image/png' } })),
+  });
+  assert(result.ok);
+  if (!result.ok) return;
+  assertEquals(result.contentType, 'image/png');
+  assertEquals(Array.from(result.bytes), [0x89, 0x50, 0x4e, 0x47]);
+  assertEquals(result.finalUrl, PUBLIC);
+});
+
+Deno.test('fetchGuardedResource sends the headers it was given', async () => {
+  let seen: Record<string, string> = {};
+  await fetchGuardedResource(PUBLIC, {
+    headers: { Accept: 'image/*' },
+    fetchImpl: (_input, init) => {
+      seen = (init?.headers ?? {}) as Record<string, string>;
+      return Promise.resolve(page('ok'));
+    },
+  });
+  assertEquals(seen.Accept, 'image/*');
+});
+
+Deno.test('fetchGuardedResource gives up after 3 hops, like the recipe path', async () => {
+  let hops = 0;
+  const result = await fetchGuardedResource(PUBLIC, {
+    fetchImpl: () => {
+      hops++;
+      return Promise.resolve(redirectTo(PUBLIC + '/' + hops));
+    },
+  });
+  assert(!result.ok);
+  assertStringIncludes(result.ok ? '' : result.error, 'Too many redirects');
+  assertEquals(hops, 4);
 });

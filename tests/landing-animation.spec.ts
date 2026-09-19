@@ -20,6 +20,12 @@ import { test, expect } from '@playwright/test';
  *
  * Runs against the built site (E2E_TARGET=dist), the same target the SEO and
  * reflow specs use, because the animation code only ships in the built chunk.
+ *
+ * US-772 replaced GSAP here with a CSS transition driven by an
+ * IntersectionObserver (src/lib/scrollReveal.ts). The assertions below are
+ * unchanged in intent -- every grid has something to animate, nothing is left
+ * unreadable -- and the GSAP-warning check is now a console check, because the
+ * warning it watched for cannot be emitted by a page that does not load GSAP.
  */
 
 /** Anything GSAP says it could not find. Substring, not exact: the message
@@ -27,13 +33,25 @@ import { test, expect } from '@playwright/test';
  *  differ in text and both have to be caught. */
 const GSAP_MISS = 'GSAP target';
 
+/**
+ * Scroll to the true bottom, not to the height measured at the top.
+ *
+ * The page grows while you scroll it -- lazy sections mount, images get their
+ * intrinsic size -- so a height read once at y=0 stops short. Measured: the
+ * closing CTA sat 200px below the last position this reached and was reported
+ * as an element the animation had failed to reveal.
+ */
 async function scrollThrough(page: import('@playwright/test').Page) {
-  const height = await page.evaluate(() => document.body.scrollHeight);
-  for (let y = 0; y < height; y += 500) {
+  let y = 0;
+  for (let guard = 0; guard < 100; guard++) {
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    if (y >= height) break;
+    y += 500;
     await page.evaluate((to) => window.scrollTo(0, to), y);
     await page.waitForTimeout(120);
   }
-  // Long enough for the last ScrollTrigger to play out its 0.8s tween.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  // Long enough for the last 700ms transition, plus its stagger, to finish.
   await page.waitForTimeout(2000);
 }
 
@@ -58,16 +76,38 @@ test.describe('landing page entrance animations', () => {
     expect(empty, `grids with no .animate-item children: ${JSON.stringify(empty)}`).toEqual([]);
   });
 
-  test('no GSAP target is missing during a full scroll', async ({ page }) => {
-    const misses: string[] = [];
-    page.on('console', (message) => {
-      if (message.text().includes(GSAP_MISS)) misses.push(message.text());
+  test('the landing page never loads GSAP', async ({ page }) => {
+    // The point of US-772: gsap is reachable from the planner and nowhere
+    // else. A static import added back to Landing, EnhancedHero or
+    // ParallaxBackground puts a 40 kB gz chunk on the marketing page again,
+    // and nothing else would notice.
+    const gsapRequests: string[] = [];
+    page.on('request', (request) => {
+      if (/vendor-gsap|\/gsap/.test(request.url())) gsapRequests.push(request.url());
     });
 
     await page.goto('/', { waitUntil: 'networkidle' });
     await scrollThrough(page);
 
-    expect(misses, misses.join('\n')).toEqual([]);
+    expect(gsapRequests, gsapRequests.join('\n')).toEqual([]);
+  });
+
+  test('a reduced-motion visitor reads the page, animation or not', async ({ browser }) => {
+    // The hidden state is a class the script adds, precisely so this holds.
+    // With it in the base stylesheet, every section on a prerendered page
+    // would sit at opacity 0 for anyone whose OS asked for less motion.
+    const context = await browser.newContext({ reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    await page.goto('/', { waitUntil: 'networkidle' });
+
+    const faded = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('.animate-section, .animate-item'))
+        .filter((el) => parseFloat(getComputedStyle(el).opacity) < 0.95)
+        .map((el) => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60)),
+    );
+
+    await context.close();
+    expect(faded, `hidden from a reduced-motion visitor: ${JSON.stringify(faded)}`).toEqual([]);
   });
 
   test('no animated element is left invisible once it has been scrolled past', async ({
@@ -76,15 +116,25 @@ test.describe('landing page entrance animations', () => {
     await page.goto('/', { waitUntil: 'networkidle' });
     await scrollThrough(page);
 
-    // fromTo starts these at opacity 0. A ScrollTrigger that never fires, or a
-    // tween that never completes, leaves real copy unreadable -- the failure
-    // mode that matters more than the missing animation does.
-    const faded = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('.animate-section, .animate-item'))
-        .filter((el) => parseFloat(getComputedStyle(el).opacity) < 0.95)
-        .map((el) => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60))
-    );
-
-    expect(faded, `still faded: ${JSON.stringify(faded)}`).toEqual([]);
+    // The start state is opacity 0. A reveal that never fires leaves real copy
+    // unreadable -- the failure mode that matters more than the missing
+    // animation does.
+    //
+    // Polled rather than read once after a fixed wait. The page grows while it
+    // is scrolled -- lazy sections mount, images get their intrinsic size --
+    // so the last elements come into view during the settle, and a single read
+    // caught ten of them mid-transition. What this test is about is the state
+    // the page comes to rest in, so it waits for rest.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() =>
+            Array.from(document.querySelectorAll('.animate-section, .animate-item'))
+              .filter((el) => parseFloat(getComputedStyle(el).opacity) < 0.95)
+              .map((el) => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 60)),
+          ),
+        { timeout: 15_000, message: 'elements still at opacity 0 after the page settled' },
+      )
+      .toEqual([]);
   });
 });

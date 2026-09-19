@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +32,7 @@ export default async (req: Request) => {
     const { urls, similarityThreshold = 0.85, thinContentThreshold = 300 } = await req.json();
 
     if (!urls || !Array.isArray(urls) || urls.length < 2) {
-      throw new Error("At least 2 URLs are required for comparison");
+      throw new PublicError("At least 2 URLs are required for comparison");
     }
 
     console.log(`Analyzing ${urls.length} pages for duplicate content...`);
@@ -64,7 +65,7 @@ export default async (req: Request) => {
     }
 
     // Record exact duplicates
-    for (const [hash, urls] of exactDuplicates.entries()) {
+    for (const [_hash, urls] of exactDuplicates.entries()) {
       if (urls.length > 1) {
         for (let i = 0; i < urls.length; i++) {
           for (let j = i + 1; j < urls.length; j++) {
@@ -185,7 +186,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -193,7 +194,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function fetchPageContent(url: string): Promise<PageContent> {
   const response = await fetch(url, {

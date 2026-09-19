@@ -49,3 +49,15 @@ export function validateSnapshot(...args: unknown[]): unknown;
 
 /** Absolute path the snapshot for `route` is written to, under dist/. */
 export function outputPathFor(route: string): string;
+
+/**
+ * US-816: the modulepreload hrefs app-shell.html declares, which is the whole
+ * allowance a prerendered route's saved HTML is permitted to keep.
+ */
+export function shellPreloadHrefs(shellHtml: string): Set<string>;
+
+/**
+ * Remove the modulepreload links __vitePreload injected at runtime and the
+ * prerenderer froze into the snapshot. Changes nothing else in the document.
+ */
+export function stripRuntimePreloads(html: string, allowedHrefs: Set<string>): string;

@@ -40,6 +40,7 @@ import { getPageSEO } from "@/lib/seo-config";
 import { PRICING_PLANS, priceLabel } from "@/lib/pricing-plans";
 import { Footer } from "@/components/Footer";
 import { trackLandingView, trackPageView } from "@/lib/conversion-tracking";
+import { observeReveal } from "@/lib/scrollReveal";
 
 // Lazy load heavy components that use GSAP to reduce initial bundle size
 const EnhancedHero = lazy(() => import("@/components/EnhancedHero").then(m => ({ default: m.EnhancedHero })));
@@ -49,23 +50,6 @@ const ExitIntentPopup = lazy(() => import("@/components/ExitIntentPopup").then(m
 // Import branded skeleton for hero loading state
 import { HeroSkeleton } from "@/components/HeroSkeleton";
 import { formatTrialDisclosure, MARKETING_TRIAL_DAYS } from "@/lib/trialDisclosure";
-
-// Dynamically import GSAP only when needed (deferred loading)
-let gsapModule: typeof import("gsap") | null = null;
-let ScrollTriggerModule: typeof import("gsap/ScrollTrigger").ScrollTrigger | null = null;
-
-const loadGSAP = async () => {
-  if (!gsapModule) {
-    const [gsapImport, scrollTriggerImport] = await Promise.all([
-      import("gsap"),
-      import("gsap/ScrollTrigger")
-    ]);
-    gsapModule = gsapImport;
-    ScrollTriggerModule = scrollTriggerImport.ScrollTrigger;
-    gsapModule.gsap.registerPlugin(ScrollTriggerModule);
-  }
-  return { gsap: gsapModule.gsap, ScrollTrigger: ScrollTriggerModule };
-};
 
 const Landing = () => {
   const { t } = useTranslation();
@@ -92,109 +76,23 @@ const Landing = () => {
   // Get SEO configuration for homepage
   const seoConfig = getPageSEO("home");
 
-  // Initialize GSAP animations when first animated section enters viewport
+  // US-772: the entrance animations, in CSS.
+  //
+  // This used to lazy-import GSAP and ScrollTrigger behind an
+  // IntersectionObserver, which is a 62 kB gz chunk fetched on the first scroll
+  // of the page whose whole job is loading fast for someone who has not decided
+  // yet -- to run two fades and a stagger. Both are a transition and a
+  // transition-delay. src/lib/scrollReveal.ts holds the policy and says why the
+  // hidden state cannot go in the base stylesheet.
   useEffect(() => {
-    let mounted = true;
-    let observer: IntersectionObserver | null = null;
+    const root = containerRef.current;
+    if (!root) return;
 
-    const initAnimations = async () => {
-      // Respect prefers-reduced-motion
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (prefersReducedMotion) return;
-
-      const { gsap, ScrollTrigger } = await loadGSAP();
-      if (!mounted || !containerRef.current) return;
-
-      // Animate sections on scroll
-      const sections = gsap.utils.toArray<HTMLElement>(".animate-section");
-
-      sections.forEach((section) => {
-        gsap.fromTo(section,
-          { y: 50, opacity: 0 },
-          {
-            y: 0,
-            opacity: 1,
-            duration: 1,
-            ease: "power3.out",
-            scrollTrigger: {
-              trigger: section,
-              start: "top 80%",
-              toggleActions: "play none none reverse"
-            }
-          }
-        );
-      });
-
-      // Staggered animations for grids
-      const grids = gsap.utils.toArray<HTMLElement>(".animate-grid");
-
-      grids.forEach((grid) => {
-        const items = grid.querySelectorAll(".animate-item");
-        // A grid whose children were never given .animate-item hands GSAP an
-        // empty NodeList: it warns "GSAP target [object NodeList] not found"
-        // and the section stays unanimated while every other one fades in.
-        // Skipping is the honest response to nothing to animate; the gate in
-        // tests/landing-animation.spec.ts is what catches the missing class.
-        if (items.length === 0) return;
-
-        gsap.fromTo(items,
-          { y: 30, opacity: 0 },
-          {
-            y: 0,
-            opacity: 1,
-            duration: 0.8,
-            stagger: 0.1,
-            ease: "power2.out",
-            scrollTrigger: {
-              trigger: grid,
-              start: "top 85%",
-            }
-          }
-        );
-      });
-    };
-
-    // Use IntersectionObserver to load GSAP only when animated sections are near viewport
-    const firstAnimatedSection = containerRef.current?.querySelector('.animate-section, .animate-grid');
-    if (firstAnimatedSection) {
-      observer = new IntersectionObserver(
-        (entries) => {
-          if (entries.some(entry => entry.isIntersecting)) {
-            observer?.disconnect();
-            initAnimations();
-          }
-        },
-        { rootMargin: '200px' } // Start loading 200px before section enters viewport
-      );
-      observer.observe(firstAnimatedSection);
-    } else {
-      // Fallback: if no animated sections found yet (SSR/hydration), defer briefly
-      const timer = setTimeout(() => {
-        const section = containerRef.current?.querySelector('.animate-section, .animate-grid');
-        if (section) {
-          observer = new IntersectionObserver(
-            (entries) => {
-              if (entries.some(entry => entry.isIntersecting)) {
-                observer?.disconnect();
-                initAnimations();
-              }
-            },
-            { rootMargin: '200px' }
-          );
-          observer.observe(section);
-        }
-      }, 0);
-      return () => {
-        mounted = false;
-        clearTimeout(timer);
-        observer?.disconnect();
-      };
-    }
-
-    return () => {
-      mounted = false;
-      observer?.disconnect();
-    };
+    return observeReveal(root, {
+      prefersReducedMotion:
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    });
   }, []);
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -1073,12 +971,16 @@ const Landing = () => {
                     Start Free Trial <ArrowRight className="h-5 w-5" aria-hidden="true" />
                   </Button>
                 </Link>
+                {/* US-817: bg-transparent is load-bearing. The `outline`
+                    variant ships `bg-background`, so without it this button
+                    painted #faf8f5 under its own white label -- 1.06:1, white
+                    on off-white, sitting on the orange section. */}
                 <Link to="/pricing">
                   <Button
                     size="lg"
                     variant="outline"
                     aria-label="View EatPal pricing plans"
-                    className="border-2 border-white/30 text-white hover:bg-white/10 text-lg px-10 py-7 rounded-full"
+                    className="bg-transparent border-2 border-white/30 text-white hover:bg-white/10 text-lg px-10 py-7 rounded-full"
                   >
                     View Pricing
                   </Button>

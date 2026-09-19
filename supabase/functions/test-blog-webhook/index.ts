@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { requireAdmin } from "../_shared/require-admin.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,7 +83,7 @@ export default async (req: Request) => {
     console.error('Error in test-blog-webhook function:', error);
     return new Response(
       JSON.stringify({ 
-        error: error?.message || 'Unknown error',
+        error: publicMessage(error),
         details: 'Failed to send test webhook'
       }),
       { 

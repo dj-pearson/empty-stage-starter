@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { requireUser } from '../_shared/require-admin.ts';
+import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,13 +26,8 @@ export default async (req: Request) => {
 
   // US-618: this endpoint spends model tokens and the runtime is
   // --no-verify-jwt, so in-function auth is the only gate.
-  const gate = await requireUser(req);
-  if (!gate.ok) {
-    return new Response(
-      JSON.stringify({ error: gate.error ?? 'Unauthorized' }),
-      { status: gate.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
+  const gate = await gateAiRequest(req, 'suggest-recipes-from-pantry', corsHeaders);
+  if (gate.response) return gate.response;
 
   try {
     const { pantryFoods, childProfile, count = 5 } = await req.json();
@@ -204,7 +200,7 @@ Return your response as a JSON array with this structure:
   } catch (error) {
     console.error('Error in suggest-recipes-from-pantry:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

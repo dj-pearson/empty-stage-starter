@@ -12,6 +12,7 @@
 // stay readable from the component that feeds them.
 
 import { requireAdmin } from "../_shared/require-admin.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +138,6 @@ export default async (req: Request) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error in send-webhook function:", message);
-    return json({ error: message }, 500);
+    return json({ error: publicMessage(error) }, 500);
   }
 };

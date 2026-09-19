@@ -85,12 +85,26 @@ iOS is live, so branch choice is now a deploy decision. **Always confirm the tar
 
 | Branch              | Source from   | Merges to             | Auto-deploys to                                                   |
 | ------------------- | ------------- | --------------------- | ----------------------------------------------------------------- |
-| `develop`           | `main`        | `release/*`           | TestFlight **internal** build (EAS `preview` profile)             |
-| `release/x.y.z`     | `develop`     | `main` + tag          | TestFlight **external** + App Store Connect submission            |
-| `hotfix/<slug>`     | `main`        | `main` + `develop`    | Expedited App Store submission with auto-filled review notes      |
 | `main`              | (merge only)  | —                     | Tagged commits (`ios/v*`, `web/v*`) trigger production deploys    |
+| `claude/*`          | `main`        | `main` via PR         | Nothing — feature work only                                       |
+| `release/x.y.z`     | `main`        | `main` + tag          | TestFlight **external** + App Store Connect submission            |
+| `hotfix/<slug>`     | `main`        | `main`                | Expedited App Store submission with auto-filled review notes      |
 | `web/v*` tag        | `main`        | —                     | Cloudflare Pages production (only when web ships with iOS)        |
-| `claude/*`          | `develop`     | `develop` via PR      | Nothing — feature work only                                       |
+
+**`develop` is gone (US-763).** The table above used to route `claude/*` and
+`release/*` through it, and that stopped being true on 2026-07-02: `origin/develop`
+has not been touched since, every PR from #241 to #280 merged straight to `main`, and
+merging `main` into `develop` would change 1249 files and delete about 290,000 lines.
+A branching rule nobody follows is worse than none, because "branch first, code
+second" then means guessing. Decision recorded 2026-09-18: **`main` is the integration
+branch.** Branch from it, PR back into it.
+
+The one thing this cost: `develop` was the trigger for the TestFlight *internal*
+build, so `ios-app-store-deploy.yml` now fires on a push to `main` touching `ios/**`
+instead. `workflow_dispatch` is unchanged and remains the way to cut a build by hand.
+`origin/develop` itself is still there, untouched; deleting it or fast-forwarding it
+to `main` is a destructive operation on a shared branch and is the repository owner's
+to run, not a step to fold into a feature PR.
 
 **The web deploy path (US-762): Cloudflare Pages, and only Cloudflare Pages.**
 Pages builds this repo from its own Git integration, configured in the Cloudflare
@@ -105,17 +119,18 @@ Details and the emergency manual path: `docs/deployment-checklist.md`.
 
 **Rules of thumb:**
 
-- New feature → branch from `develop`, PR back to `develop`.
-- App Store release candidate → cut `release/x.y.z` from `develop`, freeze, only fix-forward commits land there.
-- Production bug → branch `hotfix/<slug>` **from `main`**, NOT from `develop`. Keeps the hotfix free of un-reviewed feature work so Apple's expedited review only sees the fix. Cherry-pick or merge back into `develop` after.
-- Web-only change while iOS is mid-review → ship from `develop` to a `web/*` tag; do **not** advance the iOS bundle.
-- Never force-push `main`, `develop`, or any `release/*`. Never merge `develop` → `main` directly; it must go through a `release/*` or `hotfix/*`.
+- New feature → branch from `main`, PR back to `main`.
+- App Store release candidate → cut `release/x.y.z` from `main`, freeze, only fix-forward commits land there.
+- Production bug → branch `hotfix/<slug>` from `main`. It is off the integration branch either way now; what still matters is keeping the branch to the fix alone, so Apple's expedited review sees nothing else.
+- Web-only change while iOS is mid-review → ship from `main` to a `web/*` tag; do **not** advance the iOS bundle.
+- Never force-push `main` or any `release/*`.
 
 The `hotfix:` commit prefix and the expedited-submission column above describe intent, not
 wiring: no workflow in `.github/workflows/` reads either. `ios-app-store-deploy.yml` fires
-only on a push to `develop` touching `ios/**`, or on a manual `workflow_dispatch`. So a
-`hotfix/*` branch carrying web-only changes cannot trigger an App Store submission, and
-nothing auto-fills review notes today. Keep using the prefix sparingly anyway, both because
+only on a push to `main` touching `ios/**` (it was `develop` until US-763 retired that
+branch), or on a manual `workflow_dispatch`. So a `hotfix/*` branch carrying web-only
+changes cannot trigger an App Store submission, and nothing auto-fills review notes
+today. Keep using the prefix sparingly anyway, both because
 Apple revokes expedited privileges if abused and because someone will eventually implement
 the column as written.
 
@@ -149,9 +164,10 @@ The web app reads from two stores; precedence is **server-authoritative on load*
 2. **Authenticated → Supabase overwrites.** Once `userId` + `householdId` resolve, the load effect fetches each table and **replaces** the corresponding slice wholesale (`setFoods(serverData)`, etc.) — it does **not** merge stale local rows back in. A successful server fetch always wins, so a cross-device edit (or a deletion) can't be resurrected by a stale local backup.
 3. **Cache is write-through only.** A debounced effect persists the current in-memory state back to storage as a backup; it is read on mount (step 1) and never used to override the server (step 2).
 4. **Realtime → merge by id, last-write-wins.** Live `postgres_changes` events are folded in via the pure per-domain helpers `applyGroceryItemRealtime` / `applyPlanEntryRealtime` / `applyKidRealtime` / `applyRecipeRealtime` (deduped by `id`; normalize snake_case → camelCase). Ordering is the channel's; we do not re-order by `updated_at`.
-5. **Offline durability: the whole grocery list on web, everything on native.** US-823 gave the web app a durable write-queue for grocery edits — `src/lib/webSyncQueue.ts`, drained by `useOfflineSyncDriver`, keyed per user so one account cannot replay another's writes. It covers `grocery.toggle`, `grocery.update` and `grocery.delete`: ops that address a row the server already has, by id. **Offline INSERTS are still not queued**, deliberately — the database owns `id`, so a queued insert would replay under an id the optimistic row does not have and come back over realtime as a second row. Every other domain (foods, recipes, kids, plan entries) has no web queue at all: an optimistic write that never reached Supabase is not replayed, and a later server load wins per step 2. Native (Expo) durability is broader and lives in `app/mobile/lib/syncQueue` (FIFO replay + retry; see `src/lib/syncQueue.test.ts`).
+5. **Offline durability: the whole grocery list on web, everything on native.** US-823 gave the web app a durable write-queue for grocery writes — `src/lib/webSyncQueue.ts`, drained by `useOfflineSyncDriver`, keyed per user so one account cannot replay another's writes. It covers `grocery.insert`, `grocery.toggle`, `grocery.update` and `grocery.delete`. Inserts work because **`buildGroceryRow` generates the uuid on the client**: while the database owned `id`, a queued insert would have replayed under an id the optimistic row did not have and come back over realtime as a second row. Sending one is additive (`grocery_items.id` keeps its `gen_random_uuid()` default, so older iOS builds that omit it are unaffected), and a duplicate replay is a `23505` the executor reads as "already landed". Keep that invariant if you touch the builder — `src/lib/queuedOpCoverage.test.ts` asserts it. Every other domain (foods, recipes, kids, plan entries) has no web queue at all: an optimistic write that never reached Supabase is not replayed, and a later server load wins per step 2. Native (Expo) durability is broader and lives in `app/mobile/lib/syncQueue` (FIFO replay + retry; see `src/lib/syncQueue.test.ts`).
+6. **A load does not wipe what the queue still holds.** Step 2's wholesale replace would otherwise erase every unsent write — tick six items off in an aisle, reopen the tab at home, and watch the ticks vanish while the ops sit in localStorage. `applyPendingOpsToGroceryItems` folds the queue over the loaded rows in FIFO order, so the slice lands on what the server will hold once the drain finishes. It is a **projection of the ops, not a merge of the cache**: no cached copy of a row is consulted, so step 2 still holds and a deletion made elsewhere cannot be resurrected.
 
-Tests pin this contract: `src/contexts/AppContext.precedence.test.tsx` (offline fallback renders cache; server load overwrites stale cache) and `src/lib/webSyncQueue.test.ts` (what the web queue replays, and what it refuses to).
+Tests pin this contract: `src/contexts/AppContext.precedence.test.tsx` (offline fallback renders cache; server load overwrites stale cache; a queued write survives that load), `src/lib/webSyncQueue.test.ts` (what the queue replays and what it refuses), `src/contexts/GroceryContext.offlineInsert.test.tsx` (an add made offline stays on screen and is queued under the id it will replay under) and `src/hooks/useOfflineSyncDriver.test.tsx` (when a drain runs and what it tells the user).
 
 ## Supabase
 
@@ -167,6 +183,18 @@ const channel = supabase.channel('changes').on('postgres_changes',
 ```
 
 Migrations: `supabase migration new <name>` → edit SQL → `supabase db push` → `supabase gen types typescript --local > src/integrations/supabase/types.ts`.
+
+**Checking migrations without Docker.** `bash scripts/dev/local-sql-suite.sh` builds a
+throwaway Postgres from `scripts/dev/supabase-shim.sql` (the roles, `auth.uid()`,
+`storage.*`, `cron.schedule` and the `supabase_realtime` publication that migrations
+assume exist), applies all of `supabase/migrations` in order, then runs every
+`supabase/tests/*.test.sql` -- which is the content of CI's Migration Test job, the one
+that needs `supabase start` and therefore Docker. It is not a replacement: pgvector is
+not packaged, so `20260709000004_agent_knowledge.sql` is skipped, and the roles are
+stand-ins. It answers the question that actually bites, which is whether the history
+applies in order and the suites pass against what it builds. Run it from scratch rather
+than incrementally: a re-run against a half-built database fails on `CREATE POLICY`
+conflicts and hides the real error underneath.
 
 CLI version is **pinned to 2.116.0** in both Supabase jobs in `ci.yml` (US-760); use the
 same one locally or the generated `types.ts` will differ cosmetically from CI's. Paths
@@ -203,6 +231,32 @@ The DB is shared by every shipped iOS version still on users' phones. Min-suppor
 3. Once `MIN_SUPPORTED_IOS_BUILD` is bumped past N, write a follow-up migration that retires the old shape.
 
 If a migration cannot be made backward-compatible (e.g. urgent security fix), it must be paired with a force-update screen in the app *and* with a min-version bump shipped at least one release before the migration lands.
+
+**`REVOKE ... FROM PUBLIC` does not revoke anything here (US-804).** Supabase sets a
+schema-level default ACL on `public`
+(`{anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}`), so every function
+you create gets EXECUTE granted *directly* to those three roles at creation. Revoking
+PUBLIC removes a grant that was never what made the function callable, and the function
+stays reachable over PostgREST RPC. Fourteen functions in this repo carried that statement
+and were still callable by `anon`; thirteen were SECURITY DEFINER, and one of them
+(`rpc_merge_items`) rewrites a household's pantry with no `auth.uid()` check.
+
+Name the roles:
+
+```sql
+-- private: cron, triggers, internal helpers
+REVOKE ALL ON FUNCTION public.my_fn(uuid) FROM PUBLIC, anon, authenticated;
+
+-- a signed-in user calls it
+REVOKE ALL ON FUNCTION public.my_fn(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.my_fn(uuid) TO authenticated;
+```
+
+Then assert the privilege, not the statement: `has_function_privilege('anon', 'public.my_fn(uuid)',
+'EXECUTE')` must be false. A test that greps for the word REVOKE is what produced the false
+confidence in the first place -- see `supabase/tests/us804_function_privileges.test.sql`. Not
+everything wants locking: the signup flow runs before a session exists, so
+`is_disposable_email_domain` is deliberately callable by `anon`.
 
 **Always enable RLS on new tables**:
 ```sql

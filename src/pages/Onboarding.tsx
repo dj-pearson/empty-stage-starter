@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,11 @@ import { User, Users, Heart, ArrowRight, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { analytics } from "@/lib/analytics";
+import {
+  trackOnboardingComplete,
+  trackOnboardingSkip,
+  trackOnboardingStart,
+} from "@/lib/conversion-tracking";
 import { markOnboardingCompleted, type PlanningFor } from "@/lib/onboardingStatus";
 
 /**
@@ -68,22 +73,50 @@ export default function Onboarding() {
   const [step, setStep] = useState<1 | 2>(1);
   const [saving, setSaving] = useState(false);
 
+  // The top of the activation funnel. Fired on mount rather than on the first
+  // choice, so a visitor who opens setup and leaves is counted as a start --
+  // which is the number that makes the completion rate mean anything.
+  useEffect(() => {
+    trackOnboardingStart();
+  }, []);
+
   const needsChild = planningFor === "my_family";
   const totalSteps = needsChild ? 2 : 1;
 
-  const finish = async (skipped: boolean) => {
+  /**
+   * `answer` is passed in rather than read from state.
+   *
+   * choose() calls setPlanningFor(id) and then, for the two non-family
+   * branches, finish() in the same tick -- so the state update has not landed
+   * and `planningFor` is still null in this closure. The GA4 event has
+   * therefore been reporting planning_for: "unanswered" for every "Just me"
+   * and "Me and a partner" completion since US-770, which is exactly the two
+   * branches that story existed to add. Found by US-707's assertion on the
+   * payload; nothing asserted it before.
+   */
+  const finish = async (skipped: boolean, answer: PlanningFor | null = planningFor) => {
     setSaving(true);
     try {
-      if (needsChild && !skipped && childName.trim()) {
+      if (answer === "my_family" && !skipped && childName.trim()) {
         await addKid({ name: childName.trim(), allergens: [], favorite_foods: [] });
       }
 
-      // US-707's activation events, fired from the route that owns the funnel
-      // rather than from a dialog that only ever opened on one page.
+      const addedChild = Boolean(answer === "my_family" && !skipped && childName.trim());
+
+      // US-707: this went to GA4 alone, and GA4 carries no id that joins back
+      // to Supabase -- so "of the people who signed up, how many finished
+      // setup" was a question the data could not answer. It goes to
+      // funnel_events too now, carrying the same user_id the domain tables use.
+      // GA4 is kept rather than replaced: it is where the marketing side reads.
       analytics.trackEvent(skipped ? "onboarding_skipped" : "onboarding_completed", {
-        planning_for: planningFor ?? "unanswered",
-        added_child: Boolean(needsChild && !skipped && childName.trim()),
+        planning_for: answer ?? "unanswered",
+        added_child: addedChild,
       });
+      if (skipped) {
+        trackOnboardingSkip(answer ?? undefined);
+      } else {
+        trackOnboardingComplete(answer ?? undefined, addedChild);
+      }
 
       // Completing AND skipping both finish onboarding. A user who skipped has
       // answered the question -- "not now" -- and asking again on every visit
@@ -105,7 +138,7 @@ export default function Onboarding() {
     if (id === "my_family") {
       setStep(2);
     } else {
-      void finish(false);
+      void finish(false, id);
     }
   };
 

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +35,7 @@ export default async (req: Request) => {
     const { urls, maxRedirects = 10 } = await req.json();
 
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
-      throw new Error("URLs array is required");
+      throw new PublicError("URLs array is required");
     }
 
     console.log(`Analyzing redirect chains for ${urls.length} URL(s)...`);
@@ -104,7 +105,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -112,7 +113,7 @@ export default async (req: Request) => {
       }
     );
   }
-});
+};
 
 async function analyzeRedirectChain(
   startUrl: string,
@@ -202,7 +203,7 @@ async function analyzeRedirectChain(
           }
 
           currentUrl = nextUrl;
-        } catch (e) {
+        } catch (_e) {
           issues.push({
             type: "invalid_redirect",
             severity: "high",

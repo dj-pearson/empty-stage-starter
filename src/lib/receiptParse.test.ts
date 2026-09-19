@@ -95,7 +95,11 @@ describe('acceptedRowsToFoods (post-confirm shape)', () => {
     const rows = parseResponseToReviewRows(walmartFixture, []);
     const foods = acceptedRowsToFoods(rows);
     for (const f of foods) {
-      expect(f.is_safe).toBe(true);
+      // US-803: a receipt says what was bought. It says nothing about whether
+      // a child eats any of it, and is_safe is the flag a parent sets. This
+      // asserted `true` until that story; in an app built for ARFID, marking a
+      // food safe on a parent's behalf is the error that costs the most.
+      expect(f.is_safe).toBe(false);
       expect(f.is_try_bite).toBe(false);
       expect(typeof f.name).toBe('string');
       expect(f.name.length).toBeGreaterThan(0);

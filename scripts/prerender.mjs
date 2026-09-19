@@ -287,6 +287,59 @@ export async function discoverDynamicRoutes(config) {
  *          failures: Array<{route: string}>, budgetMs: number,
  *          generatedAt: string}} run
  */
+/**
+ * The modulepreload links a page is allowed to keep (US-816).
+ *
+ * Vite emits a handful of <link rel="modulepreload"> tags into app-shell.html
+ * for the entry graph. Then __vitePreload adds MORE of them to the live DOM as
+ * chunks load, and this prerenderer serialises document.documentElement
+ * .outerHTML -- so every chunk the runtime happened to fetch while rendering
+ * gets frozen into the static HTML as an EAGER download for every future
+ * visitor.
+ *
+ * Measured: app-shell.html has 8 links, and the prerendered dist/index.html had
+ * 62. The 54 extra were things the runtime would have fetched on demand or not
+ * at all. vendor-tiptap was the clearest -- 137 kB gzipped of blog-CMS
+ * rich-text editor preloaded on the marketing home page, which iteration 5
+ * fixed at its cause. This function fixes the mechanism rather than the
+ * instance: whatever the runtime pulled in while rendering, the saved HTML
+ * preloads only what the shell itself declared.
+ *
+ * Returns the set of hrefs app-shell.html declares.
+ */
+/** Set once per run, in main(), from app-shell.html. */
+let allowedPreloadHrefs = null;
+
+export function shellPreloadHrefs(shellHtml) {
+  const hrefs = new Set();
+  for (const match of shellHtml.matchAll(/<link\b[^>]*>/gi)) {
+    const tag = match[0];
+    if (!/rel\s*=\s*["']?modulepreload["']?/i.test(tag)) continue;
+    const href = tag.match(/href\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (href) hrefs.add(href);
+  }
+  return hrefs;
+}
+
+/**
+ * Drop the modulepreload links the shell never declared.
+ *
+ * Deliberately narrow: it removes those tags and changes NOTHING else, because
+ * the prerender output is the page a crawler reads and this story is only
+ * about what it downloads. A link the shell does declare is kept even if it
+ * looks redundant -- Vite put it there, and second-guessing the bundler is a
+ * different story from not freezing runtime noise.
+ */
+export function stripRuntimePreloads(html, allowedHrefs) {
+  return html.replace(/<link\b[^>]*>/gi, (tag) => {
+    if (!/rel\s*=\s*["']?modulepreload["']?/i.test(tag)) return tag;
+    const href = tag.match(/href\s*=\s*["']([^"']+)["']/i)?.[1];
+    // A modulepreload with no href preloads nothing; it is runtime noise too.
+    if (!href) return '';
+    return allowedHrefs.has(href) ? tag : '';
+  });
+}
+
 export function buildPrerenderManifest({ results, skipped, failures, budgetMs, generatedAt }) {
   // Sorted and deduped: the manifest is diffed between builds, and route order
   // depends on scheduling, so an unsorted list churns on every deploy.
@@ -591,7 +644,13 @@ async function prerenderRoute(page, origin, route) {
 
   const outPath = outputPathFor(route);
   await mkdir(path.dirname(outPath), { recursive: true });
-  await writeFile(outPath, html, 'utf8');
+  // US-816: drop the modulepreload links the runtime injected while this route
+  // rendered. Nothing else about the snapshot changes -- this is the page a
+  // crawler reads, and the story is only about what it downloads.
+  const saved = allowedPreloadHrefs
+    ? stripRuntimePreloads(html, allowedPreloadHrefs)
+    : html;
+  await writeFile(outPath, saved, 'utf8');
 
   return {
     outPath,
@@ -647,6 +706,12 @@ async function main() {
   }
 
   await copyFile(path.join(DIST, 'index.html'), path.join(DIST, 'app-shell.html'));
+
+  // US-816: what the SHELL declares is the whole allowance. Everything
+  // __vitePreload adds to the live DOM while a route renders gets serialised
+  // into that route's static HTML otherwise, turning on-demand chunks into
+  // eager downloads for every visitor. Read once, applied to every route below.
+  allowedPreloadHrefs = shellPreloadHrefs(shellHtml);
 
   const { chromium } = await import('playwright');
   const { server, port } = await startServer(DIST, shellHtml);

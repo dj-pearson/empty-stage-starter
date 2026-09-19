@@ -72,10 +72,14 @@ export function isOfflineFailure(error: unknown): boolean {
 /**
  * What to tell the user when the write was rolled back.
  *
- * The offline wording says the change is gone rather than pending, because it
- * is: the web app rolls the optimistic row back and holds nothing to replay
- * (see the load-precedence contract in CLAUDE.md -- durable offline writes are
- * mobile-only today).
+ * The offline wording says the change is gone rather than pending, because for
+ * this message it is: the caller rolled the optimistic row back and has
+ * nothing to replay. That is now the MINORITY case on the grocery list, where
+ * US-823 gave every write a durable queue and the queued path says
+ * OFFLINE_QUEUED_MESSAGE instead. It is still the whole story for the domains
+ * with no web queue -- foods, recipes, kids, plan entries -- so the wording
+ * stays honest where it is used. See the load-precedence contract in
+ * CLAUDE.md.
  */
 export const OFFLINE_WRITE_MESSAGE =
   "You're offline, so that change wasn't saved. Reconnect and try again.";

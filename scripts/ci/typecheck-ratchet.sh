@@ -15,11 +15,90 @@
 set -uo pipefail
 
 BASELINE_FILE=".ci/typecheck-baseline.txt"
-LOG=/tmp/typecheck-ratchet.log
+# US-802: a stable path, so the workflow can upload it as an artifact and a
+# developer can read the whole thing without reproducing the build.
+LOG="${TYPECHECK_LOG:-/tmp/typecheck-ratchet.log}"
+
+# ---------------------------------------------------------------------------
+# US-802: on a regression, show what THIS branch added.
+#
+# The old answer was `grep ... | tail -40`. Errors sort by path and this repo's
+# backlog lives in src/pages/*, so that tail is a CONSTANT -- the same forty
+# pre-existing errors print every time and the ones the branch added are
+# earlier in the walk, never shown. It cost two round trips once.
+#
+# The merge-base run is expensive, so it is paid ONLY when the ratchet is about
+# to fail. On the happy path nothing extra runs. node_modules is symlinked into
+# the worktree rather than reinstalled -- a second `npm ci` would cost more than
+# the answer is worth, and the dependency tree is the same commit-to-commit for
+# the overwhelming majority of PRs (if it is not, the base run simply fails and
+# we fall back to the grouped listing).
+#
+# $1 = kind (typecheck|lint)   $2 = head log   $3 = command to run in the base
+explain_regression() {
+  local kind="$1" head_log="$2" base_cmd="$3"
+  local base_ref="${GITHUB_BASE_REF:-}" base_sha="" worktree base_log
+
+  if [ -n "$base_ref" ]; then
+    git fetch --quiet --depth=50 origin "$base_ref" 2>/dev/null || true
+    base_sha="$(git merge-base HEAD "origin/${base_ref}" 2>/dev/null || true)"
+  fi
+  if [ -z "$base_sha" ]; then
+    base_sha="$(git merge-base HEAD origin/main 2>/dev/null || true)"
+  fi
+
+  if [ -z "$base_sha" ]; then
+    echo "No merge base available, so the list below is every error, grouped by file."
+    node scripts/ci/new-errors.mjs --kind="$kind" --head="$head_log" --head-root="$(pwd)"
+    return 0
+  fi
+
+  worktree="$(mktemp -d)/base"
+  base_log="$(mktemp)"
+  if ! git worktree add --quiet --detach "$worktree" "$base_sha" 2>/dev/null; then
+    echo "Could not check out the merge base ${base_sha}; listing every error by file instead."
+    node scripts/ci/new-errors.mjs --kind="$kind" --head="$head_log" --head-root="$(pwd)"
+    return 0
+  fi
+
+  ln -s "$(pwd)/node_modules" "$worktree/node_modules" 2>/dev/null || true
+  echo "Re-running ${kind} on the merge base (${base_sha}) to isolate what this branch added..."
+  ( cd "$worktree" && eval "$base_cmd" ) > "$base_log" 2>&1 || true
+
+  node scripts/ci/new-errors.mjs --kind="$kind" --head="$head_log" --base="$base_log" \
+    --head-root="$(pwd)" --base-root="$worktree"
+
+  git worktree remove --force "$worktree" 2>/dev/null || true
+}
 
 baseline="$(tr -dc '0-9' < "$BASELINE_FILE" 2>/dev/null)"
 if [ -z "${baseline}" ]; then
   echo "::error title=Typecheck ratchet::missing/invalid ${BASELINE_FILE}"
+  exit 1
+fi
+
+# A polluted node_modules is not this tree.
+#
+# `deno` with the default DENO_DIR writes its package store to
+# node_modules/.deno INSIDE the repo -- 1.3 GB of a second dependency tree,
+# the US-813 second-React problem. tsc walks it for @types and the count comes
+# back HIGHER than the tree's own: measured 838 against a true 805 on the same
+# commit, and the merge-base worktree this script builds symlinks the same
+# node_modules, so even the "what did this branch add" isolation below reports
+# phantom regressions.
+#
+# That is a whole afternoon if you do not know to look, and the shape of it is
+# a local number nobody can reproduce later -- which is exactly the discrepancy
+# US-790 exists to explain. src/test/reactEnvironment.test.tsx catches the
+# directory for the vitest run; this catches it for the count.
+#
+# Refuse rather than report. A number measured against the wrong dependency
+# tree is worse than no number, because it looks like a number.
+if [ -d "node_modules/.deno" ]; then
+  echo "::error title=Polluted node_modules::node_modules/.deno exists, so tsc is reading a second dependency tree layered under this one and the count would be wrong (measured +33 on a tree whose true count was 805)."
+  echo "    Deno wrote it because DENO_DIR was left at its default inside the repo."
+  echo "    Fix:   rm -rf node_modules/.deno && npm ci"
+  echo "    Avoid: export DENO_DIR=\"\${TMPDIR:-/tmp}/deno-cache\" before running deno."
   exit 1
 fi
 
@@ -70,8 +149,9 @@ fi
 
 if [ "$count" -gt "$baseline" ]; then
   echo "::error title=Typecheck regression::${count} type errors exceeds the baseline of ${baseline}. Your change introduced new type errors — fix them. Do NOT raise .ci/typecheck-baseline.txt."
-  # Surface a sample of the errors to aid debugging.
-  grep -E 'error TS' "$LOG" | tail -40
+  explain_regression typecheck "$LOG" "npm run typecheck"
+  echo ""
+  echo "The full log is at ${LOG} and is uploaded as the 'typecheck-log' artifact."
   exit 1
 fi
 

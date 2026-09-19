@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { PublicError, publicMessage } from '../_shared/errors.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,7 +37,7 @@ export default async (req: Request) => {
     const { startUrl, maxPages = 50, followExternal = false } = await req.json();
 
     if (!startUrl) {
-      throw new Error("Start URL is required");
+      throw new PublicError("Start URL is required");
     }
 
     // Initialize Supabase client
@@ -445,7 +446,7 @@ export default async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: publicMessage(error),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

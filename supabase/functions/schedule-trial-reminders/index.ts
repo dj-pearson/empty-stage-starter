@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from '../common/headers.ts';
+import { publicMessage } from '../_shared/errors.ts';
 
 /**
  * US-631: warns trial users before the first charge.
@@ -203,6 +204,6 @@ export default async (req: Request) => {
     return json({ success: true, ...results });
   } catch (err) {
     console.error('[schedule-trial-reminders] failed:', err);
-    return json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+    return json({ error: publicMessage(err) }, 500);
   }
 };

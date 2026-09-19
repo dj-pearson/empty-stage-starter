@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/headers.ts";
+import { publicMessage } from '../_shared/errors.ts';
 
 export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -178,7 +179,7 @@ export default async (req: Request) => {
   } catch (error) {
     console.error('Error in schedule-meal-reminders:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ error: publicMessage(error) }),
       { status: 500, headers: { ...corsHeaders, ...securityHeaders, ...noCacheHeaders(), 'Content-Type': 'application/json' } }
     );
   }

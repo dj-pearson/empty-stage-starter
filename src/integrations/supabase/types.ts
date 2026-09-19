@@ -6356,16 +6356,20 @@ export type Database = {
           fat_g_100: number | null
           fiber_g_100: number | null
           id: string
+          ingredients: string | null
           kind: string
           last_added_at: string
           metadata: Json | null
           name: string
           name_normalized: string
+          package_quantity_text: string | null
           package_size: number | null
           package_unit: string | null
           parent_food_id: string | null
           protein_g_100: number | null
           serving_size_g: number | null
+          serving_size_text: string | null
+          servings_per_container: number | null
           sodium_mg_100: number | null
           source: string | null
           source_ref: string | null
@@ -6391,16 +6395,20 @@ export type Database = {
           fat_g_100?: number | null
           fiber_g_100?: number | null
           id?: string
+          ingredients?: string | null
           kind?: string
           last_added_at?: string
           metadata?: Json | null
           name: string
-          name_normalized: string
+          name_normalized?: string
+          package_quantity_text?: string | null
           package_size?: number | null
           package_unit?: string | null
           parent_food_id?: string | null
           protein_g_100?: number | null
           serving_size_g?: number | null
+          serving_size_text?: string | null
+          servings_per_container?: number | null
           sodium_mg_100?: number | null
           source?: string | null
           source_ref?: string | null
@@ -6426,16 +6434,20 @@ export type Database = {
           fat_g_100?: number | null
           fiber_g_100?: number | null
           id?: string
+          ingredients?: string | null
           kind?: string
           last_added_at?: string
           metadata?: Json | null
           name?: string
           name_normalized?: string
+          package_quantity_text?: string | null
           package_size?: number | null
           package_unit?: string | null
           parent_food_id?: string | null
           protein_g_100?: number | null
           serving_size_g?: number | null
+          serving_size_text?: string | null
+          servings_per_container?: number | null
           sodium_mg_100?: number | null
           source?: string | null
           source_ref?: string | null
@@ -18272,11 +18284,17 @@ export type Database = {
       }
       conversion_funnel_summary: {
         Row: {
+          children_created: number | null
           date: string | null
           email_capture_rate: number | null
           email_captures: number | null
+          foods_added: number | null
           landing_to_quiz_rate: number | null
           landing_views: number | null
+          meals_planned: number | null
+          onboarding_completes: number | null
+          onboarding_skips: number | null
+          onboarding_starts: number | null
           overall_conversion_rate: number | null
           paid_conversions: number | null
           quiz_completes: number | null
@@ -18873,6 +18891,24 @@ export type Database = {
         Returns: number
       }
       can_add_child: { Args: { user_uuid: string }; Returns: boolean }
+      catalog_upsert_from_serving: {
+        Args: {
+          p_allergens?: string[]
+          p_barcode?: string
+          p_calories?: number
+          p_carbs_g?: number
+          p_category?: string
+          p_fat_g?: number
+          p_ingredients?: string
+          p_name: string
+          p_package_quantity_text?: string
+          p_protein_g?: number
+          p_serving_size_text?: string
+          p_servings_per_container?: number
+          p_source?: string
+        }
+        Returns: string
+      }
       check_ai_budget: {
         Args: { p_budget_type?: string; p_user_id: string }
         Returns: {
@@ -19154,6 +19190,14 @@ export type Database = {
       generate_content_hash: { Args: { content_text: string }; Returns: string }
       generate_invite_code: { Args: never; Returns: string }
       generate_referral_code: { Args: never; Returns: string }
+      generic_promotion_candidates: {
+        Args: { p_limit?: number; p_min_households?: number }
+        Returns: {
+          household_count: number
+          name_normalized: string
+          sample_name: string
+        }[]
+      }
       get_active_alerts_count: { Args: { p_user_id: string }; Returns: number }
       get_active_campaign_for_plan: {
         Args: { p_plan_id: string }
@@ -19552,6 +19596,7 @@ export type Database = {
       normalize_product_name: { Args: { p_name: string }; Returns: string }
       normalize_title: { Args: { title_text: string }; Returns: string }
       parse_quantity: { Args: { quantity_str: string }; Returns: number }
+      parse_serving_grams: { Args: { p_serving: string }; Returns: number }
       plan_name_for_apple_product: {
         Args: { p_product_id: string }
         Returns: string
