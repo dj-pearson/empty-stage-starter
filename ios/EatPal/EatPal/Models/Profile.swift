@@ -31,8 +31,10 @@ struct Profile: Codable, Identifiable {
 /// screens and by the auth rate limiter respectively, and an offline queue that
 /// could replay them would be a way to unlock an account from a phone.
 struct ProfileUpdate: Codable {
-    var fullName: String?
-    var onboardingCompleted: Bool?
+    // Explicit `= nil` so the memberwise initializer has defaults and a caller
+    // can set one column by name: ProfileUpdate(onboardingCompleted: true).
+    var fullName: String? = nil
+    var onboardingCompleted: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case fullName = "full_name"

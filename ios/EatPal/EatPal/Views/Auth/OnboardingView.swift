@@ -4,7 +4,6 @@ struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
     // US-369: gate page transitions behind Reduce Motion.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var currentPage = 0
 
     private let pages: [OnboardingPage] = [
@@ -94,7 +93,11 @@ struct OnboardingView: View {
                     } else {
                         Button {
                             HapticManager.success()
-                            hasCompletedOnboarding = true
+                            // US-708: finishing and skipping mean the same
+                            // thing to profiles.onboarding_completed. The gate
+                            // flips locally first, so the screen changes now
+                            // and the write follows (queued if it fails).
+                            Task { await OnboardingService.shared.markCompleted() }
                         } label: {
                             HStack {
                                 Text("Get Started")
@@ -112,7 +115,7 @@ struct OnboardingView: View {
                 // Skip
                 if currentPage < pages.count - 1 {
                     Button("Skip") {
-                        hasCompletedOnboarding = true
+                        Task { await OnboardingService.shared.markCompleted() }
                     }
                     .font(.callout)
                     .foregroundStyle(AppTheme.Colors.textTertiary)

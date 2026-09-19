@@ -5,9 +5,14 @@ struct RootView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
 
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     // US-380: server-driven force-update gate (fails open).
     @StateObject private var forceUpdate = ForceUpdateService.shared
+    // US-708: first-run gate, agreed with the server rather than remembered on
+    // this device. Replaces @AppStorage("hasCompletedOnboarding"), which was
+    // never written to profiles -- so the column read false for 174 of 200
+    // accounts and web kept nudging people who had onboarded months ago.
+    // Seeded synchronously from its own cache, so this never waits on a fetch.
+    @StateObject private var onboarding = OnboardingService.shared
 
     /// When the app was last backgrounded, for the staleness check below.
     @State private var backgroundedAt: Date?
@@ -30,7 +35,7 @@ struct RootView: View {
                 case .unauthenticated:
                     AuthView()
                 case .authenticated:
-                    if hasCompletedOnboarding {
+                    if !onboarding.needsOnboarding {
                         MainTabView()
                             .withToasts()
                             .withOfflineBanner()
@@ -46,6 +51,10 @@ struct RootView: View {
         // gets into the app.
         .task {
             await forceUpdate.checkMinimumVersion()
+            // US-708 AC4: seed the first-run gate from the server. The cached
+            // value is already on screen, so this corrects it rather than
+            // blocking on it.
+            await onboarding.refresh()
         }
         // US-490: re-sync subscription entitlements whenever the app returns to
         // the foreground so a renewal or a purchase made on another device is
@@ -63,6 +72,9 @@ struct RootView: View {
                 // US-145: a suspended app runs no timers, so the abandoned-trip
                 // check has to happen when it is running again.
                 Task { await GroceryTripActivityService.shared.endIfExpired() }
+                // US-708 AC4: a completion recorded on another device should
+                // land here without a relaunch.
+                Task { await OnboardingService.shared.refresh() }
                 refreshIfStale()
 
             default:
