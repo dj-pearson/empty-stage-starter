@@ -19,17 +19,24 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "
 // tonight-mode, parse-receipt-image, recognize-fridge-contents,
 // identify-product, generate-image, schedule-trial-reminders and
 // app-store-notifications. Nine of those ten have live callers in src/ and in
-// the shipped Swift app. Adding a function meant remembering to add a second
-// line in a second file, and nothing failed when you didn't.
+// the shipped Swift app, and the tenth is the App Store Server Notifications V2
+// endpoint Apple posts to on this same host. Adding a function meant remembering
+// to add a second line in a second file, and nothing failed when you didn't.
 //
-// A directory holding an index.ts is a function. _shared/ and common/ hold no
-// index.ts, so they are excluded by the same rule rather than by a name list.
+// A directory holding an index.ts is a function, unless its name starts with an
+// underscore. That prefix marks the internals: _shared/ holds helper modules,
+// and _health/ is a handler that reports which env vars are configured -- the
+// server answers /health and /_health itself, and US-623 cut that response back
+// to {status:"ok"} precisely so an unauthenticated probe learns nothing. Routing
+// _health/ would have put that detail back at /functions/_health. common/ has no
+// index.ts and drops out on the index.ts rule.
 const FUNCTIONS_ROOT = new URL("./functions/", import.meta.url);
 
 function discoverFunctions(root: URL): { [key: string]: string } {
   const map: { [key: string]: string } = {};
   for (const entry of Deno.readDirSync(root)) {
-    if (!entry.isDirectory || entry.name.startsWith(".")) continue;
+    if (!entry.isDirectory) continue;
+    if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
     const handler = new URL(`${entry.name}/index.ts`, root);
     try {
       if (!Deno.statSync(handler).isFile) continue;

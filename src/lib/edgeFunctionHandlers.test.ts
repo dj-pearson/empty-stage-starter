@@ -287,7 +287,11 @@ describe('the ported edge-function guards (US-773)', () => {
  */
 describe('the self-hosted router reaches every deployed handler (US-774)', () => {
   const server = readFileSync(path.join(process.cwd(), 'edge-functions-server.ts'), 'utf8');
-  const handlers = handlerFiles().map(({ name }) => name);
+  // _health is deliberately not routed (see the underscore case below), so it
+  // is not a handler this router owes a route to.
+  const handlers = handlerFiles()
+    .map(({ name }) => name)
+    .filter((name) => !name.startsWith('_'));
 
   /** `"some-function": "./functions/some-function/index.ts"` pairs, if any remain. */
   const hardcoded = [...server.matchAll(/"([a-z0-9-]+)":\s*"\.\/functions\//g)].map((m) => m[1]);
@@ -309,14 +313,21 @@ describe('the self-hosted router reaches every deployed handler (US-774)', () =>
     expect(unreachable, 'these ship under supabase/functions/ but answer 404').toEqual([]);
   });
 
-  it('excludes the shared directories, which are not functions', () => {
-    // Discovery keys on index.ts rather than on a name list, so this asserts
-    // the premise that makes that safe.
-    for (const shared of ['_shared', 'common']) {
-      expect(
-        existsSync(path.join(FUNCTIONS_DIR, shared, 'index.ts')),
-        `${shared}/index.ts exists, so directory discovery would route it as a function`,
-      ).toBe(false);
-    }
+  it('keeps the underscore-prefixed internals off the routing table', () => {
+    // _health/ answers with which env vars are configured. The server has its
+    // own /health and /_health branch, and US-623 cut that back to
+    // {status:"ok"} so an unauthenticated probe learns nothing -- but that
+    // branch matches the literal path only, so directory discovery that took
+    // _health/ would serve the detailed version at /functions/_health.
+    expect(
+      discovers && /startsWith\("_"\)/.test(server),
+      'discovery must skip _-prefixed directories or it re-exposes _health',
+    ).toBe(true);
+
+    // common/ is excluded by the index.ts rule instead of by name, so pin that.
+    expect(
+      existsSync(path.join(FUNCTIONS_DIR, 'common', 'index.ts')),
+      'common/index.ts exists, so directory discovery would route it as a function',
+    ).toBe(false);
   });
 });

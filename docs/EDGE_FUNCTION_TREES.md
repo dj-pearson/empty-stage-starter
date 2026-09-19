@@ -75,8 +75,10 @@ compare capabilities, not tokens.
    handler in `supabase/functions/`, or that names a directory which does not
    exist. The table is derived from the tree (US-774), so the first direction is
    satisfied by construction and the check fails if it ever reverts to a list --
-   a hand-maintained one had drifted by eleven names, `delete-account` and both
-   `bind-email-*` among them, each answering 404;
+   a hand-maintained one had drifted by ten names, `delete-account`, both
+   `bind-email-*` and Apple's `app-store-notifications` webhook among them, each
+   answering 404. `_`-prefixed directories are internals and are not owed a
+   route;
 2. **any** cross-tree name collision. `_shared` is the single exception, and it
    is a different kind of thing: a directory of helper modules per tree, not two
    implementations of one endpoint. Do not add a name to that list to silence a

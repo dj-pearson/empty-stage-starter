@@ -1033,7 +1033,7 @@ them names an edge function. So "nothing in the repo calls this" is the claim;
 | Function | Caller | Evidence |
 | --- | --- | --- |
 | `identify-product` | iOS | `ProductPhotoIdentifier.swift:70` invokes it; a rate-limit row exists in `20260613000001_rate_limit_config_ai_endpoints.sql`. **Keep** (AC 4). |
-| `app-store-notifications` | Apple | App Store Server Notifications V2 endpoint; Apple POSTs the signed payload. Not routable through `edge-functions-server.ts`, which is correct — Apple is given the URL directly. **Keep.** |
+| `app-store-notifications` | Apple | App Store Server Notifications V2 endpoint; Apple POSTs the signed JWS. **This row was wrong until 2026-09-19** and the error is why nobody chased the 404: the URL Apple is given, in the function's own SETUP comment, is `https://functions.tryeatpal.com/app-store-notifications` — the same host `src/lib/edge-functions.ts` calls, served by `edge-functions-server.ts`. It was not in the routing table, so refund, revocation and expiration events hit the 404 branch and never reached `apple_subscriptions`. Routed since US-774. Its auth does not depend on being unroutable: the JWS signature is verified against the `x5c` leaf. **Keep.** |
 | `register-push-token` | none | AC 4 confirmed: `NotificationService.swift:97` upserts `push_tokens` directly (US-379 moved it there). The only other mentions are comments. **Delete candidate.** |
 | `process-notification-queue` | none | The one iOS hit is a comment at `NotificationService.swift:70` describing what reads the table. **Delete candidate**, unless a dashboard schedule runs it. |
 | `backup-scheduler` | none | The one hit is a commented-out line in `20260726000000_tighten_permissive_rls_policies.sql:15`. **Needs a schedule or deletion.** |
@@ -1061,8 +1061,12 @@ fell out of comparing it against the tree:
   requires, and `bind-email-request`/`bind-email-verify` are the email-binding
   flow. **Fixed in US-774** by deriving the table from the tree, so a new
   function is routed by existing rather than by someone remembering a second
-  file. `_health` stays shadowed by the server's own unauthenticated health
-  branch, which is answered before routing.
+  file. `_health` is **not** routed: the server answers `/health` and `/_health`
+  itself, and US-623 cut that response back to `{status:"ok"}` so an
+  unauthenticated probe learns nothing, but that branch matches the literal path
+  only — discovery that took `_health/` would have served its
+  which-env-vars-are-configured payload at `/functions/_health`. Directories
+  whose name starts with `_` are internals and are skipped.
 - **Six functions are missing from the committed deploy package.**
   `coolify-migration/eatpal-functions-package/` holds 79 directories and lacks
   `ai-coach-chat`, `generate-pseo-content`, `oauth-token-refresh`,

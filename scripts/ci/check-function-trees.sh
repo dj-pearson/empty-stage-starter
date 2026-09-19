@@ -63,6 +63,7 @@ echo "1/3 ${SERVER} routes every handler in ${DEPLOYED}/ ..."
 # deployed tree and were missing from a hand-written FUNCTIONS_MAP. The server
 # now derives the table with Deno.readDirSync, so the second direction is
 # satisfied by construction -- this check fails if that ever goes back to a list.
+# _-prefixed directories are internals and are not owed a route.
 while IFS= read -r name; do
   [ -n "$name" ] || continue
   if [ ! -d "${DEPLOYED}/${name}" ]; then
@@ -76,6 +77,10 @@ if grep -qE 'Deno\.readDirSync\(' "$SERVER"; then
 else
   while IFS= read -r dir; do
     name="$(basename "$dir")"
+    # _-prefixed directories are internals the router deliberately skips:
+    # _shared/ is helper modules, _health/ would re-expose configuration detail
+    # the server's own /health branch was hardened to withhold (US-623).
+    case "$name" in _*) continue ;; esac
     [ -f "${DEPLOYED}/${name}/index.ts" ] || continue
     if ! grep -qE "^\s*\"${name}\":" "$SERVER"; then
       echo "::error title=Unrouted function::${DEPLOYED}/${name}/ ships but ${SERVER} has no route for it, so it answers 404."
