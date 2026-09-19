@@ -81,4 +81,42 @@ describe('onboarding copy parity (US-704)', () => {
     expect(WEB).toMatch(/totalSteps\s*=\s*needsChild \? 2 : 1/);
     expect(SWIFT).toContain('? 2 : 1');
   });
+
+  it('emits the same activation event names as the web route (US-810)', () => {
+    // A typo here does not fail anything -- it splits the funnel in two and
+    // stays invisible until somebody reads a dashboard and finds half the
+    // numbers missing. So compare the literals rather than trusting either
+    // side.
+    const ANALYTICS = readFileSync(
+      path.join(ROOT, 'ios', 'EatPal', 'EatPal', 'Services', 'Analytics.swift'),
+      'utf8',
+    );
+
+    const webEvents = [
+      ...WEB.matchAll(/trackEvent\(\s*(?:skipped \? )?"([a-z_]+)"(?:\s*:\s*"([a-z_]+)")?/g),
+    ]
+      .flatMap((m) => [m[1], m[2]])
+      .filter((name): name is string => Boolean(name) && name.startsWith('onboarding_'));
+
+    expect(webEvents.length, 'no onboarding events found in the web route').toBeGreaterThan(2);
+
+    const missing = [...new Set(webEvents)].filter((name) => !ANALYTICS.includes(`"${name}"`));
+    expect(
+      missing,
+      'the web route sends these and AnalyticsEvent does not name them, so the two funnels will not add up',
+    ).toEqual([]);
+  });
+
+  it('carries the same property keys on both platforms (US-810)', () => {
+    const ANALYTICS = readFileSync(
+      path.join(ROOT, 'ios', 'EatPal', 'EatPal', 'Services', 'Analytics.swift'),
+      'utf8',
+    );
+
+    // Web sends planning_for and added_child on completed/skipped.
+    expect(WEB).toMatch(/planning_for:/);
+    expect(WEB).toMatch(/added_child:/);
+    expect(ANALYTICS).toContain('"planning_for"');
+    expect(ANALYTICS).toContain('"added_child"');
+  });
 });

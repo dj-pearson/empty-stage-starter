@@ -71,4 +71,54 @@ final class AnalyticsContractTests: XCTestCase {
         XCTAssertEqual(event.properties["kid_id"], AnalyticsService.hash(rawId))
         XCTAssertNotEqual(event.properties["kid_id"], rawId)
     }
+
+    // MARK: - Activation funnel (US-810)
+
+    /// These three exist so iOS and web aggregate. A typo in a name or a key
+    /// does not fail anything -- it splits the funnel in two and stays
+    /// invisible until somebody reads a dashboard and finds half the numbers
+    /// missing. The literals below are the ones in src/pages/Onboarding.tsx.
+
+    func testOnboardingPlanningForSelectedContract() {
+        let event = AnalyticsEvent.onboardingPlanningForSelected(planningFor: "my_family")
+        XCTAssertEqual(event.name, "onboarding_planning_for_selected")
+        XCTAssertEqual(event.category, "auth")
+        XCTAssertEqual(event.properties["planning_for"], "my_family")
+    }
+
+    func testOnboardingCompletedContract() {
+        let event = AnalyticsEvent.onboardingCompleted(planningFor: "my_family", addedChild: true)
+        XCTAssertEqual(event.name, "onboarding_completed")
+        XCTAssertEqual(event.category, "auth")
+        XCTAssertEqual(event.properties["planning_for"], "my_family")
+        XCTAssertEqual(event.properties["added_child"], "true")
+    }
+
+    func testOnboardingSkippedContract() {
+        let event = AnalyticsEvent.onboardingSkipped(planningFor: "unanswered", addedChild: false)
+        XCTAssertEqual(event.name, "onboarding_skipped")
+        XCTAssertEqual(event.category, "auth")
+        // "unanswered" is web's placeholder for a skip taken before any choice,
+        // so both platforms land in the same bucket rather than one sending an
+        // empty string.
+        XCTAssertEqual(event.properties["planning_for"], "unanswered")
+        XCTAssertEqual(event.properties["added_child"], "false")
+    }
+
+    func testCompletedAndSkippedCarryTheSameKeys() {
+        // They are read as one funnel, so a key present on one and missing on
+        // the other is a hole in it.
+        let completed = AnalyticsEvent.onboardingCompleted(planningFor: "just_me", addedChild: false)
+        let skipped = AnalyticsEvent.onboardingSkipped(planningFor: "just_me", addedChild: false)
+        XCTAssertEqual(Set(completed.properties.keys), Set(skipped.properties.keys))
+    }
+
+    func testTheEventsCarryNoUserTypedString() {
+        // planning_for is a raw enum value, never the display title and never a
+        // child's name. The file's own rule: every property value is either
+        // enum-derived or hashed.
+        let event = AnalyticsEvent.onboardingCompleted(planningFor: PlanningFor.myFamily.rawValue, addedChild: true)
+        XCTAssertEqual(event.properties["planning_for"], "my_family")
+        XCTAssertNotEqual(event.properties["planning_for"], PlanningFor.myFamily.title)
+    }
 }

@@ -171,6 +171,9 @@ struct OnboardingView: View {
 
     private func choose(_ choice: PlanningFor) {
         planningFor = choice
+        // US-810: the same event name and property key the web route sends, so
+        // the two funnels aggregate rather than sitting in separate buckets.
+        AnalyticsService.track(.onboardingPlanningForSelected(planningFor: choice.rawValue))
         if choice.needsChild {
             step = 2
         } else {
@@ -187,6 +190,7 @@ struct OnboardingView: View {
         defer { isSaving = false }
 
         let resolved = answer ?? planningFor
+        var addedChild = false
 
         if let name = OnboardingFlow.childNameToCreate(
             answer: resolved,
@@ -200,6 +204,7 @@ struct OnboardingView: View {
             let kid = Kid(id: UUID().uuidString, userId: "", name: name)
             do {
                 try await appState.addKid(kid)
+                addedChild = true
             } catch {
                 // Setup still finishes. The child can be added from the Kids
                 // screen, and trapping someone in first-run because one insert
@@ -211,9 +216,26 @@ struct OnboardingView: View {
             }
         }
 
-        // AC8: planning_for is NOT persisted. household-planner US-740 owns
-        // storing it as household_eaters rows, and inventing a column here is
-        // how the eater model diverges before it is built.
+        // US-810: "unanswered" is web's own placeholder for a skip taken before
+        // any choice was made, so a skip from step one lands in the same bucket
+        // on both platforms rather than as an empty string on one of them.
+        //
+        // addedChild reports what actually happened: a failed insert above
+        // toasts and carries on, and reporting true there would overstate
+        // activation in the one case worth knowing about.
+        //
+        // kidAdded is NOT emitted here -- appState.addKid already fires it, and
+        // a second one would double-count every child created in setup (AC3).
+        let answerForAnalytics = resolved?.rawValue ?? "unanswered"
+        AnalyticsService.track(
+            skipped
+                ? .onboardingSkipped(planningFor: answerForAnalytics, addedChild: addedChild)
+                : .onboardingCompleted(planningFor: answerForAnalytics, addedChild: addedChild)
+        )
+
+        // US-704 AC8: planning_for is NOT persisted. household-planner US-740
+        // owns storing it as household_eaters rows, and inventing a column here
+        // is how the eater model diverges before it is built.
         await OnboardingService.shared.markCompleted()
     }
 }
