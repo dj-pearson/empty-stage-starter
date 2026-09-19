@@ -175,6 +175,14 @@ final class OfflineStore: ObservableObject {
         case insert
         case update
         case delete
+        /// US-609: an exposure log, which is not a plain insert.
+        ///
+        /// Replaying one means reading the CURRENT ladder row and re-deriving
+        /// the next rung from it, then writing two rows. A generic insert
+        /// would replay the rung computed hours ago on a phone with no signal
+        /// and stamp it over whatever the other parent's phone has since done.
+        /// See `LadderSyncOps`.
+        case ladderAttempt = "ladder_attempt"
     }
 
     /// A queued mutation this build cannot replay.
@@ -207,7 +215,7 @@ final class OfflineStore: ObservableObject {
         }
     }
 
-    enum Table: String {
+    enum Table: String, CaseIterable {
         case foods
         case kids
         case recipes
@@ -217,6 +225,14 @@ final class OfflineStore: ObservableObject {
         /// key IS `auth.users.id`. Update-only -- the row is created by the
         /// `handle_new_user` trigger at signup, so a client never inserts one.
         case profiles
+        /// US-609. Ownership derives through a `household_members` join, so a
+        /// queued op carrying `kid_id` is sufficient and the queue does not
+        /// need to remember who was signed in.
+        case kidFoodLadder = "kid_food_ladder"
+        /// US-609. Written only by the `ladderAttempt` operation -- a plain
+        /// insert here would skip the re-derivation the conflict rule needs,
+        /// so `replay`'s insert arm deliberately does not route it.
+        case foodAttempts = "food_attempts"
     }
 
     /// The decoded payload of an update replay, and the table it belongs to.
@@ -233,6 +249,12 @@ final class OfflineStore: ObservableObject {
         case kid(KidUpdate)
         case recipe(RecipeUpdate)
         case profile(ProfileUpdate)
+        /// US-609: a direct parent edit, carried as the absolute state rather
+        /// than as a `KidFoodLadderUpdate`. That type is Encodable-only by
+        /// design (its double-optionals mean nothing on the way back in), and
+        /// the state round-trips losslessly into one via
+        /// `ExposureLadderPolicy.update(from:)` at replay.
+        case ladder(LadderState)
     }
 
     /// Decode a queued update payload, or throw `ReplayError.unsupported`.
@@ -259,6 +281,8 @@ final class OfflineStore: ObservableObject {
             return .recipe(try decoder.decode(RecipeUpdate.self, from: data))
         case Table.profiles.rawValue:
             return .profile(try decoder.decode(ProfileUpdate.self, from: data))
+        case Table.kidFoodLadder.rawValue:
+            return .ladder(try decoder.decode(LadderState.self, from: data))
         default:
             throw ReplayError.unsupported(table: table, operation: Operation.update.rawValue)
         }
@@ -482,6 +506,25 @@ final class OfflineStore: ObservableObject {
         )
     }
 
+    /// US-609: queue one exposure log.
+    ///
+    /// Keyed by the op's client-generated `attemptId`, which is also what the
+    /// replay checks the server for. Deliberately not `enqueueInsert`: the
+    /// payload is the parent's INTENT, and replaying it means re-deriving the
+    /// rung from the server rather than posting the row as given.
+    func enqueueLadderAttempt(_ op: LadderAttemptOp, userId: String) {
+        guard let data = encodeOrReport(op, table: .foodAttempts, operation: .ladderAttempt) else {
+            return
+        }
+        addPendingMutation(
+            table: Table.foodAttempts.rawValue,
+            operation: Operation.ladderAttempt.rawValue,
+            entityId: op.attemptId,
+            payload: data,
+            userId: userId
+        )
+    }
+
     // MARK: - Sync
 
     /// Replays pending mutations against Supabase when coming back online.
@@ -634,6 +677,15 @@ final class OfflineStore: ObservableObject {
                 var recipe = try decoder.decode(Recipe.self, from: data)
                 recipe.userId = userId
                 try await client.from(table).upsert(recipe, onConflict: "id").execute()
+            case Table.kidFoodLadder.rawValue:
+                // US-609. No user stamping: the table has no user_id or
+                // household_id and derives ownership through kid_id. The
+                // dedupe key is the (kid_id, food_id) unique index rather than
+                // the primary key, so a replay of a row another device already
+                // created refreshes it instead of stalling the queue on a
+                // constraint the id-based upsert would never see.
+                let row = try decoder.decode(KidFoodLadderInsert.self, from: data)
+                try await client.from(table).upsert(row, onConflict: "kid_id,food_id").execute()
             default:
                 throw ReplayError.unsupported(table: table, operation: mutation.operation)
             }
@@ -659,10 +711,78 @@ final class OfflineStore: ObservableObject {
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
             case .profile(let update):
                 try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
+            case .ladder(let state):
+                let update = ExposureLadderPolicy.update(from: state)
+                try await client.from(table).update(update).eq("id", value: mutation.entityId).execute()
             }
+
+        case Operation.ladderAttempt.rawValue:
+            try await replayLadderAttempt(mutation, decoder: decoder)
 
         default:
             throw ReplayError.unsupported(table: table, operation: mutation.operation)
+        }
+    }
+
+    /// US-609: replay one exposure log.
+    ///
+    /// Three server reads' worth of care for one tap, because the alternative
+    /// is a child's ladder moving twice for one dinner or being dragged back
+    /// to a rung they have already passed. The rules themselves are in
+    /// `LadderSyncOps.planAttemptReplay`, which is pure and tested; this is
+    /// the part that needs a client.
+    private func replayLadderAttempt(_ mutation: PendingMutation, decoder: JSONDecoder) async throws {
+        guard let data = mutation.payload else {
+            throw ReplayError.missingPayload(table: mutation.table, operation: mutation.operation)
+        }
+        let op = try decoder.decode(LadderAttemptOp.self, from: data)
+        let client = SupabaseManager.client
+
+        let alreadyLogged: [FoodAttemptIdRow] = try await client.from(Table.foodAttempts.rawValue)
+            .select("id")
+            .eq("id", value: op.attemptId)
+            .limit(1)
+            .execute()
+            .value
+
+        let ladderRows: [KidFoodLadder] = try await client.from(Table.kidFoodLadder.rawValue)
+            .select()
+            .eq("id", value: op.ladderRowId)
+            .limit(1)
+            .execute()
+            .value
+
+        let plan = LadderSyncOps.planAttemptReplay(
+            op: op,
+            serverState: ladderRows.first.map(LadderState.init(row:)),
+            attemptExists: !alreadyLogged.isEmpty
+        )
+
+        switch plan {
+        case .skipAlreadyApplied, .skipRowGone:
+            // Returning without throwing clears the pending row, which is
+            // right: there is nothing left to do for this op and retrying it
+            // forever would head-of-line block everything behind it.
+            return
+
+        case .apply(let nextState):
+            do {
+                try await client.from(Table.foodAttempts.rawValue)
+                    .insert(LadderSyncOps.attemptRow(from: op))
+                    .execute()
+            } catch {
+                // Another device landed the same attempt between the check
+                // above and this insert. It applied the same move, so stop
+                // rather than applying it a second time. Retrying would spin
+                // on a constraint that can never clear.
+                guard LadderSyncOps.isUniqueViolation(error) else { throw error }
+                return
+            }
+
+            try await client.from(Table.kidFoodLadder.rawValue)
+                .update(ExposureLadderPolicy.update(from: nextState))
+                .eq("id", value: op.ladderRowId)
+                .execute()
         }
     }
 }

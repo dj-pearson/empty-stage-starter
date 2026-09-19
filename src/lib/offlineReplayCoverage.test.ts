@@ -31,7 +31,7 @@ const SOURCE = readFileSync(
 
 /** The `Table` enum's cases, read from the source rather than hand-listed. */
 const tables = (() => {
-  const start = SOURCE.indexOf('enum Table: String {');
+  const start = SOURCE.indexOf('enum Table: String, CaseIterable {');
   expect(start, 'Table enum not found').toBeGreaterThan(-1);
   const body = SOURCE.slice(start, SOURCE.indexOf('}', start));
   return [...body.matchAll(/case (\w+)/g)].map((m) => m[1]);
@@ -47,6 +47,19 @@ const tables = (() => {
  * which the case below pins so "update-only" cannot quietly become "dropped".
  */
 const UPDATE_ONLY_TABLES = ['profiles'];
+
+/**
+ * Tables written only by the `ladderAttempt` operation (US-609).
+ *
+ * An exposure is not a row to post, it is an intent to redo. Replaying one
+ * means reading the CURRENT ladder row and re-deriving the next rung from it,
+ * because the queued arithmetic was done on a phone that had no signal and may
+ * be hours behind whatever the other parent's phone has since logged. A plain
+ * insert or update arm for `food_attempts` would skip that and stamp the stale
+ * rung back -- so its absence from both switches is the design. The case below
+ * pins that the omission still throws rather than clearing the write.
+ */
+const ATTEMPT_ONLY_TABLES = ['foodAttempts'];
 
 /** The body of `replay`, split into its per-operation arms. */
 const replayBody = (() => {
@@ -94,7 +107,7 @@ describe('offline replay coverage', () => {
   it('replays an insert for every table that can be inserted', () => {
     const arm = operationArm('insert');
     const missing = tables
-      .filter((t) => !UPDATE_ONLY_TABLES.includes(t))
+      .filter((t) => !UPDATE_ONLY_TABLES.includes(t) && !ATTEMPT_ONLY_TABLES.includes(t))
       .filter((t) => !arm.includes(`case Table.${t}.rawValue:`));
     expect(missing).toEqual([]);
   });
@@ -105,7 +118,7 @@ describe('offline replay coverage', () => {
     // would be cleared as though it synced -- the exact failure this file
     // exists for, reintroduced through the exemption.
     const arm = operationArm('insert');
-    for (const table of UPDATE_ONLY_TABLES) {
+    for (const table of [...UPDATE_ONLY_TABLES, ...ATTEMPT_ONLY_TABLES]) {
       expect(tables, `${table} is exempted but is not a Table case`).toContain(table);
       expect(arm).not.toContain(`case Table.${table}.rawValue:`);
     }
@@ -115,8 +128,22 @@ describe('offline replay coverage', () => {
   it('replays an update for every table', () => {
     // kids and recipes were the two that were missing; profiles was added by
     // US-809 so a finished onboarding survives a reconnect.
-    const missing = tables.filter((t) => !updateRouting.includes(`case Table.${t}.rawValue:`));
+    const missing = tables
+      .filter((t) => !ATTEMPT_ONLY_TABLES.includes(t))
+      .filter((t) => !updateRouting.includes(`case Table.${t}.rawValue:`));
     expect(missing).toEqual([]);
+  });
+
+  it('throws rather than dropping an update queued for an attempt-only table', () => {
+    // Same shape as the profiles case: the exemption is only safe while the
+    // omission is loud.
+    for (const table of ATTEMPT_ONLY_TABLES) {
+      expect(tables, `${table} is exempted but is not a Table case`).toContain(table);
+      expect(updateRouting).not.toContain(`case Table.${table}.rawValue:`);
+    }
+    expect(updateRouting.slice(updateRouting.lastIndexOf('default:'))).toContain(
+      'throw ReplayError',
+    );
   });
 
   it('routes every update through decodeUpdate rather than around it', () => {

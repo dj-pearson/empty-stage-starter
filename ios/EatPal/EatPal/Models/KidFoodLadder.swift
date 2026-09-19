@@ -51,8 +51,16 @@ struct KidFoodLadder: Identifiable, Codable, Equatable {
     }
 }
 
-/// Insert payload. The server fills id/created_at/updated_at via defaults.
+/// Insert payload. The server fills created_at/updated_at via defaults.
+///
+/// US-609: `id` is generated on the CLIENT, not left to the column default.
+/// An insert queued offline has to replay under the id the optimistic row was
+/// shown with, or it comes back over realtime as a second row -- the same
+/// invariant `buildGroceryRow` holds on web (US-823). Sending one is additive:
+/// `kid_food_ladder.id` keeps its `gen_random_uuid()` default, so an older
+/// shipped build that omits it is unaffected.
 struct KidFoodLadderInsert: Codable {
+    var id: String = UUID().uuidString
     var kidId: String
     var foodId: String
     var currentRung: String = LadderRung.looking.rawValue
@@ -66,6 +74,7 @@ struct KidFoodLadderInsert: Codable {
     var preferredMealSlot: String? = nil
 
     enum CodingKeys: String, CodingKey {
+        case id
         case kidId = "kid_id"
         case foodId = "food_id"
         case currentRung = "current_rung"
@@ -144,6 +153,11 @@ struct KidFoodLadderUpdate: Encodable {
 /// Attempt insert payload used by one-tap logging (US-608). A narrow view of
 /// `food_attempts` — the detailed sheet still writes the full shape.
 struct FoodAttemptInsert: Codable {
+    /// US-609: client-generated, so a queued replay is exactly-once. The
+    /// primary key IS the dedupe key -- a replayed duplicate is rejected by
+    /// the constraint rather than silently doubling the exposure. Additive:
+    /// `food_attempts.id` keeps its `gen_random_uuid()` default.
+    var id: String = UUID().uuidString
     var kidId: String
     var foodId: String
     var stage: String
@@ -153,6 +167,7 @@ struct FoodAttemptInsert: Codable {
     var preparationMethod: String?
 
     enum CodingKeys: String, CodingKey {
+        case id
         case kidId = "kid_id"
         case foodId = "food_id"
         case stage

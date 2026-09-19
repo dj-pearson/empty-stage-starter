@@ -113,7 +113,15 @@ enum QuickLogResult: String, CaseIterable {
 }
 
 /// The mutable part of a ladder row — everything progression touches.
-struct LadderState: Equatable {
+///
+/// US-609: `Codable` so a direct parent edit (pause, resume, step down) can be
+/// queued offline. The queue stores the ABSOLUTE state for those, unlike an
+/// attempt, which queues intent and re-derives — a parent saying "pause this"
+/// means exactly that whenever it lands, while an exposure has to fold into
+/// whatever rung the other parent's phone has since produced. Keys are the
+/// Swift names: this shape is written and read by the same coder and never
+/// reaches PostgREST, which sees `ExposureLadderPolicy.update(from:)`.
+struct LadderState: Codable, Equatable {
     var rung: LadderRung
     var consecutiveSuccesses: Int
     var consecutiveHolds: Int

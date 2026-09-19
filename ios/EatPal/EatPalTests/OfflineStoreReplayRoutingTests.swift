@@ -123,22 +123,78 @@ final class OfflineStoreReplayRoutingTests: XCTestCase {
 
     // MARK: - every declared table has a route
 
+    /// Tables that carry no update payload, and why.
+    ///
+    /// US-609: `food_attempts` is written only by the `ladderAttempt`
+    /// operation. Routing a plain update to it would skip the re-derivation
+    /// the conflict rule needs, so its absence from `decodeUpdate` is the
+    /// design rather than an omission.
+    private static let updateExemptTables: Set<OfflineStore.Table> = [.foodAttempts]
+
+    /// A minimal valid payload per table.
+    ///
+    /// Empty for every *Update struct, because each of their fields is
+    /// optional -- checked here, not assumed. `kid_food_ladder` queues an
+    /// absolute `LadderState` instead, whose progression fields are not
+    /// optional, so it gets a whole one.
+    private func minimalPayload(for table: OfflineStore.Table) -> String {
+        switch table {
+        case .kidFoodLadder:
+            return #"{"rung":"licking","consecutiveSuccesses":1,"# +
+                #""consecutiveHolds":0,"consecutiveRefusals":0,"status":"active"}"#
+        default:
+            return "{}"
+        }
+    }
+
     func testEveryTableInTheEnumDecodesSomething() {
         // A case added to Table without a branch in decodeUpdate would queue
-        // writes that then throw on every drain until they quarantine. The
-        // empty object is a valid payload for all six because every field on
-        // every *Update struct is optional -- checked, not assumed.
-        for table in [
-            OfflineStore.Table.foods, .kids, .recipes, .planEntries, .groceryItems, .profiles,
-        ] {
+        // writes that then throw on every drain until they quarantine. Driven
+        // off allCases rather than a hand-written list so a new table cannot
+        // be added past this guard.
+        for table in OfflineStore.Table.allCases
+        where !Self.updateExemptTables.contains(table) {
             XCTAssertNoThrow(
                 try OfflineStore.decodeUpdate(
                     table: table.rawValue,
-                    data: data("{}"),
+                    data: data(minimalPayload(for: table)),
                     decoder: decoder
                 ),
                 "\(table.rawValue) is a declared table with no decode branch"
             )
         }
+    }
+
+    // MARK: - kid_food_ladder (US-609)
+
+    func testLadderUpdateDecodesToTheAbsoluteState() throws {
+        // A parent's pause is absolute, unlike an exposure, which queues
+        // intent and re-derives. The state round-trips into the Encodable-only
+        // KidFoodLadderUpdate at replay.
+        let decoded = try OfflineStore.decodeUpdate(
+            table: "kid_food_ladder",
+            data: data(minimalPayload(for: .kidFoodLadder)),
+            decoder: decoder
+        )
+
+        guard case .ladder(let state) = decoded else {
+            return XCTFail("kid_food_ladder routed to \(decoded) rather than .ladder")
+        }
+        XCTAssertEqual(state.rung, .licking)
+        XCTAssertEqual(state.consecutiveSuccesses, 1)
+        XCTAssertEqual(state.status, .active)
+    }
+
+    func testAPlainUpdateToFoodAttemptsIsRefused() {
+        // The one table that must NOT have an update route: replaying an
+        // exposure as a plain write would stamp arithmetic done hours ago on a
+        // phone with no signal over whatever the household has since logged.
+        XCTAssertThrowsError(
+            try OfflineStore.decodeUpdate(
+                table: "food_attempts",
+                data: data("{}"),
+                decoder: decoder
+            )
+        )
     }
 }
