@@ -191,6 +191,18 @@ struct AuthView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
+            // US-703: a signup that returned no session, or a sign-in refused
+            // for an unconfirmed email, pushes the code screen. Driven off
+            // pendingVerificationEmail rather than a separate flag so there is
+            // one piece of state saying whether a code is outstanding.
+            .navigationDestination(
+                isPresented: Binding(
+                    get: { authViewModel.pendingVerificationEmail != nil },
+                    set: { if !$0 { authViewModel.cancelSignupVerification() } }
+                )
+            ) {
+                SignupCodeView(viewModel: authViewModel)
+            }
         }
     }
 

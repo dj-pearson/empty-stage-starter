@@ -36,6 +36,33 @@ final class AuthService {
         return response.session
     }
 
+    // MARK: - Signup Verification (US-703)
+
+    /// Confirms a new account with the six-digit code GoTrue emailed.
+    ///
+    /// On success GoTrue issues a session, which arrives through
+    /// `onAuthStateChange` as `.signedIn` -- the same route every other sign-in
+    /// takes -- so the return value is deliberately discarded rather than
+    /// applied here. That also keeps this off the shape of `VerifyOTPResponse`,
+    /// which has changed across supabase-swift 2.x while `project.yml` pins
+    /// only `from: 2.0.0`.
+    ///
+    /// No `redirectTo`. Coolify pins `GOTRUE_SITE_URL` to the Kong gateway, so
+    /// a confirmation link cannot reach the app however it is addressed, and
+    /// this path does not use one: the code in the email is the whole flow.
+    func verifySignupCode(email: String, code: String) async throws {
+        _ = try await client.auth.verifyOTP(
+            email: email,
+            token: code,
+            type: .signup
+        )
+    }
+
+    /// Emails a fresh signup code. GoTrue invalidates the previous one.
+    func resendSignupCode(email: String) async throws {
+        try await client.auth.resend(email: email, type: .signup)
+    }
+
     // MARK: - Sign In
 
     func signIn(email: String, password: String) async throws -> Session {

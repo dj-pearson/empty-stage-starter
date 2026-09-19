@@ -31,6 +31,31 @@ final class AuthViewModel: ObservableObject {
 
     @Published var passwordValidation: PasswordValidator.ValidationResult?
 
+    // MARK: - Signup Verification (US-703)
+
+    /// The address a signup code was emailed to, and the flag AuthView reads to
+    /// present the code screen. Nil whenever no verification is outstanding.
+    ///
+    /// Held separately from `email` because the form field is editable and the
+    /// code is bound to the address GoTrue actually sent to.
+    @Published private(set) var pendingVerificationEmail: String?
+
+    /// The six digits, already normalised. Never bind a raw field to this --
+    /// go through `updateVerificationCode` so a pasted "123 456" is accepted.
+    @Published private(set) var verificationCode = ""
+
+    /// Seconds until Resend is allowed again. 0 means it is.
+    @Published private(set) var resendCooldown = 0
+
+    /// Set after a resend so the screen can say something happened.
+    @Published var verificationNotice: String?
+
+    private var resendCooldownTask: Task<Void, Never>?
+
+    var isVerificationCodeComplete: Bool {
+        SignupVerificationPolicy.isComplete(verificationCode)
+    }
+
     /// Email of the currently signed-in user, sourced from the Supabase
     /// session (not the login form). Nil when unauthenticated. Used by
     /// Settings to show the real email even after Sign in with Apple,
@@ -65,6 +90,7 @@ final class AuthViewModel: ObservableObject {
 
     deinit {
         authStateTask?.cancel()
+        resendCooldownTask?.cancel()
     }
 
     // MARK: - Auth State Listener
@@ -225,18 +251,146 @@ final class AuthViewModel: ObservableObject {
                 AnalyticsService.track(.signInCompleted(method: "email"))
             case .signUp:
                 AnalyticsService.track(.signInStarted(method: "email_signup"))
-                _ = try await authService.signUp(email: email, password: password)
-                successMessage = "Account created! Check your email to verify."
-                AnalyticsService.track(.signInCompleted(method: "email_signup"))
+                let session = try await authService.signUp(email: email, password: password)
+                // US-703: a nil session is the ordinary path with email
+                // confirmation on, and it used to end here, on
+                // "Account created! Check your email to verify." -- a message
+                // with nothing behind it, because the link in that email
+                // points at the Kong gateway. 75 Apple users got in and none
+                // came back. Now it opens the code screen.
+                if session == nil {
+                    beginSignupVerification(for: email, codeJustSent: true)
+                } else {
+                    AnalyticsService.track(.signInCompleted(method: "email_signup"))
+                }
             case .forgotPassword:
                 try await authService.resetPassword(email: email)
                 successMessage = "Password reset email sent. Check your inbox."
             }
         } catch {
-            errorMessage = error.localizedDescription
+            // US-703 AC6: an account that exists but has never confirmed its
+            // email is not an error to read and stop at -- it is the same code
+            // screen, reached from the other direction.
+            if authMode != .forgotPassword,
+               SignupVerificationPolicy.isUnconfirmedEmail(error.localizedDescription) {
+                beginSignupVerification(for: email, codeJustSent: false)
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
 
         isSubmitting = false
+    }
+
+    // MARK: - Signup Verification (US-703)
+
+    /// Open the code screen for `address`.
+    ///
+    /// `codeJustSent` decides whether Resend starts on cooldown, and the two
+    /// entry points differ. A signup has just caused an email, so a minute's
+    /// wait is right. A sign-in refused with "email not confirmed" has caused
+    /// nothing -- the only code in existence may be days old and expired -- so
+    /// starting a cooldown there would strand the parent for 60 seconds in
+    /// front of the one button that helps.
+    func beginSignupVerification(for address: String, codeJustSent: Bool) {
+        pendingVerificationEmail = address.trimmingCharacters(in: .whitespaces)
+        verificationCode = ""
+        errorMessage = nil
+        successMessage = nil
+
+        if codeJustSent {
+            verificationNotice = nil
+            startResendCooldown()
+        } else {
+            resendCooldownTask?.cancel()
+            resendCooldownTask = nil
+            resendCooldown = 0
+            verificationNotice = "This account still needs confirming. Enter the code from your email, or tap Resend for a new one."
+        }
+        // No new analytics event here on purpose: this story's ACs do not ask
+        // for one, and the iOS activation funnel is US-810's to define so the
+        // names match web's. sign_in_completed still fires on success below.
+    }
+
+    /// Leave the code screen without a session -- the back button. The account
+    /// exists either way, so signing in later lands back here (AC6).
+    func cancelSignupVerification() {
+        resendCooldownTask?.cancel()
+        resendCooldownTask = nil
+        resendCooldown = 0
+        pendingVerificationEmail = nil
+        verificationCode = ""
+        verificationNotice = nil
+    }
+
+    /// Digits only, capped at six. Bind the text field's setter to this.
+    func updateVerificationCode(_ raw: String) {
+        verificationCode = SignupVerificationPolicy.normalize(raw)
+        if errorMessage != nil { errorMessage = nil }
+    }
+
+    func verifySignupCode() async {
+        guard let address = pendingVerificationEmail, isVerificationCodeComplete else { return }
+        isSubmitting = true
+        errorMessage = nil
+        verificationNotice = nil
+
+        do {
+            try await authService.verifySignupCode(email: address, code: verificationCode)
+            // The session arrives over onAuthStateChange as .signedIn, which is
+            // what flips authState; there is nothing to apply here. Clear the
+            // screen so a later sign-out does not return to a stale code.
+            AnalyticsService.track(.signInCompleted(method: "email_signup"))
+            cancelSignupVerification()
+        } catch {
+            // AC5: name the next step. The raw string is "Token has expired or
+            // is invalid", which does not say that codes lapse after an hour or
+            // that another can be sent.
+            errorMessage = SignupVerificationPolicy.verificationFailureMessage(
+                for: error.localizedDescription
+            )
+            verificationCode = ""
+        }
+
+        isSubmitting = false
+    }
+
+    func resendSignupCode() async {
+        guard let address = pendingVerificationEmail, resendCooldown == 0 else { return }
+        isSubmitting = true
+        errorMessage = nil
+        verificationNotice = nil
+
+        do {
+            try await authService.resendSignupCode(email: address)
+            verificationNotice = "A new code is on its way to \(address)."
+            verificationCode = ""
+            startResendCooldown()
+        } catch {
+            errorMessage = SignupVerificationPolicy.resendFailureMessage(
+                for: error.localizedDescription
+            )
+            // Cooldown still starts. GoTrue rate-limits server-side, so the
+            // failure most likely to land here is "one was sent recently", and
+            // leaving the button live invites the same 429 again.
+            startResendCooldown()
+        }
+
+        isSubmitting = false
+    }
+
+    private func startResendCooldown() {
+        resendCooldownTask?.cancel()
+        let deadline = SignupVerificationPolicy.cooldownDeadline()
+        resendCooldown = SignupVerificationPolicy.resendCooldownSeconds
+        resendCooldownTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                let remaining = SignupVerificationPolicy.remainingCooldown(until: deadline)
+                self?.resendCooldown = remaining
+                if remaining == 0 { break }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
     }
 
     /// US-432: throws so the caller can sequence local-data clearing *after* a
@@ -380,5 +534,8 @@ final class AuthViewModel: ObservableObject {
         errorMessage = nil
         successMessage = nil
         passwordValidation = nil
+        // US-703: a sign-out must not leave the code screen up with someone
+        // else's address on it. clearForm is the .signedOut path.
+        cancelSignupVerification()
     }
 }
