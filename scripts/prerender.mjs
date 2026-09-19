@@ -464,6 +464,50 @@ export function validateSnapshot(
  * Confirm on a Pages preview before it reaches production that /pricing answers 200
  * rather than a redirect.
  */
+/**
+ * Transient client-side UI that must not reach a crawler (US-570).
+ *
+ * Toasts are the case that turned up. `/pricing` calls
+ * `toast.error("Failed to load pricing plans")` when the subscription_plans
+ * fetch fails, and the prerenderer snapshots whatever is on screen -- so the
+ * static HTML shipped to Googlebot, GPTBot and every social scraper opened with
+ * "Failed to load pricing plans" as its first line of text. Verified in a real
+ * dist: `data-sonner-toast=""` present as live markup, not merely as a CSS
+ * selector, with `data-type="error"` and `data-visible="true"`.
+ *
+ * A build with working credentials does not raise that particular toast, which
+ * is exactly why this is worth stripping rather than merely detecting: the
+ * failure is invisible until the one build where a key is wrong, and that build
+ * exits 0 and publishes the apology.
+ *
+ * Scoped to the toaster. Not `[role="status"]` or `[aria-live]` generally --
+ * those are also worn by legitimate content, and a snapshot policy that eats
+ * real text to catch a toast is a worse trade than the toast.
+ */
+export const TRANSIENT_SNAPSHOT_SELECTORS = [
+  '[data-sonner-toaster]',
+  '[data-sonner-toast]',
+  // The wrapper sonner mounts its <ol> inside, which carries the offscreen
+  // "Notifications alt+T" label and would otherwise be left behind empty.
+  'section[aria-label^="Notifications"]',
+];
+
+/**
+ * Remove them. Exported so the rule can be exercised against a DOM in vitest --
+ * the call site runs inside page.evaluate, where nothing in this module is in
+ * scope, so the selectors are passed in as an argument rather than closed over.
+ */
+export function stripTransientUi(doc, selectors) {
+  let removed = 0;
+  for (const selector of selectors) {
+    for (const el of doc.querySelectorAll(selector)) {
+      el.remove();
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 export function outputPathFor(route) {
   if (route === '/') return path.join(DIST, 'index.html');
   return path.join(DIST, `${route.replace(/^\//, '')}.html`);
@@ -599,10 +643,18 @@ async function prerenderRoute(page, origin, route) {
     textLength,
     markupLength,
   } =
-    await page.evaluate(() => {
+    await page.evaluate((transientSelectors) => {
     // The GA loader attaches listeners and would re-run on the static copy anyway; it is
     // already deferred, so leave it. Do strip the Vite dev-only artifacts if any slipped in.
     document.querySelectorAll('script[src*="@vite/client"]').forEach((el) => el.remove());
+    // ...and the toaster, which is on screen at snapshot time whenever the page
+    // raised one. Inlined rather than calling stripTransientUi: this function
+    // body is serialised into the browser, where nothing from this module
+    // exists. The selectors come across as the argument, so the list has one
+    // home and the vitest case exercises the same one.
+    for (const selector of transientSelectors) {
+      document.querySelectorAll(selector).forEach((el) => el.remove());
+    }
     const head = document.head;
     return {
       html: `<!doctype html>\n${document.documentElement.outerHTML}`,
@@ -635,7 +687,7 @@ async function prerenderRoute(page, origin, route) {
         .trim().length,
       textLength: (document.getElementById('root')?.innerText ?? '').trim().length,
     };
-  });
+  }, TRANSIENT_SNAPSHOT_SELECTORS);
 
   validateSnapshot(
     { title, description, canonical, textLength, ldJsonCount, helmetLdJsonCount },
