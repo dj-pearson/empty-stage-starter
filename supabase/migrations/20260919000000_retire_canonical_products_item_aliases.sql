@@ -246,5 +246,18 @@ REVOKE ALL ON FUNCTION public.rpc_merge_items(UUID, UUID[]) FROM PUBLIC, anon, a
 -- it out before the seed keeps the order readable. Neither table has a
 -- dependent view, and neither has a policy declared outside its own creating
 -- migration, so nothing else needs unpicking first.
+--
+-- The gate's default answer here is the right one -- "an old client still
+-- reading that table breaks" is exactly why CLAUDE.md wants a two-release
+-- deprecation -- and it does not apply, because no client reads either table
+-- and none ever has. Evidence, not assertion: `canonical_products` has no
+-- INSERT in any migration or script in this repo, so the "shared read-only
+-- seed" has always been empty; `git log -S item_aliases -- src app ios` turns
+-- up only the resolver's own commits, and the resolver declares the row shape
+-- without ever querying it. Nothing under ios/ or android-native/ names either
+-- table, so no shipped build can break. The design doc settles the intent:
+-- docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md says both are
+-- "read by neither client and can be dropped".
+-- migration-safety: allow drop-table (US-799 AC4 -- canonical_products was never seeded and item_aliases was never written; no client of any platform reads either, so there is no old reader to deprecate over two releases. See supabase/tests/us799_catalog_retirement.test.sql.)
 DROP TABLE IF EXISTS public.item_aliases;
 DROP TABLE IF EXISTS public.canonical_products;
