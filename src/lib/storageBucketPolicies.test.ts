@@ -245,60 +245,15 @@ describe('profile photo object paths', () => {
  * a kid seeds formData from kid.profile_picture_url, a stored object. Hence
  * this check rather than a note.
  */
-describe('US-634: stored kid photos render through KidAvatarImage', () => {
-  const componentsDir = path.join(process.cwd(), 'src', 'components');
-
-  const read = (rel: string) => readFileSync(path.join(componentsDir, rel), 'utf8');
-
-  it('ManageKidsDialog does not render a stored photo through a bare AvatarImage', () => {
-    const src = read('ManageKidsDialog.tsx');
-    expect(src).toContain('KidAvatarImage');
-    // formData.profile_picture_url is seeded from the kid record on edit.
-    expect(src).not.toMatch(/<AvatarImage\s+src=\{formData\.profile_picture_url\}/);
-  });
-
-  /**
-   * The per-file checks below were how this started, and they missed a site:
-   * ApplyTemplateDialog renders kid photos as a plain 24px <img> rather than
-   * through an Avatar, so it was invisible to a search for AvatarImage and to
-   * the enumeration recorded in the story. This sweeps every component instead,
-   * so the next render site added in a shape nobody anticipated is caught by
-   * the same rule.
-   */
-  it('no component renders a kid photo URL through a bare img or AvatarImage', () => {
-    const offenders: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          // shadcn primitives are off-limits per CLAUDE.md and take a src prop
-          // generically; they are never a kid-photo call site themselves.
-          if (entry.name !== 'ui') walk(full);
-          continue;
-        }
-        if (!entry.name.endsWith('.tsx')) continue;
-        if (entry.name === 'KidAvatarImage.tsx' || entry.name === 'KidPhoto.tsx') continue;
-
-        const src = readFileSync(full, 'utf8');
-        // <img ...> or <AvatarImage ...> whose src is some *.profile_picture_url
-        const bare = /<(?:img|AvatarImage)\b[^>]*\bsrc=\{[^}]*profile_picture_url[^}]*\}/s.exec(
-          src
-        );
-        if (bare) offenders.push(path.relative(componentsDir, full));
-      }
-    };
-    walk(componentsDir);
-
-    // There used to be exactly one permitted offender, OnboardingDialog.tsx,
-    // whose value was only ever the URL of a file uploaded in that same
-    // session. US-770 replaced that dialog with the /onboarding route, which
-    // uploads no photo, so the exception is GONE rather than moved -- the list
-    // is empty and this assertion is now strictly tighter than it was. A new
-    // bare AvatarImage anywhere fails here, with no allowed case to hide in.
-    expect(offenders).toEqual([]);
-  });
-});
-
+/**
+ * US-634's render-site sweep used to live here, as a regex over
+ * src/components/. It moved to src/lib/signedProfilePictureAdoption.test.ts,
+ * which parses the JSX instead of matching it, reaches src/pages/ and the Expo
+ * tree under app/ as well, and also asserts that KidAvatarImage and KidPhoto
+ * still call useSignedProfilePicture -- without which the sweep passes while
+ * signing nothing. Two overlapping guards for one rule is how they drift, so
+ * there is one.
+ */
 /**
  * US-635: the images bucket, which the live iOS app writes every kid, food and
  * recipe photo into. 20260822000002 declares it so a fresh environment has it
