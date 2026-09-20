@@ -813,6 +813,16 @@ final class AppState: ObservableObject {
         recipes.removeAll { $0.id == id }
         do {
             try await dataService.deleteRecipe(id)
+            // US-644: the row is gone, so the image should be too. deleteKid
+            // already did this; deleting a recipe left its uploaded photo in
+            // the bucket forever. Best effort, and a no-op for the common case
+            // of a recipe imported from another site, whose imageUrl does not
+            // point at our storage.
+            for recipe in removed {
+                if let image = recipe.imageUrl {
+                    await ImageUploadService.deletePublicURL(image)
+                }
+            }
             toast.success("Recipe deleted")
             HapticManager.mediumImpact()
             AnalyticsService.track(.recipeDeleted)
