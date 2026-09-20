@@ -11,7 +11,7 @@
  * breasts" are three items to the app and one item to the parent.
  *
  * `normalizeItemText` is the single reduction those all move onto, and the
- * value stored in `item_aliases.normalized_text`.
+ * form every alias and catalog lookup compares against.
  *
  * Pure by construction: no I/O, no clock, no Supabase import. Its behaviour is
  * pinned by fixtures the Swift mirror reads too (US-660), the same way

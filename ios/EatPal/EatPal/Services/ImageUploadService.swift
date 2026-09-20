@@ -84,32 +84,44 @@ enum ImageUploadService {
     /// recipe images imported from other sites.
     @discardableResult
     static func deletePublicURL(_ urlString: String) async -> Bool {
-        guard let path = objectPath(fromPublicURL: urlString) else { return false }
+        guard let ref = StorageObjectURL.parse(urlString) else { return false }
         do {
-            try await delete(path: path)
+            // US-644: the bucket comes from the URL rather than being assumed.
+            // Web writes kid photos to profile-pictures and iOS writes to
+            // images, so assuming one meant the other platform's photo was
+            // silently never deleted.
+            let removed = try await client.storage
+                .from(ref.bucket)
+                .remove(paths: [ref.path])
+
+            // An RLS-blocked removal is NOT an error. remove() answers with the
+            // objects it actually removed, and a row the policy hides simply is
+            // not among them -- so treating a non-throwing call as success
+            // reports a deletion that did not happen. The web learned this on
+            // profile-pictures, where SELECT matched folder-or-owner and DELETE
+            // matched folder only, leaving objects readable by their owner and
+            // undeletable by them.
+            if removed.isEmpty {
+                SentryService.capture(
+                    ImageUploadError.uploadFailed("storage removed nothing"),
+                    extras: [
+                        "context": "image_delete_orphan",
+                        "reason": "no matching object, or RLS denied it",
+                        "bucket": ref.bucket,
+                        "path": ref.path
+                    ]
+                )
+                return false
+            }
             return true
         } catch {
             SentryService.capture(error, extras: [
                 "context": "image_delete_previous",
-                "path": path
+                "bucket": ref.bucket,
+                "path": ref.path
             ])
             return false
         }
-    }
-
-    /// Extracts the storage object path from a Supabase public URL.
-    ///
-    /// `https://<host>/storage/v1/object/public/images/kids/<uuid>.jpg`
-    /// becomes `kids/<uuid>.jpg`. Returns nil for any URL that does not point
-    /// into this bucket, so an externally-hosted image is never a delete
-    /// attempt.
-    static func objectPath(fromPublicURL urlString: String) -> String? {
-        let marker = "/object/public/\(bucketName)/"
-        guard let range = urlString.range(of: marker) else { return nil }
-        let path = String(urlString[range.upperBound...])
-        // Drop any query string a signed or cache-busted URL might carry.
-        let clean = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
-        return clean.isEmpty ? nil : clean
     }
 
     /// Resizes an image to a maximum dimension while maintaining aspect ratio.

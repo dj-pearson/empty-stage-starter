@@ -69,7 +69,23 @@ export const COMPONENTS = [
   { '/': '/dashboard/progress', comment: 'progress and achievements' },
   { '/': '/dashboard/ai-coach', comment: 'AI coach' },
   { '/': '/dashboard/settings', comment: 'settings' },
+  { '/': '/join', comment: 'household invite (US-851); DeepLinkHandler routes it and parks the code' },
 ];
+
+// NOT CLAIMED, and this is the decision rather than an oversight (US-851 AC3):
+//
+//   /share -- the PWA share_target action in public/manifest.json. It is
+//   handled by a POST in public/sw.js, which stashes the payload in a
+//   `share-target-cache` entry and redirects to `/share?source=sw` INSIDE that
+//   browser. So the only /share URLs that exist carry no payload, and the data
+//   they refer to lives in a cache no app can read. Claiming it would take the
+//   web share target away from every device with the app installed and land
+//   the user on an empty screen. iOS has its own share path already -- the
+//   share extension (US-143).
+//
+//   /dashboard/billing -- Stripe checkout. Swallowing it strands someone
+//   mid-payment, which is why the /dashboard children are listed one by one
+//   rather than wildcarded.
 
 function main() {
   const teamId = process.env.APPLE_TEAM_ID?.trim();

@@ -142,7 +142,11 @@ enum AnalyticsEvent {
     case recipeImported(source: ImportSource, success: Bool)
 
     case mealPlanned(slot: String, kidId: String?)
-    case mealResultLogged(result: String, kidId: String?)
+    /// US-853: `via` tells the in-app tap apart from a Siri log. The two
+    /// surfaces used to be indistinguishable in the funnel, and the voice one
+    /// was not emitting at all -- so "nobody logs by voice" and "voice logs
+    /// are invisible" looked identical on a dashboard.
+    case mealResultLogged(result: String, kidId: String?, via: EntrySource)
     case mealRemoved
     /// US-262: parent confirmed a planned recipe was eaten; pantry was
     /// debited and recipe-sourced grocery items got auto-checked.
@@ -256,6 +260,14 @@ enum AnalyticsEvent {
     case signInCompleted(method: String)
     case signOutCompleted
 
+    // US-810: the activation funnel, named to match src/pages/Onboarding.tsx
+    // exactly so the two platforms aggregate instead of sitting in separate
+    // buckets nobody can add up. planningFor is the raw value of the choice,
+    // not a display title, for the same reason.
+    case onboardingPlanningForSelected(planningFor: String)
+    case onboardingCompleted(planningFor: String, addedChild: Bool)
+    case onboardingSkipped(planningFor: String, addedChild: Bool)
+
     /// Stable event name. Snake-case is conventional for analytics IDs and
     /// keeps these queryable across web/iOS/Android.
     var name: String {
@@ -305,6 +317,9 @@ enum AnalyticsEvent {
         case .signInStarted:            return "sign_in_started"
         case .signInCompleted:          return "sign_in_completed"
         case .signOutCompleted:         return "sign_out_completed"
+        case .onboardingPlanningForSelected: return "onboarding_planning_for_selected"
+        case .onboardingCompleted:      return "onboarding_completed"
+        case .onboardingSkipped:        return "onboarding_skipped"
         case .tonightModeCardShown:     return "tonight_mode_card_shown"
         case .tonightModeOpened:        return "tonight_mode_opened"
         case .tonightModeLoaded:        return "tonight_mode_loaded"
@@ -373,7 +388,8 @@ enum AnalyticsEvent {
             return "feature"
         case .paywallShown, .purchaseCompleted:
             return "monetization"
-        case .signInStarted, .signInCompleted, .signOutCompleted:
+        case .signInStarted, .signInCompleted, .signOutCompleted,
+             .onboardingPlanningForSelected, .onboardingCompleted, .onboardingSkipped:
             return "auth"
         }
     }
@@ -402,8 +418,8 @@ enum AnalyticsEvent {
             var p = ["slot": slot]
             if let hashed = AnalyticsService.hash(kidId) { p["kid_id"] = hashed }
             return p
-        case .mealResultLogged(let result, let kidId):
-            var p = ["result": result]
+        case .mealResultLogged(let result, let kidId, let via):
+            var p = ["result": result, "via": via.rawValue]
             if let hashed = AnalyticsService.hash(kidId) { p["kid_id"] = hashed }
             return p
         case .mealMadeLogged(let debited, let checked):
@@ -446,6 +462,16 @@ enum AnalyticsEvent {
             return ["product_id": productId]
         case .signInStarted(let method), .signInCompleted(let method):
             return ["method": method]
+        case .onboardingPlanningForSelected(let planningFor):
+            return ["planning_for": planningFor]
+        case .onboardingCompleted(let planningFor, let addedChild),
+             .onboardingSkipped(let planningFor, let addedChild):
+            // Same two keys the web route sends, same spellings. "unanswered"
+            // is web's own placeholder for a skip before any choice was made.
+            return [
+                "planning_for": planningFor,
+                "added_child": addedChild ? "true" : "false",
+            ]
         case .quickAddResolveSource(let source):
             return ["source": source]
         case .productPhotoIdentified(let confidence):

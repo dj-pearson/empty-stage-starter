@@ -267,3 +267,67 @@ describe('the ported edge-function guards (US-773)', () => {
     expect(read(name)).not.toMatch(/JSON\.stringify\(\{\s*error:\s*(error|err|message|errorMessage)\b/);
   });
 });
+
+/**
+ * Every deployed handler is reachable through the self-hosted server (US-774).
+ *
+ * edge-functions-server.ts carried a hand-written FUNCTIONS_MAP, and it had
+ * drifted by ten entries: delete-account, bind-email-request,
+ * bind-email-verify, tonight-mode, parse-receipt-image,
+ * recognize-fridge-contents, identify-product, generate-image,
+ * schedule-trial-reminders and app-store-notifications all ship under
+ * supabase/functions/ and all answered 404. Nine of the ten have callers in
+ * src/ or in the shipped Swift app -- delete-account is the account-deletion
+ * path Apple requires.
+ *
+ * Nothing caught it because the drift is an absence: a missing key routes to
+ * the 404 branch, which is also the correct answer for a name that does not
+ * exist. check-function-trees.sh compares the two function trees against each
+ * other and never looks at the router.
+ */
+describe('the self-hosted router reaches every deployed handler (US-774)', () => {
+  const server = readFileSync(path.join(process.cwd(), 'edge-functions-server.ts'), 'utf8');
+  // _health is deliberately not routed (see the underscore case below), so it
+  // is not a handler this router owes a route to.
+  const handlers = handlerFiles()
+    .map(({ name }) => name)
+    .filter((name) => !name.startsWith('_'));
+
+  /** `"some-function": "./functions/some-function/index.ts"` pairs, if any remain. */
+  const hardcoded = [...server.matchAll(/"([a-z0-9-]+)":\s*"\.\/functions\//g)].map((m) => m[1]);
+
+  /** Reads the tree at boot rather than trusting a list someone has to maintain. */
+  const discovers = /Deno\.readDirSync\(/.test(server) && /index\.ts/.test(server);
+
+  it('builds its routing table from the functions directory', () => {
+    expect(
+      discovers,
+      'a hand-maintained routing table drifts silently; derive it from the tree',
+    ).toBe(true);
+  });
+
+  it('leaves no handler unroutable', () => {
+    const routed = new Set(discovers ? handlers : hardcoded);
+    const unreachable = handlers.filter((name) => !routed.has(name));
+
+    expect(unreachable, 'these ship under supabase/functions/ but answer 404').toEqual([]);
+  });
+
+  it('keeps the underscore-prefixed internals off the routing table', () => {
+    // _health/ answers with which env vars are configured. The server has its
+    // own /health and /_health branch, and US-623 cut that back to
+    // {status:"ok"} so an unauthenticated probe learns nothing -- but that
+    // branch matches the literal path only, so directory discovery that took
+    // _health/ would serve the detailed version at /functions/_health.
+    expect(
+      discovers && /startsWith\("_"\)/.test(server),
+      'discovery must skip _-prefixed directories or it re-exposes _health',
+    ).toBe(true);
+
+    // common/ is excluded by the index.ts rule instead of by name, so pin that.
+    expect(
+      existsSync(path.join(FUNCTIONS_DIR, 'common', 'index.ts')),
+      'common/index.ts exists, so directory discovery would route it as a function',
+    ).toBe(false);
+  });
+});

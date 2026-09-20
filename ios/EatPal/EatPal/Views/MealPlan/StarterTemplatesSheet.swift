@@ -191,6 +191,20 @@ private struct StarterTemplateDetailSheet: View {
                     }
                 }
             }
+            // US-705 AC7: Apply is disabled without an active kid, and a
+            // disabled button explains nothing -- the parent is left tapping a
+            // grey word. Say which of the two reasons it is.
+            .safeAreaInset(edge: .bottom) {
+                if appState.activeKidId == nil {
+                    Text("Pick a child first -- a template is applied to one child's week.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(AppTheme.Spacing.md)
+                        .background(.bar)
+                }
+            }
             .navigationTitle("Apply template")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

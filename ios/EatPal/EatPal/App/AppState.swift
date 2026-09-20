@@ -52,6 +52,37 @@ final class AppState: ObservableObject {
     /// Observes the @Published collections that feed the home/Lock Screen
     /// widget and pushes a debounced snapshot into App Group UserDefaults
     /// any time they change. Widget timeline reloads follow automatically.
+    // MARK: - Pending household invite (US-851)
+
+    /// US-851: accept an invite that was tapped before there was anyone to
+    /// accept it as.
+    ///
+    /// The tap can land on a cold app or on a signed-out one, and signed-out
+    /// is the common case -- an invite is usually the first EatPal link
+    /// someone ever receives. `DeepLinkHandler` parks the code; this runs from
+    /// the authenticated load, so by the time it fires there is a session and
+    /// the RPC has someone to attribute the membership to.
+    ///
+    /// Not a queue: an invite is single-use and a second pending one would
+    /// mean the person tapped two links, of which only the newest can be what
+    /// they meant.
+    func drainPendingHouseholdInvite() async {
+        guard let code = HouseholdInviteLink.takePending() else { return }
+
+        do {
+            _ = try await HouseholdService.acceptInvite(code: code)
+            toast.success("You're in", message: "You've joined the household.")
+            HapticManager.success()
+        } catch {
+            // Spent either way: the RPC raises on an expired or already-used
+            // code, and takePending() has already cleared it, so this does not
+            // come back on the next launch showing the same error.
+            toast.error("Couldn't join", message: HouseholdInviteLink.errorMessage(for: error))
+            HapticManager.error()
+            SentryService.capture(error, extras: ["context": "drainPendingHouseholdInvite"])
+        }
+    }
+
     // MARK: - Pending recipe imports (US-143)
 
     /// Drains the share-extension-fed recipe queue. Each pending import is
@@ -237,6 +268,14 @@ final class AppState: ObservableObject {
         currentUserId = (try? await SupabaseManager.client.auth.session)?
             .user.id.uuidString.lowercased() ?? ""
 
+        // US-851: BEFORE the fetches, not after. Accepting an invite changes
+        // which household the user belongs to, and every query below is scoped
+        // by RLS through that membership -- so joining afterwards would load
+        // the old household's rows and need a second full load to correct
+        // itself. Runs inside loadAllData rather than calling it, because a
+        // drain that re-entered here would resubscribe realtime.
+        await drainPendingHouseholdInvite()
+
         do {
             async let fetchedFoods = dataService.fetchFoods()
             async let fetchedKids = dataService.fetchKids()
@@ -292,6 +331,18 @@ final class AppState: ObservableObject {
             // one-tap controls both tolerate arriving a beat late, and
             // neither should hold up the planner rendering.
             Task { await loadKidFoodLadder() }
+
+            // US-871: badges used to live only in UserDefaults, so a new phone
+            // showed an empty grid for a child with a year of progress. Seeded
+            // here rather than in BadgeService's init because it needs the kid
+            // list and a session, and both exist by this point.
+            let kidIdsForBadges = kids.map(\.id)
+            Task { await BadgeService.shared.seedFromServer(kidIds: kidIdsForBadges) }
+
+            // US-853: surface a badge earned while nothing was on screen --
+            // a Siri log runs LogMealResultIntent in the background, where
+            // there is no sheet to show.
+            BadgeService.shared.restoreParkedCelebration()
 
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
@@ -762,6 +813,16 @@ final class AppState: ObservableObject {
         recipes.removeAll { $0.id == id }
         do {
             try await dataService.deleteRecipe(id)
+            // US-644: the row is gone, so the image should be too. deleteKid
+            // already did this; deleting a recipe left its uploaded photo in
+            // the bucket forever. Best effort, and a no-op for the common case
+            // of a recipe imported from another site, whose imageUrl does not
+            // point at our storage.
+            for recipe in removed {
+                if let image = recipe.imageUrl {
+                    await ImageUploadService.deletePublicURL(image)
+                }
+            }
             toast.success("Recipe deleted")
             HapticManager.mediumImpact()
             AnalyticsService.track(.recipeDeleted)
@@ -812,7 +873,8 @@ final class AppState: ObservableObject {
                 toast.success("Result logged", message: "Marked as \(result)")
                 AnalyticsService.track(.mealResultLogged(
                     result: result,
-                    kidId: planEntries[index].kidId
+                    kidId: planEntries[index].kidId,
+                    via: .manual
                 ))
                 // US-144: write nutrition to Health when the meal was eaten,
                 // and take it back out when the result changes to anything
@@ -1224,7 +1286,8 @@ final class AppState: ObservableObject {
             )
             AnalyticsService.track(.mealResultLogged(
                 result: "rated_\(rating)",
-                kidId: planEntries.first { $0.id == planEntryId }?.kidId
+                kidId: planEntries.first { $0.id == planEntryId }?.kidId,
+                via: .manual
             ))
         } catch {
             planEntryFeedback.removeAll { $0.id == optimistic.id }
@@ -1286,11 +1349,29 @@ final class AppState: ObservableObject {
         let previous = kidFoodLadder[index]
         let askedRung = previous.rung
         let now = ISO8601DateFormatter().string(from: Date())
+        let today = ExposureLadderPolicy.todayIso()
         let nextState = ExposureLadderPolicy.apply(
             LadderState(row: previous),
             outcome: result.outcome,
-            today: ExposureLadderPolicy.todayIso(),
+            today: today,
             attemptAt: now
+        )
+
+        // US-609: the id is picked here, not by the database, so the write
+        // that replays hours later is the same write this tap made. It is the
+        // dedupe key on both paths.
+        let op = LadderAttemptOp(
+            attemptId: UUID().uuidString,
+            ladderRowId: previous.id,
+            kidId: previous.kidId,
+            foodId: previous.foodId,
+            stage: askedRung.rawValue,
+            outcome: result.outcome,
+            attemptedAt: now,
+            today: today,
+            mealSlot: mealSlot ?? previous.preferredMealSlot,
+            preparationMethod: previous.preferredPrep,
+            planEntryId: planEntryId
         )
 
         applyLadderState(nextState, at: index)
@@ -1298,15 +1379,7 @@ final class AppState: ObservableObject {
 
         do {
             let attemptId = try await dataService.insertFoodAttempt(
-                FoodAttemptInsert(
-                    kidId: previous.kidId,
-                    foodId: previous.foodId,
-                    stage: askedRung.rawValue,
-                    outcome: result.outcome.rawValue,
-                    attemptedAt: now,
-                    mealSlot: mealSlot ?? previous.preferredMealSlot,
-                    preparationMethod: previous.preferredPrep
-                )
+                LadderSyncOps.attemptRow(from: op)
             )
 
             if let planEntryId, let attemptId {
@@ -1335,10 +1408,28 @@ final class AppState: ObservableObject {
 
             AnalyticsService.track(.mealResultLogged(
                 result: "ladder_\(result.rawValue)",
-                kidId: previous.kidId
+                kidId: previous.kidId,
+                via: .manual
             ))
             return true
         } catch {
+            if isNetworkError(error) {
+                // US-609: a bad-signal kitchen is the normal case for this
+                // feature, so the exposure is kept on screen and queued rather
+                // than rolled back. The op carries intent, so the replay folds
+                // it into whatever rung the server holds by then instead of
+                // stamping this phone's arithmetic over another parent's.
+                //
+                // The catch spans both writes. If the attempt landed and only
+                // the ladder update failed, the replay finds the attempt
+                // already present and skips the move -- the documented
+                // under-apply in LadderSyncOps. The exposure is still
+                // recorded and the next log recomputes from real server state.
+                OfflineStore.shared.enqueueLadderAttempt(op, userId: currentUserId)
+                toast.info("Queued for sync", message: "This exposure will save when you're back online.")
+                HapticManager.lightImpact()
+                return true
+            }
             if let restoreIndex = kidFoodLadder.firstIndex(where: { $0.id == previous.id }) {
                 kidFoodLadder[restoreIndex] = previous
             }
@@ -1405,18 +1496,49 @@ final class AppState: ObservableObject {
         foodId: String,
         pairedSafeFoodId: String? = nil
     ) async -> Bool {
+        // US-609: client-generated id so the optimistic row below and the
+        // queued replay are the same row. Without it the replay lands under a
+        // server-picked id and comes back over realtime as a duplicate.
+        let row = KidFoodLadderInsert(
+            kidId: kidId,
+            foodId: foodId,
+            nextDueOn: ExposureLadderPolicy.todayIso(),
+            pairedSafeFoodId: pairedSafeFoodId
+        )
+
         do {
-            try await dataService.insertKidFoodLadder(
-                KidFoodLadderInsert(
-                    kidId: kidId,
-                    foodId: foodId,
-                    nextDueOn: ExposureLadderPolicy.todayIso(),
-                    pairedSafeFoodId: pairedSafeFoodId
-                )
-            )
+            try await dataService.insertKidFoodLadder(row)
             await loadKidFoodLadder()
             return true
         } catch {
+            if isNetworkError(error) {
+                kidFoodLadder.append(
+                    KidFoodLadder(
+                        id: row.id,
+                        kidId: kidId,
+                        foodId: foodId,
+                        currentRung: row.currentRung,
+                        consecutiveSuccesses: 0,
+                        consecutiveHolds: 0,
+                        consecutiveRefusals: 0,
+                        status: row.status,
+                        nextDueOn: row.nextDueOn,
+                        lastAttemptAt: nil,
+                        pairedSafeFoodId: pairedSafeFoodId,
+                        preferredPrep: nil,
+                        preferredMealSlot: nil,
+                        pausedReason: nil
+                    )
+                )
+                OfflineStore.shared.enqueueInsert(
+                    row,
+                    table: .kidFoodLadder,
+                    entityId: row.id,
+                    userId: currentUserId
+                )
+                toast.info("Queued for sync", message: "This food will join the ladder when you're back online.")
+                return true
+            }
             toast.show(error, as: { .save(entity: "ladder", underlying: $0) })
             return false
         }
@@ -1431,6 +1553,18 @@ final class AppState: ObservableObject {
             try await dataService.deleteKidFoodLadder(row.id)
             return true
         } catch {
+            if isNetworkError(error) {
+                // US-609: the removal stays on screen and replays later. A
+                // delete for a row that is already gone is a no-op server
+                // side, so a double replay costs nothing.
+                OfflineStore.shared.enqueueDelete(
+                    table: .kidFoodLadder,
+                    entityId: row.id,
+                    userId: currentUserId
+                )
+                toast.info("Queued for sync", message: "This will be removed when you're back online.")
+                return true
+            }
             kidFoodLadder = previous
             toast.show(error, as: { .delete(entity: "ladder", underlying: $0) })
             return false
@@ -1462,6 +1596,20 @@ final class AppState: ObservableObject {
             )
             return true
         } catch {
+            if isNetworkError(error) {
+                // US-609: pause, resume and step-down are direct parent edits,
+                // so the queue carries the ABSOLUTE state -- unlike an
+                // exposure, which carries intent and re-derives. "Pause this"
+                // means the same thing whenever it lands.
+                OfflineStore.shared.enqueueUpdate(
+                    state,
+                    table: .kidFoodLadder,
+                    entityId: row.id,
+                    userId: currentUserId
+                )
+                toast.info("Queued for sync", message: "This change will save when you're back online.")
+                return true
+            }
             if let restoreIndex = kidFoodLadder.firstIndex(where: { $0.id == previous.id }) {
                 kidFoodLadder[restoreIndex] = previous
             }

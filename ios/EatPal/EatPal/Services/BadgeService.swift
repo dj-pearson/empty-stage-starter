@@ -3,10 +3,22 @@ import SwiftUI
 
 /// US-241: Per-kid badge catalog + streak tracker.
 ///
-/// Persistence is local-first (UserDefaults keyed `badges.<kidId>`) so this
-/// ships without a DB migration. When the eventual `kid_badges` Supabase
-/// table lands, this class is the only place that needs to learn about it
-/// — the Badge enum, criteria, and UI all stay put.
+/// US-871: `kid_badges` is that eventual Supabase table, and this is the only
+/// place that had to learn about it — the Badge enum, the criteria and the UI
+/// all stayed put, as the original note predicted.
+///
+/// UserDefaults keyed `badges.<kidId>` is still written, and still read on
+/// launch, but it is now a CACHE rather than the only home. On its own it did
+/// not survive a reinstall, did not move to a new phone, and was invisible to
+/// the second parent, who opened the grid and saw nothing for a child who had
+/// earned eight badges. A year of progress is not a device detail.
+///
+/// The read order is the load-precedence contract in CLAUDE.md, in miniature:
+/// the cache paints instantly and works offline, a successful server fetch
+/// then wins — except that here it is a UNION rather than a replace. Badges
+/// are append-only and the cache may hold earns this account made before the
+/// table existed, so dropping local-only ids would delete a child's history
+/// on first launch of the new build. `seedFromServer` uploads them instead.
 @MainActor
 final class BadgeService: ObservableObject {
     static let shared = BadgeService()
@@ -185,11 +197,26 @@ final class BadgeService: ObservableObject {
             persist(badgeId: badge.id, kidId: kidId, earnedAt: now)
         }
 
+        // US-871: and to the server, so the badge survives this phone. Local
+        // first, deliberately: the celebration below fires either way, and a
+        // parent whose signal dropped at the dinner table should still see
+        // their child's badge.
+        let earnedIds = newlyEarned.map(\.id)
+        Task { await self.upload(badgeIds: earnedIds, kidId: kidId, earnedAt: now) }
+
         revisionCounter &+= 1
 
         // Queue the highest-tier badge for celebration; lesser ones still get
         // persisted but quietly to avoid stacking five sheets in a row.
         if let best = newlyEarned.max(by: { $0.tier.rawValue < $1.tier.rawValue }) {
+            // US-853: parked on disk as well as in memory. An earn can happen
+            // with no UI on screen at all -- LogMealResultIntent runs this
+            // from a Siri phrase, in the app's process but often with the app
+            // in the background, and the @Published value dies with that
+            // process. A child earning their first badge and nobody ever
+            // seeing it is the failure worth avoiding; the sheet is the whole
+            // point of a badge.
+            parkCelebration(badgeId: best.id, kidId: kidId, earnedAt: now)
             pendingCelebration = Earned(badge: best, kidId: kidId, earnedAt: now)
             // Lightweight toast for users who aren't currently on the Progress
             // screen — the celebration sheet only fires there. The toast is
@@ -206,6 +233,154 @@ final class BadgeService: ObservableObject {
     /// re-trigger the animation.
     func dismissCelebration() {
         pendingCelebration = nil
+        // US-853: and from disk, or it comes back on the next launch. Seeing
+        // the same badge celebrated twice reads as a bug and devalues the
+        // next real one.
+        UserDefaults.standard.removeObject(forKey: Self.parkedCelebrationKey)
+    }
+
+    // MARK: - Celebration that outlives the process (US-853)
+
+    static let parkedCelebrationKey = "badges.pendingCelebration"
+
+    struct ParkedCelebration: Codable, Equatable {
+        let badgeId: String
+        let kidId: String
+        let earnedAt: Date
+    }
+
+    func parkCelebration(badgeId: String, kidId: String, earnedAt: Date) {
+        guard let data = try? JSONEncoder().encode(
+            ParkedCelebration(badgeId: badgeId, kidId: kidId, earnedAt: earnedAt)
+        ) else { return }
+        UserDefaults.standard.set(data, forKey: Self.parkedCelebrationKey)
+    }
+
+    /// Promote a badge earned while nothing was on screen into the live
+    /// celebration, so it surfaces the next time the app opens (AC3).
+    ///
+    /// Does nothing when a celebration is already showing: an earn that just
+    /// happened in-app is the more recent one, and replacing it mid-animation
+    /// would swap the badge under the user.
+    func restoreParkedCelebration() {
+        guard pendingCelebration == nil,
+              let data = UserDefaults.standard.data(forKey: Self.parkedCelebrationKey),
+              let parked = try? JSONDecoder().decode(ParkedCelebration.self, from: data),
+              let badge = Badge(rawValue: parked.badgeId) else { return }
+
+        // A badge id this build does not know about is dropped rather than
+        // kept forever: it can only come from a newer build on the same
+        // device, and there is nothing to draw for it.
+        pendingCelebration = Earned(badge: badge, kidId: parked.kidId, earnedAt: parked.earnedAt)
+    }
+
+    // MARK: - Server durability (US-871)
+
+    /// Kids whose badges have already been seeded this launch, so a second
+    /// load does not re-upload the same local-only rows.
+    private var seededKidIds: Set<String> = []
+
+    /// Fold the server's badges into the local cache, and push up anything
+    /// only this device knows about.
+    ///
+    /// A union, not a replace. Every account that used the app before
+    /// `kid_badges` existed holds its badges solely in UserDefaults, so
+    /// letting the server's (empty) answer win would erase a child's history
+    /// on the first launch of the build that added the table. The upload is
+    /// what closes that gap permanently: once those ids are rows, the next
+    /// phone reads them.
+    ///
+    /// Safe to call repeatedly — the upsert is keyed on (kid_id, badge_id).
+    func seedFromServer(kidIds: [String]) async {
+        guard !kidIds.isEmpty else { return }
+
+        let remote: [KidBadge]
+        do {
+            remote = try await DataService.shared.fetchKidBadges()
+        } catch {
+            // Offline or refused: the cache is still there and the grid still
+            // renders. Nothing is lost, and the next launch tries again.
+            SentryService.capture(error, extras: ["context": "badge_seed_from_server"])
+            return
+        }
+
+        var changed = false
+        for kidId in kidIds where !seededKidIds.contains(kidId) {
+            let plan = BadgeSync.plan(
+                local: earnedIds(forKid: kidId),
+                server: Set(remote.filter { $0.kidId == kidId }.map(\.badgeId))
+            )
+
+            // Down: badges earned on another device or another phone. The
+            // server's date is kept, so a badge earned in March reads as March
+            // on the new phone too.
+            for badgeId in plan.download {
+                let earnedAt = remote.first { $0.kidId == kidId && $0.badgeId == badgeId }
+                    .flatMap { ISO8601DateFormatter().date(from: $0.earnedAt) } ?? Date()
+                persist(badgeId: badgeId, kidId: kidId, earnedAt: earnedAt)
+                changed = true
+            }
+
+            // Up: badges this device earned before the table existed. Their
+            // dates come from the cache for the same reason.
+            if !plan.upload.isEmpty {
+                await upload(badgeIds: plan.upload, kidId: kidId, earnedAt: nil)
+            }
+            seededKidIds.insert(kidId)
+        }
+
+        if changed { revisionCounter &+= 1 }
+    }
+
+    /// Write badges to `kid_badges`, queueing on a lost connection.
+    ///
+    /// `earnedAt` nil means "look the date up in the cache", which is what the
+    /// seed's upload wants: a badge earned in March must not arrive stamped
+    /// with today.
+    private func upload(badgeIds: [String], kidId: String, earnedAt: Date?) async {
+        let formatter = ISO8601DateFormatter()
+
+        // US-853: with no session there is nobody to attribute the row to, and
+        // a queued insert tagged with an empty user id is adopted by whoever
+        // signs in next. The badge is already in the cache either way, and
+        // seedFromServer pushes it up on the next authenticated launch -- the
+        // same path that carries every badge earned before this table existed.
+        guard !Self.currentUserIdForQueue().isEmpty else { return }
+
+        for badgeId in badgeIds {
+            let when = earnedAt
+                ?? Badge(rawValue: badgeId).flatMap { self.earnedAt($0, kidId: kidId) }
+                ?? Date()
+            let row = KidBadgeInsert(
+                kidId: kidId,
+                badgeId: badgeId,
+                earnedAt: formatter.string(from: when)
+            )
+
+            do {
+                try await DataService.shared.insertKidBadge(row)
+            } catch {
+                // The badge is already in UserDefaults and on screen. Queue the
+                // row so it reaches the next phone, and say nothing: a parent
+                // celebrating their child's badge does not need a sync notice.
+                OfflineStore.shared.enqueueInsert(
+                    row,
+                    table: .kidBadges,
+                    entityId: row.id,
+                    userId: Self.currentUserIdForQueue()
+                )
+            }
+        }
+    }
+
+    /// The signed-in user id the offline queue tags mutations with (US-489).
+    ///
+    /// Read from the client rather than threaded in, because `evaluate` is
+    /// called from three places that do not have it. An empty string is
+    /// adopted by whoever is signed in at drain time, which is the legacy
+    /// behaviour the queue already handles.
+    private static func currentUserIdForQueue() -> String {
+        SupabaseManager.client.auth.currentSession?.user.id.uuidString.lowercased() ?? ""
     }
 
     // MARK: - Persistence

@@ -227,11 +227,14 @@ struct AchievementsTab: View {
         ScrollView {
             VStack(spacing: 16) {
                 if appState.kids.isEmpty {
-                    ContentUnavailableView(
-                        "Add a child profile",
-                        systemImage: "person.crop.circle.badge.plus",
-                        description: Text("Streaks and badges are tracked per child.")
-                    )
+                    // US-705: same state, now with the button in it.
+                    ContentUnavailableView {
+                        Label("No child yet", systemImage: "person.crop.circle.badge.plus")
+                    } description: {
+                        Text("Streaks and badges are tracked per child.")
+                    } actions: {
+                        AddFirstChildCard(style: .action)
+                    }
                     .padding(.top, 40)
                 } else {
                     StreakCard(

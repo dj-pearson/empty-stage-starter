@@ -1,0 +1,263 @@
+-- US-799 AC4: retire canonical_products and item_aliases.
+--
+-- Both were created by 20260831000000_kitchen_loop_catalog.sql as the
+-- kitchen-loop catalog's memory (item_aliases) and its shared seed
+-- (canonical_products). Neither ever went live:
+--
+--   * canonical_products was never seeded. No migration and no script inserts a
+--     row, so the "shared read-only seed" has always been an empty table.
+--   * item_aliases has no writer. src/lib/itemResolver.ts declares its row
+--     shape but never queries it, and the resolver's only importers are its own
+--     test and the cross-platform fixture suite. No web page, no edge function
+--     and nothing in ios/ or android-native/ names either table.
+--
+-- docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md settles it:
+-- grocery_product_catalog is the canonical table, nutrition retires across two
+-- releases per CLAUDE.md's deprecation flow, and "canonical_products and
+-- item_aliases are read by neither client and can be dropped". Removing a table
+-- is only forbidden for something a shipped client reads; these are read by
+-- none, so this needs no deprecation window.
+--
+-- rpc_merge_items has to stop repointing item_aliases before the table can go,
+-- which is why the two are in one migration: retiring the table on its own
+-- would leave the function raising 42P01 on the next merge.
+
+-- rpc_merge_items, minus the item_aliases repoint --------------------------
+--
+-- Identical to the 20260901000000 body in every other respect. The response
+-- loses its repointed.item_aliases counter, which is a shape reduction and so
+-- normally wants an rpc_merge_items_v2 -- it does not here, because the
+-- function has no client caller at all. src/integrations/supabase/types.ts is
+-- the only mention outside migrations, docs and the privilege test.
+
+CREATE OR REPLACE FUNCTION public.rpc_merge_items(
+  survivor_id UUID,
+  duplicate_ids UUID[]
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $rpc_merge_items$
+DECLARE
+  survivor_household UUID;
+  survivor_exists BOOLEAN;
+  dupes UUID[];
+  mismatched INT;
+  missing INT;
+  n_recipe_ingredients INT := 0;
+  n_plan_entries INT := 0;
+  n_grocery_items INT := 0;
+  n_ladder_repointed INT := 0;
+  n_ladder_merged INT := 0;
+  n_recipes_food_ids INT := 0;
+  n_marked INT := 0;
+  summed NUMERIC := 0;
+BEGIN
+  IF survivor_id IS NULL OR duplicate_ids IS NULL THEN
+    RAISE EXCEPTION 'rpc_merge_items: survivor_id and duplicate_ids are both required';
+  END IF;
+
+  -- Drop nulls and any accidental repeat of the survivor's own id. Merging a
+  -- row into itself would set merged_into_id = id and create a self-cycle the
+  -- resolver would then have to break.
+  SELECT array_agg(DISTINCT d)
+    INTO dupes
+    FROM unnest(duplicate_ids) AS d
+   WHERE d IS NOT NULL;
+
+  IF dupes IS NULL OR array_length(dupes, 1) IS NULL THEN
+    RAISE EXCEPTION 'rpc_merge_items: duplicate_ids contained no usable ids';
+  END IF;
+
+  IF survivor_id = ANY(dupes) THEN
+    RAISE EXCEPTION 'rpc_merge_items: survivor_id % appears in duplicate_ids', survivor_id;
+  END IF;
+
+  SELECT TRUE, household_id
+    INTO survivor_exists, survivor_household
+    FROM public.foods
+   WHERE id = survivor_id;
+
+  IF survivor_exists IS NOT TRUE THEN
+    RAISE EXCEPTION 'rpc_merge_items: survivor % does not exist', survivor_id;
+  END IF;
+
+  SELECT count(*) INTO missing
+    FROM unnest(dupes) AS d
+   WHERE NOT EXISTS (SELECT 1 FROM public.foods f WHERE f.id = d);
+  IF missing > 0 THEN
+    RAISE EXCEPTION 'rpc_merge_items: % duplicate id(s) do not exist', missing;
+  END IF;
+
+  -- Household scoping. IS DISTINCT FROM so two NULL households count as the
+  -- same scope rather than as a mismatch.
+  SELECT count(*) INTO mismatched
+    FROM public.foods
+   WHERE id = ANY(dupes)
+     AND household_id IS DISTINCT FROM survivor_household;
+  IF mismatched > 0 THEN
+    RAISE EXCEPTION
+      'rpc_merge_items: % duplicate(s) belong to a different household than survivor %',
+      mismatched, survivor_id;
+  END IF;
+
+  -- Repoint every reference. Order does not matter; none of these have a
+  -- unique constraint on food_id except kid_food_ladder, handled below.
+  UPDATE public.recipe_ingredients SET food_id = survivor_id WHERE food_id = ANY(dupes);
+  GET DIAGNOSTICS n_recipe_ingredients = ROW_COUNT;
+
+  UPDATE public.plan_entries SET food_id = survivor_id WHERE food_id = ANY(dupes);
+  GET DIAGNOSTICS n_plan_entries = ROW_COUNT;
+
+  UPDATE public.grocery_items SET item_id = survivor_id WHERE item_id = ANY(dupes);
+  GET DIAGNOSTICS n_grocery_items = ROW_COUNT;
+
+  -- recipes.food_ids is a UUID[], so a merged id hides inside an array rather
+  -- than in a column. Not named in US-663's list, but leaving it stale would
+  -- keep legacy recipes pointing at a row that is no longer the item.
+  UPDATE public.recipes
+     SET food_ids = (
+       SELECT array_agg(DISTINCT CASE WHEN e = ANY(dupes) THEN survivor_id ELSE e END)
+         FROM unnest(food_ids) AS e
+     )
+   WHERE food_ids && dupes;
+  GET DIAGNOSTICS n_recipes_food_ids = ROW_COUNT;
+
+  -- kid_food_ladder is UNIQUE (kid_id, food_id), so a child holding a ladder
+  -- for BOTH the survivor and a duplicate cannot simply be repointed.
+  --
+  -- Those two rows are the same child and the same food, so they are merged
+  -- rather than one being dropped: the survivor's row takes whichever rung is
+  -- further along and the higher counters. Discarding a child's exposure
+  -- progress to satisfy a constraint is exactly the kind of silent data loss
+  -- this epic exists to stop.
+  -- Three sequential statements rather than one data-modifying CTE. Every
+  -- sub-statement of a CTE sees the same snapshot, so a DELETE inside one
+  -- cannot clear the way for an UPDATE in the same statement; the first draft
+  -- of this did exactly that and hit the unique violation it was written to
+  -- prevent. Sequential statements each see the previous one's effects.
+
+  -- 1. Fold each duplicate's progress into the survivor's row for that kid.
+  --    DISTINCT ON picks the furthest rung; the window maxima take the highest
+  --    counters, so two duplicates for one kid both contribute.
+  UPDATE public.kid_food_ladder k
+     SET current_rung = CASE
+           WHEN public.ladder_rung_index(b.current_rung) > public.ladder_rung_index(k.current_rung)
+           THEN b.current_rung ELSE k.current_rung END,
+         consecutive_successes = GREATEST(k.consecutive_successes, b.succ),
+         consecutive_holds     = GREATEST(k.consecutive_holds, b.holds),
+         consecutive_refusals  = GREATEST(k.consecutive_refusals, b.refusals),
+         last_attempt_at       = GREATEST(
+           COALESCE(k.last_attempt_at, b.last_at),
+           COALESCE(b.last_at, k.last_attempt_at)
+         )
+    FROM (
+      SELECT DISTINCT ON (kid_id)
+             kid_id,
+             current_rung,
+             max(consecutive_successes) OVER (PARTITION BY kid_id) AS succ,
+             max(consecutive_holds)     OVER (PARTITION BY kid_id) AS holds,
+             max(consecutive_refusals)  OVER (PARTITION BY kid_id) AS refusals,
+             max(last_attempt_at)       OVER (PARTITION BY kid_id) AS last_at
+        FROM public.kid_food_ladder
+       WHERE food_id = ANY(dupes)
+       ORDER BY kid_id, public.ladder_rung_index(current_rung) DESC
+    ) b
+   WHERE k.kid_id = b.kid_id
+     AND k.food_id = survivor_id;
+
+  -- 2. Drop the duplicate rows whose progress has just been folded in.
+  DELETE FROM public.kid_food_ladder d
+   WHERE d.food_id = ANY(dupes)
+     AND EXISTS (
+       SELECT 1 FROM public.kid_food_ladder s
+        WHERE s.kid_id = d.kid_id AND s.food_id = survivor_id
+     );
+  GET DIAGNOSTICS n_ladder_merged = ROW_COUNT;
+
+  -- Whatever is left has no conflict and can just be repointed.
+  UPDATE public.kid_food_ladder SET food_id = survivor_id WHERE food_id = ANY(dupes);
+  GET DIAGNOSTICS n_ladder_repointed = ROW_COUNT;
+
+  -- Roll the duplicates' stock into the survivor.
+  --
+  -- TODO(US-666): once inventory_movements exists this must append a
+  -- `correction` movement per duplicate instead of writing foods.quantity
+  -- directly, so the ledger explains where the stock came from. Until then a
+  -- direct write is the only way to avoid losing it, and the US-668 trigger
+  -- will fold a direct write into a correction anyway once it lands.
+  SELECT COALESCE(sum(quantity), 0) INTO summed
+    FROM public.foods WHERE id = ANY(dupes) AND quantity IS NOT NULL;
+
+  IF summed <> 0 THEN
+    UPDATE public.foods
+       SET quantity = COALESCE(quantity, 0) + summed
+     WHERE id = survivor_id;
+    UPDATE public.foods SET quantity = 0 WHERE id = ANY(dupes);
+  END IF;
+
+  -- Redirect, do not delete.
+  UPDATE public.foods
+     SET merged_into_id = survivor_id,
+         updated_at = now()
+   WHERE id = ANY(dupes);
+  GET DIAGNOSTICS n_marked = ROW_COUNT;
+
+  RETURN jsonb_build_object(
+    'survivor_id', survivor_id,
+    'duplicates_merged', n_marked,
+    'quantity_moved', summed,
+    'repointed', jsonb_build_object(
+      'recipe_ingredients', n_recipe_ingredients,
+      'plan_entries', n_plan_entries,
+      'grocery_items', n_grocery_items,
+      'kid_food_ladder', n_ladder_repointed,
+      'kid_food_ladder_merged', n_ladder_merged,
+      'recipes_food_ids', n_recipes_food_ids
+    )
+  );
+END;
+$rpc_merge_items$;
+
+COMMENT ON FUNCTION public.rpc_merge_items(UUID, UUID[]) IS
+  'US-663: collapse duplicate foods rows onto a survivor by repointing every reference and setting merged_into_id. Never deletes a foods row, so a stale id held by an older client still resolves. Household-scoped; raises if the survivor appears among the duplicates or if they span households. US-799 removed the item_aliases repoint along with the table.';
+
+-- Privileges, restated so this migration cannot quietly undo US-804.
+--
+-- The 20260901 original ended with `REVOKE ... FROM PUBLIC` and
+-- `GRANT EXECUTE ... TO authenticated`, and copying that line verbatim is
+-- exactly the regression 20260918000001 exists to prevent: rpc_merge_items is
+-- SECURITY DEFINER, rewrites a household's recipe_ingredients, plan_entries,
+-- grocery_items and kid food ladder, and contains no auth.uid() check at all.
+-- It stays private to every PostgREST role until the story that needs it adds
+-- the grant and the membership check together. Caught by
+-- supabase/tests/us804_function_privileges.test.sql, which failed on the first
+-- draft of this file.
+--
+-- Naming the roles matters: revoking PUBLIC alone leaves the schema-level
+-- default ACL that grants EXECUTE directly to anon, authenticated and
+-- service_role, so the function would stay callable over RPC.
+REVOKE ALL ON FUNCTION public.rpc_merge_items(UUID, UUID[]) FROM PUBLIC, anon, authenticated;
+
+-- The tables themselves ----------------------------------------------------
+--
+-- item_aliases goes first: its item_id is a foreign key into foods, and taking
+-- it out before the seed keeps the order readable. Neither table has a
+-- dependent view, and neither has a policy declared outside its own creating
+-- migration, so nothing else needs unpicking first.
+--
+-- The gate's default answer here is the right one -- "an old client still
+-- reading that table breaks" is exactly why CLAUDE.md wants a two-release
+-- deprecation -- and it does not apply, because no client reads either table
+-- and none ever has. Evidence, not assertion: `canonical_products` has no
+-- INSERT in any migration or script in this repo, so the "shared read-only
+-- seed" has always been empty; `git log -S item_aliases -- src app ios` turns
+-- up only the resolver's own commits, and the resolver declares the row shape
+-- without ever querying it. Nothing under ios/ or android-native/ names either
+-- table, so no shipped build can break. The design doc settles the intent:
+-- docs/superpowers/specs/2026-09-06-shared-food-catalog-design.md says both are
+-- "read by neither client and can be dropped".
+-- migration-safety: allow drop-table (US-799 AC4 -- canonical_products was never seeded and item_aliases was never written; no client of any platform reads either, so there is no old reader to deprecate over two releases. See supabase/tests/us799_catalog_retirement.test.sql.)
+DROP TABLE IF EXISTS public.item_aliases;
+DROP TABLE IF EXISTS public.canonical_products;

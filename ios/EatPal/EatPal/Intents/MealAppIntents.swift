@@ -69,6 +69,33 @@ enum MealResultAppEnum: String, AppEnum {
     }
 }
 
+/// US-853: the entries a badge evaluation should see after a Siri log.
+///
+/// The intent fetches the day's entries, writes the new result to the ones it
+/// matched, then has to evaluate badges against the result of that write. It
+/// already holds the rows, so re-fetching them would be a second round trip
+/// for data in hand -- but evaluating against the PRE-update copies would
+/// award nothing, because every criterion reads `result`.
+///
+/// Pure, so the projection can be tested without a Supabase client. This is
+/// the part where being wrong is silent: badges simply never advance, and the
+/// log itself still succeeds.
+enum MealResultProjection {
+    static func applying(
+        _ result: String,
+        to entries: [PlanEntry],
+        matching updated: [PlanEntry]
+    ) -> [PlanEntry] {
+        let updatedIds = Set(updated.map(\.id))
+        return entries.map { entry in
+            guard updatedIds.contains(entry.id) else { return entry }
+            var copy = entry
+            copy.result = result
+            return copy
+        }
+    }
+}
+
 // MARK: - Log meal result intent
 
 struct LogMealResultIntent: AppIntent {
@@ -130,6 +157,22 @@ struct LogMealResultIntent: AppIntent {
             // a successful log into a Siri error.
             await syncHealth(matches: matches, isEaten: domainResult == MealResult.ate.rawValue)
 
+            // US-853: advance streaks and badges, the way
+            // AppState.updatePlanEntry does. Without this, whether a meal
+            // counted towards a child's progress depended on which surface
+            // the parent happened to use -- a week logged by voice earned
+            // nothing.
+            await evaluateBadges(matches: matches, entries: entries, result: domainResult)
+
+            // US-853: and report it, with the surface distinguishable. This
+            // event fired from the in-app path only, so "nobody logs by
+            // voice" and "voice logs are invisible" looked the same.
+            for kidId in Set(matches.map(\.kidId)) {
+                AnalyticsService.track(
+                    .mealResultLogged(result: domainResult, kidId: kidId, via: .voice)
+                )
+            }
+
             // US-412: refresh the tonight/meals snapshot the widget reads.
             await WidgetSnapshot.rebuildFromServer()
 
@@ -143,6 +186,44 @@ struct LogMealResultIntent: AppIntent {
         } catch {
             SentryService.capture(error, extras: ["intent": "LogMealResult"])
             throw error
+        }
+    }
+
+    /// US-853: re-evaluate badges for every child whose meal was just logged.
+    ///
+    /// `BadgeService.evaluate` already took its inputs as arguments rather
+    /// than reaching into AppState (AC2), which is what makes this callable
+    /// from an intent at all. What it needed was somewhere to source them:
+    /// the entries are the ones already fetched above with the new result
+    /// applied locally, so this costs one recipes fetch rather than a second
+    /// round trip for data we are holding.
+    ///
+    /// Re-running for a meal already logged awards nothing: `evaluate` skips
+    /// any badge in the earned set, so logging the same dinner twice is the
+    /// same as logging it once.
+    @MainActor
+    private func evaluateBadges(
+        matches: [PlanEntry],
+        entries: [PlanEntry],
+        result: String
+    ) async {
+        let updated = MealResultProjection.applying(result, to: entries, matching: matches)
+
+        // Criteria span foods and recipes as well as entries, so a badge like
+        // "tried five vegetables" needs the catalog to know what a food is.
+        async let fetchedFoods = try? DataService.shared.fetchFoods()
+        async let fetchedRecipes = try? DataService.shared.fetchRecipes()
+        let (maybeFoods, maybeRecipes) = await (fetchedFoods, fetchedRecipes)
+        let foods = maybeFoods ?? []
+        let recipes = maybeRecipes ?? []
+
+        for kidId in Set(matches.map(\.kidId)) {
+            BadgeService.shared.evaluate(
+                kidId: kidId,
+                foods: foods,
+                recipes: recipes,
+                planEntries: updated
+            )
         }
     }
 

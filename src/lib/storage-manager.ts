@@ -67,9 +67,11 @@ export interface BucketConfig {
  * satisfy a registry nobody reads from is the wrong direction. Add the entry
  * back alongside the migration that creates it on the day something needs one.
  *
- * The two that stayed both have real call sites. blog-images is declared by
- * 20260822000000; Assets is still dashboard-only and is tracked as a known gap
- * in scripts/ci/check-storage-buckets.mjs.
+ * The two that stayed both have real call sites, and both are now declared:
+ * blog-images by 20260822000000, Assets by 20260822000001. Assets was the last
+ * known gap in scripts/ci/check-storage-buckets.mjs; PENDING is empty and the
+ * gate reports no registry-only bucket, so an entry here means a bucket a
+ * migration creates rather than one somebody clicked into being.
  */
 export const STORAGE_BUCKETS: Record<string, BucketConfig> = {
   'profile-pictures': {

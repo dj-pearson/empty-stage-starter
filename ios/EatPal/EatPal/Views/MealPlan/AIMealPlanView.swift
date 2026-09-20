@@ -35,11 +35,17 @@ struct AIMealPlanView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     if activeKid == nil {
-                        ContentUnavailableView(
-                            "No Child Selected",
-                            systemImage: "person.crop.circle.badge.plus",
-                            description: Text("Add a child profile from the Dashboard to generate personalized meal suggestions.")
-                        )
+                        // US-705 AC4: the old copy said "from the Dashboard",
+                        // which was not true -- the Dashboard had no such
+                        // control either. The fixed state names no screen to go
+                        // and find, because the button is here.
+                        ContentUnavailableView {
+                            Label("No child yet", systemImage: "person.crop.circle.badge.plus")
+                        } description: {
+                            Text("Meal suggestions are built around a child's likes and safe foods.")
+                        } actions: {
+                            AddFirstChildCard(style: .action)
+                        }
                         .padding(.top, 40)
                     } else {
                         // US-397: offline banner, matching AICoachView.

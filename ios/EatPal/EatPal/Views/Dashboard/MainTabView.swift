@@ -134,6 +134,14 @@ struct MainTabView: View {
             // US-470: Budget lives under More now.
             selectedTab = .more
             morePath = [.budget]
+        case .joinHousehold:
+            // US-851. The accept itself runs in AppState.loadAllData, before
+            // the fetches, because the membership decides which rows come
+            // back. By the time anyone sees this screen the join has either
+            // landed or toasted its reason, and either way the household
+            // screen is where the answer is.
+            selectedTab = .more
+            morePath = [.settings, .household]
         }
         // AC4: clear so the identical link fires again next time.
         deepLinkHandler.clearDestination()

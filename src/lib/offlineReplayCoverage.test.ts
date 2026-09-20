@@ -31,17 +31,72 @@ const SOURCE = readFileSync(
 
 /** The `Table` enum's cases, read from the source rather than hand-listed. */
 const tables = (() => {
-  const start = SOURCE.indexOf('enum Table: String {');
+  const start = SOURCE.indexOf('enum Table: String, CaseIterable {');
   expect(start, 'Table enum not found').toBeGreaterThan(-1);
   const body = SOURCE.slice(start, SOURCE.indexOf('}', start));
   return [...body.matchAll(/case (\w+)/g)].map((m) => m[1]);
 })();
+
+/**
+ * Tables a client updates but never inserts.
+ *
+ * `profiles` is created by the `handle_new_user` trigger when the account is
+ * made, so an insert from a phone would be a second row for a user who already
+ * has one. Its absence from the insert switch is the design, not a gap -- and
+ * an insert queued for it anyway still hits that switch's `default` and throws,
+ * which the case below pins so "update-only" cannot quietly become "dropped".
+ */
+const UPDATE_ONLY_TABLES = ['profiles'];
+
+/**
+ * Tables written only by the `ladderAttempt` operation (US-609).
+ *
+ * An exposure is not a row to post, it is an intent to redo. Replaying one
+ * means reading the CURRENT ladder row and re-deriving the next rung from it,
+ * because the queued arithmetic was done on a phone that had no signal and may
+ * be hours behind whatever the other parent's phone has since logged. A plain
+ * insert or update arm for `food_attempts` would skip that and stamp the stale
+ * rung back -- so its absence from both switches is the design. The case below
+ * pins that the omission still throws rather than clearing the write.
+ */
+const ATTEMPT_ONLY_TABLES = ['foodAttempts'];
+
+/**
+ * Tables a client inserts into but never updates (US-871).
+ *
+ * `kid_badges` is append-only: there is nothing about "this child earned this
+ * badge on this day" that a later write should revise, and the migration gives
+ * it no UPDATE policy, so a queued update would be refused by RLS rather than
+ * doing anything. Its absence from `decodeUpdate` is the design -- and the
+ * case below pins that the omission still throws rather than clearing the
+ * write.
+ */
+const INSERT_ONLY_TABLES = ['kidBadges'];
 
 /** The body of `replay`, split into its per-operation arms. */
 const replayBody = (() => {
   const start = SOURCE.indexOf('private func replay(');
   expect(start, 'replay not found').toBeGreaterThan(-1);
   return SOURCE.slice(start);
+})();
+
+/**
+ * The update routing, which US-809 moved out of `replay` into a static
+ * `decodeUpdate`.
+ *
+ * `replay` is private and needs a live Supabase client, so the table-to-type
+ * decision -- the part that was silently dropping mutations -- was extracted so
+ * the Swift suite can exercise it directly. The rule this file pins is
+ * unchanged; it just follows the code rather than relaxing to match.
+ */
+const updateRouting = (() => {
+  const start = SOURCE.indexOf('static func decodeUpdate(');
+  expect(start, 'decodeUpdate not found -- did the update routing move again?').toBeGreaterThan(-1);
+  // Ends at the function's closing brace, which is the first `}` at 4-space
+  // indent after the declaration.
+  const end = SOURCE.indexOf('\n    }', start);
+  expect(end, 'decodeUpdate has no closing brace').toBeGreaterThan(start);
+  return SOURCE.slice(start, end);
 })();
 
 function operationArm(operation: 'insert' | 'update'): string {
@@ -61,27 +116,73 @@ describe('offline replay coverage', () => {
     expect(tables).toContain('recipes');
   });
 
-  it('replays an insert for every table', () => {
+  it('replays an insert for every table that can be inserted', () => {
     const arm = operationArm('insert');
-    const missing = tables.filter((t) => !arm.includes(`case Table.${t}.rawValue:`));
+    const missing = tables
+      .filter((t) => !UPDATE_ONLY_TABLES.includes(t) && !ATTEMPT_ONLY_TABLES.includes(t))
+      .filter((t) => !arm.includes(`case Table.${t}.rawValue:`));
     expect(missing).toEqual([]);
   });
 
+  it('throws rather than dropping an insert queued for an update-only table', () => {
+    // The exemption above is only safe while the omission is loud. If the
+    // insert switch ever went back to `default: break`, an insert for profiles
+    // would be cleared as though it synced -- the exact failure this file
+    // exists for, reintroduced through the exemption.
+    const arm = operationArm('insert');
+    for (const table of [...UPDATE_ONLY_TABLES, ...ATTEMPT_ONLY_TABLES]) {
+      expect(tables, `${table} is exempted but is not a Table case`).toContain(table);
+      expect(arm).not.toContain(`case Table.${table}.rawValue:`);
+    }
+    expect(arm.slice(arm.lastIndexOf('default:'))).toContain('throw ReplayError');
+  });
+
   it('replays an update for every table', () => {
-    // kids and recipes were the two that were missing.
-    const arm = operationArm('update');
-    const missing = tables.filter((t) => !arm.includes(`case Table.${t}.rawValue:`));
+    // kids and recipes were the two that were missing; profiles was added by
+    // US-809 so a finished onboarding survives a reconnect.
+    const missing = tables
+      .filter((t) => ![...ATTEMPT_ONLY_TABLES, ...INSERT_ONLY_TABLES].includes(t))
+      .filter((t) => !updateRouting.includes(`case Table.${t}.rawValue:`));
     expect(missing).toEqual([]);
+  });
+
+  it('throws rather than dropping an update queued for a table with no update route', () => {
+    // Same shape as the profiles case: the exemption is only safe while the
+    // omission is loud.
+    for (const table of [...ATTEMPT_ONLY_TABLES, ...INSERT_ONLY_TABLES]) {
+      expect(tables, `${table} is exempted but is not a Table case`).toContain(table);
+      expect(updateRouting).not.toContain(`case Table.${table}.rawValue:`);
+    }
+    expect(updateRouting.slice(updateRouting.lastIndexOf('default:'))).toContain(
+      'throw ReplayError',
+    );
+  });
+
+  it('routes every update through decodeUpdate rather than around it', () => {
+    // The extraction is only worth anything while replay actually calls it. A
+    // second, inlined switch in replay would pass the coverage check above and
+    // still be the thing that runs.
+    const arm = operationArm('update');
+    expect(arm, 'replay no longer calls decodeUpdate').toContain('Self.decodeUpdate(');
+    expect(
+      arm.includes('case Table.'),
+      'replay has its own table switch again, so decodeUpdate is not the only route',
+    ).toBe(false);
   });
 
   it('throws rather than falling through on an unhandled case', () => {
     // A `break` or bare `return` here reads to the caller as a successful
     // replay, which is what made the loss silent.
-    for (const operation of ['insert', 'update'] as const) {
-      const arm = operationArm(operation);
-      const fallthrough = arm.slice(arm.lastIndexOf('default:'));
-      expect(fallthrough, `${operation} default falls through`).toContain('throw ReplayError');
-    }
+    const insertArm = operationArm('insert');
+    expect(
+      insertArm.slice(insertArm.lastIndexOf('default:')),
+      'insert default falls through',
+    ).toContain('throw ReplayError');
+
+    expect(
+      updateRouting.slice(updateRouting.lastIndexOf('default:')),
+      'update default falls through',
+    ).toContain('throw ReplayError');
     expect(replayBody).toContain('throw ReplayError.missingPayload');
     expect(replayBody).not.toMatch(/guard let data = mutation\.payload else \{ return \}/);
   });

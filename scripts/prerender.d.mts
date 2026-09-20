@@ -61,3 +61,17 @@ export function shellPreloadHrefs(shellHtml: string): Set<string>;
  * prerenderer froze into the snapshot. Changes nothing else in the document.
  */
 export function stripRuntimePreloads(html: string, allowedHrefs: Set<string>): string;
+
+/**
+ * US-570: selectors for transient client-side UI a snapshot must not keep. The
+ * toaster is what turned up -- `/pricing` raised `toast.error("Failed to load
+ * pricing plans")` and the prerenderer froze it into the HTML crawlers read.
+ */
+export const TRANSIENT_SNAPSHOT_SELECTORS: string[];
+
+/**
+ * Remove them from a document, returning how many elements went. Exported so
+ * the rule can be exercised against a DOM: the call site runs inside
+ * page.evaluate, where nothing from the module is in scope.
+ */
+export function stripTransientUi(doc: Document, selectors: readonly string[]): number;

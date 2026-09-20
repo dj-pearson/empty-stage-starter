@@ -25,14 +25,95 @@ import { supabase } from '@/integrations/supabase/client.mobile';
 
 export interface PushPermissionResult {
   granted: boolean;
-  reason?: 'denied' | 'unsupported' | 'error';
+  /**
+   * US-852: `unsupported` and `unavailable` used to be the same answer, which
+   * is why nobody noticed. `unsupported` means this platform does not do push
+   * this way -- web uses the service-worker path. `unavailable` means this is
+   * a platform that SHOULD do push and the module is not there, which is a
+   * build problem rather than a platform fact.
+   */
+  reason?: 'denied' | 'unsupported' | 'unavailable' | 'error';
+}
+
+/** The surface of `expo-notifications` this module actually uses. */
+interface NotificationsModule {
+  getPermissionsAsync: () => Promise<{ granted: boolean }>;
+  requestPermissionsAsync: () => Promise<{ granted: boolean }>;
+  getExpoPushTokenAsync: () => Promise<{ data?: string | null } | null>;
+}
+
+/** Reported once per process rather than once per call: three sites share it. */
+let missingModuleReported = false;
+
+/**
+ * Load `expo-notifications`, telling "not on this platform" apart from
+ * "should be here and is not".
+ *
+ * US-852: all three call sites swallowed the failed import and then returned
+ * the same answer they return on web. So a module that is absent because it
+ * was never declared as a dependency -- the actual state of this repo since
+ * US-126 -- was indistinguishable from a platform that legitimately does not
+ * do push this way. Push has been inert on every Expo build, and the code
+ * reported that as normal.
+ *
+ * Still returns null either way, because the caller genuinely cannot proceed.
+ * The difference is that this one says so.
+ */
+/**
+ * Swappable so the functions below can be driven in a test (US-852 AC4).
+ *
+ * The import has to stay out of a bundler's static analysis: `expo-notifications`
+ * is genuinely optional here -- it is not a declared dependency, which is AC1 --
+ * and a bundler that resolves the specifier eagerly fails the whole module
+ * rather than reaching the catch. That is also why a plain module-factory mock
+ * is not enough, and why this seam exists rather than an alias in the test
+ * config: an alias would shadow the real module for good once AC1 lands.
+ */
+let notificationsLoader: () => Promise<NotificationsModule> = async () => {
+  const specifier = 'expo-notifications';
+  return (await import(/* @vite-ignore */ specifier)) as unknown as NotificationsModule;
+};
+
+/** Test seam. Pass null to restore the real loader. */
+export function __setNotificationsLoaderForTests(
+  loader: (() => Promise<NotificationsModule>) | null
+): void {
+  if (loader) {
+    notificationsLoader = loader;
+  } else {
+    notificationsLoader = async () => {
+      const specifier = 'expo-notifications';
+      return (await import(/* @vite-ignore */ specifier)) as unknown as NotificationsModule;
+    };
+  }
+}
+
+async function loadNotifications(): Promise<NotificationsModule | null> {
+  try {
+    return await notificationsLoader();
+  } catch (err) {
+    if (!missingModuleReported) {
+      missingModuleReported = true;
+      console.error(
+        `[push] expo-notifications failed to load on ${Platform.OS}. Push is inert on ` +
+          'this build. It is not a declared dependency of this repo (US-852 AC1).',
+        err
+      );
+    }
+    return null;
+  }
+}
+
+/** Test seam: the report is once-per-process, so a suite has to reset it. */
+export function __resetMissingModuleReportForTests(): void {
+  missingModuleReported = false;
 }
 
 export async function requestPushPermission(): Promise<PushPermissionResult> {
   if (Platform.OS === 'web') return { granted: false, reason: 'unsupported' };
   try {
-    const Notifications = await import('expo-notifications').catch(() => null);
-    if (!Notifications) return { granted: false, reason: 'unsupported' };
+    const Notifications = await loadNotifications();
+    if (!Notifications) return { granted: false, reason: 'unavailable' };
 
     const settings = await Notifications.getPermissionsAsync();
     if (settings.granted) return { granted: true };
@@ -47,7 +128,7 @@ export async function requestPushPermission(): Promise<PushPermissionResult> {
 export async function registerPushToken(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   try {
-    const Notifications = await import('expo-notifications').catch(() => null);
+    const Notifications = await loadNotifications();
     if (!Notifications) return null;
 
     const tokenResult = await Notifications.getExpoPushTokenAsync();
@@ -99,7 +180,7 @@ export async function registerPushToken(): Promise<string | null> {
 export async function deactivatePushToken(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   try {
-    const Notifications = await import('expo-notifications').catch(() => null);
+    const Notifications = await loadNotifications();
     if (!Notifications) return false;
 
     const tokenResult = await Notifications.getExpoPushTokenAsync();

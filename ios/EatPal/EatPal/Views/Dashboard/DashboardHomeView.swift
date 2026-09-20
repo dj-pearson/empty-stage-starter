@@ -68,15 +68,28 @@ struct DashboardHomeView: View {
                 // Auto-hidden until there's signal worth showing.
                 MostLovedMealsCard()
 
-                // Quick Stats
-                QuickStatsGrid()
+                // US-705: with no children there is nothing for the stats to
+                // count and nothing the quick actions can attach to, so the
+                // dashboard showed a grid of zeroes above three buttons, none
+                // of which was "add a child" -- and Add Food was disabled
+                // besides, because it needs an activeKidId. AC5: hide them
+                // rather than render them empty, and offer the one action that
+                // gets the parent out of this state.
+                if appState.kids.isEmpty {
+                    AddFirstChildCard(
+                        message: "Add your child to start planning meals, tracking foods and building streaks."
+                    )
+                } else {
+                    // Quick Stats
+                    QuickStatsGrid()
 
-                // Quick Actions
-                QuickActionsSection(
-                    onAddFood: { showingAddFood = true },
-                    onScanBarcode: { showingScanner = true },
-                    onNewRecipe: { showingAddRecipe = true }
-                )
+                    // Quick Actions
+                    QuickActionsSection(
+                        onAddFood: { showingAddFood = true },
+                        onScanBarcode: { showingScanner = true },
+                        onNewRecipe: { showingAddRecipe = true }
+                    )
+                }
             }
             .padding()
         }

@@ -1033,7 +1033,7 @@ them names an edge function. So "nothing in the repo calls this" is the claim;
 | Function | Caller | Evidence |
 | --- | --- | --- |
 | `identify-product` | iOS | `ProductPhotoIdentifier.swift:70` invokes it; a rate-limit row exists in `20260613000001_rate_limit_config_ai_endpoints.sql`. **Keep** (AC 4). |
-| `app-store-notifications` | Apple | App Store Server Notifications V2 endpoint; Apple POSTs the signed payload. Not routable through `edge-functions-server.ts`, which is correct — Apple is given the URL directly. **Keep.** |
+| `app-store-notifications` | Apple | App Store Server Notifications V2 endpoint; Apple POSTs the signed JWS. **This row was wrong until 2026-09-19** and the error is why nobody chased the 404: the URL Apple is given, in the function's own SETUP comment, is `https://functions.tryeatpal.com/app-store-notifications` — the same host `src/lib/edge-functions.ts` calls, served by `edge-functions-server.ts`. It was not in the routing table, so refund, revocation and expiration events hit the 404 branch and never reached `apple_subscriptions`. Routed since US-774. Its auth does not depend on being unroutable: the JWS signature is verified against the `x5c` leaf. **Keep.** |
 | `register-push-token` | none | AC 4 confirmed: `NotificationService.swift:97` upserts `push_tokens` directly (US-379 moved it there). The only other mentions are comments. **Delete candidate.** |
 | `process-notification-queue` | none | The one iOS hit is a comment at `NotificationService.swift:70` describing what reads the table. **Delete candidate**, unless a dashboard schedule runs it. |
 | `backup-scheduler` | none | The one hit is a commented-out line in `20260726000000_tighten_permissive_rls_policies.sql:15`. **Needs a schedule or deletion.** |
@@ -1044,23 +1044,35 @@ them names an edge function. So "nothing in the repo calls this" is the claim;
 
 ### What the routing table says
 
-`edge-functions-server.ts` maps 82 names to `./functions/<name>/index.ts`, and
-that path resolves inside the deployed container, not against this repo's root
-`functions/` directory — all 82 exist under `supabase/functions/`. Two facts
-fall out of the comparison and both belong to US-773:
+`edge-functions-server.ts` builds its routing table at boot by reading the
+`./functions` directory, which is where `Dockerfile:8` mounts
+`supabase/functions/`. A directory holding an `index.ts` is a route; `_shared/`
+and `common/` hold none and are excluded by that same rule.
 
-- **Six mapped functions are missing from the committed deploy package.**
+It used to be a hand-written literal of 82 names, and it had drifted. Two facts
+fell out of comparing it against the tree:
+
+- **Eleven functions under `supabase/functions/` were not in the map at all**:
+  `app-store-notifications`, `bind-email-request`, `bind-email-verify`,
+  `delete-account`, `generate-image`, `identify-product`, `parse-receipt-image`,
+  `recognize-fridge-contents`, `schedule-trial-reminders`, `tonight-mode` and
+  `_health`. Every one answered 404. Nine have live callers in `src/` or in the
+  shipped Swift app -- `delete-account` is the account-deletion path Apple
+  requires, and `bind-email-request`/`bind-email-verify` are the email-binding
+  flow. **Fixed in US-774** by deriving the table from the tree, so a new
+  function is routed by existing rather than by someone remembering a second
+  file. `_health` is **not** routed: the server answers `/health` and `/_health`
+  itself, and US-623 cut that response back to `{status:"ok"}` so an
+  unauthenticated probe learns nothing, but that branch matches the literal path
+  only — discovery that took `_health/` would have served its
+  which-env-vars-are-configured payload at `/functions/_health`. Directories
+  whose name starts with `_` are internals and are skipped.
+- **Six functions are missing from the committed deploy package.**
   `coolify-migration/eatpal-functions-package/` holds 79 directories and lacks
   `ai-coach-chat`, `generate-pseo-content`, `oauth-token-refresh`,
   `process-pseo-queue`, `send-webhook` and `test-ai-configuration`. Either that
-  package is a stale snapshot or those six routes 500 in production.
-- **Eleven functions under `supabase/functions/` are not in the map at all**:
-  `app-store-notifications`, `bind-email-request`, `bind-email-verify`,
-  `common`, `delete-account`, `generate-image`, `identify-product`,
-  `parse-receipt-image`, `recognize-fridge-contents`, `schedule-trial-reminders`
-  and `tonight-mode`. Some are deliberate (Apple is handed a direct URL), but
-  `delete-account` and the two `bind-email-*` functions are user-facing flows
-  and are worth checking against a live deploy.
+  package is a stale snapshot or those six routes 500 in production. Belongs to
+  US-773.
 
 Deletion (AC 2) is deliberately not done in the same pass as the audit. Removing
 a function from the repo changes what the next deploy serves, and three of the

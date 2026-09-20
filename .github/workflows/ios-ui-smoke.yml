@@ -36,6 +36,19 @@ jobs:
     env:
       # Gate the authenticated flow on whether a test account secret is set.
       HAS_TEST_CREDS: ${{ secrets.MAESTRO_TEST_EMAIL != '' }}
+      # The XCUITest driver Maestro installs onto the simulator sometimes does
+      # not come up inside the default window on a cold macos-15 runner, and
+      # the job dies with IOSDriverTimeoutException before a single flow runs.
+      # Seen on PR #282 head 56a2b40, where the simulator spent 1:26 in data
+      # migration and finished with status 4294967295 before Maestro even
+      # started waiting. That is not a flow failing -- nothing is asserted
+      # yet, and the same job failed the same way on 05d6c74, a prd.json-only
+      # commit that cannot affect it.
+      #
+      # This is the remedy the error message itself names. It only raises a
+      # ceiling: a driver that starts promptly is unaffected, and the job's
+      # own timeout-minutes still bounds the run.
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: '240000'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
