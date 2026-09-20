@@ -209,6 +209,14 @@ final class BadgeService: ObservableObject {
         // Queue the highest-tier badge for celebration; lesser ones still get
         // persisted but quietly to avoid stacking five sheets in a row.
         if let best = newlyEarned.max(by: { $0.tier.rawValue < $1.tier.rawValue }) {
+            // US-853: parked on disk as well as in memory. An earn can happen
+            // with no UI on screen at all -- LogMealResultIntent runs this
+            // from a Siri phrase, in the app's process but often with the app
+            // in the background, and the @Published value dies with that
+            // process. A child earning their first badge and nobody ever
+            // seeing it is the failure worth avoiding; the sheet is the whole
+            // point of a badge.
+            parkCelebration(badgeId: best.id, kidId: kidId, earnedAt: now)
             pendingCelebration = Earned(badge: best, kidId: kidId, earnedAt: now)
             // Lightweight toast for users who aren't currently on the Progress
             // screen — the celebration sheet only fires there. The toast is
@@ -225,6 +233,45 @@ final class BadgeService: ObservableObject {
     /// re-trigger the animation.
     func dismissCelebration() {
         pendingCelebration = nil
+        // US-853: and from disk, or it comes back on the next launch. Seeing
+        // the same badge celebrated twice reads as a bug and devalues the
+        // next real one.
+        UserDefaults.standard.removeObject(forKey: Self.parkedCelebrationKey)
+    }
+
+    // MARK: - Celebration that outlives the process (US-853)
+
+    static let parkedCelebrationKey = "badges.pendingCelebration"
+
+    struct ParkedCelebration: Codable, Equatable {
+        let badgeId: String
+        let kidId: String
+        let earnedAt: Date
+    }
+
+    func parkCelebration(badgeId: String, kidId: String, earnedAt: Date) {
+        guard let data = try? JSONEncoder().encode(
+            ParkedCelebration(badgeId: badgeId, kidId: kidId, earnedAt: earnedAt)
+        ) else { return }
+        UserDefaults.standard.set(data, forKey: Self.parkedCelebrationKey)
+    }
+
+    /// Promote a badge earned while nothing was on screen into the live
+    /// celebration, so it surfaces the next time the app opens (AC3).
+    ///
+    /// Does nothing when a celebration is already showing: an earn that just
+    /// happened in-app is the more recent one, and replacing it mid-animation
+    /// would swap the badge under the user.
+    func restoreParkedCelebration() {
+        guard pendingCelebration == nil,
+              let data = UserDefaults.standard.data(forKey: Self.parkedCelebrationKey),
+              let parked = try? JSONDecoder().decode(ParkedCelebration.self, from: data),
+              let badge = Badge(rawValue: parked.badgeId) else { return }
+
+        // A badge id this build does not know about is dropped rather than
+        // kept forever: it can only come from a newer build on the same
+        // device, and there is nothing to draw for it.
+        pendingCelebration = Earned(badge: badge, kidId: parked.kidId, earnedAt: parked.earnedAt)
     }
 
     // MARK: - Server durability (US-871)
@@ -292,6 +339,13 @@ final class BadgeService: ObservableObject {
     /// with today.
     private func upload(badgeIds: [String], kidId: String, earnedAt: Date?) async {
         let formatter = ISO8601DateFormatter()
+
+        // US-853: with no session there is nobody to attribute the row to, and
+        // a queued insert tagged with an empty user id is adopted by whoever
+        // signs in next. The badge is already in the cache either way, and
+        // seedFromServer pushes it up on the next authenticated launch -- the
+        // same path that carries every badge earned before this table existed.
+        guard !Self.currentUserIdForQueue().isEmpty else { return }
 
         for badgeId in badgeIds {
             let when = earnedAt

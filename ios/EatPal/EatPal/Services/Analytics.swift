@@ -142,7 +142,11 @@ enum AnalyticsEvent {
     case recipeImported(source: ImportSource, success: Bool)
 
     case mealPlanned(slot: String, kidId: String?)
-    case mealResultLogged(result: String, kidId: String?)
+    /// US-853: `via` tells the in-app tap apart from a Siri log. The two
+    /// surfaces used to be indistinguishable in the funnel, and the voice one
+    /// was not emitting at all -- so "nobody logs by voice" and "voice logs
+    /// are invisible" looked identical on a dashboard.
+    case mealResultLogged(result: String, kidId: String?, via: EntrySource)
     case mealRemoved
     /// US-262: parent confirmed a planned recipe was eaten; pantry was
     /// debited and recipe-sourced grocery items got auto-checked.
@@ -414,8 +418,8 @@ enum AnalyticsEvent {
             var p = ["slot": slot]
             if let hashed = AnalyticsService.hash(kidId) { p["kid_id"] = hashed }
             return p
-        case .mealResultLogged(let result, let kidId):
-            var p = ["result": result]
+        case .mealResultLogged(let result, let kidId, let via):
+            var p = ["result": result, "via": via.rawValue]
             if let hashed = AnalyticsService.hash(kidId) { p["kid_id"] = hashed }
             return p
         case .mealMadeLogged(let debited, let checked):

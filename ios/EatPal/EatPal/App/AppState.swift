@@ -339,6 +339,11 @@ final class AppState: ObservableObject {
             let kidIdsForBadges = kids.map(\.id)
             Task { await BadgeService.shared.seedFromServer(kidIds: kidIdsForBadges) }
 
+            // US-853: surface a badge earned while nothing was on screen --
+            // a Siri log runs LogMealResultIntent in the background, where
+            // there is no sheet to show.
+            BadgeService.shared.restoreParkedCelebration()
+
             // US-143: drain any recipes the share extension saved while the
             // user was signed out or the app was backgrounded.
             await drainPendingRecipeImports()
@@ -858,7 +863,8 @@ final class AppState: ObservableObject {
                 toast.success("Result logged", message: "Marked as \(result)")
                 AnalyticsService.track(.mealResultLogged(
                     result: result,
-                    kidId: planEntries[index].kidId
+                    kidId: planEntries[index].kidId,
+                    via: .manual
                 ))
                 // US-144: write nutrition to Health when the meal was eaten,
                 // and take it back out when the result changes to anything
@@ -1270,7 +1276,8 @@ final class AppState: ObservableObject {
             )
             AnalyticsService.track(.mealResultLogged(
                 result: "rated_\(rating)",
-                kidId: planEntries.first { $0.id == planEntryId }?.kidId
+                kidId: planEntries.first { $0.id == planEntryId }?.kidId,
+                via: .manual
             ))
         } catch {
             planEntryFeedback.removeAll { $0.id == optimistic.id }
@@ -1391,7 +1398,8 @@ final class AppState: ObservableObject {
 
             AnalyticsService.track(.mealResultLogged(
                 result: "ladder_\(result.rawValue)",
-                kidId: previous.kidId
+                kidId: previous.kidId,
+                via: .manual
             ))
             return true
         } catch {
