@@ -1,4 +1,5 @@
-import { Food, PlanEntry, MealSlot } from "@/types";
+import { Food, Kid, PlanEntry, MealSlot } from "@/types";
+import { isAllergenSafeFor } from "./allergens";
 import { resolveFood, type EffectiveFood } from "./effectiveFood";
 import { generateId } from "./utils";
 import { toISODate, addIsoDays } from "./date-utils";
@@ -14,22 +15,37 @@ const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack
  * reached another device. The server assigns ids now, via addPlanEntries.
  */
 export function buildWeekPlan(
-  kidId: string,
+  kid: Pick<Kid, "id" | "allergens">,
   foods: Food[],
   history: PlanEntry[],
   startDate: Date = new Date()
 ): Omit<PlanEntry, "id">[] {
+  const kidId = kid.id;
   const plan: Omit<PlanEntry, "id">[] = [];
   const days = 7;
-  const safeFoods = foods.filter(f => f.is_safe);
-  const tryBites = foods.filter(f => f.is_try_bite);
+  // `is_safe` is a household flag, so a food one sibling eats safely can carry
+  // this child's allergen. Quick Build used to pick from every safe food with
+  // no allergen check at all; it now drops anything this child reacts to
+  // before choosing, and says so when that leaves nothing to choose from.
+  const servable = foods.filter(f => isAllergenSafeFor(kid, f));
+  const safeFoods = servable.filter(f => f.is_safe);
+  const tryBites = servable.filter(f => f.is_try_bite);
+  const allergenExcluded = servable.length < foods.length;
 
   if (safeFoods.length === 0) {
-    throw new Error("Please add some safe foods first!");
+    throw new Error(
+      allergenExcluded
+        ? "Every safe food contains one of this child's allergens. Add a safe food without them first."
+        : "Please add some safe foods first!"
+    );
   }
 
   if (tryBites.length === 0) {
-    throw new Error("Please add some try bite foods first!");
+    throw new Error(
+      allergenExcluded
+        ? "Every try bite food contains one of this child's allergens. Add a try bite without them first."
+        : "Please add some try bite foods first!"
+    );
   }
 
   const today = startDate;
