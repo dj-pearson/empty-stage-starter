@@ -19556,6 +19556,10 @@ export type Database = {
         Args: { p_household_id?: string }
         Returns: number
       }
+      merge_sole_member_households_into: {
+        Args: { p_target: string; p_user: string }
+        Returns: number
+      }
       normalize_chain_food_name: { Args: { p_name: string }; Returns: string }
       normalize_product_name: { Args: { p_name: string }; Returns: string }
       normalize_title: { Args: { title_text: string }; Returns: string }
