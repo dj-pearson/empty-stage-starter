@@ -32,12 +32,14 @@ const FOODS: Food[] = [
   food('try2', { is_safe: false, is_try_bite: true }),
 ];
 
+const KID = { id: 'kid-1' };
+
 const dateKeys = (entries: Omit<PlanEntry, 'id'>[]) =>
   [...new Set(entries.map((e) => e.date))].sort();
 
 describe('buildWeekPlan (US-715)', () => {
   it('builds the seven days starting at the requested date', () => {
-    const plan = buildWeekPlan('kid-1', FOODS, [], new Date('2026-09-06T00:00:00'));
+    const plan = buildWeekPlan(KID, FOODS, [], new Date('2026-09-06T00:00:00'));
     expect(dateKeys(plan)).toEqual([
       '2026-09-06',
       '2026-09-07',
@@ -50,13 +52,13 @@ describe('buildWeekPlan (US-715)', () => {
   });
 
   it('builds a different week when a different week is asked for', () => {
-    const plan = buildWeekPlan('kid-1', FOODS, [], new Date('2026-10-04T00:00:00'));
+    const plan = buildWeekPlan(KID, FOODS, [], new Date('2026-10-04T00:00:00'));
     expect(dateKeys(plan)[0]).toBe('2026-10-04');
     expect(dateKeys(plan)).toHaveLength(7);
   });
 
   it('returns no ids: the server assigns them', () => {
-    const plan = buildWeekPlan('kid-1', FOODS, [], new Date('2026-09-06T00:00:00'));
+    const plan = buildWeekPlan(KID, FOODS, [], new Date('2026-09-06T00:00:00'));
     expect(plan.length).toBeGreaterThan(0);
     for (const entry of plan) {
       expect(entry).not.toHaveProperty('id');
@@ -64,7 +66,7 @@ describe('buildWeekPlan (US-715)', () => {
   });
 
   it('only ever builds for the kid it was asked about', () => {
-    const plan = buildWeekPlan('kid-1', FOODS, [], new Date('2026-09-06T00:00:00'));
+    const plan = buildWeekPlan(KID, FOODS, [], new Date('2026-09-06T00:00:00'));
     expect([...new Set(plan.map((e) => e.kid_id))]).toEqual(['kid-1']);
   });
 
@@ -75,7 +77,7 @@ describe('buildWeekPlan (US-715)', () => {
       { id: 'x', kid_id: 'kid-2', date: '2026-09-06', meal_slot: 'lunch', food_id: 'safe1', result: null },
       { id: 'y', kid_id: 'kid-1', date: '2026-08-01', meal_slot: 'lunch', food_id: 'safe2', result: null },
     ];
-    const plan = buildWeekPlan('kid-1', FOODS, history, new Date('2026-09-06T00:00:00'));
+    const plan = buildWeekPlan(KID, FOODS, history, new Date('2026-09-06T00:00:00'));
     expect(plan.some((e) => e.kid_id === 'kid-2')).toBe(false);
     expect(plan.some((e) => e.date === '2026-08-01')).toBe(false);
   });
@@ -89,17 +91,56 @@ describe('buildWeekPlan (US-715)', () => {
     // in CI at 00:02 UTC, which reads as a flake and is not one: it is the exact
     // off-by-one that TZ setting exists to expose, asserted from the wrong side.
     const todayKey = toISODate(new Date());
-    const plan = buildWeekPlan('kid-1', FOODS, []);
+    const plan = buildWeekPlan(KID, FOODS, []);
     expect(dateKeys(plan)[0]).toBe(todayKey);
   });
 
   it('refuses to build without safe foods', () => {
     expect(() =>
-      buildWeekPlan('kid-1', [food('try1', { is_safe: false, is_try_bite: true })], []),
+      buildWeekPlan(KID, [food('try1', { is_safe: false, is_try_bite: true })], []),
     ).toThrow(/safe foods/i);
   });
 
   it('refuses to build without try bites', () => {
-    expect(() => buildWeekPlan('kid-1', [food('safe1')], [])).toThrow(/try bite/i);
+    expect(() => buildWeekPlan(KID, [food('safe1')], [])).toThrow(/try bite/i);
+  });
+});
+
+describe('buildWeekPlan allergen guard', () => {
+  // Two siblings share one pantry. Peanut butter is a safe food for the
+  // brother, so it is marked safe household-wide; Maya is allergic.
+  const MAYA = { id: 'maya', allergens: ['peanuts'] };
+  const PANTRY: Food[] = [
+    food('pb', { allergens: ['Peanuts'] }),
+    food('pb-crackers', { allergens: ['en:peanuts', 'wheat'] }),
+    food('rice'),
+    food('chicken'),
+    food('peanut-try', { is_safe: false, is_try_bite: true, allergens: ['peanut'] }),
+    food('pear', { is_safe: false, is_try_bite: true }),
+  ];
+
+  it('never schedules a food carrying the child\'s allergen, whatever its spelling', () => {
+    for (let run = 0; run < 25; run++) {
+      const plan = buildWeekPlan(MAYA, PANTRY, [], new Date('2026-09-06T00:00:00'));
+      const ids = new Set(plan.map((e) => e.food_id));
+      expect(ids.has('pb')).toBe(false);
+      expect(ids.has('pb-crackers')).toBe(false);
+      expect(ids.has('peanut-try')).toBe(false);
+    }
+  });
+
+  it('still uses those foods for a sibling without the allergen', () => {
+    const seen = new Set<string>();
+    for (let run = 0; run < 25; run++) {
+      for (const e of buildWeekPlan({ id: 'leo' }, PANTRY, [], new Date('2026-09-06T00:00:00'))) {
+        seen.add(e.food_id);
+      }
+    }
+    expect(seen.has('pb')).toBe(true);
+  });
+
+  it('says why when the allergen removes every safe food', () => {
+    const onlyPeanut = [food('pb', { allergens: ['peanuts'] }), food('pear', { is_safe: false, is_try_bite: true })];
+    expect(() => buildWeekPlan(MAYA, onlyPeanut, [])).toThrow(/allergens/i);
   });
 });

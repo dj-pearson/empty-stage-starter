@@ -187,7 +187,7 @@ export default function Planner() {
       // wholesale replace wiped every other kid and every other week.
       const weekStart = format(currentWeekStart, "yyyy-MM-dd");
       const newPlan = buildWeekPlan(
-        activeKid.id,
+        activeKid,
         foods,
         planEntries,
         currentWeekStart

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { KidUpdateSchema, validateData } from "@/lib/validations";
+import {
+  EMPTY_INTAKE_FORM,
+  intakeFormFromRow,
+  type IntakeFormData,
+  type IntakeRow,
+} from "@/lib/kidIntakeForm";
 
 interface ChildIntakeQuestionnaireProps {
   open: boolean;
@@ -40,28 +46,42 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
   const [saving, setSaving] = useState(false);
   const [unitSystem, setUnitSystem] = useState<'imperial' | 'metric'>('imperial');
   
-  const [formData, setFormData] = useState({
-    gender: "",
-    height_cm: null as number | null,
-    weight_kg: null as number | null,
-    allergens: [] as string[],
-    allergen_severity: {} as Record<string, string>,
-    cross_contamination_sensitive: false,
-    dietary_restrictions: [] as string[],
-    health_goals: [] as string[],
-    nutrition_concerns: [] as string[],
-    eating_behavior: "",
-    new_food_willingness: "",
-    behavioral_notes: "",
-    texture_sensitivity_level: "",
-    texture_dislikes: [] as string[],
-    texture_preferences: [] as string[],
-    preferred_preparations: [] as string[],
-    favorite_foods: [] as string[],
-    always_eats_foods: [] as string[],
-    disliked_foods: [] as string[],
-    pickiness_level: "",
-  });
+  const [formData, setFormData] = useState<IntakeFormData>(EMPTY_INTAKE_FORM);
+  // The form used to open blank and write that blank state over the
+  // saved profile, so re-running the intake to change one answer erased the
+  // child's allergens. It now loads the saved row first, and Save stays off
+  // until that load succeeds.
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoadState('loading');
+    setCurrentStep(0);
+    void (async () => {
+      const { data, error } = await supabase
+        .from('kids')
+        // "*" rather than a column list: pickiness_level,
+        // texture_sensitivity_level and preferred_preparations are written
+        // below but created by no migration, and naming a missing column
+        // fails the whole read.
+        .select("*")
+        .eq('id', kidId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error || !data) {
+        logger.error("Error loading profile for questionnaire:", error);
+        toast.error("Couldn't load this profile, so it can't be edited right now");
+        setLoadState('error');
+        return;
+      }
+      setFormData(intakeFormFromRow(data as IntakeRow));
+      setLoadState('ready');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, kidId]);
 
   // Helper functions for unit conversion with proper precision
   const convertHeightToMetric = (feet: number, inches: number): number => {
@@ -161,6 +181,7 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
   };
 
   const handleSubmit = async () => {
+    if (loadState !== 'ready') return;
     setSaving(true);
     try {
       // Prepare data for validation
@@ -781,7 +802,7 @@ export function ChildIntakeQuestionnaire({ open, onOpenChange, kidId, kidName, o
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={saving}>
+            <Button onClick={handleSubmit} disabled={saving || loadState !== 'ready'}>
               {saving ? "Saving..." : "Complete Profile"}
               <Check className="h-4 w-4 ml-1" />
             </Button>

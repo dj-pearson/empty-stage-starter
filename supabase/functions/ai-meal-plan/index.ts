@@ -3,6 +3,7 @@ import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 import { withStandingLimits } from "../_shared/safety.ts";
 import { PublicError, publicMessage } from '../_shared/errors.ts';
+import { isAllergenSafeFor } from '../_shared/allergens.ts';
 
 export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -30,17 +31,29 @@ export default async (req: Request) => {
 
     const kidAllergens = kid.allergens || [];
 
-    const safeFoods = foods
+    // Everything downstream -- the prompt AND the mapping of the model's reply
+    // back to food ids -- works from this list, never from `foods`. The prompt
+    // used to be filtered while the reply was mapped against every household
+    // food, so a model answer naming a sibling's food carrying this child's
+    // allergen resolved and was scheduled. The comparison also used to be an
+    // exact string match, which missed "Peanuts" vs "peanuts".
+    const servableFoods = (foods || []).filter((f: any) => isAllergenSafeFor(kid, f));
+    const servableIds = new Set(servableFoods.map((f: any) => f.id));
+
+    const safeFoods = servableFoods
       .filter((f: any) => f.is_safe && (f.quantity || 0) > 0)
-      .filter((f: any) => !(f.allergens || []).some((a: string) => kidAllergens.includes(a)))
       .map((f: any) => ({ id: f.id, name: f.name, category: f.category, quantity: f.quantity, unit: f.unit }));
 
-    const tryBiteFoods = foods
+    const tryBiteFoods = servableFoods
       .filter((f: any) => f.is_try_bite && (f.quantity || 0) > 0)
-      .filter((f: any) => !(f.allergens || []).some((a: string) => kidAllergens.includes(a)))
       .map((f: any) => ({ id: f.id, name: f.name, category: f.category }));
 
-    const availableRecipes = (recipes || [])
+    // A recipe is offered only when every linked food is servable.
+    const servableRecipes = (recipes || []).filter(
+      (r: any) => (r.food_ids || []).every((id: string) => servableIds.has(id)),
+    );
+
+    const availableRecipes = servableRecipes
       .slice(0, 20)
       .map((r: any) => ({
         name: r.name,
@@ -135,13 +148,13 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
     const planWithIds = mealPlan.plan.map((day: any) => {
       const mappedMeals: any = {};
       for (const [slot, foodName] of Object.entries(day.meals)) {
-        const name = (foodName as string).toLowerCase();
-        let food = foods.find((f: any) => f.name.toLowerCase() === name);
+        const name = String(foodName).toLowerCase();
+        let food = servableFoods.find((f: any) => f.name.toLowerCase() === name);
 
         if (!food) {
-          const recipe = (recipes || []).find((r: any) => r.name.toLowerCase() === name);
+          const recipe = servableRecipes.find((r: any) => r.name.toLowerCase() === name);
           if (recipe?.food_ids?.length > 0) {
-            food = foods.find((f: any) => f.id === recipe.food_ids[0]);
+            food = servableFoods.find((f: any) => f.id === recipe.food_ids[0]);
           }
         }
 

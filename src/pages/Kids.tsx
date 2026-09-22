@@ -177,6 +177,7 @@ export default function Kids() {
 
         {selectedKidForQuestionnaire && (
           <ChildIntakeQuestionnaire
+            key={selectedKidForQuestionnaire.id}
             open={questionnaireOpen}
             onOpenChange={setQuestionnaireOpen}
             kidId={selectedKidForQuestionnaire.id}
