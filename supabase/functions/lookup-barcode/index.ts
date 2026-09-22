@@ -525,6 +525,38 @@ async function promoteToCatalog(
 const edgeRuntime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } })
   .EdgeRuntime;
 
+/**
+ * The caller's own foods row for this barcode, read under RLS with the
+ * caller's JWT; null when there is no signed-in caller or no match.
+ */
+async function findInCallersPantry(
+  req: Request,
+  barcode: string,
+): Promise<Record<string, any> | null> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+
+  const callerClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    },
+  );
+  const { data, error } = await callerClient
+    .from('foods')
+    .select('name, category, package_quantity, servings_per_container, allergens, quantity, unit')
+    .eq('barcode', barcode)
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error('Pantry lookup failed (non-fatal):', error);
+    return null;
+  }
+  return data;
+}
+
 export default async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -548,16 +580,16 @@ export default async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // STEP 1: Check user's pantry first (foods table) - fastest lookup
-    console.log('Checking user pantry for barcode...');
-    const { data: pantryFood, error: pantryError } = await supabaseClient
-      .from('foods')
-      .select('*')
-      .eq('barcode', barcode)
-      .limit(1)
-      .single();
+    // STEP 1: Check the caller's own pantry first (foods table).
+    //
+    // This read runs with the caller's session, not the service role, so RLS
+    // limits it to their household. Under the service role it matched any
+    // household's row with that barcode and answered "in your pantry" with
+    // someone else's quantity. No session, no pantry step: fall through to the
+    // shared catalog and the providers, which hold no household data.
+    const pantryFood = await findInCallersPantry(req, barcode);
 
-    if (pantryFood && !pantryError) {
+    if (pantryFood) {
       console.log('Found in user pantry:', pantryFood.name);
       return new Response(
         JSON.stringify({
