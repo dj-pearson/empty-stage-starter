@@ -5,6 +5,22 @@ import { withStandingLimits } from "../_shared/safety.ts";
 import { PublicError, publicMessage } from '../_shared/errors.ts';
 import { isAllergenSafeFor } from '../_shared/allergens.ts';
 
+interface PlanFood {
+  id: string;
+  name: string;
+  category?: string;
+  quantity?: number | null;
+  unit?: string | null;
+  is_safe?: boolean;
+  is_try_bite?: boolean;
+  allergens?: string[] | null;
+}
+
+interface PlanRecipe {
+  name: string;
+  food_ids?: string[] | null;
+}
+
 export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -37,20 +53,22 @@ export default async (req: Request) => {
     // food, so a model answer naming a sibling's food carrying this child's
     // allergen resolved and was scheduled. The comparison also used to be an
     // exact string match, which missed "Peanuts" vs "peanuts".
-    const servableFoods = (foods || []).filter((f: any) => isAllergenSafeFor(kid, f));
-    const servableIds = new Set(servableFoods.map((f: any) => f.id));
+    const allFoods: PlanFood[] = Array.isArray(foods) ? foods : [];
+    const allRecipes: PlanRecipe[] = Array.isArray(recipes) ? recipes : [];
+    const servableFoods = allFoods.filter((f) => isAllergenSafeFor(kid, f));
+    const servableIds = new Set(servableFoods.map((f) => f.id));
 
     const safeFoods = servableFoods
-      .filter((f: any) => f.is_safe && (f.quantity || 0) > 0)
-      .map((f: any) => ({ id: f.id, name: f.name, category: f.category, quantity: f.quantity, unit: f.unit }));
+      .filter((f) => f.is_safe && (f.quantity || 0) > 0)
+      .map((f) => ({ id: f.id, name: f.name, category: f.category, quantity: f.quantity, unit: f.unit }));
 
     const tryBiteFoods = servableFoods
-      .filter((f: any) => f.is_try_bite && (f.quantity || 0) > 0)
-      .map((f: any) => ({ id: f.id, name: f.name, category: f.category }));
+      .filter((f) => f.is_try_bite && (f.quantity || 0) > 0)
+      .map((f) => ({ id: f.id, name: f.name, category: f.category }));
 
     // A recipe is offered only when every linked food is servable.
-    const servableRecipes = (recipes || []).filter(
-      (r: any) => (r.food_ids || []).every((id: string) => servableIds.has(id)),
+    const servableRecipes = allRecipes.filter(
+      (r) => (r.food_ids || []).every((id) => servableIds.has(id)),
     );
 
     const availableRecipes = servableRecipes
@@ -149,12 +167,13 @@ Return ONLY valid JSON (no markdown, no explanation) in this format:
       const mappedMeals: any = {};
       for (const [slot, foodName] of Object.entries(day.meals)) {
         const name = String(foodName).toLowerCase();
-        let food = servableFoods.find((f: any) => f.name.toLowerCase() === name);
+        let food = servableFoods.find((f) => f.name.toLowerCase() === name);
 
         if (!food) {
-          const recipe = servableRecipes.find((r: any) => r.name.toLowerCase() === name);
-          if (recipe?.food_ids?.length > 0) {
-            food = servableFoods.find((f: any) => f.id === recipe.food_ids[0]);
+          const recipe = servableRecipes.find((r) => r.name.toLowerCase() === name);
+          const firstFoodId = recipe?.food_ids?.[0];
+          if (firstFoodId) {
+            food = servableFoods.find((f) => f.id === firstFoodId);
           }
         }
 

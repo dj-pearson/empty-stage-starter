@@ -529,10 +529,20 @@ const edgeRuntime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promi
  * The caller's own foods row for this barcode, read under RLS with the
  * caller's JWT; null when there is no signed-in caller or no match.
  */
+interface PantryMatch {
+  name: string;
+  category: string | null;
+  package_quantity: string | null;
+  servings_per_container: number | null;
+  allergens: string[] | null;
+  quantity: number | null;
+  unit: string | null;
+}
+
 async function findInCallersPantry(
   req: Request,
   barcode: string,
-): Promise<Record<string, any> | null> {
+): Promise<PantryMatch | null> {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
 
@@ -554,7 +564,7 @@ async function findInCallersPantry(
     console.error('Pantry lookup failed (non-fatal):', error);
     return null;
   }
-  return data;
+  return data as PantryMatch | null;
 }
 
 export default async (req: Request) => {
