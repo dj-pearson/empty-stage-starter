@@ -24,6 +24,7 @@ import { calculateAge, cn } from "@/lib/utils";
 import { userFacingError } from "@/lib/networkFailure";
 import { PLANNER_WEEK_STARTS_ON } from "@/lib/date-utils";
 import { applyTemplate, type MealPlanTemplate } from "@/lib/mealPlanTemplatesApi";
+import "@/i18n/appLocale";
 
 type ApplyMode = "merge" | "replace";
 

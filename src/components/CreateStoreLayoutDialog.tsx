@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Store, MapPin } from "lucide-react";
 import { logger } from "@/lib/logger";
 import { storeDisplayName, type StoreLayoutInsert, type StoreLayoutRow } from "@/lib/storeLayouts";
+import "@/i18n/appLocale";
 
 interface CreateStoreLayoutDialogProps {
   open: boolean;

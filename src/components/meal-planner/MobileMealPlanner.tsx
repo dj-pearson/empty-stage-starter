@@ -32,6 +32,7 @@ import { isoDay, todayIndex, weekdayIndex } from "@/lib/mobilePlannerDay";
 import { WeekStrip } from "./WeekStrip";
 import { FamilyMealCard, type MealOutcome } from "./FamilyMealCard";
 import { MealQuickAddDrawer, MealQuickAddContext } from "./MealQuickAddDrawer";
+import "@/i18n/appLocale";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },

@@ -23,6 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { analytics } from '@/lib/analytics';
 import { computeVarietyFatigue, type FatigueResult, type FatigueTier } from '@/lib/varietyFatigue';
+import '@/i18n/appLocale';
 
 const DISMISS_KEY = 'varietyFatigue.dismissedFor';
 /** Re-show even when dismissed once a day has passed. */

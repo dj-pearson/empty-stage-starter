@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { PlanEntry, Kid, MealSlot } from "@/types";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { isoDay } from "@/lib/mobilePlannerDay";
+import "@/i18n/appLocale";
 
 const SLOTS_PER_DAY = 6;
 

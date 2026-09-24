@@ -1,0 +1,118 @@
+{
+  "pantry": {
+    "meta": {
+      "title": "Pantry - EatPal",
+      "description": "Manage your food pantry, track inventory, and organize items by category"
+    },
+    "subtitle_one": "{{formatted}} item across {{categories}}",
+    "subtitle_other": "{{formatted}} items across {{categories}}",
+    "subtitleCategories_one": "{{formatted}} category",
+    "subtitleCategories_other": "{{formatted}} categories",
+    "loading": "Loading your pantry",
+    "resultCount_one": "{{formatted}} item shown",
+    "resultCount_other": "{{formatted}} items shown",
+    "loadMore_one": "Load more ({{formatted}} remaining)",
+    "loadMore_other": "Load more ({{formatted}} remaining)",
+    "refresh": {
+      "failed": "Couldn't refresh the pantry. Check your connection."
+    },
+    "captureBar": {
+      "scanBarcode": "Scan barcode",
+      "scanReceipt": "Scan receipt"
+    },
+    "grocery": {
+      "added_one": "Added {{formatted}} item to the grocery list",
+      "added_other": "Added {{formatted}} items to the grocery list"
+    },
+    "quickAdd": {
+      "toppedUp": "{{name}}: {{from}} to {{to}}"
+    },
+    "shortcuts": {
+      "search": "Search the pantry",
+      "barcode": "Scan a barcode"
+    },
+    "filters": {
+      "all": "All",
+      "categories": "Filter by category",
+      "itemCount_one": "{{formatted}} item",
+      "itemCount_other": "{{formatted}} items",
+      "searchPlaceholder": "Search pantry items...",
+      "searchLabel": "Search pantry",
+      "clearSearch": "Clear search",
+      "clear_one": "Clear {{formatted}} filter",
+      "clear_other": "Clear {{formatted}} filters",
+      "clearStock": "Clear the stock filter",
+      "showingLow": "Showing low stock",
+      "showingOut": "Showing out of stock",
+      "showingRestock": "Showing what needs buying"
+    },
+    "sort": {
+      "label": "Sort pantry items",
+      "name": "Sort by name",
+      "lowStock": "Low stock first",
+      "category": "By category",
+      "recent": "Recently added"
+    },
+    "view": {
+      "label": "View",
+      "grid": "Grid view",
+      "list": "List view"
+    },
+    "empty": {
+      "starterTitle": "Quick start",
+      "starterText": "Load common kid-friendly foods",
+      "recommended": "Recommended",
+      "manualTitle": "Add manually",
+      "manualText": "Type in specific foods one at a time",
+      "aiTitle": "Food ideas",
+      "aiText": "Get suggestions based on what your child eats",
+      "tipsTitle": "Tips for getting started",
+      "tipSafeLabel": "Safe foods:",
+      "tipSafe": "foods your kids already eat and enjoy",
+      "tipTryLabel": "Try bites:",
+      "tipTry": "new foods you want to introduce gradually",
+      "tipQtyLabel": "Quantities:",
+      "tipQty": "track stock to know when to restock"
+    },
+    "filteredEmpty": {
+      "text": "No items match your current filters",
+      "forKid": "Nothing for {{kid}} matches these filters",
+      "clear": "Clear filters"
+    },
+    "suggestions": {
+      "title": "Food ideas",
+      "description": "Based on your child's preferences and what they have eaten.",
+      "loading": "Looking at what they eat...",
+      "needsKid": "Add or pick a child first: ideas are based on what they eat.",
+      "rateLimited": "Too many requests",
+      "tryLater": "Try again in a few moments.",
+      "creditsTitle": "Credits required",
+      "credits": "Add credits to your workspace to use AI features.",
+      "failed": "Couldn't get food ideas. Try again.",
+      "addToGrocery": "Add to grocery list",
+      "addAsTryBite": "Add as try bite",
+      "added": "Added",
+      "addedTryBite": "{{name}} added as a try bite",
+      "none": "No new ideas right now.",
+      "noneHint": "Log a few more meals, then try again."
+    },
+    "toast": {
+      "undo": "Undo",
+      "added": "Added {{name}}",
+      "addDetails": "Add details",
+      "toppedUpBy": "Added {{amount}} to {{name}}",
+      "threwOut": "Threw out {{amount}} {{unit}}",
+      "updated": "{{name}} updated",
+      "bulkAdded_one": "Added {{formatted}} item to the pantry",
+      "bulkAdded_other": "Added {{formatted}} items to the pantry",
+      "starterAlready": "All starter foods are already in your pantry.",
+      "starterLoaded_one": "Added {{formatted}} starter food",
+      "starterLoaded_other": "Added {{formatted}} starter foods"
+    }
+  },
+  "pullToRefresh": {
+    "pull": "Pull to refresh",
+    "release": "Release to refresh",
+    "refreshing": "Refreshing..."
+  }
+}

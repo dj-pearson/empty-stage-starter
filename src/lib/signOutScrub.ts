@@ -44,6 +44,8 @@ export const SCRUBBED_KEYS: readonly string[] = [
   'eatpal_admin_feature_flags',
   'blog_webhook_url',
   'eatpal.share_chain_outcomes',
+  // The Pantry kid lens holds a kid id from the previous household.
+  'eatpal.pantry.lensKid',
 ];
 
 /**
@@ -110,6 +112,10 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
     'cooldown that stops a broken deploy reload-looping the browser, and is about the build rather than the account',
   'recipe-view':
     'grid or list on the Recipes page is a layout choice for this screen size, not account data',
+  'eatpal.pantry.viewMode':
+    'list or grid on the Pantry page is a layout choice for this screen size, not account data',
+  'eatpal.pantry.sortBy':
+    'the Pantry sort order is a viewing preference holding one of a fixed set of option names',
   'eatpal.recipes.plan.addMissing':
     'whether "add missing ingredients" starts ticked when planning a recipe; a yes/no with no account data in it',
   'eatpal.activation.fired':

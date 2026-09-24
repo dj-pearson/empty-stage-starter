@@ -2,6 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import "@/i18n/appLocale";
 
 interface CheckoutBarProps {
   /** Rows checked off on the list on screen. */

@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Minus, Plus } from "lucide-react";
 import type { FoodCategory, GroceryItem } from "@/types";
 import { stepQuantity } from "@/lib/groceryData";
+import "@/i18n/appLocale";
 
 const KNOWN_CATEGORIES: readonly FoodCategory[] = ["protein", "carb", "dairy", "fruit", "vegetable", "snack"];
 

@@ -4,6 +4,7 @@ import {
   restockHistoryFromGroceryItems,
   isFoodSeasonalOutOfWindow,
   forecastForFood,
+  buildRestockIndex,
 } from './depletionForecastWiring';
 
 const REFERENCE_NOW = new Date('2026-05-13T12:00:00Z'); // mid-May, a Wednesday
@@ -124,5 +125,59 @@ describe('forecastForFood', () => {
     );
     expect(f).not.toBeNull();
     expect(f!.confidence).toBe('cold-start');
+  });
+});
+
+describe('buildRestockIndex + forecastForFood(food, index)', () => {
+  const items = [
+    ...[42, 35, 28, 21, 14, 7].map((n) => ({ name: 'Milk', created_at: iso(n) })),
+    { name: '  milk ', created_at: iso(3) },
+    { name: 'Eggs', created_at: iso(20) },
+    { name: 'Eggs', created_at: iso(5) },
+    { name: 'Eggs', created_at: 'not-a-date' },
+    { name: 'Bread', created_at: undefined },
+  ];
+  const foods = [
+    { id: 'm', name: 'Milk', quantity: 2 },
+    { id: 'e', name: 'EGGS', quantity: 6 },
+    { id: 'b', name: 'Bread', quantity: 1 },
+    { id: 'x', name: 'Saffron', quantity: 1 },
+    { id: 'n', name: 'Milk', quantity: undefined },
+  ];
+
+  it('holds the same histories restockHistoryFromGroceryItems returns', () => {
+    const index = buildRestockIndex(items);
+    for (const name of ['Milk', 'Eggs']) {
+      expect(index.get(normalizeProductName(name))).toEqual(restockHistoryFromGroceryItems(name, items));
+    }
+    expect(index.has('bread')).toBe(false);
+  });
+
+  it('gives identical output from both call forms', () => {
+    const index = buildRestockIndex(items);
+    for (const food of foods) {
+      expect(forecastForFood(food, index, { asOf: REFERENCE_NOW })).toEqual(
+        forecastForFood(food, items, { asOf: REFERENCE_NOW })
+      );
+    }
+  });
+
+  it('reads the index once per food and never walks the grocery rows', () => {
+    const index = buildRestockIndex(items);
+    const lookups: string[] = [];
+    const spied = new Map(index);
+    const get = spied.get.bind(spied);
+    spied.get = (key: string) => {
+      lookups.push(key);
+      return get(key);
+    };
+    // Mutating the rows after indexing would change a per-food walk; it must
+    // not change the indexed forecast.
+    const before = forecastForFood(foods[0], spied, { asOf: REFERENCE_NOW });
+    items.push({ name: 'Milk', created_at: iso(1) });
+    const after = forecastForFood(foods[0], spied, { asOf: REFERENCE_NOW });
+    items.pop();
+    expect(after).toEqual(before);
+    expect(lookups).toEqual(['milk', 'milk']);
   });
 });

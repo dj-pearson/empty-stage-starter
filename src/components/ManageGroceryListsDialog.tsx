@@ -27,6 +27,7 @@ import { Trash2, Archive, Star, ArchiveRestore } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { logger } from "@/lib/logger";
 import type { GroceryListRow } from "@/hooks/useGroceryLists";
+import "@/i18n/appLocale";
 
 interface ManageGroceryListsDialogProps {
   open: boolean;

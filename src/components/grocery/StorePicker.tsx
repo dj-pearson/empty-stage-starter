@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { isCatalogStore, storeDisplayName, type StoreLayoutRow } from "@/lib/storeLayouts";
+import "@/i18n/appLocale";
 
 /** The "no store" choice. Never a uuid, so never a store id. */
 const TYPICAL_STORE = "__typical_store__";

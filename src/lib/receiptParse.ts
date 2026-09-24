@@ -30,6 +30,74 @@ export interface ReviewRow extends ParsedLineItem {
   uid: string;
   accept: boolean;
   matchedFoodId: string | null;
+  /**
+   * The line and the pantry food it matched are counted in different units
+   * ("2 lb" of bananas against a food kept in "count"). Adding 2 to a count
+   * of 6 is a number, not a fact, so a mismatched row starts unticked and
+   * the review screen says why. Optional so a row built by hand (tests, old
+   * callers) reads as "no mismatch".
+   */
+  unitMismatch?: boolean;
+}
+
+/** Unit spellings that mean the same thing on a receipt and in the pantry. */
+const UNIT_ALIASES: Record<string, string> = {
+  lbs: 'lb',
+  pound: 'lb',
+  pounds: 'lb',
+  ounce: 'oz',
+  ounces: 'oz',
+  gallon: 'gal',
+  gallons: 'gal',
+  ea: 'count',
+  each: 'count',
+  ct: 'count',
+  pc: 'count',
+  pcs: 'count',
+  piece: 'count',
+  pieces: 'count',
+  item: 'count',
+  items: 'count',
+  unit: 'count',
+  units: 'count',
+  pk: 'pack',
+  pkg: 'pack',
+  package: 'pack',
+  packages: 'pack',
+  packs: 'pack',
+  bags: 'bag',
+  boxes: 'box',
+  jars: 'jar',
+  bottles: 'bottle',
+  cans: 'can',
+  loaves: 'loaf',
+  dozens: 'dozen',
+  doz: 'dozen',
+  servings: 'serving',
+};
+
+/** Lowercased, trimmed, dot-free, with common aliases folded together. */
+export function normalizeReceiptUnit(unit: string | null | undefined): string {
+  const u = (unit ?? '').trim().toLowerCase().replace(/\.$/, '');
+  return UNIT_ALIASES[u] ?? u;
+}
+
+/**
+ * True when both units are known and differ. An empty unit on either side is
+ * "not stated", which is not a disagreement.
+ */
+export function unitsMismatch(
+  lineUnit: string | null | undefined,
+  foodUnit: string | null | undefined
+): boolean {
+  const a = normalizeReceiptUnit(lineUnit);
+  const b = normalizeReceiptUnit(foodUnit);
+  return a !== '' && b !== '' && a !== b;
+}
+
+/** Normalised name used to fold two receipt lines for the same new food. */
+export function receiptNameKey(name: string | null | undefined): string {
+  return (name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 const VALID_CATEGORIES: FoodCategory[] = [
@@ -84,11 +152,13 @@ export function parseResponseToReviewRows(
     while (seen.has(uid)) uid = `${uid}-x`;
     seen.add(uid);
     const matched = fuzzyMatchFood(it.parsedName, foods);
+    const unitMismatch = matched ? unitsMismatch(it.unit, matched.unit) : false;
     return {
       ...it,
       uid,
-      accept: it.confidence >= 0.5,
+      accept: it.confidence >= 0.5 && !unitMismatch,
       matchedFoodId: matched?.id ?? null,
+      unitMismatch,
     };
   });
 }
@@ -119,6 +189,10 @@ export interface ReceiptPantryPlan {
 export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): ReceiptPantryPlan {
   const deltas = new Map<string, number>();
   const creates: Omit<Food, 'id'>[] = [];
+  // Two unmatched "Bananas" lines (rung up twice) are one new food, not two.
+  // Keyed by name AND unit: 2 lb and 3 count cannot be added together, so
+  // those stay separate rather than producing "5" of something.
+  const createIndex = new Map<string, number>();
   for (const r of rows) {
     if (!r.accept) continue;
     const qty = Number.isFinite(r.qty) && r.qty > 0 ? r.qty : 1;
@@ -126,14 +200,22 @@ export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): ReceiptPant
       deltas.set(r.matchedFoodId, (deltas.get(r.matchedFoodId) ?? 0) + qty);
       continue;
     }
+    const key = `${receiptNameKey(r.parsedName)}|${normalizeReceiptUnit(r.unit)}`;
+    const existing = createIndex.get(key);
+    if (existing !== undefined) {
+      const prev = creates[existing];
+      prev.quantity = Math.round(((prev.quantity ?? 0) + qty) * 100) / 100;
+      continue;
+    }
+    createIndex.set(key, creates.length);
     creates.push({
-      name: r.parsedName,
+      name: r.parsedName.trim(),
       category: categoryFromString(r.category),
       // US-803: a receipt says what was bought. Nothing on it says a
       // child accepted any of it.
       is_safe: ACQUIRED_FOOD_IS_SAFE,
       is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
-      quantity: r.qty,
+      quantity: qty,
       unit: r.unit || undefined,
     });
   }
@@ -142,6 +224,23 @@ export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): ReceiptPant
     quantityDelta: Math.round(quantityDelta * 100) / 100,
   }));
   return { updates, creates };
+}
+
+/**
+ * The unit each top-up was bought in, for a caller that routes updates
+ * through a ledger-aware top-up (`onTopUp(foodId, delta, unit)`). The first
+ * accepted row's non-empty unit wins; null when no row stated one.
+ */
+export function topUpUnits(rows: ReadonlyArray<ReviewRow>): Map<string, string | null> {
+  const units = new Map<string, string | null>();
+  for (const r of rows) {
+    if (!r.accept || !r.matchedFoodId) continue;
+    const unit = r.unit?.trim() || null;
+    if (!units.has(r.matchedFoodId) || (units.get(r.matchedFoodId) === null && unit)) {
+      units.set(r.matchedFoodId, unit);
+    }
+  }
+  return units;
 }
 
 /**

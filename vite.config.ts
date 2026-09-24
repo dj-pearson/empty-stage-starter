@@ -85,6 +85,12 @@ export default defineConfig(({ mode }) => ({
               return 'vendor-sentry';
             }
             // React Router (separate chunk for route changes)
+            // html5-qrcode is shared by the barcode, receipt and import dialogs.
+            // Unnamed, Rollup names the shared chunk after whichever module it
+            // picks, and "index" collides with the entry's budget line.
+            if (id.includes('html5-qrcode')) {
+              return 'vendor-scanner';
+            }
             if (id.includes('react-router')) {
               return 'vendor-router';
             }

@@ -13,6 +13,7 @@ import type { RecipeCollection } from "@/types";
 import { BookOpen, ChevronDown, Plus, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { collectionIcon, collectionTone } from "@/lib/collectionAppearance";
+import "@/i18n/appLocale";
 
 interface RecipeCollectionsSelectorProps {
   collections: RecipeCollection[];

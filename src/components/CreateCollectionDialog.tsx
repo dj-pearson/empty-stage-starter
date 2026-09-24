@@ -30,6 +30,7 @@ import {
   collectionTone,
 } from "@/lib/collectionAppearance";
 import type { CollectionInput, CollectionPatch } from "@/hooks/useRecipeCollections";
+import "@/i18n/appLocale";
 
 const COLLECTION_TEMPLATES = [
   { key: "weeknight", name: "Weeknight Dinners", icon: "clock", color: "primary", description: "Quick meals for busy evenings" },

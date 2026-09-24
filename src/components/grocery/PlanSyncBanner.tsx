@@ -2,6 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import "@/i18n/appLocale";
 
 interface PlanSyncBannerProps {
   /** Rows a push would add (usePlanToGrocery().preview().toAdd). */

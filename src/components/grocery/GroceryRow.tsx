@@ -8,6 +8,7 @@ import { formatQuantity } from "@/lib/groceryMerge";
 import type { ItemFit } from "@/lib/kidFit";
 import { cn } from "@/lib/utils";
 import type { GroceryItem } from "@/types";
+import "@/i18n/appLocale";
 
 export interface GroceryRowProps {
   item: GroceryItem;

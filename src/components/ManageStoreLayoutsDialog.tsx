@@ -31,6 +31,7 @@ import {
   storeDisplayName,
   type StoreLayoutRow,
 } from "@/lib/storeLayouts";
+import "@/i18n/appLocale";
 
 interface ManageStoreLayoutsDialogProps {
   open: boolean;

@@ -70,6 +70,7 @@ import {
 import { isKidAllergyUnknown } from "@/hooks/useRecipeQuickPlan";
 import { useGrocery, usePlan } from "@/contexts/AppContext";
 import type { GroceryAddInput } from "@/lib/groceryMerge";
+import "@/i18n/appLocale";
 
 interface RecipeDetailViewProps {
   recipe: Recipe | null;

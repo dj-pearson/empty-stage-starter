@@ -25,6 +25,7 @@ import {
   type ResultIndex,
 } from "@/lib/kidFit";
 import { cn } from "@/lib/utils";
+import "@/i18n/appLocale";
 
 export type FoodSelectorKid = Pick<Kid, "id" | "name" | "allergens" | "disliked_foods" | "always_eats_foods">;
 

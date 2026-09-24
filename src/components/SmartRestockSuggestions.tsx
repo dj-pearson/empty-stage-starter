@@ -19,6 +19,7 @@ import {
 import { forecastForFood } from "@/lib/depletionForecastWiring";
 import { analytics } from "@/lib/analytics";
 import { toISODate } from "@/lib/date-utils";
+import "@/i18n/appLocale";
 
 interface RestockSuggestion {
   food_id: string;

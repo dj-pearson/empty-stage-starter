@@ -676,3 +676,99 @@ describe('groceryHydrated', () => {
     expect(seen.rows.find((r) => r.id === 'g1')?.checked).toBe(false);
   });
 });
+
+/**
+ * foodsHydrated replaces the pantry's 1200ms "probably loaded by now" timer.
+ * Same contract as groceryHydrated: not ready before the server answers, ready
+ * once it settles even with zero rows, and a non-empty cache counts as ready.
+ * The grocery gate holds the whole Promise.all, so it holds the foods load too.
+ */
+describe('foodsHydrated', () => {
+  const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    localStorage.clear();
+    groceryGate = null;
+    groceryError = null;
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+  });
+
+  function probe() {
+    const seen = { hydrated: [] as boolean[], names: [] as string[] };
+    function Probe() {
+      const { foods, foodsHydrated } = useFoods();
+      const app = useApp();
+      expect(app.foodsHydrated).toBe(foodsHydrated);
+      seen.hydrated.push(foodsHydrated);
+      seen.names = foods.map((f) => f.name);
+      return null;
+    }
+    return { seen, Probe };
+  }
+
+  it('is false until the server load settles, then true', async () => {
+    tableData['foods'] = [
+      { id: 'srv', name: 'Server Milk', category: 'dairy', is_safe: true, is_try_bite: false, household_id: HOUSEHOLD },
+    ];
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.hydrated.at(-1)).toBe(false);
+    expect(seen.hydrated).not.toContain(true);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Server Milk']);
+  });
+
+  it('turns true when the server answers with zero foods', async () => {
+    tableData['foods'] = [];
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.hydrated.at(-1)).toBe(false);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual([]);
+  });
+
+  it('a non-empty cache counts as hydrated before the server answers', async () => {
+    storageBacking[STORAGE_KEY] = JSON.stringify({
+      foods: [{ id: 'f1', name: 'Cached Apple', category: 'fruit', is_safe: true, is_try_bite: false }],
+      kids: [{ id: 'k1', name: 'Kid', age: 4 }],
+      recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
+    });
+    groceryGate = new Promise<void>(() => {});
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Cached Apple']);
+  });
+});

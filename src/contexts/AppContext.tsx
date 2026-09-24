@@ -47,6 +47,8 @@ interface AppContextType {
   groceryItems: GroceryItem[];
   /** See GroceryContext: false until the cache held rows or the server load settled. */
   groceryHydrated: boolean;
+  /** See FoodsContext: false until the cache held foods or the server load settled. */
+  foodsHydrated: boolean;
   addFood: (food: Omit<Food, "id">) => Promise<boolean>;
   updateFood: (id: string, food: Partial<Food>) => void;
   deleteFood: (id: string) => void;
@@ -80,7 +82,7 @@ interface AppContextType {
   deleteFoods: (ids: string[]) => Promise<void>;
   copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<CopyWeekResult>;
   deleteWeekPlan: (weekStart: string, kidId: string) => Promise<PlanDeleteResult>;
-  refreshFoods?: () => Promise<void>;
+  refreshFoods?: () => Promise<{ ok: boolean }>;
   refreshRecipes?: () => Promise<void>;
   refreshKids?: () => Promise<void>;
 }
@@ -125,7 +127,7 @@ const STARTER_FOODS: Omit<Food, "id">[] = [
 /** Inner component that composes all domain contexts into a single AppContext for backward compatibility */
 function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { userId, householdId } = useAuth();
-  const { foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods } = useFoods();
+  const { foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, foodsHydrated, setFoodsHydrated } = useFoods();
   const { kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids } = useKids();
   const { recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes } = useRecipes();
   const { planEntries, setPlanEntries, setPlanEntriesState, addPlanEntry, addPlanEntries, updatePlanEntry, copyWeekPlan, deleteWeekPlan } = usePlan();
@@ -164,6 +166,11 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         if (stored) {
           const data = JSON.parse(stored);
           setFoods(data.foods || []);
+          // Same rule as the grocery list below: cached foods are something
+          // true to show while the server answers; an empty cache is not.
+          if (Array.isArray(data.foods) && data.foods.length > 0) {
+            setFoodsHydrated(true);
+          }
           setKids(data.kids || []);
           setRecipes(data.recipes || []);
           setActiveKidId(data.activeKidId || (data.kids?.[0]?.id ?? null));
@@ -287,6 +294,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setPlanEntriesState([]);
       setGroceryItemsState([]);
       setGroceryHydrated(false);
+      setFoodsHydrated(false);
       setMovements([]);
       setItemStock([]);
     }
@@ -532,7 +540,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     // Settled either way -- loaded, failed, or bounced to /auth -- the list
     // has stopped waiting on this load. Only for the scope it was started for.
     void loadUserData().finally(() => {
-      if (currentScopeRef.current === scope) setGroceryHydrated(true);
+      if (currentScopeRef.current === scope) {
+        setGroceryHydrated(true);
+        setFoodsHydrated(true);
+      }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, householdId]);
@@ -561,6 +572,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setPlanEntriesState([]);
       setGroceryItemsState([]);
       setGroceryHydrated(false);
+      setFoodsHydrated(false);
       setMovements([]);
       setItemStock([]);
       getStorage()
@@ -730,7 +742,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   }, [setFoods, setKids, setActiveKidId, setPlanEntriesState, setGroceryItemsState]);
 
   const value = useMemo<AppContextType>(() => ({
-    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated,
+    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated, foodsHydrated,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
@@ -742,7 +754,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     copyWeekPlan, deleteWeekPlan,
     refreshFoods, refreshRecipes, refreshKids,
   }), [
-    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated,
+    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated, foodsHydrated,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,

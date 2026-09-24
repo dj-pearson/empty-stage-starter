@@ -16,6 +16,7 @@ import {
   isDifficulty,
   recipeTotalMinutes,
 } from "./recipeTone";
+import "@/i18n/appLocale";
 
 interface RecipeListItemProps {
   recipe: Recipe;

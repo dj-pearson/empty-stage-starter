@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ChevronDown, ChevronUp, Plus, X, FileText } from "lucide-react";
+import "@/i18n/appLocale";
 
 interface InstructionStepBuilderProps {
   steps: string[];

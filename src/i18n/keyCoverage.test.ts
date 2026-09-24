@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import en from './locales/en.json';
-import { enFragments, enTranslation, findLeafCollisions, mergeLocaleTrees } from './index';
+import { enFragments, enTranslation, findLeafCollisions, mergeLocaleTrees } from './appLocale';
 
 /**
  * US-833: a key with no entry renders as the key.
@@ -36,7 +36,7 @@ function definedKeys(): Set<string> {
     }
   };
   // The merged resource, not en.json alone: grocery copy lives in locale
-  // fragments that src/i18n/index.ts folds in, and a key defined only there
+  // fragments that src/i18n/appLocale.ts registers, and a key defined only there
   // is still defined.
   walk(enTranslation as Record<string, unknown>, '');
   return out;

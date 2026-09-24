@@ -61,6 +61,7 @@ import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { analytics } from "@/lib/analytics";
 import { getKidFoodFit, getKidRecipeFit } from "@/lib/kidFit";
+import "@/i18n/appLocale";
 
 /// US-298: threshold for surfacing the "try a twist?" chip. A recipe scoring
 /// >= 0.4 is far enough above the median repeat rate that the nudge is

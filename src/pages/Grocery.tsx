@@ -73,6 +73,7 @@ import { useHousehold } from "@/hooks/useHousehold";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { usePendingGroceryIds } from "@/hooks/usePendingGroceryIds";
 import { usePlanToGrocery, type PlanToGroceryOptions, type PlanToGroceryResult } from "@/hooks/usePlanToGrocery";
+import "@/i18n/appLocale";
 
 // Mounted only while open (US perf pass): none of these is on the path to the
 // first painted row, and together they are most of the page's JavaScript.

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
 import { aislePromptDismissedKey, sortAislesByWalk, type StoreAisleRow } from "@/lib/storeLayouts";
+import "@/i18n/appLocale";
 
 interface PlaceInAisleChipsProps {
   aisles: StoreAisleRow[];

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, RotateCw, Settings } from "lucide-react";
 import type { GroceryListRow } from "@/hooks/useGroceryLists";
+import "@/i18n/appLocale";
 
 /** Select values that are actions, not lists. Never a uuid, so never a list id. */
 const NEW_LIST = "__new_list__";

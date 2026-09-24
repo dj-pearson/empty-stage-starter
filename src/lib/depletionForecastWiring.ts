@@ -89,18 +89,70 @@ export function isFoodSeasonalOutOfWindow(
 }
 
 /**
- * One-stop convenience: given a food (with current pantry qty) and the
- * complete loaded `groceryItems` array, produce a forecast ready to render.
+ * Restock history for every product on the list at once, keyed by
+ * normalizeProductName(name), each list ascending. Same rows and same
+ * dropping rules as restockHistoryFromGroceryItems, in one pass: a pantry of
+ * N foods against a list of M rows was N*M name normalisations when each food
+ * walked the list itself.
+ */
+export function buildRestockIndex(
+  groceryItems: ReadonlyArray<Pick<GroceryItem, 'name' | 'created_at'>>
+): Map<string, Date[]> {
+  const index = new Map<string, Date[]>();
+  for (const item of groceryItems) {
+    if (!item || !item.name) continue;
+    const raw = item.created_at;
+    if (!raw) continue;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = normalizeProductName(item.name);
+    const list = index.get(key);
+    if (list) list.push(d);
+    else index.set(key, [d]);
+  }
+  for (const list of index.values()) list.sort((a, b) => a.getTime() - b.getTime());
+  return index;
+}
+
+/** Either the loaded grocery rows, or an index built from them once. */
+export type RestockSource =
+  | ReadonlyArray<Pick<GroceryItem, 'name' | 'created_at'>>
+  | ReadonlyMap<string, readonly Date[]>;
+
+const EMPTY_HISTORY: readonly Date[] = [];
+
+/**
+ * One-stop convenience: given a food (with current pantry qty) and either the
+ * complete loaded `groceryItems` array or a buildRestockIndex of it, produce a
+ * forecast ready to render. Pass the index when forecasting many foods; the
+ * array form is kept for single-food callers (SmartRestockSuggestions).
  * Returns null when the food doesn't carry a `quantity` (we can't forecast
  * what we can't count) — callers should skip the chip in that case.
  */
 export function forecastForFood(
   food: Pick<Food, 'id' | 'name' | 'quantity'>,
   groceryItems: ReadonlyArray<Pick<GroceryItem, 'name' | 'created_at'>>,
+  opts?: ForecastOptions
+): DepletionForecast | null;
+export function forecastForFood(
+  food: Pick<Food, 'id' | 'name' | 'quantity'>,
+  index: ReadonlyMap<string, readonly Date[]>,
+  opts?: ForecastOptions
+): DepletionForecast | null;
+export function forecastForFood(
+  food: Pick<Food, 'id' | 'name' | 'quantity'>,
+  source: RestockSource,
   opts: ForecastOptions = {}
 ): DepletionForecast | null {
   if (food.quantity == null) return null;
-  const history = restockHistoryFromGroceryItems(food.name, groceryItems);
+  const history =
+    source instanceof Map
+      ? (source as ReadonlyMap<string, readonly Date[]>).get(normalizeProductName(food.name)) ??
+        EMPTY_HISTORY
+      : restockHistoryFromGroceryItems(
+          food.name,
+          source as ReadonlyArray<Pick<GroceryItem, 'name' | 'created_at'>>
+        );
   const seasonalOutOfWindow =
     opts.seasonalOutOfWindow ?? isFoodSeasonalOutOfWindow(food, opts.asOf);
   return forecastRunOutDate(history, food.quantity, {

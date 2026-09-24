@@ -15,6 +15,7 @@ import {
   type StoreLayoutWithAisles,
 } from "@/lib/storeLayouts";
 import { parseAisleOverrides, type WalkOrderContext } from "@/lib/storeWalkOrder";
+import "@/i18n/appLocale";
 
 export interface UseStoreLayoutsResult {
   /** The household's own stores, then the shared catalog chains, each by name. */

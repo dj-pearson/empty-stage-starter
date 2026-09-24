@@ -35,6 +35,7 @@ import {
   type StoreLayoutRow,
 } from "@/lib/storeLayouts";
 import { typicalStoreAisleNames } from "@/lib/storeWalkOrder";
+import "@/i18n/appLocale";
 
 interface ManageStoreAislesDialogProps {
   open: boolean;

@@ -38,6 +38,7 @@ import {
 } from "@/lib/kidFit";
 import { topSiblingMeals, type SolverResult } from "@/lib/siblingMealFinder";
 import type { FamilyTarget } from "@/lib/familySlot";
+import "@/i18n/appLocale";
 
 export interface MealQuickAddContext {
   date: string;

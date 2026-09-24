@@ -264,3 +264,21 @@ every budget from the current build, which lifts chunks that are nowhere near
 their limit — `vendor-react` 63000 → 65000, `totalJs` 2510000 → 2552000 — and
 that is how a ratchet becomes a ceiling. Everything else stays at the number it
 earned.
+
+## 2026-09-24: `totalJs` 2510000 -> 2570000 (page-excellence pass)
+
+The planner, recipes, grocery and pantry reworks added about 124 kB gz of
+route-only code: new dialogs split into their own chunks, the kid-fit and
+plan-to-grocery layers, and their copy. None of it is in the entry. The
+copy first landed in `en.json`, which is eager, and pushed `index` from
+118.7 kB to 138.8 kB; it now lives in `src/i18n/locales/app/*.json` and is
+registered by `src/i18n/appLocale.ts`, which each consuming component
+imports, so it ships in a lazy chunk (17.8 kB gz) and `index` is back to
+about 122 kB. html5-qrcode also lost its chunk name once Pantry shared it,
+and Rollup called the shared chunk `index`, which the checker summed into
+the entry's budget line; `vite.config.ts` now names it `vendor-scanner`.
+
+Measured with a JWT-shaped anon key (the authorized build): total 2437.2 kB
+on main, 2560.7 kB after. Eager closure 311.0 -> 314.4 kB (budget 322000,
+unchanged); `index.html` preload 191.1 kB (budget 198000, unchanged). Only
+`totalJs` moves.

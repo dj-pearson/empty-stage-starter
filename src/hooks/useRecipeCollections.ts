@@ -8,6 +8,7 @@ import { assertUUID } from "@/lib/query-sanitize";
 import { logger } from "@/lib/logger";
 import { generateId } from "@/lib/utils";
 import { DEFAULT_COLLECTION_COLOR, DEFAULT_COLLECTION_ICON } from "@/lib/collectionAppearance";
+import "@/i18n/appLocale";
 
 /**
  * Recipe collections and their membership, from one place.

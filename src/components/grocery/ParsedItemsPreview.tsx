@@ -15,6 +15,7 @@ import {
   allergenConflictsForNames,
   describeConflicts,
 } from '@/components/grocery/groceryInputSchemas';
+import '@/i18n/appLocale';
 
 interface EditableItem extends ParsedGroceryItem {
   selected: boolean;

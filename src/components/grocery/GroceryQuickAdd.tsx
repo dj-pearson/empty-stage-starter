@@ -8,6 +8,7 @@ import { useFoods, useGrocery } from '@/contexts/AppContext';
 import { parseGroceryText } from '@/lib/parse-grocery-text';
 import type { GroceryAddInput } from '@/lib/groceryMerge';
 import { toGroceryAddInput } from '@/components/grocery/groceryInputSchemas';
+import '@/i18n/appLocale';
 
 /** How many names the suggestion list offers. A datalist is not a search UI. */
 const MAX_SUGGESTIONS = 60;

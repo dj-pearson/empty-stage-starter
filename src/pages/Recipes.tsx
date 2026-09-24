@@ -81,6 +81,7 @@ import { toast } from "sonner";
 import type { Recipe, RecipeCollection, Food, Kid } from "@/types";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import "@/i18n/appLocale";
 
 // US-331-style code splitting: the builder and the import dialog are the two
 // heaviest things on this screen and neither is needed until it is opened.

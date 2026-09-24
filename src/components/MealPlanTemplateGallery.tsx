@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { listTemplates, type MealPlanTemplate } from "@/lib/mealPlanTemplatesApi";
+import "@/i18n/appLocale";
 
 export type { MealPlanTemplate } from "@/lib/mealPlanTemplatesApi";
 

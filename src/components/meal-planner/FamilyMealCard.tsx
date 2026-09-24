@@ -23,6 +23,7 @@ import {
   Cookie,
   Apple,
 } from "lucide-react";
+import "@/i18n/appLocale";
 
 export type MealOutcome = "ate" | "tasted" | "refused";
 

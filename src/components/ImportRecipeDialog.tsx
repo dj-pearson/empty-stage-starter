@@ -13,6 +13,7 @@ import type { Food, Kid, Recipe } from "@/types";
 import type { Html5Qrcode } from "html5-qrcode";
 import { logger } from "@/lib/logger";
 import { normalizeImportedRecipe, RecipeImportError, type ImportPath } from "@/lib/recipeImport";
+import '@/i18n/appLocale';
 
 interface ImportRecipeDialogProps {
   open: boolean;

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Package } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
+import "@/i18n/appLocale";
 
 interface IngredientSelectorProps {
   foods: Food[];

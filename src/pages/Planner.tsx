@@ -13,7 +13,6 @@ import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
-import { useAuth } from "@/contexts/AuthContext";
 import { toInsertablePlanEntry, type SlotTarget } from "@/contexts/PlanContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -56,8 +55,10 @@ import { addIsoDays, parseIsoDate, PLANNER_WEEK_STARTS_ON } from "@/lib/date-uti
 import { isAllergenSafeFor, matchingAllergen } from "@/lib/allergens";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { usePlanToGrocery, type PlanToGroceryWindow } from "@/hooks/usePlanToGrocery";
+import { useDefaultGroceryListId } from "@/hooks/useDefaultGroceryListId";
 import { logger } from "@/lib/logger";
 import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
+import "@/i18n/appLocale";
 
 // US-541: lazy-load the GSAP planner so gsap + gsap/Draggable are code-split
 // into their own chunk instead of statically bloating the Planner bundle.
@@ -139,37 +140,6 @@ interface ConfirmRequest {
 interface KidChooserRequest {
   op: "build" | "ai";
   selected: string[];
-}
-
-/**
- * The household's default grocery list, so rows added from the planner land
- * where the Grocery page will show them (US-714).
- */
-function useDefaultGroceryListId(): string | null {
-  const { userId } = useAuth();
-  const [id, setId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from("grocery_lists")
-          .select("id, is_default")
-          .eq("is_archived", false)
-          .order("is_default", { ascending: false })
-          .limit(1);
-        const first = (data as Array<{ id: string }> | null)?.[0];
-        if (!cancelled) setId(first?.id ?? null);
-      } catch (error) {
-        logger.warn("Default grocery list lookup failed", error);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-  return id;
 }
 
 export default function Planner() {

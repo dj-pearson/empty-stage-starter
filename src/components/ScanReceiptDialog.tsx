@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Camera, Upload, Loader2, Check, X, Trash2, Receipt, Link2Off } from "lucide-react";
+import { Camera, Upload, Loader2, Check, X, Trash2, Receipt, Link2Off, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useFoods } from "@/contexts/AppContext";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
@@ -31,13 +31,24 @@ import {
   acceptedRowsToFoods,
   averageConfidence,
   parseResponseToReviewRows,
+  topUpUnits,
+  unitsMismatch,
   type ParseResponse,
   type ReviewRow,
 } from "@/lib/receiptParse";
+import "@/i18n/appLocale";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /**
+   * Stock to add to a matched pantry food. When passed it replaces the
+   * dialog's own `updateFood({ quantity: current + delta })`, which wrote an
+   * absolute total computed from a possibly stale copy and bypassed the
+   * inventory ledger. `unit` is what the receipt line was sold in (null when
+   * it said nothing), so the page can convert or flag it.
+   */
+  onTopUp?: (foodId: string, delta: number, unit: string | null) => Promise<void>;
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -57,7 +68,7 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ScanReceiptDialog({ open, onClose }: Props) {
+export function ScanReceiptDialog({ open, onClose, onTopUp }: Props) {
   const { t } = useTranslation();
   const { foods, addFoods, updateFood } = useFoods();
   const { checkFeatureLimit, incrementUsage } = useFeatureLimit();
@@ -169,9 +180,20 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
 
   const updateRow = useCallback(
     (uid: string, patch: Partial<ReviewRow>) => {
-      setRows((prev) => prev.map((r) => (r.uid === uid ? { ...r, ...patch } : r)));
+      setRows((prev) =>
+        prev.map((r) => {
+          if (r.uid !== uid) return r;
+          const next = { ...r, ...patch };
+          // Editing the unit, or unlinking the match, can resolve a mismatch.
+          if ("unit" in patch || "matchedFoodId" in patch) {
+            const food = next.matchedFoodId ? foods.find((f) => f.id === next.matchedFoodId) : undefined;
+            next.unitMismatch = food ? unitsMismatch(next.unit, food.unit) : false;
+          }
+          return next;
+        }),
+      );
     },
-    [],
+    [foods],
   );
 
   const removeRow = useCallback((uid: string) => {
@@ -211,9 +233,16 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
         const ok = await addFoods(creates);
         if (!ok) throw new Error("addFoods returned false");
       }
-      for (const { foodId, quantityDelta } of updates) {
-        const current = foodById.get(foodId)?.quantity ?? 0;
-        updateFood(foodId, { quantity: Math.round((current + quantityDelta) * 100) / 100 });
+      if (onTopUp) {
+        const units = topUpUnits(rowsToSave);
+        for (const { foodId, quantityDelta } of updates) {
+          await onTopUp(foodId, quantityDelta, units.get(foodId) ?? null);
+        }
+      } else {
+        for (const { foodId, quantityDelta } of updates) {
+          const current = foodById.get(foodId)?.quantity ?? 0;
+          updateFood(foodId, { quantity: Math.round((current + quantityDelta) * 100) / 100 });
+        }
       }
 
       analytics.trackEvent("receipt_items_accepted", {
@@ -239,9 +268,10 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
       toast.error(t("grocery.receipt.saveFailed", "Couldn't save pantry items. Try again."));
       setStage("review");
     }
-  }, [acceptedRows, addFoods, updateFood, foods, droppedCount, handleClose, merchant, t]);
+  }, [acceptedRows, addFoods, updateFood, onTopUp, foods, droppedCount, handleClose, merchant, t]);
 
   const foodNameById = useMemo(() => new Map(foods.map((f) => [f.id, f.name])), [foods]);
+  const foodUnitById = useMemo(() => new Map(foods.map((f) => [f.id, f.unit ?? ""])), [foods]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : handleClose())}>
@@ -335,6 +365,7 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
             onTrustAll={trustAll}
             onSkipLowConfidence={skipLowConfidence}
             foodNameById={foodNameById}
+            foodUnitById={foodUnitById}
           />
         )}
 
@@ -383,6 +414,7 @@ interface ReviewScreenProps {
   onTrustAll: () => void;
   onSkipLowConfidence: () => void;
   foodNameById: ReadonlyMap<string, string>;
+  foodUnitById: ReadonlyMap<string, string>;
 }
 
 const RECEIPT_CATEGORIES = [
@@ -409,6 +441,7 @@ function ReviewScreen({
   onTrustAll,
   onSkipLowConfidence,
   foodNameById,
+  foodUnitById,
 }: ReviewScreenProps) {
   const { t } = useTranslation();
   const money = useMemo(() => {
@@ -514,6 +547,21 @@ function ReviewScreen({
                     <Link2Off className="h-3 w-3" aria-hidden="true" />
                     {t("grocery.receipt.addAsNew", "Add as new item")}
                   </Button>
+                  {row.unitMismatch && (
+                    <p
+                      className="flex w-full items-start gap-1.5 text-warning"
+                      data-testid="receipt-unit-mismatch"
+                    >
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {t("pantry.scan.receipt.unitMismatch", {
+                        defaultValue:
+                          "Your pantry counts {{name}} in {{pantryUnit}}; this line is {{unit}}. Fix the unit or add it as a new item before ticking it.",
+                        name: foodNameById.get(row.matchedFoodId),
+                        pantryUnit: foodUnitById.get(row.matchedFoodId) ?? "",
+                        unit: row.unit,
+                      })}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

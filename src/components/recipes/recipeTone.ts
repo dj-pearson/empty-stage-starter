@@ -7,6 +7,7 @@
  */
 import type { TFunction } from "i18next";
 import type { Recipe } from "@/types";
+import "@/i18n/appLocale";
 
 export type DifficultyLevel = "easy" | "medium" | "hard";
 

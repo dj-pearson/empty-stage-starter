@@ -35,6 +35,7 @@ import {
   rowsToGroceryAdds,
   type RecipeImportRow,
 } from "@/components/grocery/recipeImportRows";
+import "@/i18n/appLocale";
 
 /** Recipes shown at once in the picker; search narrows the rest. */
 const RECIPE_LIST_LIMIT = 40;

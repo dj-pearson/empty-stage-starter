@@ -6,6 +6,22 @@ interface PullToRefreshOptions {
   threshold?: number; // Distance in pixels to trigger refresh
   resistance?: number; // How much to slow down the pull (higher = more resistance)
   enabled?: boolean;
+  /**
+   * How far the page is scrolled. A pull only starts, and only takes over the
+   * touch, when this reads 0. Defaults to the container's own scrollTop when
+   * the container actually scrolls, else the document's: a container that
+   * grows with its content always reads 0, which is how a pull used to hijack
+   * every downward swipe halfway down the pantry.
+   */
+  getScrollTop?: () => number;
+}
+
+function defaultScrollTop(container: HTMLElement): number {
+  if (container.scrollHeight > container.clientHeight) return container.scrollTop;
+  if (typeof document !== 'undefined' && document.scrollingElement) {
+    return document.scrollingElement.scrollTop;
+  }
+  return typeof window !== 'undefined' ? window.scrollY : 0;
 }
 
 /**
@@ -31,7 +47,13 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
     threshold = 80,
     resistance = 2.5,
     enabled = true,
+    getScrollTop,
   } = options;
+
+  // Read through a ref so a new inline getter each render does not re-run the
+  // listener effect.
+  const getScrollTopRef = useRef(getScrollTop);
+  getScrollTopRef.current = getScrollTop;
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistanceState] = useState(0);
@@ -63,14 +85,17 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
       setIsRefreshing(false);
       setPullDistance(0);
     }
-  }, [onRefresh, isRefreshing, enabled]);
+  }, [onRefresh, isRefreshing, enabled, setPullDistance]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !enabled) return;
 
+    const readScrollTop = () =>
+      getScrollTopRef.current ? getScrollTopRef.current() : defaultScrollTop(container);
+
     const checkScrollPosition = () => {
-      isAtTop.current = container.scrollTop === 0;
+      isAtTop.current = readScrollTop() <= 0;
     };
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -87,6 +112,13 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
       const distance = currentY.current - touchStartY.current;
 
       if (distance > 0) {
+        // The page may have scrolled since touchstart (momentum, or a swipe
+        // that started up and turned down). Re-check before taking the touch.
+        if (readScrollTop() > 0) {
+          isAtTop.current = false;
+          setPullDistance(0);
+          return;
+        }
         // Apply resistance to make it feel natural
         const resistedDistance = distance / resistance;
         setPullDistance(Math.min(resistedDistance, threshold * 1.5));

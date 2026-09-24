@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, Check, CircleHelp, Frown, ShieldCheck, Sparkles, Utensils } from "lucide-react";
 import type { ItemFit } from "@/lib/kidFit";
 import { cn } from "@/lib/utils";
+import "@/i18n/appLocale";
 
 export type KidFitChipTone = "danger" | "unknown" | "dislike" | "safe" | "trying" | "neutral";
 

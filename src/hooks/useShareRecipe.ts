@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { analytics } from "@/lib/analytics";
 import { shareRecipe } from "@/lib/recipeShareText";
 import type { Food, Recipe } from "@/types";
+import "@/i18n/appLocale";
 
 /** shareRecipe plus analytics and the toast, for the share button and for menus. */
 export function useShareRecipe() {

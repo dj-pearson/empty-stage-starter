@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { X } from "lucide-react";
+import "@/i18n/appLocale";
 
 export interface IngredientRowData {
   id: string;

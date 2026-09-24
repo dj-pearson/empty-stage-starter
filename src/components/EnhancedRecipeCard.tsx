@@ -39,6 +39,7 @@ import {
   isDifficulty,
   recipeTotalMinutes,
 } from "@/components/recipes/recipeTone";
+import "@/i18n/appLocale";
 
 const MAX_TAGS = 2;
 

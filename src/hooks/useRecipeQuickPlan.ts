@@ -21,6 +21,7 @@ import { usePlanToGrocery } from "@/hooks/usePlanToGrocery";
 import { countUncheckedIngredients, getKidRecipeFit, isAllergyUnknown, type ItemFit } from "@/lib/kidFit";
 import { addIsoDays, parseIsoDate, toISODate } from "@/lib/date-utils";
 import type { Kid, MealSlot, Recipe } from "@/types";
+import "@/i18n/appLocale";
 
 /** Every planner slot, in the planner's order. */
 export const RECIPE_PLAN_SLOTS: readonly MealSlot[] = [

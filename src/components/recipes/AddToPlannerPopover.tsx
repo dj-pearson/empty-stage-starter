@@ -31,6 +31,7 @@ import {
   useRecipeQuickPlan,
   type ScheduleRecipeOptions,
 } from "@/hooks/useRecipeQuickPlan";
+import "@/i18n/appLocale";
 
 export type ScheduleRecipeFn = (
   recipe: Recipe,

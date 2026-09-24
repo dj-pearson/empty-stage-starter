@@ -15,6 +15,7 @@ import type { RecipeCollection } from "@/types";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { collectionIcon, collectionTone } from "@/lib/collectionAppearance";
+import "@/i18n/appLocale";
 
 interface AddToCollectionsDialogProps {
   open: boolean;

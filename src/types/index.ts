@@ -18,6 +18,10 @@ export interface Food {
    * food that hasn't been matched yet — most households, until US-796's
    * matcher runs. */
   canonical_id?: string | null;
+  /** The scanned product barcode, when the food was added by scan. Carried
+   * through by normalizeFoodFromDB's spread; lets a second scan of the same
+   * product stack onto this row instead of duplicating it. */
+  barcode?: string | null;
   allergens?: string[];
   aisle?: string;
   quantity?: number;

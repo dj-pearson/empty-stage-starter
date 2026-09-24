@@ -33,6 +33,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import type { Shortfall } from "@/lib/recipeShortfall";
 import { logger } from "@/lib/logger";
+import "@/i18n/appLocale";
 
 interface MissingIngredientsDialogProps {
   open: boolean;

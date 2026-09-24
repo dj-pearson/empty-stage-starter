@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { cn } from "@/lib/utils";
+import "@/i18n/appLocale";
 
 export interface GroceryGroupHeaderProps {
   /** DOM id of the group's item container, for aria-controls. */

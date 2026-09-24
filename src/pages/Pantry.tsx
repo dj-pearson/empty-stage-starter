@@ -1,38 +1,68 @@
-import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  lazy,
+  Suspense,
+  memo,
+  type FormEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 // CSS animations used instead of framer-motion for list rendering performance
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useFoods, useGrocery, useKids, usePlan, useInventory } from "@/contexts/AppContext";
-import { resolveFood } from "@/lib/effectiveFood";
 import { FoodCard } from "@/components/FoodCard";
-import { ImportCsvDialog } from "@/components/ImportCsvDialog";
-import { ImageFoodCapture, type FoodIdentification } from "@/components/ImageFoodCapture";
+import type { FoodIdentification } from "@/components/ImageFoodCapture";
+import type { BarcodePantryAdd } from "@/components/admin/BarcodeScannerDialog";
+import "@/i18n/appLocale";
 
-// Lazy load dialogs that are only shown on user action
-const AddFoodDialog = lazy(() => import("@/components/AddFoodDialog").then(m => ({ default: m.AddFoodDialog })));
-const BarcodeScannerDialog = lazy(() => import("@/components/admin/BarcodeScannerDialog").then(m => ({ default: m.BarcodeScannerDialog })));
-const BulkAddFoodDialog = lazy(() => import("@/components/BulkAddFoodDialog").then(m => ({ default: m.BulkAddFoodDialog })));
-const ScanReceiptDialog = lazy(() => import("@/components/ScanReceiptDialog").then(m => ({ default: m.ScanReceiptDialog })));
-import { PantryStatsBar } from "@/components/pantry/PantryStatsBar";
+// Every dialog is lazy and mounted only while open: none of them is part of
+// the first paint, and the barcode scanner pulls in html5-qrcode.
+const loadAddFoodDialog = () => import("@/components/AddFoodDialog");
+const loadBarcodeScanner = () => import("@/components/admin/BarcodeScannerDialog");
+const loadReceiptScanner = () => import("@/components/ScanReceiptDialog");
+const AddFoodDialog = lazy(() => loadAddFoodDialog().then((m) => ({ default: m.AddFoodDialog })));
+const BarcodeScannerDialog = lazy(() => loadBarcodeScanner().then((m) => ({ default: m.BarcodeScannerDialog })));
+const ScanReceiptDialog = lazy(() => loadReceiptScanner().then((m) => ({ default: m.ScanReceiptDialog })));
+const ImageFoodCapture = lazy(() =>
+  import("@/components/ImageFoodCapture").then((m) => ({ default: m.ImageFoodCapture }))
+);
+const ImportCsvDialog = lazy(() =>
+  import("@/components/ImportCsvDialog").then((m) => ({ default: m.ImportCsvDialog }))
+);
 import { PantryCategorySection } from "@/components/pantry/PantryCategorySection";
 import { PantryListItem } from "@/components/pantry/PantryListItem";
 import { PantryQuickAdd } from "@/components/pantry/PantryQuickAdd";
-import type { PantryQuickAddParse } from "@/lib/pantryQuickAddParser";
+import { PantryCaptureMenu } from "@/components/pantry/PantryCaptureMenu";
+import { PantryStockStrip } from "@/components/pantry/PantryStockStrip";
+import { PantryKidLens } from "@/components/pantry/PantryKidLens";
+import { parsePantryQuickAddLine, type PantryQuickAddParse } from "@/lib/pantryQuickAddParser";
 import {
-  CATEGORY_CONFIG,
-  CATEGORY_ORDER,
+  PANTRY_DISPLAY_ORDER,
+  getCategoryConfig,
   type SortOption,
   type ViewMode,
 } from "@/components/pantry/pantryConstants";
 import {
-  computeUniqueKidAllergens,
   computeCategoryCounts,
-  computeStockStats,
+  computeStockBuckets,
+  computeSafeRunningLow,
   filterAndSortFoods,
+  filterByFit,
   groupFoodsByCategory,
+  type FitFilter,
   type StockFilter,
 } from "@/lib/pantryData";
+import { buildResultIndex, getKidFoodFit, summarizeKidFits, type ItemFit } from "@/lib/kidFit";
+import { findExistingFood } from "@/lib/findExistingFood";
+import { buildOnListKeySet, isOnList, pantryToGroceryInput } from "@/lib/pantryGrocery";
+import type { GroceryAddInput } from "@/lib/groceryMerge";
+import { buildRestockIndex, forecastForFood, normalizeProductName } from "@/lib/depletionForecastWiring";
+import { useDefaultGroceryListId } from "@/hooks/useDefaultGroceryListId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,32 +84,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Plus,
   Search,
   Sparkles,
   Download,
   ScanBarcode,
-  Camera,
   Receipt,
-  MoreVertical,
-  Upload,
   Utensils,
   LayoutGrid,
   List,
   ArrowUpDown,
   X,
-  AlertTriangle,
-  ChevronRight,
+  Loader2,
+  Check,
+  ShoppingCart,
 } from "lucide-react";
-import { Food, FoodCategory } from "@/types";
+import type { Food, FoodCategory, Kid } from "@/types";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { starterFoods } from "@/lib/starterFoods";
@@ -88,10 +108,11 @@ import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { haptic } from "@/lib/haptics";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { logger } from "@/lib/logger";
-import type { MovementItem } from "@/lib/movementBuilders";
+import type { MovementItem, MovementRefType } from "@/lib/movementBuilders";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
-import { ACQUIRED_FOOD_IS_SAFE } from "@/lib/foodSafetyDefault";
+import { getStorage } from "@/lib/platform";
+import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
 
 interface FoodSuggestion {
   name: string;
@@ -99,8 +120,81 @@ interface FoodSuggestion {
   reason: string;
 }
 
+interface SuggestFoodsResponse {
+  suggestions?: FoodSuggestion[];
+  error?: string;
+}
+
+/** What a top-up is attributed to in the ledger, when anything. */
+interface TopUpRef {
+  refType: MovementRefType;
+  refId: string;
+}
+
+/** Virtualize the flat list above 60 rows, go back to plain rendering below 40 (as Grocery). */
+const VIRTUAL_ENTER = 60;
+const VIRTUAL_LEAVE = 40;
+const PAGE_SIZE = 50;
+/** The AI request carries at most this many foods. */
+const AI_FOOD_CAP = 200;
+
+/** Stored for the All kids choice, so it is told apart from never having chosen. */
+const ALL_KIDS = "__all__";
+
+const SORT_OPTIONS: readonly SortOption[] = ["name", "low-stock", "category", "recent"];
+const VIEW_MODES: readonly ViewMode[] = ["grid", "list"];
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Units match case-insensitively (as Grocery's pantry crediting). A food with
+ * no unit of its own takes whatever was typed: it is a bare count either way.
+ */
+function unitsMatch(foodUnit: string | null | undefined, typed: string | null | undefined): boolean {
+  const own = (foodUnit ?? "").trim().toLowerCase();
+  return own === "" || own === (typed ?? "").trim().toLowerCase();
+}
+
+type PlatformStorage = Awaited<ReturnType<typeof getStorage>>;
+
+/**
+ * Keys are written as literals at each call so the US-835 sign-out sweep
+ * (signOutScrub.test.ts) can read and classify them.
+ */
+async function readStored(read: (storage: PlatformStorage) => Promise<string | null>): Promise<string | null> {
+  try {
+    return await read(await getStorage());
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(write: (storage: PlatformStorage) => Promise<void>): void {
+  void (async () => {
+    try {
+      await write(await getStorage());
+    } catch {
+      // A private window or blocked storage: the choice just is not remembered.
+    }
+  })();
+}
+
+/** The fields the suggestion model reads, not the whole profile. */
+function projectChildProfile(kid: Kid) {
+  return {
+    age: kid.age,
+    allergens: kid.allergens,
+    pickiness_level: kid.pickiness_level,
+    texture_preferences: kid.texture_preferences,
+    texture_dislikes: kid.texture_dislikes,
+    flavor_preferences: kid.flavor_preferences,
+    always_eats_foods: kid.always_eats_foods,
+    disliked_foods: kid.disliked_foods,
+  };
+}
+
 export default function Pantry() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     foods,
     addFood,
@@ -109,28 +203,43 @@ export default function Pantry() {
     deleteFood,
     refreshFoods,
     catalogById,
+    foodsHydrated,
   } = useFoods();
   const { planEntries } = usePlan();
   const { kids, activeKidId } = useKids();
-  const { addGroceryItem } = useGrocery();
-  // US-671: read-only here. The flag decides whether pantry numbers come from
-  // the ledger; it is off by default and the comparison in AppContext is what
-  // has to agree before it is turned on.
-  const { ledgerReadsEnabled, ledgerQuantityOf, ledgerWritesEnabled, recordPantryCorrection, recordWaste } = useInventory();
+  const { groceryItems, mergeGroceryItems, deleteGroceryItems, updateGroceryItem } = useGrocery();
+  const defaultListId = useDefaultGroceryListId();
+  // US-671: the flag decides whether pantry numbers come from the ledger.
+  const {
+    ledgerReadsEnabled,
+    ledgerQuantityOf,
+    ledgerWritesEnabled,
+    recordPantryCorrection,
+    recordWaste,
+    recordRestock,
+  } = useInventory();
   const isMobile = useIsMobile();
+
+  const numberFormat = useMemo(() => new Intl.NumberFormat(i18n.language), [i18n.language]);
+  const fmt = useCallback((n: number) => numberFormat.format(n), [numberFormat]);
+
+  // Handlers read the latest foods through this, so `foods` stays out of
+  // their deps and the memoized cards are not re-rendered on every change.
+  const foodsRef = useRef(foods);
+  foodsRef.current = foods;
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editFood, setEditFood] = useState<Food | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([]);
+  const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(() => new Set());
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
-  const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [receiptScanOpen, setReceiptScanOpen] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(50);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // View states
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,88 +250,82 @@ export default function Pantry() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
     new Set()
   );
+  // undefined: this viewer never picked, so the lens follows the active kid.
+  const [lensChoice, setLensChoice] = useState<string | null | undefined>(undefined);
+  const [fitFilter, setFitFilter] = useState<FitFilter>("all");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const categoryScrollRef = useRef<HTMLDivElement>(null);
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  // Keyboard shortcuts
-  useKeyboardShortcuts({
-    shortcuts: [
-      {
-        key: "n",
-        ctrlOrMeta: true,
-        description: "New food",
-        action: () => {
-          setDialogOpen(true);
-          haptic.light();
-        },
-      },
-      {
-        key: "f",
-        ctrlOrMeta: true,
-        description: "Focus search",
-        action: () => {
-          searchInputRef.current?.focus();
-          searchInputRef.current?.select();
-        },
-      },
-      {
-        key: "Escape",
-        description: "Close dialogs",
-        action: () => {
-          if (dialogOpen) setDialogOpen(false);
-          if (scannerOpen) setScannerOpen(false);
-          if (imageCaptureOpen) setImageCaptureOpen(false);
-          if (bulkAddOpen) setBulkAddOpen(false);
-          if (showSuggestions) setShowSuggestions(false);
-        },
-      },
-    ],
-  });
+  // A server answer, or a cache that already had rows, ends the skeleton. An
+  // empty pantry that has been loaded is the empty state, not a spinner.
+  const isInitialLoading = !foodsHydrated && foods.length === 0;
 
-  // Track initial data loading. Clear the skeleton as soon as data arrives, but
-  // also clear it shortly after mount so a genuinely empty pantry (e.g. a brand
-  // new user with zero foods and zero kids) reaches the EmptyPantryState instead
-  // of being stuck on the loading skeleton forever — the previous data-only gate
-  // never fired when both arrays stayed empty.
+  // Remembered per viewer: the lens, the view and the sort.
   useEffect(() => {
-    if (foods.length > 0 || kids.length > 0) {
-      setIsInitialLoading(false);
-      return;
-    }
-    const timeout = setTimeout(() => setIsInitialLoading(false), 1200);
-    return () => clearTimeout(timeout);
-  }, [foods, kids]);
+    let cancelled = false;
+    void (async () => {
+      const [lens, view, sort] = await Promise.all([
+        readStored((storage) => storage.getItem("eatpal.pantry.lensKid")),
+        readStored((storage) => storage.getItem("eatpal.pantry.viewMode")),
+        readStored((storage) => storage.getItem("eatpal.pantry.sortBy")),
+      ]);
+      if (cancelled) return;
+      if (lens) setLensChoice(lens === ALL_KIDS ? null : lens);
+      if (view && (VIEW_MODES as readonly string[]).includes(view)) setViewMode(view as ViewMode);
+      if (sort && (SORT_OPTIONS as readonly string[]).includes(sort)) setSortBy(sort as SortOption);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // Pull-to-refresh
+  const lensKidId: string | null = useMemo(() => {
+    if (lensChoice === null) return null;
+    if (lensChoice !== undefined && kids.some((k) => k.id === lensChoice)) return lensChoice;
+    return activeKidId && kids.some((k) => k.id === activeKidId) ? activeKidId : null;
+  }, [lensChoice, kids, activeKidId]);
+  const lensKid = useMemo(
+    () => (lensKidId ? kids.find((k) => k.id === lensKidId) ?? null : null),
+    [kids, lensKidId]
+  );
+
+  const handleLensSelect = useCallback((kidId: string | null) => {
+    setLensChoice(kidId);
+    writeStored((storage) => storage.setItem("eatpal.pantry.lensKid", kidId ?? ALL_KIDS));
+  }, []);
+  const handleViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    writeStored((storage) => storage.setItem("eatpal.pantry.viewMode", mode));
+  }, []);
+  const handleSortBy = useCallback((value: string) => {
+    if (!(SORT_OPTIONS as readonly string[]).includes(value)) return;
+    setSortBy(value as SortOption);
+    writeStored((storage) => storage.setItem("eatpal.pantry.sortBy", value));
+  }, []);
+
+  // Pull-to-refresh. The page scrolls the window, not this container.
   const { pullToRefreshRef, isRefreshing, pullDistance } = usePullToRefresh({
     onRefresh: async () => {
       haptic.light();
-      if (refreshFoods) {
-        await refreshFoods();
+      const result = refreshFoods ? await refreshFoods() : { ok: true };
+      if (!result.ok) {
+        haptic.error();
+        toast.error(t("pantry.refresh.failed"));
+        return;
       }
+      // No success toast: the list updating is the feedback.
       haptic.success();
-      toast("Refreshed", { description: "Pantry updated with latest data" });
     },
     enabled: isMobile,
+    getScrollTop: () => window.scrollY,
   });
 
   // === DERIVED DATA ===
-  // Pure derivations live in src/lib/pantryData.ts (unit-tested) so the data
-  // logic is separated from this JSX and the memoized subtrees stay stable (US-553 AC2).
+  // Pure derivations live in src/lib/pantryData.ts (unit-tested).
 
-  const uniqueKidAllergens = useMemo(() => computeUniqueKidAllergens(kids), [kids]);
-
-  // US-671: where a pantry number comes from. With the flag OFF this returns
-  // `foods` BY REFERENCE, so the dark launch cannot move a single pixel; with
-  // it on, every quantity on this page -- the cards, the stock filter and the
-  // stats banner -- reads the ledger balance instead, and they read the same
-  // one, which is the point. An item the ledger cannot express in its display
-  // unit keeps the legacy number rather than rendering a blank.
-  //
-  // Only the READS move. handleQuantityChange still writes foods.quantity;
-  // appending a movement is US-672.
+  // US-671: with the flag OFF this returns `foods` BY REFERENCE; with it on,
+  // every quantity on this page reads the ledger balance instead.
   const pantryFoods = useMemo(() => {
     if (!ledgerReadsEnabled) return foods;
     return foods.map((food) => {
@@ -232,20 +335,119 @@ export default function Pantry() {
   }, [foods, ledgerReadsEnabled, ledgerQuantityOf]);
 
   const categoryCounts = useMemo(() => computeCategoryCounts(pantryFoods), [pantryFoods]);
+  const categoriesInUse = useMemo(
+    () => PANTRY_DISPLAY_ORDER.filter((c) => (categoryCounts[c] ?? 0) > 0).length,
+    [categoryCounts]
+  );
 
-  const stockStats = useMemo(() => computeStockStats(pantryFoods), [pantryFoods]);
+  // A category that empties (its last food deleted) would otherwise leave the
+  // page filtered on a pill that is no longer shown.
+  useEffect(() => {
+    if (categoryFilter !== "all" && (categoryCounts[categoryFilter] ?? 0) === 0) {
+      setCategoryFilter("all");
+    }
+  }, [categoryFilter, categoryCounts]);
 
-  // Filtered and sorted foods
+  // --- Kid fit -------------------------------------------------------------
+  const targetKids = useMemo(
+    () => (lensKidId ? kids.filter((k) => k.id === lensKidId) : kids),
+    [kids, lensKidId]
+  );
+  const resultIndexByKid = useMemo(
+    () => new Map(kids.map((k) => [k.id, buildResultIndex(planEntries, k.id)])),
+    [kids, planEntries]
+  );
+  // Fits are cached per food object: an edit to one food replaces only that
+  // object, so only that food is scored again. The cache resets when the
+  // kids in view or their history change.
+  const fitCacheRef = useRef<{
+    kids: Kid[];
+    index: Map<string, ReturnType<typeof buildResultIndex>>;
+    cache: WeakMap<Food, ItemFit>;
+  } | null>(null);
+  const fitByFoodId = useMemo(() => {
+    const map = new Map<string, ItemFit>();
+    if (targetKids.length === 0) return map;
+    const held = fitCacheRef.current;
+    if (!held || held.kids !== targetKids || held.index !== resultIndexByKid) {
+      fitCacheRef.current = { kids: targetKids, index: resultIndexByKid, cache: new WeakMap() };
+    }
+    const fitCache = (fitCacheRef.current as NonNullable<typeof fitCacheRef.current>).cache;
+    for (const food of pantryFoods) {
+      if (!food) continue;
+      let fit = fitCache.get(food);
+      if (!fit) {
+        fit = summarizeKidFits(
+          targetKids.map((kid) => ({
+            kid,
+            fit: getKidFoodFit(kid, food, resultIndexByKid.get(kid.id) ?? planEntries),
+          })),
+          { unchecked: food.allergens == null ? 1 : 0 }
+        );
+        fitCache.set(food, fit);
+      }
+      map.set(food.id, fit);
+    }
+    return map;
+  }, [pantryFoods, targetKids, resultIndexByKid, planEntries]);
+
+  // --- Stock and forecast --------------------------------------------------
+  const restockIndex = useMemo(() => buildRestockIndex(groceryItems), [groceryItems]);
+  const forecastDays = useMemo(() => {
+    const days = new Map<string, number>();
+    for (const food of pantryFoods) {
+      if (!food) continue;
+      const forecast = forecastForFood(food, restockIndex);
+      if (forecast && (forecast.confidence === "medium" || forecast.confidence === "high")) {
+        days.set(food.id, forecast.daysToDepletion);
+      }
+    }
+    return days;
+  }, [pantryFoods, restockIndex]);
+
+  const isTracked = useCallback(
+    (food: Food) =>
+      ledgerQuantityOf(food) != null ||
+      (restockIndex.get(normalizeProductName(food.name))?.length ?? 0) > 0,
+    [ledgerQuantityOf, restockIndex]
+  );
+  const stockBuckets = useMemo(
+    () => computeStockBuckets(pantryFoods, { isTracked }),
+    [pantryFoods, isTracked]
+  );
+
+  const onListKeys = useMemo(() => buildOnListKeySet(groceryItems), [groceryItems]);
+
+  // --- Filtering -------------------------------------------------------------
   const processedFoods = useMemo(
     () =>
-      filterAndSortFoods(pantryFoods, {
-        search: debouncedSearchQuery,
-        category: categoryFilter,
-        stock: stockFilter,
-        sortBy,
-      }),
-    [pantryFoods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy]
+      filterByFit(
+        filterAndSortFoods(pantryFoods, {
+          search: debouncedSearchQuery,
+          category: categoryFilter,
+          stock: stockFilter,
+          sortBy,
+        }),
+        fitByFoodId,
+        fitFilter
+      ),
+    [pantryFoods, debouncedSearchQuery, categoryFilter, stockFilter, sortBy, fitByFoodId, fitFilter]
   );
+
+  const safeRunningLow = useMemo(
+    () => computeSafeRunningLow(processedFoods, fitByFoodId, forecastDays, { isTracked }),
+    [processedFoods, fitByFoodId, forecastDays, isTracked]
+  );
+
+  const soonest = useMemo(() => {
+    let best: { name: string; days: number } | undefined;
+    for (const food of pantryFoods) {
+      const days = food ? forecastDays.get(food.id) : undefined;
+      if (days === undefined) continue;
+      if (!best || days < best.days) best = { name: food.name, days };
+    }
+    return best;
+  }, [pantryFoods, forecastDays]);
 
   // Paginate: show only visibleCount items (load-more pattern)
   const displayedFoods = useMemo(() => processedFoods.slice(0, visibleCount), [processedFoods, visibleCount]);
@@ -253,151 +455,70 @@ export default function Pantry() {
 
   // Reset visible count when filters change
   useEffect(() => {
-    setVisibleCount(50);
-  }, [debouncedSearchQuery, categoryFilter, stockFilter, sortBy]);
-
-  // Virtualization for list view (skip for small lists under 50 items)
-  const listParentRef = useRef<HTMLDivElement>(null);
-  const useVirtual = displayedFoods.length >= 50 && viewMode === "list";
-  const virtualizer = useVirtualizer({
-    count: useVirtual ? displayedFoods.length : 0,
-    getScrollElement: () => listParentRef.current,
-    // US-636: first-paint guess only; measureElement reports the real height.
-    // A PantryListItem carries buttons, and src/index.css:215 gives every
-    // button a 44px minimum on touch, so the row outgrows any fixed estimate
-    // there and rows would creep into each other down the list.
-    estimateSize: () => 64,
-    overscan: 10,
-  });
+    setVisibleCount(PAGE_SIZE);
+  }, [debouncedSearchQuery, categoryFilter, stockFilter, sortBy, fitFilter, lensKidId]);
 
   // Grouped by category (for "all" view without search)
   const groupedFoods = useMemo(() => groupFoodsByCategory(processedFoods), [processedFoods]);
 
-  // Should show grouped view?
   const showGroupedView =
     categoryFilter === "all" &&
     stockFilter === "all" &&
+    fitFilter === "all" &&
     !debouncedSearchQuery &&
     sortBy !== "low-stock";
 
-  // Active filter count
   const activeFilterCount =
     (categoryFilter !== "all" ? 1 : 0) +
     (stockFilter !== "all" ? 1 : 0) +
+    (fitFilter !== "all" ? 1 : 0) +
     (debouncedSearchQuery ? 1 : 0);
+
+  // --- Window virtualization for the flat list -------------------------------
+  const [virtualOn, setVirtualOn] = useState(false);
+  const flatList = !showGroupedView && viewMode === "list";
+  const nextVirtual = flatList
+    ? virtualOn
+      ? displayedFoods.length >= VIRTUAL_LEAVE
+      : displayedFoods.length > VIRTUAL_ENTER
+    : false;
+  if (nextVirtual !== virtualOn) setVirtualOn(nextVirtual);
+
+  const listRef = useRef<HTMLDivElement>(null);
+  const [listOffset, setListOffset] = useState(0);
+  useLayoutEffect(() => {
+    if (!nextVirtual) return;
+    const measure = () => {
+      const el = listRef.current;
+      if (el) setListOffset(el.getBoundingClientRect().top + window.scrollY);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [nextVirtual, displayedFoods.length]);
+
+  const virtualizer = useWindowVirtualizer({
+    count: nextVirtual ? displayedFoods.length : 0,
+    // US-636: first-paint guess only; measureElement reports the real height.
+    estimateSize: () => 64,
+    overscan: 10,
+    enabled: nextVirtual,
+    scrollMargin: listOffset,
+  });
 
   // === HANDLERS ===
 
-  const handleGetSuggestions = async () => {
-    setIsLoadingSuggestions(true);
-    setShowSuggestions(true);
-    try {
-      const activeKid = activeKidId
-        ? kids.find((k) => k.id === activeKidId)
-        : null;
-      const { data, error } = await invokeEdgeFunction("suggest-foods", {
-        body: {
-          foods,
-          planEntries,
-          childProfile: activeKid || undefined,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) {
-        if (data.error.includes("Rate limits")) {
-          toast.error("Rate Limit Reached", { description: "Please try again in a few moments." });
-        } else if (data.error.includes("Payment required")) {
-          toast.error("Credits Required", { description: "Please add credits to your workspace to continue using AI features." });
-        } else {
-          throw new Error(data.error);
-        }
-        setSuggestions([]);
-      } else {
-        setSuggestions(data.suggestions || []);
-      }
-    } catch (error) {
-      logger.error("Error getting suggestions:", error);
-      toast.error("Error", { description: "Failed to get AI suggestions. Please try again." });
-      setSuggestions([]);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  };
-
-  const handleAddSuggestion = async (suggestion: FoodSuggestion) => {
-    const added = await addFood({
-      name: suggestion.name,
-      category: suggestion.category,
-      is_safe: false,
-      is_try_bite: true,
-    });
-    if (added) {
-      toast.success("Food Added", { description: `${suggestion.name} has been added to your pantry as a try bite food.` });
-    }
-    // If blocked by plan limit, the upgrade modal handles messaging.
-  };
-
-  // US-288: Quick-add (single line) — parser already infers qty/unit/category.
-  const handleQuickAddOne = useCallback(
-    async (parse: PantryQuickAddParse) => {
-      const added = await addFood({
-        name: parse.name,
-        category: parse.category,
-        quantity: parse.quantity,
-        unit: parse.unit || undefined,
-        // US-803: the parent typed a name and a quantity, not a judgement
-        // about whether their child eats it.
-        is_safe: ACQUIRED_FOOD_IS_SAFE,
-        is_try_bite: false,
-      });
-      if (added) {
-        toast.success(`Added ${parse.name} to pantry`);
-      }
-    },
-    [addFood]
-  );
-
-  // US-288: Quick-add bulk (textarea, one item per line).
-  const handleQuickAddMany = useCallback(
-    async (parses: PantryQuickAddParse[]) => {
-      if (!addFoods) return;
-      await addFoods(
-        parses.map((p) => ({
-          name: p.name,
-          category: p.category,
-          quantity: p.quantity,
-          unit: p.unit || undefined,
-          // US-803, as above: quick-add is entry, not a safety decision.
-          is_safe: ACQUIRED_FOOD_IS_SAFE,
-          is_try_bite: false,
-        }))
-      );
-    },
-    [addFoods]
-  );
-
-  const handleEdit = useCallback((food: Food) => {
-    setEditFood(food);
-    setDialogOpen(true);
-  }, []);
-
-  // US-672: a pantry edit becomes a correction movement.
-  //
-  // WHY THIS RETURNS INSTEAD OF ALSO WRITING foods.quantity. The two paths are
-  // mutually exclusive, and running both double-counts the same edit. Once the
-  // movement lands, item_stock moves, and the US-667 mirror writes
-  // foods.quantity for us. Writing it here as well would look to the US-668
-  // trigger like a SECOND, independent client edit, and it would translate that
-  // into another correction movement of its own.
-  //
-  // A movement that cannot be built (an unconvertible unit) falls through to
-  // the legacy write rather than dropping the parent's edit on the floor.
+  // US-672: a pantry edit becomes a correction movement. The two paths are
+  // mutually exclusive; running both double-counts the edit. A movement that
+  // cannot be built falls through to the legacy write.
   const handleQuantityChange = useCallback(
     (foodId: string, newQuantity: number) => {
-      const food = foods.find((f) => f.id === foodId);
+      const food = foodsRef.current.find((f) => f.id === foodId);
       if (!food) return;
 
-      const legacyWrite = () => updateFood(foodId, { ...food, quantity: newQuantity });
+      // Quantity only: a spread of `food` here would write back fields an
+      // edit made in the same tick has already changed.
+      const legacyWrite = () => updateFood(foodId, { quantity: newQuantity });
 
       if (!ledgerWritesEnabled) {
         legacyWrite();
@@ -414,25 +535,29 @@ export default function Pantry() {
           legacyWrite();
         });
     },
-    [foods, updateFood, ledgerWritesEnabled, recordPantryCorrection]
+    [updateFood, ledgerWritesEnabled, recordPantryCorrection]
   );
 
-  // US-672 criterion 4: an explicit "we threw this out" action, which is its
-  // own fact rather than a correction -- US-681 reports waste, and a parent
-  // miscounting is not waste.
+  // US-672 criterion 4: "we threw this out" is waste, not a correction.
   const handleWaste = useCallback(
     (foodId: string, quantity: number) => {
-      const food = foods.find((f) => f.id === foodId);
+      const food = foodsRef.current.find((f) => f.id === foodId);
       if (!food) return;
       const remaining = Math.max(0, (food.quantity ?? 0) - Math.abs(quantity));
+      const confirm = () =>
+        toast.success(
+          t("pantry.toast.threwOut", {
+            amount: fmt(Math.abs(quantity)),
+            unit: food.unit || "",
+          }).trim(),
+          { description: t("pantry.toast.updated", { name: food.name }) }
+        );
 
-      const legacyWrite = () => updateFood(foodId, { ...food, quantity: remaining });
+      const legacyWrite = () => updateFood(foodId, { quantity: remaining });
 
       if (!ledgerWritesEnabled) {
         legacyWrite();
-        toast.success(`Threw out ${Math.abs(quantity)} ${food.unit || ''}`.trim(), {
-          description: `${food.name} updated`,
-        });
+        confirm();
         return;
       }
 
@@ -444,45 +569,311 @@ export default function Pantry() {
           });
           legacyWrite();
         }
-        toast.success(`Threw out ${Math.abs(quantity)} ${food.unit || ''}`.trim(), {
-          description: `${food.name} updated`,
+        confirm();
+      });
+    },
+    [updateFood, ledgerWritesEnabled, recordWaste, t, fmt]
+  );
+
+  /**
+   * Add stock to a food that is already in the pantry: a restock movement
+   * when the ledger takes it, else the legacy sum on the latest quantity.
+   */
+  const topUpFood = useCallback(
+    async (food: Food, delta: number, unit?: string | null, ref?: TopUpRef): Promise<void> => {
+      const current = foodsRef.current.find((f) => f.id === food.id) ?? food;
+      try {
+        const result = await recordRestock(current as MovementItem, delta, {
+          unit: unit ?? current.unit ?? null,
+          refType: ref?.refType ?? null,
+          refId: ref?.refId ?? null,
         });
-      });
-    },
-    [foods, updateFood, ledgerWritesEnabled, recordWaste]
-  );
-
-  const handleAddToGrocery = useCallback(
-    (food: Food) => {
-      // US-795: read the effective (catalog-resolved) name/category/aisle so
-      // a food added to the grocery list here matches how the same
-      // catalog-linked product looks everywhere else it's added from.
-      const catalog = food.canonical_id ? catalogById[food.canonical_id] : null;
-      const effective = resolveFood(food, catalog);
-      addGroceryItem({
-        name: effective.name,
-        quantity: 1,
-        unit: food.unit || "",
-        category: effective.category,
-        aisle: effective.aisle,
-      });
-      toast.success(`Added "${effective.name}" to grocery list`, {
-        description: "Edit quantity on the Grocery page",
-      });
-    },
-    [addGroceryItem, catalogById]
-  );
-
-  const handleSave = useCallback(
-    (foodData: Omit<Food, "id">) => {
-      if (editFood) {
-        updateFood(editFood.id, foodData);
-      } else {
-        addFood(foodData);
+        if (result.recorded) return;
+      } catch (error) {
+        logger.warn("Restock movement failed, using the legacy write", error);
       }
-      setEditFood(null);
+      const latest = foodsRef.current.find((f) => f.id === food.id) ?? current;
+      updateFood(latest.id, { quantity: round2((latest.quantity ?? 0) + delta) });
     },
-    [editFood, updateFood, addFood]
+    [recordRestock, updateFood]
+  );
+
+  // --- Grocery ---------------------------------------------------------------
+  const mergeToGrocery = useCallback(
+    (items: GroceryAddInput[]) => {
+      if (items.length === 0) return 0;
+      const result = mergeGroceryItems(items, { defaultListId });
+      if (result.touched === 0) return 0;
+      haptic.success();
+      toast.success(t("pantry.grocery.added", { count: result.touched, formatted: fmt(result.touched) }), {
+        action: {
+          label: t("pantry.toast.undo"),
+          onClick: () => {
+            deleteGroceryItems(result.insertedIds);
+            result.bumps.forEach((b) => updateGroceryItem(b.id, b.prev));
+          },
+        },
+      });
+      return result.touched;
+    },
+    [mergeGroceryItems, defaultListId, deleteGroceryItems, updateGroceryItem, t, fmt]
+  );
+
+  const addToGrocery = useCallback(
+    (list: Food[]) =>
+      mergeToGrocery(
+        list.map((food) =>
+          pantryToGroceryInput(food, food.canonical_id ? catalogById[food.canonical_id] ?? null : null)
+        )
+      ),
+    [mergeToGrocery, catalogById]
+  );
+  const addOneToGrocery = useCallback((food: Food) => void addToGrocery([food]), [addToGrocery]);
+
+  const handleAddAllLow = useCallback(
+    () => void addToGrocery([...stockBuckets.out, ...stockBuckets.low]),
+    [addToGrocery, stockBuckets]
+  );
+  const handleAddSafe = useCallback(() => void addToGrocery(safeRunningLow), [addToGrocery, safeRunningLow]);
+  const handleStripFilter = useCallback((filter: StockFilter) => {
+    setStockFilter(filter);
+    if (filter !== "all") setSortBy("low-stock");
+  }, []);
+  const handleShowUntracked = useCallback(() => {
+    setStockFilter("out-of-stock");
+    setCategoryFilter("all");
+  }, []);
+
+  // --- AI suggestions ----------------------------------------------------------
+  const activeKid = useMemo(
+    () => (activeKidId ? kids.find((k) => k.id === activeKidId) ?? null : null),
+    [kids, activeKidId]
+  );
+  const aiDisabledReason = activeKid
+    ? undefined
+    : t("pantry.suggestions.needsKid");
+
+  const handleGetSuggestions = useCallback(async () => {
+    if (!activeKid) {
+      toast(t("pantry.suggestions.needsKid"));
+      return;
+    }
+    setIsLoadingSuggestions(true);
+    setShowSuggestions(true);
+    setAddedSuggestions(new Set());
+    try {
+      const current = foodsRef.current;
+      const { data, error } = await invokeEdgeFunction<SuggestFoodsResponse>("suggest-foods", {
+        body: {
+          foods: current.slice(0, AI_FOOD_CAP).map((f) => ({
+            name: f.name,
+            category: f.category,
+            is_safe: f.is_safe,
+            is_try_bite: f.is_try_bite,
+          })),
+          planEntries: planEntries
+            .filter((p) => p.kid_id === activeKid.id)
+            .map((p) => ({ food_id: p.food_id, result: p.result })),
+          childProfile: projectChildProfile(activeKid),
+        },
+      });
+      if (error) throw error;
+      if (data?.error) {
+        if (String(data.error).includes("Rate limits")) {
+          toast.error(t("pantry.suggestions.rateLimited"), {
+            description: t("pantry.suggestions.tryLater"),
+          });
+        } else if (String(data.error).includes("Payment required")) {
+          toast.error(t("pantry.suggestions.creditsTitle"), {
+            description: t("pantry.suggestions.credits"),
+          });
+        } else {
+          throw new Error(String(data.error));
+        }
+        setSuggestions([]);
+      } else {
+        const list: FoodSuggestion[] = Array.isArray(data?.suggestions) ? data.suggestions : [];
+        // A suggestion for something already in the pantry is no suggestion.
+        setSuggestions(list.filter((s) => s?.name && !findExistingFood(foodsRef.current, { name: s.name })));
+      }
+    } catch (error) {
+      logger.error("Error getting suggestions:", error);
+      toast.error(t("pantry.suggestions.failed"));
+      setSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [activeKid, planEntries, t]);
+
+  const markSuggestionAdded = useCallback((key: string) => {
+    setAddedSuggestions((prev) => new Set(prev).add(key));
+  }, []);
+
+  const handleSuggestionToGrocery = useCallback(
+    (suggestion: FoodSuggestion, key: string) => {
+      const touched = mergeToGrocery([
+        { name: suggestion.name, quantity: 1, unit: "", category: suggestion.category, added_via: "pantry" },
+      ]);
+      if (touched > 0) markSuggestionAdded(key);
+    },
+    [mergeToGrocery, markSuggestionAdded]
+  );
+
+  const handleSuggestionAsTryBite = useCallback(
+    async (suggestion: FoodSuggestion, key: string) => {
+      const added = await addFood({
+        name: suggestion.name,
+        category: suggestion.category,
+        is_safe: false,
+        is_try_bite: true,
+      });
+      if (added) {
+        markSuggestionAdded(key);
+        toast.success(
+          t("pantry.suggestions.addedTryBite", { name: suggestion.name })
+        );
+      }
+      // If blocked by plan limit, the upgrade modal handles messaging.
+    },
+    [addFood, markSuggestionAdded, t]
+  );
+
+  // --- Edit dialog ---------------------------------------------------------------
+  const handleEdit = useCallback((food: Food) => {
+    setEditFood(food);
+    setDialogOpen(true);
+  }, []);
+
+  const openAddDetails = useCallback((name: string) => {
+    const food = findExistingFood(foodsRef.current, { name });
+    setEditFood(food ?? null);
+    setDialogOpen(true);
+  }, []);
+
+  // What the quick-add line would stack onto, for its preview chip. The
+  // component owns its text, so the page listens to the input's change events.
+  const [quickAddText, setQuickAddText] = useState("");
+  const handleQuickAddInput = useCallback((e: FormEvent<HTMLDivElement>) => {
+    const target = e.target;
+    if (target instanceof HTMLInputElement) setQuickAddText(target.value);
+  }, []);
+  const quickAddMatch = useMemo(() => {
+    const parse = quickAddText.trim() ? parsePantryQuickAddLine(quickAddText) : null;
+    if (!parse) return null;
+    const existing = findExistingFood(foods, { name: parse.name });
+    if (!existing || !unitsMatch(existing.unit, parse.unit)) return null;
+    const from = existing.quantity ?? 0;
+    return {
+      name: existing.name,
+      from,
+      to: round2(from + parse.quantity),
+      unit: existing.unit || undefined,
+    };
+  }, [quickAddText, foods]);
+
+  // US-288: Quick-add (single line), stacking onto a food already there.
+  const handleQuickAddOne = useCallback(
+    async (parse: PantryQuickAddParse): Promise<boolean> => {
+      const existing = findExistingFood(foodsRef.current, { name: parse.name });
+      if (existing && unitsMatch(existing.unit, parse.unit)) {
+        const before = existing.quantity ?? 0;
+        const after = round2(before + parse.quantity);
+        handleQuantityChange(existing.id, after);
+        haptic.light();
+        toast.success(
+          t("pantry.quickAdd.toppedUp", {
+            name: existing.name,
+            from: fmt(before),
+            to: fmt(after),
+          }),
+          {
+            action: {
+              label: t("pantry.toast.undo"),
+              onClick: () => handleQuantityChange(existing.id, before),
+            },
+          }
+        );
+        return true;
+      }
+      const added = await addFood({
+        name: parse.name,
+        category: parse.category,
+        quantity: parse.quantity,
+        unit: parse.unit || undefined,
+        // US-803: the parent typed a name and a quantity, not a judgement
+        // about whether their child eats it.
+        is_safe: ACQUIRED_FOOD_IS_SAFE,
+        is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
+      });
+      if (added) {
+        toast.success(t("pantry.toast.added", { name: parse.name }), {
+          action: {
+            label: t("pantry.toast.addDetails"),
+            onClick: () => openAddDetails(parse.name),
+          },
+        });
+      }
+      return added;
+    },
+    [addFood, handleQuantityChange, openAddDetails, t, fmt]
+  );
+
+  // US-288: Quick-add bulk (textarea, one item per line). The paste is the
+  // single bulk path; lines that match a food stack onto it.
+  const handleQuickAddMany = useCallback(
+    async (parses: PantryQuickAddParse[]): Promise<boolean> => {
+      const fresh: PantryQuickAddParse[] = [];
+      let stacked = 0;
+      for (const parse of parses) {
+        const existing = findExistingFood(foodsRef.current, { name: parse.name });
+        if (existing && unitsMatch(existing.unit, parse.unit)) {
+          handleQuantityChange(existing.id, round2((existing.quantity ?? 0) + parse.quantity));
+          stacked++;
+        } else {
+          fresh.push(parse);
+        }
+      }
+      let added = true;
+      if (fresh.length > 0) {
+        added = await addFoods(
+          fresh.map((p) => ({
+            name: p.name,
+            category: p.category,
+            quantity: p.quantity,
+            unit: p.unit || undefined,
+            // US-803, as above: quick-add is entry, not a safety decision.
+            is_safe: ACQUIRED_FOOD_IS_SAFE,
+            is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
+          }))
+        );
+      }
+      const count = (added ? fresh.length : 0) + stacked;
+      if (count > 0) {
+        toast.success(t("pantry.toast.bulkAdded", { count, formatted: fmt(count) }));
+      }
+      return added;
+    },
+    [addFoods, handleQuantityChange, t, fmt]
+  );
+
+  // The edit branch never writes quantity directly: a changed count goes
+  // through handleQuantityChange, so the ledger records it as a correction.
+  const handleSave = useCallback(
+    async (foodData: Omit<Food, "id">): Promise<boolean> => {
+      if (editFood) {
+        const { quantity, ...rest } = foodData;
+        updateFood(editFood.id, rest);
+        if (quantity !== undefined && quantity !== editFood.quantity) {
+          handleQuantityChange(editFood.id, quantity);
+        }
+        setEditFood(null);
+        return true;
+      }
+      const added = await addFood(foodData);
+      if (added) setEditFood(null);
+      return added;
+    },
+    [editFood, updateFood, addFood, handleQuantityChange]
   );
 
   const handleDialogClose = useCallback((open: boolean) => {
@@ -490,67 +881,105 @@ export default function Pantry() {
     if (!open) setEditFood(null);
   }, []);
 
-  const handleLoadStarterList = async () => {
+  const handleLoadStarterList = useCallback(async () => {
+    const current = foodsRef.current;
     const newFoods = starterFoods.filter(
-      (starterFood) =>
-        !foods.some((f) => f.name.toLowerCase() === starterFood.name.toLowerCase())
+      (starterFood) => !findExistingFood(current, { name: starterFood.name })
     );
     if (newFoods.length === 0) {
-      toast("Starter List Loaded", { description: "All starter foods are already in your pantry." });
+      toast(t("pantry.toast.starterAlready"));
       return;
     }
     const added = await addFoods(newFoods);
     if (added) {
-      toast("Starter List Loaded", { description: `${newFoods.length} foods added to your pantry!` });
+      toast.success(t("pantry.toast.starterLoaded", { count: newFoods.length, formatted: fmt(newFoods.length) }));
     }
     // If blocked by plan limit, the upgrade modal handles the messaging.
-  };
+  }, [addFoods, t, fmt]);
 
-  const handleFoodIdentified = async (foodData: FoodIdentification) => {
-    logger.debug("handleFoodIdentified received:", foodData);
-    const existingFood = foods.find(
-      (f) =>
-        f.name.toLowerCase() === foodData.name.toLowerCase() &&
-        f.category === foodData.category &&
-        (f.package_quantity || "") === (foodData.servingSize || "")
-    );
-    if (existingFood) {
-      const newQuantity =
-        (existingFood.quantity || 0) + (foodData.quantity || 1);
-      updateFood(existingFood.id, { ...existingFood, quantity: newQuantity });
-      toast.success("Quantity Updated", { description: `Added ${foodData.quantity || 1} to existing ${foodData.name}. Total: ${newQuantity}` });
-    } else {
+  const handleFoodIdentified = useCallback(
+    async (foodData: FoodIdentification) => {
+      logger.debug("handleFoodIdentified received:", foodData);
+      const canonicalId = (foodData as FoodIdentification & { canonical_id?: string | null }).canonical_id ?? null;
+      const qty = foodData.quantity || 1;
+      const existing = findExistingFood(foodsRef.current, { name: foodData.name, canonicalId });
+      if (existing) {
+        await topUpFood(existing, qty);
+        toast.success(
+          t("pantry.toast.toppedUpBy", {
+            amount: fmt(qty),
+            name: existing.name,
+          })
+        );
+        return;
+      }
       const added = await addFood({
         name: foodData.name,
         category: foodData.category,
-        is_safe: foodData.is_safe ?? true,
-        is_try_bite: false,
-        quantity: foodData.quantity || 1,
+        // US-803: a photo says what the food is, not whether a child eats it.
+        is_safe: ACQUIRED_FOOD_IS_SAFE,
+        is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
+        quantity: qty,
         package_quantity: foodData.servingSize || undefined,
+        ...(canonicalId ? { canonical_id: canonicalId } : {}),
       });
       if (added) {
-        toast.success("Food Added from Photo", { description: `${foodData.name} has been added to your pantry!` });
+        toast.success(t("pantry.toast.added", { name: foodData.name }), {
+          action: {
+            label: t("pantry.toast.addDetails"),
+            onClick: () => openAddDetails(foodData.name),
+          },
+        });
       }
       // If blocked by plan limit, the upgrade modal handles messaging.
-    }
-  };
+    },
+    [topUpFood, addFood, openAddDetails, t, fmt]
+  );
 
-  const handleBulkAdd = async (newFoods: Omit<Food, "id">[]) => {
-    if (!addFoods) {
-      toast.error("Error", { description: "Bulk add feature is not available" });
-      return;
-    }
-    try {
-      const added = await addFoods(newFoods);
-      if (added) {
-        toast.success("Foods Added", { description: `${newFoods.length} food${newFoods.length !== 1 ? "s" : ""} added to your pantry` });
+  /** A scanned product: stack onto the same barcode or product, else insert. */
+  const handleBarcodeAdd = useCallback(
+    async ({ food, barcode, existingFoodId, delta, unit }: BarcodePantryAdd): Promise<boolean> => {
+      const current = foodsRef.current;
+      const existing =
+        (existingFoodId ? current.find((f) => f.id === existingFoodId) : undefined) ??
+        findExistingFood(current, {
+          name: food.name,
+          barcode: barcode || food.barcode || null,
+          canonicalId: food.canonical_id ?? null,
+        });
+      const qty = delta > 0 ? delta : 1;
+      if (existing) {
+        await topUpFood(existing, qty, unit ?? food.unit ?? null);
+        toast.success(
+          t("pantry.toast.toppedUpBy", {
+            amount: fmt(qty),
+            name: existing.name,
+          })
+        );
+        return true;
       }
-      // If blocked by plan limit, the upgrade modal handles the messaging.
-    } catch (error) {
-      logger.error("Error bulk adding foods:", error);
-      toast.error("Error", { description: "Failed to add foods. Please try again." });
-    }
-  };
+      return addFood({
+        ...food,
+        quantity: qty,
+        barcode: barcode || food.barcode || null,
+        canonical_id: food.canonical_id ?? null,
+        // US-803: a scanned product is a product, not a safe food.
+        is_safe: ACQUIRED_FOOD_IS_SAFE,
+        is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
+      });
+    },
+    [topUpFood, addFood, t, fmt]
+  );
+
+  /** A receipt line for a food already in the pantry. */
+  const handleReceiptTopUp = useCallback(
+    async (foodId: string, delta: number, unit: string | null): Promise<void> => {
+      const food = foodsRef.current.find((f) => f.id === foodId);
+      if (!food) return;
+      await topUpFood(food, delta, unit);
+    },
+    [topUpFood]
+  );
 
   const toggleCategory = useCallback((cat: string) => {
     setCollapsedCategories((prev) => {
@@ -568,22 +997,106 @@ export default function Pantry() {
     setSearchQuery("");
     setCategoryFilter("all");
     setStockFilter("all");
-    setSortBy("name");
+    setFitFilter("all");
   }, []);
 
+  const openAddDialog = useCallback(() => {
+    setEditFood(null);
+    setDialogOpen(true);
+  }, []);
+  const openScanner = useCallback(() => {
+    haptic.light();
+    setScannerOpen(true);
+  }, []);
+  const openReceipt = useCallback(() => {
+    haptic.light();
+    setReceiptScanOpen(true);
+  }, []);
+  const openPhoto = useCallback(() => setImageCaptureOpen(true), []);
+  const openCsv = useCallback(() => setCsvOpen(true), []);
+  const closeReceipt = useCallback(() => setReceiptScanOpen(false), []);
+  const closeScanner = useCallback(() => setScannerOpen(false), []);
+  const prefetchScanner = useCallback(() => void loadBarcodeScanner(), []);
+  const prefetchReceipt = useCallback(() => void loadReceiptScanner(), []);
+  const getCatalog = useCallback(
+    (food: Food) => (food.canonical_id ? catalogById[food.canonical_id] ?? null : null),
+    [catalogById]
+  );
+
+  const anyDialogOpen =
+    dialogOpen || scannerOpen || imageCaptureOpen || receiptScanOpen || csvOpen || showSuggestions;
+
+  // '/' focuses search, 'b' opens the barcode scanner. Radix handles Escape.
+  useKeyboardShortcuts({
+    enabled: !anyDialogOpen,
+    shortcuts: [
+      {
+        key: "/",
+        description: t("pantry.shortcuts.search"),
+        action: () => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        },
+      },
+      {
+        key: "b",
+        description: t("pantry.shortcuts.barcode"),
+        action: openScanner,
+      },
+    ],
+  });
+
   // === RENDER ===
+
+  const resultCount = processedFoods.length;
+  const pillBase =
+    "flex items-center gap-1.5 min-h-9 px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors duration-200 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const pillActive = "bg-primary text-primary-foreground border-primary shadow-sm";
+  const pillInactive = "bg-card hover:bg-muted/80 border-border";
+
+  const renderFlatCard = (food: Food) => (
+    <FoodCard
+      food={food}
+      onEdit={handleEdit}
+      onDelete={deleteFood}
+      onQuantityChange={handleQuantityChange}
+      onWaste={handleWaste}
+      // US-797: catalogById holds stable references, so this does not defeat FoodCard's memo.
+      catalog={getCatalog(food)}
+      fit={fitByFoodId.get(food.id)}
+      onAddToGrocery={addOneToGrocery}
+      onList={isOnList(onListKeys, food)}
+      runsOutInDays={forecastDays.get(food.id)}
+    />
+  );
+  const renderListRow = (food: Food) => (
+    <PantryListItem
+      food={food}
+      onEdit={handleEdit}
+      onDelete={deleteFood}
+      onQuantityChange={handleQuantityChange}
+      onWaste={handleWaste}
+      onAddToGrocery={addOneToGrocery}
+      catalog={getCatalog(food)}
+      fit={fitByFoodId.get(food.id)}
+      onList={isOnList(onListKeys, food)}
+      runsOutInDays={forecastDays.get(food.id)}
+    />
+  );
 
   return (
     <div
       ref={pullToRefreshRef}
-      className="min-h-screen pb-20 md:pt-20 bg-background overflow-y-auto"
+      className="relative min-h-screen pb-20 md:pt-20 bg-background"
     >
       <Helmet>
-        <title>Pantry - EatPal</title>
-        <meta name="description" content="Manage your food pantry, track inventory, and organize items by category" />
+        <title>{t("pantry.meta.title")}</title>
+        <meta
+          name="description"
+          content={t("pantry.meta.description")}
+        />
         <meta name="robots" content="noindex" />
       </Helmet>
-      {/* Pull to Refresh */}
       {isMobile && (
         <PullToRefreshIndicator
           pullDistance={pullDistance}
@@ -592,447 +1105,290 @@ export default function Pantry() {
       )}
 
       <div
-        className="container mx-auto px-4 py-6 max-w-7xl"
+        className="container mx-auto px-4 py-4 md:py-6 max-w-7xl"
         style={{
           transform:
-            isMobile && !isRefreshing
+            isMobile && !isRefreshing && pullDistance > 0
               ? `translateY(${pullDistance}px)`
-              : "none",
+              : undefined,
           transition:
             pullDistance === 0 ? "transform 0.2s ease-out" : "none",
         }}
       >
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2.5 md:gap-4">
           {/* === HEADER === */}
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold font-heading">
-                  {t('pantry.title')}
-                </h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {foods.length > 0
-                    ? `${foods.length} item${foods.length !== 1 ? "s" : ""} across ${CATEGORY_ORDER.filter((c) => categoryCounts[c] > 0).length} categories`
-                    : t('pantry.subtitleEmpty')}
-                </p>
-              </div>
-
-              {/* Desktop action buttons */}
-              <div className="hidden md:flex gap-2">
-                <Button
-                  onClick={() => setDialogOpen(true)}
-                  className="gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Food
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                      <MoreVertical className="h-4 w-4" />
-                      More
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuLabel>Quick Add</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => setBulkAddOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Bulk Add Foods
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setImageCaptureOpen(true)}
-                    >
-                      <Camera className="h-4 w-4 mr-2" />
-                      Photo Identify
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setScannerOpen(true)}>
-                      <ScanBarcode className="h-4 w-4 mr-2" />
-                      Scan Barcode
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setReceiptScanOpen(true)}>
-                      <Receipt className="h-4 w-4 mr-2" />
-                      Scan Receipt
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Import</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={handleLoadStarterList}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Load Starter List
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleGetSuggestions}
-                      disabled={isLoadingSuggestions}
-                    >
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      {isLoadingSuggestions
-                        ? "Getting Ideas..."
-                        : "AI Suggestions"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <div className="cursor-pointer">
-                        <Upload className="h-4 w-4 mr-2" />
-                        <ImportCsvDialog />
-                      </div>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-
-            {/* Mobile action buttons */}
-            <div className="flex gap-2 md:hidden">
-              <Button
-                onClick={() => {
-                  haptic.light();
-                  setDialogOpen(true);
-                }}
-                size="lg"
-                className="flex-1 touch-target gap-2"
-              >
-                <Plus className="h-5 w-5" />
-                Add Food
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="touch-target min-w-[44px]"
-                  >
-                    <MoreVertical className="h-5 w-5" />
-                    <span className="sr-only">More options</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Quick Add</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={() => setBulkAddOpen(true)}
-                    className="min-h-[44px]"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Bulk Add Foods
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setImageCaptureOpen(true)}
-                    className="min-h-[44px]"
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Scan Photo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setScannerOpen(true)}
-                    className="min-h-[44px]"
-                  >
-                    <ScanBarcode className="h-4 w-4 mr-2" />
-                    Scan Barcode
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setReceiptScanOpen(true)}
-                    className="min-h-[44px]"
-                  >
-                    <Receipt className="h-4 w-4 mr-2" />
-                    Scan Receipt
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Import & AI</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={handleLoadStarterList}
-                    className="min-h-[44px]"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Load Starter List
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleGetSuggestions}
-                    disabled={isLoadingSuggestions}
-                    className="min-h-[44px]"
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    {isLoadingSuggestions
-                      ? "Getting Ideas..."
-                      : "AI Suggestions"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild className="min-h-[44px]">
-                    <div className="cursor-pointer">
-                      <Upload className="h-4 w-4 mr-2" />
-                      <ImportCsvDialog />
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h1 className="text-2xl md:text-3xl font-bold font-heading">
+              {t('pantry.title')}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {foods.length > 0
+                ? t("pantry.subtitle", {
+                    count: foods.length,
+                    formatted: fmt(foods.length),
+                    categories: t("pantry.subtitleCategories", {
+                      count: categoriesInUse,
+                      formatted: fmt(categoriesInUse),
+                    }),
+                  })
+                : t('pantry.subtitleEmpty')}
+            </p>
           </div>
 
-          {/* === US-288: QUICK-ADD INPUT === */}
-          <PantryQuickAdd
-            onAddOne={handleQuickAddOne}
-            onAddMany={handleQuickAddMany}
+          {/* === CAPTURE BAR === */}
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0" onChange={handleQuickAddInput}>
+              <PantryQuickAdd
+                onAddOne={handleQuickAddOne}
+                onAddMany={handleQuickAddMany}
+                existingMatch={quickAddMatch}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-11 shrink-0 p-0"
+              onClick={openScanner}
+              onPointerEnter={prefetchScanner}
+              onFocus={prefetchScanner}
+              aria-label={t("pantry.captureBar.scanBarcode")}
+              aria-keyshortcuts="b"
+            >
+              <ScanBarcode className="h-5 w-5" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-11 shrink-0 p-0"
+              onClick={openReceipt}
+              onPointerEnter={prefetchReceipt}
+              onFocus={prefetchReceipt}
+              aria-label={t("pantry.captureBar.scanReceipt")}
+            >
+              <Receipt className="h-5 w-5" aria-hidden="true" />
+            </Button>
+            <PantryCaptureMenu
+              onPhoto={openPhoto}
+              onImportCsv={openCsv}
+              onAiIdeas={handleGetSuggestions}
+              onStarter={foods.length === 0 && foodsHydrated ? handleLoadStarterList : undefined}
+            />
+          </div>
+
+          {/* === STOCK STRIP === */}
+          {foods.length > 0 && (
+            <PantryStockStrip
+              safeRunningLow={safeRunningLow}
+              kidName={lensKid?.name}
+              lowCount={stockBuckets.low.length}
+              outCount={stockBuckets.out.length}
+              untrackedCount={stockBuckets.untracked.length}
+              soonest={soonest}
+              stockFilter={stockFilter}
+              onFilter={handleStripFilter}
+              onAddAll={handleAddAllLow}
+              onAddSafe={handleAddSafe}
+              onShowUntracked={handleShowUntracked}
+            />
+          )}
+
+          {/* === KID LENS === */}
+          <PantryKidLens
+            kids={kids}
+            selectedKidId={lensKidId}
+            onSelect={handleLensSelect}
+            fitFilter={fitFilter}
+            onFitFilter={setFitFilter}
           />
 
-          {/* === SEARCH BAR === */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              ref={searchInputRef}
-              placeholder="Search pantry items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-10 h-11"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Clear search"
+          {/* === SEARCH, SORT, VIEW: one row === */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+              <Input
+                ref={searchInputRef}
+                type="search"
+                placeholder={t("pantry.filters.searchPlaceholder")}
+                aria-label={t("pantry.filters.searchLabel")}
+                aria-keyshortcuts="/"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10 h-11"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={t("pantry.filters.clearSearch")}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            <Select value={sortBy} onValueChange={handleSortBy}>
+              {/* aria-label (US-778): the trigger renders an icon and the value. */}
+              <SelectTrigger
+                className="h-11 w-11 shrink-0 justify-center px-0 text-sm md:w-[180px] md:justify-between md:px-3 [&>svg:last-child]:hidden md:[&>svg:last-child]:block"
+                aria-label={t("pantry.sort.label")}
               >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+                <ArrowUpDown className="h-4 w-4 shrink-0 md:mr-1.5" aria-hidden="true" />
+                <span className="hidden md:inline truncate">
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">{t("pantry.sort.name")}</SelectItem>
+                <SelectItem value="low-stock">{t("pantry.sort.lowStock")}</SelectItem>
+                <SelectItem value="category">{t("pantry.sort.category")}</SelectItem>
+                <SelectItem value="recent">{t("pantry.sort.recent")}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div
+              role="group"
+              aria-label={t("pantry.view.label")}
+              className="flex shrink-0 items-center gap-0.5 bg-muted rounded-lg p-0.5"
+            >
+              {VIEW_MODES.map((mode) => {
+                const Icon = mode === "grid" ? LayoutGrid : List;
+                const pressed = viewMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => handleViewMode(mode)}
+                    aria-pressed={pressed}
+                    aria-label={mode === "grid" ? t("pantry.view.grid") : t("pantry.view.list")}
+                    className={cn(
+                      "h-10 w-10 flex items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      pressed ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* === CATEGORY TABS === */}
+          {/* === CATEGORY PILLS === */}
           <div
-            ref={categoryScrollRef}
+            role="group"
+            aria-label={t("pantry.filters.categories")}
             className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide"
           >
-            {/* All tab */}
             <button
               type="button"
-              onClick={() => {
-                setCategoryFilter("all");
-                setStockFilter("all");
-              }}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-all duration-200 shrink-0",
-                categoryFilter === "all" && stockFilter === "all"
-                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                  : "bg-card hover:bg-muted/80 border-border"
-              )}
+              aria-pressed={categoryFilter === "all"}
+              onClick={() => setCategoryFilter("all")}
+              className={cn(pillBase, categoryFilter === "all" ? pillActive : pillInactive)}
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              All
+              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("pantry.filters.all")}
               <Badge
                 variant="secondary"
+                aria-hidden="true"
                 className={cn(
                   "text-[10px] h-[18px] px-1.5 tabular-nums",
-                  categoryFilter === "all" &&
-                    stockFilter === "all" &&
-                    "bg-primary-foreground/20 text-primary-foreground"
+                  categoryFilter === "all" && "bg-primary-foreground/20 text-primary-foreground"
                 )}
               >
-                {foods.length}
+                {fmt(foods.length)}
               </Badge>
+              <span className="sr-only">
+                {t("pantry.filters.itemCount", { count: foods.length, formatted: fmt(foods.length) })}
+              </span>
             </button>
 
-            {/* Category tabs */}
-            {CATEGORY_ORDER.map((cat) => {
-              const config = CATEGORY_CONFIG[cat];
+            {PANTRY_DISPLAY_ORDER.map((cat) => {
+              const count = categoryCounts[cat] ?? 0;
+              if (count === 0) return null;
+              const config = getCategoryConfig(cat);
               const Icon = config.icon;
-              const count = categoryCounts[cat] || 0;
               const isActive = categoryFilter === cat;
               return (
                 <button
                   key={cat}
                   type="button"
-                  onClick={() => {
-                    setCategoryFilter(cat);
-                    setStockFilter("all");
-                  }}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-all duration-200 shrink-0",
-                    isActive
-                      ? config.pillActive
-                      : "bg-card hover:bg-muted/80 border-border",
-                    count === 0 && "opacity-50"
-                  )}
-                  disabled={count === 0}
+                  aria-pressed={isActive}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={cn(pillBase, isActive ? pillActive : pillInactive)}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  {config.label}
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t(config.labelKey, config.label)}
                   <Badge
                     variant="secondary"
+                    aria-hidden="true"
                     className={cn(
                       "text-[10px] h-[18px] px-1.5 tabular-nums",
-                      isActive && "bg-current/10"
+                      isActive && "bg-primary-foreground/20 text-primary-foreground"
                     )}
                   >
-                    {count}
+                    {fmt(count)}
                   </Badge>
+                  <span className="sr-only">
+                    {t("pantry.filters.itemCount", { count, formatted: fmt(count) })}
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          {/* === SORT + VIEW CONTROLS === */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Select
-                value={sortBy}
-                onValueChange={(v) => setSortBy(v as SortOption)}
-              >
-                {/* aria-label (US-778): the trigger renders an icon and the
-                    selected value, so a screen reader announced it as an
-                    unnamed button -- the one critical violation on this page. */}
-                <SelectTrigger className="w-[160px] h-9 text-sm" aria-label="Sort pantry items">
-                  <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="name">Sort by Name</SelectItem>
-                  <SelectItem value="low-stock">Low Stock First</SelectItem>
-                  <SelectItem value="category">By Category</SelectItem>
-                  <SelectItem value="recent">Recently Added</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Active filter count */}
-              {activeFilterCount > 0 && (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                  Clear {activeFilterCount} filter
-                  {activeFilterCount !== 1 ? "s" : ""}
-                </button>
+          {/* === ACTIVE FILTERS === */}
+          {activeFilterCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {stockFilter !== "all" && (
+                <Badge variant="outline" className="gap-1 text-sm py-1 px-3">
+                  {stockFilter === "low-stock"
+                    ? t("pantry.filters.showingLow")
+                    : stockFilter === "out-of-stock"
+                      ? t("pantry.filters.showingOut")
+                      : t("pantry.filters.showingRestock")}
+                  <button
+                    aria-label={t("pantry.filters.clearStock")}
+                    type="button"
+                    onClick={() => setStockFilter("all")}
+                    className="ml-1 hover:text-foreground rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </Badge>
               )}
-            </div>
-
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
               <button
                 type="button"
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "p-1.5 rounded-md transition-all",
-                  viewMode === "grid"
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                aria-label="Grid view"
+                onClick={clearAllFilters}
+                className="flex items-center gap-1 min-h-9 px-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "p-1.5 rounded-md transition-all",
-                  viewMode === "list"
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                aria-label="List view"
-              >
-                <List className="h-4 w-4" />
+                <X className="h-3 w-3" aria-hidden="true" />
+                {t("pantry.filters.clear", { count: activeFilterCount, formatted: fmt(activeFilterCount) })}
               </button>
             </div>
-          </div>
-
-          {/* === LOW STOCK ALERT BANNER === */}
-          {(stockStats.outOfStock > 0 || stockStats.lowStock > 0) &&
-            stockFilter === "all" &&
-            !debouncedSearchQuery && (
-              <div
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800 animate-in fade-in slide-in-from-top-2 duration-300"
-              >
-                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                    {stockStats.outOfStock > 0 && (
-                      <span>
-                        {stockStats.outOfStock} out of stock
-                      </span>
-                    )}
-                    {stockStats.outOfStock > 0 && stockStats.lowStock > 0 && (
-                      <span className="mx-1">and</span>
-                    )}
-                    {stockStats.lowStock > 0 && (
-                      <span>
-                        {stockStats.lowStock} running low
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 h-8 text-xs border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                  onClick={() => {
-                    setStockFilter("low-stock");
-                    setCategoryFilter("all");
-                    setSortBy("low-stock");
-                  }}
-                >
-                  View
-                  <ChevronRight className="h-3 w-3 ml-1" />
-                </Button>
-              </div>
-            )}
-
-          {/* === STATS === */}
-          {foods.length > 0 && (
-            <PantryStatsBar
-              totalCount={foods.length}
-              lowStockCount={stockStats.lowStock}
-              outOfStockCount={stockStats.outOfStock}
-              safeCount={stockStats.safeCount}
-              tryBiteCount={stockStats.tryBiteCount}
-              onFilterLowStock={() => {
-                setStockFilter("low-stock");
-                setCategoryFilter("all");
-                setSortBy("low-stock");
-              }}
-              onFilterOutOfStock={() => {
-                setStockFilter("out-of-stock");
-                setCategoryFilter("all");
-                setSortBy("low-stock");
-              }}
-            />
           )}
 
-          {/* === STOCK FILTER INDICATOR === */}
-          {stockFilter !== "all" && (
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className="gap-1 text-sm py-1 px-3 border-amber-400 text-amber-700 dark:text-amber-400"
-              >
-                {stockFilter === "low-stock"
-                  ? "Showing low stock items"
-                  : "Showing out of stock items"}
-                <button
-                  aria-label="Clear the stock filter"
-                  type="button"
-                  onClick={() => setStockFilter("all")}
-                  className="ml-1 hover:text-foreground"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                {processedFoods.length} item
-                {processedFoods.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-          )}
+          {/* One announcement for the result count, instead of a live region
+              on the whole grid that read every card back on each keystroke. */}
+          <p role="status" className="sr-only">
+            {isInitialLoading ? "" : t("pantry.resultCount", { count: resultCount, formatted: fmt(resultCount) })}
+          </p>
 
           {/* === CONTENT === */}
           {isInitialLoading ? (
             <LoadingSkeleton />
-          ) : processedFoods.length === 0 && foods.length === 0 ? (
+          ) : foods.length === 0 ? (
             <EmptyPantryState
-              onAddFood={() => setDialogOpen(true)}
+              onAddFood={openAddDialog}
               onLoadStarter={handleLoadStarterList}
               onGetSuggestions={handleGetSuggestions}
+              starterDisabled={!foodsHydrated}
+              aiDisabledReason={aiDisabledReason}
             />
           ) : processedFoods.length === 0 ? (
-            <FilteredEmptyState onClear={clearAllFilters} />
+            <FilteredEmptyState onClear={clearAllFilters} kidName={lensKid?.name} />
           ) : showGroupedView ? (
-            /* Grouped category view */
-            <div className="flex flex-col gap-2" aria-live="polite">
-              {CATEGORY_ORDER.map((cat) => {
+            <div className="flex flex-col gap-2">
+              {PANTRY_DISPLAY_ORDER.map((cat) => {
                 const items = groupedFoods[cat];
                 if (!items || items.length === 0) return null;
                 return (
@@ -1041,218 +1397,121 @@ export default function Pantry() {
                     category={cat}
                     items={items}
                     isOpen={!collapsedCategories.has(cat)}
-                    onToggle={() => toggleCategory(cat)}
+                    onToggle={toggleCategory}
                     viewMode={viewMode}
                     onEdit={handleEdit}
                     onDelete={deleteFood}
                     onQuantityChange={handleQuantityChange}
-                    onAddToGrocery={handleAddToGrocery}
-                    kidAllergens={uniqueKidAllergens}
+                    onWaste={handleWaste}
+                    onAddToGrocery={addOneToGrocery}
+                    kidAllergens={NO_ALLERGENS}
+                    getCatalog={getCatalog}
+                    fitByFoodId={fitByFoodId}
+                    onListKeys={onListKeys}
+                    runsOutInDays={forecastDays}
                   />
                 );
               })}
             </div>
+          ) : viewMode === "grid" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+              {displayedFoods.map((food) => (
+                <div key={food.id}>{renderFlatCard(food)}</div>
+              ))}
+            </div>
+          ) : nextVirtual ? (
+            <div ref={listRef} className="border rounded-xl">
+              <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const food = displayedFoods[virtualRow.index];
+                  if (!food) return null;
+                  return (
+                    <div
+                      key={food.id}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      className="border-b last:border-b-0"
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
+                      }}
+                    >
+                      {renderListRow(food)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           ) : (
-            /* Flat filtered/sorted view */
-            viewMode === "grid" ? (
-                <div
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 animate-in fade-in duration-200"
-                  aria-live="polite"
-                >
-                  {displayedFoods.map((food) => (
-                    <div key={food.id} className="animate-in fade-in zoom-in-95 duration-150">
-                      <FoodCard
-                        food={food}
-                        onEdit={handleEdit}
-                        onDelete={deleteFood}
-                        onQuantityChange={handleQuantityChange}
-                        onWaste={handleWaste}
-                        kidAllergens={uniqueKidAllergens}
-                        // US-797: the card says where a catalog-linked food
-                        // came from. catalogById holds stable references, so
-                        // this does not defeat FoodCard's memo.
-                        catalog={food.canonical_id ? catalogById[food.canonical_id] : null}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                useVirtual ? (
-                  <div
-                    ref={listParentRef}
-                    className="border rounded-xl overflow-auto animate-in fade-in duration-200"
-                    style={{ maxHeight: "70vh" }}
-                    aria-live="polite"
-                  >
-                    <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
-                      {virtualizer.getVirtualItems().map((virtualRow) => {
-                        const food = displayedFoods[virtualRow.index];
-                        return (
-                          <div
-                            key={food.id}
-                            data-index={virtualRow.index}
-                            ref={virtualizer.measureElement}
-                            style={{
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              width: "100%",
-                              transform: `translateY(${virtualRow.start}px)`,
-                            }}
-                          >
-                            <PantryListItem
-                              food={food}
-                              onEdit={handleEdit}
-                              onDelete={deleteFood}
-                              onQuantityChange={handleQuantityChange}
-                              onAddToGrocery={handleAddToGrocery}
-                              kidAllergens={uniqueKidAllergens}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    className="border rounded-xl overflow-hidden divide-y animate-in fade-in duration-200"
-                    aria-live="polite"
-                  >
-                    {displayedFoods.map((food) => (
-                      <PantryListItem
-                        key={food.id}
-                        food={food}
-                        onEdit={handleEdit}
-                        onDelete={deleteFood}
-                        onQuantityChange={handleQuantityChange}
-                        onAddToGrocery={handleAddToGrocery}
-                        kidAllergens={uniqueKidAllergens}
-                      />
-                    ))}
-                  </div>
-                )
-              )
-          )}
-
-          {/* Load more button */}
-          {hasMoreFoods && (
-            <div className="flex justify-center py-4">
-              <Button
-                variant="outline"
-                onClick={() => setVisibleCount(prev => prev + 50)}
-              >
-                Load More ({processedFoods.length - visibleCount} remaining)
-              </Button>
+            <div className="border rounded-xl overflow-hidden divide-y">
+              {displayedFoods.map((food) => (
+                <div key={food.id}>{renderListRow(food)}</div>
+              ))}
             </div>
           )}
 
-          {/* Result count when filtering */}
-          {(debouncedSearchQuery || categoryFilter !== "all") &&
-            processedFoods.length > 0 && (
-              <p className="text-center text-sm text-muted-foreground pb-4">
-                Showing {Math.min(visibleCount, processedFoods.length)} of {processedFoods.length} matching items ({foods.length} total)
-              </p>
-            )}
+          {/* Load more (the grouped view renders everything) */}
+          {!isInitialLoading && !showGroupedView && hasMoreFoods && (
+            <div className="flex justify-center py-4">
+              <Button variant="outline" onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}>
+                {t("pantry.loadMore", {
+                  count: processedFoods.length - visibleCount,
+                  formatted: fmt(processedFoods.length - visibleCount),
+                })}
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* === DIALOGS === */}
+        {/* === DIALOGS: each mounted only while open === */}
         <Suspense fallback={null}>
-        <AddFoodDialog
-          open={dialogOpen}
-          onOpenChange={handleDialogClose}
-          onSave={handleSave}
-          editFood={editFood}
-        />
+          {dialogOpen && (
+            <AddFoodDialog
+              open={dialogOpen}
+              onOpenChange={handleDialogClose}
+              onSave={handleSave}
+              editFood={editFood}
+            />
+          )}
 
-        <Dialog open={showSuggestions} onOpenChange={setShowSuggestions}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-lg">
-                <Sparkles className="h-5 w-5 text-primary" />
-                AI Food Suggestions
-              </DialogTitle>
-              <DialogDescription className="text-base">
-                Personalized suggestions based on your child's preferences and
-                eating history.
-              </DialogDescription>
-            </DialogHeader>
+          {scannerOpen && (
+            <BarcodeScannerDialog
+              open={scannerOpen}
+              onOpenChange={setScannerOpen}
+              onFoodAdded={closeScanner}
+              targetTable="foods"
+              onAddToPantry={handleBarcodeAdd}
+              pantryFoods={foods}
+            />
+          )}
 
-            {isLoadingSuggestions ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4" />
-                <p className="text-muted-foreground">
-                  Analyzing eating patterns...
-                </p>
-              </div>
-            ) : suggestions.length > 0 ? (
-              <div className="space-y-3">
-                {suggestions.map((suggestion) => (
-                  <Card
-                    key={suggestion.name}
-                    className="hover:shadow-md transition-shadow"
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg mb-1">
-                            {suggestion.name}
-                          </h3>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Category:{" "}
-                            <span className="capitalize">
-                              {suggestion.category}
-                            </span>
-                          </p>
-                          <p className="text-sm">{suggestion.reason}</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddSuggestion(suggestion)}
-                          className="shrink-0"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                <p>No suggestions available at the moment.</p>
-                <p className="text-sm mt-2">
-                  Try again or add more foods to your pantry first.
-                </p>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+          {imageCaptureOpen && (
+            <ImageFoodCapture
+              open={imageCaptureOpen}
+              onOpenChange={setImageCaptureOpen}
+              onFoodIdentified={handleFoodIdentified}
+            />
+          )}
 
-        <BarcodeScannerDialog
-          open={scannerOpen}
-          onOpenChange={setScannerOpen}
-          onFoodAdded={() => setScannerOpen(false)}
-          targetTable="foods"
-        />
+          {receiptScanOpen && (
+            <ScanReceiptDialog open={receiptScanOpen} onClose={closeReceipt} onTopUp={handleReceiptTopUp} />
+          )}
 
-        <ImageFoodCapture
-          open={imageCaptureOpen}
-          onOpenChange={setImageCaptureOpen}
-          onFoodIdentified={handleFoodIdentified}
-        />
-
-        <BulkAddFoodDialog
-          open={bulkAddOpen}
-          onOpenChange={setBulkAddOpen}
-          onSave={handleBulkAdd}
-        />
-
-        <ScanReceiptDialog
-          open={receiptScanOpen}
-          onClose={() => setReceiptScanOpen(false)}
-        />
+          {csvOpen && <ImportCsvDialog open={csvOpen} onOpenChange={setCsvOpen} />}
         </Suspense>
+
+        <SuggestionsDialog
+          open={showSuggestions}
+          onOpenChange={setShowSuggestions}
+          loading={isLoadingSuggestions}
+          suggestions={suggestions}
+          added={addedSuggestions}
+          onAddToGrocery={handleSuggestionToGrocery}
+          onAddAsTryBite={handleSuggestionAsTryBite}
+        />
       </div>
     </div>
   );
@@ -1260,17 +1519,105 @@ export default function Pantry() {
 
 // === SUB-COMPONENTS ===
 
-function LoadingSkeleton() {
+/** Kept stable: PantryCategorySection still takes the legacy prop; `fit` supersedes it. */
+const NO_ALLERGENS: string[] = [];
+
+const SuggestionsDialog = memo(function SuggestionsDialog({
+  open,
+  onOpenChange,
+  loading,
+  suggestions,
+  added,
+  onAddToGrocery,
+  onAddAsTryBite,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  loading: boolean;
+  suggestions: FoodSuggestion[];
+  added: ReadonlySet<string>;
+  onAddToGrocery: (s: FoodSuggestion, key: string) => void;
+  onAddAsTryBite: (s: FoodSuggestion, key: string) => void;
+}) {
+  const { t } = useTranslation();
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-[88px] rounded-xl" />
-        ))}
-      </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+            {t("pantry.suggestions.title")}
+          </DialogTitle>
+          <DialogDescription className="text-base">
+            {t("pantry.suggestions.description")}
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div role="status" className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="h-10 w-10 text-primary motion-safe:animate-spin mb-4" aria-hidden="true" />
+            <p className="text-muted-foreground">{t("pantry.suggestions.loading")}</p>
+          </div>
+        ) : suggestions.length > 0 ? (
+          <ul className="space-y-3">
+            {suggestions.map((suggestion, index) => {
+              const key = `${suggestion.name}-${index}`;
+              const isAdded = added.has(key);
+              return (
+                <li key={key}>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg mb-1">{suggestion.name}</h3>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {t(getCategoryConfig(suggestion.category).labelKey, getCategoryConfig(suggestion.category).label)}
+                          </p>
+                          <p className="text-sm">{suggestion.reason}</p>
+                        </div>
+                        {isAdded ? (
+                          <Button size="sm" variant="outline" disabled className="shrink-0 gap-1">
+                            <Check className="h-4 w-4" aria-hidden="true" />
+                            {t("pantry.suggestions.added")}
+                          </Button>
+                        ) : (
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <Button size="sm" className="gap-1" onClick={() => onAddToGrocery(suggestion, key)}>
+                              <ShoppingCart className="h-4 w-4" aria-hidden="true" />
+                              {t("pantry.suggestions.addToGrocery")}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => onAddAsTryBite(suggestion, key)}>
+                              {t("pantry.suggestions.addAsTryBite")}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <p>{t("pantry.suggestions.none")}</p>
+            <p className="text-sm mt-2">{t("pantry.suggestions.noneHint")}</p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+});
+
+function LoadingSkeleton() {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4" aria-busy="true">
+      <span className="sr-only">{t("pantry.loading")}</span>
+      <Skeleton className="h-11 rounded-xl" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {[...Array(8)].map((_, i) => (
-          <div key={i} className="bg-card rounded-lg border p-3.5 space-y-3">
+          <div key={i} className="bg-card rounded-lg border p-3.5 space-y-3" data-testid="pantry-skeleton-card">
             <div className="flex justify-between items-start">
               <Skeleton className="h-5 w-28" />
               <Skeleton className="h-7 w-14 rounded" />
@@ -1291,106 +1638,107 @@ function LoadingSkeleton() {
   );
 }
 
+const optionCardClass =
+  "w-full rounded-xl border bg-card text-card-foreground p-6 text-center transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+
 function EmptyPantryState({
   onAddFood,
   onLoadStarter,
   onGetSuggestions,
+  starterDisabled,
+  aiDisabledReason,
 }: {
   onAddFood: () => void;
   onLoadStarter: () => void;
   onGetSuggestions: () => void;
+  starterDisabled?: boolean;
+  aiDisabledReason?: string;
 }) {
   // Its own hook: this is a separate component from Pantry, so the page's `t`
-  // is not in scope here. Without this the two t() calls below are a bare
-  // undefined identifier and the whole screen throws ReferenceError -- which is
-  // what a parent with an empty pantry saw instead of the empty state.
+  // is not in scope here. Without it the t() calls below are an unbound
+  // identifier and the screen throws ReferenceError (TS2304 must stay at 0).
   const { t } = useTranslation();
 
   return (
-    <div
-      className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-400"
-    >
+    <div className="max-w-3xl mx-auto motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300">
       <div className="text-center mb-8">
         <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-          <Utensils className="h-8 w-8 text-primary" />
+          <Utensils className="h-8 w-8 text-primary" aria-hidden="true" />
         </div>
-        <h3 className="text-2xl font-bold font-heading mb-2">
+        <h2 className="text-2xl font-bold font-heading mb-2">
           {t('pantry.emptyTitle')}
-        </h3>
+        </h2>
         <p className="text-muted-foreground max-w-md mx-auto">
           {t('pantry.emptyText')}
         </p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-4 mb-8">
-        <Card
-          className="hover:shadow-lg transition-all cursor-pointer hover:-translate-y-0.5 duration-200"
-          onClick={onLoadStarter}
-        >
-          <CardContent className="pt-6 text-center">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-              <Download className="h-6 w-6 text-primary" />
-            </div>
-            <h4 className="font-semibold mb-1">Quick Start</h4>
-            <p className="text-sm text-muted-foreground mb-3">
-              Load common kid-friendly foods
-            </p>
-            <Badge variant="secondary">Recommended</Badge>
-          </CardContent>
-        </Card>
+        <button type="button" className={optionCardClass} onClick={onLoadStarter} disabled={starterDisabled}>
+          <span className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+            <Download className="h-6 w-6 text-primary" aria-hidden="true" />
+          </span>
+          <span className="block font-semibold mb-1">{t("pantry.empty.starterTitle")}</span>
+          <span className="block text-sm text-muted-foreground mb-3">
+            {t("pantry.empty.starterText")}
+          </span>
+          <Badge variant="secondary">{t("pantry.empty.recommended")}</Badge>
+        </button>
 
-        <Card
-          className="hover:shadow-lg transition-all cursor-pointer hover:-translate-y-0.5 duration-200"
-          onClick={onAddFood}
-        >
-          <CardContent className="pt-6 text-center">
-            <div className="w-12 h-12 rounded-xl bg-safe-food/10 flex items-center justify-center mx-auto mb-3">
-              <Plus className="h-6 w-6 text-safe-food" />
-            </div>
-            <h4 className="font-semibold mb-1">Add Manually</h4>
-            <p className="text-sm text-muted-foreground mb-3">
-              Type in specific foods one at a time
-            </p>
-          </CardContent>
-        </Card>
+        <button type="button" className={optionCardClass} onClick={onAddFood}>
+          <span className="w-12 h-12 rounded-xl bg-safe-food/10 flex items-center justify-center mx-auto mb-3">
+            <Plus className="h-6 w-6 text-safe-food" aria-hidden="true" />
+          </span>
+          <span className="block font-semibold mb-1">{t("pantry.empty.manualTitle")}</span>
+          <span className="block text-sm text-muted-foreground">
+            {t("pantry.empty.manualText")}
+          </span>
+        </button>
 
-        <Card
-          className="hover:shadow-lg transition-all cursor-pointer hover:-translate-y-0.5 duration-200"
+        <button
+          type="button"
+          className={optionCardClass}
           onClick={onGetSuggestions}
+          disabled={Boolean(aiDisabledReason)}
+          aria-describedby={aiDisabledReason ? "pantry-ai-disabled-reason" : undefined}
         >
-          <CardContent className="pt-6 text-center">
-            <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mx-auto mb-3">
-              <Sparkles className="h-6 w-6 text-accent" />
-            </div>
-            <h4 className="font-semibold mb-1">AI Suggestions</h4>
-            <p className="text-sm text-muted-foreground mb-3">
-              Get personalized food recommendations
-            </p>
-          </CardContent>
-        </Card>
+          <span className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mx-auto mb-3">
+            <Sparkles className="h-6 w-6 text-accent" aria-hidden="true" />
+          </span>
+          <span className="block font-semibold mb-1">{t("pantry.empty.aiTitle")}</span>
+          <span className="block text-sm text-muted-foreground">
+            {t("pantry.empty.aiText")}
+          </span>
+          {aiDisabledReason && (
+            <span id="pantry-ai-disabled-reason" className="block text-xs text-muted-foreground mt-2">
+              {aiDisabledReason}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="bg-muted/50 rounded-xl p-5">
-        <h4 className="font-semibold mb-3 text-sm">Tips for getting started</h4>
+        <h3 className="font-semibold mb-3 text-sm">{t("pantry.empty.tipsTitle")}</h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
           <li className="flex gap-2">
             <span className="text-safe-food font-bold">1.</span>
             <span>
-              <strong>Safe Foods:</strong> Foods your kids already eat and enjoy
+              <strong>{t("pantry.empty.tipSafeLabel")}</strong>{" "}
+              {t("pantry.empty.tipSafe")}
             </span>
           </li>
           <li className="flex gap-2">
             <span className="text-try-bite font-bold">2.</span>
             <span>
-              <strong>Try Bites:</strong> New foods you want to introduce
-              gradually
+              <strong>{t("pantry.empty.tipTryLabel")}</strong>{" "}
+              {t("pantry.empty.tipTry")}
             </span>
           </li>
           <li className="flex gap-2">
             <span className="text-primary font-bold">3.</span>
             <span>
-              <strong>Quantities:</strong> Track stock levels to know when to
-              restock
+              <strong>{t("pantry.empty.tipQtyLabel")}</strong>{" "}
+              {t("pantry.empty.tipQty")}
             </span>
           </li>
         </ul>
@@ -1399,19 +1747,21 @@ function EmptyPantryState({
   );
 }
 
-function FilteredEmptyState({ onClear }: { onClear: () => void }) {
+function FilteredEmptyState({ onClear, kidName }: { onClear: () => void; kidName?: string }) {
+  // Its own hook, for the same reason as EmptyPantryState.
+  const { t } = useTranslation();
   return (
-    <div
-      className="text-center py-16 animate-in fade-in duration-200"
-    >
+    <div className="text-center py-16 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
       <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-4">
-        <Search className="h-6 w-6 text-muted-foreground" />
+        <Search className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
       </div>
       <p className="text-muted-foreground mb-4">
-        No items match your current filters
+        {kidName
+          ? t("pantry.filteredEmpty.forKid", { kid: kidName })
+          : t("pantry.filteredEmpty.text")}
       </p>
       <Button variant="outline" onClick={onClear}>
-        Clear Filters
+        {t("pantry.filteredEmpty.clear")}
       </Button>
     </div>
   );

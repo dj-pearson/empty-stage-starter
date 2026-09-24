@@ -28,6 +28,7 @@ import {
   describeConflicts,
   matchPantryFood,
 } from "@/components/grocery/groceryInputSchemas";
+import "@/i18n/appLocale";
 
 // Both pull in camera and scanner code the manual form never needs.
 const BarcodeScannerDialog = lazy(() =>

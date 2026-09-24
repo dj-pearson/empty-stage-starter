@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import type { Recipe } from "@/types";
+import "@/i18n/appLocale";
 
 /**
  * The Recipes screen's one delete path: hide now, commit later.

@@ -13,6 +13,7 @@ import type { RecipeCollection } from "@/types";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { collectionIcon, collectionTone } from "@/lib/collectionAppearance";
+import "@/i18n/appLocale";
 
 /** What a delete hands back so it can be undone (useRecipeCollections.remove). */
 export interface DeletedCollectionSnapshot {

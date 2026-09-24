@@ -1,7 +1,9 @@
 import { useState, useRef, lazy, Suspense } from "react";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { useTranslation } from "react-i18next";
+import { Html5Qrcode, Html5QrcodeSupportedFormats, type Html5QrcodeCameraScanConfig } from 'html5-qrcode';
 import { isMobile } from '@/lib/platform';
 import { Button } from "@/components/ui/button";
+import '@/i18n/appLocale';
 
 // Lazy load the native scanner for mobile platforms
 const NativeBarcodeScanner = lazy(() => import('@/components/mobile/NativeBarcodeScanner'));
@@ -32,6 +34,7 @@ import { DataSourceCredit } from "@/components/DataSourceCredit";
 import { logger } from "@/lib/logger";
 import { normalizeHouseholdId } from '@/lib/householdId';
 import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
+import type { Food, FoodCategory } from "@/types";
 
 type ScannedFood = {
   name: string;
@@ -49,7 +52,33 @@ type ScannedFood = {
   in_pantry?: boolean;
   existing_quantity?: number;
   existing_unit?: string;
+  /** The pantry row the scan matched, when the lookup names it. */
+  food_id?: string;
+  /** The grocery_product_catalog row, when the lookup names it (US-795). */
+  canonical_id?: string | null;
 };
+
+/**
+ * What a pantry scan asks the page to write. `delta` is always an amount to
+ * ADD: a first scan creates the food with `delta` of it, a re-scan of a food
+ * already in the pantry tops it up by `delta`. It is never the new total, so
+ * the page can route it through the same ledger-aware top-up every other
+ * capture path uses.
+ */
+
+/** Camera constraints html5-qrcode passes through that the DOM lib does not declare. */
+type CameraConstraints = MediaTrackConstraints & {
+  focusMode?: string;
+  advanced?: Array<MediaTrackConstraintSet & { zoom?: number }>;
+};
+
+export interface BarcodePantryAdd {
+  food: Omit<Food, "id">;
+  barcode: string;
+  existingFoodId?: string;
+  delta: number;
+  unit?: string;
+}
 
 interface BarcodeScannerDialogProps {
   open: boolean;
@@ -61,9 +90,34 @@ interface BarcodeScannerDialogProps {
    * used to be 'nutrition', the table US-799 is retiring.
    */
   targetTable?: 'catalog' | 'foods';
+  /**
+   * The pantry write, owned by the page. When this is passed and targetTable
+   * is 'foods', the dialog writes nothing itself: no getUser, no household
+   * RPC, no supabase.from('foods'). A direct insert skipped the optimistic
+   * state, the inventory ledger and the duplicate check, and set the stock to
+   * an absolute number that raced whatever else moved it. Resolve to whether
+   * the write landed; the dialog closes only on true. Without it (the admin
+   * catalog screen, older callers) the dialog keeps its own direct path.
+   */
+  onAddToPantry?: (p: BarcodePantryAdd) => Promise<boolean>;
+  /**
+   * The household's pantry, used only to name `existingFoodId` for a product
+   * already in it (lookup-barcode says "in your pantry" but not which row).
+   * Matched by barcode, then by name.
+   */
+  pantryFoods?: ReadonlyArray<Pick<Food, "id" | "name" | "barcode">>;
 }
 
-export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTable = 'catalog' }: BarcodeScannerDialogProps) {
+export function BarcodeScannerDialog({
+  open,
+  onOpenChange,
+  onFoodAdded,
+  targetTable = 'catalog',
+  onAddToPantry,
+  pantryFoods,
+}: BarcodeScannerDialogProps) {
+  const { t } = useTranslation();
+  const [isCommitting, setIsCommitting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [scannedFood, setScannedFood] = useState<ScannedFood | null>(null);
@@ -118,7 +172,14 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       const qrboxWidth = Math.round(containerWidth * 0.95);
       const qrboxHeight = Math.max(160, Math.round(qrboxWidth * 0.4));
 
-      const config: any = {
+      // formatsToSupport / experimentalFeatures are read at runtime but not
+      // declared on the start() config type; focusMode and zoom are camera
+      // constraints the DOM lib does not declare.
+      const config: Omit<Html5QrcodeCameraScanConfig, "videoConstraints"> & {
+        videoConstraints: CameraConstraints;
+        formatsToSupport: Html5QrcodeSupportedFormats[];
+        experimentalFeatures: { useBarCodeDetectorIfSupported: boolean };
+      } = {
         fps: 10,
         aspectRatio: 1.777,
         qrbox: { width: qrboxWidth, height: qrboxHeight },
@@ -162,7 +223,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           try {
             await scanner.stop();
             await scanner.clear();
-          } catch {}
+          } catch {
+            // Already stopped; nothing to clean up.
+          }
           webScannerRef.current = null;
           document.body.classList.remove('scanner-active');
           await lookupBarcode(decodedText);
@@ -183,7 +246,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
           await webScannerRef.current.clear();
           webScannerRef.current = null;
         }
-      } catch {}
+      } catch {
+        // Already stopped; nothing to clean up.
+      }
       document.body.classList.remove('scanner-active');
       const embeddedMsg = isEmbedded ? ' (embedded preview blocks camera — open in new tab)' : '';
       setError((err instanceof Error ? err.message : 'Failed to start web scanner') + embeddedMsg);
@@ -234,13 +299,17 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     setUnit('packages'); // Reset to default
 
     try {
-      const { data, error } = await invokeEdgeFunction('lookup-barcode', {
+      const { data, error } = await invokeEdgeFunction<{
+        success?: boolean;
+        error?: string;
+        food?: ScannedFood;
+      }>('lookup-barcode', {
         body: { barcode }
       });
 
       if (error) throw error;
 
-      if (data.success && data.food) {
+      if (data?.success && data.food) {
         setScannedFood(data.food);
         
         // Auto-select best unit based on product info
@@ -249,14 +318,16 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         }
         
         if (data.food.in_pantry) {
-          setQuantity((data.food.existing_quantity || 0) + 1);
+          // Not an error: re-scanning something you already have is how you
+          // say "I bought another one". The dialog shows the current stock
+          // inline and offers +1; `quantity` here is how many MORE to add.
+          setQuantity(1);
           setUnit(data.food.existing_unit || 'packages');
-          toast.error("Already in your pantry!", { description: `${data.food.name} - Current stock: ${data.food.existing_quantity} ${data.food.existing_unit}` });
         } else {
           toast("Product found!", { description: `Found ${data.food.name} in ${data.food.source}` });
         }
       } else {
-        setError(data.error || "Product not found in any database");
+        setError(data?.error || "Product not found in any database");
         toast.error("Product not found", { description: "Please add this product manually" });
       }
     } catch (err) {
@@ -268,7 +339,83 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
     }
   };
 
-  const addToDatabase = async () => {
+  const resetScan = () => {
+    setScannedFood(null);
+    setScannedBarcode(null);
+    setError(null);
+    setQuantity(1);
+    setUnit('packages');
+  };
+
+  /** The row this product already is in the pantry, when we can name it. */
+  const resolveExistingFoodId = (food: ScannedFood, barcode: string | null): string | undefined => {
+    if (food.food_id) return food.food_id;
+    if (!pantryFoods) return undefined;
+    const code = (barcode ?? '').trim();
+    const byBarcode = code ? pantryFoods.find((f) => (f.barcode ?? '').trim() === code) : undefined;
+    if (byBarcode) return byBarcode.id;
+    if (!food.in_pantry) return undefined;
+    const key = food.name.trim().toLowerCase();
+    return pantryFoods.find((f) => f.name.trim().toLowerCase() === key)?.id;
+  };
+
+  /** Build the pantry payload without touching the database. */
+  const buildPantryAdd = (food: ScannedFood, delta: number): BarcodePantryAdd => ({
+    food: {
+      name: food.name,
+      category: mapToAllowedCategory(food.category, food.name) as FoodCategory,
+      // No aisle: the provider's category ("Breakfast cereals", "en:snacks")
+      // is not a store aisle, and writing it there filled the grocery list's
+      // aisle grouping with nonsense.
+      allergens: food.allergens ?? [],
+      canonical_id: food.canonical_id ?? null,
+      // US-803: a scanned product is a product, not a safe food.
+      is_safe: ACQUIRED_FOOD_IS_SAFE,
+      is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
+      quantity: delta,
+      unit,
+      package_quantity: food.package_quantity,
+      servings_per_container: food.servings_per_container,
+      barcode: scannedBarcode || null,
+    },
+    barcode: scannedBarcode ?? '',
+    existingFoodId: resolveExistingFoodId(food, scannedBarcode),
+    delta,
+    unit,
+  });
+
+  const commit = async (delta: number) => {
+    if (!scannedFood || isCommitting) return;
+    if (onAddToPantry && targetTable === 'foods') {
+      setIsCommitting(true);
+      try {
+        const ok = await onAddToPantry(buildPantryAdd(scannedFood, delta));
+        if (!ok) return; // The page said why; keep the scan on screen.
+        onFoodAdded?.();
+        onOpenChange(false);
+        resetScan();
+      } catch (err) {
+        logger.error('Pantry add from scan failed:', err);
+        toast.error(t("pantry.scan.barcode.addFailed", "Couldn't add it. Try again."));
+      } finally {
+        setIsCommitting(false);
+      }
+      return;
+    }
+    setIsCommitting(true);
+    try {
+      await addToDatabase(delta);
+    } finally {
+      setIsCommitting(false);
+    }
+  };
+
+  /**
+   * The direct write, for callers that pass no onAddToPantry: the admin
+   * catalog screen, and any pantry caller not yet moved onto the page's
+   * write path. `delta` is added to the stock, never written as the total.
+   */
+  const addToDatabase = async (delta: number) => {
     if (!scannedFood) return;
 
     try {
@@ -286,25 +433,32 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
         if (!householdId) throw new Error("No household found");
 
         // Add to user's personal foods or update existing quantity
-        if (scannedFood.in_pantry) {
-          // Update existing food quantity
-          const { data: existingFood, error: fetchError } = await supabase
-            .from('foods')
-            .select('id, quantity')
-            .eq('household_id', householdId)
-            .eq('barcode', scannedBarcode)
-            .single();
-          
-          if (fetchError) throw fetchError;
-          
+        // .limit(1).maybeSingle(), not .single(): two rows carrying the same
+        // barcode (a double tap, an old import) made .single() throw, and the
+        // scan failed with "multiple rows returned" for a product the family
+        // plainly owns.
+        const { data: existingFood, error: fetchError } = scannedFood.in_pantry
+          ? await supabase
+              .from('foods')
+              .select('id, quantity')
+              .eq('household_id', householdId)
+              .eq('barcode', scannedBarcode ?? '')
+              .limit(1)
+              .maybeSingle()
+          : { data: null, error: null };
+
+        if (fetchError) throw fetchError;
+
+        if (existingFood) {
+          const next = Math.round(((existingFood.quantity ?? 0) + delta) * 100) / 100;
           const { error: updateError } = await supabase
             .from('foods')
-            .update({ 
-              quantity: quantity,
+            .update({
+              quantity: next,
               unit: unit
             })
             .eq('id', existingFood.id);
-          
+
           if (updateError) throw updateError;
         } else {
           // Insert new food
@@ -318,7 +472,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
             // US-803: a scanned product is a product, not a safe food.
             is_safe: ACQUIRED_FOOD_IS_SAFE,
             is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
-            quantity: quantity,
+            quantity: delta,
             unit: unit,
             package_quantity: scannedFood.package_quantity,
             servings_per_container: scannedFood.servings_per_container,
@@ -398,8 +552,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
       }
 
       onOpenChange(false);
-      setScannedFood(null);
-      setError(null);
+      resetScan();
     } catch (err) {
       logger.error('Add error:', err);
       toast.error("Failed to add", { description: err instanceof Error ? err.message : "Unable to add to database" });
@@ -534,6 +687,38 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                     <Badge variant="outline" className="mt-1">{scannedFood.category}</Badge>
                   </div>
 
+                  {scannedFood.in_pantry && (
+                    <div
+                      role="status"
+                      className="flex items-center justify-between gap-3 rounded-md bg-muted p-3"
+                      data-testid="barcode-in-pantry"
+                    >
+                      <p className="text-sm font-medium">
+                        {t("pantry.scan.barcode.youHave", {
+                          count: scannedFood.existing_quantity ?? 0,
+                          unit: scannedFood.existing_unit ?? "",
+                          defaultValue: "You have {{count}} {{unit}}",
+                        })}
+                      </p>
+                      <Button
+                        type="button"
+                        className="h-11 min-w-11 shrink-0"
+                        onClick={() => void commit(1)}
+                        disabled={isCommitting}
+                        aria-label={t("pantry.scan.barcode.plusOneLabel", {
+                          defaultValue: "Add 1 more {{name}}",
+                          name: scannedFood.name,
+                        })}
+                      >
+                        {isCommitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          t("pantry.scan.barcode.plusOne", "+1")
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
                   {scannedFood.serving_size && (
                     <div className="text-sm">
                       <span className="text-muted-foreground">Serving: </span>
@@ -575,7 +760,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                     <div className="flex items-center gap-2">
                       <Package2 className="h-4 w-4 text-muted-foreground" />
                       <Label className="text-sm font-medium">
-                        How to track this item {scannedFood.in_pantry && "(will update existing)"}
+                        {scannedFood.in_pantry
+                          ? t("pantry.scan.barcode.trackExisting", "Add more than one")
+                          : t("pantry.scan.barcode.track", "How to track this item")}
                       </Label>
                     </div>
                     
@@ -628,7 +815,9 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                     {/* Quantity Controls */}
                     <div className="space-y-2">
                       <Label htmlFor="quantity" className="text-xs text-muted-foreground">
-                        Quantity
+                        {scannedFood.in_pantry
+                          ? t("pantry.scan.barcode.howManyMore", "How many more")
+                          : t("pantry.scan.barcode.quantity", "Quantity")}
                       </Label>
                       <div className="flex items-center gap-2">
                         <Button
@@ -715,8 +904,17 @@ export function BarcodeScannerDialog({ open, onOpenChange, onFoodAdded, targetTa
                 {/* Sticky actions for mobile */}
                 <div className="sticky bottom-0 -mx-4 bg-background/85 backdrop-blur-md border-t p-3 flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={handleClose}>Cancel</Button>
-                  <Button className="flex-1" onClick={addToDatabase}>
-                    {targetTable === 'foods' ? 'Add to Pantry' : 'Add to Catalog'}
+                  <Button
+                    className="flex-1"
+                    variant={scannedFood.in_pantry ? "secondary" : "default"}
+                    onClick={() => void commit(quantity)}
+                    disabled={isCommitting}
+                  >
+                    {targetTable !== 'foods'
+                      ? t("pantry.scan.barcode.addToCatalog", "Add to catalog")
+                      : scannedFood.in_pantry
+                        ? t("pantry.scan.barcode.addMore", { count: quantity, defaultValue: "Add {{count}} more" })
+                        : t("pantry.scan.barcode.addToPantry", "Add to pantry")}
                   </Button>
                 </div>
               </div>

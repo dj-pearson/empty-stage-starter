@@ -32,6 +32,7 @@ import {
   type RecipeViewMode,
   type RecipeQuickFilter,
 } from "@/hooks/useRecipeFilters";
+import "@/i18n/appLocale";
 
 interface RecipeToolbarProps {
   searchQuery: string;

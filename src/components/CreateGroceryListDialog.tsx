@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { logger } from "@/lib/logger";
 import type { GroceryListRow } from "@/hooks/useGroceryLists";
+import "@/i18n/appLocale";
 
 /** Icon values are emoji; the key names the label so it can be translated. */
 const LIST_ICONS = [

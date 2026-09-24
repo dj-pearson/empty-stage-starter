@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Image, Type, Upload, Loader2, ClipboardPaste } from 'lucide-react';
 import { toast } from 'sonner';
 import { PHOTO_AI_NOTICE } from '@/lib/aiSafety';
+import '@/i18n/appLocale';
 
 interface GroceryImportTabProps {
   /** Rows arrive tagged added_via 'import'. */

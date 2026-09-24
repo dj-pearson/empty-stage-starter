@@ -28,6 +28,7 @@ import { IngredientSelector } from "./IngredientSelector";
 import { IngredientRow, type IngredientRowData } from "./IngredientRow";
 import { InstructionStepBuilder } from "./InstructionStepBuilder";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
+import "@/i18n/appLocale";
 
 interface EnhancedRecipeBuilderProps {
   foods: Food[];

@@ -46,7 +46,7 @@ import { AddFoodDialog } from "./AddFoodDialog";
 const row = (name: string) => ({ id: name, name, serving_size: "1", serving_unit: "cup" });
 
 async function type(value: string) {
-  const input = screen.getByPlaceholderText(/at least 2 characters/i);
+  const input = screen.getByPlaceholderText(/at least 2 (characters|letters)/i);
   await act(async () => {
     fireEvent.change(input, { target: { value } });
   });

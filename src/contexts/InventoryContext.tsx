@@ -45,6 +45,7 @@ import {
   isSkipped,
   type MovementDraft,
   type MovementItem,
+  type MovementRefType,
   planPurchaseMovements,
   type PurchasableGroceryItem,
   type PurchaseSkipped,
@@ -241,6 +242,17 @@ interface InventoryContextType {
   ) => Promise<RecordResult>;
   /** A parent threw something out. */
   recordWaste: (item: MovementItem, quantity: number) => Promise<RecordResult>;
+  /**
+   * A parent topped an item up outside checkout (pantry stepper, photo,
+   * receipt, barcode). Records a signed `purchase` movement in the item's
+   * display unit, or in `opts.unit` when given. `recorded: false` means fall
+   * back to the legacy `foods.quantity` write, same as recordPantryCorrection.
+   */
+  recordRestock: (
+    item: MovementItem,
+    signedQuantity: number,
+    opts?: RestockOptions,
+  ) => Promise<RecordResult>;
   /** Checkout: one purchase movement per checked row. */
   recordPurchases: (
     groceryItems: readonly PurchasableGroceryItem[],
@@ -270,6 +282,12 @@ export interface AppendResult {
   error: unknown | null;
   /** True when the flag is off, so nothing was attempted at all. */
   disabled?: boolean;
+}
+
+export interface RestockOptions {
+  unit?: string | null;
+  refType?: MovementRefType | null;
+  refId?: string | null;
 }
 
 export interface RecordResult {
@@ -428,6 +446,31 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         item,
         currentQuantity: typeof item?.quantity === "number" ? item.quantity : 0,
         newQuantity,
+      });
+      if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
+      const result = await appendMovements([draft]);
+      return {
+        recorded: result.ok && result.attempted > 0,
+        count: result.ok ? result.attempted : 0,
+        reason: result.ok ? null : "the append failed",
+      };
+    },
+    [ledgerWritesEnabled, householdId, userId, appendMovements],
+  );
+
+  const recordRestock = useCallback(
+    async (item: MovementItem, signedQuantity: number, opts?: RestockOptions): Promise<RecordResult> => {
+      if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
+      const draft = buildAdjustmentMovement({
+        id: generateId(),
+        householdId: householdId ?? "",
+        userId: userId ?? "",
+        item,
+        signedQuantity,
+        displayUnit: opts?.unit ?? item?.unit,
+        reason: "purchase",
+        refType: opts?.refType ?? null,
+        refId: opts?.refId ?? null,
       });
       if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
       const result = await appendMovements([draft]);
@@ -642,6 +685,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       appendMovements,
       recordPantryCorrection,
       recordWaste,
+      recordRestock,
       recordPurchases,
       recordPurchaseReversal,
       refreshInventory,
@@ -658,6 +702,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       appendMovements,
       recordPantryCorrection,
       recordWaste,
+      recordRestock,
       recordPurchases,
       recordPurchaseReversal,
       refreshInventory,

@@ -21,6 +21,7 @@ import { addIsoDays, parseIsoDate } from "@/lib/date-utils";
 import { userFacingError } from "@/lib/networkFailure";
 import { saveWeekAsTemplate, type TemplateSeason } from "@/lib/mealPlanTemplatesApi";
 import { cn } from "@/lib/utils";
+import "@/i18n/appLocale";
 
 interface SaveMealPlanTemplateDialogProps {
   open: boolean;
