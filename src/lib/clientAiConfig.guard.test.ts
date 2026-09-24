@@ -108,7 +108,7 @@ describe('client-supplied AI config (US-709)', () => {
     expect(offenders).toEqual([]);
   });
 
-  it.each(['ImportRecipeDialog.tsx', 'RecipeBuilder.tsx'])(
+  it.each(['ImportRecipeDialog.tsx', 'recipes/EnhancedRecipeBuilder.tsx'])(
     '%s no longer selects an AI model to send',
     (component) => {
       const src = readComponent(component);

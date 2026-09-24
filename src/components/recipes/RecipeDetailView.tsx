@@ -40,12 +40,15 @@ import {
   Salad,
   Share2,
   Check,
+  Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Recipe, Food, Kid, RecipeIngredient } from "@/types";
 import { cn } from "@/lib/utils";
 import { CookMode } from "./CookMode";
 import { AddToPlannerPopover } from "./AddToPlannerPopover";
+import { CookedLogSheet } from "./CookedLogSheet";
+import { ShareLinkDialog } from "./ShareLinkDialog";
 import { useShareRecipe } from "@/hooks/useShareRecipe";
 import { calculateRecipeNutrition, perServingNutrition } from "@/lib/nutritionCalculator";
 import { HideVeggiesDialog } from "@/components/HideVeggiesDialog";
@@ -218,6 +221,17 @@ function RecipeDetailBody({
   const [showCookMode, setShowCookMode] = useState(false);
   const [showHideVeggies, setShowHideVeggies] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [cookedLogOpen, setCookedLogOpen] = useState(false);
+  const [shareLinkOpen, setShareLinkOpen] = useState(false);
+  // Cook Mode's Done: the detail sheet mounts again in the same commit, and a
+  // sheet that opens in that commit ends up underneath it. Open the log sheet
+  // from an effect, after the detail sheet is back.
+  const [logAfterCook, setLogAfterCook] = useState(false);
+  useEffect(() => {
+    if (!logAfterCook || showCookMode) return;
+    setLogAfterCook(false);
+    setCookedLogOpen(true);
+  }, [logAfterCook, showCookMode]);
   const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(() => new Set());
   const baseServings = parseBaseServings(recipe.servings);
   const [targetServings, setTargetServings] = useState(baseServings);
@@ -489,7 +503,13 @@ function RecipeDetailBody({
     );
   };
 
-  const handleIMadeIt = () => {
+  // Item 9: a cook is also the moment to log how it went, per kid, through
+  // the plan. The sheet only opens when there is a kid to ask about.
+  const handleIMadeIt = (fromCookMode = false) => {
+    if (kids.length > 0) {
+      if (fromCookMode) setLogAfterCook(true);
+      else setCookedLogOpen(true);
+    }
     const newTimesMade = (recipe.times_made ?? 0) + 1;
     onUpdateRecipe(recipe.id, {
       times_made: newTimesMade,
@@ -556,6 +576,10 @@ function RecipeDetailBody({
         recipeName={recipe.name}
         instructions={recipe.instructions}
         onClose={() => setShowCookMode(false)}
+        onDone={() => {
+          setShowCookMode(false);
+          handleIMadeIt(true);
+        }}
       />
     );
   }
@@ -584,6 +608,10 @@ function RecipeDetailBody({
         <DropdownMenuItem onSelect={() => void share(recipe, foods)}>
           <Share2 className="h-4 w-4 mr-2" />
           {t("recipes.share.button", { defaultValue: "Share" })}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setShareLinkOpen(true)}>
+          <Link2 className="h-4 w-4 mr-2" />
+          {t("recipes.shareLink.menu", { defaultValue: "Share link" })}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleToggleFavorite}>
           <Heart className={cn("h-4 w-4 mr-2", recipe.is_favorite && "fill-primary text-primary")} />
@@ -716,7 +744,7 @@ function RecipeDetailBody({
                         })}
                       </span>
                     )}
-                    <Button size="sm" variant="outline" onClick={handleIMadeIt} className="h-11 gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => handleIMadeIt()} className="h-11 gap-1.5">
                       <ChefHat className="h-4 w-4" />
                       {t("recipes.detail.iMadeIt", { defaultValue: "I Made It" })}
                     </Button>
@@ -1018,6 +1046,8 @@ function RecipeDetailBody({
         </SheetContent>
       </Sheet>
       <HideVeggiesDialog open={showHideVeggies} onOpenChange={setShowHideVeggies} recipe={recipe} />
+      <CookedLogSheet recipe={recipe} open={cookedLogOpen} onOpenChange={setCookedLogOpen} />
+      {shareLinkOpen && <ShareLinkDialog recipe={recipe} open={shareLinkOpen} onOpenChange={setShareLinkOpen} />}
     </>
   );
 }

@@ -32,6 +32,8 @@ import {
   averageConfidence,
   parseResponseToReviewRows,
   topUpUnits,
+  topUpPrices,
+  isReceiptCurrency,
   unitsMismatch,
   type ParseResponse,
   type ReviewRow,
@@ -54,7 +56,13 @@ interface Props {
    * inventory ledger. `unit` is what the receipt line was sold in (null when
    * it said nothing), so the page can convert or flag it.
    */
-  onTopUp?: (foodId: string, delta: number, unit: string | null) => Promise<void>;
+  onTopUp?: (
+    foodId: string,
+    delta: number,
+    unit: string | null,
+    /** Item 22: what one unit cost on the receipt, when the line said. */
+    price?: { unitPrice: number; currency: string } | null,
+  ) => Promise<void>;
   /**
    * Item 16: the unchecked rows of the grocery list on screen. Given, the
    * review sheet pairs receipt lines with them and the confirm checks them
@@ -343,7 +351,7 @@ export function ScanReceiptDialog({
         handleClose();
         return;
       }
-      const { updates, creates } = acceptedRowsToFoods(rowsToSave);
+      const { updates, creates } = acceptedRowsToFoods(rowsToSave, currency);
 
       // Creates first: addFoods can fail, and a retry after that must not top
       // up the matched foods a second time.
@@ -353,8 +361,15 @@ export function ScanReceiptDialog({
       }
       if (onTopUp) {
         const units = topUpUnits(rowsToSave);
+        const prices = topUpPrices(rowsToSave);
         for (const { foodId, quantityDelta } of updates) {
-          await onTopUp(foodId, quantityDelta, units.get(foodId) ?? null);
+          const unitPrice = prices.get(foodId) ?? null;
+          await onTopUp(
+            foodId,
+            quantityDelta,
+            units.get(foodId) ?? null,
+            unitPrice !== null && isReceiptCurrency(currency) ? { unitPrice, currency } : null,
+          );
         }
       } else {
         for (const { foodId, quantityDelta } of updates) {
@@ -388,7 +403,7 @@ export function ScanReceiptDialog({
     }
   }, [
     acceptedRows, addFoods, updateFood, onTopUp, foods, droppedCount, handleClose, merchant, t,
-    listMode, onApplyToList, listMatch,
+    listMode, onApplyToList, listMatch, currency,
   ]);
 
   // How many list rows the confirm will check off, for its label.

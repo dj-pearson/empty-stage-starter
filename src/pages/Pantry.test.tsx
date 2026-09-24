@@ -21,8 +21,18 @@ interface State {
   foodsHydrated: boolean;
   kids: Kid[];
   activeKidId: string | null;
+  isMobile: boolean;
+  ledgerWrites: boolean;
 }
-const state: State = { foods: [], foodsHydrated: true, kids: [], activeKidId: null };
+const state: State = {
+  foods: [],
+  foodsHydrated: true,
+  kids: [],
+  activeKidId: null,
+  isMobile: false,
+  ledgerWrites: false,
+};
+const recordRestock = vi.fn(async () => ({ recorded: false, count: 0, reason: "off" }));
 
 const addFood = vi.fn(async () => true);
 const addFoods = vi.fn(async () => true);
@@ -60,16 +70,16 @@ vi.mock("@/contexts/AppContext", () => ({
   }),
   useInventory: () => ({
     ledgerReadsEnabled: false,
-    ledgerWritesEnabled: false,
+    ledgerWritesEnabled: state.ledgerWrites,
     ledgerQuantityOf: () => null,
     recordPantryCorrection: vi.fn(async () => ({ recorded: false, count: 0, reason: "off" })),
     recordWaste: vi.fn(async () => ({ recorded: false, count: 0, reason: "off" })),
-    recordRestock: vi.fn(async () => ({ recorded: false, count: 0, reason: "off" })),
+    recordRestock,
   }),
 }));
 
 vi.mock("@/hooks/useDefaultGroceryListId", () => ({ useDefaultGroceryListId: () => "list-1" }));
-vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => state.isMobile }));
 vi.mock("@/lib/edge-functions", () => ({ invokeEdgeFunction: vi.fn(async () => ({ data: {}, error: null })) }));
 
 const toastSuccess = vi.fn();
@@ -114,6 +124,22 @@ vi.mock("@/components/ImageFoodCapture", () => ({
     ) : null,
 }));
 
+// Item 22: the receipt dialog's side of a priced top-up is onTopUp.
+vi.mock("@/components/ScanReceiptDialog", () => ({
+  ScanReceiptDialog: ({
+    open,
+    onTopUp,
+  }: {
+    open: boolean;
+    onTopUp: (id: string, delta: number, unit: string | null, price: unknown) => Promise<void>;
+  }) =>
+    open ? (
+      <button type="button" onClick={() => void onTopUp("milk", 1, "gal", { unitPrice: 3.49, currency: "USD" })}>
+        fake-receipt
+      </button>
+    ) : null,
+}));
+
 import Pantry from "./Pantry";
 
 const food = (over: Partial<Food> & Pick<Food, "id" | "name">): Food => ({
@@ -140,6 +166,8 @@ beforeEach(() => {
   state.foodsHydrated = true;
   state.kids = [];
   state.activeKidId = null;
+  state.isMobile = false;
+  state.ledgerWrites = false;
   vi.clearAllMocks();
   localStorage.clear();
 });
@@ -244,5 +272,106 @@ describe("Pantry page", () => {
 
     await waitFor(() => expect(updateFood).toHaveBeenCalledWith("milk", { quantity: 2 }));
     expect(addFood).not.toHaveBeenCalled();
+  });
+
+  it("opens a phone in list view, and keeps a view the viewer chose (item 21)", async () => {
+    state.isMobile = true;
+    state.foods = [food({ id: "f1", name: "Rice", category: "carb" })];
+    const { unmount } = renderPantry();
+    expect(screen.getByRole("button", { name: "List view" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("pantry-list-row")).toBeInTheDocument();
+    unmount();
+
+    localStorage.setItem("eatpal.pantry.viewMode", "grid");
+    renderPantry();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Grid view" })).toHaveAttribute("aria-pressed", "true")
+    );
+  });
+
+  it("'Used up' on a list row zeroes the food, and Undo puts the count back", async () => {
+    state.isMobile = true;
+    state.foods = [food({ id: "f1", name: "Rice", category: "carb", quantity: 3 })];
+    const { rerender } = renderPantry();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Mark Rice used up" }));
+    expect(updateFood).toHaveBeenCalledWith("f1", { quantity: 0 });
+
+    const [message, options] = toastSuccess.mock.calls.at(-1) as [string, { action: { onClick: () => void } }];
+    expect(message).toBe("Rice used up");
+    // The context applies the zero before the Undo is pressed.
+    state.foods = [food({ id: "f1", name: "Rice", category: "carb", quantity: 0 })];
+    rerender(
+      <HelmetProvider>
+        <MemoryRouter>
+          <Pantry />
+        </MemoryRouter>
+      </HelmetProvider>
+    );
+    options.action.onClick();
+    expect(updateFood).toHaveBeenLastCalledWith("f1", { quantity: 3 });
+  });
+
+  it("Undo of 'Used up' keeps stock that arrived in between", async () => {
+    state.isMobile = true;
+    state.foods = [food({ id: "f1", name: "Rice", category: "carb", quantity: 3 })];
+    const { rerender } = renderPantry();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Mark Rice used up" }));
+    const [, options] = toastSuccess.mock.calls.at(-1) as [string, { action: { onClick: () => void } }];
+    // A receipt top-up of 2 lands before the Undo.
+    state.foods = [food({ id: "f1", name: "Rice", category: "carb", quantity: 2 })];
+    rerender(
+      <HelmetProvider>
+        <MemoryRouter>
+          <Pantry />
+        </MemoryRouter>
+      </HelmetProvider>
+    );
+    options.action.onClick();
+    expect(updateFood).toHaveBeenLastCalledWith("f1", { quantity: 5 });
+  });
+
+  it("shows the Waste report only while ledger writes are on", () => {
+    state.foods = [food({ id: "f1", name: "Rice", category: "carb", quantity: 3 })];
+    const { unmount } = renderPantry();
+    expect(screen.queryByRole("button", { name: /^Waste$/ })).not.toBeInTheDocument();
+    unmount();
+    state.ledgerWrites = true;
+    renderPantry();
+    expect(screen.getByRole("button", { name: /^Waste$/ })).toBeInTheDocument();
+  });
+
+  it("the starter list is a checklist that adds nothing as safe (item 20)", async () => {
+    state.kids = [{ id: "k1", name: "Ava", allergens: ["peanuts"] }];
+    renderPantry();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Quick start/ }));
+    expect(addFoods).not.toHaveBeenCalled();
+
+    expect(await screen.findByRole("checkbox", { name: "Peanut butter" })).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: "Rice" }));
+    await user.click(screen.getByRole("button", { name: "Add 1 food" }));
+
+    await waitFor(() => expect(addFoods).toHaveBeenCalledTimes(1));
+    expect(addFoods).toHaveBeenCalledWith([
+      expect.objectContaining({ name: "Rice", quantity: 1, is_safe: false, is_try_bite: false }),
+    ]);
+  });
+
+  it("a priced receipt top-up records the price and becomes the food's last price (item 22)", async () => {
+    state.foods = [food({ id: "milk", name: "Milk", category: "dairy", quantity: 1, unit: "gal" })];
+    renderPantry();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Scan receipt" }));
+    await user.click(await screen.findByRole("button", { name: "fake-receipt" }));
+
+    await waitFor(() => expect(recordRestock).toHaveBeenCalledTimes(1));
+    expect(recordRestock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "milk" }),
+      1,
+      expect.objectContaining({ unitPrice: 3.49, currency: "USD", unit: "gal" })
+    );
+    expect(updateFood).toHaveBeenCalledWith("milk", { price_per_unit: 3.49, currency: "USD" });
   });
 });

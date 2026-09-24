@@ -28,6 +28,11 @@ export interface Food {
   unit?: string;
   servings_per_container?: number;
   package_quantity?: string;
+  /** Last known price per `unit` (foods.price_per_unit), for estimates such as
+   * the waste report. What a specific shop cost lives on the purchase movement. */
+  price_per_unit?: number | null;
+  /** ISO 4217 code for price_per_unit; set together with it or not at all. */
+  currency?: string | null;
   nutrition_info?: {
     calories?: number;
     protein_g?: number;
@@ -126,6 +131,10 @@ export interface GroceryItem {
   auto_generated?: boolean;
   /** Item 16: set when a receipt credited this row's stock; checkout skips it. */
   pantry_credited_at?: string | null;
+  /** Item 22: what one `unit` cost, entered at checkout; checkout records it on the purchase. */
+  price_per_unit?: number | null;
+  /** ISO 4217 code for price_per_unit; together or not at all. */
+  currency?: string | null;
 }
 
 export interface Recipe {

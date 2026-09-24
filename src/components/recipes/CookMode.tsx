@@ -11,6 +11,11 @@ interface CookModeProps {
   recipeName: string;
   instructions: string;
   onClose: () => void;
+  /**
+   * The last step's Done: the meal is cooked. Defaults to onClose. The detail
+   * sheet uses it to log the cook and ask how each kid did (item 9).
+   */
+  onDone?: () => void;
 }
 
 function parseSteps(instructions: string): string[] {
@@ -56,7 +61,7 @@ function timerLabel(seconds: number): string {
   return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
 }
 
-export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
+export function CookMode({ recipeName, instructions, onClose, onDone }: CookModeProps) {
   const steps = parseSteps(instructions);
   const [currentStep, setCurrentStep] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
@@ -247,7 +252,7 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
           variant={currentStep === steps.length - 1 ? "default" : "outline"}
           onClick={() => {
             if (currentStep === steps.length - 1) {
-              onClose();
+              (onDone ?? onClose)();
             } else {
               goToStep(currentStep + 1);
             }

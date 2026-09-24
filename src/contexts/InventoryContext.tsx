@@ -288,6 +288,9 @@ export interface RestockOptions {
   unit?: string | null;
   refType?: MovementRefType | null;
   refId?: string | null;
+  /** Item 22: what one display unit cost, recorded with its currency or not at all. */
+  unitPrice?: number | null;
+  currency?: string | null;
 }
 
 export interface RecordResult {
@@ -471,6 +474,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         reason: "purchase",
         refType: opts?.refType ?? null,
         refId: opts?.refId ?? null,
+        unitPrice: opts?.unitPrice ?? null,
+        currency: opts?.currency ?? null,
       });
       if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
       const result = await appendMovements([draft]);

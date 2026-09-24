@@ -187,6 +187,38 @@ describe("RecipeDetailView", () => {
     expect(cta).toBeDisabled();
   });
 
+  it("I Made It logs the cook and opens the per-kid sheet when there are kids", async () => {
+    const { props } = setup(PB, [{ id: "k-ben", name: "Ben", allergens: [] }]);
+    fireEvent.click(screen.getByRole("button", { name: /I Made It/ }));
+    expect(props.onUpdateRecipe).toHaveBeenCalledWith("r-pb", expect.objectContaining({ times_made: 1 }));
+    expect(await screen.findByRole("heading", { name: "How did it go?" })).toBeInTheDocument();
+  });
+
+  it("I Made It with no kids does not ask how anyone did", () => {
+    setup(PB);
+    fireEvent.click(screen.getByRole("button", { name: /I Made It/ }));
+    expect(screen.queryByRole("heading", { name: "How did it go?" })).toBeNull();
+  });
+
+  it("Cook Mode's Done counts as made and opens the same sheet", async () => {
+    const { props } = setup({ ...PB, instructions: JSON.stringify(["Toast the bread"]) }, [
+      { id: "k-ben", name: "Ben", allergens: [] },
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Start cook mode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(props.onUpdateRecipe).toHaveBeenCalledWith("r-pb", expect.objectContaining({ times_made: 1 }));
+    // Not hidden behind the detail sheet that comes back as cook mode closes.
+    expect(await screen.findByRole("heading", { name: "How did it go?" })).toBeInTheDocument();
+  });
+
+  it("offers Share link in the options menu and has no manual kid assignment", async () => {
+    setup(PB, [{ id: "k-ben", name: "Ben", allergens: [] }]);
+    expect(screen.queryByText(/Assign to Kids/i)).toBeNull();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Recipe options" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Share link/ }));
+    expect(await screen.findByRole("heading", { name: "Share a link" })).toBeInTheDocument();
+  });
+
   it("rating is a radiogroup; clicking the current star clears it", () => {
     const { props } = setup({ ...PB, rating: 3 });
     const group = screen.getByRole("radiogroup", { name: "Rating" });

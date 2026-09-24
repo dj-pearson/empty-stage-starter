@@ -261,7 +261,6 @@ export function HideVeggiesDialog({ open, onOpenChange, recipe, kidIds, onVarian
         servings: recipe.servings,
         additionalIngredients: applied.additionalIngredientsAddendum,
         tips: applied.updatedTips,
-        assigned_kid_ids: recipe.assigned_kid_ids,
         image_url: recipe.image_url,
         source_url: recipe.source_url,
         source_type: recipe.source_type,

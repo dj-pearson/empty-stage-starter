@@ -42,7 +42,7 @@ describe('AllergyCheckSection', () => {
     expect(screen.queryByText(/No known allergies/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Record allergies' })).toHaveAttribute(
       'href',
-      '/dashboard/kids?kid=k1&edit=1',
+      '/dashboard/kids?kid=k1&section=allergies',
     );
     expect(document.body.textContent).not.toMatch(/automatically exclude/i);
   });
@@ -78,5 +78,9 @@ describe('AllergyCheckSection', () => {
     state.entries = [];
     renderSection({ id: 'k1', name: 'Maya', allergens: [] });
     expect(screen.getByText(/No known allergies/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Edit profile' })).toHaveAttribute(
+      'href',
+      '/dashboard/kids?kid=k1&section=allergies',
+    );
   });
 });

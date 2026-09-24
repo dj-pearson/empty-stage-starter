@@ -134,6 +134,36 @@ All colors MUST be HSL.
     --sky-blue: 199 84% 74%;
     /* Sky Blue */
 
+    /*
+      Pantry category colours (item 24). Each category has a fill (dots, icon
+      tiles, and text on the soft tint), a foreground for text on the fill, and
+      a soft tint for section headers and pills. Every fill reads at 4.5:1 or
+      better as text on white, --background and its own soft tint, and white
+      reads at 4.5:1 or better on it; src/lib/categoryTokens.test.ts checks
+      the arithmetic for both themes.
+    */
+    --cat-protein: 4 72% 40%;
+    --cat-protein-foreground: 0 0% 100%;
+    --cat-protein-soft: 4 80% 95%;
+    --cat-carb: 30 85% 30%;
+    --cat-carb-foreground: 0 0% 100%;
+    --cat-carb-soft: 40 85% 92%;
+    --cat-dairy: 212 75% 38%;
+    --cat-dairy-foreground: 0 0% 100%;
+    --cat-dairy-soft: 212 85% 95%;
+    --cat-fruit: 336 70% 40%;
+    --cat-fruit-foreground: 0 0% 100%;
+    --cat-fruit-soft: 336 80% 95%;
+    --cat-vegetable: 150 70% 25%;
+    --cat-vegetable-foreground: 0 0% 100%;
+    --cat-vegetable-soft: 145 50% 92%;
+    --cat-snack: 268 50% 45%;
+    --cat-snack-foreground: 0 0% 100%;
+    --cat-snack-soft: 268 70% 96%;
+    --cat-other: 215 16% 38%;
+    --cat-other-foreground: 0 0% 100%;
+    --cat-other-soft: 215 20% 94%;
+
     /* Trust colors - Light Mode */
     --trust-blue: 221 83% 53%;
     /* Friendly Blue */
@@ -233,6 +263,30 @@ All colors MUST be HSL.
     --safe-food: 142 70% 45%;
     --try-bite: 24 95% 60%;
     --sky-blue: 199 84% 74%;
+
+    /* Category colours, dark: a light fill with slate text on it, as
+       --primary does here, and a deep tint the fill reads on. */
+    --cat-protein: 4 85% 72%;
+    --cat-protein-foreground: 222 47% 11%;
+    --cat-protein-soft: 4 35% 20%;
+    --cat-carb: 40 85% 62%;
+    --cat-carb-foreground: 222 47% 11%;
+    --cat-carb-soft: 35 40% 18%;
+    --cat-dairy: 212 85% 72%;
+    --cat-dairy-foreground: 222 47% 11%;
+    --cat-dairy-soft: 212 40% 20%;
+    --cat-fruit: 336 80% 74%;
+    --cat-fruit-foreground: 222 47% 11%;
+    --cat-fruit-soft: 336 35% 20%;
+    --cat-vegetable: 145 55% 55%;
+    --cat-vegetable-foreground: 222 47% 11%;
+    --cat-vegetable-soft: 150 35% 16%;
+    --cat-snack: 268 75% 78%;
+    --cat-snack-foreground: 222 47% 11%;
+    --cat-snack-soft: 268 30% 21%;
+    --cat-other: 215 20% 72%;
+    --cat-other-foreground: 222 47% 11%;
+    --cat-other-soft: 215 20% 21%;
 
     /* Trust colors - Dark Mode */
     --trust-blue: 221 83% 65%;

@@ -333,3 +333,14 @@ added desktop family grid, week-start preference, try-bite strip
 filter (+2.1), radio-group for the week-start setting (+2.1), allergen
 families and severity (+1.7), ladder fold (+1.3). Eager closure 315.7 kB
 (budget 322 kB, unchanged). Measured total 2660.3 kB.
+
+## 2026-09-24: `totalJs` 2670000 -> 2695000 (approved features, wave 2)
+
+Owner-approved raise for route-only growth. Wave 2 added the single
+section editor for child profiles (ManageKidsDialog +7.8 kB, with
+ChildIntakeQuestionnaire -10.1 kB removed), Recipes cook log, smart
+collections and import review (+5.7 kB), the waste report (4.1 kB), the
+public shared-recipe page (3.2 kB), the starter sheet (3.2 kB) and their
+copy (+2.7 kB). The drawer (vaul) moved out of Planner into its own
+chunk, net about zero. Eager closure 315.9 kB (budget 322 kB,
+unchanged). Measured total 2685.5 kB.

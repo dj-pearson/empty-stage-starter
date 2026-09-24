@@ -52,6 +52,7 @@ vi.mock('@/hooks/useNavEntitlements', () => ({
   useNavEntitlements: () => ({ isAdmin: false, isProfessional: false }),
 }));
 vi.mock('@/hooks/useWhiteLabelTheme', () => ({ useWhiteLabelTheme: () => {} }));
+vi.mock('@/hooks/useNavBadges', () => ({ useNavBadges: () => ({}) }));
 vi.mock('next-themes', () => ({ useTheme: () => ({ resolvedTheme: 'light', setTheme: vi.fn() }) }));
 vi.mock('@/components/auth/BindEmailBanner', () => ({ BindEmailBanner: () => null }));
 vi.mock('@/components/OfflineIndicator', () => ({ OfflineIndicator: () => null }));

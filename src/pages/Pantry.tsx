@@ -34,6 +34,12 @@ const ImageFoodCapture = lazy(() =>
 const ImportCsvDialog = lazy(() =>
   import("@/components/ImportCsvDialog").then((m) => ({ default: m.ImportCsvDialog }))
 );
+const PantryStarterSheet = lazy(() =>
+  import("@/components/pantry/PantryStarterSheet").then((m) => ({ default: m.PantryStarterSheet }))
+);
+const PantryWasteSheet = lazy(() =>
+  import("@/components/pantry/PantryWasteSheet").then((m) => ({ default: m.PantryWasteSheet }))
+);
 import { PantryCategorySection } from "@/components/pantry/PantryCategorySection";
 import { PantryListItem } from "@/components/pantry/PantryListItem";
 import { PantryQuickAdd } from "@/components/pantry/PantryQuickAdd";
@@ -98,11 +104,14 @@ import {
   Loader2,
   Check,
   ShoppingCart,
+  Trash2,
 } from "lucide-react";
 import type { Food, FoodCategory, Kid } from "@/types";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
-import { starterFoods } from "@/lib/starterFoods";
+import { STARTER_OFFER_MAX_FOODS } from "@/lib/pantryStarter";
+import { initialPantryView } from "@/lib/pantrySwipe";
+import { pricePairOrNull, priceUnitFits } from "@/lib/money";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { PullToRefreshIndicator } from "@/components/PullToRefreshIndicator";
 import { haptic } from "@/lib/haptics";
@@ -239,6 +248,8 @@ export default function Pantry() {
   const [imageCaptureOpen, setImageCaptureOpen] = useState(false);
   const [receiptScanOpen, setReceiptScanOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [starterOpen, setStarterOpen] = useState(false);
+  const [wasteOpen, setWasteOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // View states
@@ -246,7 +257,9 @@ export default function Pantry() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("name");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  // Item 21: null until this viewer picks; a phone then opens in list view.
+  const [viewChoice, setViewChoice] = useState<ViewMode | null>(null);
+  const viewMode = initialPantryView(viewChoice, isMobile);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
     new Set()
   );
@@ -272,7 +285,7 @@ export default function Pantry() {
       ]);
       if (cancelled) return;
       if (lens) setLensChoice(lens === ALL_KIDS ? null : lens);
-      if (view && (VIEW_MODES as readonly string[]).includes(view)) setViewMode(view as ViewMode);
+      if (view && (VIEW_MODES as readonly string[]).includes(view)) setViewChoice(view as ViewMode);
       if (sort && (SORT_OPTIONS as readonly string[]).includes(sort)) setSortBy(sort as SortOption);
     })();
     return () => {
@@ -295,7 +308,7 @@ export default function Pantry() {
     writeStored((storage) => storage.setItem("eatpal.pantry.lensKid", kidId ?? ALL_KIDS));
   }, []);
   const handleViewMode = useCallback((mode: ViewMode) => {
-    setViewMode(mode);
+    setViewChoice(mode);
     writeStored((storage) => storage.setItem("eatpal.pantry.viewMode", mode));
   }, []);
   const handleSortBy = useCallback((value: string) => {
@@ -580,13 +593,28 @@ export default function Pantry() {
    * when the ledger takes it, else the legacy sum on the latest quantity.
    */
   const topUpFood = useCallback(
-    async (food: Food, delta: number, unit?: string | null, ref?: TopUpRef): Promise<void> => {
+    async (
+      food: Food,
+      delta: number,
+      unit?: string | null,
+      ref?: TopUpRef,
+      price?: { unitPrice: number; currency: string } | null
+    ): Promise<void> => {
       const current = foodsRef.current.find((f) => f.id === food.id) ?? food;
+      const paid = price ? pricePairOrNull(price.unitPrice, price.currency) : null;
+      // Item 22: a price bought in the food's own unit becomes its last known
+      // price. One in another unit ("per lb" for a food counted in bags) stays
+      // on the movement only, where it is recorded against the unit it is per.
+      if (paid && priceUnitFits(current.unit, unit ?? current.unit)) {
+        updateFood(current.id, { price_per_unit: paid.unitPrice, currency: paid.currency });
+      }
       try {
         const result = await recordRestock(current as MovementItem, delta, {
           unit: unit ?? current.unit ?? null,
           refType: ref?.refType ?? null,
           refId: ref?.refId ?? null,
+          unitPrice: paid?.unitPrice ?? null,
+          currency: paid?.currency ?? null,
         });
         if (result.recorded) return;
       } catch (error) {
@@ -596,6 +624,32 @@ export default function Pantry() {
       updateFood(latest.id, { quantity: round2((latest.quantity ?? 0) + delta) });
     },
     [recordRestock, updateFood]
+  );
+
+  // Item 21: "used up" from a list row's button or left swipe. A correction
+  // to zero through the same path as any edit, so the ledger records it, and
+  // Undo is the opposite correction rather than a rewrite of history.
+  const handleUsedUp = useCallback(
+    (food: Food) => {
+      const current = foodsRef.current.find((f) => f.id === food.id);
+      if (!current) return;
+      const before = current.quantity ?? 0;
+      if (before <= 0) return;
+      handleQuantityChange(current.id, 0);
+      haptic.light();
+      toast.success(t("pantry.swipe.usedUpToast", { defaultValue: "{{name}} used up", name: current.name }), {
+        action: {
+          label: t("pantry.toast.undo"),
+          // Relative to what is there now: stock that arrived since the swipe
+          // (a receipt, a checkout, another device) stays.
+          onClick: () => {
+            const latest = foodsRef.current.find((f) => f.id === current.id)?.quantity ?? 0;
+            handleQuantityChange(current.id, latest + before);
+          },
+        },
+      });
+    },
+    [handleQuantityChange, t]
   );
 
   // --- Grocery ---------------------------------------------------------------
@@ -881,21 +935,27 @@ export default function Pantry() {
     if (!open) setEditFood(null);
   }, []);
 
-  const handleLoadStarterList = useCallback(async () => {
-    const current = foodsRef.current;
-    const newFoods = starterFoods.filter(
-      (starterFood) => !findExistingFood(current, { name: starterFood.name })
-    );
-    if (newFoods.length === 0) {
-      toast(t("pantry.toast.starterAlready"));
-      return;
-    }
-    const added = await addFoods(newFoods);
-    if (added) {
-      toast.success(t("pantry.toast.starterLoaded", { count: newFoods.length, formatted: fmt(newFoods.length) }));
-    }
-    // If blocked by plan limit, the upgrade modal handles the messaging.
-  }, [addFoods, t, fmt]);
+  // Item 20: the starter list is a checklist sheet, scored per kid.
+  const handleLoadStarterList = useCallback(() => setStarterOpen(true), []);
+
+  const handleStarterAdd = useCallback(
+    async (list: Omit<Food, "id">[]): Promise<boolean> => {
+      // The sheet already hides what is in the pantry; this catches a food
+      // added on another device while it was open.
+      const fresh = list.filter((f) => !findExistingFood(foodsRef.current, { name: f.name }));
+      if (fresh.length === 0) {
+        toast(t("pantry.toast.starterAlready"));
+        return true;
+      }
+      const added = await addFoods(fresh);
+      if (added) {
+        toast.success(t("pantry.toast.starterLoaded", { count: fresh.length, formatted: fmt(fresh.length) }));
+      }
+      // If blocked by plan limit, the upgrade modal handles the messaging.
+      return added;
+    },
+    [addFoods, t, fmt]
+  );
 
   const handleFoodIdentified = useCallback(
     async (foodData: FoodIdentification) => {
@@ -973,10 +1033,15 @@ export default function Pantry() {
 
   /** A receipt line for a food already in the pantry. */
   const handleReceiptTopUp = useCallback(
-    async (foodId: string, delta: number, unit: string | null): Promise<void> => {
+    async (
+      foodId: string,
+      delta: number,
+      unit: string | null,
+      price?: { unitPrice: number; currency: string } | null
+    ): Promise<void> => {
       const food = foodsRef.current.find((f) => f.id === foodId);
       if (!food) return;
-      await topUpFood(food, delta, unit);
+      await topUpFood(food, delta, unit, undefined, price);
     },
     [topUpFood]
   );
@@ -1014,6 +1079,7 @@ export default function Pantry() {
   }, []);
   const openPhoto = useCallback(() => setImageCaptureOpen(true), []);
   const openCsv = useCallback(() => setCsvOpen(true), []);
+  const openWaste = useCallback(() => setWasteOpen(true), []);
   const closeReceipt = useCallback(() => setReceiptScanOpen(false), []);
   const closeScanner = useCallback(() => setScannerOpen(false), []);
   const prefetchScanner = useCallback(() => void loadBarcodeScanner(), []);
@@ -1024,7 +1090,14 @@ export default function Pantry() {
   );
 
   const anyDialogOpen =
-    dialogOpen || scannerOpen || imageCaptureOpen || receiptScanOpen || csvOpen || showSuggestions;
+    dialogOpen ||
+    scannerOpen ||
+    imageCaptureOpen ||
+    receiptScanOpen ||
+    csvOpen ||
+    showSuggestions ||
+    starterOpen ||
+    wasteOpen;
 
   // '/' focuses search, 'b' opens the barcode scanner. Radix handles Escape.
   useKeyboardShortcuts({
@@ -1081,6 +1154,7 @@ export default function Pantry() {
       fit={fitByFoodId.get(food.id)}
       onList={isOnList(onListKeys, food)}
       runsOutInDays={forecastDays.get(food.id)}
+      onUsedUp={handleUsedUp}
     />
   );
 
@@ -1121,7 +1195,7 @@ export default function Pantry() {
             <h1 className="text-2xl md:text-3xl font-bold font-heading">
               {t('pantry.title')}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground flex-1 min-w-0">
               {foods.length > 0
                 ? t("pantry.subtitle", {
                     count: foods.length,
@@ -1133,6 +1207,22 @@ export default function Pantry() {
                   })
                 : t('pantry.subtitleEmpty')}
             </p>
+            {/* The report reads ledger waste movements, which only exist while
+                ledger writes are on; with them off it would always claim
+                nothing was thrown out. */}
+            {foods.length > 0 && ledgerWritesEnabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-11 gap-1.5 self-center"
+                onClick={openWaste}
+                title={t("pantry.waste.openLabel", "What was thrown out this month")}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                {t("pantry.waste.open", "Waste")}
+              </Button>
+            )}
           </div>
 
           {/* === CAPTURE BAR === */}
@@ -1171,7 +1261,9 @@ export default function Pantry() {
               onPhoto={openPhoto}
               onImportCsv={openCsv}
               onAiIdeas={handleGetSuggestions}
-              onStarter={foods.length === 0 && foodsHydrated ? handleLoadStarterList : undefined}
+              onStarter={
+                foods.length <= STARTER_OFFER_MAX_FOODS && foodsHydrated ? handleLoadStarterList : undefined
+              }
             />
           </div>
 
@@ -1314,17 +1406,17 @@ export default function Pantry() {
                   type="button"
                   aria-pressed={isActive}
                   onClick={() => setCategoryFilter(cat)}
-                  className={cn(pillBase, isActive ? pillActive : pillInactive)}
+                  // Item 24: the pill wears its category's tokens, tinted at
+                  // rest and solid when chosen. aria-pressed carries the state.
+                  className={cn(pillBase, isActive ? config.pillActive : config.pillInactive)}
+                  data-category={cat}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   {t(config.labelKey, config.label)}
                   <Badge
                     variant="secondary"
                     aria-hidden="true"
-                    className={cn(
-                      "text-[10px] h-[18px] px-1.5 tabular-nums",
-                      isActive && "bg-primary-foreground/20 text-primary-foreground"
-                    )}
+                    className="text-[10px] h-[18px] px-1.5 tabular-nums bg-background text-foreground hover:bg-background"
                   >
                     {fmt(count)}
                   </Badge>
@@ -1409,6 +1501,7 @@ export default function Pantry() {
                     fitByFoodId={fitByFoodId}
                     onListKeys={onListKeys}
                     runsOutInDays={forecastDays}
+                    onUsedUp={handleUsedUp}
                   />
                 );
               })}
@@ -1501,6 +1594,26 @@ export default function Pantry() {
           )}
 
           {csvOpen && <ImportCsvDialog open={csvOpen} onOpenChange={setCsvOpen} />}
+
+          {starterOpen && (
+            <PantryStarterSheet
+              open={starterOpen}
+              onOpenChange={setStarterOpen}
+              kids={kids}
+              foods={foods}
+              planEntries={planEntries}
+              onAdd={handleStarterAdd}
+            />
+          )}
+
+          {wasteOpen && (
+            <PantryWasteSheet
+              open={wasteOpen}
+              onOpenChange={setWasteOpen}
+              foods={foods}
+              fitByFoodId={fitByFoodId}
+            />
+          )}
         </Suspense>
 
         <SuggestionsDialog

@@ -186,7 +186,11 @@ export interface ReceiptPantryPlan {
  * another "Milk" to the pantry. Two rows matched to the same food (two cartons
  * rung up separately) become one update with the quantities summed.
  */
-export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): ReceiptPantryPlan {
+export function acceptedRowsToFoods(
+  rows: ReadonlyArray<ReviewRow>,
+  /** Item 22: the receipt's currency. Given, a priced new food keeps its price. */
+  currency?: string | null
+): ReceiptPantryPlan {
   const deltas = new Map<string, number>();
   const creates: Omit<Food, 'id'>[] = [];
   // Two unmatched "Bananas" lines (rung up twice) are one new food, not two.
@@ -217,6 +221,11 @@ export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): ReceiptPant
       is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
       quantity: qty,
       unit: r.unit || undefined,
+      // Item 22: the last known price, per the unit on the line. Only with a
+      // currency: a bare number cannot be added to anything later.
+      ...(receiptLinePrice(r) !== null && isReceiptCurrency(currency)
+        ? { price_per_unit: receiptLinePrice(r), currency }
+        : {}),
     });
   }
   const updates = [...deltas].map(([foodId, quantityDelta]) => ({
@@ -241,6 +250,44 @@ export function topUpUnits(rows: ReadonlyArray<ReviewRow>): Map<string, string |
     }
   }
   return units;
+}
+
+/** A three-letter code, as a receipt parse returns it. */
+export function isReceiptCurrency(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Z]{3}$/.test(value);
+}
+
+/**
+ * What one unit on a receipt line cost, or null when the line did not say.
+ * The parser's unitPrice first; failing that, the line total over the
+ * quantity. Zero is "not read", not "free".
+ */
+export function receiptLinePrice(row: Pick<ParsedLineItem, 'unitPrice' | 'lineTotal' | 'qty'>): number | null {
+  const unit = Number(row.unitPrice);
+  if (Number.isFinite(unit) && unit > 0) return Math.round(unit * 100) / 100;
+  const total = Number(row.lineTotal);
+  const qty = Number(row.qty);
+  if (Number.isFinite(total) && total > 0 && Number.isFinite(qty) && qty > 0) {
+    return Math.round((total / qty) * 100) / 100;
+  }
+  return null;
+}
+
+/**
+ * Item 22: the price each top-up was bought at, alongside topUpUnits. The
+ * first accepted row with a price wins, the same row whose unit topUpUnits
+ * reports, so the price and the unit it is per describe the same line.
+ */
+export function topUpPrices(rows: ReadonlyArray<ReviewRow>): Map<string, number | null> {
+  const prices = new Map<string, number | null>();
+  for (const r of rows) {
+    if (!r.accept || !r.matchedFoodId) continue;
+    const price = receiptLinePrice(r);
+    if (!prices.has(r.matchedFoodId) || (prices.get(r.matchedFoodId) === null && price !== null)) {
+      prices.set(r.matchedFoodId, price);
+    }
+  }
+  return prices;
 }
 
 /**

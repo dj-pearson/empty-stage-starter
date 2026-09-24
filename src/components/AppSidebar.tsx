@@ -17,12 +17,16 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import "@/i18n/appLocale";
 import {
+  type NavBadges,
   type NavEntitlements,
   NAV_GROUP_LABELS,
   NAV_GROUP_ORDER,
   isIndexRoute,
+  navBadgeFor,
   navItemsInGroup,
 } from "@/lib/navigation";
+import { NavBadge } from "@/components/NavBadge";
+import { useNavItemLabel } from "@/hooks/useNavItemLabel";
 
 /**
  * Desktop sidebar. Sections and their contents come from src/lib/navigation.ts
@@ -38,11 +42,18 @@ const linkClass = (isActive: boolean) =>
   }`;
 
 /**
- * `entitlements` comes from Dashboard, which calls useNavEntitlements once for
+ * `entitlements` and `badges` come from Dashboard, which computes each once for
  * both this sidebar and the mobile shell rather than each running the queries.
  */
-export function AppSidebar({ entitlements }: { entitlements: NavEntitlements }) {
+export function AppSidebar({
+  entitlements,
+  badges,
+}: {
+  entitlements: NavEntitlements;
+  badges?: NavBadges;
+}) {
   const { t } = useTranslation();
+  const itemLabel = useNavItemLabel();
   const { state, toggleSidebar } = useSidebar();
 
   const isCollapsed = state === "collapsed";
@@ -91,20 +102,40 @@ export function AppSidebar({ entitlements }: { entitlements: NavEntitlements }) 
               <SidebarGroupLabel>{NAV_GROUP_LABELS[group]}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {items.map((item) => (
-                    <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton asChild tooltip={item.label}>
-                        <NavLink
-                          to={item.to}
-                          end={isIndexRoute(item.to)}
-                          className={({ isActive }) => linkClass(isActive)}
-                        >
-                          <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          {!isCollapsed && <span>{item.label}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                  {items.map((item) => {
+                    const badge = navBadgeFor(item, badges);
+                    const name = itemLabel(item.label, item.badge, badge);
+                    return (
+                      <SidebarMenuItem key={item.to}>
+                        <SidebarMenuButton asChild tooltip={name}>
+                          <NavLink
+                            to={item.to}
+                            end={isIndexRoute(item.to)}
+                            aria-label={badge ? name : undefined}
+                            className={({ isActive }) => linkClass(isActive)}
+                          >
+                            <span className="relative shrink-0">
+                              <item.icon className="h-4 w-4" aria-hidden="true" />
+                              {/* Collapsed, the label is gone, so the badge sits on the icon. */}
+                              {badge && isCollapsed && (
+                                <NavBadge
+                                  value={badge}
+                                  placement="corner"
+                                  className={
+                                    badge.kind === "count"
+                                      ? "-right-2 -top-2 h-4 min-w-4 px-1 text-[10px] ring-sidebar"
+                                      : "ring-sidebar"
+                                  }
+                                />
+                              )}
+                            </span>
+                            {!isCollapsed && <span className="truncate">{item.label}</span>}
+                            {badge && !isCollapsed && <NavBadge value={badge} placement="inline" />}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

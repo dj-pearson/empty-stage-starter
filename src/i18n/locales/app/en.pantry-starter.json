@@ -1,0 +1,51 @@
+{
+  "pantry": {
+    "starter": {
+      "title": "Starter foods",
+      "description": "Tick what you have. Each one goes in at 1, and none is marked safe: that's for your kids to decide as they try them.",
+      "noKids": "Add your kids to see which of these fit them.",
+      "inPantry": "Already in your pantry",
+      "blocked": "Not for {{name}}: {{allergen}}",
+      "blockedSevere": "Severe allergy, not for {{name}}: {{allergen}}",
+      "add_one": "Add {{count}} food",
+      "add_other": "Add {{count}} foods",
+      "addNone": "Tick foods to add",
+      "cancel": "Cancel",
+      "added_one": "Added {{count}} starter food",
+      "added_other": "Added {{count}} starter foods",
+      "selectedCount_one": "{{count}} selected",
+      "selectedCount_other": "{{count}} selected",
+      "food": {
+        "chickenBreast": "Chicken breast",
+        "eggs": "Eggs",
+        "peanutButter": "Peanut butter",
+        "turkeySlices": "Turkey slices",
+        "blackBeans": "Black beans",
+        "fishSticks": "Fish sticks",
+        "bread": "Bread",
+        "pasta": "Pasta",
+        "rice": "Rice",
+        "oatmeal": "Oatmeal",
+        "tortillas": "Tortillas",
+        "crackers": "Crackers",
+        "milk": "Milk",
+        "cheese": "Cheese",
+        "yogurt": "Yogurt",
+        "bananas": "Bananas",
+        "apples": "Apples",
+        "strawberries": "Strawberries",
+        "blueberries": "Blueberries",
+        "grapes": "Grapes",
+        "carrots": "Carrots",
+        "cucumber": "Cucumber",
+        "broccoli": "Broccoli",
+        "peas": "Peas",
+        "sweetPotatoes": "Sweet potatoes",
+        "pretzels": "Pretzels",
+        "grahamCrackers": "Graham crackers",
+        "popcorn": "Popcorn",
+        "hummus": "Hummus"
+      }
+    }
+  }
+}

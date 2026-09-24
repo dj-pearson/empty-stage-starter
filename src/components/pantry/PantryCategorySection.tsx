@@ -49,6 +49,8 @@ interface PantryCategorySectionProps {
   onListKeys?: Set<string>;
   /** Estimated days until each food runs out, keyed by food id. */
   runsOutInDays?: Map<string, number>;
+  /** Item 21: list rows' "used up" (button and left swipe). */
+  onUsedUp?: (food: Food) => void;
 }
 
 export const PantryCategorySection = memo(function PantryCategorySection({
@@ -67,6 +69,7 @@ export const PantryCategorySection = memo(function PantryCategorySection({
   fitByFoodId,
   onListKeys,
   runsOutInDays,
+  onUsedUp,
 }: PantryCategorySectionProps) {
   const { t } = useTranslation();
   const config = getCategoryConfig(category);
@@ -101,7 +104,7 @@ export const PantryCategorySection = memo(function PantryCategorySection({
               config.dot
             )}
           >
-            <Icon className="h-4 w-4 text-white" aria-hidden="true" />
+            <Icon className={cn("h-4 w-4", config.iconOnDot)} aria-hidden="true" />
           </div>
           <span className={cn("font-semibold text-sm", config.text)}>
             {t(config.labelKey, config.label)}
@@ -182,6 +185,7 @@ export const PantryCategorySection = memo(function PantryCategorySection({
                 fit={fitByFoodId?.get(food.id)}
                 onList={isOnList(food)}
                 runsOutInDays={runsOutInDays?.get(food.id)}
+                onUsedUp={onUsedUp}
               />
             ))}
           </div>

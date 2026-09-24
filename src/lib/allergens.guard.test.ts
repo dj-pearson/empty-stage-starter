@@ -39,34 +39,14 @@ const RAW_COMPARE: ReadonlyArray<{ name: string; re: RegExp }> = [
  */
 const ALLOWED: ReadonlyArray<{ file: string; snippet: string; why: string }> = [
   {
-    file: "src/components/ManageKidsDialog.tsx",
-    snippet: "prev.allergens.includes(allergen)",
-    why: "tickbox toggle over KID_ALLERGEN_PICKER values; normalizeKidAllergenInput snaps saved entries onto those spellings",
-  },
-  {
-    file: "src/components/ManageKidsDialog.tsx",
-    snippet: "formData.allergens.includes(value)",
-    why: "pressed state of a picker tickbox, same picker values as above",
-  },
-  {
-    file: "src/components/ChildIntakeQuestionnaire.tsx",
-    snippet: "const direct = formData.allergen_severity[allergen];",
-    why: "exact-key fast path; the next lines fall back to a canonicalAllergen match over every key",
-  },
-  {
-    file: "src/components/ManageKidsDialog.tsx",
+    file: "src/lib/kidIntakeForm.ts",
     snippet: "return before.filter((a) => !kept.has(canonicalAllergen(a)));",
     why: "diffs the kid's own allergen list before and after an edit; no food is compared",
   },
   {
-    file: "src/components/ChildIntakeQuestionnaire.tsx",
-    snippet: "!pickerCanonicals.has(canonicalAllergen(a))",
+    file: "src/components/kids/KidEditorSections.tsx",
+    snippet: "const isPickerValue = (a: string) => pickerKeys.has(canonicalAllergen(a));",
     why: "splits the kid's allergens into picker values and custom ones; no food is compared",
-  },
-  {
-    file: "src/components/ChildIntakeQuestionnaire.tsx",
-    snippet: "formData.allergens.filter((a) => pickerCanonicals.has(canonicalAllergen(a)))",
-    why: "same picker/custom split as above",
   },
   {
     file: "src/lib/kidGrowthRules.ts",

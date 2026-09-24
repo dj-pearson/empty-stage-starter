@@ -19,6 +19,7 @@ import { generateId } from '@/lib/utils';
 import { checkFeatureLimit } from '@/lib/featureLimits';
 import { requestUpgradePrompt } from '@/lib/upgradePromptBus';
 import { notifyFoodAttemptLogged } from '@/lib/foodAttemptHistory';
+import { notifyLadderChanged } from '@/lib/ladderEvents';
 import {
   applyAttemptOutcome,
   deriveLadderFromAttempts,
@@ -988,6 +989,7 @@ export function useFoodLadder(
           current.some((r) => r.id === row.id) ? current : [...current, row]
         );
       }
+      notifyLadderChanged();
       return { ok: true, row };
     },
     [commitRows]
@@ -1248,6 +1250,7 @@ export function useFoodLadder(
         replaceRow(row.id, () => current);
         return false;
       }
+      notifyLadderChanged();
       return true;
     },
     [replaceRow]
@@ -1350,6 +1353,7 @@ export function useFoodLadder(
       if (activeKidRef.current === activeKidId) commitRows(previous);
       return false;
     }
+    notifyLadderChanged();
     return true;
   }, [activeKidId, commitRows]);
 
@@ -1380,6 +1384,7 @@ export function useFoodLadder(
         if (activeKidRef.current === row.kidId) commitRows(previous);
         return false;
       }
+      notifyLadderChanged();
       return true;
     },
     [commitRows]
@@ -1416,6 +1421,7 @@ export function useFoodLadder(
         if (isActiveKid) commitRows((current) => current.filter((r) => r.id !== row.id));
         return false;
       }
+      notifyLadderChanged();
       return true;
     },
     [commitRows]

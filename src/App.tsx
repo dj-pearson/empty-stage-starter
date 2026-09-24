@@ -91,6 +91,7 @@ const AccountSettings = lazy(() => import('./pages/dashboard/AccountSettings'));
 const AccessibilitySettingsPage = lazy(() => import('./pages/dashboard/AccessibilitySettings'));
 const ApiDocs = lazy(() => import('./pages/ApiDocs'));
 const ShareTarget = lazy(() => import('./pages/ShareTarget'));
+const SharedRecipe = lazy(() => import('./pages/SharedRecipe'));
 
 // pSEO programmatic pages
 const PseoPage = lazy(() => import('./pages/pseo/PseoPage'));
@@ -219,6 +220,15 @@ const App = () => (
                         element={
                           <RouteErrorBoundary>
                             <CheckoutSuccess />
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      {/* Item 10: a recipe someone shared. Public, noindex, no auth. */}
+                      <Route
+                        path="/r/:token"
+                        element={
+                          <RouteErrorBoundary>
+                            <SharedRecipe />
                           </RouteErrorBoundary>
                         }
                       />

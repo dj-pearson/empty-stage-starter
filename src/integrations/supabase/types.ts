@@ -11381,6 +11381,65 @@ export type Database = {
           },
         ]
       }
+      recipe_shares: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          recipe_id: string
+          revoked_at: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          recipe_id: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          recipe_id?: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_shares_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_shares_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_scaling_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_shares_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_success_stats"
+            referencedColumns: ["recipe_id"]
+          },
+          {
+            foreignKeyName: "recipe_shares_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipes: {
         Row: {
           additional_ingredients: string | null
@@ -19406,6 +19465,19 @@ export type Database = {
           position_change: number
           previous_position: number
           trend: string
+        }[]
+      }
+      get_shared_recipe: {
+        Args: { p_token: string }
+        Returns: {
+          cook_time: string
+          image_url: string
+          ingredients: Json
+          instructions: string
+          name: string
+          prep_time: string
+          servings: string
+          total_time_minutes: number
         }[]
       }
       get_unread_notifications_count: {

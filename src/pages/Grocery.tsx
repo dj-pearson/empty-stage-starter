@@ -30,6 +30,8 @@ import { GroceryRow } from "@/components/grocery/GroceryRow";
 import { GroceryGroupHeader } from "@/components/grocery/GroceryGroupHeader";
 import { GroceryQuickAdd } from "@/components/grocery/GroceryQuickAdd";
 import { CheckoutBar } from "@/components/grocery/CheckoutBar";
+import { PurchasePrices, type PurchasePrice } from "@/components/grocery/PurchasePrices";
+import { priceUnitFits } from "@/lib/money";
 import { PlanSyncBanner } from "@/components/grocery/PlanSyncBanner";
 import { StorePicker } from "@/components/grocery/StorePicker";
 import { PlaceInAisleChips } from "@/components/grocery/PlaceInAisleChips";
@@ -258,6 +260,23 @@ export default function Grocery() {
     [findFoodByDisplayName]
   );
   const exitInStore = useCallback(() => setInStore(false), []);
+
+  // Item 22: an optional price entered on a bought row. It rides on the row
+  // into checkout's purchase movement; in the food's own unit it is also the
+  // food's last known price, which the pantry's waste report estimates from.
+  const handleSetPurchasePrice = useCallback(
+    (item: GroceryItem, price: PurchasePrice | null) => {
+      updateGroceryItem(item.id, {
+        price_per_unit: price?.unitPrice ?? null,
+        currency: price?.currency ?? null,
+      });
+      const food = price ? findFoodByDisplayName(item.name) : undefined;
+      if (food && price && priceUnitFits(food.unit, item.unit)) {
+        updateFood(food.id, { price_per_unit: price.unitPrice, currency: price.currency });
+      }
+    },
+    [updateGroceryItem, findFoodByDisplayName, updateFood]
+  );
 
   const effectiveFoodById = useMemo(() => {
     const map: Record<string, EffectiveFood> = {};
@@ -1589,6 +1608,7 @@ export default function Grocery() {
                         </div>
                       ))}
                     </div>
+                    <PurchasePrices items={shownPurchased} onSetPrice={handleSetPurchasePrice} />
                   </CollapsibleContent>
                 </div>
               </Collapsible>

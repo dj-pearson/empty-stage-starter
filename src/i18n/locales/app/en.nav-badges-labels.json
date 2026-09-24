@@ -1,0 +1,13 @@
+{
+  "navBadges": {
+    "withStatus": "{{label}}, {{status}}",
+    "groceryLeft_one": "{{count}} item left",
+    "groceryLeft_other": "{{count}} items left",
+    "dinnerUnplanned": "no dinner planned today",
+    "unloggedMeals_one": "{{count}} meal to log",
+    "unloggedMeals_other": "{{count}} meals to log",
+    "ladderDue_one": "{{count}} food to offer today",
+    "ladderDue_other": "{{count}} foods to offer today",
+    "moreHasUpdates": "More navigation options, something needs attention"
+  }
+}

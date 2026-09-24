@@ -1,0 +1,32 @@
+{
+  "pantry": {
+    "waste": {
+      "open": "Waste",
+      "openLabel": "What was thrown out this month",
+      "title": "Thrown out this month",
+      "description": "From everything marked \"threw it out\" since the 1st.",
+      "loading": "Loading this month's waste",
+      "error": "Couldn't load the waste report. Try again.",
+      "retry": "Try again",
+      "empty": "Nothing thrown out this month.",
+      "emptyHint": "When you mark something \"threw it out\", it shows up here.",
+      "total": "About {{amount}} thrown out",
+      "noPriceTotal": "No prices yet for what was thrown out",
+      "unpriced_one": "{{count}} item has no price yet, so it isn't in the total.",
+      "unpriced_other": "{{count}} items have no price yet, so they aren't in the total.",
+      "priceHint": "Prices come from scanned receipts, prices added at checkout, and a food's edit screen.",
+      "group": {
+        "trying": "Try bites",
+        "safe": "Safe foods",
+        "other": "Everything else"
+      },
+      "groupTotal": "about {{amount}}",
+      "tryBiteCost": "About {{amount}} of try-bite {{name}}",
+      "cost": "About {{amount}}",
+      "noPrice": "No price yet",
+      "times_one": "thrown out once",
+      "times_other": "thrown out {{count}} times",
+      "unknownFood": "A food you've since removed"
+    }
+  }
+}

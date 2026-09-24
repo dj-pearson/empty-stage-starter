@@ -1,0 +1,60 @@
+{
+  "kids": {
+    "editor": {
+      "addStep": "Step {{n}} of {{total}}: {{section}}",
+      "allergies": {
+        "unsureKeeps": "Not sure yet leaves the saved answer as it is. Pick one of the other answers to change it."
+      },
+      "basics": {
+        "ageMonths_one": "{{count}} month old",
+        "ageMonths_other": "{{count}} months old",
+        "ageYears_one": "{{count}} year old",
+        "ageYears_other": "{{count}} years old"
+      },
+      "behavior": {
+        "pickiness": "Pickiness, from these answers:"
+      },
+      "card": {
+        "diet": "Diet: {{list}}",
+        "editAllergies": "Edit allergies for {{name}}",
+        "editPrefix": "Edit",
+        "empty": "Not added yet",
+        "flavors": "Flavors: {{list}}",
+        "helps": "What helps: {{list}}",
+        "prepared": "Prepared: {{list}}",
+        "sectionsLabel": "{{name}}'s profile"
+      },
+      "chipHint": "Press Enter or type a comma after each one.",
+      "clearAnswer": "Clear this answer",
+      "cta": {
+        "alwaysEats": "Add foods they always eat"
+      },
+      "editDescription": "{{name}}'s profile",
+      "nextSection": "Next: {{section}}",
+      "safeFoods": {
+        "label": "Foods {{name}} likes and accepts",
+        "quickAdd": "Quick add"
+      },
+      "sections": {
+        "allergies": "Allergies",
+        "alwaysEats": "Always eats",
+        "basics": "Basics",
+        "behavior": "Eating behavior",
+        "dislikes": "Dislikes",
+        "goals": "Goals",
+        "notes": "Notes",
+        "safeFoods": "Safe foods",
+        "textures": "Textures and sensory"
+      },
+      "suggestions": "Foods in your kitchen",
+      "textures": {
+        "preparationSuggestions": "Common preparations",
+        "preparations": "How {{name}} likes food prepared",
+        "preparationsPlaceholder": "e.g. roasted, sauce on the side"
+      },
+      "thisChild": "your child",
+      "changedElsewhere": "This was changed on another device. We loaded the latest, so check it and save again.",
+      "stillCurrent": "Still current"
+    }
+  }
+}

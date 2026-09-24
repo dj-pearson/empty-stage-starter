@@ -19,8 +19,9 @@ interface ImportRecipeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /**
-   * Saves the recipe. The page owns the one success toast; this dialog closes
-   * only after the promise resolves and stays open with its input on rejection.
+   * Receives the parsed draft. The Recipes page opens it in the builder for
+   * review (item 12) rather than saving it here. This dialog closes only after
+   * the promise resolves and stays open with its input on rejection.
    */
   onImport: (recipe: Omit<Recipe, "id">) => Promise<void>;
   foods: Food[];

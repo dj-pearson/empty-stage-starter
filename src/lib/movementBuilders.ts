@@ -302,6 +302,9 @@ export function buildAdjustmentMovement(
     reason?: MovementReason;
     refType?: MovementRefType | null;
     refId?: string | null;
+    /** Item 22: price per display unit, for a restock that knows one. */
+    unitPrice?: number | null;
+    currency?: string | null;
   }
 ): MovementResult {
   return buildMovement(input, {
@@ -310,6 +313,8 @@ export function buildAdjustmentMovement(
     reason: input.reason ?? 'correction',
     refType: input.refType ?? null,
     refId: input.refId ?? null,
+    unitPrice: input.unitPrice,
+    currency: input.currency,
   });
 }
 

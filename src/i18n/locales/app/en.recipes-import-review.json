@@ -1,0 +1,12 @@
+{
+  "recipes": {
+    "importReview": {
+      "dupName": "You already have a recipe called \"{{name}}\".",
+      "dupSource": "You imported this page before, as \"{{name}}\".",
+      "hint": "Nothing is saved yet. Fix anything we read wrong, then save.",
+      "openExisting": "Open existing",
+      "saveAsNew": "Save as new",
+      "title": "Check the imported recipe"
+    }
+  }
+}

@@ -35,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 import { isTrustedForTotals } from "@/lib/catalogNutrition";
 import { NEW_FOOD_SAFETY, safetyFromFlags, type SafetyChoice } from "@/lib/foodSafetyChoice";
+import { isCurrencyCode, localeCurrency, parsePriceInput, viewerLocale } from "@/lib/money";
 import "@/i18n/appLocale";
 
 interface AddFoodDialogProps {
@@ -100,11 +101,16 @@ export function AddFoodDialog({
   const [packageQuantity, setPackageQuantity] = useState("");
   const [allergens, setAllergens] = useState<string[]>([]);
   const [canonicalId, setCanonicalId] = useState<string | null>(null);
+  // Item 22: last known price per unit, optional. Text for the same reason as quantity.
+  const [priceText, setPriceText] = useState("");
+  const [currency, setCurrency] = useState(() => localeCurrency(viewerLocale()));
 
   // Validation state
   const [nameError, setNameError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  const price = parsePriceInput(priceText);
+  const priceInvalid = priceText.trim() !== "" && price === null;
   const parsedQuantity = Number.parseFloat(quantityText);
   const quantity = Number.isFinite(parsedQuantity) && parsedQuantity >= 0 ? roundQty(parsedQuantity) : null;
 
@@ -171,6 +177,8 @@ export function AddFoodDialog({
       setPackageQuantity(editFood.package_quantity || "");
       setAllergens(editFood.allergens ?? []);
       setCanonicalId(editFood.canonical_id ?? null);
+      setPriceText(typeof editFood.price_per_unit === "number" ? String(editFood.price_per_unit) : "");
+      setCurrency(isCurrencyCode(editFood.currency) ? editFood.currency : localeCurrency(viewerLocale()));
       setShowConfirmation(false);
       setSelectedNutrition(null);
       setSearchQuery("");
@@ -191,6 +199,8 @@ export function AddFoodDialog({
     setPackageQuantity("");
     setAllergens([]);
     setCanonicalId(null);
+    setPriceText("");
+    setCurrency(localeCurrency(viewerLocale()));
     setShowConfirmation(false);
     setSelectedNutrition(null);
     setSearchQuery("");
@@ -234,7 +244,7 @@ export function AddFoodDialog({
       setNameError(nameRequiredMsg);
       return;
     }
-    if (quantity === null) return;
+    if (quantity === null || priceInvalid) return;
     setNameError("");
     setIsSaving(true);
 
@@ -251,6 +261,13 @@ export function AddFoodDialog({
         package_quantity: packageQuantity || undefined,
         allergens,
         canonical_id: canonicalId,
+        // Price and currency together or not at all. A cleared field on an
+        // edit clears the price; a new food with none sends nothing.
+        ...(price !== null
+          ? { price_per_unit: price, currency }
+          : editFood && typeof editFood.price_per_unit === "number"
+            ? { price_per_unit: null, currency: null }
+            : {}),
       });
 
       if (result === false) return;
@@ -601,12 +618,36 @@ export function AddFoodDialog({
               </Select>
             </div>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="price">
+              {t("pantry.price.label", { defaultValue: "Price per {{unit}} (optional)", unit: t(`pantry.addDialog.unit.${unit}`, unit) })}
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="price"
+                inputMode="decimal"
+                autoComplete="off"
+                value={priceText}
+                onChange={(e) => setPriceText(e.target.value)}
+                aria-invalid={priceInvalid}
+                aria-describedby="price-hint"
+                className="flex-1"
+              />
+              <span className="text-sm text-muted-foreground tabular-nums">{currency}</span>
+            </div>
+            <p id="price-hint" className={priceInvalid ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+              {priceInvalid
+                ? t("pantry.price.invalid", "Enter a price like 3.50, or leave it blank.")
+                : t("pantry.price.hint", "Used to estimate what thrown-out food costs. Leave blank if you don't know.")}
+            </p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("pantry.addDialog.cancel", "Cancel")}
           </Button>
-          <Button onClick={handleSave} disabled={!name.trim() || quantity === null || isSaving}>
+          <Button onClick={handleSave} disabled={!name.trim() || quantity === null || priceInvalid || isSaving}>
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {isSaving
               ? t("pantry.addDialog.saving", "Saving...")

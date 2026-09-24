@@ -50,6 +50,11 @@ import { RecipeToolbar } from "@/components/recipes/RecipeToolbar";
 import { RecipeListItem } from "@/components/recipes/RecipeListItem";
 import { RecipeDetailView } from "@/components/recipes/RecipeDetailView";
 import { SmartGroceryDialog } from "@/components/recipes/SmartGroceryDialog";
+import { SmartCollectionChips } from "@/components/recipes/SmartCollectionChips";
+import { ImportDuplicateNotice } from "@/components/recipes/ImportDuplicateNotice";
+import { buildSmartCollections, isSmartCollectionId } from "@/lib/recipeSmartCollections";
+import { findLikelyDuplicate, mergeReviewedImport } from "@/lib/recipeImportReview";
+import { toISODate } from "@/lib/date-utils";
 import { useRecipeFilters, totalMinutes, type RecipeViewMode } from "@/hooks/useRecipeFilters";
 import { useRecipeQuickPlan } from "@/hooks/useRecipeQuickPlan";
 import { useRecipeCollections } from "@/hooks/useRecipeCollections";
@@ -227,6 +232,10 @@ export default function Recipes() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null);
+  // Item 12: a parsed import waiting in the builder for the parent to confirm.
+  const [importDraft, setImportDraft] = useState<Omit<Recipe, "id"> | null>(null);
+  const [importDupDismissed, setImportDupDismissed] = useState(false);
+  const [importKey, setImportKey] = useState(0);
 
   // Detail view state. Only the id is stored; the recipe is always read from
   // `recipes`, so an edit elsewhere shows up without a sync effect.
@@ -280,12 +289,37 @@ export default function Recipes() {
     () => (pendingDeleteIds.size === 0 ? recipes : recipes.filter((r) => !pendingDeleteIds.has(r.id))),
     [recipes, pendingDeleteIds],
   );
+  // Item 11: smart collections, computed from kidFit, times and membership.
+  const smartFoodById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
+  const smartCollections = useMemo(
+    () =>
+      liveRecipes.length === 0
+        ? []
+        : buildSmartCollections({
+            recipes: liveRecipes,
+            kids,
+            foodById: smartFoodById,
+            planEntries,
+            collectionIdsByRecipe,
+            includeUnfiled: Boolean(userId) && !collectionsLoading && collectionsError == null,
+            todayKey: toISODate(new Date()),
+          }),
+    [liveRecipes, kids, smartFoodById, planEntries, collectionIdsByRecipe, userId, collectionsLoading, collectionsError],
+  );
+  const selectedSmart = useMemo(
+    () => (isSmartCollectionId(selectedCollectionId) ? smartCollections.find((c) => c.id === selectedCollectionId) ?? null : null),
+    [selectedCollectionId, smartCollections],
+  );
+
   const collectionFilteredRecipes = useMemo(() => {
     if (!selectedCollectionId) return liveRecipes;
+    if (isSmartCollectionId(selectedCollectionId)) {
+      return selectedSmart ? liveRecipes.filter((recipe) => selectedSmart.recipeIds.has(recipe.id)) : liveRecipes;
+    }
     const members = itemsByCollection[selectedCollectionId];
     if (!members) return [];
     return liveRecipes.filter((recipe) => members.has(recipe.id));
-  }, [selectedCollectionId, liveRecipes, itemsByCollection]);
+  }, [selectedCollectionId, selectedSmart, liveRecipes, itemsByCollection]);
 
   const {
     searchQuery,
@@ -431,10 +465,18 @@ export default function Recipes() {
   // falls back to all recipes instead of an empty screen with no way out.
   useEffect(() => {
     if (!selectedCollectionId || collectionsLoading) return;
+    if (isSmartCollectionId(selectedCollectionId)) {
+      // A smart collection goes away with its kid (or "Unfiled" while
+      // collections are unavailable); fall back the same way.
+      if (liveRecipes.length > 0 && !smartCollections.some((c) => c.id === selectedCollectionId)) {
+        setSelectedCollectionId(null);
+      }
+      return;
+    }
     if (!collectionList.some((c) => c.id === selectedCollectionId)) {
       setSelectedCollectionId(null);
     }
-  }, [selectedCollectionId, collectionList, collectionsLoading]);
+  }, [selectedCollectionId, collectionList, collectionsLoading, smartCollections, liveRecipes.length]);
 
   // Handlers
   const handleView = useCallback((recipe: Recipe) => {
@@ -461,11 +503,17 @@ export default function Recipes() {
   const handleClose = useCallback(() => {
     setBuilderOpen(false);
     setEditRecipe(null);
+    setImportDraft(null);
   }, []);
 
   const handleSave = useCallback(async (recipeData: Partial<Recipe>) => {
     try {
-      if (editRecipe) {
+      if (!editRecipe && importDraft) {
+        // Item 12: the reviewed import. The builder's fields win; what it has
+        // no input for (source type, nutrition) comes from the parsed draft.
+        await addRecipe(mergeReviewedImport(importDraft, recipeData));
+        toast.success(t("recipes.toasts.imported", { defaultValue: "Recipe imported" }));
+      } else if (editRecipe) {
         await updateRecipe(editRecipe.id, recipeData);
         toast.success(t("recipes.toasts.updated", { defaultValue: "Recipe updated" }));
       } else {
@@ -477,23 +525,33 @@ export default function Recipes() {
       logger.error("Error saving recipe:", error);
       toast.error(t("recipes.toasts.saveFailed", { defaultValue: "Couldn't save the recipe" }));
     }
-  }, [editRecipe, updateRecipe, addRecipe, handleClose, t]);
+  }, [editRecipe, importDraft, updateRecipe, addRecipe, handleClose, t]);
 
-  // The one owner of the import success toast. Rethrows so the dialog stays
-  // open with what the user typed when the save fails.
+  // Item 12: a parsed import is not saved straight away. It opens in the
+  // builder, prefilled, for the parent to check; the builder's Save is the
+  // one that writes (and owns the "Recipe imported" toast).
   const handleImport = useCallback(async (recipeData: Omit<Recipe, "id">) => {
-    try {
-      await addRecipe(recipeData);
-      toast.success(t("recipes.toasts.imported", { defaultValue: "Recipe imported" }));
-    } catch (error) {
-      logger.error("Error importing recipe:", error);
-      toast.error(t("recipes.toasts.importFailed", {
-        defaultValue: "Couldn't import the recipe: {{message}}",
-        message: (error as Error).message,
-      }));
-      throw error;
-    }
-  }, [addRecipe, t]);
+    setImportKey((k) => k + 1);
+    setImportDupDismissed(false);
+    setEditRecipe(null);
+    setImportDraft(recipeData);
+    setBuilderOpen(true);
+    analytics.trackEvent("recipe_import_review_opened", { source_type: recipeData.source_type ?? null });
+  }, []);
+
+  const importDuplicate = useMemo(
+    () => (importDraft && !importDupDismissed ? findLikelyDuplicate(importDraft, liveRecipes) : null),
+    [importDraft, importDupDismissed, liveRecipes],
+  );
+
+  const handleOpenDuplicate = useCallback(() => {
+    const existing = importDuplicate?.recipe;
+    if (!existing) return;
+    setBuilderOpen(false);
+    setImportDraft(null);
+    setViewingRecipeId(existing.id);
+    setDetailOpen(true);
+  }, [importDuplicate]);
 
   // Opens the SmartGroceryDialog with the full recipe ingredient list.
   const handleAddToGrocery = useCallback((recipe: Recipe) => {
@@ -830,13 +888,22 @@ export default function Recipes() {
             </div>
           </div>
 
+          {smartCollections.length > 0 && (
+            <SmartCollectionChips
+              collections={smartCollections}
+              selectedId={selectedSmart ? selectedSmart.id : null}
+              onSelect={setSelectedCollectionId}
+              className="mb-3"
+            />
+          )}
+
           {userId && (
             <div className="hidden md:block mb-4">
               <RecipeCollectionsSelector
                 collections={collectionList}
                 counts={countsByCollection}
                 totalRecipeCount={liveRecipes.length}
-                selectedId={selectedCollectionId}
+                selectedId={isSmartCollectionId(selectedCollectionId) ? null : selectedCollectionId}
                 onSelect={setSelectedCollectionId}
                 onCreate={handleOpenCreateCollection}
                 onManage={() => setShowManageCollectionsDialog(true)}
@@ -1076,7 +1143,29 @@ export default function Recipes() {
               />
             </div>
 
-            {selectedCollectionId && filteredRecipes.length === 0 && !hasActiveFilters ? (
+            {selectedSmart && filteredRecipes.length === 0 && !hasActiveFilters ? (
+              <Card className="p-8 md:p-12 text-center">
+                <div className="max-w-md mx-auto">
+                  <h2 className="text-xl font-semibold mb-2">
+                    {t("recipes.smart.emptyTitle", { defaultValue: "Nothing here yet" })}
+                  </h2>
+                  <p className="text-muted-foreground mb-6">
+                    {selectedSmart.kind === "unfiled"
+                      ? t("recipes.smart.emptyUnfiled", { defaultValue: "Every recipe is in a collection." })
+                      : selectedSmart.kind === "quick"
+                        ? t("recipes.smart.emptyQuick", {
+                            defaultValue: "No recipe takes 30 minutes or less. Add prep and cook times to see them here.",
+                          })
+                        : t("recipes.smart.emptyFit", {
+                            defaultValue: "Mark the foods your kids eat as safe in the pantry and matching recipes show up here.",
+                          })}
+                  </p>
+                  <Button onClick={() => setSelectedCollectionId(null)} variant="outline">
+                    {t("recipes.states.viewAll", { defaultValue: "View all recipes" })}
+                  </Button>
+                </div>
+              </Card>
+            ) : selectedCollectionId && filteredRecipes.length === 0 && !hasActiveFilters ? (
               <Card className="p-8 md:p-12 text-center">
                 <div className="max-w-md mx-auto">
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -1210,10 +1299,28 @@ export default function Recipes() {
               <SheetTitle>
                 {editRecipe
                   ? t("recipes.builder.editTitle", { defaultValue: "Edit recipe" })
-                  : t("recipes.builder.createTitle", { defaultValue: "Create recipe" })}
+                  : importDraft
+                    ? t("recipes.importReview.title", { defaultValue: "Check the imported recipe" })
+                    : t("recipes.builder.createTitle", { defaultValue: "Create recipe" })}
               </SheetTitle>
             </SheetHeader>
             <div className="mt-4">
+              {builderOpen && !editRecipe && importDraft && (
+                <>
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    {t("recipes.importReview.hint", {
+                      defaultValue: "Nothing is saved yet. Fix anything we read wrong, then save.",
+                    })}
+                  </p>
+                  {importDuplicate && (
+                    <ImportDuplicateNotice
+                      duplicate={importDuplicate}
+                      onOpenExisting={handleOpenDuplicate}
+                      onSaveAsNew={() => setImportDupDismissed(true)}
+                    />
+                  )}
+                </>
+              )}
               {builderOpen && (
                 <Suspense
                   fallback={
@@ -1223,11 +1330,12 @@ export default function Recipes() {
                   }
                 >
                   <EnhancedRecipeBuilder
-                    key={editRecipe?.id ?? "new"}
+                    key={editRecipe?.id ?? (importDraft ? `import-${importKey}` : "new")}
                     foods={foods}
                     kids={kids}
                     activeKidId={lensKid?.id ?? activeKidId}
                     editRecipe={editRecipe}
+                    initialDraft={editRecipe ? null : importDraft}
                     onSave={handleSave}
                     onCancel={handleClose}
                   />

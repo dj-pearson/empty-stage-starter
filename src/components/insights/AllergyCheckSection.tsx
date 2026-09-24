@@ -109,7 +109,8 @@ function AllergyCheckSectionImpl({ kid, todayIso }: AllergyCheckSectionProps) {
 
   const allergens = kid.allergens ?? [];
   const allergenNames = joinOr(t, allergens.map((a) => allergenLabel(t, a)));
-  const profileLink = `/dashboard/kids?kid=${encodeURIComponent(kid.id)}&edit=1`;
+  // Allergies, always: this link sits next to the allergy answer it corrects.
+  const profileLink = `/dashboard/kids?kid=${encodeURIComponent(kid.id)}&section=allergies`;
   const linkClass = 'font-medium text-primary underline-offset-4 hover:underline';
   const titleId = 'insights-allergy-title';
 

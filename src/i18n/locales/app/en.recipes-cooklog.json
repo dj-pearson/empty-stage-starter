@@ -1,0 +1,25 @@
+{
+  "recipes": {
+    "cooked": {
+      "description": "{{recipe}}, today's {{slot}}. Tap what each child did.",
+      "failed": "Couldn't log it for {{names}}. Please try again.",
+      "gateAllergen": "Allergy: {{allergen}}. Not added to the plan.",
+      "gateNoFoods": "Link an ingredient to a food to log this recipe.",
+      "gateSevere": "Severe {{allergen}} allergy. Not added to the plan.",
+      "gateUnknown": "Allergy info not checked. Plan it from the planner to log it.",
+      "kidLabel": "What {{name}} did",
+      "logged": "Logged {{recipe}} for {{names}}",
+      "noKids": "Add a child to log how meals go.",
+      "onPlan": "On today's {{slot}}",
+      "result": {
+        "ate": "Ate",
+        "refused": "Refused",
+        "tasted": "Tasted"
+      },
+      "save": "Save",
+      "skip": "Skip",
+      "title": "How did it go?",
+      "undoFailed": "Couldn't undo that. Check today in the planner."
+    }
+  }
+}

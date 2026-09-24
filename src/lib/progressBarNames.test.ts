@@ -42,7 +42,6 @@ const KNOWN_UNNAMED: Record<string, number> = {
   'src/App.tsx': 1,
   'src/components/AchievementBadge.tsx': 1,
   'src/components/AchievementsView.tsx': 1,
-  'src/components/ChildIntakeQuestionnaire.tsx': 1,
   'src/components/KidMealVoting.tsx': 1,
   'src/components/ProgressDashboard.tsx': 4,
   'src/components/TonightCookDialog.tsx': 1,

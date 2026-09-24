@@ -7,7 +7,8 @@
  * even when each unit test passes on hand-built fixtures.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import '@/i18n';
@@ -17,6 +18,9 @@ const kids: Kid[] = [
   { id: 'k-maya', name: 'Maya', age: 4, allergens: ['peanuts'], always_eats_foods: ['toast'] },
   { id: 'k-leo', name: 'Leo', age: 6 },
 ];
+
+// Real browsers have it; jsdom does not, and the deep-link handler scrolls.
+window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 vi.mock('@/contexts/AppContext', () => ({
   useKids: () => ({
@@ -91,5 +95,47 @@ describe('Kids page progress wiring', () => {
     expect(screen.getByRole('heading', { name: 'Household allergies', level: 2 })).toBeInTheDocument();
     expect(screen.getAllByText('Maya').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Leo').length).toBeGreaterThan(0);
+  });
+});
+
+function renderAt(url: string) {
+  render(
+    <HelmetProvider>
+      <MemoryRouter initialEntries={[url]}>
+        <Kids />
+      </MemoryRouter>
+    </HelmetProvider>,
+  );
+}
+
+describe('Kids page: one editor, opened by section', () => {
+  it('a card row opens that section of that child', async () => {
+    renderAt('/dashboard/kids');
+    const maya = screen.getByRole('list', { name: "Maya's profile" });
+    await userEvent.click(within(maya).getByRole('button', { name: /Safe foods/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Safe foods' });
+    expect(dialog).toHaveTextContent("Maya's profile");
+  });
+
+  it('?kid=&section= opens the named section', async () => {
+    renderAt('/dashboard/kids?kid=k-maya&section=textures');
+    expect(await screen.findByRole('dialog', { name: 'Textures and sensory' })).toBeInTheDocument();
+  });
+
+  it('?kid=&edit=1 opens Allergies while they are not recorded', async () => {
+    renderAt('/dashboard/kids?kid=k-leo&edit=1');
+    expect(await screen.findByRole('dialog', { name: 'Allergies' })).toBeInTheDocument();
+  });
+
+  it('?kid=&intake=1 opens the first missing section', async () => {
+    // Maya has allergies and an age, so the first gap is safe foods (Always eats).
+    renderAt('/dashboard/kids?kid=k-maya&intake=1');
+    expect(await screen.findByRole('dialog', { name: 'Always eats' })).toBeInTheDocument();
+  });
+
+  it('?add=1 opens the add flow at Basics', async () => {
+    renderAt('/dashboard/kids?add=1');
+    const dialog = await screen.findByRole('dialog', { name: 'Add child' });
+    expect(dialog).toHaveTextContent('Step 1 of 2: Basics');
   });
 });

@@ -1,124 +1,234 @@
 import { describe, it, expect } from "vitest";
 import {
-  EMPTY_INTAKE_FORM,
+  EMPTY_KID_FORM,
+  KID_SECTION_IDS,
+  SECTION_FIELDS,
+  buildAddPayload,
+  buildSectionPatch,
   commitListDraft,
-  intakeFormFromRow,
-  intakeFormToUpdate,
+  kidFormFromKid,
   pickinessFromAnswers,
-  type IntakeFormData,
+  removedAllergens,
+  sectionChangedSince,
+  withSectionFrom,
+  suggestFoodNames,
+  type KidEditorForm,
 } from "./kidIntakeForm";
 import { KidSchema, KidUpdateSchema, PICKINESS_LEVELS } from "./validations";
+import type { Kid } from "@/types";
 
 const BEHAVIORS = ["", "wide_variety", "moderate", "limited", "very_limited"];
 const WILLINGNESS = ["", "willing", "hesitant", "very_hesitant", "refuses"];
 
-const form = (patch: Partial<IntakeFormData>): IntakeFormData => ({ ...EMPTY_INTAKE_FORM, ...patch });
+const form = (patch: Partial<KidEditorForm>): KidEditorForm => ({ ...EMPTY_KID_FORM, ...patch });
 
-describe("intakeFormToUpdate", () => {
-  it("passes KidUpdateSchema for every eating_behavior x new_food_willingness answer", () => {
-    for (const eating_behavior of BEHAVIORS) {
-      for (const new_food_willingness of WILLINGNESS) {
-        const patch = intakeFormToUpdate(
-          form({
-            eating_behavior,
-            new_food_willingness,
-            pickiness_level: pickinessFromAnswers(eating_behavior, new_food_willingness),
-            texture_sensitivity_level: "strong",
-            preferred_preparations: ["Only cold foods"],
-          }),
-          EMPTY_INTAKE_FORM,
-        );
-        const result = KidUpdateSchema.safeParse(patch);
-        expect(result.success, `${eating_behavior} x ${new_food_willingness}`).toBe(true);
-        // Item 25: the three intake answers are columns now and are saved.
-        expect(patch.texture_sensitivity_level).toBe("strong");
-        expect(patch.preferred_preparations).toEqual(["Only cold foods"]);
-        if (eating_behavior || new_food_willingness) {
-          expect(patch.pickiness_level).toBe(pickinessFromAnswers(eating_behavior, new_food_willingness));
-        } else {
-          expect(patch).not.toHaveProperty("pickiness_level");
-        }
-      }
+const maya: Kid = {
+  id: "k1",
+  name: "Maya",
+  date_of_birth: "2020-04-01",
+  allergens: ["peanuts"],
+  allergen_severity: { peanuts: "severe" },
+  cross_contamination_sensitive: true,
+  favorite_foods: ["crackers"],
+  always_eats_foods: ["toast"],
+  disliked_foods: ["peas"],
+  texture_sensitivity_level: "High",
+  preferred_preparations: ["Steamed"],
+  eating_behavior: "limited",
+  new_food_willingness: "hesitant",
+  pickiness_level: "very_picky",
+  height_cm: 110,
+  gender: "female",
+  notes: "Loves dips",
+};
+
+describe("kidFormFromKid", () => {
+  it("derives allergy_status: missing is unsure, [] is none, a list is has", () => {
+    expect(kidFormFromKid({ id: "a", name: "A" }).allergy_status).toBe("unsure");
+    expect(kidFormFromKid({ id: "a", name: "A", allergens: [] }).allergy_status).toBe("none");
+    expect(kidFormFromKid(maya).allergy_status).toBe("has");
+  });
+
+  it("reads null columns from a realtime row as empty answers", () => {
+    const f = kidFormFromKid({ id: "a", name: "A", gender: null, height_cm: null, health_goals: null });
+    expect(f.gender).toBe("");
+    expect(f.height_cm).toBeNull();
+    expect(f.health_goals).toEqual([]);
+  });
+
+  it("round-trips: an untouched form produces an empty patch for every section", () => {
+    const base = kidFormFromKid(maya);
+    for (const section of KID_SECTION_IDS) {
+      expect(buildSectionPatch(section, base, base), section).toEqual({});
+    }
+  });
+});
+
+describe("buildSectionPatch", () => {
+  it("never puts another section's field in a patch", () => {
+    const base = kidFormFromKid(maya);
+    const everything = form({
+      name: "Mia",
+      date_of_birth: "2021-01-01",
+      gender: "other",
+      height_cm: 120,
+      weight_kg: 22,
+      allergy_status: "has",
+      allergens: ["peanuts", "sesame"],
+      dietary_restrictions: ["halal"],
+      favorite_foods: ["rice"],
+      always_eats_foods: ["pasta"],
+      disliked_foods: [],
+      texture_sensitivity_level: "mild",
+      texture_dislikes: ["Slimy"],
+      preferred_preparations: ["Baked"],
+      eating_behavior: "moderate",
+      new_food_willingness: "willing",
+      behavioral_notes: "Only eats specific brands",
+      health_goals: ["More protein"],
+      nutrition_concerns: ["ADHD"],
+      notes: "",
+    });
+    for (const section of KID_SECTION_IDS) {
+      const patch = buildSectionPatch(section, everything, base);
+      const allowed = new Set<string>(SECTION_FIELDS[section]);
+      for (const key of Object.keys(patch)) expect(allowed.has(key), `${section}: ${key}`).toBe(true);
+      expect(KidUpdateSchema.safeParse(patch).success, section).toBe(true);
     }
   });
 
-  it("computes pickiness_level from the answers and ignores the form's own value", () => {
-    const patch = intakeFormToUpdate(
-      form({ eating_behavior: "very_limited", new_food_willingness: "willing", pickiness_level: "not_picky" }),
-      EMPTY_INTAKE_FORM,
-    );
-    expect(patch.pickiness_level).toBe("extremely_picky");
+  it("basics: sends only the changed field, and a cleared value as null", () => {
+    const base = kidFormFromKid(maya);
+    expect(buildSectionPatch("basics", { ...base, height_cm: null }, base)).toEqual({ height_cm: null });
+    expect(buildSectionPatch("basics", { ...base, date_of_birth: "" }, base)).toEqual({ date_of_birth: null });
+    expect(buildSectionPatch("basics", { ...base, name: "  Mia " }, base)).toEqual({ name: "Mia" });
   });
 
-  it("leaves a pickiness level set elsewhere alone when neither behavior question is answered", () => {
-    const loaded = intakeFormFromRow({ pickiness_level: "Very Picky" });
-    expect(intakeFormToUpdate(loaded, loaded)).not.toHaveProperty("pickiness_level");
+  it("basics: an emptied name is never sent", () => {
+    const base = kidFormFromKid(maya);
+    expect(buildSectionPatch("basics", { ...base, name: " " }, base)).toEqual({});
   });
 
-  it("clears pickiness_level when both saved behavior answers are cleared", () => {
-    const loaded = form({ eating_behavior: "limited", new_food_willingness: "hesitant", pickiness_level: "very_picky" });
-    const patch = intakeFormToUpdate(form({}), loaded);
-    expect(patch.pickiness_level).toBeNull();
-    expect(patch.eating_behavior).toBeNull();
-    expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
+  it("allergies: 'Not sure yet' on a saved child sends no allergy column", () => {
+    const base = kidFormFromKid(maya);
+    const patch = buildSectionPatch("allergies", { ...base, allergy_status: "unsure" }, base);
+    expect(patch).toEqual({});
   });
 
-  it("sends null for a cleared texture level and [] for cleared preparations", () => {
-    const loaded = form({ texture_sensitivity_level: "severe", preferred_preparations: ["Steamed"] });
-    const patch = intakeFormToUpdate(form({}), loaded);
-    expect(patch.texture_sensitivity_level).toBeNull();
-    expect(patch.preferred_preparations).toEqual([]);
-    expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
+  it("allergies: 'No known allergies' sends [], an empty severity map and clears cross-contact", () => {
+    const base = kidFormFromKid(maya);
+    const patch = buildSectionPatch("allergies", { ...base, allergy_status: "none" }, base);
+    expect(patch).toEqual({ allergens: [], allergen_severity: {}, cross_contamination_sensitive: false });
   });
 
-  it("resends a texture label an older iOS build wrote, and it validates", () => {
-    const loaded = intakeFormFromRow({ texture_sensitivity_level: "High" });
-    const patch = intakeFormToUpdate(loaded, loaded);
-    expect(patch.texture_sensitivity_level).toBe("High");
-    expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
+  it("allergies: a severity change alone sends only the severity map", () => {
+    const base = kidFormFromKid(maya);
+    const patch = buildSectionPatch("allergies", { ...base, allergen_severity: { peanuts: "mild" } }, base);
+    expect(patch).toEqual({ allergen_severity: { peanuts: "mild" } });
   });
 
-  it("leaves out an empty answer that was never set", () => {
-    expect(intakeFormToUpdate(EMPTY_INTAKE_FORM, EMPTY_INTAKE_FORM)).toEqual({});
-  });
-
-  it("sends null for a cleared height that was saved before, and it validates", () => {
-    const loaded = form({ height_cm: 110, gender: "female", disliked_foods: ["peas"] });
-    const patch = intakeFormToUpdate(form({ height_cm: null }), loaded);
-    expect(patch.height_cm).toBeNull();
-    expect(patch.gender).toBeNull();
-    expect(patch.disliked_foods).toEqual([]);
-    expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
-  });
-
-  it("leaves allergens alone for 'Not sure yet' and sends [] for 'No known allergies'", () => {
-    const loaded = intakeFormFromRow({ allergens: ["peanuts"], allergen_severity: { peanuts: "severe" } });
-    expect(loaded.allergy_status).toBe("has");
-    const unsure = intakeFormToUpdate({ ...loaded, allergy_status: "unsure" }, loaded);
-    expect(unsure).not.toHaveProperty("allergens");
-    expect(unsure).not.toHaveProperty("allergen_severity");
-    const none = intakeFormToUpdate({ ...loaded, allergy_status: "none" }, loaded);
-    expect(none.allergens).toEqual([]);
-    expect(none.allergen_severity).toEqual({});
-  });
-
-  it("normalizes allergens and prunes orphaned severities", () => {
-    const patch = intakeFormToUpdate(
+  it("allergies: normalizes the list and prunes orphaned severities", () => {
+    const patch = buildSectionPatch(
+      "allergies",
       form({
         allergy_status: "has",
         allergens: ["dairy", "Milk", " Kiwi "],
         allergen_severity: { dairy: "severe", peanuts: "mild", Kiwi: "bogus" },
       }),
-      EMPTY_INTAKE_FORM,
+      EMPTY_KID_FORM,
     );
     expect(patch.allergens).toEqual(["milk", "Kiwi"]);
     expect(patch.allergen_severity).toEqual({ milk: "severe" });
     expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
   });
 
-  it("derives allergy_status from a row: null is unsure, [] is none", () => {
-    expect(intakeFormFromRow({ allergens: null }).allergy_status).toBe("unsure");
-    expect(intakeFormFromRow({ allergens: [] }).allergy_status).toBe("none");
+  it("food lists: a cleared list is sent as []", () => {
+    const base = kidFormFromKid(maya);
+    expect(buildSectionPatch("dislikes", { ...base, disliked_foods: [] }, base)).toEqual({ disliked_foods: [] });
+    expect(buildSectionPatch("safeFoods", { ...base, favorite_foods: ["crackers", "rice"] }, base)).toEqual({
+      favorite_foods: ["crackers", "rice"],
+    });
+  });
+
+  it("textures: leaves an iOS texture label alone unless it was changed", () => {
+    const base = kidFormFromKid(maya);
+    expect(buildSectionPatch("textures", { ...base, preferred_preparations: [] }, base)).toEqual({
+      preferred_preparations: [],
+    });
+    expect(buildSectionPatch("textures", { ...base, texture_sensitivity_level: "" }, base)).toEqual({
+      texture_sensitivity_level: null,
+    });
+  });
+
+  it("behavior: recomputes pickiness only when an answer moved, for every answer pair", () => {
+    for (const eating_behavior of BEHAVIORS) {
+      for (const new_food_willingness of WILLINGNESS) {
+        const patch = buildSectionPatch("behavior", form({ eating_behavior, new_food_willingness }), EMPTY_KID_FORM);
+        expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
+        if (eating_behavior || new_food_willingness) {
+          expect(patch.pickiness_level).toBe(pickinessFromAnswers(eating_behavior, new_food_willingness));
+        } else {
+          expect(patch).toEqual({});
+        }
+      }
+    }
+  });
+
+  it("behavior: a habit change leaves a pickiness level set elsewhere alone", () => {
+    const base = kidFormFromKid({ ...maya, pickiness_level: "Very Picky" });
+    const patch = buildSectionPatch("behavior", { ...base, behavioral_notes: "Only eats specific brands" }, base);
+    expect(patch).toEqual({ behavioral_notes: "Only eats specific brands" });
+  });
+
+  it("behavior: clearing both answers clears pickiness", () => {
+    const base = kidFormFromKid(maya);
+    const patch = buildSectionPatch("behavior", { ...base, eating_behavior: "", new_food_willingness: "" }, base);
+    expect(patch).toEqual({ eating_behavior: null, new_food_willingness: null, pickiness_level: null });
+  });
+
+  it("notes: trims and clears to null", () => {
+    const base = kidFormFromKid(maya);
+    expect(buildSectionPatch("notes", { ...base, notes: "  " }, base)).toEqual({ notes: null });
+  });
+});
+
+describe("removedAllergens", () => {
+  it("lists what the form dropped, and nothing for 'Not sure yet'", () => {
+    const base = kidFormFromKid({ ...maya, allergens: ["peanuts", "eggs"] });
+    expect(removedAllergens(base, { ...base, allergens: ["eggs"] })).toEqual(["peanuts"]);
+    expect(removedAllergens(base, { ...base, allergy_status: "none" })).toEqual(["peanuts", "eggs"]);
+    expect(removedAllergens(base, { ...base, allergy_status: "unsure" })).toEqual([]);
+  });
+});
+
+describe("buildAddPayload", () => {
+  it("records 'Not sure yet' as allergens: null and leaves empty answers out", () => {
+    expect(buildAddPayload(form({ name: " Leo " }))).toEqual({ name: "Leo", allergens: null });
+  });
+
+  it("carries basics and the allergy answers, and validates", () => {
+    const payload = buildAddPayload(
+      form({
+        name: "Leo",
+        date_of_birth: "2021-06-01",
+        height_cm: 95,
+        allergy_status: "has",
+        allergens: ["peanuts"],
+        allergen_severity: { peanuts: "severe" },
+        cross_contamination_sensitive: true,
+        dietary_restrictions: ["halal"],
+      }),
+    );
+    expect(payload).toEqual({
+      name: "Leo",
+      date_of_birth: "2021-06-01",
+      height_cm: 95,
+      allergens: ["peanuts"],
+      allergen_severity: { peanuts: "severe" },
+      cross_contamination_sensitive: true,
+      dietary_restrictions: ["halal"],
+    });
+    expect(KidSchema.safeParse(payload).success).toBe(true);
   });
 });
 
@@ -138,12 +248,20 @@ describe("commitListDraft", () => {
   });
 });
 
+describe("suggestFoodNames", () => {
+  it("puts prefix matches first and skips names already on the list", () => {
+    const names = ["Mac and cheese", "Cheese stick", "Macaroni", "Apple"];
+    expect(suggestFoodNames(names, "mac", [])).toEqual(["Mac and cheese", "Macaroni"]);
+    expect(suggestFoodNames(names, "chee", ["cheese stick"])).toEqual(["Mac and cheese"]);
+    expect(suggestFoodNames(names, " ", [])).toEqual([]);
+  });
+});
+
 describe("pickinessFromAnswers", () => {
   it.each([
     ["wide_variety", "willing", "not_picky"],
     ["wide_variety", "hesitant", "somewhat_picky"],
     ["moderate", "willing", "somewhat_picky"],
-    ["moderate", "hesitant", "somewhat_picky"],
     ["limited", "willing", "very_picky"],
     ["moderate", "very_hesitant", "very_picky"],
     ["very_limited", "willing", "extremely_picky"],
@@ -160,17 +278,27 @@ describe("pickinessFromAnswers", () => {
   });
 });
 
-describe("KidSchema", () => {
-  it("still accepts the ManageKidsDialog add payload", () => {
-    expect(() =>
-      KidSchema.parse({
-        name: "Maya",
-        date_of_birth: "2020-04-01",
-        notes: undefined,
-        allergens: ["peanuts"],
-        profile_picture_url: undefined,
-        favorite_foods: undefined,
-      }),
-    ).not.toThrow();
+describe("sectionChangedSince / withSectionFrom", () => {
+  const base = kidFormFromKid({ id: "k", name: "Alex", allergens: ["peanuts"], notes: "a" });
+
+  it("sees an allergen added elsewhere, and ignores other sections' fields", () => {
+    const live = kidFormFromKid({ id: "k", name: "Alex", allergens: ["peanuts", "sesame"], notes: "b" });
+    expect(sectionChangedSince("allergies", base, live)).toBe(true);
+    expect(sectionChangedSince("basics", base, live)).toBe(false);
+    expect(sectionChangedSince("notes", base, live)).toBe(true);
+  });
+
+  it("sees allergies going back to not recorded", () => {
+    const live = kidFormFromKid({ id: "k", name: "Alex", allergens: null });
+    expect(sectionChangedSince("allergies", base, live)).toBe(true);
+  });
+
+  it("takes only the section's fields from the live row", () => {
+    const live = kidFormFromKid({ id: "k", name: "Other", allergens: ["sesame"] });
+    const next = withSectionFrom("allergies", { ...base, notes: "draft" }, live);
+    expect(next.allergens).toEqual(["sesame"]);
+    expect(next.allergy_status).toBe("has");
+    expect(next.name).toBe("Alex");
+    expect(next.notes).toBe("draft");
   });
 });

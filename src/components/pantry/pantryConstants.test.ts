@@ -37,9 +37,9 @@ describe("getCategoryConfig", () => {
     for (const c of ["other", "frozen", undefined, null, ""]) {
       const config = getCategoryConfig(c);
       expect(config.value).toBe("other");
-      expect(config.bgLight).toBe("bg-muted");
-      expect(config.text).toBe("text-muted-foreground");
-      expect(config.border).toBe("border-border");
+      expect(config.bgLight).toBe("bg-cat-other-soft");
+      expect(config.text).toBe("text-cat-other");
+      expect(config.dot).toBe("bg-cat-other");
     }
   });
 
@@ -49,6 +49,42 @@ describe("getCategoryConfig", () => {
 
   it("does not treat prototype keys as categories", () => {
     expect(getCategoryConfig("toString").value).toBe("other");
+  });
+});
+
+describe("category colours (item 24)", () => {
+  const all = [...Object.values(CATEGORY_CONFIG), getCategoryConfig("other")];
+  const classesOf = (c: (typeof all)[number]) =>
+    [c.bgLight, c.bgDark, c.text, c.border, c.dot, c.iconOnDot, c.pillActive, c.pillInactive, c.badgeBg, c.badgeText]
+      .join(" ")
+      .split(/\s+/)
+      .filter(Boolean);
+
+  it("uses only category tokens, never a raw palette class", () => {
+    const palette =
+      /(?:^|:)(?:bg|text|border)-(?:red|amber|yellow|blue|pink|purple|emerald|green|orange|slate|gray)-\d/;
+    for (const config of all) {
+      for (const cls of classesOf(config)) {
+        expect(cls, `${config.value}: ${cls}`).not.toMatch(palette);
+        expect(cls, `${config.value}: ${cls}`).toMatch(/cat-/);
+      }
+    }
+  });
+
+  it("names its own category's token in every class", () => {
+    for (const config of all) {
+      for (const cls of classesOf(config)) {
+        expect(cls).toContain(`cat-${config.value}`);
+      }
+    }
+  });
+
+  it("draws text on a fill with that fill's foreground token", () => {
+    for (const config of all) {
+      expect(config.pillActive).toContain(`bg-cat-${config.value} `);
+      expect(config.pillActive).toContain(`text-cat-${config.value}-foreground`);
+      expect(config.iconOnDot).toBe(`text-cat-${config.value}-foreground`);
+    }
   });
 });
 

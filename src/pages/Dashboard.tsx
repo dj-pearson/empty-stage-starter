@@ -50,9 +50,14 @@ import {
   NAV_GROUP_LABELS,
   NAV_GROUP_ORDER,
   isIndexRoute,
+  navBadgeFor,
   primaryNavItems,
+  secondaryNavItems,
   secondaryNavItemsInGroup,
 } from "@/lib/navigation";
+import { useNavBadges } from "@/hooks/useNavBadges";
+import { NavBadge } from "@/components/NavBadge";
+import { useNavItemLabel } from "@/hooks/useNavItemLabel";
 
 /**
  * Whether the dashboard may render its page yet (US-770).
@@ -83,6 +88,15 @@ const Dashboard = () => {
   const { userId } = useAuth();
   // One call for both shells; AppSidebar gets the answer as a prop.
   const entitlements = useNavEntitlements();
+  // Item 33: computed once here and shared by the sidebar, bar and More sheet.
+  const navBadges = useNavBadges();
+  const navItemLabel = useNavItemLabel();
+  // A badge on something behind "More" puts a dot on More itself, or the
+  // Food Tracker count would be invisible on a phone until the sheet opens.
+  const moreHasBadge = useMemo(
+    () => secondaryNavItems(entitlements).some((item) => navBadgeFor(item, navBadges) !== undefined),
+    [entitlements, navBadges]
+  );
   const { kids, activeKidId } = useKids();
   const { planEntries, updatePlanEntry } = usePlan();
   const { foods } = useFoods();
@@ -419,11 +433,15 @@ const Dashboard = () => {
             aria-label={t("shell.primaryNav", { defaultValue: "Primary" })}
           >
             <div className="flex justify-around items-center h-16">
-              {primaryNavItems(entitlements).map(({ to, icon: Icon, label }) => (
+              {primaryNavItems(entitlements).map((item) => {
+                const { to, icon: Icon, label } = item;
+                const badge = navBadgeFor(item, navBadges);
+                return (
                 <NavLink
                   key={to}
                   to={to}
                   end={isIndexRoute(to)}
+                  aria-label={badge ? navItemLabel(label, item.badge, badge) : undefined}
                   className={({ isActive }) =>
                     cn(
                       "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors motion-safe:active:scale-95 min-w-[64px]",
@@ -433,10 +451,14 @@ const Dashboard = () => {
                     )
                   }
                 >
-                  <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span className="relative">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                    {badge && <NavBadge value={badge} placement="corner" />}
+                  </span>
                   <span className="text-[11px] sm:text-xs leading-tight text-center">{label}</span>
                 </NavLink>
-              ))}
+                );
+              })}
 
               {/* More Menu Button */}
               <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
@@ -446,9 +468,18 @@ const Dashboard = () => {
                       "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors motion-safe:active:scale-95 min-w-[64px]",
                       "text-muted-foreground hover:text-foreground"
                     )}
-                    aria-label={t("shell.more.label", { defaultValue: "More navigation options" })}
+                    aria-label={
+                      moreHasBadge
+                        ? t("navBadges.moreHasUpdates", {
+                            defaultValue: "More navigation options, something needs attention",
+                          })
+                        : t("shell.more.label", { defaultValue: "More navigation options" })
+                    }
                   >
-                    <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                    <span className="relative">
+                      <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                      {moreHasBadge && <NavBadge value={{ kind: "dot" }} placement="corner" />}
+                    </span>
                     <span className="text-[11px] sm:text-xs leading-tight text-center">
                       {t("shell.more.short", { defaultValue: "More" })}
                     </span>
@@ -479,10 +510,14 @@ const Dashboard = () => {
                             {NAV_GROUP_LABELS[group]}
                           </h3>
                           <div className="grid grid-cols-2 gap-3">
-                            {items.map(({ to, icon: Icon, label }) => (
+                            {items.map((item) => {
+                              const { to, icon: Icon, label } = item;
+                              const badge = navBadgeFor(item, navBadges);
+                              return (
                               <NavLink
                                 key={to}
                                 to={to}
+                                aria-label={badge ? navItemLabel(label, item.badge, badge) : undefined}
                                 onClick={() => setMoreMenuOpen(false)}
                                 className={({ isActive }) =>
                                   cn(
@@ -493,12 +528,16 @@ const Dashboard = () => {
                                   )
                                 }
                               >
-                                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
+                                <div className="relative flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
                                   <Icon className="h-6 w-6" aria-hidden="true" />
+                                  {badge && (
+                                    <NavBadge value={badge} placement="corner" className="-right-1 -top-1 ring-background" />
+                                  )}
                                 </div>
                                 <span className="text-sm text-center leading-tight">{label}</span>
                               </NavLink>
-                            ))}
+                              );
+                            })}
                           </div>
                         </section>
                       );
@@ -561,7 +600,7 @@ const Dashboard = () => {
         <div>
           <SidebarProvider defaultOpen={true}>
             <div className="flex min-h-screen w-full">
-              <AppSidebar entitlements={entitlements} />
+              <AppSidebar entitlements={entitlements} badges={navBadges} />
 
               <div className="flex-1 flex flex-col">
                 {/* Top Header */}

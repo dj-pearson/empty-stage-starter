@@ -22,6 +22,7 @@ import {
   toIngredientPayloads,
   type IngredientDraft,
 } from "@/lib/recipeIngredients";
+import { draftsFromImportRows } from "@/lib/recipeImportReview";
 import { Recipe, Food, Kid } from "@/types";
 import { cn } from "@/lib/utils";
 import { IngredientSelector } from "./IngredientSelector";
@@ -35,6 +36,11 @@ interface EnhancedRecipeBuilderProps {
   kids: Kid[];
   activeKidId: string | null;
   editRecipe?: Recipe | null;
+  /**
+   * A parsed import to review before it is saved (item 12). Prefills every
+   * field; ignored when editRecipe is set. Nothing is saved until Save.
+   */
+  initialDraft?: Omit<Recipe, "id"> | null;
   onSave: (recipe: Partial<Recipe>) => Promise<void>;
   onCancel: () => void;
 }
@@ -100,18 +106,22 @@ export function EnhancedRecipeBuilder({
   kids,
   activeKidId,
   editRecipe,
+  initialDraft,
   onSave,
   onCancel,
 }: EnhancedRecipeBuilderProps) {
   const { t } = useTranslation();
+  // What the form starts from: the recipe being edited, else an import under
+  // review, else nothing.
+  const seed: Omit<Recipe, "id"> | null = editRecipe ?? initialDraft ?? null;
   // Basic info
-  const [name, setName] = useState(editRecipe?.name ?? "");
-  const [description, setDescription] = useState(editRecipe?.description ?? "");
-  const [imageUrl, setImageUrl] = useState(editRecipe?.image_url ?? "");
+  const [name, setName] = useState(seed?.name ?? "");
+  const [description, setDescription] = useState(seed?.description ?? "");
+  const [imageUrl, setImageUrl] = useState(seed?.image_url ?? "");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">(
-    editRecipe?.difficulty_level ?? "easy"
+    seed?.difficulty_level ?? "easy"
   );
-  const [tags, setTags] = useState<string[]>(editRecipe?.tags ?? []);
+  const [tags, setTags] = useState<string[]>(seed?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
 
   // Ingredients
@@ -120,7 +130,10 @@ export function EnhancedRecipeBuilder({
   // and additional_ingredients is parsed as a last resort, which is how a
   // recipe that only ever had the free-text blob becomes structured.
   const [ingredients, setIngredients] = useState<IngredientRowData[]>(() =>
-    draftsFromRecipe(editRecipe, foods).map((draft) => ({
+    (!editRecipe && initialDraft?.recipe_ingredient_rows?.length
+      ? draftsFromImportRows(initialDraft.recipe_ingredient_rows)
+      : draftsFromRecipe(seed, foods)
+    ).map((draft) => ({
       id: draft.id,
       rowId: draft.rowId ?? undefined,
       food_id: draft.food_id ?? undefined,
@@ -135,29 +148,29 @@ export function EnhancedRecipeBuilder({
 
   // Instructions
   const [steps, setSteps] = useState<string[]>(() => {
-    if (!editRecipe?.instructions) return [""];
+    if (!seed?.instructions) return [""];
     try {
-      const parsed = JSON.parse(editRecipe.instructions);
+      const parsed = JSON.parse(seed.instructions);
       if (Array.isArray(parsed)) return parsed;
     } catch {
       // Split text into steps
-      const lines = editRecipe.instructions
+      const lines = seed.instructions
         .split(/\r?\n/)
         .map((l) => l.replace(/^\d+[.)]\s*/, "").trim())
         .filter((l) => l.length > 0);
       if (lines.length > 0) return lines;
     }
-    return [editRecipe.instructions];
+    return [seed.instructions];
   });
 
   // Additional info
   // Minutes as digits. "1 hr 10 min" from an import is seeded as "70" rather
   // than shown as a blank number input.
-  const [prepTime, setPrepTime] = useState(() => minutesText(editRecipe?.prepTime));
-  const [cookTime, setCookTime] = useState(() => minutesText(editRecipe?.cookTime));
-  const [servings, setServings] = useState(editRecipe?.servings ?? "4");
-  const [tips, setTips] = useState(editRecipe?.tips ?? "");
-  const [sourceUrl, setSourceUrl] = useState(editRecipe?.source_url ?? "");
+  const [prepTime, setPrepTime] = useState(() => minutesText(seed?.prepTime));
+  const [cookTime, setCookTime] = useState(() => minutesText(seed?.cookTime));
+  const [servings, setServings] = useState(seed?.servings || "4");
+  const [tips, setTips] = useState(seed?.tips ?? "");
+  const [sourceUrl, setSourceUrl] = useState(seed?.source_url ?? "");
   const [urlErrors, setUrlErrors] = useState<{ image?: string; source?: string }>({});
 
   // Section open states

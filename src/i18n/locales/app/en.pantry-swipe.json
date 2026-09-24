@@ -1,0 +1,14 @@
+{
+  "pantry": {
+    "swipe": {
+      "usedUp": "Used up",
+      "usedUpLabel": "Mark {{name}} used up",
+      "usedUpToast": "{{name}} used up",
+      "addToList": "Add to list",
+      "more": "More for {{name}}",
+      "edit": "Edit",
+      "delete": "Delete",
+      "hint": "Swipe a row right to add it to your list, left when it's used up."
+    }
+  }
+}

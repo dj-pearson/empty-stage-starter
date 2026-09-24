@@ -34,14 +34,13 @@ const progress: KidProgressSummary = {
 };
 
 function setup(kid: Kid = maya, withProgress: KidProgressSummary | undefined = progress) {
-  const onEdit = vi.fn();
-  const onCompleteProfile = vi.fn();
+  const onEditSection = vi.fn();
   render(
     <MemoryRouter>
-      <ChildProfileCard kid={kid} progress={withProgress} onEdit={onEdit} onCompleteProfile={onCompleteProfile} />
+      <ChildProfileCard kid={kid} progress={withProgress} onEditSection={onEditSection} />
     </MemoryRouter>,
   );
-  return { onEdit, onCompleteProfile };
+  return { onEditSection };
 }
 
 describe('ChildProfileCard', () => {
@@ -55,15 +54,13 @@ describe('ChildProfileCard', () => {
 
   it('does not style dislikes as a hazard', () => {
     setup();
-    const chip = screen.getByText('broccoli');
-    expect(chip.className).not.toMatch(/destructive/);
-    expect(chip.className).toContain('text-muted-foreground');
-    expect(screen.getByText(/Doesn't like right now/)).toBeInTheDocument();
+    const row = screen.getByRole('button', { name: /Dislikes/ });
+    expect(row).toHaveTextContent('broccoli');
+    expect(row.innerHTML).not.toMatch(/destructive/);
   });
 
-  it('skips an invalid profile_last_reviewed instead of throwing', async () => {
+  it('skips an invalid profile_last_reviewed instead of throwing', () => {
     setup({ ...maya, profile_last_reviewed: 'not-a-date' });
-    await userEvent.click(screen.getByRole('tab', { name: 'Details' }));
     expect(screen.queryByText(/Last updated/)).not.toBeInTheDocument();
   });
 
@@ -82,22 +79,69 @@ describe('ChildProfileCard', () => {
     );
   });
 
-  it('asks for allergies when they were never recorded', async () => {
-    const { onEdit } = setup({ id: 'k-leo', name: 'Leo' }, undefined);
+  it('asks for allergies when they were never recorded, and opens the Allergies section', async () => {
+    const { onEditSection } = setup({ id: 'k-leo', name: 'Leo' }, undefined);
     expect(screen.getByText('Allergies not recorded')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Add allergies for Leo' }));
-    expect(onEdit).toHaveBeenCalledWith('k-leo');
+    expect(onEditSection).toHaveBeenCalledWith('k-leo', 'allergies');
   });
 
-  it('shows an explicit none for an empty allergy list', () => {
-    setup({ id: 'k-leo', name: 'Leo', allergens: [] }, undefined);
+  it('shows an explicit none for an empty allergy list, with an edit button', async () => {
+    const { onEditSection } = setup({ id: 'k-leo', name: 'Leo', allergens: [] }, undefined);
     expect(screen.getByText('No known allergies')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit allergies for Leo' }));
+    expect(onEditSection).toHaveBeenCalledWith('k-leo', 'allergies');
   });
 
-  it('drives the completeness button from the first gap', async () => {
-    const { onCompleteProfile } = setup({ id: 'k-leo', name: 'Leo', allergens: [] }, undefined);
+  it('drives the completeness button from the first gap, to the section that fills it', async () => {
+    const { onEditSection } = setup({ id: 'k-leo', name: 'Leo', allergens: [] }, undefined);
     await userEvent.click(screen.getByRole('button', { name: 'Add birthday' }));
-    expect(onCompleteProfile).toHaveBeenCalledWith(expect.objectContaining({ id: 'k-leo' }));
+    expect(onEditSection).toHaveBeenCalledWith('k-leo', 'basics');
+  });
+
+  it('sends the safe-foods gap to Always eats, which is what it counts', async () => {
+    const { onEditSection } = setup({ id: 'k-leo', name: 'Leo', allergens: [], age: 5 }, undefined);
+    await userEvent.click(screen.getByRole('button', { name: 'Add foods they always eat' }));
+    expect(onEditSection).toHaveBeenCalledWith('k-leo', 'alwaysEats');
+  });
+
+  it('opens one section per row, in editor order, each with its summary', async () => {
+    const { onEditSection } = setup(
+      {
+        ...maya,
+        favorite_foods: ['rice'],
+        texture_sensitivity_level: 'mild',
+        preferred_preparations: ['Roasted'],
+        eating_behavior: 'limited',
+        health_goals: ['More protein'],
+        notes: 'Uses a small fork',
+      },
+      undefined,
+    );
+    const rows = within(screen.getByRole('list', { name: "Maya's profile" })).getAllByRole('button');
+    expect(rows.map((r) => r.querySelector('.font-medium')?.textContent)).toEqual([
+      'Basics',
+      'Safe foods',
+      'Always eats',
+      'Dislikes',
+      'Textures and sensory',
+      'Eating behavior',
+      'Goals',
+      'Notes',
+    ]);
+    expect(rows[1]).toHaveTextContent('rice');
+    expect(rows[2]).toHaveTextContent('toast');
+    expect(rows[4]).toHaveTextContent('Texture sensitivity: Mild');
+    expect(rows[4]).toHaveTextContent('Prepared: Roasted');
+    expect(rows[5]).toHaveTextContent('Limited variety');
+    expect(rows[6]).toHaveTextContent('More protein');
+    expect(rows[7]).toHaveTextContent('Uses a small fork');
+    expect(rows[0]).toHaveTextContent('Not added yet');
+
+    await userEvent.click(rows[4]);
+    expect(onEditSection).toHaveBeenCalledWith('k-maya', 'textures');
+    await userEvent.click(screen.getByRole('button', { name: "Edit Maya's profile" }));
+    expect(onEditSection).toHaveBeenLastCalledWith('k-maya', 'basics');
   });
 
   it('says months for a toddler and never "1 years old"', () => {
@@ -109,15 +153,6 @@ describe('ChildProfileCard', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('caps long chip lists behind Show all', async () => {
-    const foods = Array.from({ length: 10 }, (_, i) => `food ${i + 1}`);
-    setup({ ...maya, always_eats_foods: foods }, undefined);
-    expect(screen.getByText('Always eats (10)')).toBeInTheDocument();
-    expect(screen.queryByText('food 9')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Show all 10' }));
-    expect(screen.getByText('food 10')).toBeInTheDocument();
   });
 
   it('copies the care card when the share sheet is unavailable', async () => {

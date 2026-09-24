@@ -1,4 +1,11 @@
-import { memo, useState, useEffect } from "react";
+import {
+  memo,
+  useState,
+  useEffect,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Food } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -15,7 +22,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2, AlertTriangle, Plus, Minus, ShoppingCart, Check } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Pencil, Trash2, AlertTriangle, Plus, Minus, ShoppingCart, Check, PackageCheck, MoreVertical } from "lucide-react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import {
+  isHorizontalDrag,
+  swipeDirection,
+  swipeIntent,
+  swipeOffset,
+  type SwipeIntent,
+} from "@/lib/pantrySwipe";
 import { cn } from "@/lib/utils";
 import { matchingAllergen } from "@/lib/allergens";
 import { resolveFood, type CatalogEntry } from "@/lib/effectiveFood";
@@ -51,9 +72,16 @@ interface PantryListItemProps {
   catalog?: CatalogEntry | null;
   /** Estimated days until this runs out, shown on low rows. */
   runsOutInDays?: number;
+  /**
+   * Item 21: "used up", straight to zero with Undo (the page owns the toast).
+   * Given, the row shows a Used up button and a left swipe does the same.
+   */
+  onUsedUp?: (food: Food) => void;
 }
 
 const PRESETS = [-5, -2, 2, 5] as const;
+/** A click this soon after a horizontal drag belongs to the drag. */
+const SWIPE_CLICK_SUPPRESS_MS = 400;
 
 export const PantryListItem = memo(function PantryListItem({
   food,
@@ -67,8 +95,10 @@ export const PantryListItem = memo(function PantryListItem({
   fit,
   catalog,
   runsOutInDays,
+  onUsedUp,
 }: PantryListItemProps) {
   const { t } = useTranslation();
+  const reducedMotion = useReducedMotion();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showZeroDialog, setShowZeroDialog] = useState(false);
   const [qtyPopoverOpen, setQtyPopoverOpen] = useState(false);
@@ -123,6 +153,85 @@ export const PantryListItem = memo(function PantryListItem({
   const showRunsOut =
     stockStatus === "low" && typeof runsOutInDays === "number" && Number.isFinite(runsOutInDays);
 
+  // --- Item 21: swipe right = grocery list, swipe left = used up ----------
+  const abilities = {
+    canGrocery: Boolean(onAddToGrocery) && !onList,
+    canUsedUp: Boolean(onUsedUp) && quantity > 0,
+  };
+  const drag = useRef<{ id: number; x: number; y: number; horizontal: boolean } | null>(null);
+  // Time of the last horizontal pointerup. A touch that moved past the tap
+  // slop usually fires no click at all, so a boolean flag would linger and
+  // swallow the next deliberate tap; only a click right after the drag is
+  // the drag's own click.
+  const justSwipedAt = useRef<number | null>(null);
+  const [dragDx, setDragDx] = useState(0);
+  const dragIntent: SwipeIntent | null = dragDx !== 0 ? swipeDirection(dragDx, abilities) : null;
+
+  const endDrag = () => {
+    drag.current = null;
+    setDragDx(0);
+  };
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    // Touch and pen only: a mouse has hover buttons and should select text.
+    if (e.pointerType === "mouse" || !e.isPrimary) return;
+    if (!abilities.canGrocery && !abilities.canUsedUp) return;
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, horizontal: false };
+  };
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.horizontal) {
+      if (!isHorizontalDrag(dx, dy)) {
+        // Clearly vertical: the page is scrolling, let it.
+        if (Math.abs(dy) > 10) drag.current = null;
+        return;
+      }
+      d.horizontal = true;
+      // Captured only now, so a tap still lands on the button it started on.
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    setDragDx(dx);
+  };
+
+  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    const intent = d.horizontal ? swipeIntent(e.clientX - d.x, e.clientY - d.y, abilities) : null;
+    if (d.horizontal) justSwipedAt.current = Date.now();
+    endDrag();
+    if (intent === "grocery") onAddToGrocery?.(food);
+    else if (intent === "usedUp") onUsedUp?.(food);
+  };
+
+  // A drag that ended over a button must not also press it.
+  const onClickCapture = (e: ReactMouseEvent) => {
+    const at = justSwipedAt.current;
+    justSwipedAt.current = null;
+    if (at === null || Date.now() - at > SWIPE_CLICK_SUPPRESS_MS) return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const offset = reducedMotion ? 0 : swipeOffset(dragDx, abilities);
+
+  const usedUpButton =
+    onUsedUp && quantity > 0 ? (
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={() => onUsedUp(food)}
+        className="h-11 w-11"
+        aria-label={t("pantry.swipe.usedUpLabel", { defaultValue: "Mark {{name}} used up", name: food.name })}
+        title={t("pantry.swipe.usedUp", "Used up")}
+      >
+        <PackageCheck className="h-3.5 w-3.5" aria-hidden="true" />
+      </Button>
+    ) : null;
+
   const groceryButton = onAddToGrocery ? (
     onList ? (
       <Button
@@ -152,8 +261,46 @@ export const PantryListItem = memo(function PantryListItem({
   return (
     <>
     <div
+      className="relative overflow-hidden border-b last:border-b-0 touch-pan-y"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={endDrag}
+      onClickCapture={onClickCapture}
+      data-testid="pantry-list-row"
+    >
+    {/* What the swipe will do, revealed under the row as it moves. */}
+    {dragIntent && (
+      <div
+        aria-hidden="true"
+        className={cn(
+          "absolute inset-0 flex items-center px-4 text-sm font-medium",
+          dragIntent === "grocery"
+            ? "justify-start bg-primary text-primary-foreground"
+            : "justify-end bg-secondary text-secondary-foreground"
+        )}
+      >
+        {dragIntent === "grocery" ? (
+          <span className="flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4" />
+            {t("pantry.swipe.addToList", "Add to list")}
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            {t("pantry.swipe.usedUp", "Used up")}
+            <PackageCheck className="h-4 w-4" />
+          </span>
+        )}
+      </div>
+    )}
+    {/* Opaque, so the tinted row surfaces below never show the reveal through. */}
+    <div
+      className={cn("relative bg-background", dragDx === 0 && "motion-safe:transition-transform")}
+      style={offset !== 0 ? { transform: `translateX(${offset}px)` } : undefined}
+    >
+    <div
       className={cn(
-        "flex items-center gap-2 sm:gap-3 px-3 py-2 border-b last:border-b-0 hover:bg-muted/50 transition-colors group",
+        "flex items-center gap-2 sm:gap-3 px-3 py-2 hover:bg-muted/50 transition-colors group",
         stockStatus !== "ok" && STOCK_TONE[stockStatus].surface,
         hasAllergen && "bg-destructive/5"
       )}
@@ -303,14 +450,16 @@ export const PantryListItem = memo(function PantryListItem({
         </Button>
       </div>
 
-      {/* Actions */}
+      {/* Actions. The swipes' buttons stay visible on every screen; on a
+          phone, edit and delete fold into one menu to leave the name room. */}
       <div className="flex gap-0.5 shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 pointer-coarse:opacity-100">
         {stockStatus !== "out" && groceryButton}
+        {usedUpButton}
         <Button
           size="icon"
           variant="ghost"
           onClick={() => onEdit(food)}
-          className="h-11 w-11"
+          className={cn("h-11 w-11", onUsedUp && "hidden md:inline-flex")}
           aria-label={t("pantry.item.edit", { defaultValue: "Edit {{name}}", name: food.name })}
         >
           <Pencil className="h-3 w-3" aria-hidden="true" />
@@ -319,12 +468,43 @@ export const PantryListItem = memo(function PantryListItem({
           size="icon"
           variant="ghost"
           onClick={() => setShowDeleteConfirm(true)}
-          className="h-11 w-11 text-destructive hover:text-destructive"
+          className={cn("h-11 w-11 text-destructive hover:text-destructive", onUsedUp && "hidden md:inline-flex")}
           aria-label={t("pantry.item.delete", { defaultValue: "Delete {{name}}", name: food.name })}
         >
           <Trash2 className="h-3 w-3" aria-hidden="true" />
         </Button>
+        {onUsedUp && (
+          // modal={false}: opening the delete AlertDialog from a closing modal
+          // menu can leave body pointer-events:none behind (Radix).
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-11 w-11 md:hidden"
+                aria-label={t("pantry.swipe.more", { defaultValue: "More for {{name}}", name: food.name })}
+              >
+                <MoreVertical className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem className="min-h-11 gap-2" onSelect={() => onEdit(food)}>
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+                {t("pantry.swipe.edit", "Edit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="min-h-11 gap-2 text-destructive focus:text-destructive"
+                onSelect={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                {t("pantry.swipe.delete", "Delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
+    </div>
+    </div>
     </div>
 
     <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

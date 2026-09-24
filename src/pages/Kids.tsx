@@ -1,5 +1,5 @@
 import { Helmet } from "react-helmet-async";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { CakeSlice, RefreshCw, ShieldAlert, UserPlus, Users2, Utensils } from "lucide-react";
@@ -13,16 +13,14 @@ import { analytics } from "@/lib/analytics";
 import { canonicalAllergen } from "@/lib/allergens";
 import { toISODate } from "@/lib/date-utils";
 import { buildProgressByKid } from "@/lib/kidProgress";
+import { computeProfileCompleteness } from "@/lib/kidProfileCompleteness";
+import { isKidSectionId, type KidSectionId } from "@/lib/kidIntakeForm";
+import { GAP_SECTION } from "@/components/kids/kidSectionMeta";
 import { useKidsProgressSummary } from "@/hooks/useKidsProgressSummary";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { ManageKidsDialog, ManageKidsDialogRef } from "@/components/ManageKidsDialog";
 import { ChildProfileCard } from "@/components/ChildProfileCard";
 import type { Kid } from "@/types";
-
-// Only opened on demand, and it is the heaviest thing on the page.
-const ChildIntakeQuestionnaire = lazy(() =>
-  import("@/components/ChildIntakeQuestionnaire").then((m) => ({ default: m.ChildIntakeQuestionnaire })),
-);
 
 const cardDomId = (kidId: string) => `kid-card-${kidId}`;
 
@@ -75,7 +73,6 @@ export default function Kids() {
   const prefersReducedMotion = useReducedMotion();
   const [searchParams, setSearchParams] = useSearchParams();
   const manageKidsRef = useRef<ManageKidsDialogRef>(null);
-  const [questionnaireKidId, setQuestionnaireKidId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [retrying, setRetrying] = useState(false);
 
@@ -89,16 +86,6 @@ export default function Kids() {
     () => buildProgressByKid(kids, planEntries, toISODate(new Date()), ladderRows, attempts, foodNames),
     [kids, planEntries, ladderRows, attempts, foodNames],
   );
-
-  // Derived, so an edit elsewhere (realtime, the quick-edit dialog) reaches
-  // the open questionnaire, and a deleted child closes it.
-  const questionnaireKid = useMemo(
-    () => (questionnaireKidId ? kids.find((k) => k.id === questionnaireKidId) ?? null : null),
-    [kids, questionnaireKidId],
-  );
-  useEffect(() => {
-    if (questionnaireKidId && kidsHydrated && !questionnaireKid) setQuestionnaireKidId(null);
-  }, [questionnaireKidId, questionnaireKid, kidsHydrated]);
 
   // One status region for discrete outcomes. Adds and removals are read off
   // the list itself, so they are announced whichever dialog made them.
@@ -119,16 +106,17 @@ export default function Kids() {
   }, [kids, kidsHydrated, t]);
 
   const openAdd = useCallback(() => manageKidsRef.current?.openForAdd(), []);
-  const handleEdit = useCallback((kidId: string) => manageKidsRef.current?.openForEdit(kidId), []);
-  const handleCompleteProfile = useCallback((kid: Kid) => setQuestionnaireKidId(kid.id), []);
-  const handleQuestionnaireOpenChange = useCallback((open: boolean) => {
-    if (!open) setQuestionnaireKidId(null);
-  }, []);
-  const handleQuestionnaireComplete = useCallback(() => {
-    // The questionnaire toasts on its own; this is only for screen readers.
-    const name = questionnaireKid?.name ?? "";
-    setStatusMessage(t("kids.status.saved", { name }));
-  }, [questionnaireKid, t]);
+  const handleEditSection = useCallback(
+    (kidId: string, section: KidSectionId) => manageKidsRef.current?.openForEdit(kidId, section),
+    [],
+  );
+  const handleSaved = useCallback(
+    (name: string, kind: "added" | "updated") => {
+      // Adds are announced from the list itself (above); this is for edits.
+      if (kind === "updated") setStatusMessage(t("kids.status.saved", { name }));
+    },
+    [t],
+  );
 
   const handleRetry = useCallback(async () => {
     setRetrying(true);
@@ -139,8 +127,11 @@ export default function Kids() {
     }
   }, [refreshKids]);
 
-  // Deep links: ?kid=<id>[&edit=1|&intake=1] and ?add=1. Acted on once the
-  // list is real, then cleared so a refresh or Back does not replay them.
+  // Deep links: ?kid=<id>[&section=<id>|&edit=1|&intake=1] and ?add=1. Acted
+  // on once the list is real, then cleared so a refresh or Back does not
+  // replay them. edit=1 (links written for the old quick edit, from Insights
+  // and the allergy strip) opens Allergies while they are not recorded and
+  // Basics otherwise; intake=1 (the old wizard) opens the first missing section.
   useEffect(() => {
     if (!kidsHydrated) return;
     const kidId = searchParams.get("kid");
@@ -148,8 +139,10 @@ export default function Kids() {
     if (!kidId && !wantsAdd) return;
 
     if (kidId) {
-      if (!kids.some((k) => k.id === kidId)) return;
+      const kid = kids.find((k) => k.id === kidId);
+      if (!kid) return;
       setActiveKid(kidId);
+      const sectionParam = searchParams.get("section");
       const wantsEdit = searchParams.get("edit") === "1";
       const wantsIntake = searchParams.get("intake") === "1";
       requestAnimationFrame(() => {
@@ -161,14 +154,22 @@ export default function Kids() {
         if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
         target.focus({ preventScroll: true });
       });
-      if (wantsEdit) manageKidsRef.current?.openForEdit(kidId);
-      else if (wantsIntake) setQuestionnaireKidId(kidId);
+      if (isKidSectionId(sectionParam)) {
+        manageKidsRef.current?.openForEdit(kidId, sectionParam);
+      } else if (wantsEdit) {
+        manageKidsRef.current?.openForEdit(kidId, kid.allergens === undefined ? "allergies" : "basics");
+      } else if (wantsIntake) {
+        const gap = computeProfileCompleteness(kid).missing[0];
+        // The Insights "review the profile" nudge: saving here, even with no
+        // change, records the review so the nudge clears.
+        manageKidsRef.current?.openForEdit(kidId, gap ? GAP_SECTION[gap] : "basics", { review: true });
+      }
     } else if (wantsAdd) {
       manageKidsRef.current?.openForAdd();
     }
 
     const next = new URLSearchParams(searchParams);
-    for (const key of ["kid", "edit", "intake", "add"]) next.delete(key);
+    for (const key of ["kid", "section", "edit", "intake", "add"]) next.delete(key);
     setSearchParams(next, { replace: true });
   }, [kidsHydrated, kids, searchParams, setSearchParams, setActiveKid, prefersReducedMotion]);
 
@@ -316,7 +317,7 @@ export default function Kids() {
                 {kidsMissingAllergyInfo.map((kid) => (
                   <Link
                     key={kid.id}
-                    to={`/dashboard/kids?kid=${encodeURIComponent(kid.id)}&edit=1`}
+                    to={`/dashboard/kids?kid=${encodeURIComponent(kid.id)}&section=allergies`}
                     className="inline-flex shrink-0 items-center rounded-full border border-dashed px-3 py-1 text-sm text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t("kids.household.missingInfo", { name: kid.name })}
@@ -334,8 +335,7 @@ export default function Kids() {
                   <ChildProfileCard
                     kid={kid}
                     progress={progressByKid.get(kid.id)}
-                    onEdit={handleEdit}
-                    onCompleteProfile={handleCompleteProfile}
+                    onEditSection={handleEditSection}
                   />
                 </li>
               ))}
@@ -343,20 +343,7 @@ export default function Kids() {
           </>
         )}
 
-        <ManageKidsDialog ref={manageKidsRef} />
-
-        {questionnaireKid && (
-          <Suspense fallback={null}>
-            <ChildIntakeQuestionnaire
-              key={questionnaireKid.id}
-              open
-              onOpenChange={handleQuestionnaireOpenChange}
-              kidId={questionnaireKid.id}
-              kidName={questionnaireKid.name}
-              onComplete={handleQuestionnaireComplete}
-            />
-          </Suspense>
-        )}
+        <ManageKidsDialog ref={manageKidsRef} onSaved={handleSaved} />
       </div>
     </div>
   );

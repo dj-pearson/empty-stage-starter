@@ -223,3 +223,20 @@ describe('the renderers consume the registry rather than their own copies', () =
     expect(dashboard).not.toMatch(/NavItems\.slice\(/);
   });
 });
+
+describe('nav badges (item 33)', () => {
+  const badgeOf = (to: string) => NAV_ITEMS.find((item) => item.to === to)?.badge;
+
+  it('puts each badge on the screen it describes', () => {
+    expect(badgeOf('/dashboard')).toBe('unloggedMeals');
+    expect(badgeOf('/dashboard/planner')).toBe('dinnerUnplanned');
+    expect(badgeOf('/dashboard/grocery')).toBe('groceryLeft');
+    expect(badgeOf('/dashboard/food-tracker')).toBe('ladderDue');
+  });
+
+  it('uses each badge once, so two links never claim the same number', () => {
+    const keys = NAV_ITEMS.map((item) => item.badge).filter(Boolean);
+    expect(keys).toHaveLength(4);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});

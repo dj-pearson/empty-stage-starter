@@ -168,6 +168,34 @@ describe('recordRestock', () => {
     expect(row.ref_type).toBeNull();
   });
 
+  it('records a known price with its currency on the purchase (item 22)', async () => {
+    enableWrites();
+    const inventory = await mountInventory();
+    await waitFor(() => expect(inventory().ledgerWritesEnabled).toBe(true));
+
+    await act(async () => {
+      await inventory().recordRestock(EGGS, 12, { unitPrice: 0.35, currency: 'USD', refType: 'receipt' });
+    });
+
+    const [row] = upserted[0];
+    expect(row.unit_price).toBe(0.35);
+    expect(row.currency).toBe('USD');
+  });
+
+  it('drops a price that has no currency rather than storing half a pair', async () => {
+    enableWrites();
+    const inventory = await mountInventory();
+    await waitFor(() => expect(inventory().ledgerWritesEnabled).toBe(true));
+
+    await act(async () => {
+      await inventory().recordRestock(EGGS, 12, { unitPrice: 0.35 });
+    });
+
+    const [row] = upserted[0];
+    expect(row.unit_price).toBeNull();
+    expect(row.currency).toBeNull();
+  });
+
   it('attempts nothing when ledger writes are off', async () => {
     const inventory = await mountInventory();
     expect(inventory().ledgerWritesEnabled).toBe(false);
