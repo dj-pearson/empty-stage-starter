@@ -7,7 +7,7 @@ import { parseIsoDate, toISODate } from "./date-utils";
  * US-830: a plan entry's `date` is a calendar key, and two different things are
  * done with it. They need opposite parsing, which is the whole trap.
  *
- *  - BUCKETING against "today" (TodayMeals, streak grouping) must be LOCAL, or
+ *  - BUCKETING against "today" (todayPlan, streak grouping) must be LOCAL, or
  *    today's entry lands on yesterday for every user west of Greenwich.
  *  - DAY ARITHMETIC between two keys (copy-week, delete-week) must be UTC, or
  *    a 23-hour DST day makes two consecutive dates read as the same day.
@@ -120,8 +120,11 @@ describe("the call sites follow those rules", () => {
     expect(src).not.toMatch(/dayDiff/);
   });
 
-  it("TodayMeals asks isToday about a locally-parsed key", () => {
-    expect(read("src/components/TodayMeals.tsx")).toMatch(/isToday\(parseIsoDate\(p\.date\)\)/);
+  // The home screen's today list is todayPlan.ts (TodayMeals was removed).
+  it("todayPlan buckets today by comparing local day keys", () => {
+    const src = read("src/lib/todayPlan.ts");
+    expect(src).toMatch(/dateKey\(e\.date\) === todayKey/);
+    expect(src).not.toMatch(/new Date\(e\.date\)/);
   });
 
   // The opposite rule, guarded so a later "consistency" pass does not convert

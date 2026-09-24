@@ -1,5 +1,6 @@
-import type { AmountEaten } from '@/types';
+import type { AmountEaten, Food, Kid, MealResult, MealSlot, PlanEntry, Recipe } from '@/types';
 import { amountForResult } from '@/lib/foodJournal';
+import { entryKey, groupSlot } from '@/lib/familySlot';
 
 /** One of today's planned meals, for the picker. */
 export interface QuickLogMeal {
@@ -115,4 +116,187 @@ export async function performQuickLog<T extends QuickLogEntry>(options: {
   } catch (error) {
     return { status: 'failed', entry, error };
   }
+}
+
+/** The order a day reads in, so the picker lists breakfast before dinner. */
+export const QUICK_LOG_SLOT_ORDER: readonly MealSlot[] = [
+  'breakfast',
+  'snack1',
+  'lunch',
+  'snack2',
+  'dinner',
+  'try_bite',
+];
+
+/** A picker row with enough context for the dashboard to act on it. */
+export interface QuickLogPlanMeal extends QuickLogEntry {
+  kidId: string;
+  slot: MealSlot;
+  /** What was already recorded, so a log can be undone. */
+  result: MealResult;
+  /** Exactly one row carries this: the one the modal opens on. */
+  preselected: boolean;
+}
+
+/**
+ * The slot a parent most likely means at this time of day. Dinner from 16:00,
+ * because the FAB is mostly reached for after the evening meal.
+ */
+export function slotForTime(now: Date): MealSlot {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  if (minutes >= 16 * 60) return 'dinner';
+  if (minutes >= 14 * 60) return 'snack2';
+  if (minutes >= 11 * 60) return 'lunch';
+  if (minutes >= 10 * 60) return 'snack1';
+  return 'breakfast';
+}
+
+const SLOT_HOUR: Record<MealSlot, number> = {
+  breakfast: 8,
+  snack1: 10,
+  lunch: 12,
+  snack2: 15,
+  dinner: 18,
+  try_bite: 18.5,
+};
+
+const defaultSlotLabel = (slot: MealSlot) => slot.replace('_', ' ');
+
+/** U+00B7, spelled as an escape so the source stays ASCII. */
+const SEP = ' · ';
+
+/**
+ * Today's planned meals for the quick-log picker, render-free.
+ *
+ * With a kid selected, that kid's rows. In Family mode (activeKidId null) every
+ * kid's rows, each labelled with the kid's name, because a parent logging
+ * dinner for three children should not have to switch views three times.
+ *
+ * A recipe lands as one row per ingredient food; it is listed once, on the row
+ * groupSlot names as that kid's primary, and labelled with the recipe's name.
+ * A separate food in the same slot (a side, a try-bite) keeps its own row.
+ *
+ * `slotLabel` is how the slot reads to the user; the caller passes its i18n
+ * lookup. The default is only there so this stays usable without one.
+ */
+export function buildQuickLogMeals(
+  entries: ReadonlyArray<PlanEntry>,
+  kids: ReadonlyArray<Pick<Kid, 'id' | 'name'>>,
+  foods: ReadonlyArray<Pick<Food, 'id' | 'name'>>,
+  recipes: ReadonlyArray<Pick<Recipe, 'id' | 'name'>>,
+  activeKidId: string | null,
+  todayKey: string,
+  now: Date,
+  slotLabel: (slot: MealSlot) => string = defaultSlotLabel
+): QuickLogPlanMeal[] {
+  const foodById = new Map(foods.map((f) => [f.id, f]));
+  const recipeById = new Map(recipes.map((r) => [r.id, r]));
+  const kidOrder = new Map(kids.map((k, i) => [k.id, i]));
+  const kidById = new Map(kids.map((k) => [k.id, k]));
+  const familyMode = activeKidId === null;
+
+  const today = entries.filter(
+    (e) =>
+      e.date === todayKey &&
+      (familyMode ? kidById.has(e.kid_id) : e.kid_id === activeKidId)
+  );
+  if (today.length === 0) return [];
+
+  const bySlot = new Map<MealSlot, PlanEntry[]>();
+  for (const e of today) {
+    const list = bySlot.get(e.meal_slot);
+    if (list) list.push(e);
+    else bySlot.set(e.meal_slot, [e]);
+  }
+
+  const rows: Array<Omit<QuickLogPlanMeal, 'preselected'>> = [];
+  const slots = [...bySlot.keys()].sort(
+    (a, b) => slotRank(a) - slotRank(b)
+  );
+
+  for (const slot of slots) {
+    const slotEntries = bySlot.get(slot) ?? [];
+    const grouped = groupSlot(slotEntries);
+    const kidIds = [...grouped.perKid.keys()].sort(
+      (a, b) => (kidOrder.get(a) ?? 0) - (kidOrder.get(b) ?? 0)
+    );
+
+    for (const kidId of kidIds) {
+      const kidSlot = grouped.perKid.get(kidId);
+      if (!kidSlot) continue;
+
+      // One row per dish: the primary dish first, then any strays under
+      // other keys, each represented by its own lowest-id row.
+      const dishes: PlanEntry[] = [kidSlot.primary];
+      const seen = new Set([entryKey(kidSlot.primary)]);
+      const strays = kidSlot.allRows
+        .filter((r) => !seen.has(entryKey(r)))
+        .sort((a, b) => Number(!!b.is_primary_dish) - Number(!!a.is_primary_dish) || (a.id < b.id ? -1 : 1));
+      for (const r of strays) {
+        const key = entryKey(r);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        dishes.push(r);
+      }
+
+      for (const entry of dishes) {
+        const dish = entry.recipe_id
+          ? recipeById.get(entry.recipe_id)?.name ?? foodById.get(entry.food_id)?.name
+          : foodById.get(entry.food_id)?.name;
+        const parts = [
+          ...(familyMode ? [kidById.get(kidId)?.name ?? ''] : []),
+          slotLabel(slot),
+          ...(dish ? [dish] : []),
+        ].filter(Boolean);
+        rows.push({
+          id: entry.id,
+          label: parts.join(SEP),
+          notes: entry.notes,
+          amount_eaten: entry.amount_eaten,
+          kidId,
+          slot,
+          result: entry.result ?? null,
+        });
+      }
+    }
+  }
+
+  const pick = preselectRow(rows, now);
+  return rows.map((row) => ({ ...row, preselected: row.id === pick }));
+}
+
+function slotRank(slot: MealSlot): number {
+  const i = QUICK_LOG_SLOT_ORDER.indexOf(slot);
+  return i === -1 ? QUICK_LOG_SLOT_ORDER.length : i;
+}
+
+/**
+ * The row the modal opens on: the slot for this time of day if anything is
+ * planned in it, otherwise the planned slot nearest in time. Within the slot,
+ * the first row nobody has logged yet.
+ */
+function preselectRow(
+  rows: ReadonlyArray<{ id: string; slot: MealSlot; result: MealResult }>,
+  now: Date
+): string | undefined {
+  if (rows.length === 0) return undefined;
+  const wanted = slotForTime(now);
+  const hour = now.getHours() + now.getMinutes() / 60;
+
+  let slot: MealSlot = rows[0].slot;
+  if (rows.some((r) => r.slot === wanted)) {
+    slot = wanted;
+  } else {
+    let best = Infinity;
+    for (const r of rows) {
+      const d = Math.abs(SLOT_HOUR[r.slot] - hour);
+      if (d < best) {
+        best = d;
+        slot = r.slot;
+      }
+    }
+  }
+
+  const inSlot = rows.filter((r) => r.slot === slot);
+  return (inSlot.find((r) => !r.result) ?? inSlot[0])?.id;
 }

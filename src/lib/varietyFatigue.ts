@@ -25,6 +25,13 @@ export interface FatiguePlanEntry {
   foodId: string | null;
   /** ISO date 'YYYY-MM-DD' or full ISO timestamp; only the date portion matters. */
   date: string;
+  /**
+   * plan_entries.meal_slot. A household plan has one row per kid, so three
+   * kids eating one dinner is three rows. Counting is per distinct
+   * `${date}|${mealSlot}`, which folds those rows into one serving. Without a
+   * slot every row stands alone (the old behaviour).
+   */
+  mealSlot?: string | null;
 }
 
 export type FatigueTier = 'none' | 'mild' | 'high';
@@ -145,6 +152,12 @@ export interface FatigueInputs {
   planEntries: FatiguePlanEntry[];
   recipeNameById?: Map<string, string>;
   foodNameById?: Map<string, string>;
+  /**
+   * Foods the family has marked safe. They are served on purpose, often daily,
+   * and flagging them as "repeating too much" undercuts the whole idea of a
+   * safe food, so they are left out of ingredient fatigue.
+   */
+  safeFoodIds?: ReadonlySet<string>;
 }
 
 export function computeVarietyFatigue(
@@ -164,6 +177,31 @@ export function computeVarietyFatigue(
 
   const recipeBuckets = new Map<string, Bucket>();
   const foodBuckets = new Map<string, Bucket>();
+  // Servings already counted per id, keyed `${date}|${mealSlot}`.
+  const recipeSeen = new Map<string, Set<string>>();
+  const foodSeen = new Map<string, Set<string>>();
+  const safeFoodIds = inputs.safeFoodIds;
+
+  const tally = (
+    buckets: Map<string, Bucket>,
+    seen: Map<string, Set<string>>,
+    id: string,
+    servingKey: string | null,
+    inShort: boolean,
+    w: number
+  ) => {
+    if (servingKey !== null) {
+      const keys = seen.get(id) ?? new Set<string>();
+      if (keys.has(servingKey)) return;
+      keys.add(servingKey);
+      seen.set(id, keys);
+    }
+    const b = buckets.get(id) ?? { shortCount: 0, longCount: 0, weighted: 0 };
+    if (inShort) b.shortCount += 1;
+    b.longCount += 1;
+    b.weighted += w;
+    buckets.set(id, b);
+  };
 
   for (const entry of inputs.planEntries) {
     if (!entry?.date) continue;
@@ -173,20 +211,13 @@ export function computeVarietyFatigue(
     const w = decayWeight(days, o.shortWindowDays, o.longWindowDays);
     if (w <= 0) continue;
     const inShort = days <= o.shortWindowDays;
+    const servingKey = entry.mealSlot ? `${dateOnly}|${entry.mealSlot}` : null;
 
     if (entry.recipeId) {
-      const b = recipeBuckets.get(entry.recipeId) ?? { shortCount: 0, longCount: 0, weighted: 0 };
-      if (inShort) b.shortCount += 1;
-      b.longCount += 1;
-      b.weighted += w;
-      recipeBuckets.set(entry.recipeId, b);
+      tally(recipeBuckets, recipeSeen, entry.recipeId, servingKey, inShort, w);
     }
-    if (entry.foodId) {
-      const b = foodBuckets.get(entry.foodId) ?? { shortCount: 0, longCount: 0, weighted: 0 };
-      if (inShort) b.shortCount += 1;
-      b.longCount += 1;
-      b.weighted += w;
-      foodBuckets.set(entry.foodId, b);
+    if (entry.foodId && !safeFoodIds?.has(entry.foodId)) {
+      tally(foodBuckets, foodSeen, entry.foodId, servingKey, inShort, w);
     }
   }
 
@@ -234,4 +265,124 @@ export function computeVarietyFatigue(
     worstTier,
     computedFor: o.asOf,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Shared selector for the React surfaces
+// ---------------------------------------------------------------------------
+
+/** The slice of a plan row the selector reads (snake_case, as stored). */
+export interface FatigueSourcePlanEntry {
+  recipe_id?: string | null;
+  food_id?: string | null;
+  date: string;
+  meal_slot?: string | null;
+}
+
+export interface FatigueSourceNamed {
+  id: string;
+  name: string;
+}
+
+export interface FatigueSourceFood extends FatigueSourceNamed {
+  is_safe?: boolean | null;
+}
+
+interface SelectorMemo {
+  planEntries: ReadonlyArray<FatigueSourcePlanEntry>;
+  recipes: ReadonlyArray<FatigueSourceNamed>;
+  foods: ReadonlyArray<FatigueSourceFood>;
+  asOf: string;
+  result: FatigueResult;
+}
+
+let lastSelection: SelectorMemo | null = null;
+
+/**
+ * The fatigue result for the household's plan, as every surface shows it.
+ *
+ * The planner banner, the Home insight slot and the most-repeated card all
+ * used to run their own copy of this mapping, and one of them keyed its memo
+ * on array lengths so an edited recipe name never reached it. This is the one
+ * mapping. It memoizes on the identity of its three inputs plus the day, so
+ * several components rendering against the same context state share one
+ * computation; callers still wrap it in useMemo with the same three deps.
+ */
+export function selectVarietyFatigue(
+  planEntries: ReadonlyArray<FatigueSourcePlanEntry>,
+  recipes: ReadonlyArray<FatigueSourceNamed>,
+  foods: ReadonlyArray<FatigueSourceFood>,
+  asOf: string = localTodayIso()
+): FatigueResult {
+  const memo = lastSelection;
+  if (
+    memo &&
+    memo.planEntries === planEntries &&
+    memo.recipes === recipes &&
+    memo.foods === foods &&
+    memo.asOf === asOf
+  ) {
+    return memo.result;
+  }
+  const safeFoodIds = new Set<string>();
+  for (const f of foods) if (f.is_safe) safeFoodIds.add(f.id);
+  const result = computeVarietyFatigue(
+    {
+      planEntries: planEntries.map((p) => ({
+        recipeId: p.recipe_id ?? null,
+        foodId: p.food_id ?? null,
+        date: p.date,
+        mealSlot: p.meal_slot ?? null,
+      })),
+      recipeNameById: new Map(recipes.map((r) => [r.id, r.name])),
+      foodNameById: new Map(foods.map((f) => [f.id, f.name])),
+      safeFoodIds,
+    },
+    { asOf }
+  );
+  lastSelection = { planEntries, recipes, foods, asOf, result };
+  return result;
+}
+
+export interface FatigueDismissal {
+  /** ISO timestamp when the nudge was dismissed. */
+  at: string;
+  /** Item ids on screen at the time; a new item brings the nudge back. */
+  itemIds: string[];
+}
+
+/** A dismissal stops counting after this long, whatever it covered. */
+export const FATIGUE_DISMISS_TTL_HOURS = 20;
+
+export type VisibleFatigueItem = FatigueItem & { kind: 'recipe' | 'ingredient' };
+
+/**
+ * The items a fatigue nudge should show now: recipes first, then
+ * ingredients, minus whatever a still-fresh dismissal covered. Capped at 3.
+ */
+export function visibleFatigueItems(
+  result: FatigueResult,
+  dismissal: FatigueDismissal | null,
+  nowMs: number = Date.now()
+): VisibleFatigueItem[] {
+  if (result.worstTier === 'none') return [];
+  const all: VisibleFatigueItem[] = [
+    ...result.recipes.map((r) => ({ ...r, kind: 'recipe' as const })),
+    ...result.ingredients.map((i) => ({ ...i, kind: 'ingredient' as const })),
+  ];
+  if (!dismissal) return all.slice(0, 3);
+  const dismissedAt = new Date(dismissal.at).getTime();
+  const ageHours = (nowMs - dismissedAt) / (1000 * 60 * 60);
+  if (!Number.isFinite(ageHours) || ageHours >= FATIGUE_DISMISS_TTL_HOURS) return all.slice(0, 3);
+  const dismissedSet = new Set(dismissal.itemIds);
+  return all.filter((it) => !dismissedSet.has(it.id)).slice(0, 3);
+}
+
+/** Cheap predicate for the Home insight slot. */
+export function hasFatigue(
+  result: FatigueResult,
+  dismissal: FatigueDismissal | null,
+  nowMs: number = Date.now()
+): boolean {
+  return visibleFatigueItems(result, dismissal, nowMs).length > 0;
 }

@@ -1,48 +1,168 @@
-import { useKids, useFoods, usePlan, useGrocery } from "@/contexts/AppContext";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, Circle, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
+import { CheckCircle2 } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { useKids, useFoods, usePlan, useGrocery } from "@/contexts/AppContext";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { useTodayKey } from "@/hooks/useTonightPlan";
+import { getSetupSteps, nextStep, type SetupStepId } from "@/lib/setupSteps";
+import { InlineAddKid } from "@/components/home/InlineAddKid";
+import { cn } from "@/lib/utils";
+import "@/i18n/appLocale";
 
-export function OnboardingProgressBar() {
-  const { kids } = useKids();
-  const { foods } = useFoods();
+const STEP_DEFAULTS: Record<SetupStepId, { label: string; hint: string }> = {
+  kid: { label: "Add your child", hint: "Name, age and allergies. Takes a minute." },
+  foods: { label: "Pick safe foods", hint: "Three foods your child reliably eats." },
+  plan: { label: "Plan tonight's dinner", hint: "One dinner is enough to start." },
+  grocery: { label: "Start a grocery list", hint: "Add what you need for the week." },
+};
+
+function stepHref(id: SetupStepId, todayKey: string): string | null {
+  switch (id) {
+    case "foods":
+      return "/dashboard/pantry";
+    case "plan":
+      return `/dashboard/planner?date=${todayKey}&slot=dinner`;
+    case "grocery":
+      return "/dashboard/grocery";
+    default:
+      return null;
+  }
+}
+
+/**
+ * The first-run checklist on /dashboard: add a child, pick safe foods, plan a
+ * dinner, start a grocery list. Only the next undone step is actionable; the
+ * rest are plain text so a new parent has one obvious thing to tap.
+ *
+ * Renders nothing until kids, foods and grocery are hydrated (a loading
+ * account must not be told to add the child it already has) and nothing once
+ * every step is done. Adding a child happens inline, without leaving the page.
+ */
+export function SetupChecklist() {
+  const { t } = useTranslation();
+  const { kids, kidsHydrated } = useKids();
+  const { foods, foodsHydrated } = useFoods();
   const { planEntries } = usePlan();
-  const { groceryItems } = useGrocery();
-  const [dismissed, setDismissed] = useLocalStorage("onboarding-dismissed", false);
+  const { groceryItems, groceryHydrated } = useGrocery();
+  const reduceMotion = useReducedMotion();
+  const todayKey = useTodayKey();
+  const [addingKid, setAddingKid] = useState(false);
 
-  if (dismissed) return null;
+  const steps = useMemo(
+    () =>
+      getSetupSteps({
+        kids,
+        foods,
+        planEntries,
+        groceryItems,
+        hydrated: kidsHydrated && foodsHydrated && groceryHydrated,
+        todayKey,
+      }),
+    [kids, foods, planEntries, groceryItems, kidsHydrated, foodsHydrated, groceryHydrated, todayKey],
+  );
 
-  const safeFoods = foods.filter(f => f.is_safe);
-  const steps = [
-    { label: "Create child profile", done: kids.length > 0, href: "/dashboard/kids" },
-    { label: "Add 5+ safe foods", done: safeFoods.length >= 5, href: "/dashboard/pantry" },
-    { label: "Generate meal plan", done: planEntries.length > 0, href: "/dashboard/planner" },
-    { label: "Create grocery list", done: groceryItems.length > 0, href: "/dashboard/grocery" },
-  ];
+  if (!steps) return null;
+  const allDone = steps.every((s) => s.done);
+  // Keep the inline form up after the first child lands so "Add another
+  // child" is still reachable, even though the kid step is now done.
+  if (allDone && !addingKid) return null;
 
-  const completed = steps.filter(s => s.done).length;
-  if (completed === steps.length) return null;
+  const total = steps.length;
+  const completed = steps.filter((s) => s.done).length;
+  const next = nextStep(steps);
+  const progressLabel = t("setup.progressLabel", {
+    done: completed,
+    total,
+    defaultValue: "Setup progress: {{done}} of {{total}} steps done",
+  });
+
+  const label = (id: SetupStepId) => t(`setup.steps.${id}`, { defaultValue: STEP_DEFAULTS[id].label });
+  const hint = (id: SetupStepId) => t(`setup.hints.${id}`, { defaultValue: STEP_DEFAULTS[id].hint });
 
   return (
-    <div className="bg-card border rounded-lg p-4 mx-4 mt-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-sm">Getting Started ({completed}/{steps.length})</h2>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDismissed(true)} aria-label="Dismiss onboarding">
-          <X className="h-4 w-4" />
-        </Button>
+    <section aria-labelledby="setup-checklist-title" className="rounded-xl border bg-card p-4">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h2 id="setup-checklist-title" className="text-base font-semibold text-foreground">
+          {t("setup.title", { defaultValue: "Get set up" })}
+        </h2>
+        <span className="text-sm text-muted-foreground" aria-hidden="true">
+          {t("setup.stepCount", { done: completed, total, defaultValue: "{{done}} of {{total}}" })}
+        </span>
       </div>
-      <div className="w-full bg-muted rounded-full h-2 mb-3">
-        <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${(completed / steps.length) * 100}%` }} />
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={completed}
+        aria-label={progressLabel}
+        className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className={cn("h-full rounded-full bg-primary", !reduceMotion && "transition-[width] duration-300")}
+          style={{ width: `${(completed / total) * 100}%` }}
+        />
       </div>
-      <div className="flex flex-wrap gap-3">
-        {steps.map((step, i) => (
-          <Link key={i} to={step.href} className="flex items-center gap-1.5 text-xs">
-            {step.done ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Circle className="h-4 w-4 text-muted-foreground" />}
-            <span className={step.done ? "text-muted-foreground line-through" : "text-foreground"}>{step.label}</span>
-          </Link>
-        ))}
-      </div>
-    </div>
+
+      <ol className="space-y-1">
+        {steps.map((step, index) => {
+          const isNext = next?.id === step.id;
+          if (step.done) {
+            return (
+              <li key={step.id} className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <span>{label(step.id)}</span>
+                <span className="sr-only">{t("setup.done", { defaultValue: "Done" })}</span>
+              </li>
+            );
+          }
+          if (isNext) {
+            const href = stepHref(step.id, todayKey);
+            return (
+              <li key={step.id} className="space-y-2 py-1">
+                <p className="text-sm text-muted-foreground">{hint(step.id)}</p>
+                {href ? (
+                  <Link to={href} className={cn(buttonVariants(), "min-h-11 w-full sm:w-auto")}>
+                    {label(step.id)}
+                  </Link>
+                ) : (
+                  !addingKid && (
+                    <Button
+                      type="button"
+                      className="min-h-11 w-full sm:w-auto"
+                      onClick={() => setAddingKid(true)}
+                    >
+                      {label(step.id)}
+                    </Button>
+                  )
+                )}
+              </li>
+            );
+          }
+          return (
+            <li key={step.id} className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground">
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs"
+                aria-hidden="true"
+              >
+                {index + 1}
+              </span>
+              <span>{label(step.id)}</span>
+            </li>
+          );
+        })}
+      </ol>
+
+      {addingKid && (
+        <div className="mt-3">
+          <InlineAddKid onClose={() => setAddingKid(false)} />
+        </div>
+      )}
+    </section>
   );
 }
+
+/** Kept so existing default imports keep compiling. */
+export const OnboardingProgressBar = SetupChecklist;
+export default SetupChecklist;

@@ -50,6 +50,10 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
   'src/components/SeasonalRecallCard.tsx':
     'dismissKey(year, week, recipeId) under eatpal.seasonal_recall_dismissed -- scrubbed by prefix',
   'src/components/ExitIntentPopup.tsx': 'storageKey is a prop; its default is in KEPT_KEYS',
+  'src/components/VarietyFatigueBanner.tsx':
+    'fatigueDismissKey(userId) under varietyFatigue.dismissedFor. -- kept by prefix, user-scoped',
+  'src/components/SubscriptionStatusBanner.tsx':
+    'dismissKey(userId) under eatpal:billing-upsell-dismissed: -- kept by prefix, user-scoped',
   'src/hooks/useAutoSave.tsx': 'autosave-${key} -- scrubbed by the autosave- prefix',
   'src/hooks/useSmartDefaults.ts':
     'frequency-/recent-/prefs-${key} -- all three scrubbed by prefix',

@@ -7,7 +7,7 @@
  * can audit.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -17,28 +17,63 @@ import { Badge } from '@/components/ui/badge';
 import { Shuffle, X, Zap } from 'lucide-react';
 import { usePlan, useRecipes, useFoods } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useVarietyNudgePref } from '@/hooks/useVarietyNudgePref';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { analytics } from '@/lib/analytics';
-import { computeVarietyFatigue, type FatigueResult, type FatigueTier } from '@/lib/varietyFatigue';
+import { insightTone } from '@/lib/insightTone';
+import {
+  selectVarietyFatigue,
+  visibleFatigueItems,
+  type FatigueDismissal,
+  type FatigueResult,
+  type FatigueTier,
+} from '@/lib/varietyFatigue';
 import '@/i18n/appLocale';
-
-const DISMISS_KEY = 'varietyFatigue.dismissedFor';
-/** Re-show even when dismissed once a day has passed. */
-const DISMISS_TTL_HOURS = 20;
-
-interface DismissalState {
-  /** ISO timestamp when the banner was dismissed */
-  at: string;
-  /** Recipe IDs that the user dismissed; new fatigue items reset the dismissal */
-  itemIds: string[];
-}
 
 interface Props {
   /** Optional override for analytics surface tag, e.g. 'planner' or 'home'. */
   surface?: string;
+  /**
+   * List each repeating meal with its counts (the Home insight slot, which
+   * folded the old "most-repeated meals" card into this one). The planner
+   * keeps the one-line form.
+   */
+  showTopMeals?: boolean;
+  /** Called after the parent dismisses the nudge. */
+  onDismiss?: () => void;
+}
+
+/**
+ * localStorage key for the dismissal, per signed-in user: one browser shared by
+ * two parents should not let one of them silence the other's nudge. Kept on
+ * sign-out, like the web sync queue, because the user id already scopes it.
+ */
+export function fatigueDismissKey(userId: string | null | undefined): string {
+  return `varietyFatigue.dismissedFor.${userId ?? 'anon'}`;
+}
+
+/**
+ * Read the dismissal without subscribing, for the Home insight slot's
+ * predicate. Null when absent, malformed or when storage is unavailable.
+ */
+export function readFatigueDismissal(userId: string | null | undefined): FatigueDismissal | null {
+  try {
+    const raw = window.localStorage.getItem(fatigueDismissKey(userId));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as FatigueDismissal).at === 'string' &&
+      Array.isArray((parsed as FatigueDismissal).itemIds)
+    ) {
+      return parsed as FatigueDismissal;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -51,22 +86,16 @@ interface Props {
 const writtenSnapshots = new Set<string>();
 
 function tierTone(tier: FatigueTier, t: TFunction) {
-  if (tier === 'high')
-    return {
-      bg: 'bg-destructive/5 border-destructive/30',
-      icon: 'text-destructive',
-      badge: 'bg-destructive/15 text-foreground border-destructive/30',
-      label: t('varietyFatigue.tierHigh'),
-    };
+  const tone = insightTone(tier === 'high' ? 'high' : 'mild');
   return {
-    bg: 'bg-warning/5 border-warning/30',
-    icon: 'text-warning',
-    badge: 'bg-warning/15 text-foreground border-warning/30',
-    label: t('varietyFatigue.tierMedium'),
+    bg: tone.surface,
+    icon: tone.icon,
+    badge: tone.badge,
+    label: tier === 'high' ? t('varietyFatigue.tierHigh') : t('varietyFatigue.tierMedium'),
   };
 }
 
-export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
+export function VarietyFatigueBanner({ surface = 'unknown', showTopMeals = false, onDismiss }: Props) {
   const { t } = useTranslation();
   const { userId, householdId } = useAuth();
   const { planEntries } = usePlan();
@@ -74,24 +103,30 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
   const { foods } = useFoods();
   const { enabled: nudgesEnabled } = useVarietyNudgePref();
   const navigate = useNavigate();
-  const [dismissal, setDismissal] = useLocalStorage<DismissalState | null>(DISMISS_KEY, null);
+  // Keyed per signed-in user: one browser shared by two parents should not
+  // let one of them silence the other's nudge.
+  const [dismissal, setDismissalState] = useState<FatigueDismissal | null>(() =>
+    readFatigueDismissal(userId)
+  );
+  useEffect(() => {
+    setDismissalState(readFatigueDismissal(userId));
+  }, [userId]);
+  const setDismissal = useCallback(
+    (next: FatigueDismissal) => {
+      setDismissalState(next);
+      try {
+        window.localStorage.setItem(fatigueDismissKey(userId), JSON.stringify(next));
+      } catch {
+        // Private mode or quota: the dismissal still holds for this session.
+      }
+    },
+    [userId]
+  );
 
-  const result: FatigueResult = useMemo(() => {
-    const recipeNameById = new Map(recipes.map((r) => [r.id, r.name]));
-    const foodNameById = new Map(foods.map((f) => [f.id, f.name]));
-    return computeVarietyFatigue(
-      {
-        planEntries: planEntries.map((p) => ({
-          recipeId: p.recipe_id ?? null,
-          foodId: p.food_id ?? null,
-          date: p.date,
-        })),
-        recipeNameById,
-        foodNameById,
-      },
-      {}
-    );
-  }, [planEntries, recipes, foods]);
+  const result: FatigueResult = useMemo(
+    () => selectVarietyFatigue(planEntries, recipes, foods),
+    [planEntries, recipes, foods]
+  );
 
   // Persist the snapshot once per day per household (best-effort).
   const snapshotKey =
@@ -143,20 +178,7 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
   }, [snapshotKey, householdId, userId]);
 
   // Combine top fatigued items (recipes first), filtered by dismissal.
-  const visibleItems = useMemo(() => {
-    const all = [
-      ...result.recipes.map((r) => ({ kind: 'recipe' as const, ...r })),
-      ...result.ingredients.map((i) => ({ kind: 'ingredient' as const, ...i })),
-    ];
-    if (!dismissal) return all.slice(0, 3);
-    const dismissedAt = new Date(dismissal.at).getTime();
-    const ageHours = (Date.now() - dismissedAt) / (1000 * 60 * 60);
-    if (ageHours >= DISMISS_TTL_HOURS) return all.slice(0, 3);
-    const dismissedSet = new Set(dismissal.itemIds);
-    const fresh = all.filter((it) => !dismissedSet.has(it.id));
-    if (fresh.length === 0) return [];
-    return fresh.slice(0, 3);
-  }, [result, dismissal]);
+  const visibleItems = useMemo(() => visibleFatigueItems(result, dismissal), [result, dismissal]);
 
   if (!nudgesEnabled || result.worstTier === 'none' || visibleItems.length === 0) return null;
 
@@ -184,6 +206,7 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
       at: new Date().toISOString(),
       itemIds: visibleItems.map((i) => i.id),
     });
+    onDismiss?.();
   };
 
   return (
@@ -208,7 +231,23 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
               .
             </p>
           </div>
-          {visibleItems.length > 1 && (
+          {showTopMeals && visibleItems.length > 1 && (
+            <ul className="mt-2 space-y-1">
+              {visibleItems.map((item) => (
+                <li key={item.id} className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate font-medium">{item.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {t('home.insights.fatigue.counts', {
+                      defaultValue: '{{long}}x in 4 weeks, {{short}}x this week',
+                      long: item.longWindowCount,
+                      short: item.shortWindowCount,
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!showTopMeals && visibleItems.length > 1 && (
             <p className="text-xs text-muted-foreground mt-1">
               {t('varietyFatigue.alsoRepeating', {
                 names: visibleItems
@@ -234,6 +273,7 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
           <Button
             size="icon"
             variant="ghost"
+            className="h-11 w-11"
             onClick={handleDismiss}
             aria-label={t('varietyFatigue.dismissAria')}
           >

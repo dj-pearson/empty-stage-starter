@@ -126,6 +126,10 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
 export const KEPT_PREFIXES: Readonly<Record<string, string>> = {
   'eatpal.web.syncQueue.':
     'already scoped to a user id (webQueueKey), so it cannot replay into another account; its owner still wants it on their next sign-in',
+  'varietyFatigue.dismissedFor.':
+    'a yes/no dismissal of the variety nudge, already scoped to a user id, so another account on this browser never reads it',
+  'eatpal:billing-upsell-dismissed:':
+    'a yes/no dismissal of the home upgrade nudge, already scoped to a user id, so another account on this browser never reads it',
   __storage_test__: 'availability probe, written and removed in the same statement',
   __test__: 'availability probe in env-utils and browser-utils, removed in the same statement',
 };

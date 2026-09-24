@@ -1,0 +1,126 @@
+{
+  "home": {
+    "title": "Home - EatPal",
+    "metaDescription": "Tonight's dinner for each child, today's to-dos, and how the week is going.",
+    "heading": "EatPal home",
+    "tonight": {
+      "title": "Tonight",
+      "loading": "Loading tonight's plan",
+      "loadError": "We couldn't load your children. Check your connection.",
+      "retry": "Try again",
+      "allergenLine": "{{allergen}} in tonight's {{dish}}: {{kid}}",
+      "swapFor": "Swap for {{kid}}",
+      "listLabel": "Dinner for each child",
+      "separatePlate": "Separate plate",
+      "kidNothing": "Nothing planned yet.",
+      "planForKid": "Plan for {{kid}}",
+      "empty": "Dinner isn't planned yet.",
+      "planDinner": "Plan dinner",
+      "result": {
+        "ate": "Ate",
+        "tasted": "Tasted",
+        "refused": "Refused"
+      }
+    },
+    "today": {
+      "title": "Today",
+      "caughtUp": "All caught up",
+      "logPrompt": "How did {{kid}} do with {{slot}}?",
+      "logGone": "That meal is no longer on the plan.",
+      "logged": "Logged: {{kid}} {{result}}",
+      "loggedChip": "{{kid}} {{result}} {{dish}}",
+      "changeResult": "Change {{kid}}'s {{slot}} result",
+      "undo": "Undo",
+      "addNote": "Add note",
+      "result": {
+        "ate": "Ate",
+        "tasted": "Tasted",
+        "refused": "Refused"
+      },
+      "resultPast": {
+        "ate": "ate",
+        "tasted": "tasted",
+        "refused": "refused"
+      },
+      "tryBiteItem": "{{food}} for {{kid}}",
+      "tryBiteDue": "Try-bite due: {{items}}",
+      "addWeek_one": "Add {{count}} item for this week",
+      "addWeek_other": "Add {{count}} items for this week",
+      "leftToBuy_one": "{{count}} left to buy",
+      "leftToBuy_other": "{{count}} left to buy",
+      "groceriesAdded_one": "Added {{count}} item to the grocery list",
+      "groceriesAdded_other": "Added {{count}} items to the grocery list",
+      "groceriesNone": "The list already has this week covered."
+    },
+    "week": {
+      "title": "This week",
+      "streak_one": "{{count}}-day try-bite streak",
+      "streak_other": "{{count}}-day try-bite streak",
+      "tried_one": "Tried {{count}} new food",
+      "tried_other": "Tried {{count}} new foods",
+      "ate_one": "{{count}} ate",
+      "ate_other": "{{count}} ate",
+      "tasted_one": "{{count}} tasted",
+      "tasted_other": "{{count}} tasted",
+      "refused_one": "{{count}} refused",
+      "refused_other": "{{count}} refused",
+      "nothing": "Nothing logged in the last 7 days",
+      "ladder": "Working on {{food}}",
+      "aFood": "a food"
+    }
+  },
+  "mealSlots": {
+    "breakfast": "Breakfast",
+    "snack1": "Morning snack",
+    "lunch": "Lunch",
+    "snack2": "Afternoon snack",
+    "dinner": "Dinner",
+    "try_bite": "Try-bite"
+  },
+  "tonightMode": {
+    "openLabel": "Open Tonight Mode dinner suggestions",
+    "ideas": "Need ideas for tonight?",
+    "panic": {
+      "title": "Dinner in 20 minutes",
+      "body": "No plan? We'll pick 3 things you can cook with what you have.",
+      "cta": "Help me with dinner"
+    },
+    "safePlate": {
+      "title": "Build a safe plate",
+      "body": "No recipes yet. Pick two or three foods everyone eats:",
+      "listLabel": "Safe foods",
+      "empty": "Add a recipe and we'll suggest dinners that fit each kid.",
+      "addRecipe": "Add a recipe"
+    },
+    "dialog": {
+      "title": "Dinner tonight",
+      "description": "Picks based on what's in your pantry and who's eating.",
+      "cookingFor": "Cooking for:",
+      "selectKids": "Select kids cooking for tonight",
+      "allKids": "All kids",
+      "refresh": "Refresh",
+      "refreshLabel": "Refresh suggestions",
+      "emptyTitle": "Nothing matches your pantry yet.",
+      "emptyBody": "Add a few staples or order a quick delivery to get going.",
+      "openDelivery": "Open grocery delivery",
+      "listLabel": "Tonight suggestions",
+      "bestNeeds_one": "Best match still needs {{count}} item.",
+      "bestNeeds_other": "Best match still needs {{count}} items.",
+      "delivered": "Get them delivered",
+      "topPick": "Top pick",
+      "minutes_one": "{{count}} min",
+      "minutes_other": "{{count}} min",
+      "inPantry": "{{pct}}% in pantry",
+      "missing_one": "{{count}} missing",
+      "missing_other": "{{count}} missing",
+      "cookNow": "Cook now",
+      "addMissing_one": "Add {{count}} to grocery",
+      "addMissing_other": "Add {{count}} to grocery",
+      "onList": "On the grocery list",
+      "addedToGrocery_one": "Added {{count}} item to the grocery list",
+      "addedToGrocery_other": "Added {{count}} items to the grocery list",
+      "planFailed": "Couldn't add it to tonight's plan. Try again.",
+      "undo": "Undo"
+    }
+  }
+}

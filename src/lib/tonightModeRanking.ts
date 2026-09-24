@@ -16,6 +16,8 @@
  * collapses to -Infinity).
  */
 
+import { matchingAllergen } from './allergens';
+
 export interface PantryFood {
   id: string;
   name: string;
@@ -116,7 +118,6 @@ export function computeVarietyScore(
 }
 
 export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
-  const kidAllergens = lowerSet(kid.allergens);
   const dislikedIds = new Set(kid.dislikedFoods ?? []);
   const dislikedNames = lowerSet(kid.dislikedFoods);
 
@@ -124,14 +125,9 @@ export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
   const blockingAversions: string[] = [];
 
   for (const food of recipe.foods) {
-    let allergic = false;
-    for (const a of food.allergens ?? []) {
-      if (kidAllergens.has(String(a).trim().toLowerCase())) {
-        allergic = true;
-        break;
-      }
-    }
-    if (allergic) {
+    // Canonical matching, as kidFit does: a kid's "Peanuts" has to catch a
+    // food's "en:peanuts", which a lowercased exact compare let through.
+    if (matchingAllergen(kid.allergens, food.allergens)) {
       allergenHits.push(food.name);
       continue;
     }

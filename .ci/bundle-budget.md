@@ -290,3 +290,11 @@ own lazy chunk, +10.0 kB) and the quick-edit dialog (+3.5 kB), and added
 kids copy to the lazy `appLocale` chunk (+4.1 kB). All route-only; the entry
 grew 0.9 kB and the eager and preload budgets still pass. Measured total
 2581.5 kB against 2560.4 kB before.
+
+## 2026-09-24: `totalJs` 2590000 -> 2600000 (Dashboard home)
+
+The home rebuild (Tonight hero, Today tasks, setup checklist, one insight
+slot, single quick-log path) added 8.4 kB of route chunks after deleting
+four unreachable components; the entry went from 315.4 to 315.2 kB.
+Measured total 2590.0 kB, exactly at the old ceiling, so it moves by the
+growth plus room for per-build variation (the injected release id).

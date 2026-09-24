@@ -56,31 +56,55 @@ const ALLERGEN_REINTRO_RULES: Record<string, string> = {
 };
 
 /**
- * Calendar age in whole years. Identical to the helper in src/lib/utils.ts
- * but standalone so this module stays pure.
+ * Parse a 'YYYY-MM-DD' date of birth into local calendar parts. A birthday is
+ * a calendar date, not an instant, so it is never run through a timezone.
+ * Returns null when the string is not a real date.
+ */
+function parseDobParts(birthdate: string): { year: number; month: number; day: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthdate.trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  const probe = new Date(year, month, day);
+  if (
+    Number.isNaN(probe.getTime()) ||
+    probe.getFullYear() !== year ||
+    probe.getMonth() !== month ||
+    probe.getDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
+}
+
+/**
+ * Calendar age in whole years, on the parent's local calendar. Identical in
+ * intent to the helper in src/lib/utils.ts but standalone so this module
+ * stays pure.
  */
 export function calcAgeYears(birthdate: string, asOf: Date = new Date()): number {
-  const dob = new Date(`${birthdate}T12:00:00Z`);
-  if (Number.isNaN(dob.getTime())) return 0;
-  let years = asOf.getUTCFullYear() - dob.getUTCFullYear();
+  const dob = parseDobParts(birthdate);
+  if (!dob) return 0;
+  let years = asOf.getFullYear() - dob.year;
   const beforeBirthday =
-    asOf.getUTCMonth() < dob.getUTCMonth() ||
-    (asOf.getUTCMonth() === dob.getUTCMonth() && asOf.getUTCDate() < dob.getUTCDate());
+    asOf.getMonth() < dob.month || (asOf.getMonth() === dob.month && asOf.getDate() < dob.day);
   if (beforeBirthday) years -= 1;
   return Math.max(0, years);
 }
 
 /**
- * True when today (UTC) matches the kid's birthday (month + day).
- * Year-agnostic so the card fires every year on the right day.
+ * True when today, on the parent's local calendar, matches the kid's birthday
+ * (month + day). Year-agnostic so the card fires every year on the right day.
+ *
+ * This used to compare UTC parts, so in the Americas the card appeared the
+ * evening before the birthday (after 7pm in Chicago) and was gone by the
+ * evening of the day itself.
  */
 export function isBirthdayToday(birthdate: string, asOf: Date = new Date()): boolean {
-  const dob = new Date(`${birthdate}T12:00:00Z`);
-  if (Number.isNaN(dob.getTime())) return false;
-  return (
-    dob.getUTCMonth() === asOf.getUTCMonth() &&
-    dob.getUTCDate() === asOf.getUTCDate()
-  );
+  const dob = parseDobParts(birthdate);
+  if (!dob) return false;
+  return dob.month === asOf.getMonth() && dob.day === asOf.getDate();
 }
 
 /**

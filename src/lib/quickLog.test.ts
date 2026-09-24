@@ -4,8 +4,11 @@ import {
   resolveQuickLogMealId,
   selectQuickLogEntry,
   performQuickLog,
+  buildQuickLogMeals,
+  slotForTime,
   type QuickLogEntry,
 } from './quickLog';
+import type { PlanEntry } from '@/types';
 
 /**
  * The quick-log path has to know which meal it is logging, and whether the
@@ -187,5 +190,87 @@ describe('performQuickLog', () => {
     });
 
     expect(outcome.status).toBe('failed');
+  });
+});
+
+describe('buildQuickLogMeals', () => {
+  const TODAY = '2026-09-24';
+  const kids = [
+    { id: 'k1', name: 'Ada' },
+    { id: 'k2', name: 'Ben' },
+  ];
+  const foods = [
+    { id: 'pasta', name: 'Pasta' },
+    { id: 'cheese', name: 'Cheese' },
+    { id: 'oats', name: 'Oats' },
+    { id: 'peas', name: 'Peas' },
+  ];
+  const recipes = [{ id: 'mac', name: 'Mac and cheese' }];
+  const row = (over: Partial<PlanEntry> & Pick<PlanEntry, 'id' | 'kid_id' | 'meal_slot' | 'food_id'>): PlanEntry => ({
+    date: TODAY,
+    result: null,
+    ...over,
+  });
+  const at = (h: number) => new Date(2026, 8, 24, h, 0, 0);
+
+  const entries: PlanEntry[] = [
+    row({ id: 'a-din-1', kid_id: 'k1', meal_slot: 'dinner', food_id: 'pasta', recipe_id: 'mac', is_primary_dish: false }),
+    row({ id: 'a-din-2', kid_id: 'k1', meal_slot: 'dinner', food_id: 'cheese', recipe_id: 'mac', is_primary_dish: true }),
+    row({ id: 'a-bfast', kid_id: 'k1', meal_slot: 'breakfast', food_id: 'oats' }),
+    row({ id: 'b-din', kid_id: 'k2', meal_slot: 'dinner', food_id: 'peas' }),
+    row({ id: 'b-yday', kid_id: 'k2', meal_slot: 'dinner', food_id: 'peas', date: '2026-09-23' }),
+  ];
+
+  it("lists every kid's entries in Family mode, named by kid", () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, null, TODAY, at(18));
+    expect(meals.map((m) => m.label)).toEqual([
+      'Ada \u00b7 breakfast \u00b7 Oats',
+      'Ada \u00b7 dinner \u00b7 Mac and cheese',
+      'Ben \u00b7 dinner \u00b7 Peas',
+    ]);
+  });
+
+  it('lists only the selected kid, without a name, when one is active', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, 'k2', TODAY, at(18));
+    expect(meals.map((m) => m.label)).toEqual(['dinner \u00b7 Peas']);
+  });
+
+  it('lists a recipe once, on its primary row', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, 'k1', TODAY, at(18));
+    const dinner = meals.filter((m) => m.slot === 'dinner');
+    expect(dinner).toHaveLength(1);
+    expect(dinner[0].id).toBe('a-din-2');
+  });
+
+  it('preselects dinner at 18:00', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, null, TODAY, at(18));
+    const picked = meals.filter((m) => m.preselected);
+    expect(picked).toHaveLength(1);
+    expect(picked[0].slot).toBe('dinner');
+  });
+
+  it('preselects breakfast in the morning', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, null, TODAY, at(7));
+    expect(meals.find((m) => m.preselected)?.id).toBe('a-bfast');
+  });
+
+  it('skips an already-logged row when preselecting', () => {
+    const logged = entries.map((e) => (e.id === 'a-din-2' ? { ...e, result: 'ate' as const } : e));
+    const meals = buildQuickLogMeals(logged, kids, foods, recipes, null, TODAY, at(19));
+    expect(meals.find((m) => m.preselected)?.id).toBe('b-din');
+  });
+
+  it('uses the slot label the caller passes', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, 'k2', TODAY, at(18), (s) => s.toUpperCase());
+    expect(meals[0].label).toBe('DINNER \u00b7 Peas');
+  });
+
+  it('gives an empty list for an empty plan', () => {
+    expect(buildQuickLogMeals([], kids, foods, recipes, null, TODAY, at(18))).toEqual([]);
+  });
+
+  it('switches to dinner at 16:00', () => {
+    expect(slotForTime(at(15))).toBe('snack2');
+    expect(slotForTime(at(16))).toBe('dinner');
   });
 });

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeVarietyFatigue,
+  hasFatigue,
+  selectVarietyFatigue,
+  visibleFatigueItems,
   type FatiguePlanEntry,
   type FatigueOptions,
 } from './varietyFatigue';
@@ -215,5 +218,114 @@ describe('computeVarietyFatigue - asOf consistency', () => {
       opts
     );
     expect(result.recipes[0].tier).toBe('mild');
+  });
+});
+
+describe('computeVarietyFatigue - one serving per date and slot', () => {
+  it('counts three kids eating the same dinner on one day as one serving', () => {
+    const result = computeVarietyFatigue(
+      {
+        planEntries: ['kid-a', 'kid-b', 'kid-c'].map(() => ({
+          recipeId: 'r1',
+          foodId: 'pasta',
+          date: '2026-05-07',
+          mealSlot: 'dinner',
+        })),
+      },
+      // Threshold of 1 so a single serving still surfaces and its count is visible.
+      { ...opts, shortThresholdMild: 1 }
+    );
+    expect(result.recipes).toHaveLength(1);
+    expect(result.recipes[0].shortWindowCount).toBe(1);
+    expect(result.recipes[0].longWindowCount).toBe(1);
+    expect(result.ingredients[0].shortWindowCount).toBe(1);
+  });
+
+  it('does not flag a dinner shared by three kids on one day', () => {
+    const result = computeVarietyFatigue(
+      {
+        planEntries: [1, 2, 3].map(() => ({
+          recipeId: 'r1',
+          foodId: null,
+          date: '2026-05-07',
+          mealSlot: 'dinner',
+        })),
+      },
+      opts
+    );
+    expect(result.recipes).toEqual([]);
+    expect(result.worstTier).toBe('none');
+  });
+
+  it('still counts the same recipe in two slots on one day twice', () => {
+    const result = computeVarietyFatigue(
+      {
+        planEntries: [
+          { recipeId: 'r1', foodId: null, date: '2026-05-07', mealSlot: 'lunch' },
+          { recipeId: 'r1', foodId: null, date: '2026-05-07', mealSlot: 'dinner' },
+        ],
+      },
+      { ...opts, shortThresholdMild: 1 }
+    );
+    expect(result.recipes[0].shortWindowCount).toBe(2);
+  });
+});
+
+describe('computeVarietyFatigue - safe foods', () => {
+  it('leaves safe foods out of ingredient fatigue', () => {
+    const planEntries: FatiguePlanEntry[] = [1, 3, 5].flatMap((daysAgo) => [
+      { ...entry(daysAgo, null, 'nuggets'), mealSlot: 'dinner' },
+      { ...entry(daysAgo, null, 'broccoli'), mealSlot: 'dinner' },
+    ]);
+    const result = computeVarietyFatigue(
+      { planEntries, safeFoodIds: new Set(['nuggets']) },
+      opts
+    );
+    expect(result.ingredients.map((i) => i.id)).toEqual(['broccoli']);
+  });
+
+  it('selectVarietyFatigue reads is_safe from the foods it is given', () => {
+    const planEntries = [1, 3, 5].map((daysAgo) => ({
+      food_id: 'nuggets',
+      recipe_id: null,
+      date: entry(daysAgo, null, null).date,
+      meal_slot: 'dinner',
+    }));
+    const safe = selectVarietyFatigue(
+      planEntries,
+      [],
+      [{ id: 'nuggets', name: 'Nuggets', is_safe: true }],
+      ASOF
+    );
+    expect(safe.ingredients).toEqual([]);
+    const unsafe = selectVarietyFatigue(
+      planEntries,
+      [],
+      [{ id: 'nuggets', name: 'Nuggets', is_safe: false }],
+      ASOF
+    );
+    expect(unsafe.ingredients.map((i) => i.name)).toEqual(['Nuggets']);
+  });
+});
+
+describe('visibleFatigueItems / hasFatigue', () => {
+  const result = computeVarietyFatigue(
+    { planEntries: [entry(1, 'r1', null), entry(3, 'r1', null), entry(5, 'r1', null)] },
+    opts
+  );
+  const now = new Date('2026-05-08T12:00:00Z').getTime();
+
+  it('is true with no dismissal', () => {
+    expect(hasFatigue(result, null, now)).toBe(true);
+  });
+
+  it('is false while a fresh dismissal covers every item', () => {
+    const dismissal = { at: new Date(now - 60 * 60 * 1000).toISOString(), itemIds: ['r1'] };
+    expect(hasFatigue(result, dismissal, now)).toBe(false);
+  });
+
+  it('comes back once the dismissal is older than the TTL', () => {
+    const dismissal = { at: new Date(now - 21 * 60 * 60 * 1000).toISOString(), itemIds: ['r1'] };
+    expect(visibleFatigueItems(result, dismissal, now).map((i) => i.id)).toEqual(['r1']);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 // The amount buttons render through react-i18next; without the real
 // instance they would be labelled with their keys.
 import '@/i18n';
@@ -152,5 +152,68 @@ describe('logging a result', () => {
 
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect(ateButton()).toBeEnabled();
+  });
+});
+
+describe('a failed save', () => {
+  it('keeps the dialog open, says so, and keeps what was typed', async () => {
+    const onOpenChange = vi.fn();
+    const { user } = setup({
+      meals: [meals[0]],
+      onOpenChange,
+      onLog: vi.fn().mockResolvedValue(false),
+    });
+
+    await user.type(screen.getByLabelText(/Add a note/), 'left the peas');
+    await user.click(screen.getByRole('button', { name: 'Nibbles' }));
+    await user.click(ateButton());
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Add a note/)).toHaveValue('left the peas');
+    expect(screen.getByRole('button', { name: 'Nibbles' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('closes when the handler resolves true', async () => {
+    const onOpenChange = vi.fn();
+    const { user } = setup({ meals: [meals[0]], onOpenChange, onLog: vi.fn().mockResolvedValue(true) });
+
+    await user.click(ateButton());
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('opening again', () => {
+  it('starts with an empty note after a close', async () => {
+    const user = userEvent.setup();
+    const props = { onOpenChange: vi.fn(), onLog: vi.fn(), meals: [meals[0]] };
+    const { rerender } = render(<QuickLogModal open {...props} />);
+
+    await user.type(screen.getByLabelText(/Add a note/), 'half a bowl');
+    rerender(<QuickLogModal open={false} {...props} />);
+    rerender(<QuickLogModal open {...props} />);
+
+    await waitFor(() => expect(screen.getByLabelText(/Add a note/)).toHaveValue(''));
+  });
+
+  it('opens on the meal the caller suggests', () => {
+    setup({ meals, defaultMealId: 'dinner-1' });
+    expect(screen.getByRole('button', { name: 'dinner - fish pie' })).toHaveAttribute('aria-pressed', 'true');
+    expect(ateButton()).toBeEnabled();
+  });
+});
+
+describe('the title', () => {
+  it('names the meal and the food passed in', () => {
+    setup({ mealName: 'dinner', foodName: 'fish pie' });
+    const title = screen.getByRole('heading');
+    expect(title).toHaveTextContent('dinner');
+    expect(title).toHaveTextContent('fish pie');
+  });
+
+  it('keeps the emoji away from screen readers', () => {
+    setup();
+    expect(ateButton()).toHaveAccessibleName('Ate it!');
   });
 });

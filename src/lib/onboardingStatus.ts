@@ -37,23 +37,31 @@ export function writeLocalOnboardingFlag(done: boolean): void {
   }
 }
 
-/** The server's answer, and it seeds the local cache. Null = unknown. */
-export async function fetchOnboardingCompleted(): Promise<boolean | null> {
+/**
+ * The server's answer, and it seeds the local cache. Null = unknown.
+ *
+ * Takes the id the caller already has from useAuth() rather than asking
+ * supabase.auth.getUser(), which is a network round trip to the auth server
+ * on every dashboard mount.
+ *
+ * A missing profile row is an answer, not an unknown: nobody has finished
+ * onboarding on an account whose profile was never written, and treating it as
+ * "could not tell" let a brand-new account skip onboarding entirely. A failed
+ * query stays null, because an outage is not a reason to send a set-up parent
+ * back through setup.
+ */
+export async function fetchOnboardingCompleted(userId: string | null | undefined): Promise<boolean | null> {
+  if (!userId) return null;
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-
     const { data, error } = await supabase
       .from("profiles")
       .select("onboarding_completed")
-      .eq("id", user.id)
+      .eq("id", userId)
       .maybeSingle();
 
-    if (error || !data) return null;
+    if (error) return null;
 
-    const done = data.onboarding_completed === true;
+    const done = data?.onboarding_completed === true;
     writeLocalOnboardingFlag(done);
     return done;
   } catch (error) {

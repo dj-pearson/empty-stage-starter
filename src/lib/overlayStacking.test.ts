@@ -148,3 +148,115 @@ describe("the consent bar owns the very bottom", () => {
     for (const b of liveOverlays(390)) expect(b.bottom).toBeGreaterThan(0);
   });
 });
+
+/**
+ * P2: the dashboard shell's own fixed layers, at a phone and a laptop width.
+ *
+ * SupportWidget's floating button (fixed bottom-6 right-6, z-50) sat exactly on
+ * the quick-actions FAB's desktop spot (md:bottom-6 md:right-6, z-40) and
+ * covered it. The shell now renders the widget with hideTrigger and opens it
+ * from the header and the More sheet, so the FAB is the only thing in that
+ * corner. On a phone the FAB has to clear the bottom nav, whose height is h-16
+ * plus `safe-bottom` (max(1rem, env(safe-area-inset-bottom))).
+ *
+ * Responsive prefixes are resolved per viewport here: a `md:` utility wins from
+ * 768px up, the unprefixed one below it.
+ */
+const MD = 768;
+
+/** px for `bottom-6`, `bottom-0` or the FAB's calc(), at a given safe-area inset. */
+function offsetPx(value: string, inset: number): number {
+  const n = /^(\d+)$/.exec(value);
+  if (n) return spacing(Number(n[1]));
+  const calc = /^\[calc\((\d+(?:\.\d+)?)rem\+max\((\d+(?:\.\d+)?)rem,env\(safe-area-inset-bottom\)\)\+(\d+(?:\.\d+)?)rem\)\]$/.exec(value);
+  if (calc) {
+    return Number(calc[1]) * REM + Math.max(Number(calc[2]) * REM, inset) + Number(calc[3]) * REM;
+  }
+  return NaN;
+}
+
+/** The effective value of `prop-*` at this viewport, honouring `md:`. */
+function utility(cls: string, prop: "bottom" | "right" | "left", viewport: number): string | undefined {
+  const tokens = cls.split(/\s+/);
+  const base = tokens.find((t) => t.startsWith(`${prop}-`));
+  const md = tokens.find((t) => t.startsWith(`md:${prop}-`));
+  const picked = viewport >= MD && md ? md.slice(3) : base;
+  return picked?.slice(prop.length + 1);
+}
+
+function cornerBox(name: string, cls: string, viewport: number, size: number, inset: number): Box {
+  const bottom = offsetPx(utility(cls, "bottom", viewport) ?? "", inset);
+  const right = viewport - offsetPx(utility(cls, "right", viewport) ?? "", inset);
+  return { name, left: right - size, right, bottom, top: bottom + size };
+}
+
+const dashboardSrc = () => readFileSync(path.join(ROOT, "src/pages/Dashboard.tsx"), "utf8");
+
+function fabClasses(): string {
+  const src = readFileSync(path.join(ROOT, "src/components/QuickActionsFab.tsx"), "utf8");
+  const m = /FAB_POSITION_CLASSES =\s*"([^"]+)"/.exec(src);
+  if (!m) expect.fail("FAB_POSITION_CLASSES not found in QuickActionsFab.tsx");
+  return m[1];
+}
+
+function bottomNavBox(viewport: number, inset: number): Box | null {
+  // The bar only exists in the mobile shell.
+  if (viewport >= MD) return null;
+  const src = dashboardSrc();
+  expect(src).toMatch(/fixed bottom-0 left-0 right-0[^"]*safe-bottom/);
+  expect(src).toMatch(/flex justify-around items-center h-16"/);
+  return { name: "BottomNav", left: 0, right: viewport, bottom: 0, top: spacing(16) + Math.max(REM, inset) };
+}
+
+const SAFE_AREA_INSETS = [0, 34];
+
+describe.each([390, 1280])("the dashboard shell's fixed layers at %ipx", (viewport) => {
+  it("renders the support widget without its floating trigger", () => {
+    // The support entry points are the header icon and the More sheet row;
+    // neither is fixed, so neither can sit on the FAB.
+    expect(dashboardSrc()).toMatch(/<SupportWidget[^>]*\bhideTrigger\b/);
+    expect(dashboardSrc()).not.toMatch(/<QuickActionMenu\b/);
+  });
+
+  it.each(SAFE_AREA_INSETS)("the FAB clears the bottom nav (inset %ipx)", (inset) => {
+    const fab = cornerBox("QuickActionsFab", fabClasses(), viewport, 56, inset);
+    expect(Number.isFinite(fab.bottom)).toBe(true);
+    const nav = bottomNavBox(viewport, inset);
+    if (nav) {
+      expect(overlaps(fab, nav)).toBe(false);
+      // And with a visible gap, not touching.
+      expect(fab.bottom - nav.top).toBeGreaterThanOrEqual(REM);
+    }
+  });
+
+  it("would collide with the old floating support button, which is why it is hidden", () => {
+    // Guard the instrument: if this stopped reporting an overlap, the
+    // hideTrigger assertion above would be guarding nothing.
+    const fab = cornerBox("QuickActionsFab", fabClasses(), viewport, 56, 0);
+    const support = cornerBox(
+      "SupportWidget",
+      classesOf("src/components/SupportWidget.tsx", /fixed bottom-\d+ right-\d+[^"]*/),
+      viewport,
+      56,
+      0,
+    );
+    if (viewport >= MD) expect(overlaps(fab, support)).toBe(true);
+  });
+
+  it("the offline banner does not reach the FAB or the nav", () => {
+    const offline = classesOf("src/components/OfflineIndicator.tsx", /fixed (?:bottom|top)-\d+ left-1\/2[^"]*/);
+    const banner = box("OfflineIndicator", offline, viewport, 40, 200);
+    const fab = cornerBox("QuickActionsFab", fabClasses(), viewport, 56, 0);
+    expect(overlaps(banner, fab)).toBe(false);
+    const nav = bottomNavBox(viewport, 0);
+    if (nav) expect(overlaps(banner, nav)).toBe(false);
+  });
+
+  /*
+   * Known and outside this package: AppInstallPrompt (fixed bottom-24, full
+   * width below md) overlaps the FAB on a phone, as it overlapped the old
+   * QuickActionMenu at bottom-20. It is dismissable and only shows where the
+   * browser offers installation. Moving it belongs in AppInstallPrompt.tsx.
+   */
+  it.todo("the install prompt clears the FAB on a phone");
+});

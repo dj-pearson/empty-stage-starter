@@ -1,0 +1,143 @@
+{
+  "shell": {
+    "checkout": {
+      "title": "Subscription activated",
+      "body": "Your plan is active now."
+    },
+    "signOutFailed": "Couldn't sign you out",
+    "tryAgain": "Please try again.",
+    "signedOut": "Signed out",
+    "loading": "Loading your dashboard",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode",
+    "meta": {
+      "title": "Dashboard - EatPal",
+      "description": "Manage your family's meal plans, food tracking, and nutrition insights"
+    },
+    "mainLabel": "Dashboard content",
+    "primaryNav": "Primary",
+    "more": {
+      "label": "More navigation options",
+      "short": "More",
+      "title": "More"
+    },
+    "signOut": "Sign Out",
+    "search": "Search",
+    "fab": {
+      "addFirstChild": "Add your first child",
+      "logMeal": "Log a meal",
+      "planTonight": "Plan tonight",
+      "grocery": "Grocery list",
+      "close": "Close quick actions",
+      "open": "Quick actions",
+      "menuLabel": "Quick actions"
+    },
+    "kidSelector": {
+      "addChild": "Add your child",
+      "family": "Family",
+      "selectChild": "Select child",
+      "heading": "Show meals for",
+      "age": "Age {{age}}",
+      "kidCount_one": "{{count}} kid",
+      "kidCount_other": "{{count}} kids"
+    },
+    "viewingAs": "Viewing as {{name}}",
+    "shortcuts": {
+      "navigation": "Navigation",
+      "search": "Search",
+      "actions": "Actions",
+      "close": "Close a dialog",
+      "open": "Keyboard shortcuts",
+      "title": "Keyboard shortcuts",
+      "description": "Single keys work anywhere on the dashboard except while typing.",
+      "today": "Go to today",
+      "grocery": "Go to the grocery list",
+      "pantry": "Go to the pantry",
+      "logMeal": "Log a meal",
+      "help": "Show keyboard shortcuts"
+    },
+    "sidebar": {
+      "expand": "Expand sidebar",
+      "collapse": "Collapse sidebar",
+      "collapseShort": "Collapse"
+    }
+  },
+  "quickLog": {
+    "nothingPlanned": "Nothing is planned for today yet",
+    "openPlanner": "Plan a meal",
+    "undo": "Undo",
+    "logged": "Logged: {{result}}",
+    "mealGone": "That meal is no longer on today's plan",
+    "result": {
+      "ate": "Ate it!",
+      "tasted": "Tried a bite",
+      "refused": "Refused"
+    },
+    "notes": {
+      "ateHalf": "Ate half",
+      "triedDidntLike": "Tried but didn't like",
+      "lovedIt": "Loved it!",
+      "askedForMore": "Asked for more",
+      "tooTired": "Too tired",
+      "notHungry": "Not hungry"
+    },
+    "titleWithFood": "How did {{food}} at {{meal}} go?",
+    "title": "How did {{meal}} go?",
+    "thisMeal": "this meal",
+    "description": "Every meal is progress, whatever the result.",
+    "whichMeal": "Which meal?",
+    "noteLabel": "Add a note? (optional)",
+    "notePlaceholder": "Any notes about this meal?",
+    "saveFailed": "That didn't save. Your note is still here; try again."
+  },
+  "support": {
+    "open": "Help & support",
+    "errors": {
+      "subject": "Give your request a subject of 3 to {{max}} characters.",
+      "description": "Tell us a little more: 10 to {{max}} characters.",
+      "choice": "Pick one of the options."
+    },
+    "toast": {
+      "signInTitle": "Sign in to contact support",
+      "signInBody": "We need to know which account this is about.",
+      "sentTitle": "Request sent",
+      "failedTitle": "Couldn't send your request",
+      "failedBody": "Please try again in a moment."
+    },
+    "promise": "We usually reply within a day.",
+    "title": "Help & support",
+    "description": "Tell us what's going on. We usually reply within a day.",
+    "fields": {
+      "subject": "Subject",
+      "subjectPlaceholder": "A short summary",
+      "category": "Category",
+      "priority": "How urgent is it?",
+      "description": "What happened?",
+      "descriptionPlaceholder": "What you were doing, and what you expected to see",
+      "descriptionHint": "For a bug, the steps that lead to it help most."
+    },
+    "category": {
+      "question": "Question",
+      "bug": "Something's broken",
+      "feature_request": "Idea or request",
+      "billing": "Billing",
+      "other": "Other"
+    },
+    "priority": {
+      "low": "It can wait",
+      "medium": "Normal",
+      "high": "Important",
+      "urgent": "It's blocking me"
+    },
+    "sending": "Sending...",
+    "submit": "Send request",
+    "helpCenterLead": "Looking for a quick answer?",
+    "helpCenter": "Browse the Help Center"
+  },
+  "offline": {
+    "reconnecting": "Reconnecting...",
+    "banner": "You're offline",
+    "pending_one": "{{count}} change waiting to sync",
+    "pending_other": "{{count}} changes waiting to sync"
+  }
+}

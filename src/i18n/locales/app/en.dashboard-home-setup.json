@@ -1,0 +1,72 @@
+{
+  "setup": {
+    "title": "Get set up",
+    "progressLabel": "Setup progress: {{done}} of {{total}} steps done",
+    "stepCount": "{{done}} of {{total}}",
+    "done": "Done",
+    "steps": {
+      "kid": "Add your child",
+      "foods": "Pick safe foods",
+      "plan": "Plan tonight's dinner",
+      "grocery": "Start a grocery list"
+    },
+    "hints": {
+      "kid": "Name, age and allergies. Takes a minute.",
+      "foods": "Three foods your child reliably eats.",
+      "plan": "One dinner is enough to start.",
+      "grocery": "Add what you need for the week."
+    },
+    "addKid": {
+      "title": "Add your child",
+      "nameLabel": "Child's name",
+      "namePlaceholder": "First name",
+      "ageLabel": "Age (optional)",
+      "allergensLabel": "Allergies",
+      "allergensHint": "Pick any that apply, or None known.",
+      "noneKnown": "None known",
+      "submit": "Add child",
+      "saving": "Adding...",
+      "cancel": "Cancel",
+      "close": "Close",
+      "added": "{{name}} added",
+      "undo": "Undo",
+      "addAnother": "Add another child",
+      "errors": {
+        "nameRequired": "Enter your child's name.",
+        "nameTooLong": "Keep the name to 50 characters or fewer.",
+        "ageInvalid": "Enter an age from 0 to 18.",
+        "saveFailed": "Couldn't add that child. Please try again."
+      }
+    }
+  },
+  "billing": {
+    "banner": {
+      "trialEndsToday": "Your free trial ends today",
+      "trialDaysLeft_one": "{{count}} day left in your free trial",
+      "trialDaysLeft_other": "{{count}} days left in your free trial",
+      "trialBody": "Upgrade to keep {{plan}} features after the trial.",
+      "upgrade": "Upgrade",
+      "cancelling": "Your {{plan}} plan ends on {{date}}",
+      "cancellingBody": "You keep every feature until then.",
+      "manage": "Manage",
+      "pastDue": "Your last payment didn't go through",
+      "pastDueBody": "Update your payment method to keep {{plan}} features.",
+      "updatePayment": "Update payment",
+      "canceled": "Your {{plan}} plan was canceled",
+      "canceledBody": "Reactivate to get premium features back.",
+      "reactivate": "Reactivate",
+      "freeUpsell": "Get AI meal plans and unlimited recipes with Pro",
+      "dismiss": "Dismiss"
+    }
+  },
+  "home": {
+    "greeting": {
+      "morning": "Good morning, {{name}}",
+      "afternoon": "Good afternoon, {{name}}",
+      "evening": "Good evening, {{name}}",
+      "morningNameless": "Good morning",
+      "afternoonNameless": "Good afternoon",
+      "eveningNameless": "Good evening"
+    }
+  }
+}

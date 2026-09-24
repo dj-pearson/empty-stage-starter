@@ -1,23 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { useNavigate, Outlet, useSearchParams } from "react-router-dom";
+import { useNavigate, Outlet, useSearchParams, NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import "@/i18n/appLocale";
 import { supabase } from "@/integrations/supabase/client";
-import { useApp } from "@/contexts/AppContext";
+import { useFoods, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { QuickLogProvider, type OpenQuickLogOptions } from "@/contexts/QuickLogContext";
 import { fetchOnboardingCompleted, readLocalOnboardingFlag } from "@/lib/onboardingStatus";
 import { SupportWidget } from "@/components/SupportWidget";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { KidSelector } from "@/components/KidSelector";
-import { QuickActionMenu } from "@/components/ui/QuickActionMenu";
+import { QuickActionsFab } from "@/components/QuickActionsFab";
 import { QuickLogModal } from "@/components/QuickLogModal";
-import { performQuickLog, type QuickLogResult } from "@/lib/quickLog";
+import {
+  buildQuickLogMeals,
+  performQuickLog,
+  type QuickLogPlanMeal,
+  type QuickLogResult,
+} from "@/lib/quickLog";
 import { toISODate } from "@/lib/date-utils";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, LogOut } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Moon, Sun, LogOut, LifeBuoy, Search, Sparkles, MoreHorizontal } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useWhiteLabelTheme } from "@/hooks/useWhiteLabelTheme";
+import { useKeyboardShortcuts, isMac, type KeyboardShortcut } from "@/hooks/useKeyboardShortcuts";
 import { BindEmailBanner } from "@/components/auth/BindEmailBanner";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import {
@@ -27,17 +39,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import type { User } from "@supabase/supabase-js";
-import type { AmountEaten } from "@/types";
-import {
-  Calendar,
-  ShoppingCart,
-  Sparkles,
-  MoreHorizontal,
-  ClipboardList,
-} from "lucide-react";
+import { userFacingError } from "@/lib/networkFailure";
+import { SHORTCUTS } from "@/lib/dashboardShortcuts";
+import type { AmountEaten, MealSlot } from "@/types";
 import { useNavEntitlements } from "@/hooks/useNavEntitlements";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -48,150 +53,186 @@ import {
   secondaryNavItemsInGroup,
 } from "@/lib/navigation";
 
+/**
+ * Whether the dashboard may render its page yet (US-770).
+ *
+ * 'pass' when the cached flag already says onboarding is done, so a returning
+ * parent never waits on a round trip. 'checking' otherwise: the header and nav
+ * render, the page slot shows a skeleton, and the server column (the one iOS
+ * US-708 writes) decides. 'redirect' is the moment between that answer and
+ * /onboarding mounting, when rendering the page would flash it.
+ */
+export type OnboardingGate = "pass" | "checking" | "redirect";
+
+/** What the page slot shows while the gate is still asking the server. */
+function OutletSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="container mx-auto max-w-4xl space-y-4 px-4 py-8">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-28 w-full rounded-xl" />
+      <Skeleton className="h-20 w-full rounded-xl" />
+    </div>
+  );
+}
+
 const Dashboard = () => {
+  const { t } = useTranslation();
   // US-865: which shell mounts, so only one <Outlet/> exists at a time.
   const isMobile = useIsMobile();
-  const [user, setUser] = useState<User | null>(null);
+  const { userId } = useAuth();
+  // One call for both shells; AppSidebar gets the answer as a prop.
   const entitlements = useNavEntitlements();
-  const { planEntries, foods, activeKidId, updatePlanEntry } = useApp();
+  const { kids, activeKidId } = useKids();
+  const { planEntries, updatePlanEntry } = usePlan();
+  const { foods } = useFoods();
+  const { recipes } = useRecipes();
+  const { preferences } = useAccessibility();
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [quickLogOpen, setQuickLogOpen] = useState(false);
+  const [quickLogDefaultId, setQuickLogDefaultId] = useState<string | undefined>(undefined);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [gate, setGate] = useState<OnboardingGate>(() =>
+    readLocalOnboardingFlag() === true ? "pass" : "checking"
+  );
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   // Apply white-label theme for Professional subscribers
   useWhiteLabelTheme();
 
   // Handle checkout=success query param (fallback for legacy redirect)
   useEffect(() => {
     if (searchParams.get("checkout") === "success") {
-      toast("🎉 Subscription activated!", { description: "Your plan is now active. Enjoy your premium features!" });
+      toast(t("shell.checkout.title", { defaultValue: "Subscription activated" }), {
+        description: t("shell.checkout.body", { defaultValue: "Your plan is active now." }),
+      });
       // Clean up the query param
       searchParams.delete("checkout");
       setSearchParams(searchParams, { replace: true });
     }
-  }, [searchParams, setSearchParams, toast]);
+  }, [searchParams, setSearchParams, t]);
 
   /**
    * Send a user who never finished setup to /onboarding (US-770).
    *
    * Onboarding used to fire as a dialog from Auth.tsx, so somebody who closed
    * it, or who arrived at /dashboard by any route other than a fresh sign-in,
-   * simply never saw it again. The cached flag is checked first so a returning
-   * user does not wait on a round trip before the dashboard renders; the server
-   * column -- the same one iOS US-708 writes -- is the authority and seeds the
-   * cache.
+   * simply never saw it again. The cached flag is checked first (the gate's
+   * initial state) so a returning user does not wait on a round trip; the
+   * server column is the authority and seeds the cache.
+   *
+   * While the answer is outstanding the page slot shows a skeleton, not the
+   * page: rendering Home for a first-run account and then yanking it away to
+   * /onboarding was a flash of a dashboard with nothing in it.
    */
   useEffect(() => {
+    if (gate !== "checking" || !userId) return;
     let cancelled = false;
 
-    if (readLocalOnboardingFlag() === true) return;
-
-    void fetchOnboardingCompleted().then((done) => {
-      // null means we could not tell (signed out mid-flight, a failed read).
-      // Not knowing is not a reason to interrupt somebody's dashboard.
-      if (!cancelled && done === false) {
+    void fetchOnboardingCompleted(userId).then((done) => {
+      if (cancelled) return;
+      if (done === false) {
+        setGate("redirect");
         navigate("/onboarding", { replace: true });
+        return;
       }
+      // null means we could not tell (a failed read). Not knowing is not a
+      // reason to keep somebody out of their dashboard.
+      setGate("pass");
     });
 
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [gate, userId, navigate]);
 
-  useEffect(() => {
-    // Set up listener for auth state changes
-    // Auth protection is handled by ProtectedRoute wrapper
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session ? session.user : null);
-    });
-
-    // Get current session for initial render
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUser(session.user);
+  const handleLogout = useCallback(async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        // Still signed in; staying here is the truth. Navigating to / would
+        // show the landing page to somebody whose session is still live.
+        toast.error(t("shell.signOutFailed", { defaultValue: "Couldn't sign you out" }), {
+          description: userFacingError(error, t("shell.tryAgain", { defaultValue: "Please try again." })),
+        });
+        return;
       }
-    });
+      toast(t("shell.signedOut", { defaultValue: "Signed out" }));
+      navigate("/");
+    } finally {
+      setSigningOut(false);
+    }
+  }, [signingOut, navigate, t]);
 
-    return () => subscription.unsubscribe();
-  }, []);
+  const toggleTheme = useCallback(() => setTheme(isDark ? "light" : "dark"), [isDark, setTheme]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast("Signed out", { description: "You have been signed out successfully." });
-    navigate("/");
-  };
+  const slotLabel = useCallback(
+    (slot: MealSlot) => t(`mealSlots.${slot}`, { defaultValue: slot.replace("_", " ") }),
+    [t]
+  );
 
   /**
-   * Today's plan entries for the active child, labelled for the picker
-   * (US-812). Already-logged meals stay in the list so a mistaken tap can be
-   * corrected without going to the planner.
+   * Today's plan entries, labelled for the picker (US-812). In Family mode
+   * that is every kid's, named by kid; it used to be an empty list, so the
+   * quick log said "nothing planned" to exactly the parents planning for
+   * everyone. Already-logged meals stay in the list so a mistaken tap can be
+   * corrected without going to the planner. Built in src/lib/quickLog.ts.
    */
-  const todaysMeals = useMemo(() => {
-    if (!activeKidId) return [];
-    // US-818: the LOCAL calendar day. toISOString() converts to UTC first, so
-    // west of Greenwich this flipped to tomorrow in the evening and the
-    // dashboard started showing tomorrow's meals -- and the quick-log FAB
-    // logged results against them.
-    const today = toISODate(new Date());
+  // US-818: the LOCAL calendar day. toISOString() converts to UTC first, so
+  // west of Greenwich this flipped to tomorrow in the evening and the
+  // dashboard started showing tomorrow's meals -- and the quick-log FAB
+  // logged results against them.
+  const today = toISODate(new Date());
+  const todaysMeals = useMemo(
+    () => buildQuickLogMeals(planEntries, kids, foods, recipes, activeKidId, today, new Date(), slotLabel),
+    [planEntries, kids, foods, recipes, activeKidId, today, slotLabel]
+  );
+  const hasUnloggedToday = useMemo(() => todaysMeals.some((m) => !m.result), [todaysMeals]);
 
-    return planEntries
-      .filter((entry) => entry.kid_id === activeKidId && entry.date === today)
-      .map((entry) => {
-        const food = foods.find((f) => f.id === entry.food_id);
-        const slot = entry.meal_slot.replace("_", " ");
-        return {
-          id: entry.id,
-          notes: entry.notes,
-          amount_eaten: entry.amount_eaten,
-          label: food ? `${slot} - ${food.name}` : slot,
-        };
-      });
-  }, [planEntries, foods, activeKidId]);
+  const openQuickLog = useCallback(
+    (opts?: OpenQuickLogOptions) => {
+      if (todaysMeals.length === 0) {
+        toast(t("quickLog.nothingPlanned", { defaultValue: "Nothing is planned for today yet" }), {
+          action: {
+            label: t("quickLog.openPlanner", { defaultValue: "Plan a meal" }),
+            onClick: () => navigate(`/dashboard/planner?date=${today}&slot=dinner`),
+          },
+        });
+        return;
+      }
+      // The time-of-day pick is made now, not when the list was built: a tab
+      // left open since lunch should open on dinner.
+      const fresh = buildQuickLogMeals(planEntries, kids, foods, recipes, activeKidId, today, new Date(), slotLabel);
+      const requested = opts?.entryId && fresh.some((m) => m.id === opts.entryId) ? opts.entryId : undefined;
+      setQuickLogDefaultId(requested ?? fresh.find((m) => m.preselected)?.id);
+      setQuickLogOpen(true);
+    },
+    [todaysMeals, planEntries, kids, foods, recipes, activeKidId, today, slotLabel, navigate, t]
+  );
 
-  const quickActions = [
-    {
-      icon: ClipboardList,
-      label: "Log Meal Result",
-      onClick: () => setQuickLogOpen(true),
-      shortcut: "L",
-    },
-    {
-      icon: ShoppingCart,
-      label: "View Grocery List",
-      onClick: () => navigate("/dashboard/grocery"),
-      shortcut: "G",
-    },
-    {
-      icon: Sparkles,
-      label: "Suggest Foods",
-      onClick: () => navigate("/dashboard/pantry"),
-      shortcut: "S",
-    },
-    {
-      icon: Calendar,
-      label: "Today's Plan",
-      onClick: () => navigate("/dashboard"),
-      shortcut: "T",
-    },
-  ];
+  const openQuickLogFromFab = useCallback(() => openQuickLog(), [openQuickLog]);
 
   /**
-   * Log a result against a real plan entry (US-812).
+   * Log a result against a real plan entry (US-812), and say whether it landed.
    *
-   * This used to call toast("Meal logged!") and return, writing nothing. The
-   * floating action is on every dashboard page, so the most reachable way to
-   * record a meal result was also the only one that discarded it.
+   * The modal closes only on true. A failed write keeps it open with the note
+   * the parent typed, rather than closing on a result that never saved.
    */
   const handleQuickLog = async (
     result: QuickLogResult,
     notes?: string,
     mealId?: string,
     amount?: AmountEaten
-  ) => {
+  ): Promise<boolean> => {
+    const before: QuickLogPlanMeal | undefined = mealId
+      ? todaysMeals.find((m) => m.id === mealId)
+      : todaysMeals[0];
+
     // Which entry, and whether the write landed, are decided in
     // src/lib/quickLog.ts so both can be tested without mounting this page.
     const outcome = await performQuickLog({
@@ -204,60 +245,98 @@ const Dashboard = () => {
     });
 
     switch (outcome.status) {
-      case "saved":
-        toast.success(`Logged as ${result}`, { description: outcome.entry.label });
-        return;
+      case "saved": {
+        const undo = before
+          ? {
+              label: t("quickLog.undo", { defaultValue: "Undo" }),
+              onClick: () => {
+                void updatePlanEntry(before.id, {
+                  result: before.result,
+                  notes: before.notes ?? "",
+                  amount_eaten: before.amount_eaten ?? null,
+                });
+              },
+            }
+          : undefined;
+        toast.success(
+          t("quickLog.logged", {
+            defaultValue: "Logged: {{result}}",
+            result: t(`quickLog.result.${result}`),
+          }),
+          { description: outcome.entry.label, action: undo }
+        );
+        return outcome.status === "saved";
+      }
       case "nothing-planned":
-        toast.error("Nothing planned for today", {
-          description: "Add a meal to today's plan first.",
-        });
-        return;
+        toast.error(t("quickLog.nothingPlanned", { defaultValue: "Nothing is planned for today yet" }));
+        return false;
       case "unknown-meal":
         // The modal named an entry that has since gone. Logging against
         // whichever meal happened to be first would be the wrong dinner.
-        toast.error("That meal is no longer on today's plan", {
-          description: "Reopen the planner and try again.",
-        });
-        return;
+        toast.error(t("quickLog.mealGone", { defaultValue: "That meal is no longer on today's plan" }));
+        return false;
       case "failed":
-        // Deliberately silent. updatePlanEntry rolls the row back and toasts
-        // the rejection itself (runOptimisticMutation), so a second toast here
-        // would be the same failure reported twice. What this case exists for
-        // is the success toast above NOT firing -- the old handler announced
-        // "Meal logged!" whatever the server said.
-        return;
+        // updatePlanEntry rolls the row back and toasts the rejection itself
+        // (runOptimisticMutation), so a second toast here would be the same
+        // failure reported twice. The modal shows its own inline message.
+        return false;
     }
   };
+
+  const shortcuts = useMemo<KeyboardShortcut[]>(
+    () =>
+      SHORTCUTS.flatMap((s) => {
+        const action = () => {
+          if (s.target.kind === "route") navigate(s.target.to);
+          else if (s.target.kind === "quickLog") openQuickLog();
+          else setShortcutsOpen(true);
+        };
+        const bound: KeyboardShortcut = { key: s.key, shiftKey: s.shiftKey, description: s.label, action };
+        // matchesShortcut compares Shift exactly. '?' needs Shift on a US
+        // layout and not on every other one, so it is bound both ways.
+        return s.shiftKey ? [bound, { ...bound, shiftKey: false }] : [bound];
+      }),
+    [navigate, openQuickLog]
+  );
+  useKeyboardShortcuts({ shortcuts, enabled: preferences.keyboardShortcuts });
+
+  const page =
+    gate === "pass" ? (
+      <QuickLogProvider openQuickLog={openQuickLog}>
+        <Outlet />
+      </QuickLogProvider>
+    ) : (
+      <OutletSkeleton label={t("shell.loading", { defaultValue: "Loading your dashboard" })} />
+    );
+
+  const lightLabel = t("shell.lightMode", { defaultValue: "Light Mode" });
+  const darkLabel = t("shell.darkMode", { defaultValue: "Dark Mode" });
 
   return (
     <>
       <Helmet>
-        <title>Dashboard - EatPal</title>
-        <meta name="description" content="Manage your family's meal plans, food tracking, and nutrition insights" />
+        <title>{t("shell.meta.title", { defaultValue: "Dashboard - EatPal" })}</title>
+        <meta
+          name="description"
+          content={t("shell.meta.description", {
+            defaultValue: "Manage your family's meal plans, food tracking, and nutrition insights",
+          })}
+        />
         <meta name="robots" content="noindex" />
       </Helmet>
       {/*
         Offline banner (US-765). Mounted once outside the desktop/mobile split
         because it positions itself fixed and both layouts need it; it renders
-        null while online. It was written for the service worker that until now
-        was never registered, so nothing in the app had ever told a user their
-        connection had dropped.
+        null while online.
       */}
       <OfflineIndicator />
-      {/* Desktop Layout with Sidebar */}
       {/*
         US-865: ONE SHELL AT A TIME.
         These two blocks each contained their own <main> and their own <Outlet/>,
         and both were mounted -- the CSS only hid one. So every dashboard page
         ran TWICE: two React trees with their own state, two of every query and
         every realtime subscription, two role="main" landmarks with the same
-        label, and two h1 elements. Measured on /dashboard/grocery: 2 list
-        pickers (1 visible), 2 mains, 2 h1s, and 4 grocery_lists queries where
-        one instance needs 2.
-        This is what US-719 and US-766 found between the route aliases and the
-        dashboard -- "two different React trees with their own state", a filter
-        set on one not existing on the other. The same thing was sitting between
-        the mobile and desktop shells of a single route the whole time.
+        label, and two h1 elements.
         Choosing with useIsMobile rather than CSS is why src/hooks/use-mobile.tsx
         now answers on the first render: a wrong first answer would mount the
         wrong shell, throw it away, and mount the other -- reintroducing the
@@ -265,8 +344,8 @@ const Dashboard = () => {
       */}
       {isMobile ? (
         <div className="min-h-screen bg-background">
-          {/* Mobile Top Header */}
-          <nav className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50" aria-label="Mobile header navigation">
+          {/* Mobile top header */}
+          <header className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50">
             <div className="flex justify-between items-center h-14 px-4">
               <div className="flex items-center gap-2">
                 <img
@@ -282,36 +361,39 @@ const Dashboard = () => {
               </div>
 
               {/*
-                The hamburger is gone (US-815). Once every nav group rendered in
-                the bottom "More" sheet, this was a third menu listing the same
-                links a second time, on the opposite corner of the screen. What
-                only lived here -- the kid selector, theme and sign out -- moved:
-                the selector to this header, where it is one tap instead of two,
-                and the other two into More.
+                The hamburger is gone (US-815). What only lived there -- the kid
+                selector, theme and sign out -- moved: the selector to this
+                header, the other two into More.
               */}
               <div className="min-w-0 max-w-[60%]">
                 <KidSelector />
               </div>
             </div>
-          </nav>
+          </header>
 
-          {/* Mobile Content with padding */}
           {/*
-            US-865: id="main-content", the same as the desktop shell.
-            It was "main-content-mobile" because both shells were mounted at once
-            and two elements cannot share an id. Only one mounts now, so the
-            mobile shell can carry the id the skip link actually points at --
-            before this, "Skip to main content" on a phone had no target on any
-            dashboard page and fell back to whatever SkipToContent could find.
+            US-865: id="main-content", the same as the desktop shell, so the
+            skip link has a target on a phone.
+            The bottom padding is the nav's height, its safe-area inset and a
+            1rem gap: the same sum the FAB sits at, so the last row of a page
+            is never under the bar.
           */}
-          <main id="main-content" className="pt-14 pb-20" role="main" aria-label="Dashboard content">
+          <main
+            id="main-content"
+            className="pt-14 pb-[calc(4rem+max(1rem,env(safe-area-inset-bottom))+1rem)]"
+            role="main"
+            aria-label={t("shell.mainLabel", { defaultValue: "Dashboard content" })}
+          >
             <BindEmailBanner />
-            <Outlet />
+            {page}
           </main>
 
           {/* Mobile Bottom Navigation */}
-          <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom" aria-label="Primary mobile navigation">
-            <div className="flex justify-around items-center h-16 pb-[env(safe-area-inset-bottom)]">
+          <nav
+            className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-bottom"
+            aria-label={t("shell.primaryNav", { defaultValue: "Primary" })}
+          >
+            <div className="flex justify-around items-center h-16">
               {primaryNavItems(entitlements).map(({ to, icon: Icon, label }) => (
                 <NavLink
                   key={to}
@@ -319,7 +401,7 @@ const Dashboard = () => {
                   end={isIndexRoute(to)}
                   className={({ isActive }) =>
                     cn(
-                      "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors active:scale-95 min-w-[64px]",
+                      "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors motion-safe:active:scale-95 min-w-[64px]",
                       isActive
                         ? "text-primary font-medium"
                         : "text-muted-foreground"
@@ -336,21 +418,23 @@ const Dashboard = () => {
                 <SheetTrigger asChild>
                   <button
                     className={cn(
-                      "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors active:scale-95 min-w-[64px]",
+                      "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors motion-safe:active:scale-95 min-w-[64px]",
                       "text-muted-foreground hover:text-foreground"
                     )}
-                    aria-label="More navigation options"
+                    aria-label={t("shell.more.label", { defaultValue: "More navigation options" })}
                   >
                     <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-                    <span className="text-[11px] sm:text-xs leading-tight text-center">More</span>
+                    <span className="text-[11px] sm:text-xs leading-tight text-center">
+                      {t("shell.more.short", { defaultValue: "More" })}
+                    </span>
                   </button>
                 </SheetTrigger>
                 <SheetContent side="bottom" className="h-[75vh] flex flex-col rounded-t-xl">
                   <SheetHeader className="pb-4 border-b">
                     <SheetTitle className="flex items-center gap-2 text-lg">
-                      <Sparkles className="h-5 w-5 text-primary" />
+                      <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
                       <span className="font-heading font-bold text-primary">
-                        More Features
+                        {t("shell.more.title", { defaultValue: "More" })}
                       </span>
                     </SheetTitle>
                   </SheetHeader>
@@ -358,9 +442,7 @@ const Dashboard = () => {
                     {/*
                       The complement of the bottom bar, so a destination can never
                       be missing from both (US-811), grouped into the same
-                      sections as the desktop sidebar (US-815). Admin and the
-                      Professional Portal come through the same entitlement filter
-                      rather than as appended special cases.
+                      sections as the desktop sidebar (US-815).
                     */}
                     {NAV_GROUP_ORDER.map((group) => {
                       const items = secondaryNavItemsInGroup(group, entitlements);
@@ -369,7 +451,7 @@ const Dashboard = () => {
                       return (
                         <section key={group} className="mb-6">
                           <h3 className="text-xs font-medium text-muted-foreground mb-2 px-1">
-                            {NAV_GROUP_LABELS[group].toUpperCase()}
+                            {NAV_GROUP_LABELS[group]}
                           </h3>
                           <div className="grid grid-cols-2 gap-3">
                             {items.map(({ to, icon: Icon, label }) => (
@@ -379,7 +461,7 @@ const Dashboard = () => {
                                 onClick={() => setMoreMenuOpen(false)}
                                 className={({ isActive }) =>
                                   cn(
-                                    "flex flex-col items-center gap-3 p-4 rounded-xl border transition-all active:scale-95",
+                                    "flex flex-col items-center gap-3 p-4 rounded-xl border transition-colors motion-safe:active:scale-95",
                                     isActive
                                       ? "bg-primary/10 border-primary text-primary font-medium"
                                       : "border-border hover:border-primary/50 hover:bg-muted"
@@ -398,43 +480,50 @@ const Dashboard = () => {
                     })}
 
                     {/*
-                      Theme and sign out (US-815). These were the only controls
-                      the removed hamburger owned outright, so they land here
-                      rather than disappearing.
+                      Help, theme and sign out (US-815). Help lives here rather
+                      than as a second floating button, which sat on the FAB.
                     */}
                     <div className="mt-6 pt-6 border-t space-y-2 pb-safe">
                       <Button
                         variant="outline"
                         size="lg"
-                        className="w-full justify-start gap-3 h-12 active:scale-[0.98]"
+                        className="w-full justify-start gap-3 h-12"
                         onClick={() => {
-                          setTheme(theme === "dark" ? "light" : "dark");
                           setMoreMenuOpen(false);
+                          setSupportOpen(true);
                         }}
                       >
-                        {theme === "dark" ? (
-                          <>
-                            <Sun className="h-5 w-5 shrink-0" aria-hidden="true" />
-                            <span className="text-base">Light Mode</span>
-                          </>
-                        ) : (
-                          <>
-                            <Moon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                            <span className="text-base">Dark Mode</span>
-                          </>
-                        )}
+                        <LifeBuoy className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        <span className="text-base">{t("support.open", { defaultValue: "Help & support" })}</span>
                       </Button>
                       <Button
                         variant="outline"
                         size="lg"
-                        className="w-full justify-start gap-3 h-12 text-destructive hover:text-destructive active:scale-[0.98]"
+                        className="w-full justify-start gap-3 h-12"
                         onClick={() => {
-                          handleLogout();
+                          toggleTheme();
+                          setMoreMenuOpen(false);
+                        }}
+                      >
+                        {isDark ? (
+                          <Sun className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <Moon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        )}
+                        <span className="text-base">{isDark ? lightLabel : darkLabel}</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        className="w-full justify-start gap-3 h-12 text-destructive hover:text-destructive"
+                        disabled={signingOut}
+                        onClick={async () => {
+                          await handleLogout();
                           setMoreMenuOpen(false);
                         }}
                       >
                         <LogOut className="h-5 w-5 shrink-0" aria-hidden="true" />
-                        <span className="text-base">Sign Out</span>
+                        <span className="text-base">{t("shell.signOut", { defaultValue: "Sign Out" })}</span>
                       </Button>
                     </div>
                   </div>
@@ -447,71 +536,90 @@ const Dashboard = () => {
         <div>
           <SidebarProvider defaultOpen={true}>
             <div className="flex min-h-screen w-full">
-              <AppSidebar />
+              <AppSidebar entitlements={entitlements} />
 
               <div className="flex-1 flex flex-col">
                 {/* Top Header */}
-                <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-background px-4">
+                <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background px-4">
                   <SidebarTrigger />
 
                   <div className="flex-1" />
 
-                  {/* Kid Selector */}
                   <KidSelector />
 
-                  {/* Keyboard Shortcut Hint */}
+                  {/*
+                    Opens the command palette, which searches pages and
+                    actions. It was labelled "Quick Actions", which is also
+                    what the FAB is called, for a control that does neither.
+                  */}
                   <Button
                     variant="outline"
                     size="sm"
-                    className="hidden lg:flex items-center gap-2 text-xs"
+                    className="hidden md:flex items-center gap-2 text-xs"
+                    aria-keyshortcuts={isMac() ? "Meta+K" : "Control+K"}
                     onClick={() => {
-                      const event = new KeyboardEvent('keydown', {
-                        key: 'k',
+                      const event = new KeyboardEvent("keydown", {
+                        key: "k",
                         metaKey: true,
                         ctrlKey: true,
-                        bubbles: true
+                        bubbles: true,
                       });
                       document.dispatchEvent(event);
                     }}
-                    title="Open command palette"
                   >
-                    <span className="text-muted-foreground">Quick Actions</span>
-                    <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-                      <span className="text-xs">{navigator?.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}</span>K
+                    <Search className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <span className="text-muted-foreground">{t("shell.search", { defaultValue: "Search" })}</span>
+                    <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                      <span className="text-xs">{isMac() ? "\u2318" : "Ctrl"}</span>K
                     </kbd>
                   </Button>
 
-                  {/* Keyboard Shortcuts */}
-                  <KeyboardShortcutsModal />
+                  <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
-                  {/* Theme Toggle */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                    onClick={() => setSupportOpen(true)}
+                    aria-label={t("support.open", { defaultValue: "Help & support" })}
                     className="touch-target"
                   >
-                    <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                    <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    <span className="sr-only">Toggle theme</span>
+                    <LifeBuoy className="h-5 w-5" aria-hidden="true" />
                   </Button>
 
-                  {/* Logout */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={handleLogout}
-                    aria-label="Sign out"
+                    onClick={toggleTheme}
+                    className="touch-target"
+                    aria-label={isDark ? lightLabel : darkLabel}
+                  >
+                    {isDark ? (
+                      <Sun className="h-5 w-5" aria-hidden="true" />
+                    ) : (
+                      <Moon className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void handleLogout()}
+                    disabled={signingOut}
+                    aria-label={t("shell.signOut", { defaultValue: "Sign Out" })}
                     className="touch-target"
                   >
                     <LogOut className="h-5 w-5" aria-hidden="true" />
                   </Button>
                 </header>
 
-                {/* Main Content */}
-                <main id="main-content" className="flex-1 overflow-auto" role="main" aria-label="Dashboard content">
+                <main
+                  id="main-content"
+                  className="flex-1 overflow-auto"
+                  role="main"
+                  aria-label={t("shell.mainLabel", { defaultValue: "Dashboard content" })}
+                >
                   <BindEmailBanner />
-                  <Outlet />
+                  {page}
                 </main>
               </div>
             </div>
@@ -519,20 +627,25 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Quick Action Menu - Floating Action Button */}
-      <QuickActionMenu actions={quickActions} position="bottom-right" />
+      {gate === "pass" && (
+        <QuickActionsFab
+          kidCount={kids.length}
+          hasUnloggedToday={hasUnloggedToday}
+          onLogMeal={openQuickLogFromFab}
+          todayKey={today}
+        />
+      )}
 
-      {/* Quick Log Modal */}
+      {/* The only quick-log dialog; pages open it through useQuickLog(). */}
       <QuickLogModal
         open={quickLogOpen}
         onOpenChange={setQuickLogOpen}
         meals={todaysMeals}
+        defaultMealId={quickLogDefaultId}
         onLog={handleQuickLog}
       />
 
-      {/* Support Widget - Available on all pages */}
-      <SupportWidget />
-
+      <SupportWidget open={supportOpen} onOpenChange={setSupportOpen} hideTrigger />
     </>
   );
 };

@@ -133,13 +133,15 @@ describe('bestStreak uses the same rule as currentStreak', () => {
  * numbers, and a fourth would go unnoticed the same way these did.
  */
 describe('there is one web streak rule', () => {
-  it('Home.tsx and ProgressDashboard.tsx both call the shared one', () => {
+  it('the home week line and ProgressDashboard.tsx both call the shared one', () => {
     // AchievementsView was the FOURTH, missed when this story counted three:
     // it filtered to entries with a result but still never read what the
     // result was, so a week of refusals unlocked a streak badge on the web
     // while the phone showed nothing.
     for (const file of [
-      'src/pages/Home.tsx',
+      // The streak moved off Home.tsx into the per-kid week line when the
+      // home screen was rebuilt; Home.tsx itself no longer counts anything.
+      'src/components/home/KidWeekLine.tsx',
       'src/components/ProgressDashboard.tsx',
       'src/components/AchievementsView.tsx',
     ]) {

@@ -14,8 +14,10 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { useNavEntitlements } from "@/hooks/useNavEntitlements";
+import { useTranslation } from "react-i18next";
+import "@/i18n/appLocale";
 import {
+  type NavEntitlements,
   NAV_GROUP_LABELS,
   NAV_GROUP_ORDER,
   isIndexRoute,
@@ -35,9 +37,13 @@ const linkClass = (isActive: boolean) =>
       : "text-sidebar-foreground visited:text-sidebar-foreground hover:bg-muted/50 hover:text-sidebar-foreground"
   }`;
 
-export function AppSidebar() {
+/**
+ * `entitlements` comes from Dashboard, which calls useNavEntitlements once for
+ * both this sidebar and the mobile shell rather than each running the queries.
+ */
+export function AppSidebar({ entitlements }: { entitlements: NavEntitlements }) {
+  const { t } = useTranslation();
   const { state, toggleSidebar } = useSidebar();
-  const entitlements = useNavEntitlements();
 
   const isCollapsed = state === "collapsed";
 
@@ -113,13 +119,19 @@ export function AppSidebar() {
           size="sm"
           onClick={toggleSidebar}
           className="w-full justify-center"
+          aria-label={
+            isCollapsed
+              ? t("shell.sidebar.expand", { defaultValue: "Expand sidebar" })
+              : t("shell.sidebar.collapse", { defaultValue: "Collapse sidebar" })
+          }
+          aria-expanded={!isCollapsed}
         >
           {isCollapsed ? (
-            <ChevronsRight className="h-4 w-4" />
+            <ChevronsRight className="h-4 w-4" aria-hidden="true" />
           ) : (
             <>
-              <ChevronsLeft className="h-4 w-4 mr-2" />
-              <span>Collapse</span>
+              <ChevronsLeft className="h-4 w-4 mr-2" aria-hidden="true" />
+              <span>{t("shell.sidebar.collapseShort", { defaultValue: "Collapse" })}</span>
             </>
           )}
         </Button>

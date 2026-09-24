@@ -61,11 +61,8 @@ const REASONS: Record<string, string> = {
   // --- UTC-consistent: anchored in UTC and read back in UTC
   'src/lib/seasonalRecall.ts':
     'The projection anchors at T12:00:00Z and steps with getUTC* setters throughout, so the key it ' +
-    'writes matches the window SeasonalRecallCard queries with. Midday anchoring also keeps it away ' +
-    'from both boundaries.',
-  'src/components/SeasonalRecallCard.tsx':
-    'The query range for the rows seasonalRecall.ts wrote, built the same UTC way. The two have to ' +
-    'agree with each other more than either has to be local.',
+    'writes lands inside the window SeasonalRecallCard queries with (local keys, +/-21 days, a week ' +
+    'wider than any candidate). Midday anchoring also keeps it away from both boundaries.',
 
   // --- analytics buckets: UTC is the reporting day
   'src/lib/conversion-tracking.ts': 'Analytics window. The reporting day is UTC for every account.',
@@ -88,7 +85,6 @@ const REASONS: Record<string, string> = {
   'src/lib/sitemap-utils.ts': 'sitemap lastmod is a W3C datetime; UTC is correct and stable across rebuilds.',
 
   // --- download filenames: a stamp, not a key anything is looked up by
-  'src/pages/Home.tsx': 'Backup download filename -- a stamp on a file, not a key anything looks up.',
   'src/pages/Grocery.tsx': 'CSV and AnyList export filenames, stamps rather than keys.',
   'src/pages/dashboard/AccountSettings.tsx': 'Data-export filename, a stamp rather than a key.',
   'src/components/LadderReportDialog.tsx': 'Report range for a printed PDF, and its filename.',
