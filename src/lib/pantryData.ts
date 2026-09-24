@@ -189,7 +189,7 @@ export type FitFilter = 'all' | 'eats' | 'trying' | 'avoid';
  *
  * - eats: fitGroup is `safe` (safe or go-to for every kid, allergens checked).
  * - trying: fitGroup is `trying`.
- * - avoid: any kid is allergic to it or dislikes it.
+ * - avoid: at least one kid is allergic to it or dislikes it.
  *
  * A food with no entry in `fitByFoodId` is only kept under `all`: without a
  * fit there is nothing to say it is safe, and never guessing safe is the rule.

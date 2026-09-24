@@ -49,7 +49,8 @@ export interface ContributeArgs {
  */
 export function bucketPickiness(level: string | null | undefined): PickinessBucket {
   if (!level) return 'unknown';
-  const lc = level.toString().trim().toLowerCase();
+  // Stored levels are snake_case ('very_picky'); the phrases below are spaced.
+  const lc = level.toString().trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (lc === '' || lc === 'unknown') return 'unknown';
   if (
     lc === 'low' ||

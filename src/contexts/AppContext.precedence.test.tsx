@@ -19,7 +19,7 @@
 import { render, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { AppProvider, useApp, useFoods, useInventory } from './AppContext';
+import { AppProvider, useApp, useFoods, useInventory, useKids } from './AppContext';
 import { writeFlag } from '@/lib/featureFlagCache';
 import { queueWrite } from '@/lib/webSyncQueue';
 
@@ -30,6 +30,8 @@ let sessionUser: { id: string } | null = null;
 let groceryGate: Promise<void> | null = null;
 /** When set, the grocery_items read fails with it. */
 let groceryError: unknown = null;
+/** When set, the kids read fails with it. */
+let kidsError: unknown = null;
 
 function makeBuilder(table: string) {
   const builder: Record<string, unknown> = {};
@@ -61,7 +63,9 @@ function makeBuilder(table: string) {
     const answer = () =>
       table === 'grocery_items' && groceryError
         ? resolve({ data: null, error: groceryError })
-        : resolve({ data: rows, error: null });
+        : table === 'kids' && kidsError
+          ? resolve({ data: null, error: kidsError })
+          : resolve({ data: rows, error: null });
     if (table === 'grocery_items' && groceryGate) return groceryGate.then(answer);
     return answer();
   };
@@ -770,5 +774,115 @@ describe('foodsHydrated', () => {
 
     await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
     expect(seen.names).toEqual(['Cached Apple']);
+  });
+});
+
+/**
+ * kidsHydrated lets the Kids page show a skeleton instead of an empty state (or
+ * a made-up 'My Child') before the server has answered. Same contract as
+ * foodsHydrated, plus kidsLoadError for a read that failed.
+ */
+describe('kidsHydrated', () => {
+  const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    localStorage.clear();
+    groceryGate = null;
+    groceryError = null;
+    kidsError = null;
+    sessionUser = { id: 'user-1' };
+  });
+
+  function probe() {
+    const seen = {
+      hydrated: [] as boolean[],
+      names: [] as string[],
+      everNames: new Set<string>(),
+      error: null as string | null,
+    };
+    function Probe() {
+      const { kids, kidsHydrated, kidsLoadError } = useKids();
+      const app = useApp();
+      expect(app.kidsHydrated).toBe(kidsHydrated);
+      seen.hydrated.push(kidsHydrated);
+      seen.names = kids.map((k) => k.name);
+      for (const name of seen.names) seen.everNames.add(name);
+      seen.error = kidsLoadError;
+      return null;
+    }
+    return { seen, Probe };
+  }
+
+  it('signed in with an empty cache: no placeholder, not hydrated until the load settles', async () => {
+    tableData['kids'] = [{ id: 'k1', name: 'Server Kid', household_id: HOUSEHOLD }];
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.names).toEqual([]);
+    expect(seen.hydrated).not.toContain(true);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Server Kid']);
+    expect(seen.everNames.has('My Child')).toBe(false);
+  });
+
+  it('is true after a load that returns no kids, still with no placeholder', async () => {
+    tableData['kids'] = [];
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual([]);
+    expect(seen.everNames.has('My Child')).toBe(false);
+  });
+
+  it('a failed kids read sets kidsLoadError and keeps the cached kids', async () => {
+    storageBacking[STORAGE_KEY] = JSON.stringify({
+      foods: [], kids: [{ id: 'k1', name: 'Cached Kid', age: 4 }],
+      recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
+    });
+    kidsError = { message: 'boom', code: 'XX000' };
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.error).toBe('boom'));
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Cached Kid']);
+  });
+
+  it('signed out with an empty cache still seeds the local placeholder', async () => {
+    sessionUser = null;
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.names).toEqual(['My Child']));
+    expect(seen.hydrated.at(-1)).toBe(true);
   });
 });

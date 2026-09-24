@@ -42,7 +42,7 @@ export default function FoodTracker() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() => manageKidsRef.current?.openForEdit("")}
+              onClick={() => manageKidsRef.current?.openForAdd()}
               title={t('foodTracker.manageChildren')}
               aria-label={t('foodTracker.manageChildren')}
             >
@@ -52,7 +52,7 @@ export default function FoodTracker() {
         )}
       </div>
 
-      <FoodSuccessTracker onAddChild={() => manageKidsRef.current?.openForEdit("")} />
+      <FoodSuccessTracker onAddChild={() => manageKidsRef.current?.openForAdd()} />
 
       <ManageKidsDialog ref={manageKidsRef} />
     </div>

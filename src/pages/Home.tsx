@@ -2,7 +2,9 @@ import { Helmet } from "react-helmet-async";
 import { useApp } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import "@/i18n/appLocale";
 import { Utensils, Calendar, ShoppingCart, Sparkles, Download, Upload, Trash2, Users, BarChart3, ChefHat, Target, ArrowRight, Plus, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { useRef, useState, useEffect, useMemo, lazy, Suspense } from "react";
@@ -21,7 +23,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ManageKidsDialog } from "@/components/ManageKidsDialog";
 import { ManageHouseholdDialog } from "@/components/ManageHouseholdDialog";
 import {
   AnimatedDashboard,
@@ -51,6 +52,7 @@ const OnboardingProgressBar = lazy(() =>
 export default function Home() {
   const { foods, planEntries, groceryItems, kids, recipes, activeKidId, exportData, importData, resetAllData, updatePlanEntry } = useApp();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parentName, setParentName] = useState<string>("Parent");
   const [quickLogOpen, setQuickLogOpen] = useState(false);
@@ -617,7 +619,11 @@ export default function Home() {
           <CardContent>
             <div className="flex flex-col gap-4 mb-4">
               <ManageHouseholdDialog />
-              <ManageKidsDialog />
+              {/* The quick-edit dialog has no trigger of its own; children are managed on the Kids page. */}
+              <Link to="/dashboard/kids" className={buttonVariants({ variant: "outline" })}>
+                <Users className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("kids.dialog.homeLink", { defaultValue: "Manage children" })}
+              </Link>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <Button onClick={handleExport} variant="outline" className="flex-1">

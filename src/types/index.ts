@@ -45,10 +45,27 @@ export interface Kid {
   age?: number;
   date_of_birth?: string;
   notes?: string;
+  /**
+   * Nullable in the DB. `undefined` here means "not recorded" (unknown), and
+   * `[]` means the parent confirmed no known allergies. normalizeKidFromDB
+   * keeps that distinction; never default one into the other.
+   */
   allergens?: string[];
+  /** Per-allergen severity, keyed by the allergen string in `allergens`. */
+  allergen_severity?: Partial<Record<string, 'mild' | 'moderate' | 'severe'>>;
+  cross_contamination_sensitive?: boolean;
   profile_picture_url?: string;
   favorite_foods?: string[];
+  /**
+   * CLIENT-ONLY, READ-ONLY: pickiness_level, texture_sensitivity_level and
+   * preferred_preparations have no column on `kids` (see the kids Row in
+   * src/integrations/supabase/types.ts). PostgREST rejects any insert or
+   * update that carries them, so they must never be written to Supabase.
+   * pickiness_level stays for reads of older cached/local rows.
+   */
   pickiness_level?: string;
+  texture_sensitivity_level?: string;
+  preferred_preparations?: string[];
   profile_completed?: boolean;
   profile_last_reviewed?: string;
   texture_preferences?: string[];
@@ -63,6 +80,10 @@ export interface Kid {
   always_eats_foods?: string[];
   weight_kg?: number;
   height_cm?: number;
+  gender?: string;
+  nutrition_concerns?: string[];
+  behavioral_notes?: string;
+  household_id?: string;
 }
 
 export interface PlanEntry {

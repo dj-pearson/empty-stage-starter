@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { Kid } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { generateId } from "@/lib/utils";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
@@ -40,16 +41,76 @@ export function applyKidRealtime(
   return next;
 }
 
+/**
+ * A patch for updateKid. `null` clears a nullable column (the only way to
+ * clear one: an `undefined` value is stripped, because JSON drops it from the
+ * PATCH body and local state would then disagree with the server).
+ */
+export type KidPatch = { [K in keyof Kid]?: Kid[K] | null };
+
+/**
+ * Drop undefined-valued keys so the optimistic merge and the PATCH body are
+ * built from the same object.
+ */
+function stripUndefined<T extends Record<string, unknown>>(patch: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const key of Object.keys(patch) as (keyof T)[]) {
+    if (patch[key] !== undefined) out[key] = patch[key];
+  }
+  return out;
+}
+
+/**
+ * Kid fields with no column on `kids` (see src/types/index.ts). PostgREST
+ * rejects a whole write that names one, so they are dropped before any write.
+ */
+const CLIENT_ONLY_KID_FIELDS = [
+  'pickiness_level',
+  'texture_sensitivity_level',
+  'preferred_preparations',
+] as const satisfies readonly (keyof Kid)[];
+
+function withoutClientOnly<T extends Record<string, unknown>>(row: T): T {
+  const out = { ...row };
+  for (const field of CLIENT_ONLY_KID_FIELDS) delete out[field];
+  return out;
+}
+
+/**
+ * Apply a stripped patch to a kid for local state. A null clears the field,
+ * which locally means "absent", matching what normalizeKidFromDB produces
+ * when the row comes back (null allergens = not recorded, not "none").
+ */
+function mergeKidPatch(kid: Kid, patch: Partial<KidPatch>): Kid {
+  const out = { ...kid } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) delete out[key];
+    else out[key] = value;
+  }
+  return out as unknown as Kid;
+}
+
 interface KidsContextType {
   kids: Kid[];
   setKids: React.Dispatch<React.SetStateAction<Kid[]>>;
   activeKidId: string | null;
   setActiveKidId: React.Dispatch<React.SetStateAction<string | null>>;
-  addKid: (kid: Omit<Kid, "id">) => Promise<boolean>;
-  updateKid: (id: string, kid: Partial<Kid>) => void;
-  deleteKid: (id: string) => void;
+  /** `allergens: null` records "not sure yet"; omitting the key lets the DB default ('{}' = none) apply. */
+  addKid: (kid: Omit<Kid, "id" | "allergens"> & { allergens?: string[] | null }) => Promise<boolean>;
+  /** Resolves true when the change is saved (or applied locally when signed out). */
+  updateKid: (id: string, patch: KidPatch) => Promise<boolean>;
+  deleteKid: (id: string) => Promise<boolean>;
   setActiveKid: (id: string | null) => void;
   refreshKids: () => Promise<void>;
+  /**
+   * False until the kids slice holds something true: a non-empty cache, or a
+   * settled server load for the current scope. Mirrors foodsHydrated.
+   */
+  kidsHydrated: boolean;
+  setKidsHydrated: (hydrated: boolean) => void;
+  /** Message from the last failed kids read, or null once one succeeds. */
+  kidsLoadError: string | null;
+  setKidsLoadError: (error: string | null) => void;
 }
 
 const KidsContext = createContext<KidsContextType | undefined>(undefined);
@@ -57,6 +118,14 @@ const KidsContext = createContext<KidsContextType | undefined>(undefined);
 export function KidsProvider({ children }: { children: React.ReactNode }) {
   const [kids, setKids] = useState<Kid[]>([]);
   const [activeKidId, setActiveKidId] = useState<string | null>(null);
+  const [kidsHydrated, setKidsHydratedState] = useState(false);
+  const [kidsLoadError, setKidsLoadErrorState] = useState<string | null>(null);
+  const setKidsHydrated = useCallback((hydrated: boolean) => {
+    setKidsHydratedState(hydrated);
+  }, []);
+  const setKidsLoadError = useCallback((error: string | null) => {
+    setKidsLoadErrorState(error);
+  }, []);
   const { userId, householdId } = useAuth();
 
   // Real-time subscription for kids
@@ -88,7 +157,9 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
     };
   }, [userId, householdId]);
 
-  const addKid = useCallback(async (kid: Omit<Kid, "id">): Promise<boolean> => {
+  const addKid = useCallback(async (
+    kid: Omit<Kid, "id" | "allergens"> & { allergens?: string[] | null },
+  ): Promise<boolean> => {
     if (userId && householdId) {
       const limit = await checkFeatureLimit('children', kids.length);
       if (!limit.allowed) {
@@ -101,7 +172,10 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await supabase
         .from('kids')
-        .insert([{ ...kid, user_id: userId, household_id: householdId }])
+        // `allergens: null` is sent as-is: the column default ('{}', "no known
+        // allergies") only applies when the key is absent, and null is how
+        // "not sure yet" is recorded.
+        .insert([{ ...withoutClientOnly(kid), user_id: userId, household_id: householdId }])
         .select()
         .single();
 
@@ -130,25 +204,37 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
       return true;
     }
 
-    setKids(prev => [...prev, { ...kid, id: generateId() }]);
+    const { allergens, ...rest } = kid;
+    const local: Kid = { ...rest, id: generateId() };
+    if (allergens != null) local.allergens = allergens;
+    setKids(prev => [...prev, local]);
     return true;
   }, [userId, householdId, kids.length]);
 
-  const updateKid = useCallback((id: string, updates: Partial<Kid>) => {
+  const updateKid = useCallback(async (id: string, patch: KidPatch): Promise<boolean> => {
+    // One object feeds both the local merge and the PATCH body, so what the
+    // screen shows is exactly what was sent. An undefined value would vanish
+    // from the JSON body while still overwriting the field locally.
+    const updates = withoutClientOnly(
+      stripUndefined(patch as Record<string, unknown>),
+    ) as Partial<KidPatch>;
+    if (Object.keys(updates).length === 0) return true;
     if (userId) {
       // US-320: optimistic update with rollback + toast on server rejection.
-      void runOptimisticMutation<Kid>(
+      const result = await runOptimisticMutation<Kid>(
         setKids,
-        prev => prev.map(k => (k.id === id ? { ...k, ...updates } : k)),
-        () => supabase.from('kids').update(updates).eq('id', id),
+        prev => prev.map(k => (k.id === id ? mergeKidPatch(k, updates) : k)),
+        // Client-only keys are already gone; what is left maps onto kids columns.
+        () => supabase.from('kids').update(updates as TablesUpdate<'kids'>).eq('id', id),
         { logLabel: 'Supabase updateKid error:' }
       );
-    } else {
-      setKids(prev => prev.map(k => (k.id === id ? { ...k, ...updates } : k)));
+      return result.error == null;
     }
+    setKids(prev => prev.map(k => (k.id === id ? mergeKidPatch(k, updates) : k)));
+    return true;
   }, [userId]);
 
-  const deleteKid = useCallback((id: string) => {
+  const deleteKid = useCallback(async (id: string): Promise<boolean> => {
     // Keep the active-kid fixup whether the delete is local or server-backed.
     const fixActiveKid = (remaining: Kid[]) => {
       setActiveKidId(currentActive =>
@@ -164,7 +250,7 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
 
     if (userId) {
       // US-320: optimistic delete; roll back (re-add) on server rejection.
-      void runOptimisticMutation<Kid>(
+      const result = await runOptimisticMutation<Kid>(
         setKids,
         prev => {
           const remaining = prev.filter(k => k.id !== id);
@@ -181,13 +267,14 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
         },
         { logLabel: 'Supabase deleteKid error:', toastMessage: "Couldn't delete that child — restored. Please try again." }
       );
-    } else {
-      setKids(prev => {
-        const remaining = prev.filter(k => k.id !== id);
-        fixActiveKid(remaining);
-        return remaining;
-      });
+      return result.error == null;
     }
+    setKids(prev => {
+      const remaining = prev.filter(k => k.id !== id);
+      fixActiveKid(remaining);
+      return remaining;
+    });
+    return true;
   }, [userId, kids]);
 
   const setActiveKid = useCallback((id: string | null) => {
@@ -197,16 +284,35 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
   const refreshKids = useCallback(async () => {
     // US-550: always scope by household_id (defense-in-depth alongside RLS).
     if (userId && householdId) {
-      const { data } = await supabase.from('kids').select('*')
-        .eq('household_id', householdId)
-        .order('created_at', { ascending: true });
-      if (data) setKids(parseKidRows(data as unknown[]));
+      try {
+        const { data, error } = await supabase.from('kids').select('*')
+          .eq('household_id', householdId)
+          .order('created_at', { ascending: true });
+        if (error) {
+          // Keep what is on screen and say so, rather than swallowing it.
+          logger.error('Supabase refreshKids error:', error);
+          setKidsLoadErrorState(
+            typeof (error as { message?: unknown }).message === 'string'
+              ? (error as { message: string }).message
+              : 'Could not load children',
+          );
+          return;
+        }
+        if (data) setKids(parseKidRows(data as unknown[]));
+        setKidsLoadErrorState(null);
+        setKidsHydratedState(true);
+      } catch (error) {
+        logger.error('Supabase refreshKids error:', error);
+        setKidsLoadErrorState(error instanceof Error ? error.message : 'Could not load children');
+      }
     }
   }, [userId, householdId]);
 
   const value = useMemo(() => ({
-    kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids
-  }), [kids, activeKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids]);
+    kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids,
+    kidsHydrated, setKidsHydrated, kidsLoadError, setKidsLoadError,
+  }), [kids, activeKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids,
+    kidsHydrated, setKidsHydrated, kidsLoadError, setKidsLoadError]);
 
   return (
     <KidsContext.Provider value={value}>

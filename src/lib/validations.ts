@@ -115,36 +115,57 @@ export const BulkFoodImportSchema = z.array(FoodSchema).max(100, 'Maximum 100 fo
 // KID SCHEMAS
 // ============================================================================
 
+/**
+ * The four pickiness levels a kid can be tagged with. The intake used to
+ * compute 'adventurous' and 'extreme', which this enum rejected, so every
+ * intake save failed validation. Derive from this list instead of retyping it.
+ */
+export const PICKINESS_LEVELS = ['not_picky', 'somewhat_picky', 'very_picky', 'extremely_picky'] as const;
+export type PickinessLevel = (typeof PICKINESS_LEVELS)[number];
+
+export const AllergenSeveritySchema = z.enum(['mild', 'moderate', 'severe']);
+
+// Optional fields that map onto a nullable column are .nullable() as well:
+// sending null is how an editor clears one (undefined is dropped from the
+// PATCH body and leaves the old value in place).
 export const KidSchema = z.object({
   name: z.string()
     .min(1, 'Name is required')
     .max(100, 'Name too long')
     .trim(),
   age: z.number().int().min(0).max(18).optional(),
-  date_of_birth: DateStringSchema.optional(),
-  notes: z.string().max(1000).optional(),
-  allergens: z.array(z.string().max(50)).max(20).optional(),
-  profile_picture_url: URLSchema.optional(),
+  date_of_birth: DateStringSchema.nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  allergens: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  allergen_severity: z.record(z.string().max(50), AllergenSeveritySchema).optional(),
+  cross_contamination_sensitive: z.boolean().optional(),
+  profile_picture_url: URLSchema.nullable().optional(),
   favorite_foods: z.array(z.string().max(100)).max(50).optional(),
-  pickiness_level: z.enum(['not_picky', 'somewhat_picky', 'very_picky', 'extremely_picky']).optional(),
+  pickiness_level: z.enum(PICKINESS_LEVELS).optional(),
   profile_completed: z.boolean().optional(),
   texture_preferences: z.array(z.string().max(50)).max(20).optional(),
   texture_dislikes: z.array(z.string().max(50)).max(20).optional(),
   flavor_preferences: z.array(z.string().max(50)).max(20).optional(),
   dietary_restrictions: z.array(z.string().max(50)).max(20).optional(),
   health_goals: z.array(z.string().max(100)).max(10).optional(),
+  nutrition_concerns: z.array(z.string().max(100)).max(20).optional(),
   disliked_foods: z.array(z.string().max(100)).max(50).optional(),
   always_eats_foods: z.array(z.string().max(100)).max(50).optional(),
+  eating_behavior: z.string().max(50).nullable().optional(),
+  new_food_willingness: z.string().max(50).nullable().optional(),
+  behavioral_notes: z.string().max(1000).nullable().optional(),
   // Health metrics with reasonable ranges for children (ages 0-18)
   height_cm: z.number()
     .min(40, 'Height must be at least 40cm (newborn)')
     .max(220, 'Height must not exceed 220cm')
+    .nullable()
     .optional(),
   weight_kg: z.number()
     .min(1, 'Weight must be at least 1kg')
     .max(200, 'Weight must not exceed 200kg')
+    .nullable()
     .optional(),
-  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).nullable().optional(),
 });
 
 export const KidUpdateSchema = KidSchema.partial();

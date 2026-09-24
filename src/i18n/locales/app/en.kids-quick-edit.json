@@ -1,0 +1,90 @@
+{
+  "kids": {
+    "dialog": {
+      "notFound": "That child profile couldn't be found.",
+      "saveFailed": "Couldn't save. Your changes are still here, so try again.",
+      "toast": {
+        "updated": "{{name}}'s profile saved",
+        "added": "{{name}} added",
+        "removed": "{{name}} removed"
+      },
+      "name": {
+        "required": "Please enter a name",
+        "label": "Child's name",
+        "placeholder": "Enter name"
+      },
+      "allergens": {
+        "pickOne": "Pick at least one allergen, or choose No known allergies.",
+        "status": {
+          "has": "Has allergies",
+          "none": "No known allergies",
+          "unknown": "Not sure yet"
+        },
+        "legend": "Food allergies",
+        "otherLabel": "Other allergen",
+        "otherPlaceholder": "For example kiwi or mustard",
+        "add": "Add"
+      },
+      "photo": {
+        "badType": "Please choose a JPEG, PNG or WebP image",
+        "tooBig": "Image must be less than 5MB",
+        "uploadFailed": "Failed to upload image",
+        "label": "Profile picture",
+        "uploading": "Uploading...",
+        "hint": "JPEG, PNG or WebP, up to 5MB",
+        "remove": "Remove photo"
+      },
+      "title": {
+        "edit": "Edit child",
+        "add": "Add child"
+      },
+      "description": {
+        "edit": "Update this child's details",
+        "add": "Add a child so meal plans fit what they can and will eat"
+      },
+      "dob": {
+        "label": "Date of birth",
+        "age": "(Age {{age}})",
+        "placeholder": "Pick a date",
+        "month": "Month",
+        "year": "Year",
+        "clear": "Clear date of birth"
+      },
+      "notes": {
+        "label": "Notes (optional)",
+        "placeholder": "Dietary needs, textures, anything a caregiver should know",
+        "count": "{{used}}/{{max}}"
+      },
+      "favorites": {
+        "legend": "Favorite foods",
+        "help": "Pick foods your child enjoys to personalize meal suggestions",
+        "contains": "Contains {{allergen}}"
+      },
+      "delete": {
+        "button": "Delete",
+        "title": "Delete {{name}}?",
+        "description": "This removes the profile from every device in your household.",
+        "dataLoss": "All meal plans, food tracking and settings for {{name}} will be deleted. This can't be undone.",
+        "typeName": "Type {{name}} to confirm",
+        "confirm": "Delete profile"
+      },
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "save": "Save changes",
+      "add": "Add child",
+      "removeAllergen": {
+        "title": "Remove allergies?",
+        "item": "Remove {{allergen}} from {{name}}'s allergies? Meals with {{allergen}} will start appearing in plans.",
+        "keep": "Keep them",
+        "confirm": "Remove and save"
+      },
+      "discard": {
+        "title": "Discard changes?",
+        "description": "What you entered here won't be saved.",
+        "keep": "Keep editing",
+        "confirm": "Discard"
+      },
+      "homeLink": "Manage children"
+    }
+  }
+}

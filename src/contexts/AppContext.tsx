@@ -11,7 +11,7 @@ import { redactSnapshotForCache } from "@/lib/cacheSnapshot";
 import { mergeWindowedPlanEntries } from "@/lib/planWindow";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
-import { KidsProvider, useKids } from "./KidsContext";
+import { KidsProvider, useKids, type KidPatch } from "./KidsContext";
 import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
 import { fetchAllRows, ROW_CEILING } from "@/lib/fetchAllRows";
 import { toISODate, addIsoDays } from "@/lib/date-utils";
@@ -49,12 +49,16 @@ interface AppContextType {
   groceryHydrated: boolean;
   /** See FoodsContext: false until the cache held foods or the server load settled. */
   foodsHydrated: boolean;
+  /** See KidsContext: false until the cache held kids or the server load settled. */
+  kidsHydrated: boolean;
+  /** See KidsContext: the last failed kids read, or null. */
+  kidsLoadError: string | null;
   addFood: (food: Omit<Food, "id">) => Promise<boolean>;
   updateFood: (id: string, food: Partial<Food>) => void;
   deleteFood: (id: string) => void;
-  addKid: (kid: Omit<Kid, "id">) => Promise<boolean>;
-  updateKid: (id: string, kid: Partial<Kid>) => void;
-  deleteKid: (id: string) => void;
+  addKid: (kid: Omit<Kid, "id" | "allergens"> & { allergens?: string[] | null }) => Promise<boolean>;
+  updateKid: (id: string, kid: KidPatch) => Promise<boolean>;
+  deleteKid: (id: string) => Promise<boolean>;
   setActiveKid: (id: string | null) => void;
   setActiveKidId: (id: string | null) => void;
   addRecipe: (recipe: Omit<Recipe, "id">) => Promise<Recipe>;
@@ -128,7 +132,7 @@ const STARTER_FOODS: Omit<Food, "id">[] = [
 function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { userId, householdId } = useAuth();
   const { foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, foodsHydrated, setFoodsHydrated } = useFoods();
-  const { kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids } = useKids();
+  const { kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids, kidsHydrated, setKidsHydrated, kidsLoadError, setKidsLoadError } = useKids();
   const { recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes } = useRecipes();
   const { planEntries, setPlanEntries, setPlanEntriesState, addPlanEntry, addPlanEntries, updatePlanEntry, copyWeekPlan, deleteWeekPlan } = usePlan();
   const { groceryItems, groceryHydrated, setGroceryHydrated, setGroceryItems, setGroceryItemsState, addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
@@ -154,8 +158,38 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // account or household changed does not mark the new scope's list ready.
   const currentScopeRef = useRef<string | null>(null);
 
+  // The 'My Child' placeholder is for the signed-out/local app only. A
+  // signed-in parent with an empty cache must never see a child they did not
+  // add, so the mount hydrate checks for a session before seeding one, and
+  // the id is kept so a session that resolves later can take it back out.
+  const userIdRef = useRef<string | null>(userId);
+  userIdRef.current = userId;
+  const placeholderKidIdRef = useRef<string | null>(null);
+  // Set when kidsHydrated was granted with no session (the local app). A
+  // sign-in afterwards starts a server load, which is not settled yet.
+  const localKidsHydratedRef = useRef(false);
+
   // Load from storage on mount (platform-aware)
   useEffect(() => {
+    const hasSession = async (): Promise<boolean> => {
+      if (userIdRef.current) return true;
+      try {
+        const { data } = await supabase.auth.getSession();
+        return Boolean(data?.session?.user);
+      } catch {
+        return false;
+      }
+    };
+    const seedLocalPlaceholder = async () => {
+      if (await hasSession()) return;
+      if (serverLoadAppliedRef.current) return;
+      const defaultKid = { id: generateId(), name: "My Child", age: 5 };
+      placeholderKidIdRef.current = defaultKid.id;
+      setKids([defaultKid]);
+      setActiveKidId(defaultKid.id);
+      localKidsHydratedRef.current = true;
+      setKidsHydrated(true);
+    };
     const loadData = async () => {
       try {
         const storage = await getStorage();
@@ -172,6 +206,13 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
             setFoodsHydrated(true);
           }
           setKids(data.kids || []);
+          if (Array.isArray(data.kids) && data.kids.length > 0) {
+            setKidsHydrated(true);
+          } else if (!(await hasSession())) {
+            // Signed out, so no server load is coming to settle this.
+            localKidsHydratedRef.current = true;
+            setKidsHydrated(true);
+          }
           setRecipes(data.recipes || []);
           setActiveKidId(data.activeKidId || (data.kids?.[0]?.id ?? null));
           setPlanEntriesState(data.planEntries || []);
@@ -189,9 +230,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         } else {
           const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
           setFoods(starterFoods);
-          const defaultKid = { id: generateId(), name: "My Child", age: 5 };
-          setKids([defaultKid]);
-          setActiveKidId(defaultKid.id);
+          await seedLocalPlaceholder();
         }
       } catch (error) {
         logger.error("Error loading data from storage:", error);
@@ -199,9 +238,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         if (serverLoadAppliedRef.current) return;
         const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
         setFoods(starterFoods);
-        const defaultKid = { id: generateId(), name: "My Child", age: 5 };
-        setKids([defaultKid]);
-        setActiveKidId(defaultKid.id);
+        await seedLocalPlaceholder();
       }
     };
     loadData();
@@ -278,6 +315,19 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     const prevUserId = loadedScopeRef.current?.split(':')[0] ?? null;
     loadedScopeRef.current = scope;
 
+    // A placeholder seeded before the session resolved is not this account's
+    // child. Take it out rather than wait on the load to replace it.
+    const placeholderId = placeholderKidIdRef.current;
+    if (placeholderId) {
+      placeholderKidIdRef.current = null;
+      setKids((prev) => prev.filter((k) => k.id !== placeholderId));
+      setActiveKidId((prev) => (prev === placeholderId ? null : prev));
+    }
+    if (localKidsHydratedRef.current) {
+      localKidsHydratedRef.current = false;
+      setKidsHydrated(false);
+    }
+
     // US-538 leak guard: if a DIFFERENT user resolves on this device without an
     // intervening SIGNED_OUT event (account switch, token change), clear the
     // previous user's in-memory data before loading the new user's. Foods/kids/
@@ -295,6 +345,8 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setGroceryItemsState([]);
       setGroceryHydrated(false);
       setFoodsHydrated(false);
+      setKidsHydrated(false);
+      setKidsLoadError(null);
       setMovements([]);
       setItemStock([]);
     }
@@ -388,6 +440,14 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         // slices. Mark it so a late mount cache-hydrate cannot overwrite them.
         serverLoadAppliedRef.current = true;
 
+        // A failed kids read leaves the cached children on screen; the page
+        // says it is showing saved data instead of pretending it refreshed.
+        if (kidsRes.error) {
+          const message = (kidsRes.error as { message?: unknown }).message;
+          setKidsLoadError(typeof message === 'string' && message ? message : 'Could not load children');
+        } else {
+          setKidsLoadError(null);
+        }
         if (kidsRes.data) {
           // US-333: normalize on load so the shape matches the realtime path.
           const loadedKids = parseKidRows(kidsRes.data as unknown[]);
@@ -533,6 +593,9 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         }
         if (outcome === 'not-auth-error') {
           logger.error('Error loading user data from Supabase:', error);
+          if (currentScopeRef.current === scope) {
+            setKidsLoadError(error instanceof Error ? error.message : 'Could not load children');
+          }
         }
       }
     };
@@ -543,6 +606,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       if (currentScopeRef.current === scope) {
         setGroceryHydrated(true);
         setFoodsHydrated(true);
+        setKidsHydrated(true);
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -573,6 +637,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setGroceryItemsState([]);
       setGroceryHydrated(false);
       setFoodsHydrated(false);
+      setKidsHydrated(false);
+      setKidsLoadError(null);
+      placeholderKidIdRef.current = null;
+      localKidsHydratedRef.current = false;
       setMovements([]);
       setItemStock([]);
       getStorage()
@@ -743,6 +811,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppContextType>(() => ({
     foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated, foodsHydrated,
+    kidsHydrated, kidsLoadError,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
@@ -755,6 +824,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     refreshFoods, refreshRecipes, refreshKids,
   }), [
     foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated, foodsHydrated,
+    kidsHydrated, kidsLoadError,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,

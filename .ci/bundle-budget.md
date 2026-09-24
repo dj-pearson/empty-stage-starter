@@ -282,3 +282,11 @@ Measured with a JWT-shaped anon key (the authorized build): total 2437.2 kB
 on main, 2560.7 kB after. Eager closure 311.0 -> 314.4 kB (budget 322000,
 unchanged); `index.html` preload 191.1 kB (budget 198000, unchanged). Only
 `totalJs` moves.
+
+## 2026-09-24: `totalJs` 2570000 -> 2590000 (Kids tab)
+
+The Kids rework rebuilt the intake questionnaire (813 -> 1293 lines, now its
+own lazy chunk, +10.0 kB) and the quick-edit dialog (+3.5 kB), and added
+kids copy to the lazy `appLocale` chunk (+4.1 kB). All route-only; the entry
+grew 0.9 kB and the eager and preload budgets still pass. Measured total
+2581.5 kB against 2560.4 kB before.

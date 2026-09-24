@@ -421,7 +421,7 @@ export function CommandPalette() {
             {dataResults.kids.length > 0 && (
               <CommandGroup heading="Kids">
                 {dataResults.kids.map((kid) => (
-                  <CommandItem key={kid.id} onSelect={() => { saveRecentSearch(searchQuery); navigate("/dashboard/kids"); setOpen(false); }}>
+                  <CommandItem key={kid.id} onSelect={() => { saveRecentSearch(searchQuery); navigate(`/dashboard/kids?kid=${encodeURIComponent(kid.id)}`); setOpen(false); }}>
                     <Users className="mr-2 h-4 w-4 text-blue-500" />
                     <span>{kid.name}</span>
                   </CommandItem>
