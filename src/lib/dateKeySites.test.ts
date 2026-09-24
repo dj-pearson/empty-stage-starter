@@ -86,8 +86,6 @@ const REASONS: Record<string, string> = {
 
   // --- feed and markup dates: the spec says UTC
   'src/lib/sitemap-utils.ts': 'sitemap lastmod is a W3C datetime; UTC is correct and stable across rebuilds.',
-  'src/components/RecipeSchemaMarkup.tsx':
-    'schema.org datePublished fallback. A JSON-LD date is not the parent\'s calendar day.',
 
   // --- download filenames: a stamp, not a key anything is looked up by
   'src/pages/Home.tsx': 'Backup download filename -- a stamp on a file, not a key anything looks up.',

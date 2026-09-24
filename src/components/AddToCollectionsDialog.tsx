@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -9,34 +10,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
-import { RecipeCollection } from "@/types";
-import { Folder, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import type { RecipeCollection } from "@/types";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { logger } from "@/lib/logger";
-
-const ICON_MAP: Record<string, any> = {
-  folder: Folder,
-  star: Star,
-  heart: Heart,
-  zap: Zap,
-  pizza: Pizza,
-  clock: Clock,
-  users: Users,
-  sparkles: Sparkles,
-};
-
-const COLOR_CLASS_MAP: Record<string, string> = {
-  primary: "text-primary",
-  green: "text-green-600",
-  red: "text-red-600",
-  yellow: "text-yellow-600",
-  purple: "text-purple-600",
-  pink: "text-pink-600",
-  orange: "text-orange-600",
-  gray: "text-muted-foreground",
-};
+import { collectionIcon, collectionTone } from "@/lib/collectionAppearance";
 
 interface AddToCollectionsDialogProps {
   open: boolean;
@@ -44,8 +22,12 @@ interface AddToCollectionsDialogProps {
   recipeId: string;
   recipeName: string;
   collections: RecipeCollection[];
-  currentCollectionIds: string[];
-  onCollectionsUpdated?: () => void;
+  /** Collections the recipe is in now (useRecipeCollections().collectionIdsByRecipe[recipeId]). */
+  currentCollectionIds: readonly string[];
+  /** Persist the full set of collection ids for this recipe (useRecipeCollections().setMembership). */
+  onSave: (recipeId: string, collectionIds: string[]) => Promise<boolean>;
+  /** Create a collection inline (useRecipeCollections().create). */
+  onCreate?: (input: { name: string }) => Promise<RecipeCollection | null>;
 }
 
 export function AddToCollectionsDialog({
@@ -55,62 +37,57 @@ export function AddToCollectionsDialog({
   recipeName,
   collections,
   currentCollectionIds,
-  onCollectionsUpdated,
+  onSave,
+  onCreate,
 }: AddToCollectionsDialogProps) {
-  const [selectedCollections, setSelectedCollections] = useState<string[]>(currentCollectionIds);
+  const { t } = useTranslation();
+  const [selected, setSelected] = useState<string[]>(() => [...currentCollectionIds]);
   const [saving, setSaving] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
 
-  const handleToggleCollection = (collectionId: string) => {
-    setSelectedCollections(prev => {
-      if (prev.includes(collectionId)) {
-        return prev.filter(id => id !== collectionId);
-      } else {
-        return [...prev, collectionId];
+  // Re-seed each time the dialog opens (or opens for another recipe); the
+  // initial useState value alone went stale after the first recipe.
+  useEffect(() => {
+    if (open) {
+      setSelected([...currentCollectionIds]);
+      setNewName("");
+    }
+    // currentCollectionIds is intentionally not a dependency: a membership
+    // change while the dialog is open must not wipe the user's unsaved picks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, recipeId]);
+
+  const toggle = (collectionId: string, checked: boolean) => {
+    setSelected((prev) =>
+      checked ? (prev.includes(collectionId) ? prev : [...prev, collectionId]) : prev.filter((id) => id !== collectionId),
+    );
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newName.trim();
+    if (!name || !onCreate || creating) return;
+    setCreating(true);
+    try {
+      const created = await onCreate({ name });
+      if (created) {
+        setSelected((prev) => (prev.includes(created.id) ? prev : [...prev, created.id]));
+        setNewName("");
       }
-    });
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Find which collections to add and remove
-      const collectionsToAdd = selectedCollections.filter(id => !currentCollectionIds.includes(id));
-      const collectionsToRemove = currentCollectionIds.filter(id => !selectedCollections.includes(id));
-
-      // Add to new collections
-      if (collectionsToAdd.length > 0) {
-        const { error: insertError } = await supabase
-          .from('recipe_collection_items')
-          .insert(
-            collectionsToAdd.map(collectionId => ({
-              collection_id: collectionId,
-              recipe_id: recipeId,
-              sort_order: 0,
-            }))
-          );
-
-        if (insertError) throw insertError;
+      const ok = await onSave(recipeId, selected);
+      if (ok) {
+        toast.success(t("recipes.collections.saved", { defaultValue: "Collections updated" }));
+        onOpenChange(false);
       }
-
-      // Remove from collections
-      if (collectionsToRemove.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('recipe_collection_items')
-          .delete()
-          .in('collection_id', collectionsToRemove)
-          .eq('recipe_id', recipeId);
-
-        if (deleteError) throw deleteError;
-      }
-
-      toast.success("Collections updated!");
-      if (onCollectionsUpdated) {
-        onCollectionsUpdated();
-      }
-      onOpenChange(false);
-    } catch (error) {
-      logger.error('Error updating collections:', error);
-      toast.error("Failed to update collections");
     } finally {
       setSaving(false);
     }
@@ -118,68 +95,83 @@ export function AddToCollectionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Add to Collections</DialogTitle>
+          <DialogTitle>{t("recipes.collections.addTitle", { defaultValue: "Add to collections" })}</DialogTitle>
           <DialogDescription>
-            Choose which collections "{recipeName}" should be in.
+            {t("recipes.collections.addDescription", {
+              defaultValue: "Choose where \"{{name}}\" belongs.",
+              name: recipeName,
+            })}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+        <div className="max-h-[360px] space-y-2 overflow-y-auto">
           {collections.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No collections yet.</p>
-              <p className="text-sm mt-2">Create a collection first to organize your recipes.</p>
-            </div>
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {t("recipes.collections.noneYet", { defaultValue: "No collections yet. Name one below." })}
+            </p>
           ) : (
             collections.map((collection) => {
-              const Icon = collection.icon ? ICON_MAP[collection.icon] || Folder : Folder;
-              const colorClass = collection.color ? COLOR_CLASS_MAP[collection.color] || "text-primary" : "text-primary";
-              const isSelected = selectedCollections.includes(collection.id);
-
+              const Icon = collectionIcon(collection.icon);
+              const tone = collectionTone(collection.color);
+              const isSelected = selected.includes(collection.id);
+              // One <label> wraps the checkbox and the text: a click anywhere on
+              // the row reaches the checkbox exactly once, through the label.
               return (
-                <div
+                <label
                   key={collection.id}
-                  className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
-                  onClick={() => handleToggleCollection(collection.id)}
+                  className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
                 >
                   <Checkbox
-                    id={collection.id}
                     checked={isSelected}
-                    onCheckedChange={() => handleToggleCollection(collection.id)}
-                    onClick={(e) => e.stopPropagation()}
+                    onCheckedChange={(checked) => toggle(collection.id, checked === true)}
                   />
-                  <Icon className={`h-5 w-5 ${colorClass}`} />
-                  <div className="flex-1 min-w-0">
-                    <Label
-                      htmlFor={collection.id}
-                      className="font-medium cursor-pointer"
-                    >
-                      {collection.name}
-                    </Label>
+                  <Icon className={`h-5 w-5 shrink-0 ${tone.text}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{collection.name}</span>
                     {collection.description && (
-                      <p className="text-sm text-muted-foreground truncate">
-                        {collection.description}
-                      </p>
+                      <span className="block truncate text-sm text-muted-foreground">{collection.description}</span>
                     )}
-                  </div>
-                </div>
+                  </span>
+                </label>
               );
             })
           )}
         </div>
 
+        {onCreate && (
+          <form onSubmit={handleCreate} className="flex gap-2">
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={t("recipes.collections.newPlaceholder", { defaultValue: "New collection" })}
+              aria-label={t("recipes.collections.newName", { defaultValue: "New collection name" })}
+              className="min-h-11"
+              maxLength={80}
+            />
+            <Button type="submit" variant="outline" className="min-h-11 shrink-0" disabled={!newName.trim() || creating}>
+              {creating ? (
+                <Loader2 className="mr-1.5 h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+              ) : (
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              )}
+              {t("recipes.collections.add", { defaultValue: "Add" })}
+            </Button>
+          </form>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
+            {t("recipes.collections.cancel", { defaultValue: "Cancel" })}
           </Button>
-          <Button onClick={handleSave} disabled={saving || collections.length === 0}>
-            {saving ? "Saving..." : "Save"}
+          <Button onClick={() => void handleSave()} disabled={saving || collections.length === 0}>
+            {saving
+              ? t("recipes.collections.saving", { defaultValue: "Saving..." })
+              : t("recipes.collections.save", { defaultValue: "Save" })}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-

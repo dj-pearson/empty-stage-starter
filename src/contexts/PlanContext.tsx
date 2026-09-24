@@ -67,6 +67,11 @@ export interface ScheduleRecipeResult extends PlanWriteResult {
   /** Kid ids the recipe was scheduled for. */
   succeeded: string[];
   failed: string[];
+  /**
+   * The rows the RPC wrote, from the scoped read-back. Empty when nothing was
+   * scheduled or the read-back failed (realtime still delivers them then).
+   */
+  rows: PlanEntry[];
 }
 
 export type SlotTarget = { foodId: string } | { recipeId: string };
@@ -331,7 +336,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     kidIds: string[],
   ): Promise<ScheduleRecipeResult> => {
     const kids = [...new Set(kidIds)];
-    if (kids.length === 0) return { error: null, succeeded: [], failed: [] };
+    if (kids.length === 0) return { error: null, succeeded: [], failed: [], rows: [] };
 
     const settled = await Promise.allSettled(
       kids.map(async (kidId) => {
@@ -355,7 +360,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       }
     });
     if (firstError) logger.error('schedule_recipe_to_plan failed:', firstError);
-    if (succeeded.length === 0) return { error: firstError, succeeded, failed };
+    if (succeeded.length === 0) return { error: firstError, succeeded, failed, rows: [] };
 
     // One scoped read of exactly the rows the RPC wrote. The page used to
     // reload the WHOLE household plan (select('*') with no filter) after every
@@ -369,11 +374,12 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       .eq('meal_slot', slot)
       .eq('recipe_id', recipeId);
 
+    let rows: PlanEntry[] = [];
     if (readError) {
       // The rows are saved; realtime will deliver them. Nothing to roll back.
       logger.error('Scoped plan_entries read after schedule failed:', readError);
     } else {
-      const rows = parsePlanEntryRows((data ?? []) as unknown[]);
+      rows = parsePlanEntryRows((data ?? []) as unknown[]);
       const fresh = new Set(rows.map(r => r.id));
       const scope = new Set(succeeded);
       setPlanEntriesRaw(prev => {
@@ -394,7 +400,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     }
-    return { error: failed.length > 0 ? firstError : null, succeeded, failed };
+    return { error: failed.length > 0 ? firstError : null, succeeded, failed, rows };
   }, []);
 
   const replaceSlot = useCallback(async (

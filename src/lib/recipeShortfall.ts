@@ -96,14 +96,20 @@ function indexOnList(onList: readonly GroceryItem[] | undefined) {
  * `onList`, when given, is the current grocery list: unchecked rows with the
  * same name count toward the need (converted to the recipe's unit where the
  * units allow), so an ingredient already on the list is not offered twice.
+ *
+ * `scale` multiplies every recipe quantity before comparing, so a recipe
+ * doubled from 4 to 8 servings asks for twice as much. Omitted, non-finite or
+ * non-positive values mean 1.
  */
 export function computeRecipeShortfall(
   recipe: Recipe,
   foods: Food[],
   onList?: readonly GroceryItem[],
+  scale: number = 1,
 ): Shortfall[] {
   const ingredients = recipe.recipe_ingredients ?? [];
   if (ingredients.length === 0) return [];
+  const factor = Number.isFinite(scale) && scale > 0 ? scale : 1;
 
   const sorted = ingredients
     .slice()
@@ -154,7 +160,8 @@ export function computeRecipeShortfall(
       continue;
     }
 
-    let needed = ing.quantity as number;
+    const scaledQty = (ing.quantity as number) * factor;
+    let needed = scaledQty;
     let reason: ShortfallReason = matchedFood ? "short" : "not_in_pantry";
     let comparable = true;
 
@@ -183,7 +190,7 @@ export function computeRecipeShortfall(
 
     shortfalls.push({
       ingredient: ing,
-      needed: comparable ? roundQty(needed) : (ing.quantity as number),
+      needed: comparable ? roundQty(needed) : roundQty(scaledQty),
       neededUnit,
       onHand,
       onHandUnit,

@@ -225,3 +225,34 @@ describe('computeRecipeShortfall: units, unknown amounts and the list', () => {
     expect(countMissingForRecipe(recipe, [], onList)).toBe(1);
   });
 });
+
+describe('computeRecipeShortfall scale', () => {
+  const recipe: Recipe = {
+    id: 'r-scale',
+    name: 'Chili',
+    food_ids: [],
+    recipe_ingredients: [
+      buildIngredient({ id: 'i-beef', name: 'Ground beef', quantity: 1, unit: 'lb' }),
+      buildIngredient({ id: 'i-beans', name: 'Beans', quantity: 2, unit: 'can', sort_order: 1 }),
+    ],
+  };
+
+  it('multiplies what is needed by the scale', () => {
+    const base = computeRecipeShortfall(recipe, []);
+    const doubled = computeRecipeShortfall(recipe, [], undefined, 2);
+    expect(base.map((s) => s.needed)).toEqual([1, 2]);
+    expect(doubled.map((s) => s.needed)).toEqual([2, 4]);
+  });
+
+  it('treats a bad scale as 1', () => {
+    expect(computeRecipeShortfall(recipe, [], undefined, Number.NaN).map((s) => s.needed)).toEqual([1, 2]);
+  });
+
+  it('does not report an item already on the list as missing', () => {
+    const onList: GroceryItem[] = [
+      { id: 'g1', name: 'Beans', quantity: 4, unit: 'can', checked: false, category: 'protein' },
+    ];
+    const out = computeRecipeShortfall(recipe, [], onList, 2);
+    expect(out.map((s) => s.ingredient.name)).toEqual(['Ground beef']);
+  });
+});

@@ -87,7 +87,10 @@ describe("hover-reveal controls are reachable without a mouse", () => {
   it("found hover-reveal controls to check", () => {
     // Assert the instrument. If the className regex stops matching -- a
     // refactor to clsx, say -- every assertion below passes against nothing.
-    expect(total).toBeGreaterThanOrEqual(15);
+    // Was 15; the Recipes redesign made the remove/reorder buttons in
+    // IngredientRow, InstructionStepBuilder and RecipeListItem always visible,
+    // which retired four hover-reveal controls rather than hiding them.
+    expect(total).toBeGreaterThanOrEqual(12);
   });
 
   it("every one reveals on touch and on keyboard focus", () => {

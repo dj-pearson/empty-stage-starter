@@ -30,7 +30,10 @@ import {
   buildResultIndex,
   getKidFoodFit,
   getKidRecipeFit,
-  type KidFit,
+  summarizeKidFits as summarize,
+  fitGroup as groupOf,
+  type FitGroup,
+  type ItemFit,
   type ResultIndex,
 } from "@/lib/kidFit";
 import { topSiblingMeals, type SolverResult } from "@/lib/siblingMealFinder";
@@ -75,44 +78,7 @@ const SLOT_DEFAULT_LABELS: Record<MealSlot, string> = {
 const EMPTY_ENTRIES: PlanEntry[] = [];
 
 type Tab = "foods" | "recipes";
-type Group = "safe" | "trying" | "other";
-
-interface KidHit {
-  kid: Kid;
-  fit: KidFit;
-}
-
-/** One item scored against every target kid. */
-interface ItemFit {
-  perKid: KidHit[];
-  allergenKids: KidHit[];
-  dislikeKids: Kid[];
-  goToKids: Kid[];
-  safeForAll: boolean;
-  trying: boolean;
-  tries: number;
-  lastResult: KidFit["lastResult"];
-}
-
-function summarize(perKid: KidHit[]): ItemFit {
-  const allergenKids = perKid.filter((h) => h.fit.allergen);
-  const dislikeKids = perKid.filter((h) => h.fit.disliked).map((h) => h.kid);
-  const goToKids = perKid.filter((h) => h.fit.alwaysEats).map((h) => h.kid);
-  const safeForAll =
-    perKid.length > 0 &&
-    perKid.every((h) => (h.fit.safe || h.fit.alwaysEats) && !h.fit.allergen && !h.fit.disliked);
-  const trying = allergenKids.length === 0 && perKid.some((h) => h.fit.tryBite);
-  const tries = perKid.reduce((m, h) => Math.max(m, h.fit.tries), 0);
-  const lastResult = perKid.length === 1 ? perKid[0].fit.lastResult : null;
-  return { perKid, allergenKids, dislikeKids, goToKids, safeForAll, trying, tries, lastResult };
-}
-
-function groupOf(fit: ItemFit): Group {
-  if (fit.allergenKids.length > 0) return "other";
-  if (fit.safeForAll) return "safe";
-  if (fit.trying) return "trying";
-  return "other";
-}
+type Group = FitGroup;
 
 const ORDINAL_SUFFIX: Record<string, string> = { one: "st", two: "nd", few: "rd", other: "th" };
 

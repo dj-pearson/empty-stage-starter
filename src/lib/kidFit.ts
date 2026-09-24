@@ -31,6 +31,12 @@ export interface KidFit {
   /** Offers with a recorded result (ate + tasted + refused). */
   tries: number;
   ate: number;
+  /**
+   * Split of the remaining tries. Optional so fixtures written before they
+   * existed still type-check; getKidFoodFit and getKidRecipeFit always set them.
+   */
+  tasted?: number;
+  refused?: number;
   /** Every past offer, logged or not. */
   offered: number;
   /** The most recent recorded result, by date. */
@@ -123,6 +129,8 @@ function fitFromStats(
     tryBite: Boolean(food.is_try_bite),
     tries: stats.tries,
     ate: stats.ate,
+    tasted: stats.tasted,
+    refused: stats.refused,
     offered: stats.offered,
     lastResult: stats.lastResult,
   };
@@ -151,9 +159,9 @@ export function getKidFoodFit(
  * Fit of a recipe for one kid, judged over the recipe's foods.
  *
  * - allergen: the first hit among the recipe's foods, in food_ids order.
- * - disliked: any food is on the dislike list.
+ * - disliked: at least one food is on the dislike list.
  * - alwaysEats / safe: every resolvable food qualifies.
- * - tryBite: any food is a try bite.
+ * - tryBite: at least one food is a try bite.
  * - History: summed over the recipe's foods; lastResult is the most recent.
  *
  * Foods missing from `foodById` are skipped rather than guessed at.
@@ -189,6 +197,8 @@ export function getKidRecipeFit(
     const stats = statsFor(index, food.id);
     totals.tries += stats.tries;
     totals.ate += stats.ate;
+    totals.tasted += stats.tasted;
+    totals.refused += stats.refused;
     totals.offered += stats.offered;
     if (stats.lastResult && (totals.lastDate === null || (stats.lastDate ?? "") >= totals.lastDate)) {
       totals.lastDate = stats.lastDate;
@@ -204,6 +214,8 @@ export function getKidRecipeFit(
     tryBite,
     tries: totals.tries,
     ate: totals.ate,
+    tasted: totals.tasted,
+    refused: totals.refused,
     offered: totals.offered,
     lastResult: totals.lastResult,
   };
@@ -217,4 +229,182 @@ export function acceptanceWeight(stats: ResultStats | undefined): number {
   if (!stats || stats.tries === 0) return 2; // untried: neutral
   const score = (stats.ate * 4 + stats.tasted * 2.5 + stats.refused * 0.5) / stats.tries;
   return Math.max(0.25, score);
+}
+
+/** acceptanceWeight for a KidFit, which carries the same counts as ResultStats. */
+export function fitAcceptanceWeight(fit: KidFit): number {
+  if (fit.tries === 0) return acceptanceWeight(undefined);
+  const tasted = fit.tasted ?? 0;
+  return acceptanceWeight({
+    tries: fit.tries,
+    ate: fit.ate,
+    tasted,
+    refused: fit.refused ?? Math.max(0, fit.tries - fit.ate - tasted),
+    offered: fit.offered,
+    lastResult: fit.lastResult,
+    lastDate: null,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// One item scored against several kids (lifted from MealQuickAddDrawer).
+// ---------------------------------------------------------------------------
+
+export interface KidHit {
+  kid: Kid;
+  fit: KidFit;
+}
+
+/**
+ * Whether an item is safe from allergens for every target kid.
+ *
+ * - hit: at least one kid's allergen is in it.
+ * - unknown: no hit found, but we could not check everything, because a kid's
+ *   allergy list is missing (redacted from the offline cache) or some of the
+ *   item's ingredients do not resolve to a food we know the allergens of.
+ * - safe: every kid's list was known and every ingredient was checked.
+ *
+ * Unknown is never shown as safe.
+ */
+export type AllergenStatus = "safe" | "hit" | "unknown";
+
+/** One item scored against every target kid. */
+export interface ItemFit {
+  perKid: KidHit[];
+  allergenKids: KidHit[];
+  dislikeKids: Kid[];
+  goToKids: Kid[];
+  /** Safe or go-to for every kid, no dislike, and allergenStatus is "safe". */
+  safeForAll: boolean;
+  trying: boolean;
+  tries: number;
+  lastResult: KidFit["lastResult"];
+  allergenStatus: AllergenStatus;
+  /** Ingredients that could not be checked for allergens. */
+  unchecked: number;
+}
+
+export interface SummarizeOptions {
+  /** Ingredients that could not be checked (see countUncheckedIngredients). */
+  unchecked?: number;
+  /** Kids whose allergy list is not known. Kids with `allergens` undefined count too. */
+  unknownKidIds?: readonly string[];
+}
+
+/** A kid's allergy list is unknown when the field is absent, not when it is empty. */
+export function isAllergyUnknown(kid: Pick<Kid, "allergens">): boolean {
+  return kid.allergens === undefined;
+}
+
+export function summarizeKidFits(perKid: KidHit[], opts: SummarizeOptions = {}): ItemFit {
+  const unchecked = Math.max(0, opts.unchecked ?? 0);
+  const unknownIds = new Set(opts.unknownKidIds ?? []);
+  const allergenKids = perKid.filter((h) => h.fit.allergen);
+  const dislikeKids = perKid.filter((h) => h.fit.disliked).map((h) => h.kid);
+  const goToKids = perKid.filter((h) => h.fit.alwaysEats).map((h) => h.kid);
+  const anyUnknownKid = perKid.some((h) => unknownIds.has(h.kid.id) || isAllergyUnknown(h.kid));
+  const allergenStatus: AllergenStatus =
+    allergenKids.length > 0 ? "hit" : anyUnknownKid || unchecked > 0 ? "unknown" : "safe";
+  const safeForAll =
+    allergenStatus === "safe" &&
+    perKid.length > 0 &&
+    perKid.every((h) => (h.fit.safe || h.fit.alwaysEats) && !h.fit.allergen && !h.fit.disliked);
+  const trying = allergenKids.length === 0 && perKid.some((h) => h.fit.tryBite);
+  const tries = perKid.reduce((m, h) => Math.max(m, h.fit.tries), 0);
+  const lastResult = perKid.length === 1 ? perKid[0].fit.lastResult : null;
+  return {
+    perKid,
+    allergenKids,
+    dislikeKids,
+    goToKids,
+    safeForAll,
+    trying,
+    tries,
+    lastResult,
+    allergenStatus,
+    unchecked,
+  };
+}
+
+export type FitGroup = "safe" | "trying" | "other";
+
+/** Safe for everyone first, then what a kid is working on, then the rest. */
+export function fitGroup(fit: ItemFit): FitGroup {
+  if (fit.allergenKids.length > 0) return "other";
+  if (fit.safeForAll) return "safe";
+  if (fit.trying) return "trying";
+  return "other";
+}
+
+type FoodLookup = ReadonlyMap<string, Food>;
+
+/**
+ * Ingredients whose allergens we cannot check: food_ids that do not resolve in
+ * `foodById`, plus recipe_ingredients rows with no food at all (typed-in
+ * ingredients, or an import nothing matched).
+ */
+export function countUncheckedIngredients(
+  recipe: Pick<Recipe, "food_ids" | "recipe_ingredients">,
+  foodById: FoodLookup,
+): number {
+  let n = 0;
+  for (const id of recipe.food_ids ?? []) if (!foodById.has(id)) n++;
+  for (const row of recipe.recipe_ingredients ?? []) if (row.food_id == null) n++;
+  return n;
+}
+
+export interface AllergenConflict<K extends Pick<Kid, "id" | "allergens"> = Kid> {
+  kid: K;
+  food: Food;
+  /** Canonical allergen name, e.g. "peanut". */
+  allergen: string;
+}
+
+/**
+ * Every (kid, food) pair where the food carries one of the kid's allergens.
+ * Canonical matching, so a kid's "peanuts" matches a food's "en:peanuts".
+ * Foods missing from `foodById` are skipped: they are "unknown", not a hit.
+ */
+export function findAllergenConflicts<K extends Pick<Kid, "id" | "allergens">>(
+  kids: readonly K[],
+  foodIds: readonly string[],
+  foodById: FoodLookup,
+): AllergenConflict<K>[] {
+  const out: AllergenConflict<K>[] = [];
+  const foods = [...new Set(foodIds)]
+    .map((id) => foodById.get(id))
+    .filter((f): f is Food => Boolean(f));
+  for (const kid of kids) {
+    if (!kid.allergens || kid.allergens.length === 0) continue;
+    for (const food of foods) {
+      const allergen = matchingAllergen(kid.allergens, food.allergens);
+      if (allergen) out.push({ kid, food, allergen });
+    }
+  }
+  return out;
+}
+
+/**
+ * Score every recipe against the target kids. History counts up to (not
+ * including) `todayKey`. One ResultIndex is built per kid and shared across
+ * all recipes, so the cost is kids x plan + recipes x kids x foods.
+ */
+export function buildRecipeFits(
+  recipes: readonly Recipe[],
+  targetKids: readonly Kid[],
+  foodById: FoodLookup,
+  planEntries: readonly PlanEntry[],
+  todayKey?: string,
+): Map<string, ItemFit> {
+  const indexes = new Map<string, ResultIndex>();
+  for (const k of targetKids) indexes.set(k.id, buildResultIndex(planEntries, k.id, todayKey));
+  const out = new Map<string, ItemFit>();
+  for (const recipe of recipes) {
+    const perKid = targetKids.map((k) => ({
+      kid: k,
+      fit: getKidRecipeFit(k, recipe, foodById, indexes.get(k.id) ?? new Map()),
+    }));
+    out.set(recipe.id, summarizeKidFits(perKid, { unchecked: countUncheckedIngredients(recipe, foodById) }));
+  }
+  return out;
 }

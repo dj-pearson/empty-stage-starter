@@ -1,88 +1,165 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useId, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
-import { Loader2, Link2, FileJson, Sparkles, Upload, Camera, ChefHat, Users, User } from "lucide-react";
-import { Food, Kid } from "@/types";
-import { Html5Qrcode } from "html5-qrcode";
+import { Loader2, Link2, FileJson, Sparkles, Upload, Camera, ChefHat, AlertCircle, RotateCcw } from "lucide-react";
+import type { Food, Kid, Recipe } from "@/types";
+import type { Html5Qrcode } from "html5-qrcode";
 import { logger } from "@/lib/logger";
+import { normalizeImportedRecipe, RecipeImportError, type ImportPath } from "@/lib/recipeImport";
 
 interface ImportRecipeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (recipeData: any) => void;
+  /**
+   * Saves the recipe. The page owns the one success toast; this dialog closes
+   * only after the promise resolves and stays open with its input on rejection.
+   */
+  onImport: (recipe: Omit<Recipe, "id">) => Promise<void>;
   foods: Food[];
-  kids: Kid[];
+  /** Unused since the never-persisted Family/Child card was removed; kept so callers compile. */
+  kids?: Kid[];
 }
 
-export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }: ImportRecipeDialogProps) {
+type EdgeRecipeResponse = { recipe?: unknown; error?: string } | null | undefined;
+
+const errorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof RecipeImportError) return error.message;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return fallback;
+};
+
+export function ImportRecipeDialog({ open, onOpenChange, onImport, foods }: ImportRecipeDialogProps) {
+  const { t } = useTranslation();
+  const uid = useId();
   const [isLoading, setIsLoading] = useState(false);
   const [url, setUrl] = useState("");
   const [recipeText, setRecipeText] = useState("");
   const [jsonInput, setJsonInput] = useState("");
-  
-  // New states for photo import and designation
+  /** Shown inline in the active pane; the dialog stays open with its input. */
+  const [error, setError] = useState<string | null>(null);
+
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Designation states
-  const [isFamily, setIsFamily] = useState(false);
-  const [selectedKidId, setSelectedKidId] = useState<string>("");
-  const [preferredMealSlot, setPreferredMealSlot] = useState<string>("any");
+
+  const stopCamera = useCallback(async () => {
+    try {
+      if (scannerRef.current) {
+        await scannerRef.current.stop();
+        await scannerRef.current.clear();
+        scannerRef.current = null;
+      }
+    } catch (err) {
+      logger.debug('Scanner stop error (expected):', err);
+      scannerRef.current = null;
+    }
+    setShowCamera(false);
+  }, []);
 
   // Clean up camera when dialog closes
   useEffect(() => {
     if (!open) {
-      stopCamera();
+      void stopCamera();
     }
-  }, [open]);
+  }, [open, stopCamera]);
 
   const startCamera = async () => {
     try {
+      setError(null);
       setCapturedImage(null);
       setShowCamera(true);
+      // The scanner is ~300KB and only this tab needs it.
+      const { Html5Qrcode: Scanner } = await import("html5-qrcode");
       await new Promise((r) => setTimeout(r, 50));
 
       if (scannerRef.current) {
         try {
           await scannerRef.current.stop();
           await scannerRef.current.clear();
-        } catch (error) {
+        } catch (err) {
           // Ignore cleanup errors - scanner may already be stopped
-          logger.debug('Scanner cleanup error (expected):', error);
+          logger.debug('Scanner cleanup error (expected):', err);
         }
         scannerRef.current = null;
       }
 
-      const scanner = new Html5Qrcode('recipe-photo-scanner');
+      const scanner = new Scanner('recipe-photo-scanner');
       scannerRef.current = scanner;
 
-      const cameras = await Html5Qrcode.getCameras();
+      const cameras = await Scanner.getCameras();
       if (!cameras || cameras.length === 0) throw new Error('No cameras found');
-      
+
       const back = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
 
       await scanner.start(back.id, { fps: 10, aspectRatio: 1.333 }, () => {}, () => {});
-    } catch (error) {
-      logger.error('Camera error:', error);
-      toast.error("Failed to start camera");
+    } catch (err) {
+      logger.error('Camera error:', err);
+      setError(t("recipes.import.cameraFailed", { defaultValue: "Couldn't start the camera. Try uploading a photo instead." }));
       setShowCamera(false);
     }
   };
 
+  const resetAndClose = () => {
+    setUrl("");
+    setRecipeText("");
+    setJsonInput("");
+    setCapturedImage(null);
+    setError(null);
+    void stopCamera();
+    onOpenChange(false);
+  };
+
+  /**
+   * The one place a recipe leaves the dialog. Close only once the save has
+   * landed; on failure keep everything the person typed and say why.
+   */
+  const submit = async (input: unknown, path: ImportPath, sourceUrl?: string) => {
+    const recipe = normalizeImportedRecipe(input, path, foods, sourceUrl);
+    await onImport(recipe);
+    resetAndClose();
+  };
+
+  const fetchParsed = async (fn: 'parse-recipe-grocery' | 'parse-recipe', body: Record<string, unknown>): Promise<unknown> => {
+    const { data, error: fnError } = await invokeEdgeFunction<EdgeRecipeResponse>(fn, { body });
+    if (fnError) throw fnError;
+    if (data?.error) throw new Error(data.error);
+    if (!data?.recipe) throw new RecipeImportError(t("recipes.import.nothingFound", { defaultValue: "We couldn't find a recipe there." }));
+    return data.recipe;
+  };
+
+  const run = async (task: () => Promise<void>, fallback: string, logLabel: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await task();
+    } catch (err) {
+      logger.error(logLabel, err);
+      setError(errorMessage(err, fallback));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePhotoImport = (imageBase64: string) =>
+    run(
+      async () => submit(await fetchParsed('parse-recipe-grocery', { imageBase64 }), "photo"),
+      t("recipes.import.photoFailed", { defaultValue: "Couldn't import a recipe from that photo." }),
+      'Error importing from photo:',
+    );
+
   const capturePhoto = async () => {
     const videoEl = document.querySelector('#recipe-photo-scanner video') as HTMLVideoElement | null;
     if (!videoEl || videoEl.videoWidth === 0) {
-      toast.error("Camera not ready");
+      toast.error(t("recipes.import.cameraNotReady", { defaultValue: "Camera not ready" }));
       return;
     }
 
@@ -95,139 +172,82 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
       const imageData = canvas.toDataURL('image/jpeg', 0.85);
       setCapturedImage(imageData);
       await stopCamera();
-      handlePhotoImport(imageData);
+      await handlePhotoImport(imageData);
     }
-  };
-
-  const stopCamera = async () => {
-    try {
-      if (scannerRef.current) {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
-        scannerRef.current = null;
-      }
-    } catch {}
-    setShowCamera(false);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Let the same file be chosen again after an error.
+    e.target.value = "";
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const imageData = event.target?.result as string;
+      const imageData = event.target?.result;
+      if (typeof imageData !== "string") return;
       setCapturedImage(imageData);
-      handlePhotoImport(imageData);
+      void handlePhotoImport(imageData);
     };
     reader.readAsDataURL(file);
   };
 
-  const handlePhotoImport = async (imageBase64: string) => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await invokeEdgeFunction('parse-recipe-grocery', {
-        body: { imageBase64 }
-      });
-
-      if (error) throw error;
-      if (data?.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      const recipe = data.recipe;
-      onImport(mapRecipeToFormat(recipe));
-      toast.success("Recipe imported from photo!");
-      handleClose();
-    } catch (error) {
-      logger.error('Error importing from photo:', error);
-      toast.error("Failed to import recipe from photo");
-    } finally {
-      setIsLoading(false);
-    }
+  const retakePhoto = () => {
+    setCapturedImage(null);
+    setError(null);
+    void startCamera();
   };
 
-  const handleUrlImport = async () => {
-    if (!url.trim()) {
-      toast.error("Please enter a URL");
+  const chooseAnotherPhoto = () => {
+    setCapturedImage(null);
+    setError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleUrlImport = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const target = url.trim();
+    if (!target) {
+      setError(t("recipes.import.urlRequired", { defaultValue: "Enter a recipe URL" }));
       return;
     }
-
-    setIsLoading(true);
-    try {
-      const { data, error } = await invokeEdgeFunction('parse-recipe-grocery', {
-        body: { url }
-      });
-
-      if (error) throw error;
-      if (data?.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      const recipe = data.recipe;
-      onImport(mapRecipeToFormat(recipe, url.trim()));
-      toast.success("Recipe imported from URL!");
-      handleClose();
-    } catch (error) {
-      logger.error('Error importing from URL:', error);
-      toast.error("Failed to import recipe from URL");
-    } finally {
-      setIsLoading(false);
-    }
+    await run(
+      async () => submit(await fetchParsed('parse-recipe-grocery', { url: target }), "url", target),
+      t("recipes.import.urlFailed", { defaultValue: "Couldn't import a recipe from that URL." }),
+      'Error importing from URL:',
+    );
   };
 
-  const handleTextImport = async () => {
+  const handleTextImport = async (e?: FormEvent) => {
+    e?.preventDefault();
     if (!recipeText.trim()) {
-      toast.error("Please paste recipe text");
+      setError(t("recipes.import.textRequired", { defaultValue: "Paste the recipe text first" }));
       return;
     }
-
-    setIsLoading(true);
-    try {
-      // US-709: parse-recipe resolves its own model server-side. The client
-      // sends only the content to parse -- naming an endpoint or an API-key
-      // env var from here would hand any signed-in user a server secret.
-      const { data, error } = await invokeEdgeFunction('parse-recipe', {
-        body: { text: recipeText },
-      });
-
-      if (error) throw error;
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      const recipe = data.recipe;
-      onImport(mapRecipeToFormat(recipe));
-      toast.success("Recipe imported from text!");
-      handleClose();
-    } catch (error) {
-      logger.error('Error importing from text:', error);
-      toast.error("Failed to import recipe from text");
-    } finally {
-      setIsLoading(false);
-    }
+    // US-709: parse-recipe resolves its own model server-side. The client
+    // sends only the content to parse -- naming an endpoint or an API-key
+    // env var from here would hand any signed-in user a server secret.
+    await run(
+      async () => submit(await fetchParsed('parse-recipe', { text: recipeText }), "text"),
+      t("recipes.import.textFailed", { defaultValue: "Couldn't import a recipe from that text." }),
+      'Error importing from text:',
+    );
   };
 
-  const handleJsonImport = () => {
-    try {
-      const parsed = JSON.parse(jsonInput);
-      
-      // Validate required fields
-      if (!parsed.name) {
-        toast.error("Recipe must have a name");
-        return;
-      }
-
-      onImport(mapRecipeToFormat(parsed));
-      toast.success("Recipe imported from JSON!");
-      handleClose();
-    } catch (error) {
-      logger.error('Error parsing JSON:', error);
-      toast.error("Invalid JSON format");
-    }
+  const handleJsonImport = async () => {
+    await run(
+      async () => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(jsonInput);
+        } catch {
+          throw new RecipeImportError(t("recipes.import.invalidJson", { defaultValue: "That isn't valid JSON." }));
+        }
+        await submit(parsed, "json");
+      },
+      t("recipes.import.jsonFailed", { defaultValue: "Couldn't import that JSON." }),
+      'Error importing JSON:',
+    );
   };
 
   const handleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,105 +256,12 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        setJsonInput(content);
-      } catch (error) {
-        toast.error("Failed to read file");
-      }
+      const content = event.target?.result;
+      if (typeof content === "string") setJsonInput(content);
+      else setError(t("recipes.import.fileReadFailed", { defaultValue: "Couldn't read that file." }));
     };
+    reader.onerror = () => setError(t("recipes.import.fileReadFailed", { defaultValue: "Couldn't read that file." }));
     reader.readAsText(file);
-  };
-
-  const mapRecipeToFormat = (recipe: Record<string, unknown>, sourceUrl?: string) => {
-    const ingredientsList = (recipe.ingredients || []) as Array<string | { name: string; quantity?: number; unit?: string; category?: string; notes?: string }>;
-
-    // Match ingredients to pantry foods
-    const matchedFoodIds = foods
-      .filter(food =>
-        ingredientsList.some((ing) => {
-          const ingName = typeof ing === 'string' ? ing : ing.name;
-          return food.name.toLowerCase().includes(ingName.toLowerCase()) ||
-                 ingName.toLowerCase().includes(food.name.toLowerCase());
-        })
-      )
-      .map(food => food.id);
-
-    // Build additional ingredients string from unmatched items
-    const unmatchedIngredients = ingredientsList.filter((ing) => {
-      const ingName = typeof ing === 'string' ? ing : ing.name;
-      return !foods.some(
-        (food) =>
-          food.name.toLowerCase().includes(ingName.toLowerCase()) ||
-          ingName.toLowerCase().includes(food.name.toLowerCase())
-      );
-    });
-    const additionalIngredientsStr = unmatchedIngredients
-      .map((ing) => {
-        if (typeof ing === 'string') return ing;
-        const parts = [ing.quantity, ing.unit, ing.name].filter(Boolean);
-        return parts.join(' ') + (ing.notes ? ` (${ing.notes})` : '');
-      })
-      .join(', ');
-
-    // Parse instructions into JSON array for step-by-step display
-    const rawInstructions = recipe.instructions as string | undefined;
-    let instructionsJson = '';
-    if (rawInstructions && typeof rawInstructions === 'string') {
-      // Split on numbered lines (e.g., "1. Step" or "1) Step") or newlines
-      const steps = rawInstructions
-        .split(/\n/)
-        .map((s: string) => s.replace(/^\d+[.)]\s*/, '').trim())
-        .filter((s: string) => s.length > 0);
-      instructionsJson = JSON.stringify(steps);
-    }
-
-    // Extract prep/cook times from AI response
-    const prepTime = (recipe.prepTime as string) || (recipe.prep_time as string) || '';
-    const cookTime = (recipe.cookTime as string) || (recipe.cook_time as string) || '';
-
-    // Calculate total time if possible
-    const prepMinutes = parseInt(prepTime) || 0;
-    const cookMinutes = parseInt(cookTime) || 0;
-    const totalTimeMinutes = prepMinutes + cookMinutes > 0 ? prepMinutes + cookMinutes : undefined;
-
-    return {
-      name: (recipe.name as string) || (recipe.title as string) || "",
-      description: (recipe.description as string) || undefined,
-      food_ids: matchedFoodIds,
-      instructions: instructionsJson,
-      prepTime,
-      cookTime,
-      servings: recipe.servings?.toString() || "",
-      additionalIngredients: additionalIngredientsStr || (recipe.additionalIngredients as string) || "",
-      tips: (recipe.tips as string) || "",
-      total_time_minutes: totalTimeMinutes,
-      source_url: sourceUrl || (recipe.source_url as string) || (recipe.sourceUrl as string) || undefined,
-      source_type: sourceUrl ? 'url' as const : (recipe.source_type as string) || undefined,
-      image_url: (recipe.image_url as string) || (recipe.imageUrl as string) || (recipe.image as string) || undefined,
-      difficulty_level: (recipe.difficulty_level as string) || (recipe.difficulty as string) || undefined,
-      tags: (recipe.tags as string[]) || undefined,
-      nutrition_info: recipe.nutrition_info || recipe.nutrition || undefined,
-      // Designation metadata
-      metadata: {
-        isFamily,
-        kidId: isFamily ? null : selectedKidId || null,
-        preferredMealSlot: preferredMealSlot && preferredMealSlot !== 'any' ? preferredMealSlot : null
-      }
-    };
-  };
-
-  const handleClose = () => {
-    setUrl("");
-    setRecipeText("");
-    setJsonInput("");
-    setCapturedImage(null);
-    setShowCamera(false);
-    stopCamera();
-    setIsFamily(false);
-    setSelectedKidId("");
-    setPreferredMealSlot("any");
-    onOpenChange(false);
   };
 
   const downloadTemplate = () => {
@@ -363,252 +290,245 @@ export function ImportRecipeDialog({ open, onOpenChange, onImport, foods, kids }
     URL.revokeObjectURL(url);
   };
 
+  const errorBox = error ? (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+    >
+      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+      <span>{error}</span>
+    </div>
+  ) : null;
+
+  const importingLabel = t("recipes.import.importing", { defaultValue: "Importing..." });
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : !isLoading && resetAndClose())}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ChefHat className="h-5 w-5" />
-            Import Recipe
+            <ChefHat className="h-5 w-5" aria-hidden="true" />
+            {t("recipes.import.title", { defaultValue: "Import Recipe" })}
           </DialogTitle>
           <DialogDescription>
-            Import recipes from URLs, photos, or JSON with family/child designation
+            {t("recipes.import.description", {
+              defaultValue: "Import a recipe from a link, a photo, pasted text or a JSON file",
+            })}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="url" className="flex-1 flex flex-col overflow-hidden">
+        <Tabs defaultValue="url" className="flex-1 flex flex-col overflow-hidden" onValueChange={() => setError(null)}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="url">
-              <Link2 className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">URL</span>
+            <TabsTrigger value="url" aria-label={t("recipes.import.tab.url", { defaultValue: "URL" })}>
+              <Link2 className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("recipes.import.tab.url", { defaultValue: "URL" })}</span>
             </TabsTrigger>
-            <TabsTrigger value="photo">
-              <Camera className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Photo</span>
+            <TabsTrigger value="photo" aria-label={t("recipes.import.tab.photo", { defaultValue: "Photo" })}>
+              <Camera className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("recipes.import.tab.photo", { defaultValue: "Photo" })}</span>
             </TabsTrigger>
-            <TabsTrigger value="text">
-              <Sparkles className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Text</span>
+            <TabsTrigger value="text" aria-label={t("recipes.import.tab.text", { defaultValue: "Text" })}>
+              <Sparkles className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("recipes.import.tab.text", { defaultValue: "Text" })}</span>
             </TabsTrigger>
-            <TabsTrigger value="json">
-              <FileJson className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">JSON</span>
+            <TabsTrigger value="json" aria-label={t("recipes.import.tab.json", { defaultValue: "JSON" })}>
+              <FileJson className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+              <span className="hidden sm:inline">{t("recipes.import.tab.json", { defaultValue: "JSON" })}</span>
             </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto py-4 space-y-4">
-            <TabsContent value="url" className="space-y-4 mt-0">
-              <div className="space-y-2">
-                <Label>Recipe URL</Label>
-                <Input
-                  placeholder="https://example.com/recipe"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  disabled={isLoading}
-                  autoFocus
-                />
-                <p className="text-sm text-muted-foreground">
-                  Paste a URL to a recipe and AI will extract the details
-                </p>
-              </div>
-              <Button onClick={handleUrlImport} disabled={isLoading} className="w-full">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <Link2 className="h-4 w-4 mr-2" />
-                    Import from URL
-                  </>
-                )}
-              </Button>
+            <TabsContent value="url" className="mt-0">
+              <form onSubmit={handleUrlImport} className="space-y-4" noValidate>
+                <div className="space-y-2">
+                  <Label htmlFor={`${uid}-url`}>{t("recipes.import.urlLabel", { defaultValue: "Recipe URL" })}</Label>
+                  <Input
+                    id={`${uid}-url`}
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://example.com/recipe"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    disabled={isLoading}
+                    autoFocus
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {t("recipes.import.urlHint", { defaultValue: "Paste a link to a recipe and we'll pull out the details" })}
+                  </p>
+                </div>
+                {errorBox}
+                <Button type="submit" disabled={isLoading} className="w-full">
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                      {importingLabel}
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                      {t("recipes.import.fromUrl", { defaultValue: "Import from URL" })}
+                    </>
+                  )}
+                </Button>
+              </form>
             </TabsContent>
 
             <TabsContent value="photo" className="space-y-4 mt-0">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+                aria-hidden="true"
+                tabIndex={-1}
+              />
               {!showCamera && !capturedImage && (
                 <div className="flex flex-col gap-3">
-                  <Button onClick={startCamera} size="lg" className="w-full">
-                    <Camera className="h-5 w-5 mr-2" />
-                    Take Photo
+                  <Button type="button" onClick={startCamera} size="lg" className="w-full">
+                    <Camera className="h-5 w-5 mr-2" aria-hidden="true" />
+                    {t("recipes.import.takePhoto", { defaultValue: "Take Photo" })}
                   </Button>
                   <Button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
                     variant="outline"
                     size="lg"
                     className="w-full"
                   >
-                    <Upload className="h-5 w-5 mr-2" />
-                    Upload Image
+                    <Upload className="h-5 w-5 mr-2" aria-hidden="true" />
+                    {t("recipes.import.uploadImage", { defaultValue: "Upload Image" })}
                   </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
                 </div>
               )}
 
               {showCamera && (
                 <div className="space-y-4">
-                  <div className="relative rounded-lg overflow-hidden bg-black">
+                  <div className="relative rounded-lg overflow-hidden bg-muted">
                     <div id="recipe-photo-scanner" className="w-full aspect-video" />
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={capturePhoto} className="flex-1">
-                      <Camera className="h-5 w-5 mr-2" />
-                      Capture
+                    <Button type="button" onClick={capturePhoto} className="flex-1">
+                      <Camera className="h-5 w-5 mr-2" aria-hidden="true" />
+                      {t("recipes.import.capture", { defaultValue: "Capture" })}
                     </Button>
-                    <Button onClick={stopCamera} variant="outline">
-                      Cancel
+                    <Button type="button" onClick={() => void stopCamera()} variant="outline">
+                      {t("common.cancel", { defaultValue: "Cancel" })}
                     </Button>
                   </div>
                 </div>
               )}
 
-              {capturedImage && !isLoading && (
-                <div className="space-y-2">
-                  <img src={capturedImage} alt="Recipe" className="w-full rounded-lg border" />
+              {capturedImage && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <img
+                      src={capturedImage}
+                      alt={t("recipes.import.photoAlt", { defaultValue: "The recipe photo" })}
+                      className={isLoading ? "w-full rounded-lg border opacity-60" : "w-full rounded-lg border"}
+                    />
+                    {isLoading && (
+                      <div
+                        className="absolute inset-0 flex items-center justify-center gap-2 text-sm font-medium text-foreground"
+                        role="status"
+                      >
+                        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                        {t("recipes.import.readingPhoto", { defaultValue: "Reading the recipe..." })}
+                      </div>
+                    )}
+                  </div>
+                  {errorBox}
+                  {error && !isLoading && (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" variant="outline" className="flex-1" onClick={retakePhoto}>
+                        <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
+                        {t("recipes.import.retake", { defaultValue: "Retake" })}
+                      </Button>
+                      <Button type="button" variant="outline" className="flex-1" onClick={chooseAnotherPhoto}>
+                        <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
+                        {t("recipes.import.chooseAnother", { defaultValue: "Choose another" })}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
+              {!capturedImage && errorBox}
             </TabsContent>
 
-            <TabsContent value="text" className="space-y-4 mt-0">
-              <div className="space-y-2">
-                <Label>Recipe Text</Label>
-                <Textarea
-                  placeholder="Paste recipe text here... (ingredients, instructions, etc.)"
-                  value={recipeText}
-                  onChange={(e) => setRecipeText(e.target.value)}
-                  rows={8}
-                  disabled={isLoading}
-                />
-                <p className="text-sm text-muted-foreground">
-                  Paste any recipe text and AI will structure it for you
-                </p>
-              </div>
-              <Button onClick={handleTextImport} disabled={isLoading} className="w-full">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Import with AI
-                  </>
-                )}
-              </Button>
+            <TabsContent value="text" className="mt-0">
+              <form onSubmit={handleTextImport} className="space-y-4" noValidate>
+                <div className="space-y-2">
+                  <Label htmlFor={`${uid}-text`}>{t("recipes.import.textLabel", { defaultValue: "Recipe Text" })}</Label>
+                  <Textarea
+                    id={`${uid}-text`}
+                    placeholder={t("recipes.import.textPlaceholder", {
+                      defaultValue: "Paste recipe text here... (ingredients, instructions, etc.)",
+                    })}
+                    value={recipeText}
+                    onChange={(e) => setRecipeText(e.target.value)}
+                    rows={8}
+                    disabled={isLoading}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    {t("recipes.import.textHint", { defaultValue: "Paste any recipe text and AI will structure it for you" })}
+                  </p>
+                </div>
+                {errorBox}
+                <Button type="submit" disabled={isLoading} className="w-full">
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                      {importingLabel}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
+                      {t("recipes.import.withAi", { defaultValue: "Import with AI" })}
+                    </>
+                  )}
+                </Button>
+              </form>
             </TabsContent>
 
             <TabsContent value="json" className="space-y-4 mt-0">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>JSON Data</Label>
-                  <Button variant="ghost" size="sm" onClick={downloadTemplate}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Download Template
+                  <Label htmlFor={`${uid}-json`}>{t("recipes.import.jsonLabel", { defaultValue: "JSON Data" })}</Label>
+                  <Button type="button" variant="ghost" size="sm" onClick={downloadTemplate}>
+                    <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
+                    {t("recipes.import.downloadTemplate", { defaultValue: "Download Template" })}
                   </Button>
                 </div>
                 <Input
                   type="file"
-                  accept=".json"
+                  accept=".json,application/json"
                   onChange={handleJsonFileUpload}
                   className="cursor-pointer"
+                  aria-label={t("recipes.import.jsonFile", { defaultValue: "JSON file" })}
                 />
                 <Textarea
+                  id={`${uid}-json`}
                   placeholder='{"name": "Recipe Name", "ingredients": [...], ...}'
                   value={jsonInput}
                   onChange={(e) => setJsonInput(e.target.value)}
                   rows={8}
                   className="font-mono text-sm"
+                  disabled={isLoading}
                 />
                 <p className="text-sm text-muted-foreground">
-                  Upload or paste a JSON file with recipe data
+                  {t("recipes.import.jsonHint", { defaultValue: "Upload or paste a JSON file with recipe data" })}
                 </p>
               </div>
-              <Button onClick={handleJsonImport} className="w-full">
-                <FileJson className="h-4 w-4 mr-2" />
-                Import JSON
+              {errorBox}
+              <Button type="button" onClick={handleJsonImport} disabled={isLoading} className="w-full">
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                ) : (
+                  <FileJson className="h-4 w-4 mr-2" aria-hidden="true" />
+                )}
+                {isLoading ? importingLabel : t("recipes.import.importJson", { defaultValue: "Import JSON" })}
               </Button>
             </TabsContent>
-
-            {/* Recipe Designation Section */}
-            <Card className="p-4 bg-muted/30">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">Recipe Type</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Designate for family or specific child
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant={isFamily ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setIsFamily(!isFamily);
-                      if (!isFamily) setSelectedKidId("");
-                    }}
-                  >
-                    {isFamily ? (
-                      <>
-                        <Users className="h-4 w-4 mr-2" />
-                        Family
-                      </>
-                    ) : (
-                      <>
-                        <User className="h-4 w-4 mr-2" />
-                        Child-Specific
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {!isFamily && kids.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm">Select Child</Label>
-                    <Select value={selectedKidId} onValueChange={setSelectedKidId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a child" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {kids.map((kid) => (
-                          <SelectItem key={kid.id} value={kid.id}>
-                            {kid.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label className="text-sm">Preferred Meal Slot (Optional)</Label>
-                  <Select value={preferredMealSlot} onValueChange={setPreferredMealSlot}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Any meal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Any meal</SelectItem>
-                      <SelectItem value="breakfast">Breakfast</SelectItem>
-                      <SelectItem value="lunch">Lunch</SelectItem>
-                      <SelectItem value="dinner">Dinner</SelectItem>
-                      <SelectItem value="snack1">Morning Snack</SelectItem>
-                      <SelectItem value="snack2">Afternoon Snack</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Helps organize your recipes by typical meal times
-                  </p>
-                </div>
-              </div>
-            </Card>
           </div>
         </Tabs>
       </DialogContent>

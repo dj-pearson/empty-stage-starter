@@ -102,6 +102,10 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
     'device-level service-worker kill switch that support sets by hand; a sign-out must not undo it',
   'route-error-chunk-reload-at':
     'cooldown that stops a broken deploy reload-looping the browser, and is about the build rather than the account',
+  'recipe-view':
+    'grid or list on the Recipes page is a layout choice for this screen size, not account data',
+  'eatpal.recipes.plan.addMissing':
+    'whether "add missing ingredients" starts ticked when planning a recipe; a yes/no with no account data in it',
   'eatpal.activation.fired':
     'US-707: which activation events each user id has already reported. Holds no account data -- event names and ids -- and clearing it would re-fire food_added and meal_planned on the next sign-in, inflating a funnel step above the signups it is measured against',
 };
