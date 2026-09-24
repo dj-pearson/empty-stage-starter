@@ -219,7 +219,9 @@ describe('planPlates', () => {
         kid({
           id: 'k1',
           allergens: ['dairy'],
-          // Even with cheese due as an exposure, it comes off.
+          // Mild, so it is a hold-back; a severe or unrated one blocks the
+          // dish (see below). Even with cheese due as an exposure, it comes off.
+          allergenSeverity: { dairy: 'mild' },
         }),
       ],
       ladder: [
@@ -249,6 +251,107 @@ describe('planPlates', () => {
       const [plate] = plan({ kids: [k] });
       expect(plate.heldBack[0].reasons[0]).toMatchObject({ kind: 'allergen', foodName: 'Cheese' });
     }
+  });
+
+  describe('severity of a separable allergen (owner decision 2026-09-24)', () => {
+    // Cheese can be held back, so only its severity decides between a
+    // hold-back and a blocked dish.
+    it('blocks the whole dish for a recorded severe allergen, even though it could come off', () => {
+      const [plate, sibling] = plan({
+        kids: [
+          kid({ id: 'k1', name: 'Sam', allergens: ['dairy'], allergenSeverity: { dairy: 'severe' } }),
+          kid({ id: 'k2', name: 'Alex' }),
+        ],
+      });
+
+      expect(plate.blocked).toBe(true);
+      expect(plate.blockedBy).toEqual({
+        kind: 'severe_allergen',
+        copyKind: 'severe',
+        componentName: 'Cheese',
+        foodName: 'Cheese',
+      });
+      expect(placementOf(plate, 'c-cheese')).toBe('held_back');
+      expect(plate.heldBack[0].reasons).toContainEqual({
+        kind: 'severe_allergen',
+        foodName: 'Cheese',
+        recorded: true,
+      });
+      // It is not a hold-back that happens to be inseparable.
+      expect(plate.heldBack[0].reasons).not.toContainEqual({ kind: 'cannot_hold_back' });
+      // The sibling is unaffected.
+      expect(sibling.blocked).toBe(false);
+      expect(sibling.blockedBy).toBeNull();
+    });
+
+    it('blocks the whole dish for an unrated allergen, and says the severity was not recorded', () => {
+      const [plate] = plan({ kids: [kid({ id: 'k1', allergens: ['dairy'] })] });
+
+      expect(plate.blocked).toBe(true);
+      expect(plate.blockedBy).toMatchObject({ kind: 'severe_allergen', copyKind: 'severeUnrated' });
+      expect(plate.heldBack[0].reasons).toContainEqual({
+        kind: 'severe_allergen',
+        foodName: 'Cheese',
+        recorded: false,
+      });
+    });
+
+    it('still holds a mild allergen back and serves the rest', () => {
+      const [plate] = plan({
+        kids: [kid({ id: 'k1', allergens: ['dairy'], allergenSeverity: { dairy: 'mild' } })],
+      });
+
+      expect(plate.blocked).toBe(false);
+      expect(plate.blockedBy).toBeNull();
+      expect(plate.heldBack.map((p) => p.componentId)).toEqual(['c-cheese']);
+      expect(plate.heldBack[0].reasons[0]).toMatchObject({ kind: 'allergen', foodName: 'Cheese' });
+      expect(plate.heldBack[0].reasons.map((r) => r.kind)).not.toContain('severe_allergen');
+      expect(placementOf(plate, 'c-peas')).toBe('on_plate');
+    });
+
+    it('treats a moderate allergen the same as a mild one', () => {
+      const [plate] = plan({
+        kids: [kid({ id: 'k1', allergens: ['dairy'], allergenSeverity: { dairy: 'moderate' } })],
+      });
+
+      expect(plate.blocked).toBe(false);
+      expect(plate.blockedBy).toBeNull();
+      expect(plate.heldBack.map((p) => p.componentId)).toEqual(['c-cheese']);
+      expect(plate.heldBack[0].reasons.map((r) => r.kind)).not.toContain('severe_allergen');
+    });
+
+    it('names the recorded severe allergy over an unrated one on the same plate', () => {
+      const [plate] = plan({
+        kids: [
+          kid({ id: 'k1', allergens: ['dairy', 'gluten'], allergenSeverity: { gluten: 'severe' } }),
+        ],
+        // Pasta (gluten) is sorted before cheese; make both separable.
+        components: COMPONENTS.map((c) => ({ ...c, canBeHeldBack: true })),
+      });
+
+      expect(plate.blockedBy).toMatchObject({ copyKind: 'severe', foodName: 'Pasta' });
+    });
+
+    it('carries no ladder step on a blocked plate', () => {
+      const [plate] = plan({
+        kids: [kid({ id: 'k1', allergens: ['dairy'], allergenSeverity: { dairy: 'severe' } })],
+        ladder: [
+          { kidId: 'k1', foodId: 'peas', currentRung: 'touching', status: 'active', nextDueOn: TODAY },
+        ],
+      });
+
+      expect(plate.blocked).toBe(true);
+      expect(plate.exposure).toBeNull();
+    });
+
+    it('a mild allergen in a component that cannot come off still blocks, as the dish itself', () => {
+      const [plate] = plan({
+        kids: [kid({ id: 'k1', allergens: ['gluten'], allergenSeverity: { gluten: 'mild' } })],
+      });
+
+      expect(plate.blocked).toBe(true);
+      expect(plate.blockedBy).toEqual({ kind: 'cannot_hold_back', componentName: 'Pasta' });
+    });
   });
 
   it('blocks the plate when something unsafe cannot be taken off the dish', () => {

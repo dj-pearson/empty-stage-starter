@@ -1,0 +1,11 @@
+{
+  "plating": {
+    "severe": {
+      "blockedBody": "{{name}} has a severe allergy to {{food}}. Taking the {{component}} off the plate does not take it out of the shared pan, so serve {{name}} something else tonight.",
+      "blockedBodyUnrated": "{{name}} has an allergy to {{food}} with no severity recorded, so it is treated as severe. Taking the {{component}} off the plate does not take it out of the shared pan, so serve {{name}} something else tonight.",
+      "reason": "severe allergy, so the whole dish is out",
+      "reasonUnrated": "allergy with no severity recorded, treated as severe, so the whole dish is out",
+      "ruledOutBy": "What rules it out"
+    }
+  }
+}

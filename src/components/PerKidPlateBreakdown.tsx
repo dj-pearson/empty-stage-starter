@@ -8,12 +8,15 @@
  * A plate that is blocked says so plainly rather than being shown as a shorter
  * plate: "there is nothing safe here for this child" and "this child's plate is
  * smaller" are different sentences, and only one of them means don't serve it.
+ * A blocked plate lists only what rules the dish out, not what would have gone
+ * on it, and a severe or unrated allergen says which of the two it was.
  */
 
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CircleOff, Sparkles, Split, UtensilsCrossed } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import type { ComponentPlacement, KidPlate, PlatingReason } from '@/lib/platePlanner';
+import '@/i18n/appLocale';
+import type { ComponentPlacement, KidPlate, PlateBlock, PlatingReason } from '@/lib/platePlanner';
 
 interface Props {
   plates: KidPlate[];
@@ -41,7 +44,36 @@ function reasonText(reason: PlatingReason, t: ReturnType<typeof useTranslation>[
       return t('plating.reasons.safeFood', { food: reason.foodName });
     case 'cannot_hold_back':
       return t('plating.reasons.cannotHoldBack');
+    case 'severe_allergen':
+      return reason.recorded
+        ? t('plating.severe.reason', { defaultValue: 'severe allergy, so the whole dish is out' })
+        : t('plating.severe.reasonUnrated', {
+            defaultValue:
+              'allergy with no severity recorded, treated as severe, so the whole dish is out',
+          });
   }
+}
+
+function blockedBodyText(
+  block: PlateBlock | null,
+  name: string,
+  t: ReturnType<typeof useTranslation>['t']
+): string {
+  if (block?.kind === 'severe_allergen') {
+    const values = { name, food: block.foodName, component: block.componentName };
+    return block.copyKind === 'severe'
+      ? t('plating.severe.blockedBody', {
+          ...values,
+          defaultValue:
+            '{{name}} has a severe allergy to {{food}}. Taking the {{component}} off the plate does not take it out of the shared pan, so serve {{name}} something else tonight.',
+        })
+      : t('plating.severe.blockedBodyUnrated', {
+          ...values,
+          defaultValue:
+            '{{name}} has an allergy to {{food}} with no severity recorded, so it is treated as severe. Taking the {{component}} off the plate does not take it out of the shared pan, so serve {{name}} something else tonight.',
+        });
+  }
+  return t('plating.blockedBody', { name });
 }
 
 function PlacementLine({ placement }: { placement: ComponentPlacement }) {
@@ -53,6 +85,17 @@ function PlacementLine({ placement }: { placement: ComponentPlacement }) {
       <span className="font-medium">{placement.componentName}</span>
       {reasons.length > 0 && <span className="text-muted-foreground"> — {reasons.join('; ')}</span>}
     </li>
+  );
+}
+
+/**
+ * The held-back list, or on a blocked plate only the components that block
+ * it: a disliked side is beside the point once the dish is out.
+ */
+function ruledOut(plate: KidPlate): ComponentPlacement[] {
+  if (!plate.blocked) return plate.heldBack;
+  return plate.heldBack.filter((p) =>
+    p.reasons.some((r) => r.kind === 'severe_allergen' || r.kind === 'cannot_hold_back')
   );
 }
 
@@ -90,7 +133,7 @@ export function PerKidPlateBreakdown({ plates }: Props) {
 
             {plate.blocked && (
               <p className="text-xs text-muted-foreground mb-1 max-w-[70ch]">
-                {t('plating.blockedBody', { name: plate.kidName })}
+                {blockedBodyText(plate.blockedBy, plate.kidName, t)}
               </p>
             )}
             {!plate.blocked && plate.isEmpty && (
@@ -99,20 +142,24 @@ export function PerKidPlateBreakdown({ plates }: Props) {
               </p>
             )}
 
-            {plate.onPlate.length > 0 && (
+            {!plate.blocked && plate.onPlate.length > 0 && (
               <PlacementGroup label={t('plating.onPlate')} placements={plate.onPlate} />
             )}
-            {plate.separated.length > 0 && (
+            {!plate.blocked && plate.separated.length > 0 && (
               <PlacementGroup
                 label={t('plating.separated')}
                 placements={plate.separated}
                 icon={<Split className="h-3 w-3" aria-hidden="true" />}
               />
             )}
-            {plate.heldBack.length > 0 && (
+            {ruledOut(plate).length > 0 && (
               <PlacementGroup
-                label={t('plating.heldBack')}
-                placements={plate.heldBack}
+                label={
+                  plate.blocked
+                    ? t('plating.severe.ruledOutBy', { defaultValue: 'What rules it out' })
+                    : t('plating.heldBack')
+                }
+                placements={ruledOut(plate)}
                 icon={<CircleOff className="h-3 w-3" aria-hidden="true" />}
               />
             )}

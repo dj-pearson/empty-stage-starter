@@ -20,6 +20,13 @@
  * is marked blocked rather than quietly served anyway. Plating must never be
  * the thing that talks a parent past an allergy.
  *
+ * A severe allergen blocks the plate even when its component could come off
+ * (owner decision 2026-09-24). Holding the cheese back does not undo the
+ * cross-contact from the shared pan, which is why the sibling solver never
+ * split-plates a severe hit either. An allergy with no recorded severity is
+ * treated as severe, and the block says which of the two it was. Mild and
+ * moderate hits are still held back when the component can come off.
+ *
  * And an exposure is never forced. A component only gets plated as a ladder
  * exposure if it is otherwise fine for that child; a due exposure does not
  * override a dislike, a texture the child cannot tolerate, or anything the
@@ -37,6 +44,7 @@ import {
 } from './siblingConstraintSolver';
 import type { RecipeComponent } from './recipeComponents';
 import type { Rung } from './exposureLadder';
+import type { AllergenCopyKind } from './planAllergenGuard';
 
 import { NO_TOUCHING_DISLIKE } from './noTouchingDislike';
 
@@ -62,7 +70,27 @@ export type PlatingReason =
   | { kind: 'due_exposure'; rung: Rung }
   | { kind: 'safe_food'; foodName: string }
   /** Would have been held back, but it IS the dish. Surfaced, never hidden. */
-  | { kind: 'cannot_hold_back' };
+  | { kind: 'cannot_hold_back' }
+  /**
+   * A severe or unrated allergen: taking the component off is not enough, so
+   * the whole dish is out for this child. `recorded` is false when the parent
+   * never set a severity and it was treated as severe.
+   */
+  | { kind: 'severe_allergen'; foodName: string; recorded: boolean };
+
+/**
+ * Why a plate is blocked, for the one sentence a caller shows. A severe
+ * allergen outranks an inseparable component, and a recorded severe allergy
+ * outranks an unrated one, matching the order planAllergenGuard sorts in.
+ */
+export type PlateBlock =
+  | {
+      kind: 'severe_allergen';
+      copyKind: Exclude<AllergenCopyKind, 'plain'>;
+      componentName: string;
+      foodName: string;
+    }
+  | { kind: 'cannot_hold_back'; componentName: string };
 
 export interface ComponentPlacement {
   componentId: string;
@@ -94,6 +122,8 @@ export interface KidPlate {
    * The caller must offer this child something else, not this plate.
    */
   blocked: boolean;
+  /** Why `blocked` is true; null exactly when it is false. */
+  blockedBy: PlateBlock | null;
   /** True when nothing is left to serve. */
   isEmpty: boolean;
 }
@@ -189,28 +219,53 @@ export function planPlates(input: PlatingInput): KidPlate[] {
     // due ladder step may be plated on (step 5, resolved after the pass).
     const clear: { index: number; component: RecipeComponent; foodIds: Set<string> }[] = [];
 
-    let blocked = false;
+    let severeBlock: Extract<PlateBlock, { kind: 'severe_allergen' }> | null = null;
+    let inseparableBlock: Extract<PlateBlock, { kind: 'cannot_hold_back' }> | null = null;
 
     const placements: ComponentPlacement[] = ordered.map((component, index) => {
       const foodIds = foodIdsOfComponent(component, extras);
       const reasons: PlatingReason[] = [];
 
       // 1. Hard violations. These end the decision.
+      let severeHit: { foodName: string; recorded: boolean } | null = null;
       for (const foodId of foodIds) {
         const hard = hardByFood.get(foodId);
         if (!hard) continue;
+        // allergenSeverity is set on every allergen violation; the reason
+        // text starts "severe allergen" for a severe one, so it is not the test.
+        const isAllergen = hard.allergenSeverity != null || hard.reason.startsWith('allergen');
         reasons.push(
-          // allergenSeverity is set on every allergen violation; the reason
-          // text starts "severe allergen" for a severe one, so it is not the test.
-          hard.allergenSeverity != null || hard.reason.startsWith('allergen')
+          isAllergen
             ? { kind: 'allergen', foodName: hard.foodName, detail: hard.reason }
             : { kind: 'dietary', foodName: hard.foodName, detail: hard.reason }
         );
+        // The solver already resolves an unrated allergy to "severe"; a
+        // violation with no level at all is unrated too, so severe as well.
+        if (isAllergen && (hard.allergenSeverity ?? 'severe') === 'severe') {
+          const recorded = hard.allergenSeverityRecorded !== false;
+          // A recorded severe hit is the stronger statement; keep it over an unrated one.
+          if (!severeHit || (recorded && !severeHit.recorded)) {
+            severeHit = { foodName: hard.foodName, recorded };
+          }
+        }
       }
       if (reasons.length > 0) {
+        if (severeHit) {
+          // Severe or unrated: off the plate is not far enough, the dish is out.
+          reasons.push({ kind: 'severe_allergen', ...severeHit });
+          const copyKind = severeHit.recorded ? 'severe' : 'severeUnrated';
+          if (!severeBlock || (copyKind === 'severe' && severeBlock.copyKind !== 'severe')) {
+            severeBlock = {
+              kind: 'severe_allergen',
+              copyKind,
+              componentName: component.name,
+              foodName: severeHit.foodName,
+            };
+          }
+        }
         if (!component.canBeHeldBack) {
           // Unsafe and inseparable: this dish is not for this child tonight.
-          blocked = true;
+          inseparableBlock ??= { kind: 'cannot_hold_back', componentName: component.name };
           reasons.push({ kind: 'cannot_hold_back' });
         }
         return place(component, 'held_back', reasons, needsSpace(component));
@@ -272,7 +327,9 @@ export function planPlates(input: PlatingInput): KidPlate[] {
     // steps are tried longest overdue first, and each is matched against the
     // clear components, so a step for a food this recipe does not contain (or
     // cannot serve this child) never shadows one it can.
-    for (const row of findDueExposures(kid.id)) {
+    // A blocked plate is not being served, so it carries no ladder step.
+    const blockedBy: PlateBlock | null = severeBlock ?? inseparableBlock;
+    for (const row of blockedBy ? [] : findDueExposures(kid.id)) {
       const host = clear.find((c) => c.foodIds.has(row.foodId));
       if (!host) continue;
       placements[host.index] = place(
@@ -297,7 +354,8 @@ export function planPlates(input: PlatingInput): KidPlate[] {
       separated,
       heldBack,
       exposure,
-      blocked,
+      blocked: blockedBy !== null,
+      blockedBy,
       isEmpty: onPlate.length + separated.length + (exposure ? 1 : 0) === 0,
     };
 
