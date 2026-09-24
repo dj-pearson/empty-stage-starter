@@ -14,6 +14,7 @@ export {
   allergensInText,
   allergenSeverityFor,
   isSevereAllergen,
+  effectiveAllergenSeverity,
 } from "../../supabase/functions/_shared/allergens";
 export type { AllergenCheckedFood } from "../../supabase/functions/_shared/allergens";
 

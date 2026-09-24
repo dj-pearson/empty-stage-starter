@@ -55,7 +55,7 @@ import { format, startOfWeek, addWeeks, subWeeks, addDays, isSameDay } from "dat
 import { calculateAge } from "@/lib/utils";
 import { addIsoDays, parseIsoDate } from "@/lib/date-utils";
 import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
-import { dropAllergenEntries, manualAddPrompt } from "@/lib/planAllergenGuard";
+import { allergenCopyKind, dropAllergenEntries, manualAddPrompt } from "@/lib/planAllergenGuard";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { usePlanToGrocery, type PlanToGroceryWindow } from "@/hooks/usePlanToGrocery";
 import { useDefaultGroceryListId } from "@/hooks/useDefaultGroceryListId";
@@ -294,31 +294,46 @@ export default function Planner() {
    * unless the parent picks "Add anyway". Uses findAllergenConflicts (via
    * manualAddPrompt), the same matcher as the grid badges, so families and
    * food names count. A severe allergy names the child and the allergen in
-   * the title and on the button.
+   * the title and on the button. An allergy with no recorded severity gets the
+   * same severe confirm, worded as "severity not recorded" (item 3a).
    */
   const guardAllergen = useCallback(
     async (targetKids: Kid[], foodIds: string[]): Promise<boolean> => {
       const foodById = new Map(foodsRef.current.map((f) => [f.id, f]));
       const prompt = manualAddPrompt(targetKids, foodIds, foodById);
       if (!prompt) return true;
-      const lines = prompt.conflicts.map((c) =>
-        c.severity === "severe"
-          ? t("planner.allergenSafety.severeLine", {
+      const lines = prompt.conflicts.map((c) => {
+        const vars = { food: c.food.name, allergen: c.allergen, name: c.kid.name };
+        switch (allergenCopyKind(c)) {
+          case "severe":
+            return t("planner.allergenSafety.severeLine", {
               defaultValue: "{{food}} contains {{allergen}}. {{name}} has a severe {{allergen}} allergy.",
-              food: c.food.name,
-              allergen: c.allergen,
-              name: c.kid.name,
-            })
-          : t("planner.confirm.allergenLine", { food: c.food.name, allergen: c.allergen, name: c.kid.name }),
-      );
+              ...vars,
+            });
+          case "severeUnrated":
+            return t("planner.allergenSafety.unratedLine", {
+              defaultValue:
+                "{{food}} contains {{allergen}}. {{name}} has a {{allergen}} allergy with no severity recorded, so it is treated as severe.",
+              ...vars,
+            });
+          default:
+            return t("planner.confirm.allergenLine", vars);
+        }
+      });
       const lead = prompt.lead;
       return askConfirm({
         title: lead
-          ? t("planner.allergenSafety.severeTitle", {
-              defaultValue: "Severe {{allergen}} allergy: {{name}}",
-              allergen: lead.allergen,
-              name: lead.kid.name,
-            })
+          ? allergenCopyKind(lead) === "severeUnrated"
+            ? t("planner.allergenSafety.unratedTitle", {
+                defaultValue: "{{allergen}} allergy (severity not recorded, treated as severe): {{name}}",
+                allergen: lead.allergen,
+                name: lead.kid.name,
+              })
+            : t("planner.allergenSafety.severeTitle", {
+                defaultValue: "Severe {{allergen}} allergy: {{name}}",
+                allergen: lead.allergen,
+                name: lead.kid.name,
+              })
           : t("planner.confirm.allergenTitle"),
         body: (
           <span className="block space-y-1">

@@ -8,12 +8,14 @@ import { PantryStarterSheet } from "./PantryStarterSheet";
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 
 const ava = { id: "k1", name: "Ava", allergens: ["peanuts"], allergen_severity: { peanuts: "severe" } } as Kid;
-const ben = { id: "k2", name: "Ben", allergens: ["dairy"] } as Kid;
+const ben = { id: "k2", name: "Ben", allergens: ["dairy"], allergen_severity: { dairy: "mild" } } as Kid;
+/** Dairy allergy recorded with no severity (item 3a). */
+const cal = { id: "k3", name: "Cal", allergens: ["dairy"] } as Kid;
 
-function renderSheet(foods: Food[] = []) {
+function renderSheet(foods: Food[] = [], kids: Kid[] = [ava, ben]) {
   const onAdd = vi.fn(async () => true);
   const onOpenChange = vi.fn();
-  render(<PantryStarterSheet open onOpenChange={onOpenChange} kids={[ava, ben]} foods={foods} onAdd={onAdd} />);
+  render(<PantryStarterSheet open onOpenChange={onOpenChange} kids={kids} foods={foods} onAdd={onAdd} />);
   return { onAdd, onOpenChange };
 }
 
@@ -34,6 +36,15 @@ describe("PantryStarterSheet", () => {
     const cheese = screen.getByRole("checkbox", { name: "Cheese" });
     expect(cheese).toBeDisabled();
     expect(cheese).toHaveAccessibleDescription("Not for Ben: milk");
+  });
+
+  it("blocks an allergy with no recorded severity like a severe one, and says it was not recorded (item 3a)", () => {
+    renderSheet([], [cal]);
+    const cheese = screen.getByRole("checkbox", { name: "Cheese" });
+    expect(cheese).toBeDisabled();
+    expect(cheese).toHaveAccessibleDescription(
+      "Allergy (severity not recorded, treated as severe), not for Cal: milk",
+    );
   });
 
   it("shows each open row's fit for the kids", () => {

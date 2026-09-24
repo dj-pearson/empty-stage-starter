@@ -35,11 +35,14 @@ const kid = (
     disliked?: string[];
     favorites?: string[];
     alwaysEats?: string[];
+    /** Recorded severities. An allergy left out is treated as severe (item 3a). */
+    severity?: SolverKid['allergenSeverity'];
   } = {}
 ): SolverKid => ({
   id,
   name,
   allergens: opts.allergens ?? [],
+  ...(opts.severity ? { allergenSeverity: opts.severity } : {}),
   dietaryRestrictions: opts.dietary ?? [],
   dislikedFoods: opts.disliked ?? [],
   favoriteFoods: opts.favorites ?? [],
@@ -202,7 +205,8 @@ describe('solveSiblingMeals - resolution tiers', () => {
       recipes: [r],
       pantry: [], // no swap candidate
       kids: [
-        kid('k1', 'Emma', { allergens: ['dairy'] }), // hard violation on cheese
+        // hard violation on cheese; mild, so holding it back is allowed
+        kid('k1', 'Emma', { allergens: ['dairy'], severity: { dairy: 'mild' } }),
         kid('k2', 'Jack'),
       ],
     });
@@ -221,6 +225,30 @@ describe('solveSiblingMeals - resolution tiers', () => {
     expect(result[0].perKidSatisfaction[0].hardViolations[0].allergenSeverity).toBe('severe');
     expect(result[0].perKidSatisfaction[0].hardViolations[0].reason).toContain('severe allergen');
     expect(topSiblingSolutions({ recipes: [r], pantry: [], kids: [emma, kid('k2', 'Jack')] })).toHaveLength(0);
+  });
+
+  it('never split-plates an allergy recorded without a severity, and says it was not recorded (item 3a)', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const robin = kid('k1', 'Robin', { allergens: ['dairy'] });
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [robin, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(true);
+    expect(result[0].splitPlates).toHaveLength(0);
+    const v = result[0].perKidSatisfaction[0].hardViolations[0];
+    expect(v.allergenSeverity).toBe('severe');
+    expect(v.allergenSeverityRecorded).toBe(false);
+    expect(v.reason).toContain('severity not recorded, treated as severe');
+    expect(v.reason).not.toContain('severe allergen');
+    expect(result[0].excludeReason).toBe('Allergy with no recorded severity (treated as severe) for a selected kid');
+    expect(topSiblingSolutions({ recipes: [r], pantry: [], kids: [robin, kid('k2', 'Jack')] })).toHaveLength(0);
+  });
+
+  it('names a recorded severe allergy in the exclude reason when an unrated one is also present', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const robin = kid('k1', 'Robin', { allergens: ['dairy'] });
+    const emma = kid('k2', 'Emma', { allergens: ['dairy'], severity: { dairy: 'severe' } });
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [robin, emma] });
+    expect(result[0].excludeReason).toBe('Severe allergy for a selected kid');
+    expect(result[0].perKidSatisfaction[1].hardViolations[0].allergenSeverityRecorded).toBe(true);
   });
 
   it('a severe allergen listed after a mild one in the same food still excludes the recipe', () => {
@@ -253,6 +281,7 @@ describe('solveSiblingMeals - resolution tiers', () => {
       kids: [
         kid('k1', 'Emma', {
           allergens: ['dairy', 'gluten'],
+          severity: { dairy: 'mild', gluten: 'mild' },
           dietary: ['vegetarian'], // also conflicts on beef
         }),
         kid('k2', 'Jack'),
@@ -269,7 +298,7 @@ describe('solveSiblingMeals - resolution tiers', () => {
     const r3 = recipe('r3', 'Split Needed', [chicken, cheese, rice]);
     const carrot = food('carrot', 'Carrots', 'vegetable');
     const kids = [
-      kid('k1', 'Emma', { allergens: ['dairy'], disliked: ['Broccoli'] }),
+      kid('k1', 'Emma', { allergens: ['dairy'], severity: { dairy: 'mild' }, disliked: ['Broccoli'] }),
       kid('k2', 'Jack'),
     ];
     const result = solveSiblingMeals({
@@ -376,7 +405,11 @@ describe('topSiblingSolutions', () => {
         recipes: [r1, r2, r3],
         pantry: [],
         kids: [
-          kid('k1', 'Emma', { allergens: ['dairy', 'gluten'], dietary: ['vegetarian'] }),
+          kid('k1', 'Emma', {
+            allergens: ['dairy', 'gluten'],
+            severity: { dairy: 'mild', gluten: 'mild' },
+            dietary: ['vegetarian'],
+          }),
           kid('k2', 'Jack'),
         ],
       },

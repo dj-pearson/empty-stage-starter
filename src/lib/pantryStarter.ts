@@ -16,7 +16,14 @@
  * Pure: no React.
  */
 import type { Food, FoodCategory, Kid, PlanEntry } from "@/types";
-import { buildResultIndex, getKidFoodFit, summarizeKidFits, type ItemFit } from "@/lib/kidFit";
+import {
+  buildResultIndex,
+  getKidFoodFit,
+  isFitSeverityRecorded,
+  isSevereFit,
+  summarizeKidFits,
+  type ItemFit,
+} from "@/lib/kidFit";
 import type { AllergenSeverity } from "@/lib/allergens";
 import { findExistingFood } from "@/lib/findExistingFood";
 import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
@@ -68,7 +75,10 @@ export const STARTER_OFFER_MAX_FOODS = 10;
 export interface StarterBlock {
   kid: Kid;
   allergen: string;
+  /** Severity the decision uses: unrated allergies are "severe" (owner decision 2026-09-24). */
   severity: AllergenSeverity | null;
+  /** False when `severity` defaulted to severe because the parent recorded none. */
+  severityRecorded: boolean;
 }
 
 export interface StarterRow {
@@ -76,7 +86,7 @@ export interface StarterRow {
   fit: ItemFit | undefined;
   /** One entry per kid whose allergen this food carries. Non-empty: cannot be ticked. */
   blocks: StarterBlock[];
-  /** Any block is a recorded severe allergy. */
+  /** Any block is severe, recorded or unrated. */
   severe: boolean;
   /** Already in the pantry under this name. */
   inPantry: boolean;
@@ -111,7 +121,12 @@ export function buildStarterRows(input: {
     const fit = kids.length > 0 ? summarizeKidFits(perKid) : undefined;
     const blocks: StarterBlock[] = perKid
       .filter((h) => h.fit.allergen)
-      .map((h) => ({ kid: h.kid, allergen: h.fit.allergen as string, severity: h.fit.allergenSeverity ?? null }));
+      .map((h) => ({
+        kid: h.kid,
+        allergen: h.fit.allergen as string,
+        severity: isSevereFit(h.fit) ? "severe" : (h.fit.allergenSeverity ?? null),
+        severityRecorded: isFitSeverityRecorded(h.fit),
+      }));
     return {
       food,
       fit,

@@ -4,6 +4,7 @@ import {
   allergenFamilyMembers,
   allergensInText,
   allergenSeverityFor,
+  effectiveAllergenSeverity,
   isAllergenSafeFor,
   isSevereAllergen,
   matchingAllergen,
@@ -154,11 +155,21 @@ describe("allergen severity", () => {
     expect(allergenSeverityFor(kid, "junk")).toBeNull();
   });
 
-  it("isSevereAllergen is true only for a recorded severe", () => {
+  it("isSevereAllergen is true for a recorded severe and for an unrated allergy (item 3a)", () => {
     expect(isSevereAllergen(kid, "peanut")).toBe(true);
     expect(isSevereAllergen(kid, "milk")).toBe(false);
     expect(isSevereAllergen(kid, null)).toBe(false);
-    expect(isSevereAllergen(null, "peanut")).toBe(false);
+    // No severity recorded: treated as severe, never as mild.
+    expect(isSevereAllergen(kid, "egg")).toBe(true);
+    expect(isSevereAllergen(null, "peanut")).toBe(true);
+  });
+
+  it("effectiveAllergenSeverity keeps a recorded level and defaults an unrated one to severe", () => {
+    expect(effectiveAllergenSeverity(kid, "dairy")).toBe("mild");
+    expect(effectiveAllergenSeverity(kid, "peanut")).toBe("severe");
+    expect(effectiveAllergenSeverity(kid, "egg")).toBe("severe");
+    // The display lookup still says nothing was recorded.
+    expect(allergenSeverityFor(kid, "egg")).toBeNull();
   });
 });
 
@@ -177,15 +188,25 @@ describe("worst hit per food (item 29)", () => {
     expect(worstFoodAllergen(kid, { name: "Cheese omelette", allergens: ["milk", "eggs"] })).toEqual({
       allergen: "egg",
       severity: "severe",
+      recorded: true,
     });
   });
 
-  it("prefers a rated hit over an unrated one and returns null for a safe food", () => {
+  it("an unrated hit outranks a mild one as severe, flagged as not recorded (item 3a)", () => {
     expect(worstFoodAllergen(kid, { name: "Almond milk latte", allergens: ["almonds", "milk"] })).toEqual({
-      allergen: "milk",
-      severity: "mild",
+      allergen: "tree nut",
+      severity: "severe",
+      recorded: false,
     });
     expect(worstFoodAllergen(kid, { name: "Rice", allergens: [] })).toBeNull();
+  });
+
+  it("a mild hit alone stays mild and recorded", () => {
+    expect(worstFoodAllergen(kid, { name: "Glass of milk", allergens: ["milk"] })).toEqual({
+      allergen: "milk",
+      severity: "mild",
+      recorded: true,
+    });
   });
 });
 

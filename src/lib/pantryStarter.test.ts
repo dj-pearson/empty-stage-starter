@@ -8,7 +8,9 @@ import {
 import type { Food, Kid } from "@/types";
 
 const ava: Kid = { id: "k1", name: "Ava", allergens: ["peanuts"], allergen_severity: { peanuts: "severe" } } as Kid;
-const ben: Kid = { id: "k2", name: "Ben", allergens: ["dairy"] } as Kid;
+const ben: Kid = { id: "k2", name: "Ben", allergens: ["dairy"], allergen_severity: { dairy: "mild" } } as Kid;
+/** Dairy allergy recorded with no severity: blocked like severe (item 3a). */
+const cal: Kid = { id: "k3", name: "Cal", allergens: ["dairy"] } as Kid;
 
 const rowFor = (rows: ReturnType<typeof buildStarterRows>, key: string) => {
   const row = rows.find((r) => r.food.key === key);
@@ -25,11 +27,23 @@ describe("buildStarterRows", () => {
     expect(isStarterSelectable(pb)).toBe(false);
 
     const cheese = rowFor(rows, "cheese");
-    expect(cheese.blocks).toEqual([expect.objectContaining({ allergen: "milk", severity: null })]);
+    expect(cheese.blocks).toEqual([
+      expect.objectContaining({ allergen: "milk", severity: "mild", severityRecorded: true }),
+    ]);
     expect(cheese.severe).toBe(false);
     expect(isStarterSelectable(cheese)).toBe(false);
 
     expect(isStarterSelectable(rowFor(rows, "bananas"))).toBe(true);
+  });
+
+  it("blocks an unrated allergy as severe, flagged as not recorded (item 3a)", () => {
+    const rows = buildStarterRows({ kids: [cal], pantryFoods: [] });
+    const cheese = rowFor(rows, "cheese");
+    expect(cheese.blocks).toEqual([
+      expect.objectContaining({ allergen: "milk", severity: "severe", severityRecorded: false }),
+    ]);
+    expect(cheese.severe).toBe(true);
+    expect(isStarterSelectable(cheese)).toBe(false);
   });
 
   it("scores every kid, so each row carries a per-kid fit", () => {

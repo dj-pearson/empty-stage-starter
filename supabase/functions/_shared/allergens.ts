@@ -493,12 +493,27 @@ export function allergenSeverityFor(
   return null;
 }
 
-/** A hit whose recorded severity is "severe". Unknown severity is not severe, but is still a hit. */
+/**
+ * The severity every safety decision uses: what the parent recorded, and
+ * "severe" when they recorded the allergy but not how bad it is. Owner
+ * decision 2026-09-24: an unrated allergy is treated as severe (never
+ * auto-planned, never split-plated, strongest confirm on manual add).
+ * Display the recorded value (allergenSeverityFor) where the UI shows what
+ * the parent entered.
+ */
+export function effectiveAllergenSeverity(
+  kid: { allergen_severity?: Readonly<Record<string, unknown>> | null } | null | undefined,
+  key: string,
+): AllergenSeverityLevel {
+  return allergenSeverityFor(kid, key) ?? 'severe';
+}
+
+/** A hit treated as severe: recorded severe, or recorded with no severity. */
 export function isSevereAllergen(
   kid: { allergen_severity?: Readonly<Record<string, unknown>> | null } | null | undefined,
   key: string | null | undefined,
 ): boolean {
-  return Boolean(key) && allergenSeverityFor(kid, key as string) === 'severe';
+  return Boolean(key) && effectiveAllergenSeverity(kid, key as string) === 'severe';
 }
 
 /**
@@ -524,8 +539,10 @@ const SEVERITY_RANK: Readonly<Record<AllergenSeverityLevel, number>> = {
 
 /**
  * The worst allergen hit the food carries for this child: severe beats
- * moderate beats mild beats unrated. Null when the food is safe. Use this,
- * not matchingFoodAllergen, wherever the severity of the hit changes what a
+ * moderate beats mild. An unrated hit counts as severe (see
+ * effectiveAllergenSeverity), and `recorded` says whether the parent chose
+ * that severity. Null when the food is safe. Use this, not
+ * matchingFoodAllergen, wherever the severity of the hit changes what a
  * surface does.
  */
 export function worstFoodAllergen(
@@ -537,14 +554,15 @@ export function worstFoodAllergen(
     | null
     | undefined,
   food: AllergenCheckedFood | null | undefined,
-): { allergen: string; severity: AllergenSeverityLevel | null } | null {
+): { allergen: string; severity: AllergenSeverityLevel; recorded: boolean } | null {
   const hits = matchingFoodAllergens(kid?.allergens, food);
-  let best: { allergen: string; severity: AllergenSeverityLevel | null } | null = null;
+  let best: { allergen: string; severity: AllergenSeverityLevel; recorded: boolean } | null = null;
   for (const allergen of hits) {
-    const severity = allergenSeverityFor(kid, allergen);
-    const rank = severity ? SEVERITY_RANK[severity] : 0;
-    const bestRank = best?.severity ? SEVERITY_RANK[best.severity] : 0;
-    if (!best || rank > bestRank) best = { allergen, severity };
+    const recordedSeverity = allergenSeverityFor(kid, allergen);
+    const severity = recordedSeverity ?? 'severe';
+    if (!best || SEVERITY_RANK[severity] > SEVERITY_RANK[best.severity]) {
+      best = { allergen, severity, recorded: recordedSeverity !== null };
+    }
   }
   return best;
 }

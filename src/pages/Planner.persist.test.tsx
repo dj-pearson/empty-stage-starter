@@ -337,29 +337,71 @@ describe('Planner destructive flows', () => {
 });
 
 describe('Allergen guard', () => {
-  it("asks before adding a food that carries the kid's allergen, and writes nothing on Cancel", async () => {
-    const user = userEvent.setup();
-    renderPlanner();
+  describe('mild allergy', () => {
+    const kidRecord = KID as Record<string, unknown>;
+    beforeEach(() => { kidRecord.allergen_severity = { peanuts: 'mild' }; });
+    afterEach(() => { delete kidRecord.allergen_severity; });
 
-    await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
-    const dialog = await screen.findByRole('alertdialog');
-    expect(dialog.textContent).toMatch(/Peanut butter contains peanut, which Robin is allergic to/);
-    // Cancel is the default: it has focus.
-    const cancel = screen.getByRole('button', { name: /cancel/i });
-    await waitFor(() => expect(document.activeElement).toBe(cancel));
-    await user.click(cancel);
+    it("asks before adding a food that carries the kid's allergen, and writes nothing on Cancel", async () => {
+      const user = userEvent.setup();
+      renderPlanner();
 
-    expect(addPlanEntry).not.toHaveBeenCalled();
-    expect(addPlanEntries).not.toHaveBeenCalled();
+      await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog.textContent).toMatch(/Peanut butter contains peanut, which Robin is allergic to/);
+      // Cancel is the default: it has focus.
+      const cancel = screen.getByRole('button', { name: /cancel/i });
+      await waitFor(() => expect(document.activeElement).toBe(cancel));
+      await user.click(cancel);
+
+      expect(addPlanEntry).not.toHaveBeenCalled();
+      expect(addPlanEntries).not.toHaveBeenCalled();
+    });
+
+    it('writes when the parent picks Add anyway', async () => {
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
+      await screen.findByRole('alertdialog');
+      await user.click(screen.getByRole('button', { name: /add anyway/i }));
+      await waitFor(() => expect(addPlanEntry).toHaveBeenCalledWith(expect.objectContaining({ food_id: 'nut1', kid_id: 'kid-1' })));
+    });
   });
 
-  it('writes when the parent picks Add anyway', async () => {
-    const user = userEvent.setup();
-    renderPlanner();
-    await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
-    await screen.findByRole('alertdialog');
-    await user.click(screen.getByRole('button', { name: /add anyway/i }));
-    await waitFor(() => expect(addPlanEntry).toHaveBeenCalledWith(expect.objectContaining({ food_id: 'nut1', kid_id: 'kid-1' })));
+  describe('allergy with no recorded severity (item 3a)', () => {
+    it('gets the severe confirm, worded as not recorded rather than severe', async () => {
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog.textContent).toMatch(/peanut allergy \(severity not recorded, treated as severe\): Robin/);
+      expect(dialog.textContent).toMatch(/Robin has a peanut allergy with no severity recorded, so it is treated as severe/);
+      expect(dialog.textContent).not.toMatch(/Severe peanut allergy/);
+      expect(dialog.textContent).not.toMatch(/has a severe peanut allergy/);
+      expect(screen.queryByRole('button', { name: /^add anyway$/i })).toBeNull();
+      expect(screen.getByRole('button', { name: /add it for Robin anyway/i })).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+      expect(addPlanEntry).not.toHaveBeenCalled();
+    });
+
+    it('writes only after the named confirm', async () => {
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
+      await screen.findByRole('alertdialog');
+      await user.click(screen.getByRole('button', { name: /add it for Robin anyway/i }));
+      await waitFor(() => expect(addPlanEntry).toHaveBeenCalledWith(expect.objectContaining({ food_id: 'nut1' })));
+    });
+
+    it('Quick Build never places it', async () => {
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click((await screen.findAllByRole('button', { name: QUICK_BUILD }))[0]);
+      await waitFor(() => expect(replaceWeekPlan).toHaveBeenCalled());
+      const entries = replaceWeekPlan.mock.calls[0][2] as Array<{ food_id: string }>;
+      expect(entries.length).toBeGreaterThan(0);
+      expect(entries.some((e) => e.food_id === 'nut1')).toBe(false);
+    });
   });
 
   describe('severe allergy (item 29)', () => {

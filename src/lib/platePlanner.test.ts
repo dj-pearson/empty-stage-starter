@@ -238,6 +238,18 @@ describe('planPlates', () => {
     expect(plate.blocked).toBe(false);
   });
 
+  it('reports a severe or unrated allergen as an allergen, not a dietary rule', () => {
+    // The solver words these "severe allergen (...)" and "allergen (...), severity
+    // not recorded"; the kind must not depend on how the reason starts.
+    for (const k of [
+      kid({ id: 'k1', allergens: ['dairy'], allergenSeverity: { dairy: 'severe' } }),
+      kid({ id: 'k1', allergens: ['dairy'] }),
+    ]) {
+      const [plate] = plan({ kids: [k] });
+      expect(plate.heldBack[0].reasons[0]).toMatchObject({ kind: 'allergen', foodName: 'Cheese' });
+    }
+  });
+
   it('blocks the plate when something unsafe cannot be taken off the dish', () => {
     // Pasta is the dish (canBeHeldBack false) and carries gluten.
     const [plate] = plan({

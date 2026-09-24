@@ -70,14 +70,31 @@ describe("MealQuickAddDrawer", () => {
 
   it("names the allergen and the kid, and needs a confirm tap", async () => {
     const user = userEvent.setup();
-    const { onSelectFood } = renderDrawer({ date: "2026-09-24", slot: "lunch", kidId: "sam", mode: "add" });
-    const warning = screen.getByText("Contains milk - Sam is allergic");
-    expect(warning.closest("span")).toHaveClass("text-destructive");
+    KIDS[0] = { id: "sam", name: "Sam", allergens: ["milk"], allergen_severity: { milk: "mild" } };
+    try {
+      const { onSelectFood } = renderDrawer({ date: "2026-09-24", slot: "lunch", kidId: "sam", mode: "add" });
+      const warning = screen.getByText("Contains milk - Sam is allergic");
+      expect(warning.closest("span")).toHaveClass("text-destructive");
 
+      await user.click(screen.getByRole("button", { name: /Cheese/ }));
+      expect(onSelectFood).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "Add anyway" }));
+      expect(onSelectFood).toHaveBeenCalledWith("cheese", expect.anything(), ["sam"]);
+    } finally {
+      KIDS[0] = { id: "sam", name: "Sam", allergens: ["milk"] };
+    }
+  });
+
+  it("says an allergy with no recorded severity is treated as severe, without calling it severe (item 3a)", async () => {
+    const user = userEvent.setup();
+    const { onSelectFood } = renderDrawer({ date: "2026-09-24", slot: "lunch", kidId: "sam", mode: "add" });
+    const line = "Contains milk - allergy, severity not recorded (treated as severe): Sam";
+    expect(screen.getByText(line)).toBeInTheDocument();
+    expect(screen.queryByText("Contains milk - Sam is allergic")).toBeNull();
+    expect(screen.queryByText("Contains milk - severe allergy: Sam")).toBeNull();
     await user.click(screen.getByRole("button", { name: /Cheese/ }));
     expect(onSelectFood).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Add anyway" }));
-    expect(onSelectFood).toHaveBeenCalledWith("cheese", expect.anything(), ["sam"]);
+    expect(screen.getByRole("group", { name: line })).toBeInTheDocument();
   });
 
   it("names a severe allergy as severe before the confirm (item 29)", async () => {

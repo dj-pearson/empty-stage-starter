@@ -12,7 +12,13 @@
 import type { Food, Kid, PlanEntry, Recipe } from "@/types";
 import { groupSlot } from "@/lib/familySlot";
 import { QUICK_LOG_SLOT_ORDER, slotForTime } from "@/lib/quickLog";
-import { countUncheckedIngredients, getKidRecipeFit, isAllergyUnknown } from "@/lib/kidFit";
+import {
+  countUncheckedIngredients,
+  getKidRecipeFit,
+  isAllergyUnknown,
+  isFitSeverityRecorded,
+  isSevereFit,
+} from "@/lib/kidFit";
 
 /**
  * The entry a kid's result for this recipe belongs on today, or undefined.
@@ -66,7 +72,14 @@ export function primaryForKid(rows: readonly PlanEntry[], kidId: string): PlanEn
  * have to schedule.
  */
 export type CookLogGate =
-  | { reason: "allergen"; allergen: string; severe: boolean }
+  | {
+      reason: "allergen";
+      allergen: string;
+      /** Severe, recorded or unrated (an unrated allergy is treated as severe). */
+      severe: boolean;
+      /** False when the severity was not recorded; copy must not call it the parent's "severe". */
+      severityRecorded?: boolean;
+    }
   | { reason: "unknown" }
   | { reason: "no-foods" };
 
@@ -79,7 +92,12 @@ export function cookLogGate(
   if ((recipe.food_ids ?? []).length === 0) return { reason: "no-foods" };
   const fit = getKidRecipeFit(kid, recipe, foodById, planEntries);
   if (fit.allergen) {
-    return { reason: "allergen", allergen: fit.allergen, severe: fit.allergenSeverity === "severe" };
+    return {
+      reason: "allergen",
+      allergen: fit.allergen,
+      severe: isSevereFit(fit),
+      severityRecorded: isFitSeverityRecorded(fit),
+    };
   }
   // Same rule as useRecipeQuickPlan's isKidAllergyUnknown: no list at all, or
   // a list and an ingredient we could not check against it.

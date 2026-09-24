@@ -64,8 +64,16 @@ export interface KidFit {
   score: number;
   blockingAversions: string[];
   allergenHits: string[];
-  /** Worst recorded severity among this kid's hits, or null (no hit, or none recorded). */
+  /**
+   * Worst severity among this kid's hits, or null when there is no hit. An
+   * allergy with no recorded severity counts as "severe" (item 3a).
+   */
   allergenSeverity?: AllergenSeverity | null;
+  /**
+   * False when `allergenSeverity` is "severe" only because no severity was
+   * recorded; label it "severity not recorded", not "severe".
+   */
+  allergenSeverityRecorded?: boolean;
 }
 
 export interface ScoredRecipe {
@@ -130,6 +138,7 @@ export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
   const allergenHits: string[] = [];
   const blockingAversions: string[] = [];
   let worst: AllergenSeverity | null = null;
+  let worstRecorded = false;
 
   for (const food of recipe.foods) {
     // Canonical matching, as kidFit does: a kid's "Peanuts" has to catch a
@@ -142,7 +151,15 @@ export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
     if (worstHit) {
       allergenHits.push(food.name);
       const level = worstHit.severity;
-      if (level && SEVERITY_RANK[level] > SEVERITY_RANK[worst ?? 'none']) worst = level;
+      const rank = SEVERITY_RANK[level];
+      const worstRank = SEVERITY_RANK[worst ?? 'none'];
+      if (rank > worstRank) {
+        worst = level;
+        worstRecorded = worstHit.recorded;
+      } else if (rank === worstRank && worstHit.recorded) {
+        // A recorded severe beats an unrated one for the label.
+        worstRecorded = true;
+      }
       continue;
     }
     if (
@@ -163,6 +180,7 @@ export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
     blockingAversions,
     allergenHits,
     allergenSeverity: worst,
+    allergenSeverityRecorded: worst === null ? false : worstRecorded,
   };
 }
 

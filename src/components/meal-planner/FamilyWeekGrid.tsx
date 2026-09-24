@@ -95,6 +95,12 @@ function initials(name: string): string {
 function chipLabel(chip: CellChip, kidName: string, t: TFunction): string {
   switch (chip.kind) {
     case "allergen":
+      if (chip.severe && chip.severityRecorded === false) {
+        return t("planner.familyGrid.chip.allergenUnrated", {
+          defaultValue: "{{allergen}} allergy, severity not recorded (treated as severe)",
+          allergen: chip.allergen ?? "",
+        });
+      }
       return chip.severe
         ? t("planner.familyGrid.chip.allergenSevere", {
             defaultValue: "Severe {{allergen}} allergy",

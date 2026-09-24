@@ -37,7 +37,7 @@ const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((
 const today = isoDay(now);
 const nextWeekDay = (i: number) => isoDay(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i));
 
-function setup(planEntries: PlanEntry[]) {
+function setup(planEntries: PlanEntry[], kids: Kid[] = KIDS) {
   const props = {
     onAddEntry: vi.fn(),
     onSelectRecipeForKids: vi.fn(),
@@ -50,7 +50,7 @@ function setup(planEntries: PlanEntry[]) {
     onClearWeek: vi.fn(),
   };
   render(
-    <FamilyWeekGrid weekStart={weekStart} planEntries={planEntries} foods={FOODS} recipes={RECIPES} kids={KIDS} {...props} />,
+    <FamilyWeekGrid weekStart={weekStart} planEntries={planEntries} foods={FOODS} recipes={RECIPES} kids={kids} {...props} />,
   );
   return props;
 }
@@ -76,14 +76,31 @@ describe("FamilyWeekGrid (item 2)", () => {
     expect(ada).toHaveTextContent("Toast");
   });
 
+  const snackForBoth: PlanEntry[] = [
+    { id: "1", kid_id: "sam", date: today, meal_slot: "snack1", food_id: "pb", result: null },
+    { id: "2", kid_id: "ada", date: today, meal_slot: "snack1", food_id: "pb", result: null },
+  ];
+
   it("shows a per-kid fit chip from kidFit", () => {
-    setup([
-      { id: "1", kid_id: "sam", date: today, meal_slot: "snack1", food_id: "pb", result: null },
-      { id: "2", kid_id: "ada", date: today, meal_slot: "snack1", food_id: "pb", result: null },
-    ]);
+    const mildAda: Kid = { ...KIDS[1], allergen_severity: { peanut: "mild" } };
+    setup(snackForBoth, [KIDS[0], mildAda]);
     const c = cell(today, "snack1");
     expect(within(within(c).getByTestId(`family-line-${today}-snack1-ada`)).getByText(/Not for Ada: peanut/)).toBeInTheDocument();
     expect(within(within(c).getByTestId(`family-line-${today}-snack1-sam`)).queryByText(/Not for/)).toBeNull();
+  });
+
+  it("labels an allergy with no recorded severity as treated as severe, not as severe (item 3a)", () => {
+    setup(snackForBoth);
+    const line = within(cell(today, "snack1")).getByTestId(`family-line-${today}-snack1-ada`);
+    expect(within(line).getByText(/peanut allergy, severity not recorded \(treated as severe\)/)).toBeInTheDocument();
+    expect(within(line).queryByText(/Severe peanut allergy/)).toBeNull();
+  });
+
+  it("labels a recorded severe allergy as severe", () => {
+    const severeAda: Kid = { ...KIDS[1], allergen_severity: { peanut: "severe" } };
+    setup(snackForBoth, [KIDS[0], severeAda]);
+    const line = within(cell(today, "snack1")).getByTestId(`family-line-${today}-snack1-ada`);
+    expect(within(line).getByText(/Severe peanut allergy/)).toBeInTheDocument();
   });
 
   it("adds a family meal for every kid in one call", async () => {

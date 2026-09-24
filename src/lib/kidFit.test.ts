@@ -9,7 +9,13 @@ import {
   fitGroup,
   getKidFoodFit,
   getKidRecipeFit,
+  hasSevereAllergenHit,
+  isConflictSeverityRecorded,
+  isFitSeverityRecorded,
+  isSevereConflict,
+  isSevereFit,
   selectReliableFoods,
+  severeConflicts,
   selectTryNextFromResults,
   summarizeKidFits,
   type KidFit,
@@ -408,7 +414,7 @@ describe("allergen families, names and severity (items 28/29)", () => {
     expect(fit.allergenSeverity).toBe("severe");
   });
 
-  it("findAllergenConflicts carries severity, null when none was recorded", () => {
+  it("findAllergenConflicts carries severity, and an unrated one is severe but not recorded (item 3a)", () => {
     const foods = [food({ id: "w", name: "Walnuts" }), food({ id: "m", name: "Milk" })];
     const byId = new Map(foods.map((f) => [f.id, f]));
     const out = findAllergenConflicts(
@@ -416,9 +422,46 @@ describe("allergen families, names and severity (items 28/29)", () => {
       ["w", "m"],
       byId,
     );
-    expect(out.map((c) => [c.food.id, c.allergen, c.severity])).toEqual([
-      ["w", "tree nut", "severe"],
-      ["m", "milk", null],
+    expect(out.map((c) => [c.food.id, c.allergen, c.severity, c.severityRecorded])).toEqual([
+      ["w", "tree nut", "severe", true],
+      ["m", "milk", "severe", false],
     ]);
+    expect(out.every(isSevereConflict)).toBe(true);
+    expect(out.map(isConflictSeverityRecorded)).toEqual([true, false]);
+    expect(severeConflicts(out)).toHaveLength(2);
+  });
+
+  it("an unrated food hit is severe for decisions and flagged as not recorded (item 3a)", () => {
+    const unrated: KidFitKid = { ...nutKid, allergen_severity: { milk: "mild" } };
+    const fit = getKidFoodFit(unrated, food({ id: "cw", name: "Cashews" }), []);
+    expect(fit.allergen).toBe("tree nut");
+    expect(fit.allergenSeverity).toBe("severe");
+    expect(fit.allergenSeverityRecorded).toBe(false);
+    expect(isSevereFit(fit)).toBe(true);
+    expect(isFitSeverityRecorded(fit)).toBe(false);
+
+    const mild = getKidFoodFit(unrated, food({ id: "yg", name: "Greek yogurt" }), []);
+    expect(mild.allergenSeverity).toBe("mild");
+    expect(mild.allergenSeverityRecorded).toBe(true);
+    expect(isSevereFit(mild)).toBe(false);
+  });
+
+  it("a recipe's unrated hit outranks a mild first hit and keeps the not-recorded flag", () => {
+    const unrated: KidFitKid = { ...nutKid, allergen_severity: { milk: "mild" } };
+    const foods = [food({ id: "y", name: "Yogurt" }), food({ id: "p", name: "Pistachios" })];
+    const byId = new Map(foods.map((f) => [f.id, f]));
+    const fit = getKidRecipeFit(unrated, { food_ids: ["y", "p"] }, byId, []);
+    expect(fit.allergen).toBe("tree nut");
+    expect(fit.allergenSeverity).toBe("severe");
+    expect(fit.allergenSeverityRecorded).toBe(false);
+    const item = summarizeKidFits([{ kid: kidOf("u", {}), fit }]);
+    expect(hasSevereAllergenHit(item)).toBe(true);
+  });
+
+  it("an older fit with an allergen but no severity field reads as unrated severe", () => {
+    expect(isSevereFit({ allergen: "peanut" })).toBe(true);
+    expect(isFitSeverityRecorded({})).toBe(false);
+    expect(isFitSeverityRecorded({ allergenSeverity: "mild" })).toBe(true);
+    expect(isSevereFit({ allergen: null, allergenSeverity: "severe" })).toBe(false);
   });
 });

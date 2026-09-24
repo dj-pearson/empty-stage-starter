@@ -211,7 +211,13 @@ function StarterRowItem({
                   className={cn("flex items-center gap-1 text-xs text-destructive", severe && "font-semibold")}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {severe
+                  {severe && !b.severityRecorded
+                    ? t("pantry.starter.blockedUnrated", {
+                        defaultValue: "Allergy (severity not recorded, treated as severe), not for {{name}}: {{allergen}}",
+                        name: b.kid.name,
+                        allergen: b.allergen,
+                      })
+                    : severe
                     ? t("pantry.starter.blockedSevere", {
                         defaultValue: "Severe allergy, not for {{name}}: {{allergen}}",
                         name: b.kid.name,

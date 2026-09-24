@@ -52,7 +52,24 @@ describe("cookLogGate", () => {
 
   it("stops an allergen hit, naming it and its severity", () => {
     const kid: Kid = { id: "k", name: "K", allergens: ["peanut"], allergen_severity: { peanut: "severe" } };
-    expect(cookLogGate(kid, recipe, foods, [])).toEqual({ reason: "allergen", allergen: expect.any(String), severe: true });
+    expect(cookLogGate(kid, recipe, foods, [])).toEqual({
+      reason: "allergen",
+      allergen: expect.any(String),
+      severe: true,
+      severityRecorded: true,
+    });
+  });
+
+  it("stops an unrated hit as severe and says the severity was not recorded (item 3a)", () => {
+    const kid: Kid = { id: "k", name: "K", allergens: ["peanut"] };
+    expect(cookLogGate(kid, recipe, foods, [])).toEqual({
+      reason: "allergen",
+      allergen: expect.any(String),
+      severe: true,
+      severityRecorded: false,
+    });
+    const mild: Kid = { ...kid, allergen_severity: { peanut: "mild" } };
+    expect(cookLogGate(mild, recipe, foods, [])).toMatchObject({ severe: false, severityRecorded: true });
   });
 
   it("stops unknown allergy data and a recipe with no foods", () => {

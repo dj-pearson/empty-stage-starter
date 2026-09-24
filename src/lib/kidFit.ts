@@ -30,10 +30,19 @@ export interface KidFit {
    */
   allergen: string | null;
   /**
-   * Severity the parent recorded for `allergen`, or null when there is no hit
-   * or none was recorded. Optional so older fixtures still type-check.
+   * Severity every safety decision uses for `allergen`, or null when there is
+   * no hit. An allergy the parent recorded without a severity is "severe" here
+   * (owner decision 2026-09-24); `allergenSeverityRecorded` says which it was.
+   * Optional so older fixtures still type-check; read it through isSevereFit.
    */
   allergenSeverity?: AllergenSeverity | null;
+  /**
+   * False when `allergenSeverity` was not chosen by the parent but defaulted
+   * to severe. Copy must not claim "severe" as the parent's word in that case.
+   * Optional so older fixtures still type-check; read it through
+   * isFitSeverityRecorded.
+   */
+  allergenSeverityRecorded?: boolean;
   disliked: boolean;
   alwaysEats: boolean;
   /**
@@ -138,6 +147,7 @@ function fitFromStats(
   food: Pick<Food, "is_safe" | "is_try_bite">,
   allergen: string | null,
   allergenSeverity: AllergenSeverity | null,
+  allergenSeverityRecorded: boolean,
   disliked: boolean,
   alwaysEats: boolean,
   stats: ResultStats,
@@ -145,6 +155,7 @@ function fitFromStats(
   return {
     allergen,
     allergenSeverity,
+    allergenSeverityRecorded,
     disliked,
     alwaysEats,
     safe: Boolean(food.is_safe),
@@ -179,6 +190,7 @@ export function getKidFoodFit(
     food,
     hit?.allergen ?? null,
     hit?.severity ?? null,
+    hit?.recorded ?? false,
     listMatches(kid.disliked_foods, food),
     listMatches(kid.always_eats_foods, food),
     statsFor(index, food.id),
@@ -212,6 +224,7 @@ export function getKidRecipeFit(
 
   let allergen: string | null = null;
   let allergenSeverity: AllergenSeverity | null = null;
+  let allergenSeverityRecorded = false;
   let disliked = false;
   let tryBite = false;
   let alwaysEats = foods.length > 0;
@@ -223,10 +236,13 @@ export function getKidRecipeFit(
     if (allergen === null && fit.allergen) {
       allergen = fit.allergen;
       allergenSeverity = fit.allergenSeverity ?? null;
-    } else if (fit.allergen && fit.allergenSeverity === "severe" && allergenSeverity !== "severe") {
-      // A severe hit anywhere in the recipe outranks a milder first hit.
+      allergenSeverityRecorded = isFitSeverityRecorded(fit);
+    } else if (fit.allergen && isSevereFit(fit) && allergenSeverity !== "severe") {
+      // A severe hit anywhere in the recipe (recorded or unrated) outranks a
+      // milder first hit.
       allergen = fit.allergen;
       allergenSeverity = "severe";
+      allergenSeverityRecorded = isFitSeverityRecorded(fit);
     }
     if (fit.disliked) disliked = true;
     if (fit.tryBite) tryBite = true;
@@ -247,6 +263,7 @@ export function getKidRecipeFit(
   return {
     allergen,
     allergenSeverity,
+    allergenSeverityRecorded,
     disliked,
     alwaysEats,
     safe,
@@ -382,16 +399,44 @@ type FoodLookup = ReadonlyMap<string, Food>;
  * `foodById`, plus recipe_ingredients rows with no food at all (typed-in
  * ingredients, or an import nothing matched).
  */
-/** Conflicts whose recorded severity is "severe": never placed by a suggestion or auto-plan. */
+/**
+ * A hit every safety decision treats as severe: recorded severe, or recorded
+ * with no severity (owner decision 2026-09-24). A fit with an allergen but no
+ * allergenSeverity at all (an older fixture or caller) is unrated, so severe.
+ */
+export function isSevereFit(fit: Pick<KidFit, "allergen" | "allergenSeverity"> | null | undefined): boolean {
+  return Boolean(fit?.allergen) && (fit?.allergenSeverity ?? "severe") === "severe";
+}
+
+/** Whether the parent chose the fit's severity, rather than it defaulting to severe. */
+export function isFitSeverityRecorded(
+  fit: Pick<KidFit, "allergenSeverity" | "allergenSeverityRecorded"> | null | undefined,
+): boolean {
+  return fit?.allergenSeverityRecorded ?? fit?.allergenSeverity != null;
+}
+
+/** A conflict treated as severe: recorded severe, or no severity recorded. */
+export function isSevereConflict(conflict: Pick<AllergenConflict<Pick<Kid, "id" | "allergens">>, "severity">): boolean {
+  return (conflict.severity ?? "severe") === "severe";
+}
+
+/** Whether the parent chose the conflict's severity, rather than it defaulting to severe. */
+export function isConflictSeverityRecorded(
+  conflict: Pick<AllergenConflict<Pick<Kid, "id" | "allergens">>, "severity" | "severityRecorded">,
+): boolean {
+  return conflict.severityRecorded ?? conflict.severity != null;
+}
+
+/** Conflicts treated as severe (recorded or unrated): never placed by a suggestion or auto-plan. */
 export function severeConflicts<K extends Pick<Kid, "id" | "allergens">>(
   conflicts: readonly AllergenConflict<K>[],
 ): AllergenConflict<K>[] {
-  return conflicts.filter((c) => c.severity === "severe");
+  return conflicts.filter(isSevereConflict);
 }
 
-/** True when any target kid has a severe hit in this item (a KidHit list or an ItemFit). */
+/** True when any target kid has a severe (recorded or unrated) hit in this item. */
 export function hasSevereAllergenHit(fit: Pick<ItemFit, "allergenKids"> | null | undefined): boolean {
-  return Boolean(fit?.allergenKids.some((h) => h.fit.allergenSeverity === "severe"));
+  return Boolean(fit?.allergenKids.some((h) => isSevereFit(h.fit)));
 }
 
 export function countUncheckedIngredients(
@@ -409,8 +454,18 @@ export interface AllergenConflict<K extends Pick<Kid, "id" | "allergens"> = Kid>
   food: Food;
   /** Canonical allergen name, e.g. "peanut". */
   allergen: string;
-  /** Severity recorded on the kid for this allergen, or null when none was. */
+  /**
+   * Severity every safety decision uses: what the parent recorded, or "severe"
+   * when they recorded the allergy without one. Null only from older callers;
+   * read it through isSevereConflict.
+   */
   severity: AllergenSeverity | null;
+  /**
+   * False when `severity` defaulted to severe because none was recorded.
+   * Optional so older fixtures still type-check; read it through
+   * isConflictSeverityRecorded.
+   */
+  severityRecorded?: boolean;
 }
 
 /**
@@ -433,7 +488,7 @@ export function findAllergenConflicts<K extends Pick<Kid, "id" | "allergens">>(
     for (const food of foods) {
       const hit = worstFoodAllergen(kid as Partial<Pick<Kid, "allergens" | "allergen_severity">>, food);
       if (!hit) continue;
-      out.push({ kid, food, allergen: hit.allergen, severity: hit.severity });
+      out.push({ kid, food, allergen: hit.allergen, severity: hit.severity, severityRecorded: hit.recorded });
     }
   }
   return out;

@@ -15,6 +15,8 @@ import {
   buildResultIndex,
   getKidFoodFit,
   getKidRecipeFit,
+  isFitSeverityRecorded,
+  isSevereFit,
   type KidFit,
   type ResultIndex,
 } from "@/lib/kidFit";
@@ -78,6 +80,8 @@ export interface CellChip {
   /** Canonical allergen, for "allergen". */
   allergen?: string;
   severe?: boolean;
+  /** With `severe`: false when no severity was recorded and it is treated as severe. */
+  severityRecorded?: boolean;
   /** For "history": ate this many of `tries` logged offers. */
   ate?: number;
   tries?: number;
@@ -93,7 +97,12 @@ export function cellFitChips(fit: KidFit | null, limit = 2): CellChip[] {
   if (!fit) return [];
   const chips: CellChip[] = [];
   if (fit.allergen) {
-    chips.push({ kind: "allergen", allergen: fit.allergen, severe: fit.allergenSeverity === "severe" });
+    chips.push({
+      kind: "allergen",
+      allergen: fit.allergen,
+      severe: isSevereFit(fit),
+      severityRecorded: isFitSeverityRecorded(fit),
+    });
   }
   if (fit.disliked) chips.push({ kind: "dislike" });
   if (!fit.allergen && fit.alwaysEats) chips.push({ kind: "goTo" });

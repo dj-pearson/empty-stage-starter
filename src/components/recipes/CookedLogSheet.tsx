@@ -50,6 +50,12 @@ export function CookedLogSheet({ recipe, open, onOpenChange }: CookedLogSheetPro
 
   const gateText = (gate: CookLogGate): string => {
     if (gate.reason === "allergen") {
+      if (gate.severe && gate.severityRecorded === false) {
+        return t("recipes.cooked.gateUnrated", {
+          defaultValue: "{{allergen}} allergy, severity not recorded (treated as severe). Not added to the plan.",
+          allergen: gate.allergen,
+        });
+      }
       return gate.severe
         ? t("recipes.cooked.gateSevere", {
             defaultValue: "Severe {{allergen}} allergy. Not added to the plan.",

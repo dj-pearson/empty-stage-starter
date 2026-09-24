@@ -18,7 +18,15 @@ import { toast } from "sonner";
 import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
 import type { ScheduleRecipeResult } from "@/contexts/PlanContext";
 import { usePlanToGrocery } from "@/hooks/usePlanToGrocery";
-import { countUncheckedIngredients, getKidRecipeFit, isAllergyUnknown, type ItemFit } from "@/lib/kidFit";
+import {
+  countUncheckedIngredients,
+  getKidRecipeFit,
+  isAllergyUnknown,
+  isFitSeverityRecorded,
+  isSevereFit,
+  type ItemFit,
+  type KidFit,
+} from "@/lib/kidFit";
 import { addIsoDays, parseIsoDate, toISODate } from "@/lib/date-utils";
 import type { Kid, MealSlot, Recipe } from "@/types";
 import "@/i18n/appLocale";
@@ -217,14 +225,25 @@ export function useRecipeQuickPlan() {
       const dateISO = now.getHours() >= 16 ? addIsoDays(today, 1) : today;
 
       // Every hit is skipped, whatever its severity: planning a dish for a
-      // child it hits is never a one-tap action. A severe hit says so.
+      // child it hits is never a one-tap action. A severe hit says so; an
+      // unrated one (treated as severe) says its severity was not recorded.
       const allergenIds = new Set<string>();
       const allergenByKid = new Map<string, string>();
       const severeIds = new Set<string>();
+      const unratedIds = new Set<string>();
+      const markSeverity = (kidId: string, kidFit: KidFit) => {
+        if (!isSevereFit(kidFit)) return;
+        if (isFitSeverityRecorded(kidFit)) {
+          severeIds.add(kidId);
+          unratedIds.delete(kidId);
+        } else if (!severeIds.has(kidId)) {
+          unratedIds.add(kidId);
+        }
+      };
       for (const hit of fit?.allergenKids ?? []) {
         allergenIds.add(hit.kid.id);
         if (hit.fit.allergen) allergenByKid.set(hit.kid.id, hit.fit.allergen);
-        if (hit.fit.allergenSeverity === "severe") severeIds.add(hit.kid.id);
+        markSeverity(hit.kid.id, hit.fit);
       }
       // Re-check against the live profile: a caller's fit may be stale, and
       // no caller at all still must not plan a peanut dish for the peanut kid.
@@ -233,7 +252,7 @@ export function useRecipeQuickPlan() {
         if (kidFit.allergen) {
           allergenIds.add(kid.id);
           allergenByKid.set(kid.id, kidFit.allergen);
-          if (kidFit.allergenSeverity === "severe") severeIds.add(kid.id);
+          markSeverity(kid.id, kidFit);
         }
       }
       const unchecked = Math.max(fit?.unchecked ?? 0, countUncheckedIngredients(recipe, foodById));
@@ -253,6 +272,13 @@ export function useRecipeQuickPlan() {
             names: joinNames(
               skippedAllergen.map((k) => {
                 const a = allergenByKid.get(k.id);
+                if (a && unratedIds.has(k.id)) {
+                  return t("recipes.allergenSafety.unratedKid", {
+                    defaultValue: "{{name}}: {{allergen}}, severity not recorded (treated as severe)",
+                    name: k.name,
+                    allergen: a,
+                  });
+                }
                 if (a && severeIds.has(k.id)) {
                   return t("recipes.allergenSafety.severeKid", {
                     defaultValue: "{{name}}: severe {{allergen}}",

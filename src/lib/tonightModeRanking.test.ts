@@ -355,6 +355,7 @@ describe('tonight ranking: severity and families (items 28/29)', () => {
     const hit = scored.find((s) => s.recipeId === 'r1')!;
     expect(hit.excluded).toBe(true);
     expect(hit.kidFit[0].allergenSeverity).toBe('severe');
+    expect(hit.kidFit[0].allergenSeverityRecorded).toBe(true);
     const top = topSuggestions({ recipes: [r, safe], pantry: [], kids: [k], recentEntries: [] }, { maxMinutes: 30 });
     expect(top.map((s) => s.recipeId)).toEqual(['r2']);
   });
@@ -371,6 +372,34 @@ describe('tonight ranking: severity and families (items 28/29)', () => {
   it('matches a food by name when it carries no tags', () => {
     const fit = evaluateKidFit(recipe('r', 'Salmon bowl', [food('s', 'Baked salmon')]), kid('k', 'Ava', { allergens: ['fish'] }));
     expect(fit.allergenHits).toEqual(['Baked salmon']);
-    expect(fit.allergenSeverity).toBeNull();
+    // No severity recorded for fish: treated as severe, and labelled as unrated (item 3a).
+    expect(fit.allergenSeverity).toBe('severe');
+    expect(fit.allergenSeverityRecorded).toBe(false);
+  });
+
+  it('never suggests a recipe whose hit has no recorded severity (item 3a)', () => {
+    const r = recipe('r1', 'Salmon bowl', [food('s', 'Baked salmon')]);
+    const safe = recipe('r2', 'Plain pasta', [food('p', 'Pasta')]);
+    const k = kid('k', 'Ava', { allergens: ['fish'] });
+    const top = topSuggestions({ recipes: [r, safe], pantry: [], kids: [k], recentEntries: [] }, { maxMinutes: 30 });
+    expect(top.map((s) => s.recipeId)).toEqual(['r2']);
+  });
+
+  it('a recorded severe hit wins the label over an unrated one in the same recipe', () => {
+    const r = recipe('r1', 'Surf and nuts', [food('s', 'Baked salmon'), food('c', 'Cashews')]);
+    const k: KidContext = {
+      ...kid('k', 'Ava', { allergens: ['fish', 'tree nuts'] }),
+      allergenSeverity: { 'tree nuts': 'severe' },
+    };
+    const fit = evaluateKidFit(r, k);
+    expect(fit.allergenSeverity).toBe('severe');
+    expect(fit.allergenSeverityRecorded).toBe(true);
+  });
+
+  it('a mild hit alone stays mild', () => {
+    const k: KidContext = { ...kid('k', 'Ava', { allergens: ['fish'] }), allergenSeverity: { fish: 'mild' } };
+    const fit = evaluateKidFit(recipe('r', 'Salmon bowl', [food('s', 'Baked salmon')]), k);
+    expect(fit.allergenSeverity).toBe('mild');
+    expect(fit.allergenSeverityRecorded).toBe(true);
   });
 });

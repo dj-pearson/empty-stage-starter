@@ -30,6 +30,8 @@ import {
   buildResultIndex,
   getKidFoodFit,
   getKidRecipeFit,
+  isFitSeverityRecorded,
+  isSevereFit,
   summarizeKidFits as summarize,
   fitGroup as groupOf,
   type FitGroup,
@@ -359,11 +361,18 @@ export function MealQuickAddDrawer({
     // One line per allergen, naming every kid it affects.
     // A severe allergy gets its own line, so the confirm names the child and
     // the allergen as severe before "Add anyway" (item 29).
+    // An allergy with no recorded severity is treated as severe, and its line
+    // says the severity was not recorded rather than calling it severe.
     const byAllergen = new Map<string, Kid[]>();
     const severeByAllergen = new Map<string, Kid[]>();
+    const unratedByAllergen = new Map<string, Kid[]>();
     for (const h of fit.allergenKids) {
       const a = h.fit.allergen as string;
-      const bucket = h.fit.allergenSeverity === "severe" ? severeByAllergen : byAllergen;
+      const bucket = !isSevereFit(h.fit)
+        ? byAllergen
+        : isFitSeverityRecorded(h.fit)
+          ? severeByAllergen
+          : unratedByAllergen;
       bucket.set(a, [...(bucket.get(a) ?? []), h.kid]);
     }
     const severeLines = [...severeByAllergen].map(([allergen, ks]) =>
@@ -373,7 +382,14 @@ export function MealQuickAddDrawer({
         names: names(ks),
       }),
     );
-    return [...severeLines, ...[...byAllergen]
+    const unratedLines = [...unratedByAllergen].map(([allergen, ks]) =>
+      t("planner.allergenSafety.drawerUnrated", {
+        defaultValue: "Contains {{allergen}} - allergy, severity not recorded (treated as severe): {{names}}",
+        allergen,
+        names: names(ks),
+      }),
+    );
+    return [...severeLines, ...unratedLines, ...[...byAllergen]
       .map(([allergen, ks]) =>
         t("planner.mobile.drawer.allergenHit", {
           defaultValue: "Contains {{allergen}} - {{names}} {{verb}} allergic",

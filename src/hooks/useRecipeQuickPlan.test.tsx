@@ -182,6 +182,18 @@ describe("useRecipeQuickPlan", () => {
     }
   });
 
+  it("planTonight skips an allergy with no recorded severity and says so, not 'severe' (item 3a)", async () => {
+    const { result } = renderHook(() => useRecipeQuickPlan());
+    await act(async () => {
+      await result.current.planTonight(RECIPE);
+    });
+    const [, , , kidIds] = scheduleRecipe.mock.calls[0];
+    expect(kidIds).toEqual(["k-ben", "k-cal"]);
+    const info = toastCalls.find((c) => c.kind === "info" && c.title.includes("Ava"));
+    expect(info?.title).toContain("Ava: peanut, severity not recorded (treated as severe)");
+    expect(info?.title).not.toContain("severe peanut");
+  });
+
   it("planTonight skips a kid whose allergen hides in a food name (family match)", async () => {
     KIDS[1] = { id: "k-ben", name: "Ben", allergens: ["milk"] };
     FOODS.push({ id: "f-butter", name: "Butter", category: "dairy", is_safe: true, is_try_bite: false, allergens: [], quantity: 0 });

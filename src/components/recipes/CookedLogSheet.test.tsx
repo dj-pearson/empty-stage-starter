@@ -78,6 +78,26 @@ describe("CookedLogSheet", () => {
     expect(undo).toHaveBeenCalled();
   });
 
+  it("says an allergy with no recorded severity is treated as severe, without calling it severe (item 3a)", () => {
+    const original = preview.getMockImplementation();
+    preview.mockImplementation(() => [
+      {
+        kid: ava,
+        entry: undefined,
+        gate: { reason: "allergen", allergen: "peanut", severe: true, severityRecorded: false },
+      },
+      { kid: ben, entry, gate: null },
+    ]);
+    try {
+      render(<CookedLogSheet recipe={RECIPE} open onOpenChange={vi.fn()} />);
+      const gate = screen.getByTestId("cooked-gate-k-ava");
+      expect(gate).toHaveTextContent("peanut allergy, severity not recorded (treated as severe). Not added to the plan.");
+      expect(gate).not.toHaveTextContent(/Severe peanut allergy/);
+    } finally {
+      if (original) preview.mockImplementation(original);
+    }
+  });
+
   it("tapping the chosen result again clears it", () => {
     render(<CookedLogSheet recipe={RECIPE} open onOpenChange={vi.fn()} />);
     const ate = screen.getByRole("radio", { name: "Ate" });

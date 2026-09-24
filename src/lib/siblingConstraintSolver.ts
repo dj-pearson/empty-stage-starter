@@ -41,7 +41,11 @@ export interface SolverKid {
   id: string;
   name: string;
   allergens?: string[] | null;
-  /** kids.allergen_severity: a severe hit is never split-plated, only excluded. */
+  /**
+   * kids.allergen_severity: a severe hit is never split-plated, only excluded.
+   * An allergy with no entry here is treated as severe (owner decision
+   * 2026-09-24).
+   */
   allergenSeverity?: Partial<Record<string, AllergenSeverity>> | null;
   dietaryRestrictions?: string[] | null;
   dislikedFoods?: string[] | null;
@@ -85,8 +89,13 @@ export interface ConstraintViolation {
   reason: string;
   /** 'hard' = excludes the kid (allergen / dietary). 'soft' = penalizes. */
   severity: 'hard' | 'soft';
-  /** For an allergen violation: the severity the parent recorded, if any. */
+  /**
+   * For an allergen violation: the severity decisions use. "severe" when the
+   * parent recorded severe or recorded no severity at all.
+   */
   allergenSeverity?: AllergenSeverity | null;
+  /** For an allergen violation: false when no severity was recorded and it defaulted to severe. */
+  allergenSeverityRecorded?: boolean;
 }
 
 export interface KidSatisfaction {
@@ -147,6 +156,21 @@ function lowerSet(values: readonly (string | null | undefined)[] | null | undefi
     }
   }
   return out;
+}
+
+/** An allergen violation decisions treat as severe: recorded severe, or no severity recorded. */
+function isSevereViolation(v: ConstraintViolation): boolean {
+  return v.allergenSeverity === 'severe';
+}
+
+/** Why a recipe was dropped, without calling an unrated allergy the parent's "severe". */
+function excludeReasonFor(perKid: readonly KidSatisfaction[]): string {
+  const severe = perKid.flatMap((k) => k.hardViolations.filter(isSevereViolation));
+  if (severe.some((v) => v.allergenSeverityRecorded !== false)) return 'Severe allergy for a selected kid';
+  if (severe.length > 0) {
+    return 'Allergy with no recorded severity (treated as severe) for a selected kid';
+  }
+  return 'Too many constraint conflicts to resolve';
 }
 
 function clamp01(n: number): number {
@@ -317,9 +341,14 @@ export function evaluateKidConstraint(recipe: SolverRecipe, kid: SolverKid): Kid
       hardViolations.push({
         foodId: food.id,
         foodName: food.name,
-        reason: level === 'severe' ? `severe allergen (${allergenHit})` : `allergen (${allergenHit})`,
+        reason: !worstHit.recorded
+          ? `allergen (${allergenHit}), severity not recorded, treated as severe`
+          : level === 'severe'
+            ? `severe allergen (${allergenHit})`
+            : `allergen (${allergenHit})`,
         severity: 'hard',
         allergenSeverity: level,
+        allergenSeverityRecorded: worstHit.recorded,
       });
       continue; // no need to also flag as dislike etc.
     }
@@ -528,8 +557,9 @@ function planResolution(
   }));
 
   // Item 29: "hold the X" is fine for a mild or moderate allergy, but a severe
-  // one is a cross-contact risk from the shared pot, so the recipe is out.
-  if (adjusted.some((ks) => ks.hardViolations.some((v) => v.allergenSeverity === 'severe'))) {
+  // one is a cross-contact risk from the shared pot, so the recipe is out. An
+  // allergy with no recorded severity counts as severe here (item 3a).
+  if (adjusted.some((ks) => ks.hardViolations.some(isSevereViolation))) {
     return null;
   }
 
@@ -660,9 +690,7 @@ export function solveSiblingMeals(
         swaps: [],
         splitPlates: [],
         excluded: true,
-        excludeReason: perKid.some((k) => k.hardViolations.some((v) => v.allergenSeverity === 'severe'))
-          ? 'Severe allergy for a selected kid'
-          : 'Too many constraint conflicts to resolve',
+        excludeReason: excludeReasonFor(perKid),
       });
       continue;
     }

@@ -189,7 +189,9 @@ export function planPlates(input: PlatingInput): KidPlate[] {
         const hard = hardByFood.get(foodId);
         if (!hard) continue;
         reasons.push(
-          hard.reason.startsWith('allergen')
+          // allergenSeverity is set on every allergen violation; the reason
+          // text starts "severe allergen" for a severe one, so it is not the test.
+          hard.allergenSeverity != null || hard.reason.startsWith('allergen')
             ? { kind: 'allergen', foodName: hard.foodName, detail: hard.reason }
             : { kind: 'dietary', foodName: hard.foodName, detail: hard.reason }
         );
