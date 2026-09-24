@@ -1,3 +1,6 @@
+import type { AmountEaten } from '@/types';
+import { amountForResult } from '@/lib/foodJournal';
+
 /** One of today's planned meals, for the picker. */
 export interface QuickLogMeal {
   id: string;
@@ -34,6 +37,7 @@ export type QuickLogResult = 'ate' | 'tasted' | 'refused';
 /** A planned meal as the dashboard knows it: the picker's row plus its note. */
 export interface QuickLogEntry extends QuickLogMeal {
   notes?: string;
+  amount_eaten?: AmountEaten | null;
 }
 
 /**
@@ -81,12 +85,14 @@ export async function performQuickLog<T extends QuickLogEntry>(options: {
   result: QuickLogResult;
   notes?: string;
   mealId?: string;
+  /** "A lot", "some" or "nibbles", when the user picked one. */
+  amount?: AmountEaten;
   save: (
     entryId: string,
-    patch: { result: QuickLogResult; notes?: string }
+    patch: { result: QuickLogResult; notes?: string; amount_eaten?: AmountEaten | null }
   ) => PromiseLike<{ error: unknown }> | { error: unknown };
 }): Promise<QuickLogOutcome> {
-  const { meals, result, notes, mealId, save } = options;
+  const { meals, result, notes, mealId, amount, save } = options;
   const entry = selectQuickLogEntry(meals, mealId);
 
   if (!entry) {
@@ -96,7 +102,15 @@ export async function performQuickLog<T extends QuickLogEntry>(options: {
   try {
     // No note typed is the user not writing one, so keep whatever the entry
     // already carried rather than blanking it.
-    const { error } = await save(entry.id, { result, notes: notes ?? entry.notes });
+    const patch: { result: QuickLogResult; notes?: string; amount_eaten?: AmountEaten | null } = {
+      result,
+      notes: notes ?? entry.notes,
+    };
+    // Only touch the amount when there is something to say about it: a new
+    // pick, or a refusal clearing one recorded earlier.
+    const amountEaten = amountForResult(result, amount, entry.amount_eaten);
+    if (amountEaten !== (entry.amount_eaten ?? null)) patch.amount_eaten = amountEaten;
+    const { error } = await save(entry.id, patch);
     return error ? { status: 'failed', entry, error } : { status: 'saved', entry };
   } catch (error) {
     return { status: 'failed', entry, error };

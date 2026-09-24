@@ -116,6 +116,33 @@ describe('performQuickLog', () => {
     expect(save).toHaveBeenCalledWith('a', { result: 'refused', notes: 'too tired' });
   });
 
+  it('saves how much was eaten when one was picked', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({ meals: [meal('a')], result: 'ate', amount: 'nibbles', save });
+
+    expect(save).toHaveBeenCalledWith('a', {
+      result: 'ate',
+      notes: undefined,
+      amount_eaten: 'nibbles',
+    });
+  });
+
+  it('clears a recorded amount when the meal is re-logged as refused', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({
+      meals: [{ ...meal('a'), amount_eaten: 'some' }],
+      result: 'refused',
+      amount: 'a_lot',
+      save,
+    });
+
+    expect(save).toHaveBeenCalledWith('a', {
+      result: 'refused',
+      notes: undefined,
+      amount_eaten: null,
+    });
+  });
+
   it('says nothing is planned, and writes nothing', async () => {
     const save = vi.fn(ok);
     const outcome = await performQuickLog({ meals: [], result: 'ate', save });

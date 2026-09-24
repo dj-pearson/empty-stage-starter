@@ -1,8 +1,10 @@
 import SwiftUI
 
 /// US-231: Optional follow-up to a meal-result tap. Captures a 1-5 emoji
-/// rating + an optional one-line note. Skippable; auto-dismisses after 8s
-/// of no input so the parent never gets blocked on the modal mid-cook.
+/// rating, how much was eaten (a lot / some / nibbles) and an optional note.
+/// Skippable; auto-dismisses after 8s of no input so the parent never gets
+/// blocked on the modal mid-cook. Everything saved here shows up in the Food
+/// Journal for the whole household.
 struct MealFeedbackSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var appState: AppState
@@ -12,6 +14,7 @@ struct MealFeedbackSheet: View {
     let result: MealResult
 
     @State private var selectedRating: Int? = nil
+    @State private var selectedAmount: AmountEaten? = nil
     @State private var note: String = ""
     @State private var isSubmitting = false
     @State private var autoDismissTask: Task<Void, Never>?
@@ -35,6 +38,10 @@ struct MealFeedbackSheet: View {
 
                 ratingScale
 
+                if result != .refused {
+                    amountPicker
+                }
+
                 noteField
 
                 Spacer()
@@ -52,7 +59,7 @@ struct MealFeedbackSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
         .interactiveDismissDisabled(false)
@@ -66,6 +73,7 @@ struct MealFeedbackSheet: View {
         // — typing, tapping a rating, etc. Don't snatch the sheet out from
         // under them just because they took 9 seconds to think.
         .onChange(of: selectedRating) { _, _ in autoDismissTask?.cancel() }
+        .onChange(of: selectedAmount) { _, _ in autoDismissTask?.cancel() }
         .onChange(of: note) { _, _ in autoDismissTask?.cancel() }
     }
 
@@ -124,6 +132,38 @@ struct MealFeedbackSheet: View {
         }
     }
 
+    private var amountPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("How much did they eat?")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(AmountEaten.allCases) { amount in
+                    let isSelected = selectedAmount == amount
+                    Button {
+                        HapticManager.selection()
+                        selectedAmount = isSelected ? nil : amount
+                    } label: {
+                        Text(amount.displayName)
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(
+                                isSelected ? Color.green.opacity(0.15) : Color(.secondarySystemBackground),
+                                in: RoundedRectangle(cornerRadius: 10)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(isSelected ? Color.green : .clear, lineWidth: 2)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(amount.displayName)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+        }
+    }
+
     private var noteField: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Add a note (optional)")
@@ -157,7 +197,11 @@ struct MealFeedbackSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.green)
-            .disabled(selectedRating == nil && note.trimmingCharacters(in: .whitespaces).isEmpty)
+            .disabled(
+                selectedRating == nil
+                    && selectedAmount == nil
+                    && note.trimmingCharacters(in: .whitespaces).isEmpty
+            )
         }
     }
 
@@ -176,16 +220,29 @@ struct MealFeedbackSheet: View {
         // Use 0 ("note-only") when the user didn't pick a face but still
         // typed a note — keeps the schema interpretable downstream.
         let rating = selectedRating ?? 0
-        guard rating > 0 || !note.trimmingCharacters(in: .whitespaces).isEmpty else {
+        let hasFeedback = rating > 0 || !note.trimmingCharacters(in: .whitespaces).isEmpty
+        let amount = result == .refused ? nil : selectedAmount
+        guard hasFeedback || amount != nil else {
             dismiss()
             return
         }
         isSubmitting = true
-        await appState.addPlanEntryFeedback(
-            planEntryId: planEntryId,
-            rating: rating,
-            note: note
-        )
+        // The amount belongs to the meal, not to this parent's rating, so it
+        // goes on the plan entry where the web log modal writes it too.
+        // updatePlanEntry rolls back and toasts a failure itself.
+        if let amount {
+            try? await appState.updatePlanEntry(
+                planEntryId,
+                updates: PlanEntryUpdate(amountEaten: amount.rawValue)
+            )
+        }
+        if hasFeedback {
+            await appState.addPlanEntryFeedback(
+                planEntryId: planEntryId,
+                rating: rating,
+                note: note
+            )
+        }
         HapticManager.success()
         dismiss()
     }

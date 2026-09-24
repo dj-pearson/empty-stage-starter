@@ -4,6 +4,9 @@ export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack1" | "snack2" | 
 
 export type MealResult = "ate" | "tasted" | "refused" | null;
 
+/** How much of a food the child ate. Stored in plan_entries.amount_eaten. */
+export type AmountEaten = "a_lot" | "some" | "nibbles";
+
 export interface Food {
   id: string;
   name: string;
@@ -65,6 +68,8 @@ export interface PlanEntry {
   meal_slot: MealSlot;
   food_id: string;
   result: MealResult;
+  /** Null or absent when nobody recorded it. Only meaningful for ate/tasted. */
+  amount_eaten?: AmountEaten | null;
   notes?: string;
   food_attempt_id?: string;
   recipe_id?: string;

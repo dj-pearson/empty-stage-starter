@@ -597,5 +597,50 @@
     "dismissed": "We won't bring {{food}} up again for a while.",
     "levelWatch": "Worth a look",
     "levelAtRisk": "Worth some attention"
+  },
+  "foodJournal": {
+    "title": "Food Journal",
+    "metaDescription": "Every logged meal, with notes and how much was eaten, day by day.",
+    "subtitleKid": "What {{name}} ate, day by day, with everyone's notes",
+    "subtitleFamily": "What everyone ate, day by day, with everyone's notes",
+    "amountQuestion": "How much did they eat? (optional)",
+    "amount": {
+      "a_lot": "A lot",
+      "some": "Some",
+      "nibbles": "Nibbles"
+    },
+    "amountLabel": "Amount",
+    "result": {
+      "ate": "Ate",
+      "tasted": "Tasted",
+      "refused": "Refused"
+    },
+    "range": {
+      "7": "Last 7 days",
+      "14": "Last 14 days",
+      "30": "Last 30 days"
+    },
+    "rangeLabel": "Date range",
+    "onlyNotes": "Only meals with notes",
+    "summaryTitle": "Summary",
+    "summaryMeals": "{{count}} logged meals",
+    "noAmount": "No amount recorded",
+    "emptyTitle": "Nothing logged yet",
+    "emptyText": "Log a meal from Home or the Planner, and add a note or how much was eaten. It shows up here for everyone in your household.",
+    "emptyNotes": "No notes in this range. Turn off the filter to see every logged meal.",
+    "edit": "Edit",
+    "editAria": "Edit notes and amount for {{name}}",
+    "editTitle": "Notes for {{name}}",
+    "noteLabel": "Note",
+    "notePlaceholder": "What happened? Texture, mood, what helped...",
+    "otherNotes": "Also noted on this meal",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved",
+    "feedbackLoadFailed": "Couldn't load notes written in the iPhone app.",
+    "viewJournal": "Open the food journal",
+    "copyDay": "Copy day",
+    "copyDayAria": "Copy {{date}} as text",
+    "copied": "Copied. Paste it into a message or a note for your care team."
   }
 }

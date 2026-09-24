@@ -4,6 +4,9 @@ import { PlanEntry, Food } from "@/types";
 import { format } from "date-fns";
 import { Clock } from "lucide-react";
 import { parseIsoDate } from "@/lib/date-utils";
+import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 
 interface ResultHistoryCardProps {
   entries: PlanEntry[];
@@ -26,6 +29,7 @@ const mealSlotLabels: Record<string, string> = {
 };
 
 export function ResultHistoryCard({ entries, foods }: ResultHistoryCardProps) {
+  const { t } = useTranslation();
   // Sort by date descending
   const sortedEntries = [...entries]
     .filter(e => e.result !== null)
@@ -52,11 +56,14 @@ export function ResultHistoryCard({ entries, foods }: ResultHistoryCardProps) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2">
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
           Recent Meal History
         </CardTitle>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/dashboard/food-journal">{t("foodJournal.viewJournal")}</Link>
+        </Button>
       </CardHeader>
       <CardContent>
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -80,9 +87,14 @@ export function ResultHistoryCard({ entries, foods }: ResultHistoryCardProps) {
                     </p>
                   )}
                 </div>
-                <Badge className={resultColors[entry.result as keyof typeof resultColors]}>
-                  {entry.result}
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge className={resultColors[entry.result as keyof typeof resultColors]}>
+                    {entry.result}
+                  </Badge>
+                  {entry.amount_eaten && (
+                    <Badge variant="outline">{t(`foodJournal.amount.${entry.amount_eaten}`)}</Badge>
+                  )}
+                </div>
               </div>
             );
           })}

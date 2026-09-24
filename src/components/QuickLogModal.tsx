@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import {
   Dialog,
@@ -16,6 +17,8 @@ import {
   resolveQuickLogMealId,
   type QuickLogMeal,
 } from '@/lib/quickLog';
+import { AMOUNT_EATEN_VALUES } from '@/lib/foodJournal';
+import type { AmountEaten } from '@/types';
 
 type MealResult = 'ate' | 'tasted' | 'refused';
 
@@ -35,7 +38,16 @@ interface QuickLogModalProps {
    * pretending to.
    */
   meals?: ReadonlyArray<QuickLogMeal>;
-  onLog: (result: MealResult, notes?: string, mealId?: string) => void | Promise<void>;
+  /**
+   * `amount` is how much the child ate ("a lot", "some", "nibbles"), when the
+   * user picked one. The caller drops it for a refusal.
+   */
+  onLog: (
+    result: MealResult,
+    notes?: string,
+    mealId?: string,
+    amount?: AmountEaten
+  ) => void | Promise<void>;
 }
 
 export function QuickLogModal({
@@ -46,7 +58,9 @@ export function QuickLogModal({
   meals,
   onLog,
 }: QuickLogModalProps) {
+  const { t } = useTranslation();
   const [notes, setNotes] = useState('');
+  const [amount, setAmount] = useState<AmountEaten | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
 
@@ -59,9 +73,10 @@ export function QuickLogModal({
     setIsLoading(true);
 
     try {
-      await onLog(result, notes || undefined, resolvedMealId ?? undefined);
+      await onLog(result, notes || undefined, resolvedMealId ?? undefined, amount);
       // Reset and close on success
       setNotes('');
+      setAmount(undefined);
       setSelectedMealId(null);
       onOpenChange(false);
     } catch (error) {
@@ -146,6 +161,31 @@ export function QuickLogModal({
             </div>
           </fieldset>
         )}
+
+        {/* How much (optional). Picked before the result, because tapping a
+            result saves and closes. */}
+        <fieldset className="space-y-2 pt-2">
+          <legend className="text-sm font-medium">{t('foodJournal.amountQuestion')}</legend>
+          <div className="grid grid-cols-3 gap-2">
+            {AMOUNT_EATEN_VALUES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setAmount((current) => (current === value ? undefined : value))}
+                aria-pressed={amount === value}
+                disabled={isLoading}
+                className={cn(
+                  'rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  amount === value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary hover:bg-secondary/80'
+                )}
+              >
+                {t(`foodJournal.amount.${value}`)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
 
         {/* Result buttons - large, touch-friendly */}
         <div className="grid gap-3 py-4">

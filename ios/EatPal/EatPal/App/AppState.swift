@@ -1269,7 +1269,9 @@ final class AppState: ObservableObject {
         let optimistic = PlanEntryFeedback(
             id: UUID().uuidString,
             planEntryId: planEntryId,
-            userId: "",
+            // The real id, so hasOwnFeedback(for:) recognises this row before
+            // the next reload replaces it with the server's copy.
+            userId: currentUserId,
             rating: rating,
             note: trimmedNote?.isEmpty == true ? nil : trimmedNote,
             createdAt: ISO8601DateFormatter().string(from: Date())
@@ -1300,6 +1302,16 @@ final class AppState: ObservableObject {
         planEntryFeedback
             .filter { $0.planEntryId == planEntryId }
             .max { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
+    }
+
+    /// Whether the signed-in user has already given feedback on this entry.
+    /// `planEntryFeedback` also holds the rest of the household's rows since
+    /// they became readable for the food journal, so "someone rated it" is no
+    /// longer "you rated it", and only the second should skip the prompt.
+    func hasOwnFeedback(for planEntryId: String) -> Bool {
+        planEntryFeedback.contains {
+            $0.planEntryId == planEntryId && $0.userId == currentUserId
+        }
     }
 
     // MARK: - Exposure Ladder (US-606 / US-608)
