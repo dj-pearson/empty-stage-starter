@@ -2,7 +2,19 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
-import { PublicError, publicMessage } from '../_shared/errors.ts';
+import { publicMessage } from '../_shared/errors.ts';
+import { resolveSimilarityScope, type HouseholdScopedRow } from '../_shared/foodSimilarityScope.ts';
+
+// Rows come back wider than this; the scope check reads id and household_id.
+type FoodRow = HouseholdScopedRow & Record<string, unknown>;
+interface KidRow extends HouseholdScopedRow {
+  name?: string | null;
+  age?: number | null;
+  allergens?: string[] | null;
+  texture_preferences?: string[] | null;
+  flavor_preferences?: string[] | null;
+  pickiness_level?: string | null;
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,47 +32,83 @@ export default async (req: Request) => {
   if (gate.response) return gate.response;
 
   try {
-    const { sourceFoodId, kidId } = await req.json();
-    
-    if (!sourceFoodId) {
-      throw new PublicError('Source food ID is required');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!supabaseUrl || !anonKey) {
+      throw new Error('calculate-food-similarity: SUPABASE_URL/SUPABASE_ANON_KEY missing');
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
+    // Bound to the caller's JWT, not the service role: the foods and kids
+    // RLS policies (household_id = get_user_household_id(auth.uid())) apply
+    // to every read below, on top of the explicit household filters.
+    const supabase = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    let body: unknown = null;
+    try {
+      body = await req.json();
+    } catch {
+      body = null;
+    }
+
+    // The household comes from the verified user id. Nothing in the body
+    // names it; see _shared/foodSimilarityScope.ts.
+    const scope = await resolveSimilarityScope<FoodRow, KidRow>({
+      userId: gate.userId,
+      body,
+      lookupHousehold: async (userId) => {
+        const { data, error } = await supabase.rpc('get_user_household_id', { _user_id: userId });
+        if (error) throw error;
+        return typeof data === 'string' ? data : null;
+      },
+      loadSourceFood: async (foodId, householdId) => {
+        const { data, error } = await supabase
+          .from('foods')
+          .select('*, food_properties(*)')
+          .eq('id', foodId)
+          .eq('household_id', householdId)
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      loadKid: async (kidId, householdId) => {
+        const { data, error } = await supabase
+          .from('kids')
+          .select('*')
+          .eq('id', kidId)
+          .eq('household_id', householdId)
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      loadHouseholdFoods: async (householdId) => {
+        const { data, error } = await supabase
+          .from('foods')
+          .select('*, food_properties(*)')
+          .eq('household_id', householdId);
+        if (error) throw error;
+        return data ?? [];
+      },
+    });
+
+    if (scope.kind === 'refused') {
+      console.warn('calculate-food-similarity refused:', scope.refusal.reason, 'user:', gate.userId ?? 'none');
+      return new Response(JSON.stringify({ error: scope.refusal.error }), {
+        status: scope.refusal.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { sourceFood, kid: kidProfile, candidates: allFoods } = scope;
+    const sourceFoodId = sourceFood.id;
+
     // Initialize AI service
     const aiService = new AIServiceV2();
 
     console.log('Calculating food similarity for:', sourceFoodId);
-
-    // Fetch source food with properties
-    const { data: sourceFood, error: sourceFoodError } = await supabase
-      .from('foods')
-      .select('*, food_properties(*)')
-      .eq('id', sourceFoodId)
-      .single();
-
-    if (sourceFoodError) throw sourceFoodError;
-
-    // Fetch kid profile if provided
-    let kidProfile = null;
-    if (kidId) {
-      const { data: kid } = await supabase
-        .from('kids')
-        .select('*')
-        .eq('id', kidId)
-        .single();
-      kidProfile = kid;
-    }
-
-    // Fetch all foods with properties
-    const { data: allFoods, error: foodsError } = await supabase
-      .from('foods')
-      .select('*, food_properties(*)');
-
-    if (foodsError) throw foodsError;
 
     // Calculate similarity scores
     const similarities = allFoods
