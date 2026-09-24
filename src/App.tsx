@@ -47,6 +47,7 @@ const Grocery = lazy(() => import('./pages/Grocery'));
 const Kids = lazy(() => import('./pages/Kids'));
 const InsightsDashboard = lazy(() => import('./pages/InsightsDashboard'));
 const Analytics = lazy(() => import('./pages/Analytics'));
+const FoodJournal = lazy(() => import('./pages/FoodJournal'));
 const Progress = lazy(() => import('./pages/Progress'));
 const Admin = lazy(() => import('./pages/Admin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -529,6 +530,14 @@ const App = () => (
                           element={
                             <RouteErrorBoundary>
                               <Analytics />
+                            </RouteErrorBoundary>
+                          }
+                        />
+                        <Route
+                          path="food-journal"
+                          element={
+                            <RouteErrorBoundary>
+                              <FoodJournal />
                             </RouteErrorBoundary>
                           }
                         />

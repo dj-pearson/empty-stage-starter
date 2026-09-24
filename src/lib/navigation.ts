@@ -1,6 +1,7 @@
 import {
   Accessibility,
   BarChart3,
+  BookOpen,
   Bot,
   Calendar,
   ChefHat,
@@ -84,6 +85,9 @@ export const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   { to: "/dashboard/sibling-meal-finder", label: "Sibling Meals", icon: GitCompare, group: "tools" },
 
   // Insights.
+  // The notes and amounts caregivers log, a day at a time, for everyone in
+  // the household to read.
+  { to: "/dashboard/food-journal", label: "Food Journal", icon: BookOpen, group: "insights" },
   { to: "/dashboard/insights", label: "Insights", icon: LineChart, group: "insights" },
   { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3, group: "insights" },
   { to: "/dashboard/progress", label: "Progress", icon: Trophy, group: "insights" },

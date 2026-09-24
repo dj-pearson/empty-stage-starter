@@ -997,7 +997,7 @@ struct PlanEntryRow: View {
             // already a rating on file, skip the modal so re-logging doesn't
             // pester the user. They can still re-rate via a future detail
             // view if we add one.
-            if appState.latestFeedback(for: entry.id) == nil {
+            if !appState.hasOwnFeedback(for: entry.id) {
                 feedbackContext = MealFeedbackContext(
                     id: entry.id,
                     entryName: entryName,

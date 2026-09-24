@@ -9532,6 +9532,7 @@ export type Database = {
       }
       plan_entries: {
         Row: {
+          amount_eaten: string | null
           created_at: string | null
           date: string
           food_attempt_id: string | null
@@ -9548,6 +9549,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          amount_eaten?: string | null
           created_at?: string | null
           date: string
           food_attempt_id?: string | null
@@ -9564,6 +9566,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          amount_eaten?: string | null
           created_at?: string | null
           date?: string
           food_attempt_id?: string | null

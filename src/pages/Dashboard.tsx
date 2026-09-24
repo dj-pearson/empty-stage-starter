@@ -30,6 +30,7 @@ import {
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import type { User } from "@supabase/supabase-js";
+import type { AmountEaten } from "@/types";
 import {
   Calendar,
   ShoppingCart,
@@ -145,6 +146,7 @@ const Dashboard = () => {
         return {
           id: entry.id,
           notes: entry.notes,
+          amount_eaten: entry.amount_eaten,
           label: food ? `${slot} - ${food.name}` : slot,
         };
       });
@@ -187,7 +189,8 @@ const Dashboard = () => {
   const handleQuickLog = async (
     result: QuickLogResult,
     notes?: string,
-    mealId?: string
+    mealId?: string,
+    amount?: AmountEaten
   ) => {
     // Which entry, and whether the write landed, are decided in
     // src/lib/quickLog.ts so both can be tested without mounting this page.
@@ -196,6 +199,7 @@ const Dashboard = () => {
       result,
       notes,
       mealId,
+      amount,
       save: (entryId, patch) => updatePlanEntry(entryId, patch),
     });
 

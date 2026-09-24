@@ -10,6 +10,9 @@ struct PlanEntry: Identifiable, Codable, Equatable {
     var foodId: String
     var recipeId: String?
     var result: String?
+    /// How much of it the child ate: `AmountEaten.rawValue`. Nil when nobody
+    /// recorded it, which is every row written before the column existed.
+    var amountEaten: String?
     var notes: String?
     var isPrimaryDish: Bool?
     var foodAttemptId: String?
@@ -26,6 +29,7 @@ struct PlanEntry: Identifiable, Codable, Equatable {
         case foodId = "food_id"
         case recipeId = "recipe_id"
         case result, notes
+        case amountEaten = "amount_eaten"
         case isPrimaryDish = "is_primary_dish"
         case foodAttemptId = "food_attempt_id"
         case createdAt = "created_at"
@@ -35,6 +39,7 @@ struct PlanEntry: Identifiable, Codable, Equatable {
     mutating func apply(_ updates: PlanEntryUpdate) {
         if let result = updates.result { self.result = result }
         if let notes = updates.notes { self.notes = notes }
+        if let amountEaten = updates.amountEaten { self.amountEaten = amountEaten }
         if let foodId = updates.foodId { self.foodId = foodId }
         if let mealSlot = updates.mealSlot { self.mealSlot = mealSlot }
     }
@@ -45,11 +50,36 @@ struct PlanEntryUpdate: Codable {
     var mealSlot: String?
     var result: String?
     var notes: String?
+    /// Nil leaves the stored amount alone: the synthesized encoder omits nil
+    /// keys, so an update carrying only a result never clears it.
+    var amountEaten: String?
 
     enum CodingKeys: String, CodingKey {
         case foodId = "food_id"
         case mealSlot = "meal_slot"
         case result, notes
+        case amountEaten = "amount_eaten"
+    }
+}
+
+/// How much of a food the child ate. Stored in `plan_entries.amount_eaten`;
+/// the web copy is `AMOUNT_EATEN_VALUES` in src/lib/foodJournal.ts, and the
+/// database CHECK allows exactly these three.
+enum AmountEaten: String, CaseIterable, Identifiable {
+    case aLot = "a_lot"
+    // Not `case some`: an `AmountEaten?` would then read `.some` as
+    // Optional.some, which compiles with a warning and means something else.
+    case moderate = "some"
+    case nibbles
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .aLot: return "A lot"
+        case .moderate: return "Some"
+        case .nibbles: return "Nibbles"
+        }
     }
 }
 

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+// The amount buttons render through react-i18next; without the real
+// instance they would be labelled with their keys.
+import '@/i18n';
 import userEvent from '@testing-library/user-event';
 import { QuickLogModal } from './QuickLogModal';
 
@@ -60,7 +63,7 @@ describe('logging a result', () => {
 
     await user.click(ateButton());
 
-    expect(onLog).toHaveBeenCalledWith('ate', undefined, 'breakfast-1');
+    expect(onLog).toHaveBeenCalledWith('ate', undefined, 'breakfast-1', undefined);
   });
 
   it('will not log until the user has said which meal', async () => {
@@ -79,7 +82,7 @@ describe('logging a result', () => {
     expect(ateButton()).toBeEnabled();
     await user.click(ateButton());
 
-    expect(onLog).toHaveBeenCalledWith('ate', undefined, 'dinner-1');
+    expect(onLog).toHaveBeenCalledWith('ate', undefined, 'dinner-1', undefined);
   });
 
   it('marks the chosen meal for anyone not looking at the colour', async () => {
@@ -98,7 +101,7 @@ describe('logging a result', () => {
     await user.type(screen.getByLabelText(/Add a note/), 'left the peas');
     await user.click(screen.getByRole('button', { name: /Refused/ }));
 
-    expect(onLog).toHaveBeenCalledWith('refused', 'left the peas', 'breakfast-1');
+    expect(onLog).toHaveBeenCalledWith('refused', 'left the peas', 'breakfast-1', undefined);
   });
 
   it('sends a quick-note suggestion the same way', async () => {
@@ -107,7 +110,17 @@ describe('logging a result', () => {
     await user.click(screen.getByRole('button', { name: 'Asked for more' }));
     await user.click(screen.getByRole('button', { name: /Tried a bite/ }));
 
-    expect(onLog).toHaveBeenCalledWith('tasted', 'Asked for more', 'breakfast-1');
+    expect(onLog).toHaveBeenCalledWith('tasted', 'Asked for more', 'breakfast-1', undefined);
+  });
+
+  it('sends how much was eaten when the user picked an amount', async () => {
+    const { onLog, user } = setup({ meals: [meals[0]] });
+
+    await user.click(screen.getByRole('button', { name: 'Nibbles' }));
+    expect(screen.getByRole('button', { name: 'Nibbles' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(ateButton());
+
+    expect(onLog).toHaveBeenCalledWith('ate', undefined, 'breakfast-1', 'nibbles');
   });
 
   it('passes no meal id when the caller named the meal itself', async () => {
@@ -115,7 +128,7 @@ describe('logging a result', () => {
 
     await user.click(ateButton());
 
-    expect(onLog).toHaveBeenCalledWith('ate', undefined, undefined);
+    expect(onLog).toHaveBeenCalledWith('ate', undefined, undefined, undefined);
   });
 
   it('closes on a successful log', async () => {

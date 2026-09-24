@@ -27,6 +27,8 @@ enum MoreRoute: Hashable {
     // it so the person sees the household they just joined rather than a
     // settings list they now have to read.
     case household
+    // Logged meals with their notes and amounts, readable by the household.
+    case foodJournal
 }
 
 struct MoreView: View {
@@ -78,6 +80,21 @@ struct MoreView: View {
 
             // Tools
             Section("Tools") {
+                NavigationLink(value: MoreRoute.foodJournal) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Food Journal")
+                                .font(.body)
+                            Text("Every meal, with notes and how much was eaten")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "book.closed.fill")
+                            .foregroundStyle(.teal)
+                    }
+                }
+
                 NavigationLink(value: MoreRoute.foodTracker) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
@@ -232,6 +249,8 @@ struct MoreView: View {
                 BudgetView()
             case .household:
                 HouseholdSettingsView()
+            case .foodJournal:
+                FoodJournalView()
             }
         }
     }

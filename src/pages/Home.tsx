@@ -41,6 +41,8 @@ import { MostRepeatedMealsCard } from "@/components/MostRepeatedMealsCard";
 import { SeasonalRecallCard } from "@/components/SeasonalRecallCard";
 import { KidBirthdayCard } from "@/components/KidBirthdayCard";
 import { currentStreak } from "@/lib/streakRules";
+import { amountForResult } from "@/lib/foodJournal";
+import type { AmountEaten } from "@/types";
 
 const OnboardingProgressBar = lazy(() =>
   import("@/components/OnboardingProgressBar").then(m => ({ default: m.OnboardingProgressBar }))
@@ -201,18 +203,27 @@ export default function Home() {
     setQuickLogOpen(true);
   };
 
-  const handleQuickLog = async (result: 'ate' | 'tasted' | 'refused', notes?: string) => {
+  const handleQuickLog = async (
+    result: 'ate' | 'tasted' | 'refused',
+    notes?: string,
+    _mealId?: string,
+    amount?: AmountEaten
+  ) => {
     if (!selectedMeal || !updatePlanEntry) return;
 
     try {
       const entry = planEntries.find(p => p.id === selectedMeal.entryId);
       if (entry) {
-        await updatePlanEntry(selectedMeal.entryId, {
+        const amountEaten = amountForResult(result, amount, entry.amount_eaten);
+        const { error } = await updatePlanEntry(selectedMeal.entryId, {
           ...entry,
           result,
           notes: notes || entry.notes,
+          // Sent only when it changes, like quickLog.ts does.
+          ...(amountEaten !== (entry.amount_eaten ?? null) ? { amount_eaten: amountEaten } : {}),
         });
-        toast.success(`Meal logged as ${result}!`);
+        // updatePlanEntry rolls back and toasts a rejection itself.
+        if (!error) toast.success(`Meal logged as ${result}!`);
       }
     } catch (error) {
       toast.error("Failed to log meal. Please try again.");
