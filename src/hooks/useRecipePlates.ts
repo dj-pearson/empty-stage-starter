@@ -14,6 +14,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { isRung, type Rung } from '@/lib/exposureLadder';
+import { kidSafeFoodIds, type KidLadderRow } from '@/lib/kidProgress';
+import type { KidFitKid } from '@/lib/kidFit';
 import { normalizeRecipeComponents, type RecipeComponent } from '@/lib/recipeComponents';
 import {
   planPlates,
@@ -22,6 +24,64 @@ import {
   type PlatingLadderRow,
 } from '@/lib/platePlanner';
 import type { SolverRecipe } from '@/lib/siblingConstraintSolver';
+
+/** kidSafeFoodIds reads the snake_case kid; plating kids are camelCase. */
+function toKidFitKid(kid: PlatingKid): KidFitKid {
+  return {
+    id: kid.id,
+    allergens: kid.allergens ?? undefined,
+    allergen_severity: kid.allergenSeverity ?? undefined,
+    disliked_foods: kid.dislikedFoods ?? undefined,
+    always_eats_foods: kid.alwaysEatsFoods ?? undefined,
+  };
+}
+
+/** Field-by-field, so a renamed column is a type error rather than a silent undefined. */
+function toKidLadderRow(row: PlatingLadderRow): KidLadderRow {
+  return {
+    kid_id: row.kidId,
+    food_id: row.foodId,
+    status: row.status,
+    current_rung: row.currentRung,
+    next_due_on: row.nextDueOn,
+  };
+}
+
+/**
+ * Each kid's safe food ids, resolved through kidSafeFoodIds so an
+ * `always_eats_foods` entry stored as a name ("Rice") matches the food id the
+ * planner compares against. Only the recipes' own foods are resolvable here,
+ * which is all plating needs. A caller-supplied `safeFoodIds` is kept as is.
+ */
+export function withResolvedSafeFoods(
+  kids: readonly PlatingKid[],
+  recipes: readonly SolverRecipe[],
+  ladder: readonly PlatingLadderRow[]
+): PlatingKid[] {
+  const foodsById = new Map<
+    string,
+    { id: string; name: string; allergens?: string[]; is_safe: boolean; is_try_bite: boolean }
+  >();
+  for (const recipe of recipes) {
+    for (const food of recipe.foods) {
+      if (foodsById.has(food.id)) continue;
+      foodsById.set(food.id, {
+        id: food.id,
+        name: food.name,
+        allergens: food.allergens ?? undefined,
+        // Not read by kidSafeFoodIds (the household flag is per-sibling wrong).
+        is_safe: false,
+        is_try_bite: false,
+      });
+    }
+  }
+  const ladderRows = ladder.map(toKidLadderRow);
+  return kids.map((kid) =>
+    kid.safeFoodIds != null
+      ? kid
+      : { ...kid, safeFoodIds: [...kidSafeFoodIds(toKidFitKid(kid), ladderRows, foodsById)] }
+  );
+}
 
 interface UseRecipePlatesArgs {
   /** Candidate recipes, already in solver shape. */
@@ -98,7 +158,7 @@ export function useRecipePlates({
           kidIds.length > 0
             ? supabase
                 .from('kid_food_ladder')
-                .select('kid_id, food_id, current_rung, status, next_due_on')
+                .select('kid_id, food_id, current_rung, status, next_due_on, paired_safe_food_id')
                 .in('kid_id', kidIds)
             : Promise.resolve({ data: [] as never[] }),
         ]);
@@ -120,6 +180,7 @@ export function useRecipePlates({
             currentRung: (isRung(row.current_rung) ? row.current_rung : 'looking') as Rung,
             status: row.status,
             nextDueOn: row.next_due_on,
+            pairedSafeFoodId: row.paired_safe_food_id,
           }))
         );
       } catch (err) {
@@ -152,6 +213,8 @@ export function useRecipePlates({
       else componentsByRecipe.set(component.recipeId, [component]);
     }
 
+    const platingKids = withResolvedSafeFoods(kids, recipes, ladder);
+
     for (const recipe of recipes) {
       const recipeComponents = componentsByRecipe.get(recipe.id);
       if (!recipeComponents || recipeComponents.length === 0) continue;
@@ -163,7 +226,7 @@ export function useRecipePlates({
           recipe,
           components: recipeComponents,
           componentFoods: componentFoods.filter((link) => componentIds.has(link.componentId)),
-          kids,
+          kids: platingKids,
           ladder,
           today,
         })

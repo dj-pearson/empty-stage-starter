@@ -17,10 +17,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Plus, RefreshCw, Sparkles } from 'lucide-react';
+import { Plus, RefreshCw, Sparkles, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LadderQuickLogControls } from '@/components/LadderQuickLogControls';
 import { LadderReportDialog } from '@/components/LadderReportDialog';
 import { useFoods, useKids } from '@/contexts/AppContext';
 import { useFoodLadder, type LadderRow } from '@/hooks/useFoodLadder';
@@ -43,6 +44,12 @@ export interface LadderOverviewProps {
    * food's buttons, or opens the picker when nothing is due.
    */
   logRequestNonce?: number;
+  /**
+   * A food to log a try for, from a link elsewhere (Meal Builder's try bite
+   * is ?log=<foodId>). When this child has a row for it, its log controls
+   * open once per kid and id; an id with no row does nothing.
+   */
+  logFoodId?: string;
 }
 
 function listHas(list: readonly string[] | undefined, food: { id: string; name: string } | undefined, foodId: string) {
@@ -51,7 +58,7 @@ function listHas(list: readonly string[] | undefined, food: { id: string; name: 
   return list.some((v) => v === foodId || (name !== undefined && v.trim().toLowerCase() === name));
 }
 
-export function LadderOverview({ kid, logRequestNonce }: LadderOverviewProps) {
+export function LadderOverview({ kid, logRequestNonce, logFoodId }: LadderOverviewProps) {
   const { t } = useTranslation();
   const { foods } = useFoods();
   const { updateKid } = useKids();
@@ -193,6 +200,41 @@ export function LadderOverview({ kid, logRequestNonce }: LadderOverviewProps) {
     controls?.scrollIntoView?.({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
     controls?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
   }, [logRequestNonce, reducedMotion]);
+
+  // ?log=<foodId>: open that food's log controls once. Due and close-to-safe
+  // rows already show them inline, so those are scrolled to and focused; any
+  // other row gets the same controls pinned above the list until dismissed.
+  const [pinnedLogRowId, setPinnedLogRowId] = useState<string | null>(null);
+  const pinnedLogRef = useRef<HTMLDivElement>(null);
+  const logLinkHandled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!logFoodId) return;
+    const token = `${kid.id}:${logFoodId}`;
+    if (logLinkHandled.current === token) return;
+    const row = rows.find((r) => r.foodId === logFoodId);
+    // Rows may still be loading; a later render tries again. Unknown ids stay a no-op.
+    if (!row) return;
+    logLinkHandled.current = token;
+    const inline = groups.dueToday.some((r) => r.id === row.id) || groups.closeToSafe.some((r) => r.id === row.id);
+    if (!inline) {
+      setPinnedLogRowId(row.id);
+      return;
+    }
+    requestAnimationFrame(() => {
+      const controls = listRef.current?.querySelector<HTMLElement>(`[data-quick-log="${row.id}"]`);
+      controls?.scrollIntoView?.({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
+      controls?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+    });
+  }, [logFoodId, kid.id, rows, groups, reducedMotion]);
+
+  const pinnedLogRow = pinnedLogRowId ? rows.find((r) => r.id === pinnedLogRowId && r.kidId === kid.id) : undefined;
+  const pinnedLogShown = pinnedLogRow !== undefined;
+  useEffect(() => {
+    if (!pinnedLogShown) return;
+    const el = pinnedLogRef.current;
+    el?.scrollIntoView?.({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
+    el?.querySelector<HTMLElement>('[data-quick-log] button')?.focus({ preventScroll: true });
+  }, [pinnedLogShown, reducedMotion]);
 
   const handleAddToAlwaysEats = async (row: LadderRow) => {
     const food = foodById.get(row.foodId);
@@ -410,6 +452,42 @@ export function LadderOverview({ kid, logRequestNonce }: LadderOverviewProps) {
       {header}
       {errorAlert}
       {liveRegion}
+
+      {pinnedLogRow ? (
+        <section
+          ref={pinnedLogRef}
+          aria-labelledby="ladder-log-link-heading"
+          className="space-y-3 rounded-xl border border-border p-4"
+          data-testid="ladder-log-link"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <h2 id="ladder-log-link-heading" className="text-base font-semibold text-foreground">
+              {t('foodTracker.ladderUi.logLink.title', {
+                defaultValue: 'How did {{food}} go?',
+                food: foodNameById.get(pinnedLogRow.foodId) ?? t('foodLadder.unknownFood'),
+              })}
+            </h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="min-h-11 min-w-11 shrink-0"
+              onClick={() => setPinnedLogRowId(null)}
+              aria-label={t('foodTracker.ladderUi.logLink.close', { defaultValue: 'Close' })}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+          <LadderQuickLogControls
+            row={pinnedLogRow}
+            foodName={foodNameById.get(pinnedLogRow.foodId) ?? t('foodLadder.unknownFood')}
+            kidName={kid.name}
+            mealSlot={pinnedLogRow.preferredMealSlot}
+            onLog={logAttempt}
+            onUndo={undoLog}
+            announce={setLiveMessage}
+          />
+        </section>
+      ) : null}
 
       {masteryCandidates.length > 0 ? (
         <section

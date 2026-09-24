@@ -13,7 +13,7 @@
  */
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import { Target, UserCog, UserPlus } from 'lucide-react';
@@ -93,6 +93,25 @@ export default function FoodTracker() {
   const activeKidKey = activeKid?.id ?? null;
 
   const [logNonce, setLogNonce] = useState(0);
+
+  // ?log=<foodId> (Meal Builder's "how did the try bite go"): read it once,
+  // hand it to the ladder, and take it out of the URL so a reload or a back
+  // navigation does not open the log controls again.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const logParam = searchParams.get('log');
+  const [logFoodId, setLogFoodId] = useState<string | undefined>(() => logParam ?? undefined);
+  useEffect(() => {
+    if (logParam === null) return;
+    if (logParam) setLogFoodId(logParam);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('log');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [logParam, setSearchParams]);
 
   // The FAB's primary item becomes "Log a tasting" while a child is picked.
   // Unmounting (or going back to family mode) hands it back.
@@ -201,7 +220,7 @@ export default function FoodTracker() {
             >
               {t('foodTracker.kidHeading', { defaultValue: "{{name}}'s foods", name: activeKid.name })}
             </h2>
-            <LadderOverview kid={activeKid} logRequestNonce={logNonce} />
+            <LadderOverview kid={activeKid} logRequestNonce={logNonce} logFoodId={logFoodId} />
             <FoodHistoryList kidId={activeKid.id} />
           </section>
         ) : (

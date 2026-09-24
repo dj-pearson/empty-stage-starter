@@ -90,7 +90,9 @@
       "body": "No recipes yet. Pick two or three foods everyone eats:",
       "listLabel": "Safe foods",
       "empty": "Add a recipe and we'll suggest dinners that fit each kid.",
-      "addRecipe": "Add a recipe"
+      "addRecipe": "Add a recipe",
+      "buildPlateFor": "Build a plate with {{name}}",
+      "buildPlate": "Build a plate in Meal Builder"
     },
     "dialog": {
       "title": "Dinner tonight",

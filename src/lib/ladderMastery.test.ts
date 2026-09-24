@@ -105,6 +105,46 @@ describe('selectHandoffCandidates', () => {
     expect(candidates).toEqual([]);
   });
 
+  it('drops an untagged food whose name carries the allergen when foodsById is given', () => {
+    const candidates = selectHandoffCandidates(
+      [
+        suggestion({ foodId: 'pb-crackers', foodName: 'Peanut butter crackers', similarityScore: 95 }),
+        suggestion({ foodId: 'rice-cake', foodName: 'Rice cake', similarityScore: 40 }),
+      ],
+      ctx({
+        kidAllergens: ['peanuts'],
+        allergensByFoodId: new Map([
+          ['pb-crackers', []],
+          ['rice-cake', []],
+        ]),
+        foodsById: new Map([
+          ['pb-crackers', { name: 'Peanut butter crackers', allergens: [] }],
+          ['rice-cake', { name: 'Rice cake', allergens: [] }],
+        ]),
+      })
+    );
+
+    expect(candidates.map((c) => c.foodId)).toEqual(['rice-cake']);
+  });
+
+  it('without foodsById, keeps the old tags-only check', () => {
+    const candidates = selectHandoffCandidates(
+      [
+        suggestion({ foodId: 'pb-toast', similarityScore: 90 }),
+        suggestion({ foodId: 'rice-cake', similarityScore: 10 }),
+      ],
+      ctx({
+        kidAllergens: ['peanuts'],
+        allergensByFoodId: new Map([
+          ['pb-toast', ['peanuts']],
+          ['rice-cake', []],
+        ]),
+      })
+    );
+
+    expect(candidates.map((c) => c.foodId)).toEqual(['rice-cake']);
+  });
+
   it('keeps a candidate with unknown allergens when the child has none', () => {
     const candidates = selectHandoffCandidates(
       [suggestion({ foodId: 'mystery' })],

@@ -38,12 +38,9 @@ import {
 import type { RecipeComponent } from './recipeComponents';
 import type { Rung } from './exposureLadder';
 
-/**
- * The texture_dislikes entry that means "nothing may touch". Written by the
- * intake questionnaire's TEXTURE_OPTIONS; matched case-insensitively so a
- * hand-edited value still works.
- */
-export const NO_TOUCHING_DISLIKE = 'foods touching each other';
+import { NO_TOUCHING_DISLIKE } from './noTouchingDislike';
+
+export { NO_TOUCHING_DISLIKE };
 
 export type PlacementKind =
   /** Goes on the plate as normal. */
@@ -72,6 +69,14 @@ export interface ComponentPlacement {
   componentName: string;
   placement: PlacementKind;
   reasons: PlatingReason[];
+  /**
+   * Whether this component needs its own space on THIS child's plate: the
+   * child cannot have foods touching, or the component cannot touch others.
+   * Set on every placement, 'exposure' and 'held_back' included, so a caller
+   * drawing the plate does not have to re-derive it from the kind. For a
+   * held-back component it says how it would have been served.
+   */
+  separated: boolean;
 }
 
 export interface KidPlate {
@@ -111,6 +116,12 @@ export interface PlatingLadderRow {
   status: string;
   /** ISO 'YYYY-MM-DD', or null when nothing is scheduled. */
   nextDueOn: string | null;
+  /**
+   * The safe food this ladder step is paired with, when the parent set one.
+   * Optional and unused by planPlates today; carried so a recipe-mode plate can
+   * draw the bridge between the try bite and its anchor.
+   */
+  pairedSafeFoodId?: string | null;
 }
 
 export interface PlatingInput {
@@ -174,13 +185,13 @@ export function planPlates(input: PlatingInput): KidPlate[] {
     const dislikesTouching = textureDislikes.has(NO_TOUCHING_DISLIKE);
     const safeIds = new Set(kid.safeFoodIds ?? kid.alwaysEatsFoods ?? []);
 
-    // At most one exposure per meal: a plate is not a test.
-    const dueExposure = findDueExposure(kid.id);
-    let exposureTaken = false;
+    // Components with nothing against them, in recipe order: the only ones a
+    // due ladder step may be plated on (step 5, resolved after the pass).
+    const clear: { index: number; component: RecipeComponent; foodIds: Set<string> }[] = [];
 
     let blocked = false;
 
-    const placements: ComponentPlacement[] = ordered.map((component) => {
+    const placements: ComponentPlacement[] = ordered.map((component, index) => {
       const foodIds = foodIdsOfComponent(component, extras);
       const reasons: PlatingReason[] = [];
 
@@ -202,7 +213,7 @@ export function planPlates(input: PlatingInput): KidPlate[] {
           blocked = true;
           reasons.push({ kind: 'cannot_hold_back' });
         }
-        return place(component, 'held_back', reasons);
+        return place(component, 'held_back', reasons, needsSpace(component));
       }
 
       // 2. A texture this child cannot tolerate. Separation does not help —
@@ -227,19 +238,17 @@ export function planPlates(input: PlatingInput): KidPlate[] {
       }
 
       if (reasons.length > 0) {
-        if (component.canBeHeldBack) return place(component, 'held_back', reasons);
+        if (component.canBeHeldBack) {
+          return place(component, 'held_back', reasons, needsSpace(component));
+        }
         // It is the dish. Serve it, but say what the parent is up against.
         reasons.push({ kind: 'cannot_hold_back' });
-        return place(component, separationFor(component), reasons);
+        return place(component, separationFor(component), reasons, needsSpace(component));
       }
 
-      // 5. Nothing against it. Is it this child's due ladder step?
-      if (!exposureTaken && dueExposure && foodIds.has(dueExposure.foodId)) {
-        exposureTaken = true;
-        return place(component, 'exposure', [
-          { kind: 'due_exposure', rung: dueExposure.currentRung },
-        ]);
-      }
+      // 5. Nothing against it, so it could carry a due ladder step. Which one
+      // (if any) is decided once every component has been seen.
+      clear.push({ index, component, foodIds });
 
       // 6. A safe food is worth naming — it is the anchor the rest sits beside.
       for (const foodId of foodIds) {
@@ -256,8 +265,24 @@ export function planPlates(input: PlatingInput): KidPlate[] {
           component.canTouchOtherFoods ? { kind: 'no_touching' } : { kind: 'component_separate' }
         );
       }
-      return place(component, placement, reasons);
+      return place(component, placement, reasons, placement === 'separated');
     });
+
+    // 5, resolved. At most one exposure per meal: a plate is not a test. Due
+    // steps are tried longest overdue first, and each is matched against the
+    // clear components, so a step for a food this recipe does not contain (or
+    // cannot serve this child) never shadows one it can.
+    for (const row of findDueExposures(kid.id)) {
+      const host = clear.find((c) => c.foodIds.has(row.foodId));
+      if (!host) continue;
+      placements[host.index] = place(
+        host.component,
+        'exposure',
+        [{ kind: 'due_exposure', rung: row.currentRung }],
+        needsSpace(host.component)
+      );
+      break;
+    }
 
     const onPlate = placements.filter((p) => p.placement === 'on_plate');
     const separated = placements.filter((p) => p.placement === 'separated');
@@ -276,24 +301,34 @@ export function planPlates(input: PlatingInput): KidPlate[] {
       isEmpty: onPlate.length + separated.length + (exposure ? 1 : 0) === 0,
     };
 
-    function separationFor(component: RecipeComponent): PlacementKind {
+    function needsSpace(component: RecipeComponent): boolean {
       // Either the child needs everything kept apart, or this component says
       // it needs a gap regardless of who is eating it.
-      return dislikesTouching || !component.canTouchOtherFoods ? 'separated' : 'on_plate';
+      return dislikesTouching || !component.canTouchOtherFoods;
+    }
+
+    function separationFor(component: RecipeComponent): PlacementKind {
+      return needsSpace(component) ? 'separated' : 'on_plate';
     }
   }
 
-  function findDueExposure(kidId: string): PlatingLadderRow | null {
-    const due = (input.ladder ?? []).filter(
-      (row) =>
-        row.kidId === kidId &&
-        row.status === 'active' &&
-        row.nextDueOn !== null &&
-        row.nextDueOn <= today
-    );
-    if (due.length === 0) return null;
-    // Longest overdue first, so a step that has been waiting is not skipped.
-    return [...due].sort((a, b) => (a.nextDueOn ?? '').localeCompare(b.nextDueOn ?? ''))[0];
+  /**
+   * Every ladder step due for this child, longest overdue first so a step that
+   * has been waiting is not skipped, then by food id so the order is stable.
+   */
+  function findDueExposures(kidId: string): PlatingLadderRow[] {
+    return (input.ladder ?? [])
+      .filter(
+        (row) =>
+          row.kidId === kidId &&
+          row.status === 'active' &&
+          row.nextDueOn !== null &&
+          row.nextDueOn <= today
+      )
+      .sort(
+        (a, b) =>
+          (a.nextDueOn ?? '').localeCompare(b.nextDueOn ?? '') || a.foodId.localeCompare(b.foodId)
+      );
   }
 }
 
@@ -308,12 +343,14 @@ function indexViolations(violations: ConstraintViolation[]): Map<string, Constra
 function place(
   component: RecipeComponent,
   placement: PlacementKind,
-  reasons: PlatingReason[]
+  reasons: PlatingReason[],
+  separated: boolean
 ): ComponentPlacement {
   return {
     componentId: component.id,
     componentName: component.name,
     placement,
     reasons,
+    separated,
   };
 }

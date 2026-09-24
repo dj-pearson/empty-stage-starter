@@ -213,3 +213,50 @@ describe('LadderOverview', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent('Start a food for Maya');
   });
 });
+
+describe('LadderOverview logFoodId', () => {
+  const todayIso = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  it('focuses the inline log controls of a due row', async () => {
+    h.ladder = ladderState({
+      rows: [ladderRow({ id: 'r-due', foodId: 'due', nextDueOn: todayIso(), currentRung: 'full_bite' })],
+    });
+    render(<LadderOverview kid={kid} logFoodId="due" />);
+    await waitFor(() => {
+      const controls = document.querySelector('[data-quick-log="r-due"]');
+      expect(controls).not.toBeNull();
+      expect(controls!.contains(document.activeElement)).toBe(true);
+    });
+    expect(screen.queryByTestId('ladder-log-link')).toBeNull();
+  });
+
+  it('opens log controls for a row that has none inline, once, until closed', async () => {
+    h.ladder = ladderState({
+      rows: [ladderRow({ id: 'r-working', foodId: 'working', nextDueOn: '2999-01-01', currentRung: 'looking' })],
+    });
+    const { rerender } = render(<LadderOverview kid={kid} logFoodId="working" />);
+    const panel = await screen.findByTestId('ladder-log-link');
+    expect(within(panel).getByRole('heading', { name: 'How did Food working go?' })).toBeInTheDocument();
+    const took = within(panel).getByRole('button', { name: 'Log Took it for Food working' });
+    await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
+    expect(took).toBeInTheDocument();
+
+    act(() => within(panel).getByRole('button', { name: 'Close' }).click());
+    expect(screen.queryByTestId('ladder-log-link')).toBeNull();
+    // Re-rendering with the same id does not reopen it.
+    rerender(<LadderOverview kid={kid} logFoodId="working" />);
+    expect(screen.queryByTestId('ladder-log-link')).toBeNull();
+  });
+
+  it('does nothing for an id with no row', () => {
+    h.ladder = ladderState({
+      rows: [ladderRow({ id: 'r-working', foodId: 'working', nextDueOn: '2999-01-01', currentRung: 'looking' })],
+    });
+    render(<LadderOverview kid={kid} logFoodId="nope" />);
+    expect(screen.queryByTestId('ladder-log-link')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+});

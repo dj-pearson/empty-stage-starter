@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { forwardRef, useImperativeHandle, useState, type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import '@/i18n';
 import type { Kid } from '@/types';
 
@@ -39,8 +39,8 @@ vi.mock('@/hooks/useFeatureFlag', () => ({
   },
 }));
 vi.mock('@/components/foodTracker/LadderOverview', () => ({
-  LadderOverview: ({ kid, logRequestNonce }: { kid: Kid; logRequestNonce?: number }) => (
-    <div data-testid="ladder-overview" data-kid={kid.id} data-nonce={logRequestNonce} />
+  LadderOverview: ({ kid, logRequestNonce, logFoodId }: { kid: Kid; logRequestNonce?: number; logFoodId?: string }) => (
+    <div data-testid="ladder-overview" data-kid={kid.id} data-nonce={logRequestNonce} data-log-food={logFoodId} />
   ),
 }));
 vi.mock('@/components/foodTracker/FoodHistoryList', () => ({
@@ -203,5 +203,32 @@ describe('FoodTracker FAB action', () => {
     const after = screen.getByRole('group', { name: 'Quick actions' });
     expect(within(after).queryByRole('button', { name: 'Log a tasting' })).not.toBeInTheDocument();
     expect(within(after).getByRole('button', { name: 'Log a meal' })).toBeInTheDocument();
+  });
+});
+
+describe('FoodTracker ?log= deep link', () => {
+  const where = { search: '' };
+  function LocationProbe() {
+    where.search = useLocation().search;
+    return null;
+  }
+
+  it('passes ?log=<foodId> to the ladder, then clears it from the URL', async () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard/food-tracker?log=food-9&tab=x']}>
+        <FoodTracker />
+        <LocationProbe />
+      </MemoryRouter>
+    );
+    expect(screen.getByTestId('ladder-overview')).toHaveAttribute('data-log-food', 'food-9');
+    await waitFor(() => expect(new URLSearchParams(where.search).get('log')).toBeNull());
+    // Other params survive, and the ladder keeps the id after the URL loses it.
+    expect(new URLSearchParams(where.search).get('tab')).toBe('x');
+    expect(screen.getByTestId('ladder-overview')).toHaveAttribute('data-log-food', 'food-9');
+  });
+
+  it('passes nothing without ?log', () => {
+    wrap(<FoodTracker />);
+    expect(screen.getByTestId('ladder-overview')).not.toHaveAttribute('data-log-food');
   });
 });

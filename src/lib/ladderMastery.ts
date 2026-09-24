@@ -16,7 +16,7 @@
  *     scores on sensory similarity.
  */
 
-import { matchingAllergen } from '@/lib/allergens';
+import { matchingAllergen, matchingFoodAllergen } from '@/lib/allergens';
 import type { ChainOutcome, PickinessBucket } from './chainNetwork';
 
 export interface ChainSuggestion {
@@ -50,6 +50,14 @@ export interface HandoffContext {
    * allergen list is not a safe one.
    */
   allergensByFoodId: Map<string, string[]>;
+  /**
+   * The candidate foods themselves, keyed by id. When given, the check reads
+   * the food's name and allergen families as well as its tags
+   * (matchingFoodAllergen), so an untagged "Peanut butter crackers" is caught.
+   * Optional so older callers keep working; without it only the tags in
+   * `allergensByFoodId` are checked.
+   */
+  foodsById?: ReadonlyMap<string, { name?: string | null; allergens?: readonly string[] | null }>;
   /** The child the candidates are for; copied onto each candidate. */
   kidId?: string | null;
   /** How many targets to offer. Kept small on purpose. */
@@ -82,8 +90,16 @@ export function selectHandoffCandidates(
 
       if (kidHasAllergens) {
         const foodAllergens = ctx.allergensByFoodId.get(s.foodId);
-        if (!foodAllergens) return false;
-        if (matchingAllergen(ctx.kidAllergens, foodAllergens) !== null) return false;
+        if (ctx.foodsById) {
+          const food = ctx.foodsById.get(s.foodId);
+          // Unknown to both maps: an unknown allergen list is not a safe one.
+          if (!food && !foodAllergens) return false;
+          const checked = food ?? { name: s.foodName, allergens: foodAllergens };
+          if (matchingFoodAllergen(ctx.kidAllergens, checked) !== null) return false;
+        } else {
+          if (!foodAllergens) return false;
+          if (matchingAllergen(ctx.kidAllergens, foodAllergens) !== null) return false;
+        }
       }
       return true;
     })

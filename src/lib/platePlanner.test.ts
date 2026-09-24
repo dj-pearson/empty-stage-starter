@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { planPlates, type PlatingInput, type PlatingKid } from './platePlanner';
 import type { RecipeComponent } from './recipeComponents';
 import type { SolverRecipe } from './siblingConstraintSolver';
+import { kidSafeFoodIds } from './kidProgress';
 
 const TODAY = '2026-08-06';
 
@@ -348,5 +349,125 @@ describe('planPlates', () => {
         'c-cheese',
       ]);
     }
+  });
+
+  it('marks the exposure as separated for a kid who cannot have foods touching', () => {
+    const [plate] = plan({
+      kids: [kid({ id: 'k1', textureDislikes: ['Foods touching each other'] })],
+      ladder: [
+        {
+          kidId: 'k1',
+          foodId: 'peas',
+          currentRung: 'touching',
+          status: 'active',
+          nextDueOn: '2026-08-05',
+        },
+      ],
+    });
+
+    expect(plate.exposure?.componentName).toBe('Peas');
+    expect(plate.exposure?.separated).toBe(true);
+  });
+
+  it('marks an exposure that cannot touch other foods as separated, and one that can as not', () => {
+    const ladder = [
+      {
+        kidId: 'k1',
+        foodId: 'peas',
+        currentRung: 'touching' as const,
+        status: 'active',
+        nextDueOn: '2026-08-05',
+      },
+    ];
+    const [apart] = plan({
+      components: [
+        component({ id: 'c-peas', name: 'Peas', foodId: 'peas', canTouchOtherFoods: false }),
+      ],
+      kids: [kid({ id: 'k1' })],
+      ladder,
+    });
+    expect(apart.exposure?.separated).toBe(true);
+
+    const [together] = plan({ kids: [kid({ id: 'k1' })], ladder });
+    expect(together.exposure?.separated).toBe(false);
+  });
+
+  it('sets separated on every placement, held-back ones included', () => {
+    const [plate] = plan({
+      kids: [kid({ id: 'sep', textureDislikes: ['Foods touching each other'] })],
+    });
+
+    for (const p of plate.placements) expect(typeof p.separated).toBe('boolean');
+    // The sauce is held back, and would have needed its own space.
+    expect(plate.heldBack.find((p) => p.componentId === 'c-sauce')?.separated).toBe(true);
+    expect(plate.separated.every((p) => p.separated)).toBe(true);
+
+    const [easy] = plan({ kids: [kid({ id: 'easy' })] });
+    expect(easy.onPlate.every((p) => !p.separated)).toBe(true);
+  });
+
+  it('takes the first due step that is in this recipe, not the first due step overall', () => {
+    const [plate] = plan({
+      components: COMPONENTS.filter((c) => c.id !== 'c-cheese'),
+      kids: [kid({ id: 'k1' })],
+      ladder: [
+        {
+          kidId: 'k1',
+          foodId: 'broccoli',
+          currentRung: 'looking',
+          status: 'active',
+          nextDueOn: '2026-08-01',
+        },
+        {
+          kidId: 'k1',
+          foodId: 'peas',
+          currentRung: 'touching',
+          status: 'active',
+          nextDueOn: '2026-08-05',
+        },
+      ],
+    });
+
+    expect(plate.exposure?.componentName).toBe('Peas');
+    expect(plate.exposure?.reasons).toEqual([{ kind: 'due_exposure', rung: 'touching' }]);
+  });
+
+  it('breaks a tie on due date by food id, so the choice is stable', () => {
+    const due = (foodId: string) => ({
+      kidId: 'k1',
+      foodId,
+      currentRung: 'touching' as const,
+      status: 'active',
+      nextDueOn: '2026-08-05',
+    });
+    for (const ladder of [
+      [due('peas'), due('cheese')],
+      [due('cheese'), due('peas')],
+    ]) {
+      const [plate] = plan({ kids: [kid({ id: 'k1' })], ladder });
+      expect(plate.exposure?.componentName).toBe('Cheese');
+      expect(plate.placements.filter((p) => p.placement === 'exposure')).toHaveLength(1);
+    }
+  });
+
+  it('names a safe food stored as a name once safeFoodIds is resolved', () => {
+    const rice = { id: 'rice', name: 'Rice', category: 'grain', allergens: [] };
+    const recipe: SolverRecipe = { id: 'recipe-2', name: 'Rice bowl', foodIds: ['rice'], foods: [rice] };
+    const components = [
+      component({ id: 'c-rice', recipeId: 'recipe-2', name: 'Rice', foodId: 'rice' }),
+    ];
+    const raw = kid({ id: 'k1', alwaysEatsFoods: ['Rice'] });
+
+    // Unresolved, the name never equals the id.
+    const [before] = plan({ recipe, components, kids: [raw] });
+    expect(before.placements[0].reasons).not.toContainEqual({ kind: 'safe_food', foodName: 'Rice' });
+
+    const safe = kidSafeFoodIds(
+      { id: 'k1', always_eats_foods: ['Rice'] },
+      [],
+      new Map([['rice', { ...rice, is_safe: false, is_try_bite: false }]])
+    );
+    const [after] = plan({ recipe, components, kids: [{ ...raw, safeFoodIds: [...safe] }] });
+    expect(after.placements[0].reasons).toContainEqual({ kind: 'safe_food', foodName: 'Rice' });
   });
 });

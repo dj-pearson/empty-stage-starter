@@ -45,7 +45,19 @@ function KidAvatar({ kid, className }: { kid: Kid; className?: string }) {
 const chipClass =
   'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium motion-safe:transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
-export function KidChips({ className, ariaLabel }: { className?: string; ariaLabel?: string }) {
+export function KidChips({
+  className,
+  ariaLabel,
+  showFamily = true,
+}: {
+  className?: string;
+  ariaLabel?: string;
+  /**
+   * The Family chip. Off on screens that only work for one child at a time
+   * (Meal Builder), where "Family" would be a dead end.
+   */
+  showFamily?: boolean;
+}) {
   const { t } = useTranslation();
   const { kids, activeKidId, setActiveKid } = useKids();
   const ageT = useAgeT();
@@ -86,20 +98,22 @@ export function KidChips({ className, ariaLabel }: { className?: string; ariaLab
           </button>
         );
       })}
-      <button
-        type="button"
-        aria-pressed={familyPressed}
-        onClick={() => setActiveKid(null)}
-        className={cn(
-          chipClass,
-          familyPressed
-            ? 'border-primary bg-primary text-primary-foreground'
-            : 'border-border bg-background text-foreground hover:bg-muted'
-        )}
-      >
-        <Users className="h-4 w-4" aria-hidden="true" />
-        <span>{t('foodTracker.familyHeading', { defaultValue: 'Family' })}</span>
-      </button>
+      {showFamily ? (
+        <button
+          type="button"
+          aria-pressed={familyPressed}
+          onClick={() => setActiveKid(null)}
+          className={cn(
+            chipClass,
+            familyPressed
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-border bg-background text-foreground hover:bg-muted'
+          )}
+        >
+          <Users className="h-4 w-4" aria-hidden="true" />
+          <span>{t('foodTracker.familyHeading', { defaultValue: 'Family' })}</span>
+        </button>
+      ) : null}
     </div>
   );
 }

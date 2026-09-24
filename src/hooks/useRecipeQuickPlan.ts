@@ -13,7 +13,6 @@
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { toast } from "sonner";
 import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
 import type { ScheduleRecipeResult } from "@/contexts/PlanContext";
@@ -31,33 +30,13 @@ import { addIsoDays, parseIsoDate, toISODate } from "@/lib/date-utils";
 import type { Kid, MealSlot, Recipe } from "@/types";
 import "@/i18n/appLocale";
 
-/** Every planner slot, in the planner's order. */
-export const RECIPE_PLAN_SLOTS: readonly MealSlot[] = [
-  "breakfast",
-  "lunch",
-  "dinner",
-  "snack1",
-  "snack2",
-  "try_bite",
-];
+import { slotLabel } from "@/lib/planSlotLabels";
 
-export const SLOT_DEFAULT_LABELS: Record<MealSlot, string> = {
-  breakfast: "Breakfast",
-  lunch: "Lunch",
-  dinner: "Dinner",
-  snack1: "Snack 1",
-  snack2: "Snack 2",
-  try_bite: "Try Bite",
-};
+export { RECIPE_PLAN_SLOTS, SLOT_DEFAULT_LABELS, slotLabel } from "@/lib/planSlotLabels";
 
 /** Dinner once the afternoon is on; lunch before that. */
 export function defaultPlanSlot(now: Date = new Date()): MealSlot {
   return now.getHours() >= 14 ? "dinner" : "lunch";
-}
-
-/** The planner's own label for a slot, never the raw slot id. */
-export function slotLabel(t: TFunction, slot: MealSlot): string {
-  return t(`planner.mobile.slot.${slot}`, { defaultValue: SLOT_DEFAULT_LABELS[slot] });
 }
 
 /** "Thursday" for a YYYY-MM-DD key, in the UI language. */

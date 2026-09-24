@@ -353,3 +353,12 @@ actionable (useCoachActions: try bite, ladder, grocery with Undo): AICoach
 route chunk +13.3 kB, shared kidProgress/kidAllergenChips/planAllergenGuard
 chunks, +1.6 kB copy. Eager entry 315.8 kB (budget 322 kB, unchanged).
 Measured total 2708.4 kB.
+
+## 2026-09-24: `totalJs` 2720000 -> 2735000 (Meal Builder)
+
+Owner-approved raise for route-only growth. Meal Builder went from a
+stars toy to a per-kid plate builder: route chunk 4.1 -> 15.4 kB
+(plateBuilder selector, drawn plate, zone choices, slot chip), appLocale
++1.6 kB. Two imports were moved to leaf modules to keep platePlanner and
+useRecipeQuickPlan out of its graph (-2.4 kB). Eager closure unchanged.
+Measured total 2724.0 kB.

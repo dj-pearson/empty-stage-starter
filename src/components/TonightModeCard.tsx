@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { ChefHat, Clock, Loader2, Plus, ShieldCheck } from "lucide-react";
+import { ChefHat, Clock, Loader2, Plus, ShieldCheck, UtensilsCrossed } from "lucide-react";
 import { useFoods, useKids, useRecipes, usePlan } from "@/contexts/AppContext";
 import { analytics } from "@/lib/analytics";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -178,6 +178,8 @@ export function TonightModeCard({ className, forceShow, variant = "card" }: Toni
   }
 
   const frame = variant === "card" ? "rounded-xl border bg-card p-4" : "";
+  // Meal Builder opens on the active kid; name them when there is exactly one.
+  const plateKid = targetKids.length === 1 ? targetKids[0] : null;
 
   if (recipes.length === 0) {
     return (
@@ -211,10 +213,21 @@ export function TonightModeCard({ className, forceShow, variant = "card" }: Toni
             })}
           </p>
         )}
-        <Link to="/dashboard/recipes" className={buttonVariants({ variant: "outline", size: "sm" })}>
-          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-          {t("tonightMode.safePlate.addRecipe", { defaultValue: "Add a recipe" })}
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/dashboard/recipes" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            {t("tonightMode.safePlate.addRecipe", { defaultValue: "Add a recipe" })}
+          </Link>
+          <Link to="/dashboard/meal-builder" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            <UtensilsCrossed className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            {plateKid
+              ? t("tonightMode.safePlate.buildPlateFor", {
+                  defaultValue: "Build a plate with {{name}}",
+                  name: plateKid.name,
+                })
+              : t("tonightMode.safePlate.buildPlate", { defaultValue: "Build a plate in Meal Builder" })}
+          </Link>
+        </div>
       </div>
     );
   }

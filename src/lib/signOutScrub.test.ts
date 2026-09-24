@@ -72,6 +72,8 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
     'draftKey(kidId, foodId) under eatpal.ladderLogDraft. in sessionStorage -- scrubbed by SCRUBBED_SESSION_PREFIXES',
   'src/components/grocery/PlaceInAisleChips.tsx':
     'aislePromptDismissedKey(storeId) -- scrubbed by the grocery.aislePrompt.dismissed. prefix',
+  'src/components/KidMealBuilder.tsx':
+    'draftKey(kidId, date, slot) under mealBuilder:draft: -- scrubbed by prefix',
   'src/components/aiCoach/ChatComposer.tsx':
     'DRAFT_PREFIX + conversation id (or "draft") -- scrubbed by the aiCoach.draft. prefix',
 };

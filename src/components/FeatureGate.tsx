@@ -32,7 +32,8 @@ interface FeatureGateProps {
   allowWhenExhausted?: boolean;
   /**
    * Heading level of the lock screen title. 1 when the gate is the whole page
-   * (MealBuilder, FoodChaining); 2 when the page renders its own h1 above it.
+   * (FoodChaining); 2 when the page renders its own h1 above it (AICoach,
+   * MealBuilder).
    */
   headingLevel?: 1 | 2;
   /** Notified with the latest gate state, e.g. so a page header can show remaining uses. */
@@ -172,9 +173,9 @@ export function FeatureGate({
       </div>
       {/*
         US-860: h1 by default, because when this renders it IS the page.
-        MealBuilder and FoodChaining wrap their entire body in this gate and have
-        no heading of their own. AICoach renders its own h1 above the gate, so it
-        passes headingLevel={2}.
+        FoodChaining wraps its entire body in this gate and has no heading of
+        its own. AICoach and MealBuilder render their own h1 above the gate, so
+        they pass headingLevel={2}.
       */}
       <Heading className="text-2xl font-semibold mb-2">
         {t("featureGate.locked", { label, defaultValue: "{{label}} is locked" })}

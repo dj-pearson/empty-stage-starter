@@ -100,6 +100,9 @@ export const SCRUBBED_PREFIXES: readonly string[] = [
   // a new one). It is what a parent typed about their child, and the 'draft'
   // key is not user-scoped, so the next account on the device would see it.
   'aiCoach.draft.',
+  // Meal Builder's offline plate draft, one per child, date and meal slot. It
+  // names a child and the foods chosen for them, and is not user-scoped.
+  'mealBuilder:draft:',
 ];
 
 /** Keys that survive sign-out on purpose, each with the reason it does. */

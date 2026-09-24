@@ -61,6 +61,7 @@ import { usePlanToGrocery, type PlanToGroceryWindow } from "@/hooks/usePlanToGro
 import { useDefaultGroceryListId } from "@/hooks/useDefaultGroceryListId";
 import { logger } from "@/lib/logger";
 import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import "@/i18n/appLocale";
 
 // US-541: lazy-load the GSAP planner so gsap + gsap/Draggable are code-split
@@ -129,6 +130,49 @@ function parseWeekParam(value: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+const DEEP_LINK_SLOTS: readonly MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack2", "try_bite"];
+
+function parseSlotParam(value: string | null): MealSlot | null {
+  return DEEP_LINK_SLOTS.find((s) => s === value) ?? null;
+}
+
+interface DeepLinkTarget {
+  date: string;
+  slot: MealSlot | null;
+}
+
+// The mobile planner shows one day at a time behind a WeekStrip tab and has
+// no data-cell-* hooks, so a deep link there selects the day's tab and then
+// the slot's card. These ids and the card order come from MobileMealPlanner.
+const MOBILE_TAB_PREFIX = "planner-day";
+const MOBILE_PANEL_ID = "planner-day-panel";
+
+/** Finds the element a ?date=&slot= deep link should land on, or null if it is not rendered yet. */
+function findDeepLinkCell(target: DeepLinkTarget, weekStartIso: string): HTMLElement | null {
+  const cellSelector = target.slot
+    ? `[data-cell-date="${target.date}"][data-cell-slot="${target.slot}"]`
+    : `[data-cell-date="${target.date}"][data-cell-slot]`;
+  const cell = document.querySelector<HTMLElement>(cellSelector);
+  if (cell) return cell;
+
+  const panel = document.getElementById(MOBILE_PANEL_ID);
+  if (!panel) return null;
+  const dayIndex = Math.round(
+    (parseIsoDate(target.date).getTime() - parseIsoDate(weekStartIso).getTime()) / 86_400_000,
+  );
+  if (dayIndex < 0 || dayIndex > 6) return null;
+  const tab = document.getElementById(`${MOBILE_TAB_PREFIX}-${dayIndex}`);
+  if (!tab) return null;
+  if (tab.getAttribute("aria-selected") !== "true") {
+    // Selecting the day re-renders the panel; the caller looks again then.
+    tab.click();
+    return null;
+  }
+  const cards = panel.querySelectorAll<HTMLElement>(":scope > section");
+  const slotIndex = target.slot ? DEEP_LINK_SLOTS.indexOf(target.slot) : 0;
+  return cards[slotIndex] ?? panel;
+}
+
 type RangeFormatter = Intl.DateTimeFormat & { formatRange?: (a: Date, b: Date) => string };
 
 interface ConfirmRequest {
@@ -172,13 +216,19 @@ export default function Planner() {
   // --- Week in view, persisted in ?week=YYYY-MM-DD -------------------------
   const [searchParams, setSearchParams] = useSearchParams();
   const weekParam = searchParams.get("week");
+  // ?date=YYYY-MM-DD&slot=dinner deep links (TodayTasks, QuickActionsFab,
+  // TonightHero, Dashboard, OnboardingProgressBar, Meal Builder). ?week wins
+  // when both are present; otherwise the week is the one holding ?date.
+  const dateParam = searchParams.get("date");
+  const slotParam = searchParams.get("slot");
   // Item 3: Monday unless this user chose Sunday. Plan rows keep their dates;
   // only the seven-day window moves, so a ?week= saved under the other start
   // opens on the week that contains that day.
   const weekStartsOn = useWeekStartsOn();
   const currentWeekStart = useMemo(
-    () => startOfWeek(parseWeekParam(weekParam) ?? new Date(), { weekStartsOn }),
-    [weekParam, weekStartsOn],
+    () =>
+      startOfWeek(parseWeekParam(weekParam) ?? parseWeekParam(dateParam) ?? new Date(), { weekStartsOn }),
+    [weekParam, dateParam, weekStartsOn],
   );
   const weekStartIso = format(currentWeekStart, "yyyy-MM-dd");
   const thisWeekStart = startOfWeek(new Date(), { weekStartsOn });
@@ -198,6 +248,57 @@ export default function Planner() {
     },
     [setSearchParams, weekStartsOn],
   );
+
+  // Capture the deep link once, then take date/slot out of the URL so a
+  // reload or a later week change does not jump back to it. ?week is set to
+  // the week on screen, so dropping ?date does not move the view.
+  const [deepLinkTarget, setDeepLinkTarget] = useState<DeepLinkTarget | null>(null);
+  useEffect(() => {
+    if (dateParam === null && slotParam === null) return;
+    const valid = parseWeekParam(dateParam) !== null;
+    if (valid && dateParam) setDeepLinkTarget({ date: dateParam, slot: parseSlotParam(slotParam) });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("date");
+        next.delete("slot");
+        if (valid && !next.get("week")) next.set("week", weekStartIso);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [dateParam, slotParam, weekStartIso, setSearchParams]);
+
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    if (!deepLinkTarget) return;
+    const target = deepLinkTarget;
+    const land = (): boolean => {
+      const el = findDeepLinkCell(target, weekStartIso);
+      if (!el) return false;
+      // Grid cells are plain role="cell" divs; -1 makes them focusable without
+      // adding them to the tab order.
+      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+      el.scrollIntoView?.({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+      el.focus({ preventScroll: true });
+      setDeepLinkTarget(null);
+      return true;
+    };
+    if (land()) return;
+    // The per-kid grid is lazy, so the cell may arrive a few renders later.
+    const observer = new MutationObserver(() => {
+      if (land()) observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-selected"] });
+    const giveUp = window.setTimeout(() => {
+      observer.disconnect();
+      setDeepLinkTarget(null);
+    }, 5000);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(giveUp);
+    };
+  }, [deepLinkTarget, weekStartIso, reduceMotion]);
 
   const [busyOp, setBusyOp] = useState<BusyOp | null>(null);
   const busyRef = useRef<BusyOp | null>(null);
