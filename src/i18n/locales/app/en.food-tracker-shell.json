@@ -1,0 +1,44 @@
+{
+  "foodTracker": {
+    "page": {
+      "subtitle": "Where each food sits, what to offer today, and what is one step from safe.",
+      "metaDescription": "See where each food sits on your child's ladder, what to offer today, and which foods are one step from safe."
+    },
+    "subtitleKid": "{{name}}'s foods: what to offer today and what is close to safe.",
+    "subtitleFamily": "Every child's foods at a glance. Pick a child to log a tasting.",
+    "crossLinkJournal": "Past meals are in the Food Journal.",
+    "crossLinkKids": "Weekly counts are on Kids.",
+    "logTasting": "Log a tasting",
+    "editChild": "Edit {{name}}'s profile",
+    "addChild": "Add child",
+    "chooseChild": "Choose a child",
+    "nowTracking": "Now tracking {{name}}",
+    "kidHeading": "{{name}}'s foods",
+    "familyHeading": "Family",
+    "gate": {
+      "loadingLabel": "Loading your children",
+      "loadErrorTitle": "Couldn't load your children",
+      "loadErrorBody": "Check your connection and try again.",
+      "retry": "Retry",
+      "noKidsTitle": "No children yet",
+      "noKidsBody": "Add a child to start tracking the foods they are learning to eat.",
+      "addFirstChild": "Add child",
+      "pickTitle": "Whose foods?",
+      "pickBody": "Pick a child to see what to offer today.",
+      "noLadderYet": "No foods are on a ladder yet. Pick a child to start one."
+    },
+    "family": {
+      "openKid": "Open {{name}}'s foods",
+      "moreOnLadder_one": "{{count}} more food on the ladder",
+      "moreOnLadder_other": "{{count}} more foods on the ladder",
+      "nothingToday": "Nothing to offer today.",
+      "loadError": "Couldn't load {{name}}'s ladder.",
+      "unknownFood": "Removed food"
+    }
+  },
+  "shell": {
+    "kidSelector": {
+      "showFor": "Showing"
+    }
+  }
+}

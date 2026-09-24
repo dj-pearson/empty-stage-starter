@@ -67,7 +67,7 @@ export function KidSelector() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 z-50 bg-popover">
-        <DropdownMenuLabel>{t("shell.kidSelector.heading", { defaultValue: "Show meals for" })}</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("shell.kidSelector.showFor", { defaultValue: "Showing" })}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
           value={activeKidId ?? FAMILY}

@@ -9,7 +9,7 @@
  * the default variant repaints to primary on hover. The hover class on each
  * style pins the background for the same reason.
  */
-import { Check, Circle, Utensils, X, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Check, Circle, Utensils, X, type LucideIcon } from 'lucide-react';
 
 export type LoggedResult = 'ate' | 'tasted' | 'refused';
 
@@ -44,3 +44,33 @@ export const NOT_LOGGED_STYLE: Readonly<ResultStyle> = Object.freeze({
   dotClassName: 'bg-muted-foreground/40',
   Icon: Circle,
 });
+
+/**
+ * A hard time at the table (food_attempts.outcome 'tantrum'). Outlined in
+ * the destructive hue with a warning icon, so it reads apart from a plain
+ * refusal (solid destructive, X) without a colour of its own.
+ */
+export const TANTRUM_STYLE: Readonly<ResultStyle> = Object.freeze({
+  className: 'border-destructive bg-transparent text-destructive hover:bg-transparent',
+  dotClassName: 'border-2 border-destructive bg-background',
+  Icon: AlertTriangle,
+});
+
+/**
+ * food_attempts.outcome in the same look as a meal result: success is Ate,
+ * partial is Tasted, refused is Refused. Anything else reads as not logged.
+ */
+export function attemptOutcomeStyle(outcome: string): ResultStyle {
+  switch (outcome) {
+    case 'success':
+      return RESULT_STYLE.ate;
+    case 'partial':
+      return RESULT_STYLE.tasted;
+    case 'refused':
+      return RESULT_STYLE.refused;
+    case 'tantrum':
+      return TANTRUM_STYLE;
+    default:
+      return NOT_LOGGED_STYLE;
+  }
+}

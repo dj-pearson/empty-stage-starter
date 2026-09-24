@@ -16,6 +16,7 @@
  *     scores on sensory similarity.
  */
 
+import { matchingAllergen } from '@/lib/allergens';
 import type { ChainOutcome, PickinessBucket } from './chainNetwork';
 
 export interface ChainSuggestion {
@@ -28,6 +29,12 @@ export interface ChainSuggestion {
 export interface MasteryCandidate extends ChainSuggestion {
   /** The mastered food this target chains from — the new row's anchor. */
   anchorFoodId: string;
+  /**
+   * The child these candidates were computed for. A candidate is only valid
+   * for that child's allergens and ladder, so it must never be started for
+   * whoever happens to be selected when the parent taps it.
+   */
+  kidId: string | null;
 }
 
 export interface HandoffContext {
@@ -35,20 +42,22 @@ export interface HandoffContext {
   masteredFoodId: string;
   /** Every food already on this child's ladder, whatever its status. */
   ladderFoodIds: string[];
-  /** Lowercased allergens for the child. */
+  /** The child's allergens, in any spelling; matched via matchingAllergen. */
   kidAllergens: string[];
-  /** Allergens per candidate food, keyed by food id. */
+  /**
+   * Allergens per candidate food, keyed by food id. For a child with any
+   * allergen, a candidate missing from this map is dropped: an unknown
+   * allergen list is not a safe one.
+   */
   allergensByFoodId: Map<string, string[]>;
+  /** The child the candidates are for; copied onto each candidate. */
+  kidId?: string | null;
   /** How many targets to offer. Kept small on purpose. */
   limit?: number;
 }
 
 /** Offering a wall of options is its own kind of pressure. */
 export const DEFAULT_HANDOFF_LIMIT = 3;
-
-function lower(values: string[] | null | undefined): string[] {
-  return (values ?? []).map((v) => v.toLowerCase().trim()).filter(Boolean);
-}
 
 /**
  * Pick the next ladder targets after a food is mastered.
@@ -62,7 +71,7 @@ export function selectHandoffCandidates(
   ctx: HandoffContext
 ): MasteryCandidate[] {
   const alreadyTracked = new Set(ctx.ladderFoodIds);
-  const allergens = new Set(lower(ctx.kidAllergens));
+  const kidHasAllergens = ctx.kidAllergens.some((a) => typeof a === 'string' && a.trim());
   const limit = ctx.limit ?? DEFAULT_HANDOFF_LIMIT;
 
   return suggestions
@@ -71,9 +80,10 @@ export function selectHandoffCandidates(
       if (s.foodId === ctx.masteredFoodId) return false;
       if (alreadyTracked.has(s.foodId)) return false;
 
-      if (allergens.size > 0) {
-        const foodAllergens = lower(ctx.allergensByFoodId.get(s.foodId));
-        if (foodAllergens.some((a) => allergens.has(a))) return false;
+      if (kidHasAllergens) {
+        const foodAllergens = ctx.allergensByFoodId.get(s.foodId);
+        if (!foodAllergens) return false;
+        if (matchingAllergen(ctx.kidAllergens, foodAllergens) !== null) return false;
       }
       return true;
     })
@@ -85,7 +95,7 @@ export function selectHandoffCandidates(
       return a.foodId.localeCompare(b.foodId);
     })
     .slice(0, limit)
-    .map((s) => ({ ...s, anchorFoodId: ctx.masteredFoodId }));
+    .map((s) => ({ ...s, anchorFoodId: ctx.masteredFoodId, kidId: ctx.kidId ?? null }));
 }
 
 export interface WinContributionArgs {

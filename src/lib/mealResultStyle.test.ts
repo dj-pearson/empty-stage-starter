@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { NOT_LOGGED_STYLE, RESULT_STYLE } from './mealResultStyle';
+import { NOT_LOGGED_STYLE, RESULT_STYLE, TANTRUM_STYLE, attemptOutcomeStyle } from './mealResultStyle';
 
-const all = [...Object.values(RESULT_STYLE), NOT_LOGGED_STYLE];
+const all = [...Object.values(RESULT_STYLE), NOT_LOGGED_STYLE, TANTRUM_STYLE];
 
 describe('RESULT_STYLE', () => {
   it('keeps ate and tasted apart', () => {
@@ -22,5 +22,26 @@ describe('RESULT_STYLE', () => {
 
   it('gives every style an icon', () => {
     for (const style of all) expect(style.Icon).toBeTruthy();
+  });
+});
+
+describe('attemptOutcomeStyle', () => {
+  it('maps the three plain outcomes onto the meal result styles', () => {
+    expect(attemptOutcomeStyle('success')).toBe(RESULT_STYLE.ate);
+    expect(attemptOutcomeStyle('partial')).toBe(RESULT_STYLE.tasted);
+    expect(attemptOutcomeStyle('refused')).toBe(RESULT_STYLE.refused);
+  });
+
+  it('gives tantrum its own frozen style, apart from refused', () => {
+    const tantrum = attemptOutcomeStyle('tantrum');
+    expect(tantrum).toBe(TANTRUM_STYLE);
+    expect(Object.isFrozen(tantrum)).toBe(true);
+    expect(tantrum.className).not.toBe(RESULT_STYLE.refused.className);
+    expect(tantrum.Icon).not.toBe(RESULT_STYLE.refused.Icon);
+  });
+
+  it('falls back to NOT_LOGGED_STYLE for anything unknown', () => {
+    expect(attemptOutcomeStyle('')).toBe(NOT_LOGGED_STYLE);
+    expect(attemptOutcomeStyle('happy')).toBe(NOT_LOGGED_STYLE);
   });
 });

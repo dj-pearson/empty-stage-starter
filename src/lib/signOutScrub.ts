@@ -181,9 +181,20 @@ export function keysToScrub(existing: readonly string[]): string[] {
   );
 }
 
+/**
+ * sessionStorage key prefixes removed on sign-out. The Food Tracker's unsent
+ * detail-log draft is keyed per (child, food) and carries reaction notes about
+ * a child, which the next person signing in to the same tab must not see.
+ */
+export const SCRUBBED_SESSION_PREFIXES: readonly string[] = ['eatpal.ladderLogDraft.'];
+
 /** Pure: which of `existing` this module says to remove from sessionStorage. */
 export function sessionKeysToScrub(existing: readonly string[]): string[] {
-  return existing.filter((key) => SCRUBBED_SESSION_KEYS.includes(key));
+  return existing.filter(
+    (key) =>
+      SCRUBBED_SESSION_KEYS.includes(key) ||
+      SCRUBBED_SESSION_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
 }
 
 /**

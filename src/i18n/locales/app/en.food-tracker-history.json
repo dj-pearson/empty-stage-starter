@@ -1,0 +1,80 @@
+{
+  "foodTracker": {
+    "history": {
+      "title": "History by food",
+      "subtitle": "Each food over time. Meals by day live in the Journal.",
+      "loading": "Loading history",
+      "loadFailed": "Couldn't load this history. Nothing is lost; try again.",
+      "retry": "Retry",
+      "emptyTitle": "No tries logged yet",
+      "emptyBody": "Each food you log shows up here with how it has gone over time.",
+      "filteredEmpty": "No foods match this filter.",
+      "clearFilter": "Clear filter",
+      "filterLabel": "Filter by last result",
+      "filterAll": "All ({{count}})",
+      "filterSuccess": "Took it ({{count}})",
+      "filterPartial": "Partway ({{count}})",
+      "filterRefused": "Not today ({{count}})",
+      "tries_one": "{{count}} try",
+      "tries_other": "{{count}} tries",
+      "lastResult": "Last result",
+      "reactionLogged": "Reaction logged",
+      "showMore": "Show more",
+      "openFood": "Open {{food}} history",
+      "unknownFood": "Unknown food",
+      "outcome": {
+        "success": "Took it",
+        "partial": "Partway",
+        "refused": "Not today",
+        "tantrum": "Hard time",
+        "unknown": "Not recorded"
+      },
+      "sheet": {
+        "title": "{{food}} over time",
+        "description": "Every try, newest first.",
+        "empty": "No tries logged for this food yet.",
+        "showOlder": "Show older",
+        "reaction": "Reaction",
+        "showAll": "Show all",
+        "showLess": "Show less",
+        "parentNotes": "Notes",
+        "milestone": "Milestone",
+        "stageUnknown": "Step not recorded"
+      }
+    },
+    "legacy": {
+      "logAttempt": "Log attempt",
+      "dialogTitle": "Log a food attempt",
+      "dialogDescription": "Only the food and how it went are needed. Everything else is optional.",
+      "food": "Food",
+      "searchFoods": "Search foods...",
+      "noFoods": "No foods in your pantry yet.",
+      "addFoodsFirst": "Add foods in your Pantry first",
+      "noMatch": "No foods match \"{{query}}\"",
+      "selected": "Selected: {{food}}",
+      "tryBite": "Try bite",
+      "howDidItGo": "How did it go?",
+      "result": {
+        "accepted": "Took it",
+        "held": "Partway",
+        "refused": "Not today"
+      },
+      "hardTime": "It was a hard time (upset, gagging, meltdown)",
+      "bitesTaken": "Bites taken",
+      "reactionNotes": "Reaction",
+      "reactionPlaceholder": "Gagging, a rash, a tummy ache... anything to watch for next time",
+      "parentNotes": "Parent notes",
+      "parentNotesPlaceholder": "Observations, strategies used, or context...",
+      "milestone": "Mark as a milestone (first time, breakthrough)",
+      "cancel": "Cancel",
+      "save": "Save attempt",
+      "saving": "Saving...",
+      "selectFood": "Pick a food first",
+      "selectResult": "Pick how it went",
+      "saved": "Attempt logged",
+      "saveFailed": "That didn't save. Try again in a moment.",
+      "inFlight": "Still saving the last one for this food.",
+      "cap": "Too many foods are due that day. Try again tomorrow."
+    }
+  }
+}

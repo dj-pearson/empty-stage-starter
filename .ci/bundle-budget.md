@@ -306,3 +306,13 @@ per-row exposure/first-try/allergen chips, per-kid patterns and a share
 report. FoodJournal route chunk 3.6 -> 12.6 kB, plus 3.9 kB of shared
 helpers; +13.5 kB total. Eager closure and preload unchanged. Measured
 total 2603.3 kB.
+
+## 2026-09-24: `totalJs` 2615000 -> 2630000 (Food Tracker)
+
+The tracker gained the per-food ladder view (behind `exposure_ladder`),
+a one-tap log sheet, a kid-aware food picker and a per-food history
+drill-down, while the legacy flag-off tracker stays as the fallback until
+the flag flips. FoodTracker route chunk 6.6 -> 21.4 kB after dropping
+<Trans> (which pulled html-parse-stringify into this chunk alone). Eager
+closure unchanged. Measured total 2621.2 kB. Retiring the legacy view
+once the flag defaults on should give most of this back.

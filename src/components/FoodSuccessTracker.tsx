@@ -1,21 +1,28 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+/**
+ * The Food Tracker when the exposure ladder flag is off.
+ *
+ * It used to insert into food_attempts on its own, with "full bite / success /
+ * happy / most" preselected, so a hurried save recorded a good meal nobody
+ * saw. It now logs through useFoodLadder().logAttempt, the same path as the
+ * ladder view, so the attempt row, the rung, the plan-limit gate and mastery
+ * stay consistent whichever view is on. Nothing is preselected: the stage
+ * comes from the food's rung, and mood and amount are written as null.
+ *
+ * The page decides which child is shown (and what to say when there is none),
+ * so this renders nothing without an active kid.
+ */
+import { useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { KidAvatarImage } from '@/components/KidAvatarImage';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -24,977 +31,370 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  CheckCircle,
-  XCircle,
-  Minus,
-  AlertTriangle,
-  TrendingUp,
-  Plus,
-  Trophy,
-  Star,
-  Calendar,
-  UserCircle,
-  UserPlus,
-  Search,
-  UtensilsCrossed,
-  ArrowRight,
-} from "lucide-react";
-import { toast } from "sonner";
 import { useKids, useFoods } from "@/contexts/AppContext";
-import { format } from "date-fns";
+import {
+  MAX_ATTEMPT_BITES,
+  MAX_ATTEMPT_NOTE_LENGTH,
+  useFoodLadder,
+  type QuickLogResult,
+} from "@/hooks/useFoodLadder";
+import { FoodHistoryList } from "@/components/foodTracker/FoodHistoryList";
 import { cn } from "@/lib/utils";
-import { calculateAge } from "@/lib/utils";
-import { logger } from "@/lib/logger";
-import { checkFeatureLimit } from "@/lib/featureLimits";
-import { requestUpgradePrompt } from "@/lib/upgradePromptBus";
-import { recordContributionsFromAttempt } from "@/lib/chainNetwork";
-import { useNavigate } from "react-router-dom";
+import "@/i18n/appLocale";
 
-interface FoodSuccessTrackerProps {
+export interface FoodSuccessTrackerProps {
+  /** Kept for callers that still pass it; the page owns the no-kid state now. */
   onAddChild?: () => void;
 }
 
-interface FoodAttempt {
-  id: string;
-  food_id: string;
-  attempted_at: string;
-  stage: string;
-  outcome: string;
-  bites_taken: number;
-  amount_consumed: string;
-  mood_before: string;
-  mood_after: string;
-  reaction_notes: string;
-  parent_notes: string;
-  is_milestone: boolean;
-  foods: {
-    name: string;
-  };
+const RESULTS: readonly QuickLogResult[] = ["accepted", "held", "refused"];
+const RESULT_DEFAULTS: Record<QuickLogResult, string> = {
+  accepted: "Took it",
+  held: "Partway",
+  refused: "Not today",
+};
+
+interface AttemptForm {
+  foodId: string;
+  result: QuickLogResult | null;
+  hardTime: boolean;
+  bites: string;
+  reactionNotes: string;
+  parentNotes: string;
+  isMilestone: boolean;
 }
 
-interface Achievement {
-  id: string;
-  achievement_name: string;
-  achievement_description: string;
-  icon_name: string;
-  points_value: number;
-  earned_at: string;
+const EMPTY_FORM: AttemptForm = {
+  foodId: "",
+  result: null,
+  hardTime: false,
+  bites: "",
+  reactionNotes: "",
+  parentNotes: "",
+  isMilestone: false,
+};
+
+function parseBites(value: string): number | null {
+  if (!value.trim()) return null;
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.min(n, MAX_ATTEMPT_BITES);
 }
 
-const STAGES = [
-  { value: "looking", label: "Looking", emoji: "👀", description: "Just looking at the food" },
-  { value: "touching", label: "Touching", emoji: "✋", description: "Touching or playing with food" },
-  { value: "smelling", label: "Smelling", emoji: "👃", description: "Smelling the food" },
-  { value: "licking", label: "Licking", emoji: "👅", description: "Licking or kissing the food" },
-  { value: "tiny_taste", label: "Tiny Taste", emoji: "🔬", description: "Very small taste" },
-  { value: "small_bite", label: "Small Bite", emoji: "🍴", description: "Small bite and chew" },
-  { value: "full_bite", label: "Full Bite", emoji: "😋", description: "Normal bite size" },
-  { value: "full_portion", label: "Full Portion", emoji: "🎉", description: "Ate full serving" },
-];
-
-const OUTCOMES = [
-  { value: "success", label: "Success", icon: CheckCircle, color: "text-safe-food" },
-  { value: "partial", label: "Partial", icon: Minus, color: "text-yellow-500" },
-  { value: "refused", label: "Refused", icon: XCircle, color: "text-muted-foreground" },
-  { value: "tantrum", label: "Tantrum", icon: AlertTriangle, color: "text-destructive" },
-];
-
-const MOODS = [
-  { value: "happy", label: "Happy", emoji: "😊" },
-  { value: "neutral", label: "Neutral", emoji: "😐" },
-  { value: "anxious", label: "Anxious", emoji: "😟" },
-  { value: "resistant", label: "Resistant", emoji: "😤" },
-];
-
-export function FoodSuccessTracker({ onAddChild }: FoodSuccessTrackerProps) {
-  const { activeKidId, kids, setActiveKid } = useKids();
-  const { foods } = useFoods();
+export function FoodSuccessTracker(_props: FoodSuccessTrackerProps = {}) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const [attempts, setAttempts] = useState<FoodAttempt[]>([]);
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const activeKid = kids.find((k) => k.id === activeKidId);
-  const [filterOutcome, setFilterOutcome] = useState<string>("all");
+  const { activeKidId, kids } = useKids();
+  const { foods } = useFoods();
+  const activeKid = kids.find((k) => k.id === activeKidId) ?? null;
+  const { logAttempt } = useFoodLadder(activeKidId, { kid: activeKid, foods });
 
-  // Food search state for the log attempt dialog
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<AttemptForm>(EMPTY_FORM);
   const [foodSearch, setFoodSearch] = useState("");
-
-  // Form state
-  const [attemptForm, setAttemptForm] = useState({
-    food_id: "",
-    stage: "full_bite",
-    outcome: "success",
-    bites_taken: 1,
-    amount_consumed: "most",
-    mood_before: "neutral",
-    mood_after: "happy",
-    reaction_notes: "",
-    parent_notes: "",
-    is_milestone: false,
-  });
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const filteredFoods = useMemo(() => {
-    if (!foodSearch.trim()) return foods;
-    const search = foodSearch.toLowerCase();
+    const search = foodSearch.trim().toLowerCase();
+    if (!search) return foods;
     return foods.filter(
       (food) =>
         food.name.toLowerCase().includes(search) ||
-        food.category?.toLowerCase().includes(search)
+        (food.category ?? "").toLowerCase().includes(search)
     );
   }, [foods, foodSearch]);
 
-  const loadAttempts = useCallback(async () => {
-    if (!activeKidId) return;
-    try {
-      setLoading(true);
+  const selectedFood = foods.find((f) => f.id === form.foodId);
 
-      let query = supabase
-        .from("food_attempts")
-        .select(
-          `
-          *,
-          foods (name)
-        `
-        )
-        .eq("kid_id", activeKidId)
-        .order("attempted_at", { ascending: false })
-        .limit(50);
-
-      if (filterOutcome !== "all") {
-        query = query.eq("outcome", filterOutcome);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      setAttempts(data || []);
-    } catch (error: unknown) {
-      logger.error("Error loading attempts:", error);
-      toast.error("Failed to load food attempts");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeKidId, filterOutcome]);
-
-  const loadAchievements = useCallback(async () => {
-    if (!activeKidId) return;
-    try {
-      const { data, error } = await supabase
-        .from("kid_achievements")
-        .select("*")
-        .eq("kid_id", activeKidId)
-        .order("earned_at", { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setAchievements(data || []);
-    } catch (error: unknown) {
-      logger.error("Error loading achievements:", error);
-    }
-  }, [activeKidId]);
-
-  useEffect(() => {
-    if (activeKidId) {
-      loadAttempts();
-      loadAchievements();
-    } else {
-      setAttempts([]);
-      setAchievements([]);
-    }
-  }, [activeKidId, loadAttempts, loadAchievements]);
-
-  const handleAddAttempt = async () => {
-    if (!attemptForm.food_id) {
-      toast.error("Please select a food");
+  const handleSave = async () => {
+    if (savingRef.current) return;
+    if (!form.foodId) {
+      toast.error(t("foodTracker.legacy.selectFood", { defaultValue: "Pick a food first" }));
       return;
     }
-
+    if (!form.result) {
+      toast.error(t("foodTracker.legacy.selectResult", { defaultValue: "Pick how it went" }));
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
     try {
-      setLoading(true);
-
-      // Plan-limit gate: free / lower-tier plans cap monthly food-tracker entries.
-      const limit = await checkFeatureLimit("food_tracker");
-      if (!limit.allowed) {
-        requestUpgradePrompt({
-          feature: "Food tracking",
-          message: limit.message,
-        });
+      const outcome = await logAttempt({
+        foodId: form.foodId,
+        result: form.result,
+        hardTime: form.hardTime,
+        details: {
+          reactionNotes: form.reactionNotes,
+          parentNotes: form.parentNotes,
+          bitesTaken: parseBites(form.bites),
+          moodBefore: null,
+          moodAfter: null,
+          amountConsumed: null,
+          isMilestone: form.isMilestone,
+        },
+      });
+      if (outcome.ok) {
+        toast.success(t("foodTracker.legacy.saved", { defaultValue: "Attempt logged" }));
+        setForm(EMPTY_FORM);
+        setFoodSearch("");
+        setOpen(false);
         return;
       }
-
-      const { data: insertedAttempts, error } = await supabase
-        .from("food_attempts")
-        .insert([
-          {
-            kid_id: activeKidId,
-            ...attemptForm,
-          },
-        ])
-        .select("id, food_id, outcome, kid_id");
-
-      if (error) throw error;
-
-      // Fire-and-forget anonymous chain-network contribution (US-296).
-      const newAttempt = (insertedAttempts ?? [])[0];
-      if (newAttempt) {
-        void recordContributionsFromAttempt(newAttempt).catch((err) =>
-          logger.warn("chainNetwork contribution failed", err),
+      // 'limit' has already raised the upgrade prompt inside the hook.
+      if (outcome.reason === "in_flight") {
+        toast.info(
+          t("foodTracker.legacy.inFlight", { defaultValue: "Still saving the last one for this food." })
+        );
+      } else if (outcome.reason === "cap") {
+        toast.error(
+          t("foodTracker.legacy.cap", {
+            defaultValue: "Too many foods are due that day. Try again tomorrow.",
+          })
+        );
+      } else if (outcome.reason === "error") {
+        toast.error(
+          t("foodTracker.legacy.saveFailed", { defaultValue: "That didn't save. Try again in a moment." })
         );
       }
-
-      // Bump monthly usage so the next check reflects this entry.
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.rpc("increment_usage", {
-          p_user_id: user.id,
-          p_feature_type: "food_tracker",
-        });
-      }
-
-      toast.success("Food attempt logged!");
-      setShowAddDialog(false);
-      resetForm();
-      loadAttempts();
-      loadAchievements();
-    } catch (error: unknown) {
-      logger.error("Error adding attempt:", error);
-      toast.error("Failed to log attempt");
     } finally {
-      setLoading(false);
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
-  const resetForm = () => {
-    setAttemptForm({
-      food_id: "",
-      stage: "full_bite",
-      outcome: "success",
-      bites_taken: 1,
-      amount_consumed: "most",
-      mood_before: "neutral",
-      mood_after: "happy",
-      reaction_notes: "",
-      parent_notes: "",
-      is_milestone: false,
-    });
-    setFoodSearch("");
-  };
+  if (!activeKidId) return null;
 
-  const getOutcomeBadge = (outcome: string) => {
-    const colors: Record<string, string> = {
-      success: "bg-safe-food text-white",
-      partial: "bg-yellow-500 text-white",
-      refused: "bg-gray-500 text-white",
-      tantrum: "bg-destructive text-white",
-    };
-
-    return (
-      <Badge className={colors[outcome] || "bg-gray-500 text-white"}>
-        {outcome.charAt(0).toUpperCase() + outcome.slice(1)}
-      </Badge>
-    );
-  };
-
-  const getStageBadge = (stage: string) => {
-    const stageInfo = STAGES.find((s) => s.value === stage);
-    return (
-      <Badge variant="outline" className="text-xs">
-        {stageInfo ? `${stageInfo.emoji} ${stageInfo.label}` : stage}
-      </Badge>
-    );
-  };
-
-  const getAchievementIcon = (iconName: string) => {
-    const icons: Record<string, typeof Star> = {
-      star: Star,
-      trophy: Trophy,
-      medal: Trophy,
-      crown: Trophy,
-    };
-    const Icon = icons[iconName] || Star;
-    return <Icon className="h-5 w-5 text-yellow-500" />;
-  };
-
-  // Calculate stats
-  const totalAttempts = attempts.length;
-  const successfulAttempts = attempts.filter((a) => a.outcome === "success").length;
-  const successRate = totalAttempts > 0 ? (successfulAttempts / totalAttempts) * 100 : 0;
-  const uniqueFoodsTried = new Set(attempts.map((a) => a.food_id)).size;
-  const totalPoints = achievements.reduce((sum, a) => sum + a.points_value, 0);
-
-  // ─── No Kids Exist ────────────────────────────────────────────────
-  if (kids.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <UserCircle className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">No children added yet</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                Add a child profile to start tracking their food journey and logging meal attempts.
-              </p>
-            </div>
-            {onAddChild && (
-              <Button onClick={onAddChild} className="mt-2">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add Your First Child
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // ─── No Kid Selected ──────────────────────────────────────────────
-  if (!activeKidId) {
-    return (
-      <Card>
-        <CardContent className="py-8">
-          <div className="flex flex-col items-center text-center gap-4 mb-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <UserCircle className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">Select a child to get started</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Choose which child you'd like to track food attempts for.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-w-3xl mx-auto">
-            {kids.map((kid) => {
-              const age = calculateAge(kid.date_of_birth);
-              return (
-                <button
-                  key={kid.id}
-                  onClick={() => setActiveKid(kid.id)}
-                  className={cn(
-                    "flex items-center gap-3 p-4 rounded-lg border-2 border-border",
-                    "hover:border-primary hover:bg-primary/5 transition-colors text-left",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  )}
-                >
-                  <Avatar className="h-10 w-10">
-                    <KidAvatarImage src={kid.profile_picture_url} />
-                    <AvatarFallback>
-                      <UserCircle className="h-6 w-6 text-muted-foreground" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{kid.name}</p>
-                    {age !== null && (
-                      <p className="text-xs text-muted-foreground">Age {age}</p>
-                    )}
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // ─── Kid Selected — Main Tracker UI ───────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Active Child Banner */}
-      <div className="flex items-center gap-3 px-1">
-        <Avatar className="h-8 w-8">
-          <KidAvatarImage src={activeKid?.profile_picture_url} />
-          <AvatarFallback>
-            <UserCircle className="h-5 w-5 text-muted-foreground" />
-          </AvatarFallback>
-        </Avatar>
-        <span className="text-sm text-muted-foreground">
-          Tracking for <span className="font-medium text-foreground">{activeKid?.name}</span>
-        </span>
+      <div className="flex justify-end">
+        <Button onClick={() => setOpen(true)} className="min-h-11">
+          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+          {t("foodTracker.legacy.logAttempt", { defaultValue: "Log attempt" })}
+        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <TrendingUp className="h-6 w-6 mx-auto mb-2 text-primary" />
-              <div className="text-2xl font-bold">{totalAttempts}</div>
-              <p className="text-xs text-muted-foreground">Total Attempts</p>
-            </div>
-          </CardContent>
-        </Card>
+      <FoodHistoryList key={activeKidId} kidId={activeKidId} />
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <CheckCircle className="h-6 w-6 mx-auto mb-2 text-safe-food" />
-              <div className="text-2xl font-bold">{successfulAttempts}</div>
-              <p className="text-xs text-muted-foreground">Successes</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <Star className="h-6 w-6 mx-auto mb-2 text-accent" />
-              <div className="text-2xl font-bold">{Math.round(successRate)}%</div>
-              <p className="text-xs text-muted-foreground">Success Rate</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <Calendar className="h-6 w-6 mx-auto mb-2 text-try-bite" />
-              <div className="text-2xl font-bold">{uniqueFoodsTried}</div>
-              <p className="text-xs text-muted-foreground">Foods Tried</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <Trophy className="h-6 w-6 mx-auto mb-2 text-yellow-500" />
-              <div className="text-2xl font-bold">{totalPoints}</div>
-              <p className="text-xs text-muted-foreground">Points Earned</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Achievements */}
-      {achievements.length > 0 && (
-        <Card className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border-yellow-500/20">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-yellow-500" />
-              Recent Achievements
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {achievements.slice(0, 5).map((achievement) => (
-                <div
-                  key={achievement.id}
-                  className="flex flex-col items-center min-w-[120px] p-4 bg-background rounded-lg border"
-                >
-                  {getAchievementIcon(achievement.icon_name)}
-                  <p className="text-sm font-semibold mt-2 text-center">
-                    {achievement.achievement_name}
-                  </p>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {achievement.achievement_description}
-                  </p>
-                  <Badge variant="secondary" className="mt-2 text-xs">
-                    +{achievement.points_value} pts
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Main Content */}
-      <div className="grid md:grid-cols-3 gap-6">
-        {/* Attempts List */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>Food Attempts</CardTitle>
-                <CardDescription>Track every attempt to help build confidence</CardDescription>
-              </div>
-              <Button onClick={() => setShowAddDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Log Attempt
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4">
-              <Select value={filterOutcome} onValueChange={setFilterOutcome}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Outcomes</SelectItem>
-                  <SelectItem value="success">Success Only</SelectItem>
-                  <SelectItem value="partial">Partial Only</SelectItem>
-                  <SelectItem value="refused">Refused Only</SelectItem>
-                  <SelectItem value="tantrum">Tantrum Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {loading && attempts.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">Loading...</div>
-            ) : attempts.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mx-auto mb-4">
-                  <UtensilsCrossed className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <p className="font-medium mb-1">No food attempts logged yet</p>
-                <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
-                  Start by logging an attempt here, or track a meal result from the{" "}
-                  <button
-                    onClick={() => navigate("/dashboard/planner")}
-                    className="text-primary underline underline-offset-2 hover:text-primary/80"
-                  >
-                    Meal Planner
-                  </button>
-                  .
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                  <Button onClick={() => setShowAddDialog(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Log First Attempt
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate("/dashboard/planner")}>
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Go to Planner
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <ScrollArea className="h-[600px] pr-4">
-                <div className="space-y-3">
-                  {attempts.map((attempt) => (
-                    <Card key={attempt.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="pt-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h4 className="font-semibold flex items-center gap-2">
-                              {attempt.foods?.name || "Unknown Food"}
-                              {attempt.is_milestone && (
-                                <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                              )}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(attempt.attempted_at), "MMM d, yyyy 'at' h:mm a")}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {getStageBadge(attempt.stage)}
-                            {getOutcomeBadge(attempt.outcome)}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                          <div>
-                            <span className="text-muted-foreground">Bites:</span>{" "}
-                            <span className="font-medium">{attempt.bites_taken}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Amount:</span>{" "}
-                            <span className="font-medium capitalize">{attempt.amount_consumed}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Mood Before:</span>{" "}
-                            <span className="font-medium capitalize">
-                              {MOODS.find((m) => m.value === attempt.mood_before)?.emoji}{" "}
-                              {attempt.mood_before}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Mood After:</span>{" "}
-                            <span className="font-medium capitalize">
-                              {MOODS.find((m) => m.value === attempt.mood_after)?.emoji}{" "}
-                              {attempt.mood_after}
-                            </span>
-                          </div>
-                        </div>
-
-                        {attempt.parent_notes && (
-                          <p className="text-sm text-muted-foreground italic">
-                            "{attempt.parent_notes}"
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Quick Stats Sidebar */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Outcome Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {OUTCOMES.map((outcome) => {
-                  const count = attempts.filter((a) => a.outcome === outcome.value).length;
-                  const percentage = totalAttempts > 0 ? (count / totalAttempts) * 100 : 0;
-                  const Icon = outcome.icon;
-
-                  return (
-                    <div key={outcome.value}>
-                      <div className="flex justify-between items-center mb-1">
-                        <div className="flex items-center gap-2">
-                          <Icon className={cn("h-4 w-4", outcome.color)} />
-                          <span className="text-sm font-medium">{outcome.label}</span>
-                        </div>
-                        <span className="text-sm font-semibold">{count}</span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={cn("h-full transition-all", {
-                            "bg-safe-food": outcome.value === "success",
-                            "bg-yellow-500": outcome.value === "partial",
-                            "bg-gray-500": outcome.value === "refused",
-                            "bg-destructive": outcome.value === "tantrum",
-                          })}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Stage Progress */}
-          {totalAttempts > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Stage Progress</CardTitle>
-                <CardDescription>Best stage reached per food</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {STAGES.map((stage) => {
-                    const count = attempts.filter((a) => a.stage === stage.value).length;
-                    if (count === 0) return null;
-                    return (
-                      <div key={stage.value} className="flex items-center justify-between text-sm">
-                        <span>
-                          {stage.emoji} {stage.label}
-                        </span>
-                        <Badge variant="secondary" className="text-xs">
-                          {count}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Quick Links */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Related Tools</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => navigate("/dashboard/planner")}
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Meal Planner
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => navigate("/dashboard/food-chaining")}
-                >
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Food Chaining
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => navigate("/dashboard/pantry")}
-                >
-                  <UtensilsCrossed className="h-4 w-4 mr-2" />
-                  Pantry
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* ─── Add Attempt Dialog ──────────────────────────────────────── */}
-      <Dialog
-        open={showAddDialog}
-        onOpenChange={(open) => {
-          setShowAddDialog(open);
-          if (!open) resetForm();
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* An outside tap or Escape closes without clearing: the form is only reset once a log lands. */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Log Food Attempt</DialogTitle>
+            <DialogTitle>
+              {t("foodTracker.legacy.dialogTitle", { defaultValue: "Log a food attempt" })}
+            </DialogTitle>
             <DialogDescription>
-              Track {activeKid?.name}'s food attempt to build a success history
+              {t("foodTracker.legacy.dialogDescription", {
+                defaultValue: "Only the food and how it went are needed. Everything else is optional.",
+              })}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Food Selection with Search */}
+          <div className="space-y-5">
             <div className="space-y-2">
-              <Label>Food *</Label>
+              <Label htmlFor="legacy-food-search">
+                {t("foodTracker.legacy.food", { defaultValue: "Food" })}
+              </Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search
+                  className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 <Input
+                  id="legacy-food-search"
                   value={foodSearch}
                   onChange={(e) => setFoodSearch(e.target.value)}
-                  placeholder="Search foods..."
+                  placeholder={t("foodTracker.legacy.searchFoods", { defaultValue: "Search foods..." })}
                   className="pl-9"
                 />
               </div>
               {foods.length === 0 ? (
-                <div className="border rounded-md p-4 text-center text-sm text-muted-foreground">
-                  <p className="mb-2">No foods in your pantry yet.</p>
+                <div className="rounded-md border p-4 text-center text-sm text-muted-foreground">
+                  <p className="mb-2">
+                    {t("foodTracker.legacy.noFoods", { defaultValue: "No foods in your pantry yet." })}
+                  </p>
                   <Button
                     variant="link"
-                    className="p-0 h-auto"
+                    className="h-auto p-0"
                     onClick={() => {
-                      setShowAddDialog(false);
+                      setOpen(false);
                       navigate("/dashboard/pantry");
                     }}
                   >
-                    Add foods in your Pantry first
+                    {t("foodTracker.legacy.addFoodsFirst", {
+                      defaultValue: "Add foods in your Pantry first",
+                    })}
                   </Button>
                 </div>
               ) : (
-                <ScrollArea className="h-[140px] border rounded-md">
-                  <div className="p-2 space-y-1">
-                    {filteredFoods.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No foods match "{foodSearch}"
-                      </p>
-                    ) : (
-                      filteredFoods.map((food) => (
-                        <button
-                          key={food.id}
-                          type="button"
-                          onClick={() =>
-                            setAttemptForm({ ...attemptForm, food_id: food.id })
-                          }
-                          className={cn(
-                            "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
-                            "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            attemptForm.food_id === food.id
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-background"
-                          )}
-                        >
-                          <span className="font-medium">{food.name}</span>
-                          {food.category && (
-                            <span className="ml-2 text-xs opacity-70 capitalize">
-                              {food.category}
-                            </span>
-                          )}
-                          {food.is_try_bite && (
-                            <Badge
-                              variant="outline"
+                <div className="max-h-40 overflow-y-auto rounded-md border p-2">
+                  {filteredFoods.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-muted-foreground">
+                      {t("foodTracker.legacy.noMatch", {
+                        defaultValue: 'No foods match "{{query}}"',
+                        query: foodSearch,
+                      })}
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {filteredFoods.map((food) => {
+                        const selected = form.foodId === food.id;
+                        return (
+                          <li key={food.id}>
+                            <button
+                              type="button"
+                              aria-pressed={selected}
+                              onClick={() => setForm((f) => ({ ...f, foodId: food.id }))}
                               className={cn(
-                                "ml-2 text-[10px] px-1 py-0",
-                                attemptForm.food_id === food.id && "border-primary-foreground/40"
+                                "min-h-11 w-full rounded-md px-3 py-2 text-left text-sm",
+                                "transition-colors motion-reduce:transition-none",
+                                "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                selected ? "bg-primary text-primary-foreground" : "bg-background"
                               )}
                             >
-                              Try Bite
-                            </Badge>
-                          )}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
+                              <span className="font-medium">{food.name}</span>
+                              {food.category && (
+                                <span className="ml-2 text-xs capitalize opacity-70">{food.category}</span>
+                              )}
+                              {food.is_try_bite && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "ml-2 px-1 py-0 text-[10px]",
+                                    selected && "border-primary-foreground/40 text-primary-foreground"
+                                  )}
+                                >
+                                  {t("foodTracker.legacy.tryBite", { defaultValue: "Try bite" })}
+                                </Badge>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               )}
-              {attemptForm.food_id && (
+              {selectedFood && (
                 <p className="text-xs text-muted-foreground">
-                  Selected:{" "}
-                  <span className="font-medium text-foreground">
-                    {foods.find((f) => f.id === attemptForm.food_id)?.name}
-                  </span>
+                  {t("foodTracker.legacy.selected", {
+                    defaultValue: "Selected: {{food}}",
+                    food: selectedFood.name,
+                  })}
                 </p>
               )}
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Stage</Label>
-                <Select
-                  value={attemptForm.stage}
-                  onValueChange={(value) =>
-                    setAttemptForm({ ...attemptForm, stage: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STAGES.map((stage) => (
-                      <SelectItem key={stage.value} value={stage.value}>
-                        {stage.emoji} {stage.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Outcome *</Label>
-                <Select
-                  value={attemptForm.outcome}
-                  onValueChange={(value) =>
-                    setAttemptForm({ ...attemptForm, outcome: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OUTCOMES.map((outcome) => (
-                      <SelectItem key={outcome.value} value={outcome.value}>
-                        {outcome.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Bites Taken</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={attemptForm.bites_taken}
-                  onChange={(e) =>
-                    setAttemptForm({
-                      ...attemptForm,
-                      bites_taken: parseInt(e.target.value) || 0,
-                    })
-                  }
+            <div className="space-y-2">
+              <p className="text-sm font-medium" id="legacy-result-label">
+                {t("foodTracker.legacy.howDidItGo", { defaultValue: "How did it go?" })}
+              </p>
+              <ToggleGroup
+                type="single"
+                value={form.result ?? ""}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    result: (RESULTS as readonly string[]).includes(value) ? (value as QuickLogResult) : null,
+                  }))
+                }
+                aria-labelledby="legacy-result-label"
+                className="flex-wrap justify-start"
+              >
+                {RESULTS.map((r) => (
+                  <ToggleGroupItem key={r} value={r} variant="outline" className="min-h-11 px-4">
+                    {t(`foodTracker.legacy.result.${r}`, { defaultValue: RESULT_DEFAULTS[r] })}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="legacy-hard-time"
+                  checked={form.hardTime}
+                  onCheckedChange={(checked) => setForm((f) => ({ ...f, hardTime: checked === true }))}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Amount Consumed</Label>
-                <Select
-                  value={attemptForm.amount_consumed}
-                  onValueChange={(value) =>
-                    setAttemptForm({ ...attemptForm, amount_consumed: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="quarter">Quarter</SelectItem>
-                    <SelectItem value="half">Half</SelectItem>
-                    <SelectItem value="most">Most</SelectItem>
-                    <SelectItem value="all">All</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Mood Before</Label>
-                <Select
-                  value={attemptForm.mood_before}
-                  onValueChange={(value) =>
-                    setAttemptForm({ ...attemptForm, mood_before: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MOODS.map((mood) => (
-                      <SelectItem key={mood.value} value={mood.value}>
-                        {mood.emoji} {mood.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Mood After</Label>
-                <Select
-                  value={attemptForm.mood_after}
-                  onValueChange={(value) =>
-                    setAttemptForm({ ...attemptForm, mood_after: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MOODS.map((mood) => (
-                      <SelectItem key={mood.value} value={mood.value}>
-                        {mood.emoji} {mood.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="legacy-hard-time" className="cursor-pointer text-sm font-normal">
+                  {t("foodTracker.legacy.hardTime", {
+                    defaultValue: "It was a hard time (upset, gagging, meltdown)",
+                  })}
+                </Label>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Parent Notes</Label>
+              <Label htmlFor="legacy-reaction">
+                {t("foodTracker.legacy.reactionNotes", { defaultValue: "Reaction" })}
+              </Label>
               <Textarea
-                value={attemptForm.parent_notes}
-                onChange={(e) =>
-                  setAttemptForm({ ...attemptForm, parent_notes: e.target.value })
-                }
-                placeholder="Any observations, strategies used, or context..."
-                rows={3}
+                id="legacy-reaction"
+                value={form.reactionNotes}
+                maxLength={MAX_ATTEMPT_NOTE_LENGTH}
+                onChange={(e) => setForm((f) => ({ ...f, reactionNotes: e.target.value }))}
+                placeholder={t("foodTracker.legacy.reactionPlaceholder", {
+                  defaultValue: "Gagging, a rash, a tummy ache... anything to watch for next time",
+                })}
+                rows={2}
               />
             </div>
 
+            <div className="grid gap-4 md:grid-cols-[8rem_1fr]">
+              <div className="space-y-2">
+                <Label htmlFor="legacy-bites">
+                  {t("foodTracker.legacy.bitesTaken", { defaultValue: "Bites taken" })}
+                </Label>
+                <Input
+                  id="legacy-bites"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={MAX_ATTEMPT_BITES}
+                  value={form.bites}
+                  onChange={(e) => setForm((f) => ({ ...f, bites: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="legacy-notes">
+                  {t("foodTracker.legacy.parentNotes", { defaultValue: "Parent notes" })}
+                </Label>
+                <Textarea
+                  id="legacy-notes"
+                  value={form.parentNotes}
+                  maxLength={MAX_ATTEMPT_NOTE_LENGTH}
+                  onChange={(e) => setForm((f) => ({ ...f, parentNotes: e.target.value }))}
+                  placeholder={t("foodTracker.legacy.parentNotesPlaceholder", {
+                    defaultValue: "Observations, strategies used, or context...",
+                  })}
+                  rows={2}
+                />
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="milestone"
-                checked={attemptForm.is_milestone}
-                onChange={(e) =>
-                  setAttemptForm({ ...attemptForm, is_milestone: e.target.checked })
-                }
-                className="rounded"
+              <Checkbox
+                id="legacy-milestone"
+                checked={form.isMilestone}
+                onCheckedChange={(checked) => setForm((f) => ({ ...f, isMilestone: checked === true }))}
               />
-              <Label htmlFor="milestone" className="cursor-pointer">
-                Mark as milestone (first time, breakthrough, etc.)
+              <Label htmlFor="legacy-milestone" className="cursor-pointer text-sm font-normal">
+                {t("foodTracker.legacy.milestone", {
+                  defaultValue: "Mark as a milestone (first time, breakthrough)",
+                })}
               </Label>
             </div>
           </div>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowAddDialog(false);
-                resetForm();
-              }}
-            >
-              Cancel
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              {t("foodTracker.legacy.cancel", { defaultValue: "Cancel" })}
             </Button>
-            <Button onClick={handleAddAttempt} disabled={loading || !attemptForm.food_id}>
-              Save Attempt
+            <Button
+              onClick={() => void handleSave()}
+              disabled={saving || !form.foodId || !form.result}
+              aria-busy={saving}
+            >
+              {saving
+                ? t("foodTracker.legacy.saving", { defaultValue: "Saving..." })
+                : t("foodTracker.legacy.save", { defaultValue: "Save attempt" })}
             </Button>
           </DialogFooter>
         </DialogContent>

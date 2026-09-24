@@ -30,6 +30,11 @@ export interface QuickActionsFabProps {
   /** True when today has at least one planned meal with no result yet. */
   hasUnloggedToday: boolean;
   onLogMeal: () => void;
+  /**
+   * Label for the primary log item. A page that registered its own action
+   * (Food Tracker: "Log a tasting") passes it; the default is "Log a meal".
+   */
+  logLabel?: string;
   /** Local YYYY-MM-DD, for the "Plan tonight" link. */
   todayKey: string;
 }
@@ -44,7 +49,7 @@ interface FabAction {
   shortcut?: string;
 }
 
-function QuickActionsFabImpl({ kidCount, hasUnloggedToday, onLogMeal, todayKey }: QuickActionsFabProps) {
+function QuickActionsFabImpl({ kidCount, hasUnloggedToday, onLogMeal, logLabel, todayKey }: QuickActionsFabProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -73,7 +78,7 @@ function QuickActionsFabImpl({ kidCount, hasUnloggedToday, onLogMeal, todayKey }
               ? [
                   {
                     id: "log",
-                    label: t("shell.fab.logMeal", { defaultValue: "Log a meal" }),
+                    label: logLabel ?? t("shell.fab.logMeal", { defaultValue: "Log a meal" }),
                     icon: ClipboardList,
                     onSelect: onLogMeal,
                     shortcut: shortcutFor({ kind: "quickLog" }),
@@ -100,7 +105,7 @@ function QuickActionsFabImpl({ kidCount, hasUnloggedToday, onLogMeal, todayKey }
     // The action for the page you are on is a link to itself; drop it.
     const here = pathname.replace(/\/+$/, "") || "/";
     return all.filter((a) => !a.to || a.to.split("?")[0] !== here);
-  }, [kidCount, hasUnloggedToday, onLogMeal, todayKey, pathname, navigate, t]);
+  }, [kidCount, hasUnloggedToday, onLogMeal, logLabel, todayKey, pathname, navigate, t]);
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);

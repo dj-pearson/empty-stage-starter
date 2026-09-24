@@ -12,6 +12,7 @@
  * once in this repo's history; a sweep that finds nothing must fail loudly
  * rather than report a clean tree.
  */
+import { draftKey } from '@/components/foodTracker/logDetailDraft';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -66,6 +67,8 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
   'src/hooks/useGroceryLists.ts':
     'listsCacheKey/selectedListCacheKey(userId) -- scrubbed by the grocery:lists: and grocery:selectedList: prefixes',
   'src/hooks/useStoreLayouts.ts': 'storeLayoutsCacheKey(householdId) -- scrubbed by the grocery:storeLayouts: prefix',
+  'src/components/foodTracker/LogDetailSheet.tsx':
+    'draftKey(kidId, foodId) under eatpal.ladderLogDraft. in sessionStorage -- scrubbed by SCRUBBED_SESSION_PREFIXES',
   'src/components/grocery/PlaceInAisleChips.tsx':
     'aislePromptDismissedKey(storeId) -- scrubbed by the grocery.aislePrompt.dismissed. prefix',
 };
@@ -247,6 +250,11 @@ describe('US-835: keysToScrub', () => {
     expect(sessionKeysToScrub([...present, 'route-error-chunk-reload-at']).sort()).toEqual(
       present.sort()
     );
+  });
+
+  it('clears an unsent Food Tracker detail-log draft, which holds notes about a child', () => {
+    const draft = draftKey('kid-7', 'food-3');
+    expect(sessionKeysToScrub([draft, 'route-error-chunk-reload-at'])).toEqual([draft]);
   });
 
   it('scrubOnSignOut removes exactly those keys from the storage it is given', () => {

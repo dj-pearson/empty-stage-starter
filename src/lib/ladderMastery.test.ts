@@ -67,11 +67,58 @@ describe('selectHandoffCandidates', () => {
       ],
       ctx({
         kidAllergens: ['Fish'],
-        allergensByFoodId: new Map([['fish-stick', ['fish']]]),
+        allergensByFoodId: new Map([
+          ['fish-stick', ['fish']],
+          ['safe-option', []],
+        ]),
       })
     );
 
     expect(candidates.map((c) => c.foodId)).toEqual(['safe-option']);
+  });
+
+  it('matches allergen synonyms and tag spellings, not just exact strings', () => {
+    const candidates = selectHandoffCandidates(
+      [
+        suggestion({ foodId: 'pb-toast', similarityScore: 90 }),
+        suggestion({ foodId: 'yogurt', similarityScore: 80 }),
+        suggestion({ foodId: 'rice-cake', similarityScore: 10 }),
+      ],
+      ctx({
+        kidAllergens: ['peanuts', 'dairy'],
+        allergensByFoodId: new Map([
+          ['pb-toast', ['en:peanuts']],
+          ['yogurt', ['Milk']],
+          ['rice-cake', []],
+        ]),
+      })
+    );
+
+    expect(candidates.map((c) => c.foodId)).toEqual(['rice-cake']);
+  });
+
+  it('drops a candidate with unknown allergens when the child has any', () => {
+    const candidates = selectHandoffCandidates(
+      [suggestion({ foodId: 'mystery', similarityScore: 99 })],
+      ctx({ kidAllergens: ['sesame'], allergensByFoodId: new Map() })
+    );
+    expect(candidates).toEqual([]);
+  });
+
+  it('keeps a candidate with unknown allergens when the child has none', () => {
+    const candidates = selectHandoffCandidates(
+      [suggestion({ foodId: 'mystery' })],
+      ctx({ kidAllergens: [], allergensByFoodId: new Map() })
+    );
+    expect(candidates.map((c) => c.foodId)).toEqual(['mystery']);
+  });
+
+  it('tags every candidate with the child it was computed for', () => {
+    const candidates = selectHandoffCandidates(
+      [suggestion({ foodId: 'fish-stick' })],
+      ctx({ kidId: 'kid-a' })
+    );
+    expect(candidates[0].kidId).toBe('kid-a');
   });
 
   it('ranks by similarity score', () => {

@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useFoods, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
-import { QuickLogProvider, type OpenQuickLogOptions } from "@/contexts/QuickLogContext";
+import { QuickLogProvider, type OpenQuickLogOptions, type PageAction } from "@/contexts/QuickLogContext";
 import { fetchOnboardingCompleted, readLocalOnboardingFlag } from "@/lib/onboardingStatus";
 import { SupportWidget } from "@/components/SupportWidget";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -218,6 +218,11 @@ const Dashboard = () => {
 
   const openQuickLogFromFab = useCallback(() => openQuickLog(), [openQuickLog]);
 
+  // A page can take over the FAB's primary item and the quick-log shortcut
+  // (Food Tracker: "Log a tasting"). Null restores the meal log.
+  const [pageAction, setPageAction] = useState<PageAction | null>(null);
+  const runPageAction = useCallback(() => pageAction?.run(), [pageAction]);
+
   /**
    * Log a result against a real plan entry (US-812), and say whether it landed.
    *
@@ -305,7 +310,10 @@ const Dashboard = () => {
       SHORTCUTS.flatMap((s) => {
         const action = () => {
           if (s.target.kind === "route") navigate(s.target.to);
-          else if (s.target.kind === "quickLog") openQuickLog();
+          else if (s.target.kind === "quickLog") {
+            if (pageAction) pageAction.run();
+            else openQuickLog();
+          }
           else setShortcutsOpen(true);
         };
         const bound: KeyboardShortcut = { key: s.key, shiftKey: s.shiftKey, description: s.label, action };
@@ -313,13 +321,13 @@ const Dashboard = () => {
         // layout and not on every other one, so it is bound both ways.
         return s.shiftKey ? [bound, { ...bound, shiftKey: false }] : [bound];
       }),
-    [navigate, openQuickLog]
+    [navigate, openQuickLog, pageAction]
   );
   useKeyboardShortcuts({ shortcuts, enabled: preferences.keyboardShortcuts });
 
   const page =
     gate === "pass" ? (
-      <QuickLogProvider openQuickLog={openQuickLog}>
+      <QuickLogProvider openQuickLog={openQuickLog} pageAction={pageAction} onPageActionChange={setPageAction}>
         <Outlet />
       </QuickLogProvider>
     ) : (
@@ -647,8 +655,9 @@ const Dashboard = () => {
       {gate === "pass" && (
         <QuickActionsFab
           kidCount={kids.length}
-          hasUnloggedToday={hasUnloggedToday}
-          onLogMeal={openQuickLogFromFab}
+          hasUnloggedToday={pageAction ? true : hasUnloggedToday}
+          onLogMeal={pageAction ? runPageAction : openQuickLogFromFab}
+          logLabel={pageAction?.label}
           todayKey={today}
         />
       )}

@@ -151,7 +151,7 @@ export async function fetchTopChainNetworkTargets(
   try {
     const { data, error } = await supabase.rpc('fetch_chain_network_targets', {
       p_source_food_name: sourceFoodName,
-      p_pickiness_bucket: pickinessBucket ?? null,
+      p_pickiness_bucket: pickinessBucket,
       p_limit: Math.min(25, Math.max(1, limit)),
     });
     if (error) {
@@ -218,8 +218,19 @@ function isShareOptedIn(): boolean {
  * Returns the number of contributions accepted. Returns 0 when the user
  * has opted out of sharing (US-296 privacy contract).
  */
+export interface ContributionContext {
+  /**
+   * The kid's pickiness_level when the caller already has the kid record.
+   * Passing it (even as null) skips the kids lookup.
+   */
+  pickinessLevel?: string | null;
+  /** The attempted food's name when known; skips the foods lookup. */
+  foodName?: string;
+}
+
 export async function recordContributionsFromAttempt(
-  attempt: FoodAttemptForContribution
+  attempt: FoodAttemptForContribution,
+  context: ContributionContext = {}
 ): Promise<number> {
   if (!attempt?.id || !attempt?.food_id) return 0;
   if (!isShareOptedIn()) return 0;
@@ -232,9 +243,11 @@ export async function recordContributionsFromAttempt(
   // We only contribute on outcomes that are signal: success/partial.
   if (outcome === null || outcome === 'refused') return 0;
 
-  // Look up pickiness for the kid (best-effort).
+  // Look up pickiness for the kid (best-effort), unless the caller has it.
   let bucket: PickinessBucket = 'unknown';
-  if (attempt.kid_id) {
+  if (context.pickinessLevel !== undefined) {
+    bucket = bucketPickiness(context.pickinessLevel);
+  } else if (attempt.kid_id) {
     const { data: kidRow } = await supabase
       .from('kids')
       .select('pickiness_level')
@@ -244,13 +257,17 @@ export async function recordContributionsFromAttempt(
   }
 
   // Resolve target food name.
-  const { data: targetFoodRow } = await supabase
-    .from('foods')
-    .select('name')
-    .eq('id', attempt.food_id)
-    .maybeSingle();
-  const targetName = (targetFoodRow as { name?: string } | null)?.name;
+  let targetName = context.foodName?.trim() || undefined;
+  if (!targetName) {
+    const { data: targetFoodRow } = await supabase
+      .from('foods')
+      .select('name')
+      .eq('id', attempt.food_id)
+      .maybeSingle();
+    targetName = (targetFoodRow as { name?: string } | null)?.name;
+  }
   if (!targetName) return 0;
+  const target = targetName;
 
   // Find matching chain suggestions where this food was the target.
   const { data: suggestions, error: suggError } = await supabase
@@ -262,7 +279,7 @@ export async function recordContributionsFromAttempt(
     return 0;
   }
   const sourceIds = (suggestions ?? [])
-    .map((s: { source_food_id?: string }) => s.source_food_id)
+    .map((s: { source_food_id?: string | null }) => s.source_food_id)
     .filter((x): x is string => typeof x === 'string');
   if (sourceIds.length === 0) return 0;
 
@@ -273,23 +290,24 @@ export async function recordContributionsFromAttempt(
     if (row?.id && row?.name) nameById.set(row.id, row.name);
   }
 
-  let accepted = 0;
-  for (const sourceId of sourceIds) {
-    const sourceName = nameById.get(sourceId);
-    if (!sourceName) continue;
-    // Combine attempt id with source food id so multiple sources from one
-    // attempt produce stable, distinct contribution keys.
-    const contributionKey = deterministicUuid(`${attempt.id}:${sourceId}`);
-    const ok = await contributeChainNetworkSuccess({
-      contributionKey,
-      sourceFoodName: sourceName,
-      targetFoodName: targetName,
-      pickinessBucket: bucket,
-      outcome,
-    });
-    if (ok) accepted += 1;
-  }
-  return accepted;
+  // Each contribution is independent and idempotent on its key, so they run
+  // in parallel rather than one round trip after another.
+  const results = await Promise.all(
+    sourceIds.map((sourceId) => {
+      const sourceName = nameById.get(sourceId);
+      if (!sourceName) return Promise.resolve(false);
+      // Combine attempt id with source food id so multiple sources from one
+      // attempt produce stable, distinct contribution keys.
+      return contributeChainNetworkSuccess({
+        contributionKey: deterministicUuid(`${attempt.id}:${sourceId}`),
+        sourceFoodName: sourceName,
+        targetFoodName: target,
+        pickinessBucket: bucket,
+        outcome,
+      });
+    })
+  );
+  return results.filter(Boolean).length;
 }
 
 /**
