@@ -316,3 +316,11 @@ the flag flips. FoodTracker route chunk 6.6 -> 21.4 kB after dropping
 <Trans> (which pulled html-parse-stringify into this chunk alone). Eager
 closure unchanged. Measured total 2621.2 kB. Retiring the legacy view
 once the flag defaults on should give most of this back.
+
+## 2026-09-24: `totalJs` 2630000 -> 2645000 (Insights)
+
+Insights was rebuilt from a static stats page into five per-kid sections
+(week trend, what's working, next step, variety, allergy check).
+InsightsDashboard route chunk 3.5 -> 12.2 kB, appLocale +1.8 kB, plus
+about 4 kB of chunk-split overhead from shared modules the page now
+reuses. Eager closure unchanged. Measured total 2638.6 kB.

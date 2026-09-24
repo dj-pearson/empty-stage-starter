@@ -1,4 +1,15 @@
+import { isValid, parseISO } from 'date-fns';
 import type { Kid } from '@/types';
+
+/**
+ * kids.profile_last_reviewed as a Date, or null. Date-only strings are
+ * calendar dates; parseISO reads them as local.
+ */
+export function parseReviewed(value: string | undefined | null): Date | null {
+  if (!value) return null;
+  const date = parseISO(value);
+  return isValid(date) ? date : null;
+}
 
 export type ProfileGap = 'allergies' | 'birthday' | 'safeFoods' | 'preferences' | 'goals';
 

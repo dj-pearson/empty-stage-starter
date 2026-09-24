@@ -329,3 +329,30 @@ describe('visibleFatigueItems / hasFatigue', () => {
     expect(visibleFatigueItems(result, dismissal, now).map((i) => i.id)).toEqual(['r1']);
   });
 });
+
+describe('computeVarietyFatigue - unresolved names', () => {
+  const UUID = '3f2b8c1e-5d4a-4e7b-9c10-2a6f8e9d0b11';
+  const planEntries = [1, 3, 5].flatMap((d) => [entry(d, UUID, null), entry(d, 'r-known', null)]);
+  const recipeNameById = new Map([['r-known', 'Tacos']]);
+
+  it('drops an item whose id is missing from the name map by default', () => {
+    const result = computeVarietyFatigue({ planEntries, recipeNameById }, opts);
+    expect(result.recipes.map((r) => r.name)).toEqual(['Tacos']);
+    expect(result.recipes.some((r) => r.name === UUID)).toBe(false);
+  });
+
+  it('keeps it, named by id, when keepUnresolved is set', () => {
+    const result = computeVarietyFatigue({ planEntries, recipeNameById }, { ...opts, keepUnresolved: true });
+    expect(result.recipes.map((r) => r.id).sort()).toEqual([UUID, 'r-known'].sort());
+  });
+
+  it('leaves selectVarietyFatigue output unchanged for resolved items', () => {
+    const rows = planEntries.map((p) => ({ recipe_id: p.recipeId, food_id: null, date: p.date, meal_slot: null }));
+    const selected = selectVarietyFatigue(rows, [{ id: 'r-known', name: 'Tacos' }], [], ASOF);
+    const direct = computeVarietyFatigue({ planEntries, recipeNameById }, opts);
+    const known = selected.recipes.filter((r) => r.id === 'r-known');
+    expect(known).toEqual(direct.recipes);
+    // The snapshot writer still sees the unresolved row.
+    expect(selected.recipes.map((r) => r.id)).toContain(UUID);
+  });
+});

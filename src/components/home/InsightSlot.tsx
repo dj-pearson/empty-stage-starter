@@ -98,7 +98,7 @@ export function InsightSlot() {
       {active !== null && (
         <div className="flex justify-end">
           <Link
-            to="/dashboard/insights"
+            to={`/dashboard/insights?from=${active}`}
             className="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-sm font-medium text-primary hover:underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {t("home.insights.seeAll", { defaultValue: "See all insights" })}

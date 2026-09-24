@@ -119,7 +119,13 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
     // Apply EVERY payload (US-525): a trailing debounce dropped distinct events
     // (bulk inserts / DELETE+INSERT pairs) down to the last one.
     const handleChange = (payload: RealtimePayload<Record<string, unknown>>) => {
-      setKids((prev) => applyKidRealtime(prev, payload));
+      setKids((prev) => {
+        const next = applyKidRealtime(prev, payload);
+        // A DELETE from another device can remove the selected child. Same
+        // rule as deleteKid's fixActiveKid: fall to the first remaining kid.
+        setActiveKidId((cur) => (cur && !next.some((k) => k.id === cur) ? (next[0]?.id ?? null) : cur));
+        return next;
+      });
     };
 
     // Household-scoped channel name so switching households tears down the old

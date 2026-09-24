@@ -82,7 +82,7 @@ describe("InsightSlot", () => {
     expect(renderedCards()).toEqual(["birthday-card"]);
     expect(screen.getByRole("link", { name: /see all insights/i })).toHaveAttribute(
       "href",
-      "/dashboard/insights",
+      "/dashboard/insights?from=birthday",
     );
     // Nothing is fetched for the seasonal card while a higher one is showing.
     expect(h.seasonalEnabledCalls.every((enabled) => !enabled)).toBe(true);

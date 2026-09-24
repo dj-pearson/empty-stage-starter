@@ -9,6 +9,8 @@ import {
   fitGroup,
   getKidFoodFit,
   getKidRecipeFit,
+  selectReliableFoods,
+  selectTryNextFromResults,
   summarizeKidFits,
   type KidFit,
   type KidFitKid,
@@ -286,5 +288,79 @@ describe("buildRecipeFits", () => {
     const foodById = new Map([["f1", food({ id: "f1", name: "Rice" })]]);
     const fits = buildRecipeFits([{ id: "r", name: "R", food_ids: ["f1"] }], [kidOf("k1")], foodById, history, "2026-09-24");
     expect(fits.get("r")?.tries).toBe(0);
+  });
+});
+
+describe("buildResultIndex with before", () => {
+  it("excludes a row dated on or after the bound", () => {
+    const entries = [
+      entry({ kid_id: "k1", food_id: "f1", date: "2026-09-20", result: "ate" }),
+      entry({ kid_id: "k1", food_id: "f1", date: "2026-09-30" }),
+    ];
+    expect(buildResultIndex(entries, "k1").get("f1")?.offered).toBe(2);
+    expect(buildResultIndex(entries, "k1", "2026-09-25").get("f1")?.offered).toBe(1);
+  });
+});
+
+describe("selectReliableFoods", () => {
+  const peanutKid: KidFitKid = { id: "k1", allergens: ["peanut"], disliked_foods: ["f-peas"], always_eats_foods: [] };
+  const foods = [
+    food({ id: "f-nuts", name: "Peanuts", allergens: ["peanuts"] }),
+    food({ id: "f-rice", name: "Rice" }),
+    food({ id: "f-toast", name: "Toast" }),
+    food({ id: "f-peas", name: "Peas" }),
+    food({ id: "f-corn", name: "Corn" }),
+  ];
+  const byId = new Map(foods.map((f) => [f.id, f]));
+  const ate = (food_id: string, n: number, result: PlanEntry["result"] = "ate") =>
+    Array.from({ length: n }, (_, i) =>
+      entry({ kid_id: "k1", food_id, date: `2026-09-${String(10 + i).padStart(2, "0")}`, result }),
+    );
+
+  it("keeps foods eaten often enough and drops allergens, dislikes and thin history", () => {
+    const index = buildResultIndex(
+      [
+        ...ate("f-nuts", 5),
+        ...ate("f-rice", 4),
+        ...ate("f-toast", 3),
+        ...ate("f-toast", 1, "refused"),
+        ...ate("f-peas", 5),
+        ...ate("f-corn", 2),
+      ],
+      "k1",
+    );
+    const out = selectReliableFoods(index, byId, peanutKid);
+    expect(out.map((r) => r.food.name)).toEqual(["Rice", "Toast"]);
+  });
+
+  it("drops a food whose ate share is under the bar", () => {
+    const index = buildResultIndex([...ate("f-rice", 2), ...ate("f-rice", 2, "tasted")], "k1");
+    expect(selectReliableFoods(index, byId, peanutKid)).toEqual([]);
+  });
+});
+
+describe("selectTryNextFromResults", () => {
+  const foods = [
+    food({ id: "f-broc", name: "Broccoli", is_try_bite: true }),
+    food({ id: "f-kiwi", name: "Kiwi", is_try_bite: true }),
+    food({ id: "f-plum", name: "Plum", is_try_bite: true }),
+    food({ id: "f-bread", name: "Bread", is_try_bite: false }),
+  ];
+
+  it("picks the most recent tasted try bite and ignores disliked foods", () => {
+    const index = buildResultIndex(
+      [
+        entry({ kid_id: "k1", food_id: "f-broc", date: "2026-09-22", result: "tasted" }),
+        entry({ kid_id: "k1", food_id: "f-kiwi", date: "2026-09-18", result: "tasted" }),
+        entry({ kid_id: "k1", food_id: "f-plum", date: "2026-09-21", result: "refused" }),
+        entry({ kid_id: "k1", food_id: "f-bread", date: "2026-09-23", result: "tasted" }),
+      ],
+      "k1",
+    );
+    expect(selectTryNextFromResults(index, foods, kid)?.food.id).toBe("f-kiwi");
+  });
+
+  it("returns null with no tasted try bite", () => {
+    expect(selectTryNextFromResults(new Map(), foods, kid)).toBeNull();
   });
 });

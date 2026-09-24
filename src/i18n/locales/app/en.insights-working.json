@@ -1,0 +1,35 @@
+{
+  "insightsWorking": {
+    "working": {
+      "title": "What's working",
+      "window": "Last 4 weeks",
+      "reliable": "{{name}} reliably eats:",
+      "reliableEmpty": "Once {{name}} has eaten a food at least 3 times, it shows up here.",
+      "reliableLink": "{{food}} in the Food Journal"
+    },
+    "slipping": {
+      "title": "Safe foods to watch",
+      "recent": "{{food}}: eaten {{eaten}} of the last {{total}} times",
+      "before": "Before that: {{eaten}} of {{total}}",
+      "overServed": "On the plate often lately",
+      "notEnough": "{{food}}: not enough history yet",
+      "steady": "{{name}}'s safe foods are holding steady.",
+      "thinHistory": "Not enough history yet to tell whether a safe food is slipping."
+    },
+    "next": {
+      "title": "One thing to try next",
+      "foodFallback": "this food",
+      "tip": {
+        "stalled": "{{food}} has stayed at {{rung}} for a few tries. A smaller step or a short break usually helps.",
+        "close_one": "{{food}} is {{triesLeft}} good try from safe, at {{rung}} now.",
+        "close_other": "{{food}} is {{triesLeft}} good tries from safe, at {{rung}} now.",
+        "resting": "{{food}} is resting at {{rung}}. Pick it back up when the table feels calm."
+      },
+      "fallback": "{{name}} tasted {{food}} last time. That is a good moment to offer it again.",
+      "empty": "Nothing queued to try yet.",
+      "emptyCta": "Add a try bite in Food Tracker",
+      "ctaTracker": "Open Food Tracker",
+      "ctaPlan": "Plan it this week"
+    }
+  }
+}

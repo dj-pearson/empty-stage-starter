@@ -18,9 +18,15 @@ export interface KidsProgressData {
   ladderRows: KidLadderRow[];
   attempts: KidAttemptRow[];
   loading: boolean;
+  /** True when either read failed; the rows that did load are still returned. */
+  error: boolean;
 }
 
-const EMPTY: KidsProgressData = { ladderRows: [], attempts: [], loading: false };
+const EMPTY: KidsProgressData = { ladderRows: [], attempts: [], loading: false, error: false };
+
+/** The kid_food_ladder columns read here: existing columns, no schema change. */
+export const LADDER_SELECT =
+  'id, kid_id, food_id, status, current_rung, last_attempt_at, consecutive_successes, consecutive_holds, next_due_on';
 
 /** Local midnight of `isoDay`, as an instant for a timestamptz filter. */
 export function localMidnightInstant(isoDay: string): string {
@@ -31,6 +37,8 @@ export function localMidnightInstant(isoDay: string): string {
 export interface KidsProgressOptions {
   /** Days in the window, today included. Defaults to PROGRESS_WINDOW_DAYS. */
   windowDays?: number;
+  /** Any change refetches (e.g. a pull-to-refresh counter). */
+  refreshKey?: string | number;
 }
 
 export function useKidsProgressSummary(
@@ -42,7 +50,10 @@ export function useKidsProgressSummary(
   // A stable key: the page re-renders on every context change, and a fresh
   // array of the same ids must not refetch.
   const idsKey = useMemo(() => [...new Set(kidIds)].sort().join(','), [kidIds]);
-  const [data, setData] = useState<KidsProgressData>(EMPTY);
+  const refreshKey = opts.refreshKey;
+  // Loading from the first paint when there is something to read, so a page
+  // never shows a zeroed "no data" state before the fetch has even started.
+  const [data, setData] = useState<KidsProgressData>(() => ({ ...EMPTY, loading: Boolean(userId && idsKey) }));
 
   useEffect(() => {
     const ids = idsKey ? idsKey.split(',') : [];
@@ -62,7 +73,7 @@ export function useKidsProgressSummary(
         const [ladderRes, attemptsRes] = await Promise.all([
           supabase
             .from('kid_food_ladder')
-            .select('kid_id, food_id, status, current_rung, last_attempt_at')
+            .select(LADDER_SELECT)
             .in('kid_id', ids),
           supabase
             .from('food_attempts')
@@ -77,18 +88,19 @@ export function useKidsProgressSummary(
           ladderRows: ladderRes.error ? [] : ((ladderRes.data ?? []) as KidLadderRow[]),
           attempts: attemptsRes.error ? [] : ((attemptsRes.data ?? []) as KidAttemptRow[]),
           loading: false,
+          error: Boolean(ladderRes.error || attemptsRes.error),
         });
       } catch (error) {
         if (cancelled) return;
         logger.warn('Kids progress: read failed', error);
-        setData(EMPTY);
+        setData({ ...EMPTY, error: true });
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [userId, idsKey, windowDays]);
+  }, [userId, idsKey, windowDays, refreshKey]);
 
   return data;
 }

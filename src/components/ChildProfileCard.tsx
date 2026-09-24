@@ -3,7 +3,6 @@ import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { isValid, parseISO } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,7 @@ import { cn } from "@/lib/utils";
 import type { Kid } from "@/types";
 import type { KidProgressSummary } from "@/lib/kidProgress";
 import { kidAllergenChips, kidAllergyState } from "@/lib/kidAllergenChips";
-import { computeProfileCompleteness, type ProfileGap } from "@/lib/kidProfileCompleteness";
+import { computeProfileCompleteness, parseReviewed, type ProfileGap } from "@/lib/kidProfileCompleteness";
 import { buildCareCardText, formatKidAge, humanize, severityLabel, type CareCardT } from "@/lib/careCard";
 import { RUNGS, RUNG_META } from "@/lib/exposureLadder";
 
@@ -64,12 +63,6 @@ const GAP_CTA: Record<ProfileGap, { key: string; english: string }> = {
 const nonEmpty = (list: readonly string[] | null | undefined): string[] =>
   (list ?? []).filter((v): v is string => typeof v === "string" && v.trim() !== "");
 
-/** Date-only strings are calendar dates; parseISO reads them as local. */
-function parseReviewed(value: string | undefined | null): Date | null {
-  if (!value) return null;
-  const date = parseISO(value);
-  return isValid(date) ? date : null;
-}
 
 interface ChipSectionProps {
   id: string;

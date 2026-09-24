@@ -69,8 +69,8 @@ function QuickActionsFabImpl({ kidCount, hasUnloggedToday, onLogMeal, logLabel, 
               id: "add-kid",
               label: t("shell.fab.addFirstChild", { defaultValue: "Add your first child" }),
               icon: UserPlus,
-              to: "/dashboard/kids?new=1",
-              onSelect: go("/dashboard/kids?new=1"),
+              to: "/dashboard/kids?add=1",
+              onSelect: go("/dashboard/kids?add=1"),
             },
           ]
         : [

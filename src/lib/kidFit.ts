@@ -80,6 +80,11 @@ function emptyStats(): ResultStats {
  * kids are ignored. Only entries dated before `before` (a YYYY-MM-DD key,
  * exclusive) count when it is given, so the index can describe "how it went
  * last time" without counting today's still-open plan.
+ *
+ * Warning: without `before`, a raw plan array counts FUTURE offers too. Every
+ * planned dinner next week lands in `offered`, so a caller that reads
+ * `offered` as "has been put in front of the kid" must pass `before`
+ * (tomorrow's key to include today, today's key to exclude it).
  */
 export function buildResultIndex(
   planEntries: readonly PlanEntry[],
@@ -139,6 +144,10 @@ function fitFromStats(
 /**
  * Fit of one food for one kid. `history` may be the full plan (other kids are
  * filtered out) or a prebuilt ResultIndex when a caller scores many foods.
+ *
+ * Warning: a raw plan array is indexed with no `before` bound, so future
+ * offers count in `offered`. Pass a ResultIndex built with `before` when the
+ * answer must describe only what has already happened.
  */
 export function getKidFoodFit(
   kid: KidFitKid,
@@ -407,4 +416,93 @@ export function buildRecipeFits(
     out.set(recipe.id, summarizeKidFits(perKid, { unchecked: countUncheckedIngredients(recipe, foodById) }));
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Insights: what is working, and the try bite to plan next.
+// ---------------------------------------------------------------------------
+
+type InsightFood = Pick<Food, "id" | "name" | "allergens" | "is_safe" | "is_try_bite">;
+
+export interface ReliableFood<F extends InsightFood = InsightFood> {
+  food: F;
+  ate: number;
+  tries: number;
+}
+
+export interface ReliableFoodOptions {
+  /** Logged results needed before a food can count as reliable. */
+  minTries?: number;
+  /** Share of those results that must be 'ate'. */
+  minAteShare?: number;
+  limit?: number;
+}
+
+/**
+ * Foods this kid reliably eats, by logged results in `index`: at least
+ * `minTries` results with `minAteShare` or more of them eaten. A food carrying
+ * one of the kid's allergens, or on their dislike list, is never listed, even
+ * if the log says it was eaten. Most-eaten first; ties go to the higher share,
+ * then the name, so the list is the same on every render.
+ */
+export function selectReliableFoods<F extends InsightFood>(
+  index: ResultIndex,
+  foodsById: ReadonlyMap<string, F>,
+  kid: KidFitKid,
+  { minTries = 3, minAteShare = 0.67, limit = 3 }: ReliableFoodOptions = {},
+): ReliableFood<F>[] {
+  const out: ReliableFood<F>[] = [];
+  for (const [foodId, stats] of index) {
+    if (stats.tries < minTries || stats.tries === 0) continue;
+    if (stats.ate / stats.tries < minAteShare) continue;
+    const food = foodsById.get(foodId);
+    if (!food) continue;
+    const fit = getKidFoodFit(kid, food, index);
+    if (fit.allergen !== null || fit.disliked) continue;
+    out.push({ food, ate: stats.ate, tries: stats.tries });
+  }
+  out.sort(
+    (a, b) =>
+      b.ate - a.ate ||
+      b.ate / b.tries - a.ate / a.tries ||
+      a.food.name.localeCompare(b.food.name) ||
+      a.food.id.localeCompare(b.food.id),
+  );
+  return out.slice(0, Math.max(0, limit));
+}
+
+export interface TryNextPick<F extends InsightFood = InsightFood> {
+  food: F;
+  /** Date key (YYYY-MM-DD) of the tasted result. */
+  lastDate: string | null;
+}
+
+/**
+ * The try bite to plan again when the exposure ladder is off: a food marked
+ * is_try_bite whose most recent logged result was 'tasted', most recent
+ * first. A taste is the moment to offer it again; a refusal is not. Allergen
+ * and disliked foods are skipped.
+ */
+export function selectTryNextFromResults<F extends InsightFood>(
+  index: ResultIndex,
+  foods: readonly F[],
+  kid: KidFitKid,
+): TryNextPick<F> | null {
+  let best: TryNextPick<F> | null = null;
+  for (const food of foods) {
+    if (!food.is_try_bite) continue;
+    const stats = index.get(food.id);
+    if (!stats || stats.lastResult !== "tasted") continue;
+    const fit = getKidFoodFit(kid, food, index);
+    if (fit.allergen !== null || fit.disliked) continue;
+    const date = stats.lastDate ?? "";
+    if (
+      best === null ||
+      date > (best.lastDate ?? "") ||
+      (date === (best.lastDate ?? "") && food.name.localeCompare(best.food.name) < 0)
+    ) {
+      best = { food, lastDate: stats.lastDate };
+    }
+  }
+  return best;
 }

@@ -71,6 +71,14 @@ export interface FatigueOptions {
   longThresholdHigh?: number;
   /** Cap items returned per category. Default 5. */
   limit?: number;
+  /**
+   * Keep items whose id is missing from a supplied name map, named by their
+   * raw id. Off by default: a uuid is not a name a parent can read. Callers
+   * that need every counted item (the snapshot writer, via
+   * selectVarietyFatigue) turn it on. A category scored with no name map at
+   * all is id-only by intent (safeFoodRisk) and keeps its items either way.
+   */
+  keepUnresolved?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +181,7 @@ export function computeVarietyFatigue(
     shortThresholdHigh: options.shortThresholdHigh ?? 5,
     longThresholdHigh: options.longThresholdHigh ?? 8,
     limit: options.limit ?? 5,
+    keepUnresolved: options.keepUnresolved ?? false,
   };
 
   const recipeBuckets = new Map<string, Bucket>();
@@ -229,9 +238,11 @@ export function computeVarietyFatigue(
     for (const [id, b] of map.entries()) {
       const tier = classifyTier(b.shortCount, b.longCount, o);
       if (tier === 'none') continue;
+      const resolved = nameById?.get(id);
+      if (resolved === undefined && nameById && !o.keepUnresolved) continue;
       items.push({
         id,
-        name: nameById?.get(id) ?? id,
+        name: resolved ?? id,
         shortWindowCount: b.shortCount,
         longWindowCount: b.longCount,
         fatigueScore: Math.round(fatigueScoreOf(b, o.longWindowDays) * 100) / 100,
@@ -338,7 +349,8 @@ export function selectVarietyFatigue(
       foodNameById: new Map(foods.map((f) => [f.id, f.name])),
       safeFoodIds,
     },
-    { asOf }
+    // The planner banner's snapshot records every counted item, named or not.
+    { asOf, keepUnresolved: true }
   );
   lastSelection = { planEntries, recipes, foods, asOf, result };
   return result;

@@ -12,8 +12,11 @@ import { ADVANCE_THRESHOLD, RUNGS, applyAttemptOutcome, initialLadderState } fro
 import {
   CLOSE_TO_SAFE_MAX,
   exposuresToSafe,
+  STALLED_HOLDS,
   groupLadder,
+  selectNextStep,
   summaryCounts,
+  toOverviewRow,
   type OverviewRow,
 } from './ladderOverview';
 
@@ -118,5 +121,85 @@ describe('groupLadder', () => {
 
   it('summarizes the groups for the status line', () => {
     expect(summaryCounts(groupLadder(rows, TODAY))).toEqual({ due: 2, close: 1, onLadder: 8 });
+  });
+});
+
+describe('selectNextStep', () => {
+  it('prefers a stalled active row over one closer to safe', () => {
+    const rows = [
+      row('close', { currentRung: 'full_portion', consecutiveSuccesses: 1 }),
+      row('stuck', { currentRung: 'touching', consecutiveHolds: STALLED_HOLDS }),
+    ];
+    const step = selectNextStep(rows, TODAY);
+    expect(step?.row.id).toBe('stuck');
+    expect(step?.reason).toBe('stalled');
+    expect(step?.triesLeft).toBe(exposuresToSafe(rows[1]));
+  });
+
+  it('never calls a paused row stalled', () => {
+    const rows = [row('p', { status: 'paused', consecutiveHolds: STALLED_HOLDS + 2 })];
+    expect(selectNextStep(rows, TODAY)?.reason).toBe('resting');
+  });
+
+  it('picks the lowest exposuresToSafe even when that row is due today', () => {
+    const rows = [
+      row('notDue', { currentRung: 'full_portion', consecutiveSuccesses: 0 }),
+      row('due', { currentRung: 'full_portion', consecutiveSuccesses: 1, nextDueOn: TODAY }),
+      row('far', { nextDueOn: TODAY }),
+    ];
+    const step = selectNextStep(rows, TODAY);
+    expect(step?.row.id).toBe('due');
+    expect(step?.reason).toBe('close');
+    expect(step?.triesLeft).toBe(1);
+  });
+
+  it('falls back to the longest-resting paused or backed-off row', () => {
+    const rows = [
+      row('work', { nextDueOn: '2026-09-01' }),
+      row('later', { status: 'paused', nextDueOn: '2026-08-30' }),
+      row('first', { status: 'backed_off', nextDueOn: '2026-08-12' }),
+      row('safe', { status: 'mastered' }),
+    ];
+    const step = selectNextStep(rows, TODAY);
+    expect(step?.row.id).toBe('first');
+    expect(step?.reason).toBe('resting');
+  });
+
+  it('returns null when every row is mastered', () => {
+    expect(selectNextStep([row('a', { status: 'mastered' }), row('b', { status: 'mastered' })], TODAY)).toBeNull();
+    expect(selectNextStep([], TODAY)).toBeNull();
+  });
+});
+
+describe('toOverviewRow', () => {
+  it('defaults missing counters to 0 and builds an id from kid and food', () => {
+    const out = toOverviewRow({ kid_id: 'k1', food_id: 'f1', status: 'active', current_rung: 'licking' });
+    expect(out).toEqual({
+      id: 'k1:f1',
+      foodId: 'f1',
+      currentRung: 'licking',
+      consecutiveSuccesses: 0,
+      consecutiveHolds: 0,
+      status: 'active',
+      nextDueOn: null,
+    });
+  });
+
+  it('maps an unknown rung to the first rung and keeps a real id', () => {
+    const out = toOverviewRow({
+      id: 'r9',
+      kid_id: 'k1',
+      food_id: 'f1',
+      status: 'active',
+      current_rung: 'sniffing',
+      consecutive_successes: null,
+      consecutive_holds: 2,
+      next_due_on: '2026-08-11',
+    });
+    expect(out.currentRung).toBe(RUNGS[0]);
+    expect(out.id).toBe('r9');
+    expect(out.consecutiveSuccesses).toBe(0);
+    expect(out.consecutiveHolds).toBe(2);
+    expect(out.nextDueOn).toBe('2026-08-11');
   });
 });

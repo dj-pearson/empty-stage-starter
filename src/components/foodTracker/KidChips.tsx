@@ -45,7 +45,7 @@ function KidAvatar({ kid, className }: { kid: Kid; className?: string }) {
 const chipClass =
   'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium motion-safe:transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
-export function KidChips({ className }: { className?: string }) {
+export function KidChips({ className, ariaLabel }: { className?: string; ariaLabel?: string }) {
   const { t } = useTranslation();
   const { kids, activeKidId, setActiveKid } = useKids();
   const ageT = useAgeT();
@@ -57,7 +57,7 @@ export function KidChips({ className }: { className?: string }) {
   return (
     <div
       role="group"
-      aria-label={t('foodTracker.chooseChild', { defaultValue: 'Choose a child' })}
+      aria-label={ariaLabel ?? t('foodTracker.chooseChild', { defaultValue: 'Choose a child' })}
       className={cn('-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0', className)}
     >
       {kids.map((kid) => {

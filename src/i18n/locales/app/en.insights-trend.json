@@ -1,0 +1,28 @@
+{
+  "insightsTrend": {
+    "title": "How the weeks are going",
+    "headline": {
+      "foodFallback": "a new food",
+      "reachedSafe_one": "{{food}} became a safe food for {{name}} this week.",
+      "reachedSafe_other": "{{count}} foods became safe for {{name}} this week, including {{food}}.",
+      "notEnough": "Log a few more meals for {{name}} and the weekly picture fills in here.",
+      "quiet": "Nothing logged for {{name}} this week yet. The last log was {{date}}.",
+      "aboveAverage_one": "{{name}} had {{count}} try this week, more than the usual {{average}}.",
+      "aboveAverage_other": "{{name}} had {{count}} tries this week, more than the usual {{average}}.",
+      "steady_one": "{{name}} was offered {{count}} dish this week.",
+      "steady_other": "{{name}} was offered {{count}} dishes this week, with {{foods}} different foods on the plate."
+    },
+    "sparkline": {
+      "label": "Tries per week for {{name}} over the last 4 weeks. {{summary}}",
+      "week": "{{range}}: {{count}}",
+      "weekNotLogged": "{{range}}: not logged",
+      "thisWeek": "This week",
+      "notLogged": "not logged",
+      "needsTwoWeeks": "Trend shows after two weeks of logging"
+    },
+    "empty": {
+      "body": "No meals logged for {{name}} in the last 4 weeks. Mark what got eaten in the planner and this fills in.",
+      "cta": "Open planner"
+    }
+  }
+}

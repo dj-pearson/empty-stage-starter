@@ -101,7 +101,7 @@ describe('QuickActionsFab', () => {
     expect(buttons).toHaveLength(1);
     await user.click(buttons[0]);
     expect(buttons[0]).toHaveAttribute('aria-label', 'Add your first child');
-    expect(screen.getByTestId('where')).toHaveTextContent('/dashboard/kids?new=1');
+    expect(screen.getByTestId('where')).toHaveTextContent('/dashboard/kids?add=1');
   });
 
   it('hides the action for the page you are on', async () => {

@@ -35,7 +35,7 @@ export function KidSelector() {
     if (!kidsHydrated) return null;
     return (
       <Button asChild variant="outline" size="sm" className="gap-2">
-        <Link to="/dashboard/kids?new=1">
+        <Link to="/dashboard/kids?add=1">
           <UserPlus className="h-4 w-4" aria-hidden="true" />
           <span>{t("shell.kidSelector.addChild", { defaultValue: "Add your child" })}</span>
         </Link>

@@ -144,3 +144,104 @@ export function summaryCounts<T extends OverviewRow>(groups: LadderGroups<T>): S
       groups.resting.length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Insights: the raw kid_food_ladder row, and the one next step.
+// ---------------------------------------------------------------------------
+
+/**
+ * The kid_food_ladder columns the Insights page reads, as they come off the
+ * wire. Declared here rather than imported from kidProgress so this module
+ * does not depend on which optional columns a caller's select includes.
+ */
+export interface LadderRowLike {
+  id?: string | null;
+  food_id: string;
+  kid_id: string;
+  status: string;
+  current_rung: string;
+  consecutive_successes?: number | null;
+  consecutive_holds?: number | null;
+  next_due_on?: string | null;
+}
+
+const KNOWN_STATUSES: readonly LadderStatus[] = ['active', 'paused', 'mastered', 'backed_off'];
+
+function isRung(value: string): value is Rung {
+  return (RUNGS as readonly string[]).includes(value);
+}
+
+function isLadderStatus(value: string): value is LadderStatus {
+  return (KNOWN_STATUSES as readonly string[]).includes(value);
+}
+
+function countOrZero(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+/**
+ * A raw ladder row as an OverviewRow. An unknown rung reads as the bottom
+ * one, missing counters as 0, and an unknown status (written by a client
+ * newer than this build) as 'paused' so it rests rather than being offered.
+ */
+export function toOverviewRow(row: LadderRowLike): OverviewRow & { foodId: string } {
+  return {
+    id: row.id ?? `${row.kid_id}:${row.food_id}`,
+    foodId: row.food_id,
+    currentRung: isRung(row.current_rung) ? row.current_rung : RUNGS[0],
+    consecutiveSuccesses: countOrZero(row.consecutive_successes),
+    consecutiveHolds: countOrZero(row.consecutive_holds),
+    status: isLadderStatus(row.status) ? row.status : 'paused',
+    nextDueOn: row.next_due_on ?? null,
+  };
+}
+
+export type NextStepReason = 'stalled' | 'close' | 'resting';
+
+export interface NextStep<T extends OverviewRow = OverviewRow> {
+  row: T;
+  reason: NextStepReason;
+  /** Good tries left before the food is safe (exposuresToSafe). */
+  triesLeft: number;
+}
+
+/**
+ * The one ladder food worth a parent's attention next, or null.
+ *
+ *   1. A food held at its rung STALLED_HOLDS or more times in a row: the plan
+ *      for it needs changing, which matters more than anything going well.
+ *   2. Otherwise the food fewest good tries from safe, whether or not it is
+ *      due today.
+ *   3. Otherwise the longest-resting paused or backed-off food.
+ *
+ * Mastered rows are never chosen. Deterministic: ties break on due date, then
+ * id, never on input order or chance.
+ */
+export function selectNextStep<T extends OverviewRow>(
+  rows: readonly T[],
+  today: string
+): NextStep<T> | null {
+  const groups = groupLadder(rows, today);
+
+  const stalled = rows
+    .filter((r) => r.status === 'active' && r.consecutiveHolds >= STALLED_HOLDS)
+    .sort(byExposuresToSafe);
+  if (stalled.length > 0) {
+    const row = stalled[0];
+    return { row, reason: 'stalled', triesLeft: exposuresToSafe(row) };
+  }
+
+  const close = [...groups.dueToday, ...groups.closeToSafe].sort(byExposuresToSafe);
+  if (close.length > 0) {
+    const row = close[0];
+    return { row, reason: 'close', triesLeft: exposuresToSafe(row) };
+  }
+
+  const resting = groups.resting.filter((r) => r.status === 'backed_off' || r.status === 'paused');
+  if (resting.length > 0) {
+    const row = resting[0];
+    return { row, reason: 'resting', triesLeft: exposuresToSafe(row) };
+  }
+
+  return null;
+}
