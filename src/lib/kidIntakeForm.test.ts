@@ -11,7 +11,6 @@ import { KidSchema, KidUpdateSchema, PICKINESS_LEVELS } from "./validations";
 
 const BEHAVIORS = ["", "wide_variety", "moderate", "limited", "very_limited"];
 const WILLINGNESS = ["", "willing", "hesitant", "very_hesitant", "refuses"];
-const CLIENT_ONLY = ["pickiness_level", "texture_sensitivity_level", "preferred_preparations"];
 
 const form = (patch: Partial<IntakeFormData>): IntakeFormData => ({ ...EMPTY_INTAKE_FORM, ...patch });
 
@@ -31,9 +30,52 @@ describe("intakeFormToUpdate", () => {
         );
         const result = KidUpdateSchema.safeParse(patch);
         expect(result.success, `${eating_behavior} x ${new_food_willingness}`).toBe(true);
-        for (const key of CLIENT_ONLY) expect(patch).not.toHaveProperty(key);
+        // Item 25: the three intake answers are columns now and are saved.
+        expect(patch.texture_sensitivity_level).toBe("strong");
+        expect(patch.preferred_preparations).toEqual(["Only cold foods"]);
+        if (eating_behavior || new_food_willingness) {
+          expect(patch.pickiness_level).toBe(pickinessFromAnswers(eating_behavior, new_food_willingness));
+        } else {
+          expect(patch).not.toHaveProperty("pickiness_level");
+        }
       }
     }
+  });
+
+  it("computes pickiness_level from the answers and ignores the form's own value", () => {
+    const patch = intakeFormToUpdate(
+      form({ eating_behavior: "very_limited", new_food_willingness: "willing", pickiness_level: "not_picky" }),
+      EMPTY_INTAKE_FORM,
+    );
+    expect(patch.pickiness_level).toBe("extremely_picky");
+  });
+
+  it("leaves a pickiness level set elsewhere alone when neither behavior question is answered", () => {
+    const loaded = intakeFormFromRow({ pickiness_level: "Very Picky" });
+    expect(intakeFormToUpdate(loaded, loaded)).not.toHaveProperty("pickiness_level");
+  });
+
+  it("clears pickiness_level when both saved behavior answers are cleared", () => {
+    const loaded = form({ eating_behavior: "limited", new_food_willingness: "hesitant", pickiness_level: "very_picky" });
+    const patch = intakeFormToUpdate(form({}), loaded);
+    expect(patch.pickiness_level).toBeNull();
+    expect(patch.eating_behavior).toBeNull();
+    expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
+  });
+
+  it("sends null for a cleared texture level and [] for cleared preparations", () => {
+    const loaded = form({ texture_sensitivity_level: "severe", preferred_preparations: ["Steamed"] });
+    const patch = intakeFormToUpdate(form({}), loaded);
+    expect(patch.texture_sensitivity_level).toBeNull();
+    expect(patch.preferred_preparations).toEqual([]);
+    expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
+  });
+
+  it("resends a texture label an older iOS build wrote, and it validates", () => {
+    const loaded = intakeFormFromRow({ texture_sensitivity_level: "High" });
+    const patch = intakeFormToUpdate(loaded, loaded);
+    expect(patch.texture_sensitivity_level).toBe("High");
+    expect(KidUpdateSchema.safeParse(patch).success).toBe(true);
   });
 
   it("leaves out an empty answer that was never set", () => {

@@ -57,11 +57,9 @@ export interface Kid {
   profile_picture_url?: string;
   favorite_foods?: string[];
   /**
-   * CLIENT-ONLY, READ-ONLY: pickiness_level, texture_sensitivity_level and
-   * preferred_preparations have no column on `kids` (see the kids Row in
-   * src/integrations/supabase/types.ts). PostgREST rejects any insert or
-   * update that carries them, so they must never be written to Supabase.
-   * pickiness_level stays for reads of older cached/local rows.
+   * Intake answers, saved to kids since item 25 (20260925000004). The web
+   * writes pickiness_level as one of PICKINESS_LEVELS (computed from the
+   * eating-behavior answers); iOS builds may have written their own labels.
    */
   pickiness_level?: string;
   texture_sensitivity_level?: string;

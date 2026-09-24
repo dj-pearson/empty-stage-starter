@@ -5,6 +5,7 @@
  * tested without a database or a deployed function: building plan_entries rows
  * from a template, and folding a planned week back into template entries.
  */
+import { canonicalAllergen } from './allergens.ts';
 
 export interface TemplateEntry {
   day_of_week: number;
@@ -56,8 +57,8 @@ export interface BuildResult {
   skipped: SkippedFood[];
 }
 
-const lower = (values: string[] | null | undefined): string[] =>
-  (values ?? []).map((v) => String(v).toLowerCase());
+const canonicalSet = (values: readonly unknown[] | null | undefined): Set<string> =>
+  new Set((values ?? []).map(canonicalAllergen).filter(Boolean));
 
 /** The date `dayOffset` days after `startDate`, as a YYYY-MM-DD key. */
 export function dateForOffset(startDate: string, dayOffset: number): string {
@@ -71,6 +72,11 @@ export function dateForOffset(startDate: string, dayOffset: number): string {
  *
  * This is the check the handler had carried as a `// TODO: Check allergens`
  * comment since it was written, while the dialog offered per-child selection.
+ *
+ * Both comparisons go through canonicalAllergen (./allergens.ts), not an exact
+ * lowercase compare: "Peanuts" against a kid's "peanut", "en:milk" against a
+ * "dairy" restriction, or "tree_nuts" against "tree nuts" used to pass. The
+ * reason names the food's own spelling so the parent recognises it.
  */
 export function unsafeReason(
   kid: KidSafety,
@@ -80,14 +86,13 @@ export function unsafeReason(
   const food = foodsById.get(foodId);
   if (!food) return null;
 
-  const foodAllergens = lower(food.allergens);
-  const kidAllergens = lower(kid.allergens);
-  const hit = foodAllergens.find((a) => kidAllergens.includes(a));
-  if (hit) return `contains ${hit}`;
+  const kidAllergens = canonicalSet(kid.allergens);
+  const hit = (food.allergens ?? []).find((a) => kidAllergens.has(canonicalAllergen(a)));
+  if (hit !== undefined) return `contains ${String(hit).toLowerCase()}`;
 
-  const restrictions = lower(kid.dietary_restrictions);
-  const restricted = foodAllergens.find((a) => restrictions.includes(a));
-  if (restricted) return `restricted: ${restricted}`;
+  const restrictions = canonicalSet(kid.dietary_restrictions);
+  const restricted = (food.allergens ?? []).find((a) => restrictions.has(canonicalAllergen(a)));
+  if (restricted !== undefined) return `restricted: ${String(restricted).toLowerCase()}`;
 
   return null;
 }

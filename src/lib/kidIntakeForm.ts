@@ -70,8 +70,9 @@ export function intakeFormFromRow(row: IntakeRow): IntakeFormData {
 }
 
 /**
- * Pickiness from the two eating-behavior answers, for display on the review
- * step. There is no kids.pickiness_level column, so it is never saved.
+ * Pickiness from the two eating-behavior answers. The review step shows it and
+ * intakeFormToUpdate saves it to kids.pickiness_level; it is never asked for
+ * directly.
  *
  * "very_limited" (fewer than 10 foods) is the narrower diet and "limited"
  * (10-15) the wider one, so very_limited maps to the stronger level. The old
@@ -93,6 +94,7 @@ const LIST_FIELDS = [
   "nutrition_concerns",
   "texture_dislikes",
   "texture_preferences",
+  "preferred_preparations",
   "favorite_foods",
   "always_eats_foods",
   "disliked_foods",
@@ -103,6 +105,7 @@ const TEXT_FIELDS = [
   "eating_behavior",
   "new_food_willingness",
   "behavioral_notes",
+  "texture_sensitivity_level",
 ] as const satisfies readonly (keyof IntakeFormData & keyof Kid)[];
 
 const NUMBER_FIELDS = ["height_cm", "weight_kg"] as const satisfies readonly (keyof IntakeFormData & keyof Kid)[];
@@ -116,8 +119,10 @@ const NUMBER_FIELDS = ["height_cm", "weight_kg"] as const satisfies readonly (ke
  * null list would fail KidUpdateSchema, and null in kids.allergens means "not
  * recorded", which is not what clearing a list says.)
  *
- * pickiness_level, texture_sensitivity_level and preferred_preparations have
- * no column on `kids` and are never included.
+ * pickiness_level is computed from eating_behavior and new_food_willingness
+ * whenever either is answered; form.pickiness_level is ignored. With neither
+ * answered it is left out, so a level set elsewhere (the iOS editor) stays.
+ * If the parent cleared both answers that were saved before, it is cleared too.
  */
 export function intakeFormToUpdate(form: IntakeFormData, loaded: IntakeFormData): KidIntakeUpdate {
   const out: Record<string, unknown> = {};
@@ -138,6 +143,12 @@ export function intakeFormToUpdate(form: IntakeFormData, loaded: IntakeFormData)
     const value = (form[key] ?? []).map((v) => v.trim()).filter(Boolean);
     if (value.length > 0) out[key] = value;
     else if ((loaded[key] ?? []).length > 0) out[key] = [];
+  }
+
+  if (form.eating_behavior.trim() || form.new_food_willingness.trim()) {
+    out.pickiness_level = pickinessFromAnswers(form.eating_behavior.trim(), form.new_food_willingness.trim());
+  } else if ((loaded.eating_behavior ?? "").trim() || (loaded.new_food_willingness ?? "").trim()) {
+    out.pickiness_level = null;
   }
 
   // Allergens: "Not sure yet" (or no answer) leaves the column as it is.

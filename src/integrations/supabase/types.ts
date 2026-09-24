@@ -7754,11 +7754,14 @@ export type Database = {
           new_food_willingness: string | null
           notes: string | null
           nutrition_concerns: string[] | null
+          pickiness_level: string | null
+          preferred_preparations: string[] | null
           profile_completed: boolean | null
           profile_last_reviewed: string | null
           profile_picture_url: string | null
           texture_dislikes: string[] | null
           texture_preferences: string[] | null
+          texture_sensitivity_level: string | null
           updated_at: string | null
           user_id: string
           weight_kg: number | null
@@ -7787,11 +7790,14 @@ export type Database = {
           new_food_willingness?: string | null
           notes?: string | null
           nutrition_concerns?: string[] | null
+          pickiness_level?: string | null
+          preferred_preparations?: string[] | null
           profile_completed?: boolean | null
           profile_last_reviewed?: string | null
           profile_picture_url?: string | null
           texture_dislikes?: string[] | null
           texture_preferences?: string[] | null
+          texture_sensitivity_level?: string | null
           updated_at?: string | null
           user_id: string
           weight_kg?: number | null
@@ -7820,11 +7826,14 @@ export type Database = {
           new_food_willingness?: string | null
           notes?: string | null
           nutrition_concerns?: string[] | null
+          pickiness_level?: string | null
+          preferred_preparations?: string[] | null
           profile_completed?: boolean | null
           profile_last_reviewed?: string | null
           profile_picture_url?: string | null
           texture_dislikes?: string[] | null
           texture_preferences?: string[] | null
+          texture_sensitivity_level?: string | null
           updated_at?: string | null
           user_id?: string
           weight_kg?: number | null

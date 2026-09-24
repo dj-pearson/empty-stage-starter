@@ -141,7 +141,14 @@ export const KidSchema = z.object({
   cross_contamination_sensitive: z.boolean().optional(),
   profile_picture_url: URLSchema.nullable().optional(),
   favorite_foods: z.array(z.string().max(100)).max(50).optional(),
-  pickiness_level: z.enum(PICKINESS_LEVELS).optional(),
+  // kids.pickiness_level (item 25). The web only ever writes a computed level,
+  // so the enum holds here; the column itself is free text because iOS
+  // builds send their own picker labels.
+  pickiness_level: z.enum(PICKINESS_LEVELS).nullable().optional(),
+  // Free text, not an enum: the intake resends a loaded value unchanged, and
+  // a row an iOS build wrote may hold a label the web never offers.
+  texture_sensitivity_level: z.string().max(50).nullable().optional(),
+  preferred_preparations: z.array(z.string().max(100)).max(50).optional(),
   profile_completed: z.boolean().optional(),
   texture_preferences: z.array(z.string().max(50)).max(20).optional(),
   texture_dislikes: z.array(z.string().max(50)).max(20).optional(),

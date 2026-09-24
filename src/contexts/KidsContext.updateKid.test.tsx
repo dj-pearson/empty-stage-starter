@@ -115,15 +115,40 @@ describe('KidsContext.updateKid', () => {
     expect(kid.notes).toBe('likes crunchy');
   });
 
-  it('never sends the client-only fields', async () => {
+  it('sends the intake columns added in item 25 and applies them locally', async () => {
     const api = setup([sam()]);
     await waitFor(() => expect(api.current?.kids).toHaveLength(1));
 
     await act(async () => {
-      await api.current!.updateKid('k1', { name: 'Sammy', texture_sensitivity_level: 'high', pickiness_level: 'mild' });
+      await api.current!.updateKid('k1', {
+        name: 'Sammy',
+        texture_sensitivity_level: 'strong',
+        pickiness_level: 'very_picky',
+        preferred_preparations: ['Only cold foods'],
+      });
     });
 
-    expect(updateBodies).toEqual([{ name: 'Sammy' }]);
+    expect(updateBodies).toEqual([{
+      name: 'Sammy',
+      texture_sensitivity_level: 'strong',
+      pickiness_level: 'very_picky',
+      preferred_preparations: ['Only cold foods'],
+    }]);
+    const kid = api.current!.kids[0];
+    expect(kid.pickiness_level).toBe('very_picky');
+    expect(kid.texture_sensitivity_level).toBe('strong');
+    expect(kid.preferred_preparations).toEqual(['Only cold foods']);
+  });
+
+  it('sends null to clear an intake column', async () => {
+    const api = setup([sam()]);
+    await waitFor(() => expect(api.current?.kids).toHaveLength(1));
+
+    await act(async () => {
+      await api.current!.updateKid('k1', { pickiness_level: null });
+    });
+
+    expect(updateBodies).toEqual([{ pickiness_level: null }]);
   });
 
   it('resolves false and rolls back when the server rejects the patch', async () => {

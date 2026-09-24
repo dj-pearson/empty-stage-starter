@@ -2,6 +2,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders, noCacheHeaders } from '../common/headers.ts';
 import { enforceRateLimit } from '../_shared/rate-limit.ts';
 import { publicMessage } from '../_shared/errors.ts';
+import {
+  kidFitFor,
+  parseLeadingNumber,
+  tonightScope,
+  tonightScopeFilter,
+  varietyScore,
+  type FoodRow,
+  type KidFit,
+  type KidRow,
+  type PlanEntryRow,
+} from '../_shared/tonight-mode.ts';
 
 /**
  * US-312: tonight-mode
@@ -30,9 +41,12 @@ import { publicMessage } from '../_shared/errors.ts';
  *     varietyScore, rankScore
  *   }
  *
- * Authorization: requires a user JWT. We resolve the caller, then scope all
- * reads to rows the caller owns (user_id) or shares (household_id). We never
- * trust the body's householdId without checking membership first.
+ * Authorization: requires a user JWT. We resolve the caller, then scope every
+ * read to the caller's household, resolved server-side with
+ * get_user_household_id (the function every RLS policy uses). The body's
+ * householdId is accepted for contract compatibility and ignored: a co-parent
+ * sees the kids, foods and recipes the partner added, and nobody can name a
+ * household that is not theirs. See ../_shared/tonight-mode.ts.
  */
 
 interface RequestBody {
@@ -42,14 +56,6 @@ interface RequestBody {
   pantryOnly: boolean;
   lookbackDays: number;
   limit: number;
-}
-
-interface KidFit {
-  kidId: string;
-  kidName: string;
-  score: number;
-  blockingAversions: string[];
-  allergenHits: string[];
 }
 
 interface MissingIngredient {
@@ -70,12 +76,6 @@ interface Suggestion {
   rankScore: number;
 }
 
-interface FoodRow {
-  id: string;
-  name: string;
-  allergens: string[] | null;
-}
-
 interface RecipeRow {
   id: string;
   name: string;
@@ -83,60 +83,6 @@ interface RecipeRow {
   food_ids: string[] | null;
   total_time_minutes: number | null;
   prep_time: string | null;
-}
-
-interface KidRow {
-  id: string;
-  name: string;
-  allergens: string[] | null;
-  disliked_foods: string[] | null;
-}
-
-interface PlanEntryRow {
-  recipe_id: string | null;
-  date: string;
-}
-
-function lower(arr: string[] | null | undefined): Set<string> {
-  return new Set((arr ?? []).map((s) => s.toLowerCase()));
-}
-
-/** Leading numeric run out of "20 min" / "PT15M" -> 20 / 15. */
-function parseLeadingNumber(raw: string | null | undefined): number | null {
-  if (!raw) return null;
-  const m = raw.match(/\d+(\.\d+)?/);
-  return m ? Number(m[0]) : null;
-}
-
-/**
- * Recency weight for variety scoring: a recipe planned in the last week
- * counts double; 8-14 days ago counts once; 15-21 days ago counts half.
- * Mirrors TonightModeService.clientFallback so server + client agree.
- */
-function recencyWeight(daysAgo: number): number {
-  if (daysAgo < 0) return 0;
-  if (daysAgo <= 7) return 2;
-  if (daysAgo <= 14) return 1;
-  return 0.5;
-}
-
-/** Recency-weighted "how recently/often planned" score, normalized 0-1. */
-function varietyScore(
-  recipeId: string,
-  planEntries: PlanEntryRow[],
-  lookbackDays: number,
-  now: number,
-): number {
-  let weighted = 0;
-  for (const entry of planEntries) {
-    if (entry.recipe_id !== recipeId) continue;
-    const t = Date.parse(entry.date);
-    if (Number.isNaN(t)) continue;
-    const days = Math.floor((now - t) / 86400000);
-    if (days < 0 || days > lookbackDays) continue;
-    weighted += recencyWeight(days);
-  }
-  return Math.min(1, Math.max(0, (weighted / Math.max(1, lookbackDays)) * 3));
 }
 
 export default async (req: Request) => {
@@ -173,15 +119,15 @@ export default async (req: Request) => {
     const userId = userData.user.id;
 
     const body = (await req.json()) as Partial<RequestBody>;
-    const requestedHouseholdId = typeof body.householdId === 'string' ? body.householdId : null;
+    // body.householdId is part of the iOS contract but is deliberately not
+    // read: the household comes from the JWT user below.
     const kidIds = Array.isArray(body.kidIds) ? body.kidIds.filter((k) => typeof k === 'string') : [];
     const maxMinutes = Number.isFinite(body.maxMinutes) ? Number(body.maxMinutes) : 30;
     const lookbackDays = Number.isFinite(body.lookbackDays) ? Number(body.lookbackDays) : 21;
     const limit = Number.isFinite(body.limit) ? Math.max(1, Math.min(10, Number(body.limit))) : 3;
 
-    // Service-role client for the reads. We still scope every query to the
-    // caller's own rows (or a household they belong to) so the service role
-    // can't be used to read another household.
+    // Service-role client for the reads. Every query below is scoped to the
+    // caller's household so the service role can't be used to read another.
     const supabase = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 
     // US-325: per-user rate limit before any DB work. `tonight-mode` is seeded
@@ -192,52 +138,47 @@ export default async (req: Request) => {
     const limited = await enforceRateLimit(supabase, userId, 'tonight-mode', noCacheHeaders());
     if (limited) return limited;
 
-    // Verify household membership before trusting requestedHouseholdId.
-    let householdId: string | null = null;
-    if (requestedHouseholdId) {
-      const { data: membership } = await supabase
-        .from('household_members')
-        .select('household_id')
-        .eq('household_id', requestedHouseholdId)
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (membership) {
-        householdId = requestedHouseholdId;
-      }
-    }
-
-    // Scope helper: restrict a query to rows owned by the user OR shared in
-    // their household. `PostgrestFilterBuilder` is generic; we only need the
-    // `.or`/`.eq` surface, captured by this structural type so we avoid `any`.
-    interface ScopableQuery<Self> {
-      or(filters: string): Self;
-      eq(column: string, value: string): Self;
-    }
-    const scoped = <Self extends ScopableQuery<Self>>(q: Self): Self =>
-      householdId
-        ? q.or(`user_id.eq.${userId},household_id.eq.${householdId}`)
-        : q.eq('user_id', userId);
+    // The caller's household, from the JWT user and never from the body.
+    const { data: householdData, error: householdError } = await supabase.rpc(
+      'get_user_household_id',
+      { _user_id: userId },
+    );
+    if (householdError) throw householdError;
+    const householdId = typeof householdData === 'string' ? householdData : null;
+    const scopeFilter = tonightScopeFilter(tonightScope(userId, householdId));
 
     const lookbackCutoff = new Date(Date.now() - lookbackDays * 86400000)
       .toISOString()
       .split('T')[0];
 
     const [foodsRes, recipesRes, kidsRes, planRes] = await Promise.all([
-      scoped(supabase.from('foods').select('id,name,allergens')),
-      scoped(
-        supabase
-          .from('recipes')
-          .select('id,name,image_url,food_ids,total_time_minutes,prep_time'),
-      ),
-      // Kids: only the ones the caller asked for, and only those they own.
+      supabase.from('foods').select('id,name,allergens').or(scopeFilter),
+      supabase
+        .from('recipes')
+        .select('id,name,image_url,food_ids,total_time_minutes,prep_time')
+        .or(scopeFilter),
+      // Kids: only the ones the caller asked for, and only in their household.
       kidIds.length > 0
-        ? scoped(supabase.from('kids').select('id,name,allergens,disliked_foods'))
+        ? supabase
+          .from('kids')
+          .select('id,name,allergens,disliked_foods')
+          .or(scopeFilter)
           .in('id', kidIds)
         : Promise.resolve({ data: [] as KidRow[], error: null }),
       // Plan entries within the lookback window for variety scoring.
-      scoped(supabase.from('plan_entries').select('recipe_id,date'))
+      supabase
+        .from('plan_entries')
+        .select('recipe_id,date')
+        .or(scopeFilter)
         .gte('date', lookbackCutoff),
     ]);
+
+    // A failed read is an error, not an empty list: with foods or kids missing
+    // no allergen can hit, and the top pick could be one a child reacts to.
+    // iOS falls back to its on-device ranker on any non-2xx.
+    for (const res of [foodsRes, recipesRes, kidsRes, planRes]) {
+      if (res.error) throw res.error;
+    }
 
     const foods = (foodsRes.data ?? []) as FoodRow[];
     const recipes = (recipesRes.data ?? []) as RecipeRow[];
@@ -263,38 +204,7 @@ export default async (req: Request) => {
       const missing = foodIds.filter((id) => !pantryIds.has(id));
       const coverage = (foodIds.length - missing.length) / total;
 
-      const kidFits: KidFit[] = kids.map((kid) => {
-        const kidAllergens = lower(kid.allergens);
-        const dislikedIds = new Set(kid.disliked_foods ?? []);
-        const dislikedNames = lower(kid.disliked_foods);
-
-        const allergenHits: string[] = [];
-        const blockingAversions: string[] = [];
-        for (const fid of foodIds) {
-          const food = foodById.get(fid);
-          if (!food) continue;
-          const foodAllergens = lower(food.allergens);
-          const intersects = [...foodAllergens].some((a) => kidAllergens.has(a));
-          if (intersects) {
-            allergenHits.push(food.name);
-            continue;
-          }
-          if (dislikedIds.has(fid) || dislikedNames.has(food.name.toLowerCase())) {
-            blockingAversions.push(food.name);
-          }
-        }
-
-        let score = 1 - 0.25 * blockingAversions.length;
-        if (allergenHits.length > 0) score = 0;
-        score = Math.min(1, Math.max(0, score));
-        return {
-          kidId: kid.id,
-          kidName: kid.name,
-          score,
-          blockingAversions,
-          allergenHits,
-        };
-      });
+      const kidFits: KidFit[] = kids.map((kid) => kidFitFor(kid, foodIds, foodById));
 
       const anyAllergen = kidFits.some((k) => k.allergenHits.length > 0);
       const totalAversions = kidFits.reduce((s, k) => s + k.blockingAversions.length, 0);

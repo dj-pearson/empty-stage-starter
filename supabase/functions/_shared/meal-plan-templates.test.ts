@@ -46,6 +46,21 @@ Deno.test('unsafeReason matches a dietary restriction', () => {
   assertStringIncludes(reason!, 'dairy');
 });
 
+// An exact lowercase compare let every one of these through.
+Deno.test('unsafeReason matches allergen spellings through the canonical matcher', () => {
+  const kid = { id: 'k', allergens: ['peanuts', 'tree nuts', 'milk'], dietary_restrictions: [] };
+  assertStringIncludes(unsafeReason(kid, 'a', foods([['a', ['Peanut']]]))!, 'contains peanut');
+  assertStringIncludes(unsafeReason(kid, 'b', foods([['b', ['en:tree-nuts']]]))!, 'en:tree-nuts');
+  assertStringIncludes(unsafeReason(kid, 'c', foods([['c', ['dairy']]]))!, 'contains dairy');
+  assertEquals(unsafeReason(kid, 'd', foods([['d', ['sesame']]])), null);
+});
+
+Deno.test('unsafeReason matches a restriction through the canonical matcher', () => {
+  const kid = { id: 'k', allergens: [], dietary_restrictions: ['dairy', 'gluten'] };
+  assertStringIncludes(unsafeReason(kid, 'a', foods([['a', ['en:milk']]]))!, 'restricted: en:milk');
+  assertStringIncludes(unsafeReason(kid, 'b', foods([['b', ['Wheat']]]))!, 'restricted: wheat');
+});
+
 Deno.test('unsafeReason passes a food the kid does not react to', () => {
   assertEquals(unsafeReason(KIDS[0], 'rice', foods([['rice', []]])), null);
 });

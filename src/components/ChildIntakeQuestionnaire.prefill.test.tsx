@@ -76,7 +76,8 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 import { ChildIntakeQuestionnaire } from "./ChildIntakeQuestionnaire";
 
-const CLIENT_ONLY = ["pickiness_level", "texture_sensitivity_level", "preferred_preparations"];
+// Item 25 made these kids columns; the blank-profile save must still not invent them.
+const INTAKE_COLUMNS = ["pickiness_level", "texture_sensitivity_level", "preferred_preparations"];
 
 function setup() {
   const onComplete = vi.fn();
@@ -166,7 +167,7 @@ describe("ChildIntakeQuestionnaire save", () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     expect(updateKid).toHaveBeenCalledTimes(1);
     const patch = lastPatch();
-    for (const key of ["gender", "height_cm", "weight_kg", "allergens", ...CLIENT_ONLY]) {
+    for (const key of ["gender", "height_cm", "weight_kg", "allergens", ...INTAKE_COLUMNS]) {
       expect(patch).not.toHaveProperty(key);
     }
     expect(patch.profile_completed).toBe(true);
@@ -185,8 +186,11 @@ describe("ChildIntakeQuestionnaire save", () => {
 
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     const patch = lastPatch();
-    expect(patch).toMatchObject({ eating_behavior: "limited", new_food_willingness: "refuses" });
-    for (const key of CLIENT_ONLY) expect(patch).not.toHaveProperty(key);
+    expect(patch).toMatchObject({
+      eating_behavior: "limited",
+      new_food_willingness: "refuses",
+      pickiness_level: "extremely_picky",
+    });
   });
 
   it("keeps the texture level the parent picked", async () => {
@@ -196,6 +200,9 @@ describe("ChildIntakeQuestionnaire save", () => {
     await user.click(screen.getByLabelText(/Mild, dislikes 1-2 specific textures/));
     await next(user, 3);
     expect(screen.getByTestId("texture-level")).toHaveTextContent(/mild/i);
+    await save(user);
+    await waitFor(() => expect(updateKid).toHaveBeenCalled());
+    expect(lastPatch().texture_sensitivity_level).toBe("mild");
   });
 
   it("clears texture dislikes when the parent says there are no texture issues", async () => {

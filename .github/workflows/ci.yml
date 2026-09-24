@@ -547,6 +547,12 @@ jobs:
       - name: Deno meal-plan template transforms
         run: deno test supabase/functions/_shared/meal-plan-templates.test.ts
 
+      # tonight-mode: household scope filter (no body-supplied household) and
+      # allergen matching through canonical names, so "peanuts" on a kid
+      # excludes a food tagged "Peanut". Pure, no network, no DB.
+      - name: Deno tonight-mode scope and allergens
+        run: deno test supabase/functions/_shared/tonight-mode.test.ts
+
       # US-783: these payloads carry child PII. The OpenAI request must send
       # store:false, and the Anthropic one must NOT carry an invented
       # retention field -- the Messages API has no per-request equivalent, so

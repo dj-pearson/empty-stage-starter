@@ -61,22 +61,6 @@ function stripUndefined<T extends Record<string, unknown>>(patch: T): Partial<T>
 }
 
 /**
- * Kid fields with no column on `kids` (see src/types/index.ts). PostgREST
- * rejects a whole write that names one, so they are dropped before any write.
- */
-const CLIENT_ONLY_KID_FIELDS = [
-  'pickiness_level',
-  'texture_sensitivity_level',
-  'preferred_preparations',
-] as const satisfies readonly (keyof Kid)[];
-
-function withoutClientOnly<T extends Record<string, unknown>>(row: T): T {
-  const out = { ...row };
-  for (const field of CLIENT_ONLY_KID_FIELDS) delete out[field];
-  return out;
-}
-
-/**
  * Apply a stripped patch to a kid for local state. A null clears the field,
  * which locally means "absent", matching what normalizeKidFromDB produces
  * when the row comes back (null allergens = not recorded, not "none").
@@ -175,7 +159,7 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
         // `allergens: null` is sent as-is: the column default ('{}', "no known
         // allergies") only applies when the key is absent, and null is how
         // "not sure yet" is recorded.
-        .insert([{ ...withoutClientOnly(kid), user_id: userId, household_id: householdId }])
+        .insert([{ ...kid, user_id: userId, household_id: householdId }])
         .select()
         .single();
 
@@ -215,16 +199,15 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
     // One object feeds both the local merge and the PATCH body, so what the
     // screen shows is exactly what was sent. An undefined value would vanish
     // from the JSON body while still overwriting the field locally.
-    const updates = withoutClientOnly(
-      stripUndefined(patch as Record<string, unknown>),
-    ) as Partial<KidPatch>;
+    const updates = stripUndefined(patch as Record<string, unknown>) as Partial<KidPatch>;
     if (Object.keys(updates).length === 0) return true;
     if (userId) {
       // US-320: optimistic update with rollback + toast on server rejection.
       const result = await runOptimisticMutation<Kid>(
         setKids,
         prev => prev.map(k => (k.id === id ? mergeKidPatch(k, updates) : k)),
-        // Client-only keys are already gone; what is left maps onto kids columns.
+        // Every Kid field maps onto a kids column since item 25 added
+        // pickiness_level, texture_sensitivity_level and preferred_preparations.
         () => supabase.from('kids').update(updates as TablesUpdate<'kids'>).eq('id', id),
         { logLabel: 'Supabase updateKid error:' }
       );
