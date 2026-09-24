@@ -119,4 +119,43 @@ BEGIN
   RAISE NOTICE 'assertion 5 ok (pre-auth signup helpers still reachable by anon)';
 END $a5$;
 
+-- 6. DELIBERATELY OPEN, AND EMPTY FOR ANON (20260928000007): the two RLS
+--    helpers. 82 policies declared for every role call them, and Postgres
+--    checks EXECUTE when a query starts, so a revoke turns every signed-out
+--    read of foods, recipes, kids and the rest into "permission denied for
+--    function get_user_household_id". The fix is in the body instead: for the
+--    anon role they answer false / NULL whatever they are asked. This checks
+--    both halves, so neither a revoke nor a body rewrite passes unnoticed.
+DO $a6$
+DECLARE fn TEXT; member UUID; hh UUID; belongs BOOLEAN; resolved UUID;
+BEGIN
+  FOREACH fn IN ARRAY ARRAY[
+    'public.user_belongs_to_household(uuid, uuid)',
+    'public.get_user_household_id(uuid)'
+  ] LOOP
+    IF NOT has_function_privilege('anon', fn, 'EXECUTE') THEN
+      RAISE EXCEPTION 'assertion 6: % must stay executable by anon; policies '
+        'declared for every role call it and signed-out reads would error', fn;
+    END IF;
+  END LOOP;
+
+  -- A real member to ask about. Signup gives the account a household; the
+  -- whole file rolls back.
+  member := gen_random_uuid();
+  INSERT INTO auth.users (id, email) VALUES (member, 'us804-a6@example.test');
+  SELECT household_id INTO hh FROM public.household_members WHERE user_id = member;
+  IF hh IS NULL THEN
+    RAISE EXCEPTION 'assertion 6: signup did not create a membership to probe with';
+  END IF;
+  SET LOCAL ROLE anon;
+  belongs  := public.user_belongs_to_household(member, hh);
+  resolved := public.get_user_household_id(member);
+  RESET ROLE;
+  IF belongs OR resolved IS NOT NULL THEN
+    RAISE EXCEPTION 'assertion 6: anon learned a real membership (belongs=%, household=%)',
+      belongs, resolved;
+  END IF;
+  RAISE NOTICE 'assertion 6 ok (RLS helpers executable by anon, and answer it nothing)';
+END $a6$;
+
 ROLLBACK;
