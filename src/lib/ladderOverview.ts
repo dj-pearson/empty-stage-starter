@@ -163,6 +163,9 @@ export interface LadderRowLike {
   consecutive_successes?: number | null;
   consecutive_holds?: number | null;
   next_due_on?: string | null;
+  /** Row timestamps; the Progress page falls back to updated_at for a graduation month. */
+  updated_at?: string | null;
+  created_at?: string | null;
 }
 
 const KNOWN_STATUSES: readonly LadderStatus[] = ['active', 'paused', 'mastered', 'backed_off'];

@@ -275,19 +275,6 @@
     "metaDescription": "Track food attempts and build your child's confidence with new foods over time",
     "manageChildren": "Manage children"
   },
-  "analytics": {
-    "title": "Food Analytics - {{name}}",
-    "subtitle": "Track meal outcomes and food preferences",
-    "noDataTitle": "No Data Yet",
-    "noDataText": "Start tracking meals by marking them as Ate, Tasted, or Refused in the Planner",
-    "totalTracked": "Total Tracked",
-    "ate": "Ate",
-    "tasted": "Tasted",
-    "refused": "Refused",
-    "successRate": "Success Rate",
-    "outcomesDistribution": "Meal Outcomes Distribution",
-    "topFoods": "Top 10 Foods Performance"
-  },
   "recipes": {
     "title": "Recipes",
     "subtitleFamily": "Family recipes for all children",
@@ -341,10 +328,6 @@
   "checkoutSuccess": {
     "welcome": "Welcome to {{plan}}!",
     "subtitle": "Your subscription is now active. Let's get started!"
-  },
-  "progress": {
-    "title": "{{name}}'s Progress",
-    "subtitle": "Track growth, celebrate achievements, and review weekly progress"
   },
   "blogPost": {
     "notFoundTitle": "Article Not Found",

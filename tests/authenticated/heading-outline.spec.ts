@@ -42,7 +42,9 @@ const KNOWN_SKIPS: Record<string, number> = {
   '/dashboard/kids': 1,
   '/dashboard/settings': 1,
   '/dashboard/insights': 1,
-  '/dashboard/analytics': 1,
+  // Redirects to /dashboard/progress?section=numbers since Analytics was folded
+  // into Progress, so it is measured as Progress: one h1, no skipped levels.
+  '/dashboard/analytics': 0,
   '/dashboard/food-tracker': 1,
   '/dashboard/billing': 1,
   '/dashboard/household': 1,

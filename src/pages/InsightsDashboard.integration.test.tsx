@@ -66,6 +66,9 @@ vi.mock('@/integrations/supabase/client', () => {
       in: () => chain,
       eq: () => chain,
       gte: () => chain,
+      // useKidsProgressSummary pages its reads through fetchAllRows.
+      order: () => chain,
+      range: () => chain,
       then: (resolve: (value: Result) => unknown) => Promise.resolve(result()).then(resolve),
     };
     return chain;

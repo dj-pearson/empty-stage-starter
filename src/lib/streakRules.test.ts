@@ -133,7 +133,7 @@ describe('bestStreak uses the same rule as currentStreak', () => {
  * numbers, and a fourth would go unnoticed the same way these did.
  */
 describe('there is one web streak rule', () => {
-  it('the home week line and ProgressDashboard.tsx both call the shared one', () => {
+  it('the home week line and AchievementsView.tsx both call the shared one', () => {
     // AchievementsView was the FOURTH, missed when this story counted three:
     // it filtered to entries with a result but still never read what the
     // result was, so a week of refusals unlocked a streak badge on the web
@@ -142,7 +142,6 @@ describe('there is one web streak rule', () => {
       // The streak moved off Home.tsx into the per-kid week line when the
       // home screen was rebuilt; Home.tsx itself no longer counts anything.
       'src/components/home/KidWeekLine.tsx',
-      'src/components/ProgressDashboard.tsx',
       'src/components/AchievementsView.tsx',
     ]) {
       const source = fs.readFileSync(file, 'utf8');
@@ -154,6 +153,15 @@ describe('there is one web streak rule', () => {
         /for \(let d = 0; d <= 365/,
       );
     }
+  });
+
+  it('ProgressDashboard.tsx no longer computes a streak at all', () => {
+    // The months view reads durable attempts and ladder rows. A streak there
+    // would need the -30d plan cache, which is what made it disagree before.
+    const source = fs.readFileSync('src/components/ProgressDashboard.tsx', 'utf8');
+    expect(source).not.toMatch(/@\/lib\/streakRules/);
+    expect(source).not.toMatch(/currentStreak\(/);
+    expect(source).not.toMatch(/\bplanEntries\b|usePlan\(/);
   });
 
   it('the phone still has its own copy, and PLATFORMS.md says so', () => {

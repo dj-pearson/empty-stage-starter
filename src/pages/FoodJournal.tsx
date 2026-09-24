@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useInRouterContext, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import "@/i18n/appLocale";
@@ -49,6 +50,34 @@ const isRange = (value: string): value is Range => (RANGES as readonly string[])
 const hasReaction = (item: JournalItem): boolean =>
   item.notes.some((n) => n.source === "reaction") || item.components.some((c) => c.notes.some((n) => n.source === "reaction"));
 
+/**
+ * `?kid=<id>` from a link scoped to one child (Progress's recent history):
+ * select that child once the kids have loaded, then drop the param so a
+ * refresh or Back does not override a choice made on the page since.
+ */
+function KidParamSync({ kids, kidsHydrated }: { kids: ReadonlyArray<{ id: string }>; kidsHydrated: boolean }) {
+  const { setActiveKidId } = useKids();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const handled = useRef(false);
+
+  useEffect(() => {
+    if (handled.current) return;
+    const kid = searchParams.get("kid");
+    if (kid === null) {
+      handled.current = true;
+      return;
+    }
+    if (!kidsHydrated) return;
+    handled.current = true;
+    if (kids.some((k) => k.id === kid)) setActiveKidId(kid);
+    const next = new URLSearchParams(searchParams);
+    next.delete("kid");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, kids, kidsHydrated, setActiveKidId]);
+
+  return null;
+}
+
 function makeFormatter(locale: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   try {
     return new Intl.DateTimeFormat(locale, opts);
@@ -64,6 +93,7 @@ export default function FoodJournal() {
   const { foods, foodsHydrated } = useFoods();
   const { recipes } = useRecipes();
   const { kids, activeKidId, kidsHydrated } = useKids();
+  const inRouter = useInRouterContext();
   const { planEntries, updatePlanEntry } = usePlan();
   const { userId } = useAuth();
   const { members } = useHousehold();
@@ -434,6 +464,7 @@ export default function FoodJournal() {
 
   return (
     <>
+      {inRouter ? <KidParamSync kids={kids} kidsHydrated={kidsHydrated} /> : null}
       <Helmet>
         <title>{t("foodJournal.title")} - EatPal</title>
         <meta name="description" content={t("foodJournal.metaDescription")} />

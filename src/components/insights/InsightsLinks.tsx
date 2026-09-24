@@ -26,27 +26,42 @@ function formatDate(date: Date, language: string): string {
   }
 }
 
-export function InsightsLinks({ kid, now = new Date() }: { kid: Kid; now?: Date }) {
+/**
+ * `kid` is the child in scope. Without one (the family view) the links that
+ * belong to a single child, the profile and its review hint, are left out and
+ * the Progress link drops the possessive.
+ */
+export function InsightsLinks({ kid = null, now = new Date() }: { kid?: Kid | null; now?: Date }) {
   const { t, i18n } = useTranslation();
-  const kidParam = encodeURIComponent(kid.id);
+  const kidParam = kid ? encodeURIComponent(kid.id) : '';
 
-  const reviewed = parseReviewed(kid.profile_last_reviewed);
+  const reviewed = kid ? parseReviewed(kid.profile_last_reviewed) : null;
   const reviewDue = reviewed !== null && now.getTime() - reviewed.getTime() > REVIEW_DUE_DAYS * DAY_MS;
 
   const links: { to: string; label: string }[] = [
+    {
+      to: '/dashboard/progress',
+      label: kid
+        ? t('insightsPage.links.progress', { name: kid.name, defaultValue: "{{name}}'s progress over months" })
+        : t('insightsPage.links.progressFamily', { defaultValue: 'Progress over months' }),
+    },
     { to: '/dashboard/food-tracker', label: t('insightsPage.links.tracker', { defaultValue: 'Food Tracker' }) },
     { to: '/dashboard/food-journal', label: t('insightsPage.links.journal', { defaultValue: 'Food Journal' }) },
     { to: '/dashboard/planner', label: t('insightsPage.links.planner', { defaultValue: 'Planner' }) },
-    {
-      to: `/dashboard/kids?kid=${kidParam}&edit=1`,
-      label: t('insightsPage.links.profile', { name: kid.name, defaultValue: "{{name}}'s profile" }),
-    },
+    ...(kid
+      ? [
+          {
+            to: `/dashboard/kids?kid=${kidParam}&edit=1`,
+            label: t('insightsPage.links.profile', { name: kid.name, defaultValue: "{{name}}'s profile" }),
+          },
+        ]
+      : []),
     { to: '/dashboard/kids', label: t('insightsPage.links.kidsDay', { defaultValue: 'Day by day on Kids' }) },
   ];
 
   return (
     <nav aria-label={t('insightsPage.links.label', { defaultValue: 'More detail' })} className="space-y-2">
-      {reviewDue && reviewed ? (
+      {kid && reviewDue && reviewed ? (
         <p className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
           <span>
             {t('insightsPage.review.due', {

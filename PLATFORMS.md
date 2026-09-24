@@ -63,30 +63,30 @@ one line above, so in a two-child household either child eating kept the other
 child's streak alive. The shared rule takes `kidId` as a required argument, so
 it cannot be called without naming a child.
 
-### Badges: iOS-only, deliberately, and the storage is still wrong
+### Badges: kid_badges is the shared source; web reads it; iOS evaluates and writes.
 
-- **iOS** stores earned badge keys in `UserDefaults` under `badges.<kidId>`
-  (`BadgeService.swift`). Device-local: they do not survive a reinstall, do not
-  move to a new phone, and are invisible to a second parent on their own device.
-- **Web** derives achievements on the fly in `src/components/AchievementsView.tsx`
-  from plan entries, foods and kids, and renders them through `Progress.tsx`.
-  Nothing is stored, so nothing is lost -- and nothing is shared either.
+- **iOS** evaluates `Badge.criteria` in `BadgeService.swift` and writes each earn
+  to `kid_badges(kid_id, badge_id, earned_at)` through the offline queue
+  (US-871). It seeds its `UserDefaults` cache from the table on launch, so a
+  new phone or a second parent sees the same badges with their original dates.
+- **Web** reads `kid_badges` (`src/hooks/useKidBadges.ts`) and draws the same
+  twelve badges from `src/lib/badgeCatalog.ts`, whose ids and tiers are pinned
+  to the Swift enum by `badgeCatalog.parity.test.ts`. It does not decide that a
+  badge is earned and never dates one "today".
 
-**Decision: iOS-only. The two clients keep separate notions of what a child has
-earned.**
+**Decision (2026-09-24): one catalog, evaluated on the phone.** This replaced
+the web's own nine-badge set, which was computed from the plan cache and
+stamped every unlock with the day the page was opened. A web tile can no
+longer disagree with the phone about whether a badge was earned, or when.
 
-This is the status quo, stated out loud. Note what it does *not* mean: there is
-no web surface to remove. The web achievements are real and computed, and a
-parent on the web sees achievements that are correct for the data the web has.
-What they will not see is a badge the phone awarded, and the reverse.
+What the web still computes is a progress hint on a locked tile, and only where
+it can count what the phone counts from the data it holds: the streak badges
+through `src/lib/streakRules.ts`, and Perfect Week from this Monday-first
+week's results (`src/lib/badgeHints.ts`). All-time counts get no bar, because
+the web's -30d..+90d plan window would read low. A hint that is already full
+while the badge is absent from `kid_badges` says it is waiting for the phone to
+sync rather than printing "27 / 25".
 
-The alternative was a shared `kid_badges(kid_id, badge_key, earned_at)` table
-with RLS, written by both clients. It is the better end state and it is not this
-story: it needs the iOS `BadgeService` to write through the offline queue and to
-seed from the server, which is iOS work that cannot be built or verified from
-the web side.
-
-**What stays wrong either way**, and is filed as its own story: the
-`UserDefaults` storage. A child loses every badge they have earned when the
-family gets a new phone. That is a bad outcome under both options, so it does
-not wait on this decision.
+**What stays open:** a family with no iPhone never earns a badge, because
+nothing on the web writes one. Moving evaluation server-side would fix that and
+is not this change.

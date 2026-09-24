@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as csvExport from './csvExport';
 import { escapeCell, sanitizeFilename, toCsv } from './csvExport';
 
 describe('toCsv (US-346)', () => {
@@ -56,5 +57,25 @@ describe('sanitizeFilename', () => {
 
   it('falls back when nothing is left', () => {
     expect(sanitizeFilename('//')).toBe('export');
+  });
+});
+
+describe('formula guard, every lead character', () => {
+  it.each(['=1', '+1', '-1', '@a', '\tx', '\rx'])("prefixes a single quote on %j", (cell) => {
+    expect(escapeCell(cell).replace(/^"/, '').startsWith(`'${cell[0]}`)).toBe(true);
+  });
+
+  it('neutralises a =HYPERLINK food name and doubles its quotes', () => {
+    const name = '=HYPERLINK("http://example.test","Click")';
+    const csv = toCsv([{ name }], [{ header: 'dish', value: (r: { name: string }) => r.name }]);
+    const cell = csv.split('\r\n')[1];
+    expect(cell).toBe(`"'=HYPERLINK(""http://example.test"",""Click"")"`);
+    expect(cell.slice(1, -1).replace(/""/g, '"').startsWith("'=")).toBe(true);
+  });
+});
+
+describe('downloadBlob', () => {
+  it('is exported from csvExport', () => {
+    expect(typeof csvExport.downloadBlob).toBe('function');
   });
 });

@@ -32,6 +32,7 @@ import {
   Tag,
   Clock,
   Accessibility,
+  Trophy,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -155,7 +156,18 @@ export function CommandPalette() {
           navigate("/dashboard/insights");
           setOpen(false);
         },
-        keywords: ["analytics", "stats", "data"],
+        keywords: ["stats", "data"],
+        group: "navigation",
+      },
+      {
+        id: "nav-progress",
+        label: "Go to Progress",
+        icon: Trophy,
+        action: () => {
+          navigate("/dashboard/progress");
+          setOpen(false);
+        },
+        keywords: ["progress", "milestones", "badges", "achievements", "analytics", "export", "report"],
         group: "navigation",
       },
       {

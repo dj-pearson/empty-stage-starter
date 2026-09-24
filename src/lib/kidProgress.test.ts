@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
+  MIN_LOGGED_FOR_HEADLINE,
+  buildMonthlyTrajectory,
   buildProgressByKid,
   buildWeeklyTrend,
+  firstTriesByMonth,
+  kidSafeFoodIds,
+  masteredOnIso,
+  pickTrajectoryHeadline,
+  type MonthPoint,
   pickWeekHeadline,
   summarizeKidWeek,
   windowStartIso,
@@ -11,7 +18,7 @@ import {
   type WeekBucket,
 } from './kidProgress';
 import { addIsoDays } from '@/lib/date-utils';
-import type { PlanEntry } from '@/types';
+import type { Food, Kid, PlanEntry } from '@/types';
 
 const TODAY = '2026-09-24';
 
@@ -304,5 +311,186 @@ describe('pickWeekHeadline', () => {
     );
     const out = pickWeekHeadline(trend, [], TODAY);
     expect(JSON.stringify(out.params).toLowerCase()).not.toContain('refus');
+  });
+});
+
+
+/* ------------------------------------------------------------------------ */
+/* Months trajectory.                                                       */
+/* ------------------------------------------------------------------------ */
+
+function attempt(
+  day: string,
+  food_id: string,
+  outcome = 'success',
+  kid_id = 'k1',
+  plan_entry_id: string | null = null,
+): KidAttemptRow {
+  // Local noon, so the local day is `day` in every time zone the suite runs in.
+  const [y, m, d] = day.split('-').map(Number);
+  return { kid_id, food_id, attempted_at: new Date(y, m - 1, d, 12).toISOString(), outcome, plan_entry_id };
+}
+
+function mastered(food_id: string, last_attempt_at: string | null, kid_id = 'k1', updated_at: string | null = null): KidLadderRow {
+  return { kid_id, food_id, status: 'mastered', current_rung: 'eating', last_attempt_at, updated_at };
+}
+
+describe('firstTriesByMonth', () => {
+  it('counts a food only in the month of its first attempt across three months', () => {
+    const attempts = [
+      attempt('2026-07-03', 'peas'),
+      attempt('2026-08-10', 'peas'),
+      attempt('2026-09-01', 'peas'),
+      attempt('2026-08-12', 'corn'),
+      attempt('2026-09-02', 'corn'),
+    ];
+    const out = firstTriesByMonth(attempts, 'k1');
+    expect(out.get('2026-07')).toBe(1);
+    expect(out.get('2026-08')).toBe(1);
+    expect(out.get('2026-09')).toBeUndefined();
+  });
+
+  it('ignores other kids', () => {
+    expect(firstTriesByMonth([attempt('2026-09-01', 'peas', 'success', 'k2')], 'k1').size).toBe(0);
+  });
+});
+
+describe('masteredOnIso', () => {
+  it('prefers last_attempt_at over updated_at', () => {
+    expect(masteredOnIso({ last_attempt_at: '2026-08-15', updated_at: '2026-09-20' })).toBe('2026-08-15');
+  });
+
+  it('falls back to updated_at', () => {
+    expect(masteredOnIso({ last_attempt_at: null, updated_at: '2026-09-20' })).toBe('2026-09-20');
+  });
+
+  it('returns null when both are missing', () => {
+    expect(masteredOnIso({ last_attempt_at: null, updated_at: null })).toBeNull();
+    expect(masteredOnIso({})).toBeNull();
+  });
+});
+
+describe('buildMonthlyTrajectory', () => {
+  it('counts a plan-linked attempt once: exposures are attempts only', () => {
+    const attempts = [attempt('2026-09-05', 'peas', 'success', 'k1', 'plan-1'), attempt('2026-09-06', 'corn', 'refused')];
+    const out = buildMonthlyTrajectory(attempts, [], 'k1', TODAY);
+    const sept = out.find((p) => p.month === '2026-09')!;
+    expect(sept.loggedExposures).toBe(2);
+    expect(sept.acceptedExposures).toBe(1);
+  });
+
+  it('omits leading empty months before the first attempt', () => {
+    const out = buildMonthlyTrajectory([attempt('2026-08-20', 'peas')], [], 'k1', TODAY);
+    expect(out.map((p) => p.month)).toEqual(['2026-08', '2026-09']);
+  });
+
+  it('keeps six months when history is older, oldest first', () => {
+    const out = buildMonthlyTrajectory([attempt('2025-12-01', 'peas'), attempt(TODAY, 'corn')], [], 'k1', TODAY);
+    expect(out.map((p) => p.month)).toEqual(['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']);
+    // Peas was first tried before the window, so it is not a first try in it.
+    expect(out.reduce((n, p) => n + p.firstTries, 0)).toBe(1);
+  });
+
+  it('ignores attempts and graduations dated after today', () => {
+    const out = buildMonthlyTrajectory(
+      [attempt('2026-09-01', 'peas'), attempt('2026-10-02', 'corn')],
+      [mastered('rice', '2026-10-01')],
+      'k1',
+      TODAY,
+    );
+    expect(out.map((p) => p.month)).toEqual(['2026-09']);
+    expect(out[0].loggedExposures).toBe(1);
+    expect(out[0].graduations).toBe(0);
+  });
+
+  it('buckets graduations by masteredOnIso month', () => {
+    const out = buildMonthlyTrajectory(
+      [attempt('2026-07-01', 'peas')],
+      [mastered('peas', '2026-08-15'), mastered('corn', null, 'k1', '2026-09-03')],
+      'k1',
+      TODAY,
+    );
+    expect(out.find((p) => p.month === '2026-08')!.graduations).toBe(1);
+    expect(out.find((p) => p.month === '2026-09')!.graduations).toBe(1);
+  });
+
+  it('is empty for a child with nothing logged', () => {
+    expect(buildMonthlyTrajectory([], [], 'k1', TODAY)).toEqual([]);
+  });
+});
+
+describe('kidSafeFoodIds', () => {
+  const food = (id: string, name: string, allergens: string[] = []): Food => ({
+    id,
+    name,
+    category: 'vegetable',
+    is_safe: true,
+    is_try_bite: false,
+    allergens,
+  });
+  const foodsById = new Map<string, Food>([
+    ['peas', food('peas', 'Peas')],
+    ['corn', food('corn', 'Corn')],
+    ['toast', food('toast', 'Toast', ['wheat'])],
+  ]);
+  const ana: Kid = { id: 'ana', name: 'Ana', allergens: [], disliked_foods: [], always_eats_foods: [] };
+  const ben: Kid = { id: 'ben', name: 'Ben', allergens: ['wheat'], disliked_foods: ['Corn'], always_eats_foods: [] };
+
+  it('differs between siblings with different ladders even though is_safe is shared', () => {
+    const rows = [mastered('peas', TODAY, 'ana'), mastered('corn', TODAY, 'ben'), mastered('peas', TODAY, 'ben')];
+    expect([...kidSafeFoodIds(ana, rows, foodsById)]).toEqual(['peas']);
+    expect([...kidSafeFoodIds(ben, rows, foodsById)]).toEqual(['peas']);
+    const anaMore = [...rows, mastered('corn', TODAY, 'ana')];
+    expect(kidSafeFoodIds(ana, anaMore, foodsById).size).toBe(2);
+    expect(kidSafeFoodIds(ben, anaMore, foodsById).size).toBe(1);
+  });
+
+  it('adds always-eats by id or name and drops allergen hits and dislikes', () => {
+    const kid: Kid = { ...ben, always_eats_foods: ['toast', 'corn', 'peas'] };
+    expect([...kidSafeFoodIds(kid, [], foodsById)]).toEqual(['peas']);
+    const byName: Kid = { ...ana, always_eats_foods: ['  corn '] };
+    expect([...kidSafeFoodIds(byName, [], foodsById)]).toEqual(['corn']);
+  });
+});
+
+describe('pickTrajectoryHeadline', () => {
+  const point = (month: string, over: Partial<MonthPoint> = {}): MonthPoint => ({
+    month,
+    firstTries: 0,
+    graduations: 0,
+    acceptedExposures: 0,
+    loggedExposures: 0,
+    ...over,
+  });
+
+  it('returns notEnough below MIN_LOGGED_FOR_HEADLINE', () => {
+    const out = pickTrajectoryHeadline(
+      [point('2026-07', { loggedExposures: MIN_LOGGED_FOR_HEADLINE - 1, firstTries: 2 })],
+      '2026-07-01',
+      TODAY,
+    );
+    expect(out).toEqual({ kind: 'notEnough', params: { logged: MIN_LOGGED_FOR_HEADLINE - 1 } });
+  });
+
+  it('returns notEnough when logging started less than a month ago', () => {
+    const out = pickTrajectoryHeadline([point('2026-09', { loggedExposures: 20, firstTries: 5 })], '2026-09-10', TODAY);
+    expect(out.kind).toBe('notEnough');
+  });
+
+  it('sums safe foods and first tries since the first month shown', () => {
+    const out = pickTrajectoryHeadline(
+      [
+        point('2026-03', { loggedExposures: 10, firstTries: 4, graduations: 1 }),
+        point('2026-04', { loggedExposures: 10, firstTries: 3, graduations: 2 }),
+      ],
+      '2026-03-02',
+      TODAY,
+    );
+    expect(out).toEqual({ kind: 'progress', params: { sinceMonth: '2026-03', safe: 3, firstTries: 7 } });
+  });
+
+  it('is steady when nothing new happened', () => {
+    const out = pickTrajectoryHeadline([point('2026-07', { loggedExposures: 6 })], '2026-07-01', TODAY);
+    expect(out).toEqual({ kind: 'steady', params: { sinceMonth: '2026-07', exposures: 6 } });
   });
 });

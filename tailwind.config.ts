@@ -65,6 +65,29 @@ export default {
         "safe-food": "hsl(var(--safe-food))",
         "try-bite": "hsl(var(--try-bite))",
         "sky-blue": "hsl(var(--sky-blue))",
+        // Badge tiers, mirroring iOS BadgeTier; tokens in src/index.css.
+        badge: {
+          bronze: {
+            DEFAULT: "hsl(var(--badge-bronze))",
+            foreground: "hsl(var(--badge-bronze-foreground))",
+            soft: "hsl(var(--badge-bronze-soft))",
+          },
+          silver: {
+            DEFAULT: "hsl(var(--badge-silver))",
+            foreground: "hsl(var(--badge-silver-foreground))",
+            soft: "hsl(var(--badge-silver-soft))",
+          },
+          gold: {
+            DEFAULT: "hsl(var(--badge-gold))",
+            foreground: "hsl(var(--badge-gold-foreground))",
+            soft: "hsl(var(--badge-gold-soft))",
+          },
+          platinum: {
+            DEFAULT: "hsl(var(--badge-platinum))",
+            foreground: "hsl(var(--badge-platinum-foreground))",
+            soft: "hsl(var(--badge-platinum-soft))",
+          },
+        },
         // Pantry category colours (item 24), tokens in src/index.css.
         cat: {
           protein: {

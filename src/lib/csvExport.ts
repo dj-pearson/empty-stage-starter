@@ -65,3 +65,19 @@ export function downloadCsv(filename: string, csv: string): boolean {
   URL.revokeObjectURL(url);
   return true;
 }
+
+/**
+ * Trigger a browser download of any Blob (a PDF report, say) as `filename`.
+ * Moved here from the retired reportGenerator so the one download helper the
+ * clinician ladder report needs no longer drags that module along.
+ */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

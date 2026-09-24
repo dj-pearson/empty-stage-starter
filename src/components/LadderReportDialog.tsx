@@ -28,7 +28,7 @@ import { logger } from '@/lib/logger';
 import { RUNG_META, type Rung } from '@/lib/exposureLadder';
 import { buildClinicianLadderReport } from '@/lib/clinicianLadderReport';
 import { renderClinicianLadderPdf } from '@/lib/clinicianLadderPdf';
-import { downloadBlob } from '@/lib/reportGenerator';
+import { downloadBlob } from '@/lib/csvExport';
 
 interface LadderReportDialogProps {
   kidId: string;

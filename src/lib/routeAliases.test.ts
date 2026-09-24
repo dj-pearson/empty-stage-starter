@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import { ROUTE_ALIASES, ROUTE_ALIAS_ENTRIES } from './routeAliases';
+import {
+  DASHBOARD_REDIRECT_ENTRIES,
+  DASHBOARD_REDIRECTS,
+  ROUTE_ALIASES,
+  ROUTE_ALIAS_ENTRIES,
+} from './routeAliases';
 
 /**
  * The alias URLs redirect; they do not mount a second app (US-766).
@@ -119,5 +124,50 @@ describe('aliases stay out of discovery surfaces', () => {
     for (const [from] of ROUTE_ALIAS_ENTRIES) {
       expect(routes).not.toContain(`"${from}"`);
     }
+  });
+});
+
+describe('retired dashboard routes', () => {
+  it('folds Analytics into the numbers section of Progress', () => {
+    expect(DASHBOARD_REDIRECTS['/dashboard/analytics']).toBe('/dashboard/progress?section=numbers');
+    expect(Object.isFrozen(DASHBOARD_REDIRECTS)).toBe(true);
+  });
+
+  it.each(DASHBOARD_REDIRECT_ENTRIES)('301s %s at the CDN, with and without a trailing slash', (from, to) => {
+    expect(redirects).toContain(`${from} ${to} 301`);
+    expect(redirects).toContain(`${from}/ ${to} 301`);
+  });
+
+  it('renders them from the shared list in App.tsx', () => {
+    expect(appSource).toContain('DASHBOARD_REDIRECT_ENTRIES.map');
+  });
+
+  it('no longer imports the Analytics page', () => {
+    expect(appSource).not.toContain('pages/Analytics');
+    const files = execSync("find src -name '*.tsx' -o -name '*.ts'", { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter((f) => f && !/\.test\./.test(f));
+    const importers = files.filter((f) => /pages\/Analytics["']/.test(readFileSync(f, 'utf8')));
+    expect(importers).toEqual([]);
+  });
+
+  it('has no in-app link to a retired route', () => {
+    // The redirect is for bookmarks; our own links go to the page that
+    // replaced the route, so nobody takes the extra hop.
+    const files = execSync("find src -name '*.tsx' -o -name '*.ts'", { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter((f) => f && !/\.test\.|routeAliases/.test(f));
+
+    const offenders: string[] = [];
+    for (const [from] of DASHBOARD_REDIRECT_ENTRIES) {
+      const quoted = new RegExp(`["'\`]${from}/?["'\`?#]`);
+      for (const file of files) {
+        if (quoted.test(readFileSync(file, 'utf8'))) offenders.push(`${file} -> ${from}`);
+      }
+    }
+    expect(files.length).toBeGreaterThan(100);
+    expect(offenders).toEqual([]);
   });
 });

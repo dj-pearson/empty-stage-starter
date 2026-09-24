@@ -1,6 +1,5 @@
 import {
   Accessibility,
-  BarChart3,
   BookOpen,
   Bot,
   Calendar,
@@ -109,7 +108,6 @@ export const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   // the household to read.
   { to: "/dashboard/food-journal", label: "Food Journal", icon: BookOpen, group: "insights" },
   { to: "/dashboard/insights", label: "Insights", icon: LineChart, group: "insights" },
-  { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3, group: "insights" },
   { to: "/dashboard/progress", label: "Progress", icon: Trophy, group: "insights" },
 
   // Account. Household is here rather than under Main because it is a setup

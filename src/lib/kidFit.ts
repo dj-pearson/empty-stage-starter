@@ -36,6 +36,11 @@ export interface KidFit {
   allergenSeverity?: AllergenSeverity | null;
   disliked: boolean;
   alwaysEats: boolean;
+  /**
+   * The food's household `is_safe` flag, copied as is. It is NOT per-kid: every
+   * sibling gets the same value. For "is this safe for THIS child", read the
+   * kid's own ladder and always-eats list (kidSafeFoodIds in kidProgress.ts).
+   */
   safe: boolean;
   tryBite: boolean;
   /** Offers with a recorded result (ate + tasted + refused). */

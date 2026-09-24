@@ -1,0 +1,37 @@
+{
+  "progressHousehold": {
+    "result": {
+      "ate": "Ate",
+      "tasted": "Tasted",
+      "refused": "Refused"
+    },
+    "chart": {
+      "caption": "{{name}}: dishes logged each month",
+      "month": "Month"
+    },
+    "export": {
+      "summary": "Monthly summary (CSV)",
+      "meals": "Every logged meal (CSV)",
+      "done_one": "Exported {{count}} row.",
+      "done_other": "Exported {{count}} rows.",
+      "failed": "Could not start the download."
+    },
+    "noKids": "Add a child to start counting meals.",
+    "loading": "Loading the numbers",
+    "range": "Logged meals from {{from}} to {{to}}, one count per dish.",
+    "error": "Couldn't load the meal log. Try again in a moment.",
+    "truncated": "This household has more logged rows than we read at once, so the oldest months may be short.",
+    "showChart": ", show in chart",
+    "emptyKid": "Nothing logged for {{name}} in the last year.",
+    "emptyKidLink": "Log a meal in the planner",
+    "dishesThisMonth": "Dishes this month",
+    "distinctFoods": "Different foods",
+    "firstTries": "First logged tries",
+    "graduations": "Ladder graduations to date",
+    "resultsThisMonth": "Results this month",
+    "mom": {
+      "compare": "{{current}} different foods so far this month, {{previous}} in {{lastMonth}}.",
+      "thin": "Not enough logged in {{lastMonth}} to compare."
+    }
+  }
+}

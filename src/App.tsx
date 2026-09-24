@@ -8,7 +8,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
 import { AppProvider } from '@/contexts/AppContext';
-import { ROUTE_ALIAS_ENTRIES } from '@/lib/routeAliases';
+import { DASHBOARD_REDIRECT_ENTRIES, ROUTE_ALIAS_ENTRIES } from '@/lib/routeAliases';
 import { AccessibilityProvider, useAccessibility } from '@/contexts/AccessibilityContext';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -46,7 +46,6 @@ const Planner = lazy(() => import('./pages/Planner'));
 const Grocery = lazy(() => import('./pages/Grocery'));
 const Kids = lazy(() => import('./pages/Kids'));
 const InsightsDashboard = lazy(() => import('./pages/InsightsDashboard'));
-const Analytics = lazy(() => import('./pages/Analytics'));
 const FoodJournal = lazy(() => import('./pages/FoodJournal'));
 const Progress = lazy(() => import('./pages/Progress'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -535,14 +534,16 @@ const App = () => (
                             </RouteErrorBoundary>
                           }
                         />
-                        <Route
-                          path="analytics"
-                          element={
-                            <RouteErrorBoundary>
-                              <Analytics />
-                            </RouteErrorBoundary>
-                          }
-                        />
+                        {/* Retired dashboard routes (Analytics folded into Progress).
+                            Relative to /dashboard; public/_redirects carries the
+                            301 for a cold load. List: src/lib/routeAliases.ts. */}
+                        {DASHBOARD_REDIRECT_ENTRIES.map(([from, to]) => (
+                          <Route
+                            key={from}
+                            path={from.replace(/^\/dashboard\//, '')}
+                            element={<Navigate to={to} replace />}
+                          />
+                        ))}
                         <Route
                           path="food-journal"
                           element={

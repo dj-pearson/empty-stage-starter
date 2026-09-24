@@ -3,7 +3,12 @@
     "history": {
       "title": "Recent meal history",
       "empty": "No logged meals yet. Mark meals in the Planner to see them here.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "openPlanner": "Open the Planner",
+      "rowMeta": "{{kid}} · {{date}} · {{slot}}",
+      "formerKid": "Former child",
+      "showAll": "Show all {{count}}",
+      "showFewer": "Show fewer"
     }
   }
 }

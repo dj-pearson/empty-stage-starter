@@ -135,6 +135,27 @@ All colors MUST be HSL.
     /* Sky Blue */
 
     /*
+      Badge tiers, mirroring the iOS BadgeTier (bronze, silver, gold,
+      platinum). Same shape as the category colours: a fill for icons and
+      text on the soft tint, a foreground for text on the fill, and a soft
+      tint for earned tiles. Measured 2026-09-24, light: every fill reads at
+      6.0:1 or better on the background, the card and its own soft tint, and
+      foreground on fill is 6.4:1 or better.
+    */
+    --badge-bronze: 25 75% 33%;
+    --badge-bronze-foreground: 0 0% 100%;
+    --badge-bronze-soft: 30 60% 93%;
+    --badge-silver: 215 14% 37%;
+    --badge-silver-foreground: 0 0% 100%;
+    --badge-silver-soft: 215 20% 93%;
+    --badge-gold: 38 90% 27%;
+    --badge-gold-foreground: 0 0% 100%;
+    --badge-gold-soft: 45 90% 90%;
+    --badge-platinum: 270 50% 43%;
+    --badge-platinum-foreground: 0 0% 100%;
+    --badge-platinum-soft: 270 55% 95%;
+
+    /*
       Pantry category colours (item 24). Each category has a fill (dots, icon
       tiles, and text on the soft tint), a foreground for text on the fill, and
       a soft tint for section headers and pills. Every fill reads at 4.5:1 or
@@ -263,6 +284,22 @@ All colors MUST be HSL.
     --safe-food: 142 70% 45%;
     --try-bite: 24 95% 60%;
     --sky-blue: 199 84% 74%;
+
+    /* Badge tiers, dark: a light fill with slate text on it and a deep tint
+       the fill reads on. Every fill is 5.6:1 or better on the background,
+       the card and its soft tint. */
+    --badge-bronze: 28 75% 65%;
+    --badge-bronze-foreground: 222 47% 11%;
+    --badge-bronze-soft: 28 40% 20%;
+    --badge-silver: 215 16% 76%;
+    --badge-silver-foreground: 222 47% 11%;
+    --badge-silver-soft: 215 18% 24%;
+    --badge-gold: 45 90% 60%;
+    --badge-gold-foreground: 222 47% 11%;
+    --badge-gold-soft: 45 50% 18%;
+    --badge-platinum: 270 75% 80%;
+    --badge-platinum-foreground: 222 47% 11%;
+    --badge-platinum-soft: 270 30% 24%;
 
     /* Category colours, dark: a light fill with slate text on it, as
        --primary does here, and a deep tint the fill reads on. */

@@ -1,0 +1,90 @@
+{
+  "progressBadges": {
+    "heading": "{{name}}: milestones",
+    "summary": "{{earned}} of {{total}} badges earned",
+    "safeCount_one": "{{count}} food reached safe",
+    "safeCount_other": "{{count}} foods reached safe",
+    "tiers": {
+      "bronze": "Bronze",
+      "silver": "Silver",
+      "gold": "Gold",
+      "platinum": "Platinum"
+    },
+    "earnedOn": "Earned on {{date}}",
+    "notYet": "Not yet earned",
+    "household": "Household",
+    "readyToSync": "Done. Shows as earned after the iPhone app syncs.",
+    "progressLabel": "{{title}} progress",
+    "progressValue": "{{progress}} of {{total}}",
+    "loading": "Loading badges",
+    "timeline": {
+      "title": "Milestones",
+      "badgeItem": "Earned {{title}}",
+      "safeItem": "{{food}} reached safe",
+      "showAll": "Show all {{count}}",
+      "showFewer": "Show fewer",
+      "none": "Nothing here yet. Foods that reach safe on the ladder and badges from the iPhone app land here with their dates."
+    },
+    "grid": {
+      "title": "Badges"
+    },
+    "error": {
+      "inline": "Couldn't load badges.",
+      "toast": "Couldn't load {{name}}'s badges",
+      "retry": "Retry"
+    },
+    "empty": {
+      "title": "No badges yet",
+      "body": "Badges are earned in the iPhone app from what you log. Closest for {{name}}: {{badge}}.",
+      "cta": "Offer a try-bite"
+    },
+    "firstTryBite": {
+      "title": "First Try-Bite",
+      "description": "Tried a new food"
+    },
+    "fiveDayStreak": {
+      "title": "5-Day Streak",
+      "description": "5 days of try-bites in a row"
+    },
+    "tenDayStreak": {
+      "title": "10-Day Streak",
+      "description": "10 days of try-bites in a row"
+    },
+    "categoryExplorer": {
+      "title": "Category Explorer",
+      "description": "Tried foods from 5 categories"
+    },
+    "vegetableExplorer": {
+      "title": "Vegetable Explorer",
+      "description": "10 different vegetables"
+    },
+    "fruitExplorer": {
+      "title": "Fruit Explorer",
+      "description": "10 different fruits"
+    },
+    "proteinPro": {
+      "title": "Protein Pro",
+      "description": "10 different proteins"
+    },
+    "weekWarrior": {
+      "title": "Week Warrior",
+      "description": "Logged 7 meal results"
+    },
+    "consistentTracker": {
+      "title": "Consistent Tracker",
+      "description": "Logged 30 meal results"
+    },
+    "recipeChef": {
+      "title": "Recipe Chef",
+      "description": "Created 5 recipes"
+    },
+    "loggedThirtyMeals": {
+      "title": "Meal Master",
+      "description": "Planned 30 meals"
+    },
+    "perfectWeek": {
+      "title": "Perfect Week",
+      "description": "5+ wins, 0 refusals this week"
+    }
+  }
+}

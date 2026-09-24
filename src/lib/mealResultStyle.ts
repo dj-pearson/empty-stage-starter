@@ -74,3 +74,14 @@ export function attemptOutcomeStyle(outcome: string): ResultStyle {
       return NOT_LOGGED_STYLE;
   }
 }
+
+/**
+ * Chart fills for each result, as CSS colour values built from the same
+ * tokens the chips use. Tasted keeps the try-bite hue, so a stacked bar never
+ * puts Ate and Tasted in one green.
+ */
+export const RESULT_CHART_COLOR: Readonly<Record<LoggedResult, string>> = Object.freeze({
+  ate: 'hsl(var(--safe-food))',
+  tasted: 'hsl(var(--try-bite))',
+  refused: 'hsl(var(--destructive))',
+});

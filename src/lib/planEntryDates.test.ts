@@ -90,8 +90,9 @@ describe("the call sites follow those rules", () => {
   const read = (rel: string) =>
     readFileSync(path.resolve(__dirname, "../..", rel), "utf-8");
 
+  // ProgressDashboard.tsx left this list when it became the months view: it
+  // reads food_attempts and the ladder, and computes no streak.
   const STREAK_FILES = [
-    "src/components/ProgressDashboard.tsx",
     "src/components/AchievementsView.tsx",
   ];
 
@@ -110,6 +111,13 @@ describe("the call sites follow those rules", () => {
     expect(src).toMatch(/currentStreak\(/);
     expect(src).not.toMatch(/dayDiff/);
     // The raw form is the bug; it must not come back anywhere.
+    expect(src).not.toMatch(/new Date\(entry\.date\)/);
+  });
+
+  it("ProgressDashboard.tsx does not import plan-entry streak code", () => {
+    const src = read("src/components/ProgressDashboard.tsx");
+    expect(src).not.toMatch(/streakRules/);
+    expect(src).not.toMatch(/usePlan\(|planEntries/);
     expect(src).not.toMatch(/new Date\(entry\.date\)/);
   });
 

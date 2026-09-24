@@ -56,6 +56,8 @@ function query(result: { data: unknown; error: null }) {
     gte: () => chain,
     eq: () => chain,
     order: () => chain,
+    // useKidsProgressSummary pages its reads through fetchAllRows.
+    range: () => chain,
     then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
   };
   return chain;
