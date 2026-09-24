@@ -1,247 +1,639 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+/**
+ * Sibling Meal Finder: one dish, one slot, every child being fed.
+ *
+ * The page answers on open. There is one solve (buildSolverInputs +
+ * findSiblingMeals over the whole library), and the header count, the hero,
+ * "Other options", "Takes longer" and "Ruled out for safety" are all cut from
+ * that single array, so they cannot disagree.
+ *
+ * Division of labour: Home's Tonight hero shows what is already on tonight,
+ * the Planner arranges the week, and this page picks the one dish for one
+ * slot across siblings. It links out to both rather than rendering a week or
+ * a cook view of its own.
+ *
+ * Writes go through useRecipeQuickPlan.schedule (PlanContext.scheduleRecipe),
+ * only for the kids the rows were solved for, only for kids the card says
+ * are usable, and only after siblingScheduleGuard re-checks them.
+ */
+
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
-import { Users2, RefreshCw, Sparkles, ChefHat, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  AlertTriangle,
+  CalendarDays,
+  ChevronDown,
+  ShieldAlert,
+  SlidersHorizontal,
+  Users2,
+} from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Star } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
-import { useFoods, useKids, useRecipes } from '@/contexts/AppContext';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useFoods, useKids, usePlan, useRecipes } from '@/contexts/AppContext';
 import { useSiblingResolutions } from '@/hooks/useSiblingResolutions';
-import {
-  findSiblingMeals,
-  applyRelaxation,
-  familyWins as curateFamilyWins,
-  minKidScore as computeMinKidScore,
-  kidToSolverKid,
-  recipeToSolverRecipe,
-} from '@/lib/siblingMealFinder';
 import { useRecipePlates } from '@/hooks/useRecipePlates';
+import { useRecipeQuickPlan, defaultPlanSlot, weekdayLabel } from '@/hooks/useRecipeQuickPlan';
+import { useOnline } from '@/hooks/useCommon';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import {
+  annotateResults,
+  buildSolverInputs,
+  describeExclusions,
+  filterRows,
+  findSiblingMeals,
+  kidToSolverKid,
+  parseFinderParams,
+  rankReconciled,
+  reconcileKidSelection,
+  reconcileRow,
+  type FinderMode,
+  type FinderRow,
+  type PrepLimit,
+  type Reconciled,
+  type StoredKidSelection,
+} from '@/lib/siblingMealFinder';
+import { siblingScheduleGuard } from '@/lib/siblingSchedule';
+import { kidAllergenChips } from '@/lib/kidAllergenChips';
 import type { SolverResult } from '@/lib/siblingConstraintSolver';
+import type { AllergenCopyKind } from '@/lib/planAllergenGuard';
+import { RECIPE_PLAN_SLOTS, slotLabel } from '@/lib/planSlotLabels';
+import { addIsoDays, parseIsoDate } from '@/lib/date-utils';
 import { analytics } from '@/lib/analytics';
 import { logger } from '@/lib/logger';
 import { todayIso } from '@/lib/tonightMode';
-import { supabase } from '@/integrations/supabase/client';
-import { buildSiblingScheduleRequests } from '@/lib/siblingSchedule';
+import { cn } from '@/lib/utils';
 import { SiblingPickerChips } from '@/components/sibling-meal-finder/SiblingPickerChips';
 import { SiblingMealResultCard } from '@/components/sibling-meal-finder/SiblingMealResultCard';
 import { FairnessIndicator } from '@/components/sibling-meal-finder/FairnessIndicator';
 import { TonightCookDialog } from '@/components/TonightCookDialog';
-import type { MealSlot } from '@/types';
+import type { Kid, MealSlot, Recipe } from '@/types';
+import '@/i18n/appLocale';
 
-const STORAGE_KEY = 'siblingMealFinder.selectedKidIds';
+const CONTROLS_OPEN_KEY = 'siblingMealFinder.controlsOpen';
+const OTHER_OPTIONS_PAGE = 8;
+const PREP_OPTIONS: readonly PrepLimit[] = ['any', 15, 30, 45];
+const MODE_OPTIONS: readonly FinderMode[] = ['as_is', 'small_swaps', 'separate_plates'];
+/** U+00B7 middle dot, escaped so this source stays ASCII. */
+const DOT = ' \u00B7 ';
 
-const MEAL_SLOTS: { value: MealSlot; label: string }[] = [
-  { value: 'breakfast', label: 'Breakfast' },
-  { value: 'lunch', label: 'Lunch' },
-  { value: 'dinner', label: 'Dinner' },
-  { value: 'snack1', label: 'Snack' },
-];
+type AllergyMarker = 'severe' | 'unrated' | 'none';
+
+interface CardRow {
+  row: FinderRow;
+  reconciled: Reconciled;
+  unknownAllergyKidNames: string[];
+}
+
+interface BlockedLine {
+  kidName: string;
+  allergen?: string;
+  copyKind?: AllergenCopyKind;
+  cause: 'allergen' | 'plate_blocked' | 'plate_empty';
+}
+
+interface CardNotice {
+  noFoods?: boolean;
+  blocked: BlockedLine[];
+}
+
+function selectionKey(householdId: string | null | undefined): string {
+  return `siblingMealFinder.selection.${householdId ?? 'local'}`;
+}
+
+function readStoredSelection(key: string): StoredKidSelection | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as StoredKidSelection).kidIds) &&
+      Array.isArray((parsed as StoredKidSelection).knownKidIds)
+    ) {
+      return parsed as StoredKidSelection;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSelection(key: string, value: StoredKidSelection): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Private mode or blocked storage: the selection just isn't remembered.
+  }
+}
+
+function readControlsOpen(): boolean {
+  try {
+    return localStorage.getItem(CONTROLS_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeControlsOpen(open: boolean): void {
+  try {
+    localStorage.setItem(CONTROLS_OPEN_KEY, open ? '1' : '0');
+  } catch {
+    // Not remembered; harmless.
+  }
+}
+
+function allergyMarkerFor(kid: Kid): AllergyMarker {
+  // kidAllergenChips matches severity keys canonically, so a severity saved as
+  // "peanuts" still counts for an allergen listed as "Peanut".
+  const chips = kidAllergenChips(kid);
+  if (chips.some((c) => c.severity === 'severe')) return 'severe';
+  if (chips.some((c) => c.severity === null)) return 'unrated';
+  return 'none';
+}
+
+function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((parseIsoDate(toIso).getTime() - parseIsoDate(fromIso).getTime()) / 86_400_000);
+}
+
+function joinNames(names: string[]): string {
+  return names.filter(Boolean).join(', ');
+}
 
 export default function SiblingMealFinder() {
-  const { t } = useTranslation();
-  const { kids } = useKids();
+  const { t, i18n } = useTranslation();
+  const { kids, kidsHydrated } = useKids();
   const { foods } = useFoods();
   const { recipes } = useRecipes();
-  const { history, recordResolution } = useSiblingResolutions();
+  const { planEntries } = usePlan();
+  const { householdId, history, recordResolution } = useSiblingResolutions();
+  const { schedule } = useRecipeQuickPlan();
+  const online = useOnline();
+  const reducedMotion = useReducedMotion();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [selectedKidIds, setSelectedKidIds] = useLocalStorage<string[]>(STORAGE_KEY, []);
-  const [maxMinutes, setMaxMinutes] = useState<number>(30);
-  const [mealDate, setMealDate] = useState<string>(todayIso());
-  const [mealSlot, setMealSlot] = useState<MealSlot>('dinner');
+  // ---- today, re-derived when the tab comes back -------------------------
+  const [today, setToday] = useState<string>(() => todayIso());
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setToday(todayIso());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
-  const [results, setResults] = useState<SolverResult[] | null>(null);
-  const [running, setRunning] = useState(false);
-  const [acceptedRecipeId, setAcceptedRecipeId] = useState<string | null>(null);
+  // ---- deep link: URL wins over storage for this visit -------------------
+  // Seeded once on mount; later URL writes come from this page itself.
+  const [initialParams] = useState(() => parseFinderParams(searchParams, []));
+  const params = useMemo(() => parseFinderParams(searchParams, kids), [searchParams, kids]);
+
+  const [mealDate, setMealDate] = useState<string>(() => initialParams.date ?? todayIso());
+  const [mealSlot, setMealSlot] = useState<MealSlot>(() => initialParams.slot ?? defaultPlanSlot());
+  const [mode, setMode] = useState<FinderMode>('small_swaps');
+  const [prep, setPrep] = useState<PrepLimit>('any');
+  const [controlsOpen, setControlsOpen] = useState<boolean>(() => readControlsOpen());
+  const [showAllOthers, setShowAllOthers] = useState(false);
   const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [notices, setNotices] = useState<Record<string, CardNotice>>({});
+  const [scheduleAnnouncement, setScheduleAnnouncement] = useState<string>('');
+  const [focusResults, setFocusResults] = useState(0);
 
-  // US-295: constraint relaxation panel. All client-side post-filters
-  // over the solver output so toggling is instant and the live count
-  // updates without re-running the solver.
-  const [allowAversionsPerKid, setAllowAversionsPerKid] = useState<number>(0);
-  const [allowSwaps, setAllowSwaps] = useState<boolean>(true);
-  const [hideSoftBlocks, setHideSoftBlocks] = useState<boolean>(false);
+  // ---- who's eating -------------------------------------------------------
+  const storageKey = selectionKey(householdId);
+  const [localSelection, setLocalSelection] = useState<string[] | null>(null);
 
-  // US-295: "Family wins" — auto-curated collection of recipes that were
-  // a full match for every selected kid. Accumulates across sessions.
-  const [familyWins, setFamilyWins] = useLocalStorage<string[]>(
-    'siblingMealFinder.familyWins',
-    []
-  );
-
-  const effectiveKidIds = useMemo(() => {
+  const selectedKidIds = useMemo<string[]>(() => {
+    if (kids.length === 0) return [];
     const known = new Set(kids.map((k) => k.id));
-    const filtered = selectedKidIds.filter((id) => known.has(id));
-    return filtered.length ? filtered : kids.map((k) => k.id);
-  }, [selectedKidIds, kids]);
+    if (localSelection) return localSelection.filter((id) => known.has(id));
+    if (params.kidIds) return params.kidIds;
+    return reconcileKidSelection(readStoredSelection(storageKey), kids).kidIds;
+  }, [kids, localSelection, params.kidIds, storageKey]);
 
-  const cookingRecipe = useMemo(
-    () => (cookingRecipeId ? (recipes.find((r) => r.id === cookingRecipeId) ?? null) : null),
-    [recipes, cookingRecipeId]
+  const kidIdKey = selectedKidIds.join(',');
+  // A stable array per distinct selection, so the deferred value only lags on a real change.
+  const effectiveKidIds = useMemo(() => (kidIdKey ? kidIdKey.split(',') : []), [kidIdKey]);
+  const solvedKidIds = useDeferredValue(effectiveKidIds);
+  const lagging = solvedKidIds !== effectiveKidIds;
+
+  const updateParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [k, v] of Object.entries(patch)) {
+            if (v == null || v === '') next.delete(k);
+            else next.set(k, v);
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
   );
 
-  const selectedKidsObj = useMemo(
-    () => kids.filter((k) => effectiveKidIds.includes(k.id)),
-    [kids, effectiveKidIds]
+  const changeKids = useCallback(
+    (ids: string[]) => {
+      const knownKidIds = kids.map((k) => k.id);
+      const ordered = knownKidIds.filter((id) => ids.includes(id));
+      setLocalSelection(ordered);
+      writeStoredSelection(storageKey, { kidIds: ordered, knownKidIds });
+      updateParams({ kids: ordered.join(',') || null });
+      setScheduleAnnouncement('');
+    },
+    [kids, storageKey, updateParams]
+  );
+  const selectAllKids = useCallback(() => changeKids(kids.map((k) => k.id)), [changeKids, kids]);
+
+  const changeDate = useCallback(
+    (next: string) => {
+      if (!next) return;
+      setMealDate(next);
+      updateParams({ date: next });
+      setScheduleAnnouncement('');
+      setFocusResults((n) => n + 1);
+    },
+    [updateParams]
   );
 
-  const minKidScore = useCallback(
-    (r: SolverResult): number => computeMinKidScore(r),
-    []
+  const changeSlot = useCallback(
+    (next: string) => {
+      if (!(RECIPE_PLAN_SLOTS as readonly string[]).includes(next)) return;
+      setMealSlot(next as MealSlot);
+      updateParams({ slot: next });
+      setScheduleAnnouncement('');
+      setFocusResults((n) => n + 1);
+    },
+    [updateParams]
   );
 
-  /**
-   * US-613: per-kid plating for whichever recipes are on screen. Loaded in one
-   * batch rather than per card, and absent entirely for recipes that have
-   * never been broken into components.
-   */
-  const resultRecipeIds = useMemo(
-    () => (results ?? []).filter((r) => !r.excluded).map((r) => r.recipeId),
-    [results]
+  const changeMode = useCallback(
+    (next: string) => {
+      if (!(MODE_OPTIONS as readonly string[]).includes(next)) return;
+      setMode(next as FinderMode);
+      analytics.trackEvent('family_finder_constraint_relaxed', {
+        which_constraint: 'mode',
+        value: next,
+        kid_count: effectiveKidIds.length,
+      });
+    },
+    [effectiveKidIds.length]
   );
 
-  const solverRecipesForPlating = useMemo(() => {
-    if (resultRecipeIds.length === 0) return [];
-    const foodById = new Map(foods.map((f) => [f.id, f]));
-    const wanted = new Set(resultRecipeIds);
-    return recipes.filter((r) => wanted.has(r.id)).map((r) => recipeToSolverRecipe(r, foodById));
-  }, [recipes, foods, resultRecipeIds]);
-
-  const platingKids = useMemo(
-    () =>
-      selectedKidsObj.map((k) => ({
-        ...kidToSolverKid(k),
-        textureDislikes: k.texture_dislikes ?? null,
-      })),
-    [selectedKidsObj]
+  const changePrep = useCallback(
+    (next: string) => {
+      if (!next) return;
+      const value: PrepLimit = next === 'any' ? 'any' : (Number(next) as PrepLimit);
+      if (!PREP_OPTIONS.includes(value)) return;
+      setPrep(value);
+      analytics.trackEvent('family_finder_constraint_relaxed', {
+        which_constraint: 'prep',
+        value: String(value),
+        kid_count: effectiveKidIds.length,
+      });
+    },
+    [effectiveKidIds.length]
   );
 
-  const { platesByRecipe } = useRecipePlates({
-    recipes: solverRecipesForPlating,
-    kids: platingKids,
-    today: todayIso(),
-  });
+  const toggleControls = useCallback((open: boolean) => {
+    setControlsOpen(open);
+    writeControlsOpen(open);
+  }, []);
 
-  const runSolver = useCallback(() => {
-    if (kids.length === 0) {
-      toast.error('Add a kid profile first.');
-      return;
-    }
-    if (recipes.length === 0) {
-      toast.error('Add some recipes first - the solver needs a library to choose from.');
-      return;
-    }
-    setRunning(true);
-    setAcceptedRecipeId(null);
+  // ---- the one solve ------------------------------------------------------
+  const solverInputs = useMemo(() => buildSolverInputs(recipes, foods), [recipes, foods]);
+
+  const solved = useMemo<SolverResult[]>(() => {
+    if (kids.length === 0 || solvedKidIds.length === 0 || recipes.length === 0) return [];
     try {
-      const r = findSiblingMeals({
+      return findSiblingMeals({
         recipes,
         foods,
         kids,
-        selectedKidIds: effectiveKidIds,
+        selectedKidIds: solvedKidIds,
         history,
-        options: { maxMinutes, limit: 8 },
-      });
-      setResults(r);
-      analytics.trackEvent('sibling_solver_run', {
-        kid_count: effectiveKidIds.length,
-        recipe_count: recipes.length,
-        result_count: r.filter((x) => !x.excluded).length,
-        full_match_count: r.filter((x) => !x.excluded && x.resolutionType === 'full_match').length,
-        with_swaps_count: r.filter((x) => !x.excluded && x.resolutionType === 'with_swaps').length,
-        split_plate_count: r.filter((x) => !x.excluded && x.resolutionType === 'split_plate')
-          .length,
-        max_minutes: maxMinutes,
+        options: { limit: Infinity },
+        inputs: solverInputs,
       });
     } catch (err) {
       logger.error('siblingSolver error', err);
-      toast.error("Couldn't run the solver. Try again?");
-    } finally {
-      setRunning(false);
+      return [];
     }
-  }, [kids, recipes, foods, effectiveKidIds, history, maxMinutes]);
+  }, [solverInputs, recipes, foods, kids, solvedKidIds, history]);
+
+  const rows = useMemo(
+    () =>
+      annotateResults(solved, {
+        recipes,
+        foods,
+        kids,
+        selectedKidIds: solvedKidIds,
+        inputs: solverInputs,
+      }),
+    [solved, recipes, foods, kids, solvedKidIds, solverInputs]
+  );
+
+  const filtered = useMemo(() => filterRows(rows, { mode, prep }), [rows, mode, prep]);
+
+  // Per-kid plating for every dish that can show, in one batch.
+  const platingRecipes = useMemo(() => {
+    const ids = new Set([...filtered.visible, ...filtered.slower].map((r) => r.result.recipeId));
+    return [...ids]
+      .map((id) => solverInputs.recipeById.get(id))
+      .filter((r): r is NonNullable<typeof r> => !!r);
+  }, [filtered, solverInputs]);
+
+  const solvedKids = useMemo(() => {
+    const wanted = new Set(solvedKidIds);
+    return kids.filter((k) => wanted.has(k.id));
+  }, [kids, solvedKidIds]);
+
+  const platingKids = useMemo(
+    () =>
+      solvedKids.map((k) => ({
+        ...kidToSolverKid(k),
+        textureDislikes: k.texture_dislikes ?? null,
+      })),
+    [solvedKids]
+  );
+
+  const {
+    platesByRecipe,
+    loading: platesLoading,
+    error: platesError,
+  } = useRecipePlates({ recipes: platingRecipes, kids: platingKids, today });
+
+  const kidNameById = useMemo(() => new Map(kids.map((k) => [k.id, k.name])), [kids]);
+
+  const toCardRows = useCallback(
+    (list: FinderRow[]): CardRow[] =>
+      rankReconciled(
+        list.map((row) => ({
+          row,
+          reconciled: reconcileRow(row, platesByRecipe.get(row.result.recipeId), kids),
+          unknownAllergyKidNames: row.unknownAllergyKidIds
+            .map((id) => kidNameById.get(id) ?? '')
+            .filter(Boolean),
+        }))
+      ),
+    [platesByRecipe, kids, kidNameById]
+  );
+
+  const ranked = useMemo(() => toCardRows(filtered.visible), [toCardRows, filtered.visible]);
+  const slowerRanked = useMemo(() => toCardRows(filtered.slower), [toCardRows, filtered.slower]);
+  const exclusions = useMemo(() => describeExclusions(solved), [solved]);
+
+  const hero = ranked[0] ?? null;
+  const others = ranked.slice(1);
+  const shownOthers = showAllOthers ? others : others.slice(0, OTHER_OPTIONS_PAGE);
+
+  // ---- what is already on the plan for this slot -------------------------
+  const acceptedRecipeIds = useMemo(() => {
+    const wanted = new Set(solvedKidIds);
+    const out = new Set<string>();
+    for (const e of planEntries) {
+      if (e.recipe_id && e.date === mealDate && e.meal_slot === mealSlot && wanted.has(e.kid_id)) {
+        out.add(e.recipe_id);
+      }
+    }
+    return out;
+  }, [planEntries, mealDate, mealSlot, solvedKidIds]);
+
+  // ---- labels -------------------------------------------------------------
+  const slotName = slotLabel(t, mealSlot);
+  const dayWord = useMemo(() => {
+    if (mealDate === today) return mealSlot === 'dinner' ? 'tonight' : 'today';
+    if (mealDate === addIsoDays(today, 1)) return 'tomorrow';
+    return 'day';
+  }, [mealDate, today, mealSlot]);
+  const weekday = weekdayLabel(mealDate, i18n.language);
+
+  const dayLabel =
+    dayWord === 'tonight'
+      ? t('siblingMealFinder.controls.date.tonight', { defaultValue: 'Tonight' })
+      : dayWord === 'today'
+        ? t('siblingMealFinder.controls.date.today', { defaultValue: 'Today' })
+        : dayWord === 'tomorrow'
+          ? t('siblingMealFinder.controls.date.tomorrow', { defaultValue: 'Tomorrow' })
+          : weekday;
+
+  const slotText =
+    dayWord === 'day'
+      ? t('siblingMealFinder.results.slotText.day', {
+          slot: slotName.toLowerCase(),
+          day: weekday,
+          defaultValue: '{{slot}} on {{day}}',
+        })
+      : t(`siblingMealFinder.results.slotText.${dayWord}`, {
+          slot: slotName.toLowerCase(),
+          defaultValue: `{{slot}} ${dayWord}`,
+        });
+
+  const prepLabel = (p: PrepLimit) =>
+    p === 'any'
+      ? t('siblingMealFinder.controls.prep.any', { defaultValue: 'Any time' })
+      : t('siblingMealFinder.controls.prep.minutes', {
+          count: p,
+          defaultValue: 'Under {{count}} min',
+        });
+  const modeLabel = (m: FinderMode) =>
+    m === 'as_is'
+      ? t('siblingMealFinder.controls.mode.asIs', { defaultValue: 'Same plate for all' })
+      : m === 'small_swaps'
+        ? t('siblingMealFinder.controls.mode.smallSwaps', { defaultValue: 'Small swaps OK' })
+        : t('siblingMealFinder.controls.mode.separatePlates', {
+            defaultValue: 'Separate plates OK',
+          });
+
+  const summary = [dayLabel, slotName, prepLabel(prep), modeLabel(mode)].join(DOT);
+  const plannerHref = `/dashboard/planner?date=${mealDate}&slot=${mealSlot}`;
+  const solvedNames = joinNames(solvedKids.map((k) => k.name));
+
+  const allergyMarkers = useMemo(() => {
+    const out: Record<string, AllergyMarker> = {};
+    for (const k of kids) out[k.id] = allergyMarkerFor(k);
+    return out;
+  }, [kids]);
+
+  const disabledReason = !online
+    ? t('siblingMealFinder.offline', {
+        defaultValue: "You're offline. Planning needs a connection; Cook now still works.",
+      })
+    : lagging
+      ? t('siblingMealFinder.results.updating', { defaultValue: 'Updating for who is eating...' })
+      : undefined;
+
+  // ---- latest values for the stable callbacks ----------------------------
+  const latest = useRef({
+    mealDate,
+    mealSlot,
+    today,
+    online,
+    lagging,
+    solvedKidIds,
+    kids,
+    recipes,
+    solverInputs,
+    platesByRecipe,
+    ranked,
+    slowerRanked,
+    schedule,
+    recordResolution,
+  });
+  latest.current = {
+    mealDate,
+    mealSlot,
+    today,
+    online,
+    lagging,
+    solvedKidIds,
+    kids,
+    recipes,
+    solverInputs,
+    platesByRecipe,
+    ranked,
+    slowerRanked,
+    schedule,
+    recordResolution,
+  };
+  const lockRef = useRef<string | null>(null);
+  const recordedKeys = useRef<Set<string>>(new Set());
 
   const handleUse = useCallback(
-    async (result: SolverResult) => {
+    async (result: SolverResult, cardKidIds: string[]) => {
+      const cur = latest.current;
+      if (!cur.online || cur.lagging) return;
+      const key = `${result.recipeId}|${cur.mealDate}|${cur.mealSlot}`;
+      if (lockRef.current) return;
+
+      const recipe: Recipe | undefined = cur.recipes.find((r) => r.id === result.recipeId);
+      if (!recipe) {
+        toast.error(
+          t('siblingMealFinder.toast.noRecipe', { defaultValue: 'That recipe is no longer in your library.' })
+        );
+        analytics.trackEvent('sibling_schedule_failed', { reason: 'no_recipe' });
+        return;
+      }
+
+      // Only kids the rows were solved for, and only the ones the card said are usable.
+      const solvedSet = new Set(cur.solvedKidIds);
+      const candidates = cur.kids.filter((k) => solvedSet.has(k.id) && cardKidIds.includes(k.id));
+      const guard = siblingScheduleGuard({
+        kids: candidates,
+        recipeFoodIds: recipe.food_ids,
+        foodById: cur.solverInputs.foodById,
+        plates: cur.platesByRecipe.get(recipe.id),
+      });
+
+      if (guard.noFoods) {
+        setNotices((prev) => ({ ...prev, [recipe.id]: { noFoods: true, blocked: [] } }));
+        analytics.trackEvent('sibling_schedule_failed', { reason: 'no_foods' });
+        return;
+      }
+
+      const allowed = new Set(guard.schedule);
+      const kidIds = cardKidIds.filter((id) => solvedSet.has(id) && allowed.has(id));
+      const blocked: BlockedLine[] = guard.blocked.map((b) => ({
+        kidName: b.kid.name,
+        allergen: b.allergen,
+        copyKind: b.copyKind,
+        cause: b.cause,
+      }));
+      setNotices((prev) => ({ ...prev, [recipe.id]: { blocked } }));
+
+      if (kidIds.length === 0) {
+        analytics.trackEvent('sibling_schedule_failed', { reason: 'all_blocked' });
+        return;
+      }
+
+      lockRef.current = key;
+      setPendingKey(key);
       try {
-        // US-718: a solver result names a recipe, not a food. This used to send
-        // `food_id: ''` to addPlanEntry -- an empty string into a NOT NULL uuid
-        // column, rejected every time -- so schedule the recipe instead and let
-        // it expand into real rows, once per child.
-        const requests = buildSiblingScheduleRequests({
-          recipeId: result.recipeId,
-          kidIds: effectiveKidIds,
-          date: mealDate,
-          mealSlot,
-        });
+        const res = await cur.schedule(recipe, cur.mealDate, cur.mealSlot, kidIds);
+        const succeededSet = new Set(res.succeeded);
 
-        if (requests.length === 0) {
-          toast.error("That meal has no recipe to schedule.");
-          return;
+        if (res.succeeded.length > 0 && !recordedKeys.current.has(key)) {
+          recordedKeys.current.add(key);
+          const primary = (res.rows ?? []).find((r) => r.is_primary_dish && succeededSet.has(r.kid_id));
+          await cur.recordResolution({
+            result,
+            selectedKidIds: res.succeeded,
+            planEntryId: primary?.id ?? res.rows?.[0]?.id ?? null,
+          });
         }
 
-        let scheduled = 0;
-        for (const request of requests) {
-          const { error } = await supabase.rpc('schedule_recipe_to_plan', request);
-          if (error) {
-            // US-718 AC2: a failed insert is visible, not swallowed.
-            logger.error('schedule_recipe_to_plan failed', error);
-            toast.error("Couldn't add that meal to the plan. Please try again.");
-            return;
-          }
-          scheduled += 1;
+        if (res.succeeded.length === 0) {
+          analytics.trackEvent('sibling_schedule_failed', { reason: 'write_failed' });
         }
-        void scheduled;
 
-        const ok = await recordResolution({
-          result,
-          selectedKidIds: effectiveKidIds,
-          planEntryId: null,
-        });
-
-        analytics.trackEvent('sibling_solution_chosen', {
-          recipe_id: result.recipeId,
+        const heroId = cur.ranked[0]?.row.result.recipeId;
+        const otherIdx = cur.ranked.findIndex((r) => r.row.result.recipeId === recipe.id);
+        const slowIdx = cur.slowerRanked.findIndex((r) => r.row.result.recipeId === recipe.id);
+        const rank = otherIdx >= 0 ? otherIdx : slowIdx >= 0 ? cur.ranked.length + slowIdx : -1;
+        const payload = {
+          recipe_id: recipe.id,
+          list: heroId === recipe.id ? 'hero' : 'other',
+          rank,
+          days_ahead: daysBetween(cur.today, cur.mealDate),
+          scheduled_count: res.succeeded.length,
+          failed_count: res.failed.length,
+          blocked_count: blocked.length,
+          partial: res.failed.length > 0 || blocked.length > 0,
           resolution_type: result.resolutionType,
-          satisfaction_score: result.satisfactionScore,
-          kid_count: effectiveKidIds.length,
-          swap_count: result.swaps.length,
-          split_plate_count: result.splitPlates.length,
-          recorded: ok,
-          meal_slot: mealSlot,
-        });
+          meal_slot: cur.mealSlot,
+        };
+        analytics.trackEvent('sibling_solution_chosen', payload);
+        // Kept one release for dashboards that still read the old name.
+        analytics.trackEvent('family_finder_recipe_selected', payload);
 
-        analytics.trackEvent('family_finder_recipe_selected', {
-          recipe_id: result.recipeId,
-          min_kid_score: minKidScore(result),
-          kid_count: effectiveKidIds.length,
-          resolution_type: result.resolutionType,
-        });
-
-        setAcceptedRecipeId(result.recipeId);
-        toast.success(
-          `${result.recipeName} added to ${MEAL_SLOTS.find((m) => m.value === mealSlot)?.label.toLowerCase() ?? mealSlot} for ${effectiveKidIds.length} ${effectiveKidIds.length === 1 ? 'kid' : 'kids'}.`
+        const nameOf = (id: string) => cur.kids.find((k) => k.id === id)?.name ?? '';
+        setScheduleAnnouncement(
+          res.succeeded.length === 0
+            ? t('siblingMealFinder.toast.failed', {
+                name: recipe.name,
+                defaultValue: "Couldn't plan {{name}}.",
+              })
+            : res.failed.length > 0
+              ? t('siblingMealFinder.toast.partial', {
+                  name: recipe.name,
+                  succeeded: joinNames(res.succeeded.map(nameOf)),
+                  failed: joinNames(res.failed.map(nameOf)),
+                  defaultValue: '{{name}} planned for {{succeeded}}, not for {{failed}}.',
+                })
+              : t('siblingMealFinder.toast.planned', {
+                  name: recipe.name,
+                  names: joinNames(res.succeeded.map(nameOf)),
+                  defaultValue: '{{name}} planned for {{names}}.',
+                })
         );
       } catch (err) {
-        logger.error('siblingSolver use error', err);
-        toast.error("Couldn't add the meal to the planner.");
+        logger.error('sibling schedule error', err);
+        analytics.trackEvent('sibling_schedule_failed', { reason: 'error' });
+        toast.error(
+          t('siblingMealFinder.toast.error', {
+            defaultValue: "Couldn't add that meal to the plan. Please try again.",
+          })
+        );
+      } finally {
+        lockRef.current = null;
+        setPendingKey(null);
       }
     },
-    [effectiveKidIds, mealDate, mealSlot, recordResolution, minKidScore]
+    [t]
   );
 
   const handleCook = useCallback((result: SolverResult) => {
@@ -252,367 +644,578 @@ export default function SiblingMealFinder() {
     });
   }, []);
 
-  const visibleResults = useMemo(() => (results ?? []).filter((r) => !r.excluded), [results]);
-  const excludedCount = useMemo(() => (results ?? []).filter((r) => r.excluded).length, [results]);
-
-  // US-295: apply the relaxation panel to the solver output.
-  const filteredResults = useMemo(
-    () =>
-      applyRelaxation(visibleResults, {
-        allowAversionsPerKid,
-        allowSwaps,
-        hideSoftBlocks,
-      }),
-    [visibleResults, allowSwaps, hideSoftBlocks, allowAversionsPerKid]
+  const cookingRecipe = useMemo(
+    () => (cookingRecipeId ? (recipes.find((r) => r.id === cookingRecipeId) ?? null) : null),
+    [recipes, cookingRecipeId]
   );
 
-  // US-295: one-swap fallback surfaced when nothing is a clean match but
-  // some recipes work with a single per-kid swap.
-  const oneSwapFallback = useMemo(
-    () =>
-      visibleResults
-        .filter((r) => r.resolutionType === 'with_swaps' && r.swaps.length > 0)
-        .slice(0, 3),
-    [visibleResults]
-  );
-
-  // US-295: "Family wins" — full matches for every selected kid with a
-  // positive minimum score. Persisted set accumulates the recipe IDs.
-  const familyWinResults = useMemo(
-    () => curateFamilyWins(filteredResults),
-    [filteredResults]
-  );
-
+  // ---- analytics ----------------------------------------------------------
+  const openedRef = useRef(false);
   useEffect(() => {
-    if (familyWinResults.length === 0) return;
-    setFamilyWins((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-      for (const r of familyWinResults) {
-        if (!next.has(r.recipeId)) {
-          next.add(r.recipeId);
-          changed = true;
-        }
-      }
-      return changed ? Array.from(next) : prev;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [familyWinResults]);
-
-  // US-295: live count — re-solves only when the selected kids / library
-  // change, so the header reflects the current selection before the user
-  // hits "Find a meal". Memoized; O(recipes*kids), well under the 200ms
-  // budget for typical libraries.
-  const liveMatchCount = useMemo(() => {
-    if (kids.length === 0 || recipes.length === 0) return null;
-    try {
-      const r = findSiblingMeals({
-        recipes,
-        foods,
-        kids,
-        selectedKidIds: effectiveKidIds,
-        history,
-        options: { maxMinutes: 240, limit: 999 },
-      });
-      return r.filter((x) => !x.excluded).length;
-    } catch {
-      return null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipes.length, foods.length, effectiveKidIds, kids.length]);
-
-  const relaxConstraint = useCallback(
-    (which: string, value: number | boolean) => {
-      analytics.trackEvent('family_finder_constraint_relaxed', {
-        which_constraint: which,
-        value,
-        kid_count: effectiveKidIds.length,
-      });
-    },
-    [effectiveKidIds.length]
-  );
-
-  // US-295 AC: family_finder_opened on every entry to the page (direct
-  // URL or via the new Recipes/Kids CTAs). Distinct from the per-CTA
-  // event so the funnel can attribute organic visits separately.
-  useEffect(() => {
+    if (openedRef.current || !kidsHydrated) return;
+    openedRef.current = true;
     analytics.trackEvent('family_finder_opened', {
-      source: 'page',
+      source: params.from ?? initialParams.from ?? 'direct',
       kid_count: kids.length,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [kidsHydrated, kids.length, params.from, initialParams.from]);
 
-  // US-295 AC: family_finder_zero_results_shown — fires once per solver
-  // run that returns no usable matches. Helps spot pantries / kid
-  // profiles that never satisfy the solver so we can tune the engine.
+  const runKey = `${solvedKidIds.join(',')}|${recipes.length}|${foods.length}|${history.length}`;
+  const lastRunKey = useRef<string | null>(null);
   useEffect(() => {
-    if (results !== null && visibleResults.length === 0) {
+    if (solvedKidIds.length === 0 || recipes.length === 0) return;
+    if (lastRunKey.current === runKey) return;
+    lastRunKey.current = runKey;
+    const live = solved.filter((x) => !x.excluded);
+    analytics.trackEvent('sibling_solver_run', {
+      kid_count: solvedKidIds.length,
+      recipe_count: recipes.length,
+      result_count: live.length,
+      full_match_count: live.filter((x) => x.resolutionType === 'full_match').length,
+      with_swaps_count: live.filter((x) => x.resolutionType === 'with_swaps').length,
+      split_plate_count: live.filter((x) => x.resolutionType === 'split_plate').length,
+      excluded_count: solved.length - live.length,
+    });
+    if (live.length === 0) {
       analytics.trackEvent('family_finder_zero_results_shown', {
-        kid_count: effectiveKidIds.length,
-        excluded_count: excludedCount,
+        kid_count: solvedKidIds.length,
+        excluded_count: solved.length - live.length,
         recipe_count: recipes.length,
       });
     }
-  }, [results, visibleResults.length, excludedCount, effectiveKidIds.length, recipes.length]);
+  }, [runKey, solved, solvedKidIds.length, recipes.length]);
+
+  // ---- focus the results after a date/slot change ------------------------
+  const resultsHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  useEffect(() => {
+    if (focusResults === 0) return;
+    const el = resultsHeadingRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+    }
+  }, [focusResults, reducedMotion]);
+
+  // ---- render helpers -----------------------------------------------------
+  const blockedLineText = (b: BlockedLine): string => {
+    if (b.cause === 'allergen' && b.allergen) {
+      return b.copyKind === 'severeUnrated'
+        ? t('siblingMealFinder.results.blocked.unrated', {
+            name: b.kidName,
+            allergen: b.allergen,
+            defaultValue: 'Not planned for {{name}}: {{allergen}}, severity not recorded (treated as severe)',
+          })
+        : t('siblingMealFinder.results.blocked.severe', {
+            name: b.kidName,
+            allergen: b.allergen,
+            defaultValue: 'Not planned for {{name}}: severe {{allergen}} allergy',
+          });
+    }
+    if (b.cause === 'plate_empty') {
+      return t('siblingMealFinder.results.blocked.empty', {
+        name: b.kidName,
+        defaultValue: 'Not planned for {{name}}: nothing left on their plate',
+      });
+    }
+    return t('siblingMealFinder.results.blocked.plate', {
+      name: b.kidName,
+      defaultValue: "Not planned for {{name}}: their plate can't be made safe",
+    });
+  };
+
+  const renderCard = (item: CardRow, variant: 'hero' | 'compact') => {
+    const { row, reconciled } = item;
+    const id = row.result.recipeId;
+    const notice = notices[id];
+    const key = `${id}|${mealDate}|${mealSlot}`;
+    return (
+      <div key={id} className="space-y-2">
+        <SiblingMealResultCard
+          result={row.result}
+          reconciled={reconciled}
+          uncheckedIngredients={row.uncheckedIngredients}
+          unknownAllergyKidNames={item.unknownAllergyKidNames}
+          variant={variant}
+          plates={platesByRecipe.get(id)}
+          platesLoading={platesLoading}
+          platesError={platesError}
+          isPending={pendingKey === key}
+          isAccepted={acceptedRecipeIds.has(id)}
+          slotText={slotText}
+          plannerHref={plannerHref}
+          disabledReason={disabledReason}
+          onUse={handleUse}
+          onCook={handleCook}
+          recipeHref="/dashboard/recipes"
+        />
+        {notice && (notice.noFoods || notice.blocked.length > 0) && (
+          <div className="rounded-md bg-muted p-3 text-sm text-foreground" data-testid={`notice-${id}`}>
+            {notice.noFoods ? (
+              <p>
+                {t('siblingMealFinder.results.noFoods', {
+                  defaultValue: 'This recipe has no linked foods yet, so it could not be planned.',
+                })}{' '}
+                <Link
+                  to="/dashboard/recipes"
+                  className="font-medium underline underline-offset-2 hover:text-primary"
+                >
+                  {t('siblingMealFinder.results.noFoodsLink', {
+                    name: row.result.recipeName,
+                    defaultValue: 'Add ingredients to {{name}}',
+                  })}
+                </Link>
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {notice.blocked.map((b) => (
+                  <li key={b.kidName} className="flex items-start gap-2">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+                    <span>{blockedLineText(b)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const disclosure = (id: string, label: string, children: ReactNode): ReactNode => (
+    <Collapsible>
+      <CollapsibleTrigger asChild>
+        <Button
+          variant="ghost"
+          className="group min-h-11 w-full justify-between px-2 text-base font-semibold"
+          data-testid={id}
+        >
+          <span>{label}</span>
+          <ChevronDown
+            className={cn(
+              'h-5 w-5 text-muted-foreground group-data-[state=open]:rotate-180',
+              !reducedMotion && 'transition-transform'
+            )}
+            aria-hidden="true"
+          />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-3 pt-2">{children}</CollapsibleContent>
+    </Collapsible>
+  );
+
+  const resultsCountText =
+    ranked.length === 0
+      ? t('siblingMealFinder.results.none', {
+          names: solvedNames,
+          defaultValue: 'Nothing works for {{names}} with these settings',
+        })
+      : t('siblingMealFinder.results.count', {
+          count: ranked.length,
+          kids: solvedNames,
+          defaultValue: ranked.length === 1 ? '{{count}} dish works for {{kids}}' : '{{count}} dishes work for {{kids}}',
+        });
+
+  // ---- empty states -------------------------------------------------------
+  let body: ReactNode = null;
+  if (kids.length === 0) {
+    body = (
+      <Alert>
+        <AlertTitle>{t('siblingMealFinder.empty.noKids.title', { defaultValue: 'No kid profiles yet' })}</AlertTitle>
+        <AlertDescription>
+          {t('siblingMealFinder.empty.noKids.body', {
+            defaultValue: 'Add your kids so the finder knows who it is cooking for.',
+          })}{' '}
+          <Link to="/dashboard/kids" className="font-medium underline underline-offset-2 hover:text-primary">
+            {t('siblingMealFinder.empty.noKids.cta', { defaultValue: 'Add a kid' })}
+          </Link>
+        </AlertDescription>
+      </Alert>
+    );
+  } else if (kids.length === 1) {
+    body = (
+      <section className="rounded-xl bg-muted p-5 space-y-3" data-testid="empty-one-kid">
+        <h2 className="text-lg font-semibold">
+          {t('siblingMealFinder.empty.oneKid.title', { defaultValue: 'This finder is for two or more kids' })}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {t('siblingMealFinder.empty.oneKid.body', {
+            name: kids[0].name,
+            defaultValue: "With just {{name}}, Tonight on Home already picks from what they eat. Add a sibling to plan one dish for everyone.",
+          })}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild className="min-h-11">
+            <Link to="/dashboard/kids">
+              {t('siblingMealFinder.empty.oneKid.addKid', { defaultValue: 'Add a sibling' })}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="min-h-11">
+            <Link to="/dashboard">
+              {t('siblingMealFinder.empty.oneKid.tonight', { defaultValue: 'See Tonight' })}
+            </Link>
+          </Button>
+        </div>
+      </section>
+    );
+  } else if (recipes.length === 0) {
+    body = (
+      <section className="rounded-xl bg-muted p-5 space-y-3" data-testid="empty-no-recipes">
+        <h2 className="text-lg font-semibold">
+          {t('siblingMealFinder.empty.noRecipes.title', { defaultValue: 'Add a few recipes first' })}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {t('siblingMealFinder.empty.noRecipes.body', {
+            defaultValue: 'The finder picks from your recipe library. Two or three family staples is enough to start.',
+          })}
+        </p>
+        <Button asChild className="min-h-11">
+          <Link to="/dashboard/recipes">
+            {t('siblingMealFinder.empty.noRecipes.cta', { defaultValue: 'Go to Recipes' })}
+          </Link>
+        </Button>
+      </section>
+    );
+  }
+
+  const pickHint = kids.length > 1 && effectiveKidIds.length === 0;
+  const isCustomDate = mealDate !== today && mealDate !== addIsoDays(today, 1);
 
   return (
-    <div className="container mx-auto p-4 md:p-6 max-w-5xl space-y-6">
+    <div className="container mx-auto max-w-3xl space-y-5 p-4 md:p-6">
       <Helmet>
-        <title>Sibling Meal Finder | EatPal</title>
+        <title>{t('siblingMealFinder.meta.title', { defaultValue: 'Sibling Meal Finder | EatPal' })}</title>
         <meta
           name="description"
-          content="Find dinners that work for every kid in the house - allergens, dietary restrictions, dislikes and favorites all balanced."
+          content={t('siblingMealFinder.meta.description', {
+            defaultValue:
+              'Find one dish that works for every kid at the table, with each child\'s plate spelled out and allergies checked first.',
+          })}
         />
       </Helmet>
 
-      <header className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Users2 className="h-6 w-6 text-primary" aria-hidden="true" />
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t('siblingMealFinder.title')}</h1>
+      <div role="status" aria-live="polite" className="sr-only" data-testid="finder-status">
+        {scheduleAnnouncement ||
+          (kids.length > 1 && effectiveKidIds.length > 0 && !lagging ? resultsCountText : '')}
+      </div>
+
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight md:text-3xl">
+            <Users2 className="h-6 w-6 text-primary" aria-hidden="true" />
+            {t('siblingMealFinder.title')}
+          </h1>
+          <p className="text-muted-foreground">
+            {t('siblingMealFinder.header.subtitle', {
+              defaultValue: 'One dish for every kid, with the fewest changes',
+            })}
+          </p>
         </div>
-        <p className="text-muted-foreground">
-          {t('siblingMealFinder.subtitle')}
-        </p>
-        {liveMatchCount !== null && (
-          <Badge variant="secondary" className="w-fit" data-testid="live-match-count">
-            Showing {liveMatchCount} {liveMatchCount === 1 ? 'recipe' : 'recipes'} that work for{' '}
-            {effectiveKidIds.length} {effectiveKidIds.length === 1 ? 'kid' : 'kids'}
-          </Badge>
-        )}
+        <Link
+          to={`/dashboard/planner?date=${mealDate}`}
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary underline-offset-2 hover:underline"
+        >
+          <CalendarDays className="h-4 w-4" aria-hidden="true" />
+          {t('siblingMealFinder.header.plannerLink', { defaultValue: 'See the week in Planner' })}
+        </Link>
       </header>
 
-      <FairnessIndicator kids={selectedKidsObj} history={history} />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Who's eating?</CardTitle>
-          <CardDescription>
-            Pick the siblings to plan for. Skip the picker to include everyone.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {kids.length === 0 ? (
-            <Alert>
-              <AlertTitle>No kid profiles yet</AlertTitle>
-              <AlertDescription>
-                Add at least one kid in your dashboard so the solver knows who to plan for.
-              </AlertDescription>
-            </Alert>
-          ) : (
+      {body ?? (
+        <>
+          <div className="space-y-3">
             <SiblingPickerChips
               kids={kids}
               selectedKidIds={effectiveKidIds}
-              onChange={(ids) => setSelectedKidIds(ids)}
-              disabled={running}
+              onChange={changeKids}
+              onSelectAll={selectAllKids}
+              allergyMarkers={allergyMarkers}
             />
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <Label htmlFor="meal-date" className="text-xs">
-                Meal date
-              </Label>
-              <Input
-                id="meal-date"
-                type="date"
-                value={mealDate}
-                onChange={(e) => setMealDate(e.target.value)}
-                min={todayIso(new Date(2024, 0, 1))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="meal-slot" className="text-xs">
-                Meal slot
-              </Label>
-              <Select value={mealSlot} onValueChange={(v) => setMealSlot(v as MealSlot)}>
-                <SelectTrigger id="meal-slot">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MEAL_SLOTS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="max-minutes" className="text-xs">
-                Max prep (minutes)
-              </Label>
-              <Input
-                id="max-minutes"
-                type="number"
-                min={5}
-                max={240}
-                value={maxMinutes}
-                onChange={(e) => setMaxMinutes(Math.max(5, Number(e.target.value) || 30))}
-              />
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* US-295: constraint relaxation panel — instant client-side
-              filtering of the solver output. */}
-          <div className="space-y-4" aria-label="Constraint relaxation">
-            <p className="text-sm font-medium">Loosen the rules</p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-4">
-                <Label htmlFor="allow-aversions" className="text-sm">
-                  Allow up to {allowAversionsPerKid} disliked food
-                  {allowAversionsPerKid === 1 ? '' : 's'} per kid
-                </Label>
-              </div>
-              <Slider
-                id="allow-aversions"
-                min={0}
-                max={3}
-                step={1}
-                value={[allowAversionsPerKid]}
-                onValueChange={(v) => {
-                  const next = v[0] ?? 0;
-                  setAllowAversionsPerKid(next);
-                  relaxConstraint('allow_aversions_per_kid', next);
-                }}
-                className="max-w-xs"
-              />
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <Label htmlFor="allow-swaps" className="text-sm">
-                Allow ingredient swaps & split plates
-              </Label>
-              <Switch
-                id="allow-swaps"
-                checked={allowSwaps}
-                onCheckedChange={(c) => {
-                  setAllowSwaps(c);
-                  relaxConstraint('allow_swaps', c);
-                }}
-              />
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <Label htmlFor="hide-soft" className="text-sm">
-                Hide anything with a disliked food
-              </Label>
-              <Switch
-                id="hide-soft"
-                checked={hideSoftBlocks}
-                onCheckedChange={(c) => {
-                  setHideSoftBlocks(c);
-                  relaxConstraint('hide_soft_blocks', c);
-                }}
-              />
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button
-              onClick={runSolver}
-              disabled={running || kids.length === 0 || recipes.length === 0}
-              className="gap-2"
-            >
-              {running ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-              )}
-              Find a meal
-            </Button>
-            {results !== null && (
-              <Button variant="outline" onClick={runSolver} disabled={running} className="gap-2">
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Run again
-              </Button>
+            {pickHint && (
+              <p className="text-sm text-muted-foreground" data-testid="pick-hint">
+                {t('siblingMealFinder.controls.pickHint', { defaultValue: "Pick who's eating" })}
+              </p>
             )}
+            <FairnessIndicator kids={solvedKids} history={history} />
           </div>
-        </CardContent>
-      </Card>
 
-      {results !== null && filteredResults.length === 0 && (
-        <Alert>
-          <ChefHat className="h-4 w-4" aria-hidden="true" />
-          <AlertTitle>
-            0 perfect matches across {effectiveKidIds.length}{' '}
-            {effectiveKidIds.length === 1 ? 'kid' : 'kids'}
-          </AlertTitle>
-          <AlertDescription>
-            {oneSwapFallback.length > 0
-              ? `Here ${oneSwapFallback.length === 1 ? 'is' : 'are'} ${oneSwapFallback.length} that work with one small swap each — see below.`
-              : excludedCount > 0
-                ? `${excludedCount} recipes were ruled out by hard constraints (allergens or dietary restrictions). Try widening your recipe library, loosening the rules above, or adjusting kid profiles.`
-                : 'Add more recipes, loosen the rules above, or relax the prep time.'}
-          </AlertDescription>
-        </Alert>
-      )}
+          <Collapsible open={controlsOpen} onOpenChange={toggleControls}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="outline"
+                className="group min-h-11 w-full justify-between gap-2 text-left font-normal"
+                data-testid="controls-summary"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="truncate">{summary}</span>
+                </span>
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 shrink-0 text-muted-foreground group-data-[state=open]:rotate-180',
+                    !reducedMotion && 'transition-transform'
+                  )}
+                  aria-hidden="true"
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <fieldset className="mt-3 space-y-4 rounded-xl bg-muted/50 p-4">
+                <legend className="sr-only">
+                  {t('siblingMealFinder.controls.legend', { defaultValue: 'When, and how flexible' })}
+                </legend>
 
-      {results !== null && filteredResults.length === 0 && oneSwapFallback.length > 0 && (
-        <section className="space-y-3" aria-label="One-swap suggestions">
-          <h2 className="text-lg font-semibold">Close — one swap each</h2>
-          {oneSwapFallback.map((r) => (
-            <SiblingMealResultCard
-              key={r.recipeId}
-              result={r}
-              onUse={handleUse}
-              onCook={handleCook}
-              isAccepted={acceptedRecipeId === r.recipeId}
-              plates={platesByRecipe.get(r.recipeId)}
-            />
-          ))}
-        </section>
-      )}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium" id="finder-date-label">
+                    {t('siblingMealFinder.controls.date.label', { defaultValue: 'When' })}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby="finder-date-label">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={mealDate === today ? 'default' : 'outline'}
+                      aria-pressed={mealDate === today}
+                      className="min-h-11"
+                      onClick={() => changeDate(today)}
+                    >
+                      {mealSlot === 'dinner'
+                        ? t('siblingMealFinder.controls.date.tonight', { defaultValue: 'Tonight' })
+                        : t('siblingMealFinder.controls.date.today', { defaultValue: 'Today' })}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={mealDate === addIsoDays(today, 1) ? 'default' : 'outline'}
+                      aria-pressed={mealDate === addIsoDays(today, 1)}
+                      className="min-h-11"
+                      onClick={() => changeDate(addIsoDays(today, 1))}
+                    >
+                      {t('siblingMealFinder.controls.date.tomorrow', { defaultValue: 'Tomorrow' })}
+                    </Button>
+                    <label
+                      htmlFor="finder-date-input"
+                      className={cn(
+                        'inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm',
+                        isCustomDate ? 'border-primary' : 'border-input'
+                      )}
+                    >
+                      <span>{t('siblingMealFinder.controls.date.pick', { defaultValue: 'Pick a day' })}</span>
+                      <input
+                        id="finder-date-input"
+                        type="date"
+                        aria-label={t('siblingMealFinder.controls.date.pick', { defaultValue: 'Pick a day' })}
+                        className="bg-transparent text-sm text-foreground"
+                        value={isCustomDate ? mealDate : ''}
+                        min={today}
+                        onChange={(e) => {
+                          if (e.target.value === '') return;
+                          changeDate(e.target.value);
+                        }}
+                        data-testid="finder-date-input"
+                      />
+                    </label>
+                  </div>
+                </div>
 
-      {familyWinResults.length > 0 && (
-        <section className="space-y-3" aria-label="Family wins">
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <Star className="h-5 w-5 text-amber-500" aria-hidden="true" />
-            Family wins
-            <Badge variant="secondary">{familyWins.length} saved</Badge>
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Recipes that worked for every selected kid — auto-saved so you can come back to them.
-          </p>
-          {familyWinResults.map((r) => (
-            <SiblingMealResultCard
-              key={`win-${r.recipeId}`}
-              result={r}
-              onUse={handleUse}
-              onCook={handleCook}
-              isAccepted={acceptedRecipeId === r.recipeId}
-              plates={platesByRecipe.get(r.recipeId)}
-            />
-          ))}
-        </section>
-      )}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium" id="finder-slot-label">
+                    {t('siblingMealFinder.controls.slot', { defaultValue: 'Meal' })}
+                  </p>
+                  <ToggleGroup
+                    type="single"
+                    value={mealSlot}
+                    onValueChange={changeSlot}
+                    className="flex-wrap justify-start"
+                    aria-labelledby="finder-slot-label"
+                  >
+                    {RECIPE_PLAN_SLOTS.map((s) => (
+                      <ToggleGroupItem key={s} value={s} className="min-h-11 px-3">
+                        {slotLabel(t, s)}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </div>
 
-      {filteredResults.length > 0 && (
-        <section className="space-y-3" aria-label="Sibling meal solver results">
-          <h2 className="text-lg font-semibold">
-            {filteredResults.length} {filteredResults.length === 1 ? 'match' : 'matches'}
-          </h2>
-          {filteredResults
-            .filter((r) => !familyWinResults.some((w) => w.recipeId === r.recipeId))
-            .map((r) => (
-              <SiblingMealResultCard
-                key={r.recipeId}
-                result={r}
-                onUse={handleUse}
-                onCook={handleCook}
-                isAccepted={acceptedRecipeId === r.recipeId}
-                plates={platesByRecipe.get(r.recipeId)}
-              />
-            ))}
-        </section>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium" id="finder-prep-label">
+                    {t('siblingMealFinder.controls.prep.label', { defaultValue: 'Time to cook' })}
+                  </p>
+                  <ToggleGroup
+                    type="single"
+                    value={String(prep)}
+                    onValueChange={changePrep}
+                    className="flex-wrap justify-start"
+                    aria-labelledby="finder-prep-label"
+                  >
+                    {PREP_OPTIONS.map((p) => (
+                      <ToggleGroupItem key={String(p)} value={String(p)} className="min-h-11 px-3">
+                        {prepLabel(p)}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium" id="finder-mode-label">
+                    {t('siblingMealFinder.controls.mode.label', { defaultValue: 'How much can plates differ' })}
+                  </p>
+                  <ToggleGroup
+                    type="single"
+                    value={mode}
+                    onValueChange={changeMode}
+                    className="flex-wrap justify-start"
+                    aria-labelledby="finder-mode-label"
+                  >
+                    {MODE_OPTIONS.map((m) => (
+                      <ToggleGroupItem key={m} value={m} className="min-h-11 px-3">
+                        {modeLabel(m)}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </div>
+              </fieldset>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {!pickHint && (
+            <section className="space-y-4" aria-labelledby="finder-results-heading">
+              <h2
+                id="finder-results-heading"
+                ref={resultsHeadingRef}
+                tabIndex={-1}
+                className="scroll-mt-4 text-lg font-semibold focus:outline-none"
+                data-testid="result-count"
+                data-count={ranked.length}
+              >
+                {resultsCountText}
+              </h2>
+
+              {hero ? (
+                <div data-testid="hero">{renderCard(hero, 'hero')}</div>
+              ) : (
+                <div className="rounded-xl bg-muted p-4 text-sm text-foreground space-y-3">
+                  <p>
+                    {t('siblingMealFinder.results.noneBody', {
+                      defaultValue: 'Loosen a setting, or add a recipe everyone already eats.',
+                    })}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {mode !== 'separate_plates' && (
+                      <Button variant="outline" className="min-h-11" onClick={() => changeMode('separate_plates')}>
+                        {t('siblingMealFinder.results.allowSeparate', { defaultValue: 'Allow separate plates' })}
+                      </Button>
+                    )}
+                    {prep !== 'any' && (
+                      <Button variant="outline" className="min-h-11" onClick={() => changePrep('any')}>
+                        {t('siblingMealFinder.results.anyTime', { defaultValue: 'Any cooking time' })}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {others.length > 0 && (
+                <div className="space-y-3" data-testid="other-options">
+                  <h3 className="text-base font-semibold">
+                    {t('siblingMealFinder.results.others', {
+                      count: others.length,
+                      defaultValue: 'Other options ({{count}})',
+                    })}
+                  </h3>
+                  {shownOthers.map((item) => renderCard(item, 'compact'))}
+                  {!showAllOthers && others.length > OTHER_OPTIONS_PAGE && (
+                    <Button variant="outline" className="min-h-11 w-full" onClick={() => setShowAllOthers(true)}>
+                      {t('siblingMealFinder.results.showMore', {
+                        count: others.length - OTHER_OPTIONS_PAGE,
+                        defaultValue: 'Show {{count}} more',
+                      })}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {slowerRanked.length > 0 &&
+                disclosure(
+                  'slower-toggle',
+                  t('siblingMealFinder.results.slower', {
+                    count: slowerRanked.length,
+                    defaultValue: 'Takes longer ({{count}})',
+                  }),
+                  slowerRanked.map((item) => renderCard(item, 'compact'))
+                )}
+
+              {exclusions.length > 0 &&
+                disclosure(
+                  'exclusions-toggle',
+                  t('siblingMealFinder.exclusions.title', {
+                    count: exclusions.length,
+                    defaultValue: 'Ruled out for safety ({{count}})',
+                  }),
+                  <ul className="space-y-3" data-testid="exclusions-list">
+                    {exclusions.map((ex) => (
+                      <li key={ex.recipeId} className="rounded-md bg-muted p-3 text-sm">
+                        <p className="font-medium">{ex.recipeName}</p>
+                        <ul className="mt-1 space-y-1 text-foreground">
+                          {ex.kids.map((k) => (
+                            <li key={k.kidId} className="flex items-start gap-2">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+                              <span>
+                                {k.copyKind === 'severeUnrated' ? (
+                                  <>
+                                    {t('siblingMealFinder.exclusions.unrated', {
+                                      name: k.kidName,
+                                      allergen: k.allergen ?? k.foodName,
+                                      food: k.foodName,
+                                      defaultValue:
+                                        '{{name}}: {{allergen}} in {{food}}, severity not recorded (treated as severe)',
+                                    })}{' '}
+                                    <Link
+                                      to="/dashboard/kids"
+                                      className="font-medium underline underline-offset-2 hover:text-primary"
+                                    >
+                                      {t('siblingMealFinder.exclusions.setSeverity', {
+                                        defaultValue: 'Set severity',
+                                      })}
+                                    </Link>
+                                  </>
+                                ) : k.copyKind === 'severe' ? (
+                                  t('siblingMealFinder.exclusions.severe', {
+                                    name: k.kidName,
+                                    allergen: k.allergen ?? k.foodName,
+                                    food: k.foodName,
+                                    defaultValue: '{{name}}: severe {{allergen}} allergy ({{food}})',
+                                  })
+                                ) : k.copyKind === 'dietary' ? (
+                                  t('siblingMealFinder.exclusions.dietary', {
+                                    name: k.kidName,
+                                    food: k.foodName,
+                                    defaultValue: '{{name}}: {{food}} breaks a diet rule',
+                                  })
+                                ) : (
+                                  t('siblingMealFinder.exclusions.plain', {
+                                    name: k.kidName,
+                                    allergen: k.allergen ?? k.foodName,
+                                    food: k.foodName,
+                                    defaultValue: '{{name}}: {{allergen}} allergy ({{food}})',
+                                  })
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+            </section>
+          )}
+        </>
       )}
 
       <TonightCookDialog
         recipe={cookingRecipe}
         open={cookingRecipeId !== null}
         onClose={() => setCookingRecipeId(null)}
+        plates={cookingRecipeId ? platesByRecipe.get(cookingRecipeId) : undefined}
       />
     </div>
   );

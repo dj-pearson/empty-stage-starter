@@ -74,6 +74,8 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
     'aislePromptDismissedKey(storeId) -- scrubbed by the grocery.aislePrompt.dismissed. prefix',
   'src/components/KidMealBuilder.tsx':
     'draftKey(kidId, date, slot) under mealBuilder:draft: -- scrubbed by prefix',
+  'src/pages/SiblingMealFinder.tsx':
+    'selectionKey(householdId) under siblingMealFinder.selection. -- scrubbed by prefix; controlsOpen is a literal in KEPT_KEYS',
   'src/components/aiCoach/ChatComposer.tsx':
     'DRAFT_PREFIX + conversation id (or "draft") -- scrubbed by the aiCoach.draft. prefix',
 };

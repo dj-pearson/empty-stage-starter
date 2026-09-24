@@ -48,6 +48,10 @@ export const SCRUBBED_KEYS: readonly string[] = [
   'eatpal.pantry.lensKid',
   // Item 3: the week-start cache names the user it belongs to.
   'eatpal.week_starts_on',
+  // Sibling Meal Finder keys from before the selection became per-household:
+  // no longer written, but still on devices holding kid and recipe ids.
+  'siblingMealFinder.selectedKidIds',
+  'siblingMealFinder.familyWins',
 ];
 
 /**
@@ -103,6 +107,9 @@ export const SCRUBBED_PREFIXES: readonly string[] = [
   // Meal Builder's offline plate draft, one per child, date and meal slot. It
   // names a child and the foods chosen for them, and is not user-scoped.
   'mealBuilder:draft:',
+  // Sibling Meal Finder's "who's eating" selection, one per household. It
+  // holds that household's kid ids.
+  'siblingMealFinder.selection.',
 ];
 
 /** Keys that survive sign-out on purpose, each with the reason it does. */
@@ -127,6 +134,8 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
     'the Pantry sort order is a viewing preference holding one of a fixed set of option names',
   'eatpal.planner.tryBitesOpen':
     'whether the planner try-bite strip starts open; a yes/no layout choice with no account data in it',
+  'siblingMealFinder.controlsOpen':
+    'whether the Sibling Meal Finder settings panel starts open; a yes/no layout choice with no account data in it',
   'eatpal.recipes.plan.addMissing':
     'whether "add missing ingredients" starts ticked when planning a recipe; a yes/no with no account data in it',
   'eatpal.activation.fired':

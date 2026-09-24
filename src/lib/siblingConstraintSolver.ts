@@ -96,13 +96,25 @@ export interface ConstraintViolation {
   allergenSeverity?: AllergenSeverity | null;
   /** For an allergen violation: false when no severity was recorded and it defaulted to severe. */
   allergenSeverityRecorded?: boolean;
+  /** For an allergen violation: the kid-side canonical allergen, e.g. "peanut". */
+  allergen?: string;
 }
 
 export interface KidSatisfaction {
   kidId: string;
   kidName: string;
-  /** 0..1 — pre-fairness, pre-swap raw score. */
+  /**
+   * 0..1, fairness-adjusted: after swaps and split-plate accounting, plus the
+   * fairness boost for a kid who has been losing lately. Use it for ranking
+   * only; it is not what the kid thinks of the meal.
+   */
   score: number;
+  /**
+   * 0..1 after swaps and split-plate accounting, before the fairness boost.
+   * Set on every non-excluded result; read `rawScore ?? score` for anything
+   * persisted or shown as "how well this fits the kid".
+   */
+  rawScore?: number;
   hardViolations: ConstraintViolation[];
   softViolations: ConstraintViolation[];
   favoriteHits: string[];
@@ -349,6 +361,7 @@ export function evaluateKidConstraint(recipe: SolverRecipe, kid: SolverKid): Kid
         severity: 'hard',
         allergenSeverity: level,
         allergenSeverityRecorded: worstHit.recorded,
+        allergen: allergenHit,
       });
       continue; // no need to also flag as dislike etc.
     }
@@ -440,14 +453,14 @@ function findSwap(
   if (!offendingCategory) return null;
 
   const recipeFoodIds = new Set(recipe.foodIds);
+  const kidDislikes = lowerSet(kid.dislikedFoods);
+  const kidDislikeIds = new Set(kid.dislikedFoods ?? []);
 
   for (const candidate of pantry) {
     if (recipeFoodIds.has(candidate.id)) continue;
     if ((candidate.category ?? '').toLowerCase() !== offendingCategory) continue;
 
     // Asking kid must not dislike it
-    const kidDislikes = lowerSet(kid.dislikedFoods);
-    const kidDislikeIds = new Set(kid.dislikedFoods ?? []);
     if (kidDislikes.has(candidate.name.trim().toLowerCase()) || kidDislikeIds.has(candidate.id)) {
       continue;
     }
@@ -698,6 +711,7 @@ export function solveSiblingMeals(
     // Apply fairness boost to the targeted kid's satisfaction (for ranking only).
     const fairnessAdjusted = plan.adjustedSatisfaction.map((ks) => ({
       ...ks,
+      rawScore: ks.score,
       score: clamp01(ks.score + (fairnessBoosts[ks.kidId] ?? 0)),
     }));
 

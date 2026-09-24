@@ -442,3 +442,44 @@ describe('topSiblingSolutions', () => {
     expect(result[0].satisfactionScore).toBeGreaterThan(result[1].satisfactionScore);
   });
 });
+
+describe('rawScore (pre-fairness)', () => {
+  it('equals the unboosted score when history boosts a kid', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const history: SolverHistoryEntry[] = [
+      { kidId: 'k1', score: 0.1, daysAgo: 2 },
+      { kidId: 'k2', score: 1.0, daysAgo: 2 },
+    ];
+    const kids = [kid('k1', 'Emma', { allergens: ['dairy'], severity: { dairy: 'mild' } }), kid('k2', 'Jack')];
+    const boosted = solveSiblingMeals({ recipes: [r], pantry: [], kids, history });
+    const plain = solveSiblingMeals({ recipes: [r], pantry: [], kids });
+    const emma = boosted[0].perKidSatisfaction.find((k) => k.kidId === 'k1')!;
+    const emmaPlain = plain[0].perKidSatisfaction.find((k) => k.kidId === 'k1')!;
+    expect(emma.score).toBeGreaterThan(emma.rawScore!);
+    expect(emma.rawScore).toBeCloseTo(0.9);
+    expect(emma.rawScore).toBe(emmaPlain.score);
+    expect(emmaPlain.rawScore).toBe(emmaPlain.score);
+  });
+
+  it('names the allergen on an allergen violation', () => {
+    const r = recipe('r1', 'PB toast', [peanut]);
+    const v = evaluateKidConstraint(r, kid('k1', 'Emma', { allergens: ['peanut'] })).hardViolations[0];
+    expect(v.allergen).toBe('peanut');
+  });
+});
+
+describe('findSwap after hoisting the dislike sets', () => {
+  it('skips candidates the kid dislikes by id or by name and takes the first viable one', () => {
+    const r = recipe('r1', 'Chicken Broccoli', [chicken, broccoli]);
+    const peas = food('peas', 'Peas', 'vegetable');
+    const corn = food('corn', 'Corn', 'vegetable');
+    const carrot = food('carrot', 'Carrots', 'vegetable');
+    const result = solveSiblingMeals({
+      recipes: [r],
+      pantry: [peas, corn, carrot],
+      kids: [kid('k1', 'Emma', { disliked: ['Broccoli', 'peas', 'corn'] }), kid('k2', 'Jack')],
+    });
+    expect(result[0].resolutionType).toBe('with_swaps');
+    expect(result[0].swaps.map((s) => s.swapInFoodId)).toEqual(['carrot']);
+  });
+});

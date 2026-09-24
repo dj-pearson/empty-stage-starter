@@ -17,6 +17,14 @@ function plannerDinnerHref(todayKey: string): string {
   return `/dashboard/planner?date=${todayKey}&slot=dinner`;
 }
 
+/**
+ * Link into the Sibling Meal Finder, pre-set to tonight's dinner. The finder
+ * picks one dish for every child; the planner stays the place to arrange it.
+ */
+function siblingFinderDinnerHref(todayKey: string): string {
+  return `/dashboard/sibling-meal-finder?date=${todayKey}&slot=dinner&from=home_tonight`;
+}
+
 const HERO_MIN_HEIGHT = "min-h-[168px]";
 
 function capitalize(value: string): string {
@@ -192,6 +200,14 @@ export const TonightHero = memo(function TonightHero() {
             <Link to={plannerHref} className={cn(buttonVariants(), "min-h-11")}>
               {t("home.tonight.planDinner", { defaultValue: "Plan dinner" })}
             </Link>
+            {kids.length >= 2 && (
+              <Link
+                to={siblingFinderDinnerHref(todayKey)}
+                className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
+              >
+                {t("home.tonight.findForEveryone", { defaultValue: "Find one everyone eats" })}
+              </Link>
+            )}
             <TonightModeCard variant="inline" />
           </div>
         </div>

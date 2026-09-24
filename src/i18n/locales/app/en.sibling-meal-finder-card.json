@@ -1,0 +1,55 @@
+{
+  "siblingMealFinder": {
+    "card": {
+      "tier": {
+        "everyone": "Works for everyone",
+        "changes_one": "{{count}} change",
+        "changes_other": "{{count}} changes",
+        "smallChanges": "Small changes",
+        "checkIngredients_one": "Check {{count}} ingredient",
+        "checkIngredients_other": "Check {{count}} ingredients",
+        "allergiesNotSet": "{{names}}: allergies not set",
+        "notFor": "Not for {{names}}",
+        "none": "Not for these kids"
+      },
+      "status": {
+        "asIs": "as is",
+        "changed": "changed",
+        "blocked": "not this one"
+      },
+      "row": {
+        "severe": "severe allergy: {{food}}",
+        "unrated": "allergy to {{food}}, severity not set",
+        "allergen": "allergy: {{food}}",
+        "cannotHoldBack": "{{component}} can't come off the plate",
+        "empty": "nothing left on the plate",
+        "notThisOne": "not this one",
+        "holdBack": "hold the {{items}}",
+        "onTheSide": "{{items}} on the side",
+        "swap": "swap {{from}} for {{to}}"
+      },
+      "perKidLabel": "Each child",
+      "prepMinutes_one": "{{count}} min",
+      "prepMinutes_other": "{{count}} min",
+      "planFor": "Plan for {{slotText}}",
+      "planForKids": "Plan for {{names}}, {{slotText}}",
+      "onThePlan": "On the plan, {{slotText}}. View in Planner",
+      "cookNow": "Cook now",
+      "uncheckedList": "Couldn't check for allergens: {{names}}",
+      "linkIngredients": "Link ingredients",
+      "allergiesNotSetBody": "{{names}}: allergies not set, so this couldn't be checked for them",
+      "splitTitle": "Plate by plate",
+      "platesLoading": "Checking each plate",
+      "platesError": "Plate check unavailable"
+    },
+    "picker": {
+      "label": "Cooking for",
+      "everyone": "Everyone",
+      "severeAllergy": "has a severe allergy"
+    },
+    "fairness": {
+      "title": "{{name}} gets first pick tonight",
+      "body": "Their favorites lost out the last few meals, so dishes they like rank higher."
+    }
+  }
+}

@@ -986,14 +986,8 @@ export default function Recipes() {
               {/* US-295: Multi-kid affordance. Only useful with 2+ kids. */}
               {kids.length >= 2 && (
                 <Link
-                  to="/dashboard/sibling-meal-finder"
+                  to="/dashboard/sibling-meal-finder?from=recipes_header"
                   className={cn(chipClass(false), "text-primary")}
-                  onClick={() =>
-                    analytics.trackEvent("family_finder_opened", {
-                      source: "recipes_header",
-                      kid_count: kids.length,
-                    })
-                  }
                 >
                   <Users2 className="h-4 w-4" aria-hidden="true" />
                   {t("recipes.actions.findForEveryone", { defaultValue: "Find a meal everyone will eat" })}

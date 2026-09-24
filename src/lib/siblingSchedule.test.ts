@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildSiblingScheduleRequests } from './siblingSchedule';
+import type { Food, Kid } from '@/types';
+import type { KidPlate } from './platePlanner';
+import {
+  buildSiblingScheduleRequests,
+  buildSiblingScheduleRequestsResult,
+  siblingScheduleGuard,
+} from './siblingSchedule';
 
 /**
  * US-718: "Use this meal" has to schedule something real.
@@ -116,5 +122,92 @@ describe('buildSiblingScheduleRequests (US-718)', () => {
     for (const r of requests) {
       expect(Object.values(r).every((v) => typeof v === 'string' && v.length > 0)).toBe(true);
     }
+  });
+});
+
+describe('buildSiblingScheduleRequestsResult', () => {
+  const base = { recipeId: UUID, kidIds: [KID_A], date: '2026-09-08', mealSlot: 'dinner' };
+
+  it('says which part is missing', () => {
+    expect(buildSiblingScheduleRequestsResult({ ...base, recipeId: ' ' })).toEqual({ ok: false, reason: 'no_recipe' });
+    expect(buildSiblingScheduleRequestsResult({ ...base, date: '' })).toEqual({ ok: false, reason: 'no_date' });
+    expect(buildSiblingScheduleRequestsResult({ ...base, mealSlot: '' })).toEqual({ ok: false, reason: 'no_date' });
+    expect(buildSiblingScheduleRequestsResult({ ...base, kidIds: ['', null] })).toEqual({ ok: false, reason: 'no_kids' });
+  });
+
+  it('returns the same requests as the list form', () => {
+    const out = buildSiblingScheduleRequestsResult({ ...base, kidIds: [KID_A, KID_B] });
+    expect(out.ok && out.requests).toEqual(buildSiblingScheduleRequests({ ...base, kidIds: [KID_A, KID_B] }));
+  });
+});
+
+describe('siblingScheduleGuard', () => {
+  const food = (id: string, name: string, allergens: string[] = []): Food => ({
+    id,
+    name,
+    category: 'protein',
+    is_safe: true,
+    is_try_bite: false,
+    allergens,
+  });
+  const sauce = food('sauce', 'Satay sauce', ['peanut']);
+  const noodles = food('noodles', 'Noodles');
+  const foodById = new Map([sauce, noodles].map((f) => [f.id, f]));
+  const kid = (id: string, name: string, over: Partial<Kid> = {}): Kid => ({ id, name, allergens: [], ...over });
+
+  const severe = kid('s', 'Sam', { allergens: ['peanut'], allergen_severity: { peanut: 'severe' } });
+  const unrated = kid('u', 'Uma', { allergens: ['peanut'] });
+  const mild = kid('m', 'Mia', { allergens: ['peanut'], allergen_severity: { peanut: 'mild' } });
+  const clear = kid('c', 'Cal');
+
+  const plate = (kidId: string, over: Partial<KidPlate> = {}): KidPlate => ({
+    kidId,
+    kidName: kidId,
+    placements: [],
+    onPlate: [],
+    separated: [],
+    heldBack: [],
+    exposure: null,
+    blocked: false,
+    blockedBy: null,
+    isEmpty: false,
+    ...over,
+  });
+
+  it('removes severe and unrated kids, keeps mild ones', () => {
+    const out = siblingScheduleGuard({
+      kids: [severe, unrated, mild, clear],
+      recipeFoodIds: ['sauce', 'noodles'],
+      foodById,
+    });
+    expect(out.schedule).toEqual(['m', 'c']);
+    expect(out.blocked.map((b) => [b.kid.id, b.allergen, b.copyKind, b.cause])).toEqual([
+      ['s', 'peanut', 'severe', 'allergen'],
+      ['u', 'peanut', 'severeUnrated', 'allergen'],
+    ]);
+    expect(out.noFoods).toBe(false);
+  });
+
+  it('removes plate-blocked and empty-plate kids', () => {
+    const out = siblingScheduleGuard({
+      kids: [mild, clear, kid('e', 'Eve')],
+      recipeFoodIds: ['noodles'],
+      foodById,
+      plates: [
+        plate('m', { blocked: true, blockedBy: { kind: 'cannot_hold_back', componentName: 'Noodles' } }),
+        plate('c'),
+        plate('e', { isEmpty: true }),
+      ],
+    });
+    expect(out.schedule).toEqual(['c']);
+    expect(out.blocked.map((b) => [b.kid.id, b.cause])).toEqual([
+      ['m', 'plate_blocked'],
+      ['e', 'plate_empty'],
+    ]);
+  });
+
+  it('flags a recipe with no foods', () => {
+    expect(siblingScheduleGuard({ kids: [clear], recipeFoodIds: [], foodById }).noFoods).toBe(true);
+    expect(siblingScheduleGuard({ kids: [clear], recipeFoodIds: null, foodById }).noFoods).toBe(true);
   });
 });

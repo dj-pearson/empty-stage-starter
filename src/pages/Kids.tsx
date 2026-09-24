@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { analytics } from "@/lib/analytics";
 import { canonicalAllergen } from "@/lib/allergens";
 import { toISODate } from "@/lib/date-utils";
 import { buildProgressByKid } from "@/lib/kidProgress";
@@ -224,18 +223,9 @@ export default function Kids() {
               </Button>
               {/* US-295: same target as the Recipes-page CTA; only useful with two or more kids. */}
               {kids.length >= 2 && (
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full gap-2 sm:w-auto"
-                  onClick={() =>
-                    analytics.trackEvent("family_finder_opened", {
-                      source: "kids_header",
-                      kid_count: kids.length,
-                    })
-                  }
-                >
-                  <Link to="/dashboard/sibling-meal-finder">
+                <Button asChild variant="outline" className="w-full gap-2 sm:w-auto">
+                  {/* The finder fires family_finder_opened once, with this source. */}
+                  <Link to="/dashboard/sibling-meal-finder?from=kids_header">
                     <Users2 className="h-4 w-4" aria-hidden="true" />
                     {t("kids.findFamilyMeal")}
                   </Link>

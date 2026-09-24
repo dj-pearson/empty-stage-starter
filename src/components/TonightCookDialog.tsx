@@ -8,21 +8,79 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, ChevronLeft, ChevronRight, Timer, Volume2, VolumeX, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import {
+  AlertTriangle,
+  Pause,
+  Play,
+  ChevronLeft,
+  ChevronRight,
+  Timer,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
+import { PerKidPlateBreakdown } from "@/components/PerKidPlateBreakdown";
 import { analytics } from "@/lib/analytics";
+import type { KidPlate } from "@/lib/platePlanner";
 import { recipeStepsFromInstructions } from "@/lib/tonightMode";
 import type { Recipe } from "@/types";
+import "@/i18n/appLocale";
 
 interface Props {
   recipe: Recipe | null;
   open: boolean;
   onClose: () => void;
+  /**
+   * One plate per child from the plate planner. When given, the last step
+   * shows what goes on each plate, what is held back or served apart, and
+   * which children must not eat this dish at all.
+   */
+  plates?: KidPlate[];
+}
+
+/**
+ * What to do at the counter, per child. Blocked children are named first and
+ * apart from the breakdown, because "serve them something else" is the one
+ * line on this screen a parent cannot skip.
+ */
+function ServingPanel({ plates }: { plates: KidPlate[] }) {
+  const { t } = useTranslation();
+  if (plates.length === 0) return null;
+  const blocked = plates.filter((plate) => plate.blocked);
+  const names = blocked.map((plate) => plate.kidName).join(", ");
+
+  return (
+    <section
+      className="mt-8 space-y-3"
+      aria-labelledby="tonight-cook-serving-heading"
+      data-testid="tonight-cook-serving"
+    >
+      <h3 id="tonight-cook-serving-heading" className="text-base font-semibold">
+        {t("siblingMealFinder.cook.serving.title", { defaultValue: "Serving" })}
+      </h3>
+      {blocked.length > 0 && (
+        <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p className="max-w-[70ch] font-medium">
+            {t("siblingMealFinder.cook.serving.blocked", {
+              count: blocked.length,
+              names,
+              defaultValue: "Not for {{names}} tonight. Serve something else.",
+            })}
+          </p>
+        </div>
+      )}
+      <PerKidPlateBreakdown plates={plates} />
+    </section>
+  );
 }
 
 const STEP_TIMER_DEFAULT_SECONDS = 0;
 const VOICE_PREF_KEY = "tonightMode.voiceEnabled";
 
-export function TonightCookDialog({ recipe, open, onClose }: Props) {
+export function TonightCookDialog({ recipe, open, onClose, plates }: Props) {
+  const { t } = useTranslation();
   const steps = useMemo(
     () => (recipe ? recipeStepsFromInstructions(recipe.instructions) : []),
     [recipe],
@@ -30,6 +88,9 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState(STEP_TIMER_DEFAULT_SECONDS);
   const [timerRunning, setTimerRunning] = useState(false);
+  // What screen readers hear about the timer: start, pause and done only.
+  // The ticking mm:ss is deliberately not live, or it would announce every second.
+  const [timerAnnouncement, setTimerAnnouncement] = useState("");
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
       return localStorage.getItem(VOICE_PREF_KEY) === "1";
@@ -73,6 +134,7 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
     setStepIndex(0);
     setTimerSeconds(0);
     setTimerRunning(false);
+    setTimerAnnouncement("");
     startedAtRef.current = performance.now();
     completedRef.current = false;
     if (recipe) {
@@ -95,8 +157,32 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
   useEffect(() => {
     if (timerRunning && timerSeconds === 0) {
       setTimerRunning(false);
+      setTimerAnnouncement(t("siblingMealFinder.cook.timer.done", { defaultValue: "Timer done" }));
     }
-  }, [timerRunning, timerSeconds]);
+  }, [timerRunning, timerSeconds, t]);
+
+  const startTimer = useCallback(
+    (seconds: number) => {
+      setTimerSeconds(seconds);
+      setTimerRunning(true);
+      setTimerAnnouncement(
+        t("siblingMealFinder.cook.timer.started", {
+          count: seconds / 60,
+          defaultValue: "{{count}} minute timer started",
+        }),
+      );
+    },
+    [t],
+  );
+
+  const toggleTimer = useCallback(() => {
+    setTimerAnnouncement(
+      timerRunning
+        ? t("siblingMealFinder.cook.timer.paused", { defaultValue: "Timer paused" })
+        : t("siblingMealFinder.cook.timer.resumed", { defaultValue: "Timer resumed" }),
+    );
+    setTimerRunning(!timerRunning);
+  }, [timerRunning, t]);
 
   const speakStep = useCallback(
     (text: string) => {
@@ -177,7 +263,7 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
         goPrev();
       } else if (e.key === " ") {
         e.preventDefault();
-        if (timerSeconds > 0) setTimerRunning((r) => !r);
+        if (timerSeconds > 0) toggleTimer();
       } else if (e.key === "Escape") {
         e.preventDefault();
         onClose();
@@ -185,7 +271,7 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, goNext, goPrev, timerSeconds, onClose]);
+  }, [open, goNext, goPrev, timerSeconds, toggleTimer, onClose]);
 
   if (!recipe) return null;
 
@@ -228,7 +314,7 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2">
               <Timer className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <span className="font-mono text-lg" aria-live="polite">
+              <span className="font-mono text-lg" data-testid="tonight-cook-timer">
                 {minutes}:{seconds}
               </span>
               <div className="flex gap-1">
@@ -237,10 +323,7 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
                     key={s}
                     size="sm"
                     variant="ghost"
-                    onClick={() => {
-                      setTimerSeconds(s);
-                      setTimerRunning(true);
-                    }}
+                    onClick={() => startTimer(s)}
                     aria-label={`Start ${s / 60} minute timer`}
                   >
                     +{s / 60}m
@@ -251,7 +334,7 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
                 <Button
                   size="icon"
                   variant="ghost"
-                  onClick={() => setTimerRunning((r) => !r)}
+                  onClick={toggleTimer}
                   aria-label={timerRunning ? "Pause timer" : "Resume timer"}
                 >
                   {timerRunning ? (
@@ -274,6 +357,11 @@ export function TonightCookDialog({ recipe, open, onClose }: Props) {
               {voiceEnabled ? "Voice on" : "Voice off"}
             </Button>
           </div>
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {timerAnnouncement}
+          </div>
+
+          {onLastStep && plates && <ServingPanel plates={plates} />}
         </div>
 
         <div className="flex items-center justify-between border-t px-6 py-4">

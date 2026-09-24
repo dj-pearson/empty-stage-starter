@@ -362,3 +362,12 @@ stars toy to a per-kid plate builder: route chunk 4.1 -> 15.4 kB
 +1.6 kB. Two imports were moved to leaf modules to keep platePlanner and
 useRecipeQuickPlan out of its graph (-2.4 kB). Eager closure unchanged.
 Measured total 2724.0 kB.
+
+## 2026-09-24: `totalJs` 2735000 -> 2755000 (Sibling Meal Finder)
+
+Owner-approved raise for route-only growth. The finder now opens solved
+with a hero pick, per-child plate lines, honest tiers and writes through
+useRecipeQuickPlan: SiblingMealFinder chunk +5.1 kB, TonightCookDialog
++1.7, siblingMealFinder lib +1.7, copy +1.6, useRecipeQuickPlan split
+into a shared chunk (+2.2, Recipes -1.3). Eager unchanged. Measured total
+2744.3 kB.

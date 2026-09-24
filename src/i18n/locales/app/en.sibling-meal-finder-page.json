@@ -1,0 +1,100 @@
+{
+  "siblingMealFinder": {
+    "meta": {
+      "title": "Sibling Meal Finder | EatPal",
+      "description": "Find one dish that works for every kid at the table, with each child's plate spelled out and allergies checked first."
+    },
+    "header": {
+      "subtitle": "One dish for every kid, with the fewest changes",
+      "plannerLink": "See the week in Planner"
+    },
+    "controls": {
+      "legend": "When, and how flexible",
+      "pickHint": "Pick who's eating",
+      "slot": "Meal",
+      "date": {
+        "label": "When",
+        "tonight": "Tonight",
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "pick": "Pick a day"
+      },
+      "prep": {
+        "label": "Time to cook",
+        "any": "Any time",
+        "minutes_one": "Under {{count}} min",
+        "minutes_other": "Under {{count}} min"
+      },
+      "mode": {
+        "label": "How much can plates differ",
+        "asIs": "Same plate for all",
+        "smallSwaps": "Small swaps OK",
+        "separatePlates": "Separate plates OK"
+      }
+    },
+    "results": {
+      "count_one": "{{count}} dish works for {{kids}}",
+      "count_other": "{{count}} dishes work for {{kids}}",
+      "none": "Nothing works for {{names}} with these settings",
+      "noneBody": "Loosen a setting, or add a recipe everyone already eats.",
+      "allowSeparate": "Allow separate plates",
+      "anyTime": "Any cooking time",
+      "others_one": "Other options ({{count}})",
+      "others_other": "Other options ({{count}})",
+      "showMore_one": "Show {{count}} more",
+      "showMore_other": "Show {{count}} more",
+      "slower_one": "Takes longer ({{count}})",
+      "slower_other": "Takes longer ({{count}})",
+      "updating": "Updating for who is eating...",
+      "slotText": {
+        "tonight": "{{slot}} tonight",
+        "today": "{{slot}} today",
+        "tomorrow": "{{slot}} tomorrow",
+        "day": "{{slot}} on {{day}}"
+      },
+      "noFoods": "This recipe has no linked foods yet, so it could not be planned.",
+      "noFoodsLink": "Add ingredients to {{name}}",
+      "blocked": {
+        "severe": "Not planned for {{name}}: severe {{allergen}} allergy",
+        "unrated": "Not planned for {{name}}: {{allergen}}, severity not recorded (treated as severe)",
+        "empty": "Not planned for {{name}}: nothing left on their plate",
+        "plate": "Not planned for {{name}}: their plate can't be made safe"
+      }
+    },
+    "toast": {
+      "noRecipe": "That recipe is no longer in your library.",
+      "error": "Couldn't add that meal to the plan. Please try again.",
+      "failed": "Couldn't plan {{name}}.",
+      "partial": "{{name}} planned for {{succeeded}}, not for {{failed}}.",
+      "planned": "{{name}} planned for {{names}}."
+    },
+    "offline": "You're offline. Planning needs a connection; Cook now still works.",
+    "exclusions": {
+      "title_one": "Ruled out for safety ({{count}})",
+      "title_other": "Ruled out for safety ({{count}})",
+      "severe": "{{name}}: severe {{allergen}} allergy ({{food}})",
+      "unrated": "{{name}}: {{allergen}} in {{food}}, severity not recorded (treated as severe)",
+      "plain": "{{name}}: {{allergen}} allergy ({{food}})",
+      "dietary": "{{name}}: {{food}} breaks a diet rule",
+      "setSeverity": "Set severity"
+    },
+    "empty": {
+      "noKids": {
+        "title": "No kid profiles yet",
+        "body": "Add your kids so the finder knows who it is cooking for.",
+        "cta": "Add a kid"
+      },
+      "oneKid": {
+        "title": "This finder is for two or more kids",
+        "body": "With just {{name}}, Tonight on Home already picks from what they eat. Add a sibling to plan one dish for everyone.",
+        "addKid": "Add a sibling",
+        "tonight": "See Tonight"
+      },
+      "noRecipes": {
+        "title": "Add a few recipes first",
+        "body": "The finder picks from your recipe library. Two or three family staples is enough to start.",
+        "cta": "Go to Recipes"
+      }
+    }
+  }
+}
