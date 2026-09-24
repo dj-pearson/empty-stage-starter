@@ -1,0 +1,42 @@
+{
+  "household": {
+    "invites": {
+      "heading": "Invite someone",
+      "relationship": {
+        "label": "Who are you inviting?",
+        "parent": "Co-parent or partner",
+        "guardian": "Grandparent, nanny or therapist"
+      },
+      "sameAccess": "Everyone in a household gets the same access to kids, plan, grocery and pantry.",
+      "create": "Create and share link",
+      "creating": "Creating link...",
+      "shareTitle": "Join {{name}} on EatPal",
+      "shareText": "Join {{name}} on EatPal so we share the kids, meal plan and grocery list. Code: {{code}}",
+      "copiedLink": "Link copied. Paste it in a text to your co-parent.",
+      "copiedCode": "Code copied.",
+      "copyFailed": "Couldn't copy. Press and hold the code to copy it by hand.",
+      "createFailed": "Couldn't create an invite link.",
+      "upgrade": "See plans with more seats",
+      "hint": "Each link works once, for 24 hours. Make one per person.",
+      "listHeading": "Open invites",
+      "codeLabel": "Invite code {{spelled}}",
+      "for": {
+        "parent": "For a co-parent",
+        "guardian": "For a caregiver"
+      },
+      "expires": "Expires {{when}}",
+      "share": "Share",
+      "shareAria": "Share invite {{code}}",
+      "copyCode": "Copy code",
+      "copyCodeAria": "Copy invite code {{code}}",
+      "revoke": "Revoke",
+      "revokeAria": "Revoke invite {{code}}",
+      "revoking": "Revoking...",
+      "revokeTitle": "Revoke this link?",
+      "revokeBody": "Anyone who hasn't used it yet won't be able to join.",
+      "revokeConfirm": "Revoke link",
+      "revokeCancel": "Keep it",
+      "revoked": "Invite revoked."
+    }
+  }
+}

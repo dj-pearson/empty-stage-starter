@@ -52,6 +52,9 @@ export const SCRUBBED_KEYS: readonly string[] = [
   // no longer written, but still on devices holding kid and recipe ids.
   'siblingMealFinder.selectedKidIds',
   'siblingMealFinder.familyWins',
+  // The Household page opens "What's shared" for a person who has not seen it.
+  // The next person to sign in on this device has not, whoever saw it before.
+  'eatpal.household.scopeSeen',
 ];
 
 /**

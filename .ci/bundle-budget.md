@@ -371,3 +371,12 @@ useRecipeQuickPlan: SiblingMealFinder chunk +5.1 kB, TonightCookDialog
 +1.7, siblingMealFinder lib +1.7, copy +1.6, useRecipeQuickPlan split
 into a shared chunk (+2.2, Recipes -1.3). Eager unchanged. Measured total
 2744.3 kB.
+
+## 2026-09-24: `totalJs` 2755000 -> 2770000 (Household)
+
+Owner-approved raise for route-only growth. The Household rebuild
+(roster header, sharing contract, phone invites, confirm-before-join)
+added about 10 kB gz after its duplicated defaultValue strings were
+removed; measured total 2754.8 kB, 0.2 kB under the old ceiling, which
+per-build variation (the injected release id) could cross. Eager
+unchanged at 316.1 kB.

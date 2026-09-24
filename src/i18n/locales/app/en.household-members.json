@@ -1,0 +1,49 @@
+{
+  "household": {
+    "members": {
+      "heading": "Members",
+      "count_one": "{{count}} person",
+      "count_other": "{{count}} people",
+      "you": "You",
+      "youMarker": "(You)",
+      "owner": "Owner",
+      "planHolder": "Plan holder",
+      "unnamed": {
+        "parent": "Co-parent",
+        "guardian": "Caregiver",
+        "other": "Household member"
+      },
+      "role": {
+        "parent": "Co-parent",
+        "guardian": "Caregiver",
+        "other": "Household member"
+      },
+      "joined": "joined {{date}}",
+      "nudge": "Add a co-parent, grandparent or nanny so they see the same kids and plan",
+      "moreActions": "More actions for {{name}}",
+      "cancel": "Cancel",
+      "remove": {
+        "action": "Remove from household",
+        "title": "Remove {{name}} from the household?",
+        "loses": "They'll lose access to: {{items}}.",
+        "kids": "They'll no longer see {{kids}}.",
+        "keeps": "Anything they added stays here.",
+        "confirm": "Remove",
+        "working": "Removing",
+        "done": "{{name}} was removed from the household"
+      },
+      "leave": {
+        "action": "Leave household",
+        "title": "Leave this household?",
+        "loses": "You'll lose access to the kids, plan and lists here.",
+        "keeps": "Everything you added stays with this household.",
+        "fresh": "You'll start in a new, empty household.",
+        "confirm": "Leave",
+        "working": "Leaving",
+        "done": "You left the household",
+        "soleMember": "You're the only one here, so there's no household to leave.",
+        "ownerWithOthers": "You hold the plan for this household. Remove the other members before you leave."
+      }
+    }
+  }
+}

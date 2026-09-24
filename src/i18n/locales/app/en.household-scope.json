@@ -1,0 +1,26 @@
+{
+  "household": {
+    "scope": {
+      "shared": {
+        "kids": "Kids and their care cards",
+        "plan": "Meal plan",
+        "grocery": "Grocery list",
+        "pantry": "Pantry",
+        "recipes": "Recipes",
+        "collections": "Recipe collections",
+        "aisles": "Store aisles and layouts",
+        "notes": "Meal notes, with who wrote them"
+      },
+      "private": {
+        "billing": "Your plan and billing",
+        "notifications": "Your notifications",
+        "signIn": "Your sign-in"
+      },
+      "sharedTitle": "Shared with everyone here",
+      "privateTitle": "Stays with your account",
+      "nothingCrosses": "No other household can see anything here.",
+      "careCardsLink": "See the kids' care cards",
+      "foodJournalLink": "Open the Food Journal"
+    }
+  }
+}
