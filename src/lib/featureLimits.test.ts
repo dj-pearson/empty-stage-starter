@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const getUserMock = vi.fn();
+// checkFeatureLimit reads the local session (no network); the RPC checks the id.
+const getSessionMock = vi.fn();
 const rpcMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: {
-      getUser: () => getUserMock(),
+      getSession: () => getSessionMock(),
     },
     rpc: (...args: unknown[]) => rpcMock(...args),
   },
@@ -21,19 +22,19 @@ import { requestUpgradePrompt, subscribeUpgradePrompt } from "./upgradePromptBus
 
 describe("checkFeatureLimit", () => {
   beforeEach(() => {
-    getUserMock.mockReset();
+    getSessionMock.mockReset();
     rpcMock.mockReset();
   });
 
   it("allows the action when no user is signed in", async () => {
-    getUserMock.mockResolvedValue({ data: { user: null } });
+    getSessionMock.mockResolvedValue({ data: { session: null } });
     const result = await checkFeatureLimit("children", 0);
     expect(result.allowed).toBe(true);
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("returns the RPC verdict when blocked", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    getSessionMock.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
     rpcMock.mockResolvedValue({
       data: { allowed: false, limit: 1, current: 1, message: "Limit reached" },
       error: null,
@@ -51,7 +52,7 @@ describe("checkFeatureLimit", () => {
   });
 
   it("fails open when the RPC errors so users are never wrongly blocked", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    getSessionMock.mockResolvedValue({ data: { session: { user: { id: "user-1" } } } });
     rpcMock.mockResolvedValue({ data: null, error: new Error("network") });
 
     const result = await checkFeatureLimit("pantry_foods", 50);

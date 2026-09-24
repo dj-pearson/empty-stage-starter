@@ -13,6 +13,7 @@
  * rather than report a clean tree.
  */
 import { draftKey } from '@/components/foodTracker/logDetailDraft';
+import { DRAFT_PREFIX as COACH_DRAFT_PREFIX } from '@/components/aiCoach/ChatComposer';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -71,6 +72,8 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
     'draftKey(kidId, foodId) under eatpal.ladderLogDraft. in sessionStorage -- scrubbed by SCRUBBED_SESSION_PREFIXES',
   'src/components/grocery/PlaceInAisleChips.tsx':
     'aislePromptDismissedKey(storeId) -- scrubbed by the grocery.aislePrompt.dismissed. prefix',
+  'src/components/aiCoach/ChatComposer.tsx':
+    'DRAFT_PREFIX + conversation id (or "draft") -- scrubbed by the aiCoach.draft. prefix',
 };
 
 const STORAGE_CALL =
@@ -229,6 +232,8 @@ describe('US-835: keysToScrub', () => {
       'grocery:selectedList:user-1',
       'grocery:storeLayouts:hh-1',
       'grocery.aislePrompt.dismissed.store-1',
+      'aiCoach.draft.draft',
+      'aiCoach.draft.conv-1',
     ];
     expect(keysToScrub(present).sort()).toEqual(present.sort());
   });
@@ -255,6 +260,11 @@ describe('US-835: keysToScrub', () => {
   it('clears an unsent Food Tracker detail-log draft, which holds notes about a child', () => {
     const draft = draftKey('kid-7', 'food-3');
     expect(sessionKeysToScrub([draft, 'route-error-chunk-reload-at'])).toEqual([draft]);
+  });
+
+  it('clears an unsent AI Coach question, keyed by the prefix the composer really writes', () => {
+    const keys = [`${COACH_DRAFT_PREFIX}draft`, `${COACH_DRAFT_PREFIX}conv-9`];
+    expect(keysToScrub([...keys, 'eatpal_cookie_consent']).sort()).toEqual(keys.sort());
   });
 
   it('scrubOnSignOut removes exactly those keys from the storage it is given', () => {

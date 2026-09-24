@@ -344,3 +344,12 @@ public shared-recipe page (3.2 kB), the starter sheet (3.2 kB) and their
 copy (+2.7 kB). The drawer (vaul) moved out of Planner into its own
 chunk, net about zero. Eager closure 315.9 kB (budget 322 kB,
 unchanged). Measured total 2685.5 kB.
+
+## 2026-09-24: `totalJs` 2695000 -> 2720000 (AI Coach)
+
+Owner-approved raise for route-only growth. The coach became grounded
+(coachContext), safety-checked (reply allergen scan, red-flag card) and
+actionable (useCoachActions: try bite, ladder, grocery with Undo): AICoach
+route chunk +13.3 kB, shared kidProgress/kidAllergenChips/planAllergenGuard
+chunks, +1.6 kB copy. Eager entry 315.8 kB (budget 322 kB, unchanged).
+Measured total 2708.4 kB.

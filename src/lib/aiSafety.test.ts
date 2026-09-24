@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { SAFETY_RESOURCES, AI_COACH_DISCLAIMER, CRISIS_HELP_LINE } from './aiSafety';
+import { SAFETY_RESOURCES, AI_COACH_DISCLAIMER, CRISIS_HELP_LINE, detectRedFlags, telHref } from './aiSafety';
 
 /**
  * The crisis resources exist twice - once for the model (Deno) and once for the
@@ -68,4 +68,68 @@ describe('safety block wiring', () => {
       expect(readFn(fn)).toMatch(/withStandingLimits\(systemPrompt\)/);
     }
   );
+});
+
+describe('detectRedFlags', () => {
+  const tiers = (text: string) => detectRedFlags(text).map((f) => f.tier);
+
+  it.each([
+    ['He was choking on a grape', 'emergency'],
+    ["She can't breathe after eating shrimp", 'emergency'],
+    ['His lips are turning blue', 'emergency'],
+    ['Her face is swollen', 'emergency'],
+    ['broke out in hives after dinner', 'emergency'],
+    ['last time it was anaphylaxis', 'emergency'],
+    ['she has lost weight this month', 'clinician'],
+    ['he is losing weight', 'clinician'],
+    ['not gaining at all according to the chart', 'clinician'],
+    ['I think he is dehydrated', 'clinician'],
+    ["she hasn't eaten in 2 days", 'clinician'],
+    ['he vomits after meals', 'clinician'],
+    ['she only eats 5 foods', 'eating_disorder'],
+    ["he won't eat anything", 'eating_disorder'],
+    ['she has a fear of eating', 'eating_disorder'],
+    ['could this be ARFID?', 'eating_disorder'],
+    ['I feel suicidal', 'crisis'],
+    ['worried about self-harm', 'crisis'],
+    ['I want to die', 'crisis'],
+  ])('%s -> %s', (text, tier) => {
+    expect(tiers(text)).toContain(tier);
+  });
+
+  it.each(['peanut butter sandwich', 'the weight of the pan', 'she only eats beige food', 'he ate a blueberry'])(
+    'no flag for %s',
+    (text) => {
+      expect(detectRedFlags(text)).toEqual([]);
+    },
+  );
+
+  it('documents the figurative "chokes up" false positive', () => {
+    // Kept on purpose: see the comment on RedFlagTier.
+    expect(tiers('she chokes up with emotion')).toEqual(['emergency']);
+  });
+
+  it('dedupes by tier, emergency first, with the matching resource', () => {
+    const flags = detectRedFlags('ARFID? she only eats 3 foods, lost weight, and was choking yesterday');
+    expect(flags.map((f) => f.tier)).toEqual(['emergency', 'clinician', 'eating_disorder']);
+    expect(flags[0].resource.contact).toContain('911');
+    expect(flags[2].resource.contact).toBe('1-888-375-7767');
+    expect(detectRedFlags('self-harm')[0].resource.contact).toContain('988');
+  });
+});
+
+describe('telHref', () => {
+  it('pulls the dialable digits from each resource', () => {
+    expect(telHref('call or text 988 (US)')).toBe('tel:988');
+    expect(telHref('1-888-375-7767')).toBe('tel:18883757767');
+    expect(telHref('911 in an emergency (US)')).toBe('tel:911');
+  });
+
+  it('gives every resource a number', () => {
+    for (const r of SAFETY_RESOURCES) expect(telHref(r.contact)).toMatch(/^tel:\d+$/);
+  });
+
+  it('returns null without a number', () => {
+    expect(telHref('your pediatrician')).toBeNull();
+  });
 });

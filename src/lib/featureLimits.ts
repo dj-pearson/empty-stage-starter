@@ -8,7 +8,12 @@ export type FeatureType =
   | "food_tracker"
   | "food_chaining"
   | "meal_builder"
-  | "nutrition_tracking";
+  | "nutrition_tracking"
+  // No branch in check_feature_limit for these two: the RPC's ELSE returns
+  // { allowed: true } and increment_usage counts nothing. They are listed so
+  // ScanReceiptDialog and HideVeggiesDialog typecheck against the same union.
+  | "receipt_scan"
+  | "hidden_veggies_rewrite";
 
 export interface FeatureLimitResult {
   allowed: boolean;
@@ -47,13 +52,17 @@ export async function checkFeatureLimit(
   currentCount = 1,
 ): Promise<FeatureLimitResult> {
   try {
+    // getSession() reads the local session with no network round trip.
+    // check_feature_limit rejects any p_user_id other than auth.uid(), so the
+    // server verifies the id rather than trusting it.
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { allowed: true };
+      data: { session },
+    } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return { allowed: true };
 
     const { data, error } = await supabase.rpc("check_feature_limit", {
-      p_user_id: user.id,
+      p_user_id: userId,
       p_feature_type: featureType,
       p_current_count: currentCount,
     });

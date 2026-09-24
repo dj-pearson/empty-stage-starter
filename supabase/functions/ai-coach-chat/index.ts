@@ -78,16 +78,45 @@ Your role is to:
     // Prepare messages for AI service. Keep only the most recent turns: the
     // tail is what carries the conversation, and truncating from the front
     // bounds input cost without changing behaviour for a normal chat.
-    const recentMessages = messages.slice(-MAX_MESSAGES);
+    // Only user and assistant turns with string content reach the model: a
+    // caller-supplied "system" turn would sit beside the safety rules with the
+    // same authority. Each turn is capped, well above the web composer's 2000
+    // characters plus its family-data block, so one huge paste cannot be the
+    // cost lever the message cap above exists to remove.
+    const MAX_CONTENT_CHARS = 16000;
+    const recentMessages = messages
+      .filter(
+        (msg: unknown): msg is { role: 'user' | 'assistant'; content: string } =>
+          typeof msg === 'object' &&
+          msg !== null &&
+          ((msg as { role?: unknown }).role === 'user' || (msg as { role?: unknown }).role === 'assistant') &&
+          typeof (msg as { content?: unknown }).content === 'string',
+      )
+      .slice(-MAX_MESSAGES)
+      .map((msg: { role: 'user' | 'assistant'; content: string }) => ({
+        role: msg.role,
+        content: msg.content.slice(0, MAX_CONTENT_CHARS),
+      }));
+    if (recentMessages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Messages array is required' }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            ...securityHeaders,
+            ...noCacheHeaders(),
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
 
     // US-629: the safety block goes on last so it is the final instruction the
     // model reads, and so it cannot be skipped by an early return above.
     const aiMessages: AIMessage[] = [
       { role: 'system', content: withSafetyRules(systemPrompt) },
-      ...recentMessages.map((msg: any) => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content
-      }))
+      ...recentMessages,
     ];
 
     console.log('[ai-coach-chat] Processing request with', aiMessages.length, 'messages');

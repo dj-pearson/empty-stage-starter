@@ -8,7 +8,7 @@ import { ACQUIRED_FOOD_IS_SAFE } from "@/lib/foodSafetyDefault";
  * Nothing here is marked safe (US-803). Whether a child eats a food is the
  * parent's answer, and a starter list that answered it for them told every new
  * family that nuggets and goldfish were safe before anyone had said so. The
- * parent marks what their child eats with the same safe/try/none choice as any
+ * parent marks what their child eats with the same safe/try/none choice used for every
  * other food. The five try bites stay: "we are working on it" is not a claim
  * that the food is safe.
  *

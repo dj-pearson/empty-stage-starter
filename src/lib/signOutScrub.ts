@@ -96,6 +96,10 @@ export const SCRUBBED_PREFIXES: readonly string[] = [
   'grocery:selectedList:',
   'grocery:storeLayouts:',
   'grocery.aislePrompt.dismissed.',
+  // The AI Coach composer's unsent question, per conversation (and 'draft' for
+  // a new one). It is what a parent typed about their child, and the 'draft'
+  // key is not user-scoped, so the next account on the device would see it.
+  'aiCoach.draft.',
 ];
 
 /** Keys that survive sign-out on purpose, each with the reason it does. */
