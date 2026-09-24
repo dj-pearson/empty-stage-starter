@@ -627,7 +627,7 @@ export default function Pantry() {
   );
 
   // Item 21: "used up" from a list row's button or left swipe. A correction
-  // to zero through the same path as any edit, so the ledger records it, and
+  // to zero through the same path as every other edit, so the ledger records it, and
   // Undo is the opposite correction rather than a rewrite of history.
   const handleUsedUp = useCallback(
     (food: Food) => {
