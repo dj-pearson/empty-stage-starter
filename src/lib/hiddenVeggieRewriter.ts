@@ -16,6 +16,8 @@
  * adapter pulls techniques + kid profiles from Supabase and feeds them in.
  */
 
+import { matchingFoodAllergen } from './allergens';
+
 export interface HiddenVeggieTechnique {
   id: string;
   veggieName: string;
@@ -94,15 +96,6 @@ function lower(s: string | null | undefined): string {
   return (s ?? '').toLowerCase();
 }
 
-function lowerSet(values: readonly (string | null | undefined)[] | null | undefined): Set<string> {
-  const out = new Set<string>();
-  if (!values) return out;
-  for (const v of values) {
-    if (typeof v === 'string' && v.trim().length > 0) out.add(v.trim().toLowerCase());
-  }
-  return out;
-}
-
 function recipeHaystack(recipe: RewriterRecipe): string {
   return [recipe.name, recipe.description ?? '', recipe.instructions ?? '']
     .map((s) => s.toLowerCase())
@@ -145,20 +138,18 @@ function safeForKids(
   technique: HiddenVeggieTechnique,
   kids: RewriterKid[]
 ): { allSafeIds: string[]; blockedReason?: string } {
-  const allergens = lowerSet(technique.veggieAllergens);
   const safe: string[] = [];
   let blocked: string | undefined;
 
   for (const kid of kids) {
-    const kidAllergens = lowerSet(kid.allergens);
-    let hardBlocked = false;
-    for (const a of allergens) {
-      if (kidAllergens.has(a)) {
-        hardBlocked = true;
-        blocked = `${kid.name}: allergen ${a}`;
-        break;
-      }
-    }
+    // Canonical, family-aware match on the veggie's tags and its name: a
+    // lowercased exact compare missed "Tree Nuts" against "en:tree-nuts".
+    const hit = matchingFoodAllergen(kid.allergens, {
+      name: technique.veggieName,
+      allergens: technique.veggieAllergens,
+    });
+    const hardBlocked = hit !== null;
+    if (hardBlocked) blocked = `${kid.name}: allergen ${hit}`;
     if (hardBlocked) continue;
 
     // Hidden, but if the kid explicitly DISLIKES the actual veggie name we still

@@ -167,6 +167,38 @@ describe("useRecipeQuickPlan", () => {
     expect(toastCalls.some((c) => c.kind === "info" && c.title.includes("Ava"))).toBe(true);
   });
 
+  it("planTonight skips a severe allergy and names it as severe (item 29)", async () => {
+    KIDS[0] = { id: "k-ava", name: "Ava", allergens: ["peanut"], allergen_severity: { peanut: "severe" } };
+    try {
+      const { result } = renderHook(() => useRecipeQuickPlan());
+      await act(async () => {
+        await result.current.planTonight(RECIPE);
+      });
+      const [, , , kidIds] = scheduleRecipe.mock.calls[0];
+      expect(kidIds).toEqual(["k-ben", "k-cal"]);
+      expect(toastCalls.some((c) => c.kind === "info" && c.title.includes("Ava: severe peanut"))).toBe(true);
+    } finally {
+      KIDS[0] = { id: "k-ava", name: "Ava", allergens: ["peanut"] };
+    }
+  });
+
+  it("planTonight skips a kid whose allergen hides in a food name (family match)", async () => {
+    KIDS[1] = { id: "k-ben", name: "Ben", allergens: ["milk"] };
+    FOODS.push({ id: "f-butter", name: "Butter", category: "dairy", is_safe: true, is_try_bite: false, allergens: [], quantity: 0 });
+    try {
+      const { result } = renderHook(() => useRecipeQuickPlan());
+      const withButter: Recipe = { id: "r3", name: "Toast", food_ids: ["f-bread", "f-butter"] };
+      await act(async () => {
+        await result.current.planTonight(withButter);
+      });
+      const [, , , kidIds] = scheduleRecipe.mock.calls[0];
+      expect(kidIds).toEqual(["k-ava", "k-cal"]);
+    } finally {
+      FOODS.pop();
+      KIDS[1] = { id: "k-ben", name: "Ben", allergens: [] };
+    }
+  });
+
   it("planTonight schedules nothing when no kid is eligible", async () => {
     const { result } = renderHook(() => useRecipeQuickPlan());
     const onlyPeanut: Recipe = { id: "r2", name: "PB spoon", food_ids: ["f-pb"] };

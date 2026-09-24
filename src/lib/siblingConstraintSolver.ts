@@ -17,6 +17,8 @@
  * recipes) and we want decisions to be explainable to a parent in plain text.
  */
 
+import { matchingAllergen, matchingFoodAllergen, worstFoodAllergen, type AllergenSeverity } from './allergens';
+
 export type DietaryRestriction =
   | 'vegetarian'
   | 'vegan'
@@ -39,6 +41,8 @@ export interface SolverKid {
   id: string;
   name: string;
   allergens?: string[] | null;
+  /** kids.allergen_severity: a severe hit is never split-plated, only excluded. */
+  allergenSeverity?: Partial<Record<string, AllergenSeverity>> | null;
   dietaryRestrictions?: string[] | null;
   dislikedFoods?: string[] | null;
   favoriteFoods?: string[] | null;
@@ -81,6 +85,8 @@ export interface ConstraintViolation {
   reason: string;
   /** 'hard' = excludes the kid (allergen / dietary). 'soft' = penalizes. */
   severity: 'hard' | 'soft';
+  /** For an allergen violation: the severity the parent recorded, if any. */
+  allergenSeverity?: AllergenSeverity | null;
 }
 
 export interface KidSatisfaction {
@@ -266,11 +272,11 @@ function violatesDietaryRestriction(
   const rule = DIETARY_RULES[restriction.trim().toLowerCase()];
   if (!rule) return { violates: false, reason: '' };
 
-  const allergens = lowerSet(food.allergens);
-  for (const a of rule.excludeAllergens ?? []) {
-    if (allergens.has(a)) {
-      return { violates: true, reason: `${restriction} (contains ${a})` };
-    }
+  // Canonical and family-aware: a dairy-free kid's rule catches a food tagged
+  // "en:milk" or "cheese", which a lowercased exact compare let through.
+  const excluded = matchingAllergen(rule.excludeAllergens ?? [], food.allergens);
+  if (excluded) {
+    return { violates: true, reason: `${restriction} (contains ${excluded})` };
   }
   const nameLower = food.name.toLowerCase();
   for (const kw of rule.excludeNameKeywords ?? []) {
@@ -286,7 +292,6 @@ function violatesDietaryRestriction(
 // ---------------------------------------------------------------------------
 
 export function evaluateKidConstraint(recipe: SolverRecipe, kid: SolverKid): KidSatisfaction {
-  const kidAllergens = lowerSet(kid.allergens);
   const dislikedIds = new Set(kid.dislikedFoods ?? []);
   const dislikedNames = lowerSet(kid.dislikedFoods);
   const favoriteIds = new Set(kid.favoriteFoods ?? []);
@@ -300,20 +305,21 @@ export function evaluateKidConstraint(recipe: SolverRecipe, kid: SolverKid): Kid
   const favoriteHits: string[] = [];
 
   for (const food of recipe.foods) {
-    // Hard: allergen
-    let allergenHit: string | null = null;
-    for (const a of food.allergens ?? []) {
-      if (kidAllergens.has(String(a).trim().toLowerCase())) {
-        allergenHit = String(a);
-        break;
-      }
-    }
-    if (allergenHit) {
+    // Hard: allergen. Canonical, family-aware, and reads the food's name.
+    // Worst hit, not first, so a severe allergen is never hidden behind a mild one.
+    const worstHit = worstFoodAllergen(
+      { allergens: kid.allergens, allergen_severity: kid.allergenSeverity },
+      food,
+    );
+    if (worstHit) {
+      const allergenHit = worstHit.allergen;
+      const level = worstHit.severity;
       hardViolations.push({
         foodId: food.id,
         foodName: food.name,
-        reason: `allergen (${allergenHit})`,
+        reason: level === 'severe' ? `severe allergen (${allergenHit})` : `allergen (${allergenHit})`,
         severity: 'hard',
+        allergenSeverity: level,
       });
       continue; // no need to also flag as dislike etc.
     }
@@ -420,16 +426,7 @@ function findSwap(
     // Must not violate any group member's hard constraints
     let viable = true;
     for (const other of allKids) {
-      const allergens = lowerSet(other.allergens);
-      const candAllergens = lowerSet(candidate.allergens);
-      let hit = false;
-      for (const a of candAllergens) {
-        if (allergens.has(a)) {
-          hit = true;
-          break;
-        }
-      }
-      if (hit) {
+      if (matchingFoodAllergen(other.allergens, candidate)) {
         viable = false;
         break;
       }
@@ -529,6 +526,12 @@ function planResolution(
     hardViolations: [...k.hardViolations],
     softViolations: [...k.softViolations],
   }));
+
+  // Item 29: "hold the X" is fine for a mild or moderate allergy, but a severe
+  // one is a cross-contact risk from the shared pot, so the recipe is out.
+  if (adjusted.some((ks) => ks.hardViolations.some((v) => v.allergenSeverity === 'severe'))) {
+    return null;
+  }
 
   for (const ks of adjusted) {
     const totalMods = ks.hardViolations.length + ks.softViolations.length;
@@ -657,7 +660,9 @@ export function solveSiblingMeals(
         swaps: [],
         splitPlates: [],
         excluded: true,
-        excludeReason: 'Too many constraint conflicts to resolve',
+        excludeReason: perKid.some((k) => k.hardViolations.some((v) => v.allergenSeverity === 'severe'))
+          ? 'Severe allergy for a selected kid'
+          : 'Too many constraint conflicts to resolve',
       });
       continue;
     }

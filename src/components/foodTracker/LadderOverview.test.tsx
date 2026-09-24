@@ -181,6 +181,28 @@ describe('LadderOverview', () => {
     expect(document.querySelector('section[data-group="workingOn"]')).toBeNull();
   });
 
+  it("brings the planner strip's ?food= row into view once the ladder loads (item 4)", async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    window.history.pushState({}, '', '/dashboard/food-tracker?food=working');
+    try {
+      const rows = [
+        ladderRow({ id: 'r-close', foodId: 'close', nextDueOn: '2999-01-01', currentRung: 'looking' }),
+        ladderRow({ id: 'r-working', foodId: 'working', nextDueOn: '2999-01-01', currentRung: 'looking' }),
+      ];
+      h.ladder = ladderState({ loading: true });
+      const { rerender } = render(<LadderOverview kid={kid} />);
+      h.ladder = ladderState({ loading: false, rows });
+      rerender(<LadderOverview kid={kid} />);
+      await waitFor(() => expect(scroll).toHaveBeenCalled());
+      const el = scroll.mock.contexts[0] as HTMLElement;
+      expect(el.getAttribute('data-ladder-row')).toBe('r-working');
+    } finally {
+      window.history.pushState({}, '', '/');
+      Element.prototype.scrollIntoView = vi.fn();
+    }
+  });
+
   it('opens the picker on a log request when nothing is due', async () => {
     h.ladder = ladderState({
       rows: [ladderRow({ id: 'r-working', foodId: 'working', nextDueOn: '2999-01-01', currentRung: 'looking' })],

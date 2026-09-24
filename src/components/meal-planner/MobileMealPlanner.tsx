@@ -27,11 +27,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
-import { groupSlot, kidsOnFamilyMeal, type FamilyTarget } from "@/lib/familySlot";
 import { isoDay, todayIndex, weekdayIndex } from "@/lib/mobilePlannerDay";
 import { WeekStrip } from "./WeekStrip";
 import { FamilyMealCard, type MealOutcome } from "./FamilyMealCard";
-import { MealQuickAddDrawer, MealQuickAddContext } from "./MealQuickAddDrawer";
+import { MealQuickAddDrawer } from "./MealQuickAddDrawer";
+import { useFamilySlotPicker } from "./useFamilySlotPicker";
 import "@/i18n/appLocale";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
@@ -46,10 +46,6 @@ const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
 const EMPTY: PlanEntry[] = [];
 const PANEL_ID = "planner-day-panel";
 const TAB_PREFIX = "planner-day";
-
-function toSlotTarget(target: FamilyTarget): SlotTarget {
-  return target.kind === "recipe" ? { recipeId: target.id } : { foodId: target.id };
-}
 
 interface MobileMealPlannerProps {
   weekStart: Date;
@@ -110,8 +106,6 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
 
   const [today, setToday] = useState(() => isoDay(new Date()));
   const [selectedDayIndex, setSelectedDayIndex] = useState(() => Math.max(todayIndex(weekStart), 0));
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerContext, setDrawerContext] = useState<MealQuickAddContext | null>(null);
 
   const singleKidMode = activeKidId !== null;
   const selectedDate = isoDay(addDays(weekStart, selectedDayIndex));
@@ -191,106 +185,21 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
   const foodById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const recipeById = useMemo(() => new Map(recipes.map((r) => [r.id, r])), [recipes]);
 
-  // Handlers read the latest plan through refs so they keep one identity and
-  // the cards' memo() is not defeated by a new closure per render.
-  const latest = useRef({ planEntries, slotEntries, kids, singleKidMode, activeKidId });
-  latest.current = { planEntries, slotEntries, kids, singleKidMode, activeKidId };
-
-  const rowsFor = useCallback((date: string, slot: MealSlot, kidIds: readonly string[]) => {
-    const set = new Set(kidIds);
-    return latest.current.planEntries.filter(
-      (e) => e.date === date && e.meal_slot === slot && set.has(e.kid_id),
-    );
-  }, []);
-
-  // --- Drawer openers ---
-
-  const handleTapAdd = useCallback((date: string, slot: MealSlot, kidId?: string) => {
-    const { singleKidMode: single, activeKidId: active } = latest.current;
-    setDrawerContext({
-      date,
-      slot,
-      kidId: kidId ?? (single && active ? active : undefined),
-      mode: "add",
-    });
-    setDrawerOpen(true);
-  }, []);
-
-  const handleTapChangeFamilyMeal = useCallback((date: string, slot: MealSlot) => {
-    const { singleKidMode: single, activeKidId: active, kids: allKids, planEntries: all } = latest.current;
-    if (single && active) {
-      setDrawerContext({ date, slot, kidId: active, mode: "change" });
-    } else {
-      const group = groupSlot(all.filter((e) => e.date === date && e.meal_slot === slot));
-      const ids = allKids.map((k) => k.id);
-      // Change what the family is eating; a kid on a substitute keeps it.
-      const onFamily = kidsOnFamilyMeal(group, ids);
-      setDrawerContext({
-        date,
-        slot,
-        kidId: allKids.length === 1 ? allKids[0].id : undefined,
-        kidIds: onFamily.length > 0 ? onFamily : ids,
-        familyTarget: group.familyTarget ?? undefined,
-        mode: "change",
-      });
-    }
-    setDrawerOpen(true);
-  }, []);
-
-  const handleTapKidSubstitute = useCallback((date: string, slot: MealSlot, kidId: string) => {
-    const group = groupSlot(
-      latest.current.planEntries.filter((e) => e.date === date && e.meal_slot === slot),
-    );
-    setDrawerContext({
-      date,
-      slot,
-      kidId,
-      familyTarget: group.familyTarget ?? undefined,
-      mode: "substitute",
-    });
-    setDrawerOpen(true);
-  }, []);
-
-  // --- Drawer results ---
-
-  const handleDrawerSelectFood = useCallback(
-    (foodId: string, context: MealQuickAddContext, kidIds: string[]) => {
-      if (kidIds.length === 0) return;
-      const existing = rowsFor(context.date, context.slot, kidIds);
-      if (kidIds.length === 1 && existing.length === 0) {
-        onAddEntry(kidIds[0], context.date, context.slot, foodId);
-        return;
-      }
-      onReplaceSlot(kidIds, context.date, context.slot, { foodId });
-    },
-    [rowsFor, onAddEntry, onReplaceSlot],
-  );
-
-  const handleDrawerSelectRecipe = useCallback(
-    (recipeId: string, context: MealQuickAddContext, kidIds: string[]) => {
-      if (kidIds.length === 0) return;
-      if (rowsFor(context.date, context.slot, kidIds).length === 0) {
-        onSelectRecipeForKids(recipeId, context.date, context.slot, kidIds);
-        return;
-      }
-      onReplaceSlot(kidIds, context.date, context.slot, { recipeId });
-    },
-    [rowsFor, onSelectRecipeForKids, onReplaceSlot],
-  );
-
-  // "Eat with family": put the kid back on the family dish, recipe and all.
-  const handleEatWithFamily = useCallback(
-    (context: MealQuickAddContext) => {
-      if (!context.kidId || !context.familyTarget) return;
-      onReplaceSlot([context.kidId], context.date, context.slot, toSlotTarget(context.familyTarget));
-    },
-    [onReplaceSlot],
-  );
-
-  const handleDrawerOpenChange = useCallback((open: boolean) => {
-    setDrawerOpen(open);
-    if (!open) setDrawerContext(null);
-  }, []);
+  // Drawer openers and what a pick writes, shared with the desktop family
+  // grid (item 2).
+  const picker = useFamilySlotPicker({
+    planEntries,
+    kids,
+    activeKidId,
+    onAddEntry,
+    onSelectRecipeForKids,
+    onReplaceSlot,
+  });
+  const {
+    tapAdd: handleTapAdd,
+    tapChangeFamilyMeal: handleTapChangeFamilyMeal,
+    tapKidSubstitute: handleTapKidSubstitute,
+  } = picker;
 
   const handlePushWeek = useCallback(() => onPushWeekToGrocery?.(), [onPushWeekToGrocery]);
 
@@ -473,16 +382,11 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
       </div>
 
       <MealQuickAddDrawer
-        open={drawerOpen}
-        onOpenChange={handleDrawerOpenChange}
-        context={drawerContext}
+        {...picker.drawer}
         foods={foods}
         recipes={recipes}
         kids={kids}
         planEntries={planEntries}
-        onSelectFood={handleDrawerSelectFood}
-        onSelectRecipeForKids={handleDrawerSelectRecipe}
-        onEatWithFamily={handleEatWithFamily}
       />
     </div>
   );

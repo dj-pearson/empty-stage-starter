@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { MobileMealPlanner } from "@/components/meal-planner/MobileMealPlanner";
+import { FamilyWeekGrid } from "@/components/meal-planner/FamilyWeekGrid";
+import { TryBiteStrip } from "@/components/meal-planner/TryBiteStrip";
 import { buildWeekPlan } from "@/lib/mealPlanner";
 import {
   Calendar,
@@ -51,8 +53,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { format, startOfWeek, addWeeks, subWeeks, addDays, isSameDay } from "date-fns";
 import { calculateAge } from "@/lib/utils";
-import { addIsoDays, parseIsoDate, PLANNER_WEEK_STARTS_ON } from "@/lib/date-utils";
-import { isAllergenSafeFor, matchingAllergen } from "@/lib/allergens";
+import { addIsoDays, parseIsoDate } from "@/lib/date-utils";
+import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
+import { dropAllergenEntries, manualAddPrompt } from "@/lib/planAllergenGuard";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { usePlanToGrocery, type PlanToGroceryWindow } from "@/hooks/usePlanToGrocery";
 import { useDefaultGroceryListId } from "@/hooks/useDefaultGroceryListId";
@@ -169,17 +172,21 @@ export default function Planner() {
   // --- Week in view, persisted in ?week=YYYY-MM-DD -------------------------
   const [searchParams, setSearchParams] = useSearchParams();
   const weekParam = searchParams.get("week");
+  // Item 3: Monday unless this user chose Sunday. Plan rows keep their dates;
+  // only the seven-day window moves, so a ?week= saved under the other start
+  // opens on the week that contains that day.
+  const weekStartsOn = useWeekStartsOn();
   const currentWeekStart = useMemo(
-    () => startOfWeek(parseWeekParam(weekParam) ?? new Date(), { weekStartsOn: PLANNER_WEEK_STARTS_ON }),
-    [weekParam],
+    () => startOfWeek(parseWeekParam(weekParam) ?? new Date(), { weekStartsOn }),
+    [weekParam, weekStartsOn],
   );
   const weekStartIso = format(currentWeekStart, "yyyy-MM-dd");
-  const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: PLANNER_WEEK_STARTS_ON });
+  const thisWeekStart = startOfWeek(new Date(), { weekStartsOn });
   const isThisWeek = isSameDay(currentWeekStart, thisWeekStart);
 
   const setCurrentWeekStart = useCallback(
     (d: Date) => {
-      const iso = format(startOfWeek(d, { weekStartsOn: PLANNER_WEEK_STARTS_ON }), "yyyy-MM-dd");
+      const iso = format(startOfWeek(d, { weekStartsOn }), "yyyy-MM-dd");
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -189,7 +196,7 @@ export default function Planner() {
         { replace: true },
       );
     },
-    [setSearchParams],
+    [setSearchParams, weekStartsOn],
   );
 
   const [busyOp, setBusyOp] = useState<BusyOp | null>(null);
@@ -284,30 +291,48 @@ export default function Planner() {
   /**
    * Allergen guard. Every path that puts a food on a child's plan comes through
    * here. A match asks first, with Cancel as the default; nothing is written
-   * unless the parent picks "Add anyway".
+   * unless the parent picks "Add anyway". Uses findAllergenConflicts (via
+   * manualAddPrompt), the same matcher as the grid badges, so families and
+   * food names count. A severe allergy names the child and the allergen in
+   * the title and on the button.
    */
   const guardAllergen = useCallback(
     async (targetKids: Kid[], foodIds: string[]): Promise<boolean> => {
-      const lines: string[] = [];
-      for (const kid of targetKids) {
-        for (const id of new Set(foodIds)) {
-          const food = foodsRef.current.find((f) => f.id === id);
-          if (!food || isAllergenSafeFor(kid, food)) continue;
-          const allergen = matchingAllergen(kid.allergens, food.allergens);
-          if (allergen) lines.push(t("planner.confirm.allergenLine", { food: food.name, allergen, name: kid.name }));
-        }
-      }
-      if (lines.length === 0) return true;
+      const foodById = new Map(foodsRef.current.map((f) => [f.id, f]));
+      const prompt = manualAddPrompt(targetKids, foodIds, foodById);
+      if (!prompt) return true;
+      const lines = prompt.conflicts.map((c) =>
+        c.severity === "severe"
+          ? t("planner.allergenSafety.severeLine", {
+              defaultValue: "{{food}} contains {{allergen}}. {{name}} has a severe {{allergen}} allergy.",
+              food: c.food.name,
+              allergen: c.allergen,
+              name: c.kid.name,
+            })
+          : t("planner.confirm.allergenLine", { food: c.food.name, allergen: c.allergen, name: c.kid.name }),
+      );
+      const lead = prompt.lead;
       return askConfirm({
-        title: t("planner.confirm.allergenTitle"),
+        title: lead
+          ? t("planner.allergenSafety.severeTitle", {
+              defaultValue: "Severe {{allergen}} allergy: {{name}}",
+              allergen: lead.allergen,
+              name: lead.kid.name,
+            })
+          : t("planner.confirm.allergenTitle"),
         body: (
           <span className="block space-y-1">
-            {lines.map((l) => (
+            {[...new Set(lines)].map((l) => (
               <span key={l} className="block">{l}</span>
             ))}
           </span>
         ),
-        confirmLabel: t("planner.actions.addAnyway"),
+        confirmLabel: lead
+          ? t("planner.allergenSafety.severeConfirm", {
+              defaultValue: "Add it for {{name}} anyway",
+              name: lead.kid.name,
+            })
+          : t("planner.actions.addAnyway"),
         cautious: true,
       });
     },
@@ -580,18 +605,32 @@ export default function Planner() {
         return "bad";
       }
       const known = new Set(foodsRef.current.map((f) => f.id));
-      const entries: Omit<PlanEntry, "id">[] = [];
+      const generated: Omit<PlanEntry, "id">[] = [];
       for (const day of parsed.data.plan) {
         if (!ISO_DATE.test(day.date) || !inWeek(day.date, weekStartIso)) continue;
         for (const [slot, foodId] of Object.entries(day.meals)) {
           if (!foodId || !(MEAL_SLOTS as readonly string[]).includes(slot) || !known.has(foodId)) continue;
-          entries.push({ kid_id: kid.id, date: day.date, meal_slot: slot as MealSlot, food_id: foodId, result: null });
+          generated.push({ kid_id: kid.id, date: day.date, meal_slot: slot as MealSlot, food_id: foodId, result: null });
         }
       }
-      logger.info("[AI Meal Plan] response", { days: parsed.data.plan.length, kept: entries.length });
+      // Item 29: the edge function filters allergens too, but the client is
+      // the last stop before the write, and an older deployment or a reply
+      // naming a sibling's food must not put this child's allergen on the plan.
+      const foodById = new Map(foodsRef.current.map((f) => [f.id, f]));
+      const { kept: entries, dropped } = dropAllergenEntries(generated, [kid], foodById);
+      if (dropped.length > 0) {
+        toast.warning(
+          t("planner.allergenSafety.aiDropped", {
+            defaultValue: "Left out {{foods}}: {{name}} is allergic.",
+            foods: [...new Set(dropped.map((c) => c.food.name))].join(", "),
+            name: kid.name,
+          }),
+        );
+      }
+      logger.info("[AI Meal Plan] response", { days: parsed.data.plan.length, kept: entries.length, dropped: dropped.length });
       return entries.length > 0 ? entries : "bad";
     },
-    [weekStartIso],
+    [weekStartIso, t],
   );
 
   const runAiWeek = useCallback(
@@ -905,6 +944,15 @@ export default function Planner() {
       const { error } = await updatePlanEntry(entry.id, updates);
       if (error) return;
 
+      // A NULL -> result mark wrote an attempt through the trigger; move the
+      // ladder rung for it now, the same lazy path performQuickLog uses. A
+      // ladder tap (attemptId) already moved it.
+      if (!attemptId && previous == null) {
+        void import("@/hooks/useFoodLadder")
+          .then((m) => m.syncLadderAfterPlanResult(entry.id))
+          .catch((syncError: unknown) => logger.warn("Ladder sync after a planner result failed:", syncError));
+      }
+
       // Deduct once, on the way INTO "ate". Re-tapping "ate" or flipping
       // tasted -> refused must not eat the pantry a second time.
       if (result === "ate" && previous !== "ate") {
@@ -1176,6 +1224,18 @@ export default function Planner() {
       </Card>
     ) : null;
 
+  // Item 4: this week's try bites, per kid, with this month's exposures.
+  const tryBiteStrip = (
+    <TryBiteStrip
+      weekStartIso={weekStartIso}
+      planEntries={planEntries}
+      foods={foods}
+      kids={kids}
+      activeKidId={familyMode ? null : activeKidId}
+      onOpenKid={setActiveKid}
+    />
+  );
+
   const overlays = (
     <>
       {foodSelectorOpen && (
@@ -1294,6 +1354,7 @@ export default function Planner() {
           </div>
           <div className="mb-2">{addWeekToListButton}</div>
           {emptyWeekPanel}
+          {tryBiteStrip}
 
           <div aria-busy={busy}>
             <MobileMealPlanner
@@ -1435,21 +1496,31 @@ export default function Planner() {
           </Card>
         </div>
 
+        {tryBiteStrip}
+
         <div aria-busy={busy}>
           {familyMode ? (
-            <div className="space-y-6">
-              {kids.map((kid) => (
-                <div key={kid.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold">{t("planner.familyPlanHeading", { name: kid.name })}</h2>
-                    <Button variant="outline" size="sm" onClick={() => setActiveKid(kid.id)}>
-                      {t("planner.viewDetails")}
-                    </Button>
-                  </div>
-                  {renderGrid(kid)}
-                </div>
-              ))}
-            </div>
+            // Item 2: one grid for the family, a dish per day and slot with
+            // each kid's line under it, instead of one grid per child.
+            <FamilyWeekGrid
+              weekStart={currentWeekStart}
+              planEntries={planEntries}
+              foods={foods}
+              recipes={recipes}
+              kids={kids}
+              onAddEntry={handleMobileAddEntry}
+              onSelectRecipeForKids={handleSelectRecipeForKids}
+              onReplaceSlot={handleReplaceSlot}
+              onDeleteEntries={handleDeleteEntries}
+              onMoveEntries={handleMoveEntries}
+              onMarkResult={handleMarkResult}
+              onViewKid={setActiveKid}
+              onCopyWeek={handleCopyWeek}
+              onClearWeek={handleClearWeek}
+              onOpenSaveTemplate={openSaveTemplate}
+              onOpenTemplateGallery={openTemplateGallery}
+              onOpenMissingForRecipe={openMissingIngredientsForRecipe}
+            />
           ) : (
             <>
               {emptyWeekPanel}

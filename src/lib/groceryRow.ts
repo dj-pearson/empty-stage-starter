@@ -52,6 +52,8 @@ export interface GroceryRowDraft {
   source_recipe_id?: string | null;
   source_plan_entry_id?: string | null;
   auto_generated?: boolean | null;
+  /** Item 16: a receipt already credited this row; checkout must not again. */
+  pantry_credited_at?: string | null;
   /** A restored row keeps the checked state it had. New rows default to false. */
   checked?: boolean;
 }
@@ -92,6 +94,7 @@ const PASSTHROUGH_KEYS = [
   'source_recipe_id',
   'source_plan_entry_id',
   'auto_generated',
+  'pantry_credited_at',
 ] as const satisfies ReadonlyArray<keyof GroceryRowDraft & keyof GroceryItemInsert>;
 
 /**

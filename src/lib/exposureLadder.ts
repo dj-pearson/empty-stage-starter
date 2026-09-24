@@ -5,7 +5,7 @@
  * each logged attempt, and when that food is next due.
  *
  * The eight rungs are the same labels the app has always written to
- * `food_attempts.stage` (see the STAGES list in FoodSuccessTracker). Reusing
+ * `food_attempts.stage` (the old tracker's STAGES list, retired in item 40). Reusing
  * that vocabulary is what makes deriving a ladder from existing history
  * possible at all — see `deriveLadderFromAttempts` (US-598).
  *
@@ -109,7 +109,7 @@ export function prevRung(rung: Rung): Rung {
   return idx <= 0 ? RUNGS[0] : RUNGS[idx - 1];
 }
 
-/** Human label + emoji, matching what FoodSuccessTracker already shows. */
+/** Human label + emoji for each rung. */
 export const RUNG_META: Record<Rung, { label: string; emoji: string }> = {
   looking: { label: 'Looking', emoji: '👀' },
   touching: { label: 'Touching', emoji: '✋' },

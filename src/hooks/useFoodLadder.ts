@@ -169,6 +169,18 @@ const PLAN_RESULT: Record<QuickLogResult, 'ate' | 'tasted' | 'refused'> = {
   refused: 'refused',
 };
 
+/**
+ * The same mapping read the other way: what a meal result means on the ladder.
+ * create_attempt_from_plan_result (20260926000002) writes the attempt outcome
+ * with exactly this correspondence, so a meal logged "tasted" holds the rung
+ * the way a ladder "held" tap does.
+ */
+export const LADDER_RESULT_FOR_PLAN: Record<'ate' | 'tasted' | 'refused', QuickLogResult> = {
+  ate: 'accepted',
+  tasted: 'held',
+  refused: 'refused',
+};
+
 /** food_attempts.mood_before / mood_after vocabulary (20251008150000). */
 export const ATTEMPT_MOODS = ['happy', 'neutral', 'anxious', 'resistant'] as const;
 /** food_attempts.amount_consumed vocabulary (20251008150000). */
@@ -373,6 +385,244 @@ async function sessionUserId(): Promise<string | null> {
   }
 }
 
+/**
+ * Write a ladder state, but only over the version the caller based it on.
+ * 'stale' means another device (or another fold) moved the row first.
+ */
+async function writeLadderOver(
+  base: Pick<LadderRow, 'id' | 'lastAttemptAt'>,
+  state: LadderState
+): Promise<'ok' | 'stale' | 'error'> {
+  let query = supabase.from('kid_food_ladder').update(stateToUpdate(state)).eq('id', base.id);
+  query =
+    base.lastAttemptAt === null
+      ? query.is('last_attempt_at', null)
+      : query.eq('last_attempt_at', base.lastAttemptAt);
+  const { data, error: updateError } = await query.select('id');
+  if (updateError) {
+    logger.error('Ladder update failed:', updateError);
+    return 'error';
+  }
+  return (data ?? []).length > 0 ? 'ok' : 'stale';
+}
+
+// ---------------------------------------------------------------------------
+// Meal results -> ladder (item 41)
+// ---------------------------------------------------------------------------
+
+/** Statuses a meal result moves. Paused and mastered rows are the parent's call. */
+const FOLDABLE_STATUSES: readonly LadderStatus[] = ['active', 'backed_off'];
+
+/**
+ * No meal result older than this is folded into a ladder. Attempts written
+ * before item 41 were stamped under a contract where meal results never moved
+ * the ladder, so replaying months of them on the first load after deploy
+ * would jump a beta child several rungs (or pause a food over two old
+ * refusals). Set to the day the fold was built; results between this and the
+ * deploy are the only history it will ever read.
+ */
+export const PLAN_FOLD_EPOCH = '2026-09-24T00:00:00.000Z';
+
+/** The later of two ISO timestamps; null only when both are. */
+function laterOf(a: string | null, b: string | null): string | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Date.parse(a) >= Date.parse(b) ? a : b;
+}
+
+/** A food_attempts row a plan result produced, as the fold reads it. */
+export interface PlanAttempt {
+  id: string;
+  foodId: string;
+  outcome: string;
+  attemptedAt: string;
+}
+
+/** Local calendar date of an ISO timestamp, the way todayIsoDate reads now. */
+function localIsoDate(timestamp: string): string {
+  const at = new Date(timestamp);
+  if (Number.isNaN(at.getTime())) return todayIsoDate();
+  const offsetMs = at.getTimezoneOffset() * 60_000;
+  return new Date(at.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+function isFoldableOutcome(value: string): value is AttemptOutcome {
+  return value === 'success' || value === 'partial' || value === 'refused' || value === 'tantrum';
+}
+
+/**
+ * Fold the attempts a meal result wrote into one ladder row. Pure.
+ *
+ * Setting plan_entries.result fires create_attempt_from_plan_result, which
+ * writes the attempt (at the row's rung, since 20260926000002) but does not
+ * move the ladder. This applies those attempts with applyAttemptOutcome, the
+ * same policy a ladder tap goes through, so a meal "tasted" and a ladder
+ * "held" land on the same state.
+ *
+ * Exactly once: only attempts strictly newer than `since` (the row's
+ * last_attempt_at, or its created_at when nothing was ever folded) count, and
+ * the result carries the newest one's timestamp as lastAttemptAt. Folding the
+ * same attempts again over the written state finds nothing newer.
+ *
+ * Returns null when nothing applies.
+ */
+export function foldPlanAttempts(
+  row: LadderRow,
+  attempts: readonly PlanAttempt[],
+  since: string | null,
+  siblings?: readonly DueDateRow[]
+): { state: LadderState; applied: string[] } | null {
+  if (!FOLDABLE_STATUSES.includes(row.status)) return null;
+  const sinceMs = since ? Date.parse(since) : Number.NEGATIVE_INFINITY;
+  const pending = attempts
+    .filter(
+      (a) =>
+        a.foodId === row.foodId &&
+        isFoldableOutcome(a.outcome) &&
+        Date.parse(a.attemptedAt) > sinceMs
+    )
+    .sort((a, b) => Date.parse(a.attemptedAt) - Date.parse(b.attemptedAt));
+  if (pending.length === 0) return null;
+
+  let state = toLadderState(row);
+  const applied: string[] = [];
+  for (const attempt of pending) {
+    // A refusal that pauses the row ends the run: what comes after it is a
+    // meal, not a ladder exposure, until a parent resumes the food.
+    if (!FOLDABLE_STATUSES.includes(state.status)) break;
+    state = applyAttemptOutcome(state, attempt.outcome as AttemptOutcome, {
+      today: localIsoDate(attempt.attemptedAt),
+      attemptAt: attempt.attemptedAt,
+    });
+    applied.push(attempt.id);
+  }
+  if (siblings) state = capDueDate(state, row, siblings);
+  return { state, applied };
+}
+
+type LadderSyncListener = (kidId: string, source: symbol | null) => void;
+const ladderSyncListeners = new Set<LadderSyncListener>();
+
+/** "This child's ladder moved outside this hook." In-process only. */
+function notifyLadderSynced(kidId: string, source: symbol | null): void {
+  for (const listener of [...ladderSyncListeners]) {
+    try {
+      listener(kidId, source);
+    } catch {
+      // A broken listener must not fail the log that triggered it.
+    }
+  }
+}
+
+/**
+ * Apply every meal-result attempt this child's ladder has not seen yet.
+ *
+ * Runs after a quick log (syncLadderAfterPlanResult) and whenever a ladder
+ * loads, which is how a result an older iOS build set straight on
+ * plan_entries reaches the ladder. Only attempts with a plan_entry_id are
+ * read: those are the ones the trigger writes, and the ladder's own logs
+ * (web or iOS) move the rung themselves. Each row is written over the
+ * last_attempt_at it was read at, so two folds racing (two tabs, the Home
+ * card and Food Tracker) move it once; the loser sees 'stale' and stops.
+ *
+ * Returns the rows it moved. Never throws.
+ */
+export async function syncLadderFromPlanAttempts(
+  kidId: string,
+  opts: { foodIds?: readonly string[]; source?: symbol | null } = {}
+): Promise<LadderRow[]> {
+  try {
+    let ladderQuery = supabase
+      .from('kid_food_ladder')
+      .select(`${SELECT_COLUMNS}, created_at`)
+      .eq('kid_id', kidId);
+    if (opts.foodIds) ladderQuery = ladderQuery.in('food_id', [...opts.foodIds]);
+    const { data: ladderData, error: ladderError } = await ladderQuery;
+    if (ladderError) throw ladderError;
+
+    const all = (ladderData ?? []).map((raw) => {
+      const db = raw as unknown as LadderDbRow & { created_at?: string | null };
+      return {
+        row: normalizeLadderRow(db),
+        since: laterOf(db.last_attempt_at ?? db.created_at ?? null, PLAN_FOLD_EPOCH),
+      };
+    });
+    const foldable = all.filter(({ row }) => FOLDABLE_STATUSES.includes(row.status));
+    if (foldable.length === 0) return [];
+
+    // One read for every row: from the oldest point any of them has seen.
+    const floors = foldable.map((f) => f.since);
+    const oldest = floors.includes(null)
+      ? null
+      : floors.reduce<string | null>(
+          (min, s) => (min === null || (s !== null && Date.parse(s) < Date.parse(min)) ? s : min),
+          null
+        );
+    let attemptQuery = supabase
+      .from('food_attempts')
+      .select('id, food_id, outcome, attempted_at')
+      .eq('kid_id', kidId)
+      .not('plan_entry_id', 'is', null)
+      .in(
+        'food_id',
+        foldable.map((f) => f.row.foodId)
+      );
+    if (oldest) attemptQuery = attemptQuery.gt('attempted_at', oldest);
+    const { data: attemptData, error: attemptError } = await attemptQuery.order('attempted_at', {
+      ascending: true,
+    });
+    if (attemptError) throw attemptError;
+
+    const attempts: PlanAttempt[] = (attemptData ?? []).flatMap((a) =>
+      a.id && a.food_id && a.outcome && a.attempted_at
+        ? [{ id: a.id, foodId: a.food_id, outcome: a.outcome, attemptedAt: a.attempted_at }]
+        : []
+    );
+    if (attempts.length === 0) return [];
+
+    const siblings = all.map(({ row }) => row);
+    const moved: LadderRow[] = [];
+    for (const { row, since } of foldable) {
+      const folded = foldPlanAttempts(row, attempts, since, siblings);
+      if (!folded) continue;
+      const written = await writeLadderOver(row, folded.state);
+      if (written === 'ok') moved.push({ ...row, ...folded.state });
+    }
+    if (moved.length > 0) notifyLadderSynced(kidId, opts.source ?? null);
+    return moved;
+  } catch (syncError) {
+    logger.warn('Folding meal results into the ladder failed:', syncError);
+    return [];
+  }
+}
+
+/**
+ * After a meal result is saved: move that food's rung if the child has it on
+ * an active ladder. What performQuickLog calls, so the shell quick log, the
+ * Home "today" card and the journal editor all get it.
+ */
+export async function syncLadderAfterPlanResult(planEntryId: string): Promise<LadderRow[]> {
+  try {
+    const { data, error: readError } = await supabase
+      .from('plan_entries')
+      .select('kid_id, food_id')
+      .eq('id', planEntryId)
+      .maybeSingle();
+    if (readError) throw readError;
+    const kidId = data?.kid_id;
+    const foodId = data?.food_id;
+    if (!kidId || !foodId) return [];
+    const moved = await syncLadderFromPlanAttempts(kidId, { foodIds: [foodId] });
+    // The trigger wrote an attempt either way; the history under the ladder
+    // should show it without a page visit.
+    notifyFoodAttemptLogged(kidId);
+    return moved;
+  } catch (syncError) {
+    logger.warn('Could not move the ladder after a meal result:', syncError);
+    return [];
+  }
+}
+
 export interface UseFoodLadderOptions {
   /** Kid record, used for the Win Network pickiness bucket and allergens. */
   kid?: { pickiness_level?: string | null; allergens?: string[] } | null;
@@ -403,6 +653,9 @@ export function useFoodLadder(
 
   const activeKidRef = useRef(activeKidId ?? null);
   activeKidRef.current = activeKidId ?? null;
+
+  /** Identifies this instance's own folds, so it does not re-read after them. */
+  const [syncSource] = useState(() => Symbol('useFoodLadder'));
 
   // The ladder as last committed. Every write path reads the row it is about
   // to change from here by id, never from a caller's prop, which may be a
@@ -478,7 +731,16 @@ export function useFoodLadder(
     (async () => {
       try {
         const loaded = await load(activeKidId);
-        if (!cancelled) commitRows(loaded);
+        if (cancelled) return;
+        commitRows(loaded);
+        setLoading(false);
+        // Item 41: meal results logged where no ladder was listening (an
+        // older iOS build, the planner) move the rung now. Moved rows are
+        // merged over what is showing, so a tap made meanwhile is kept.
+        const moved = await syncLadderFromPlanAttempts(activeKidId, { source: syncSource });
+        if (cancelled || moved.length === 0) return;
+        const byId = new Map(moved.map((r) => [r.id, r]));
+        commitRows((current) => current.map((r) => byId.get(r.id) ?? r));
       } catch (loadError) {
         logger.error('Failed to load food ladder:', loadError);
         if (!cancelled) setError('load_failed');
@@ -490,7 +752,7 @@ export function useFoodLadder(
     return () => {
       cancelled = true;
     };
-  }, [activeKidId, load, commitRows, dismissMastery]);
+  }, [activeKidId, load, commitRows, dismissMastery, syncSource]);
 
   const reload = useCallback(async () => {
     const kidId = activeKidId;
@@ -505,6 +767,22 @@ export function useFoodLadder(
       if (activeKidRef.current === kidId) setError('load_failed');
     }
   }, [activeKidId, load, commitRows]);
+
+  // Another surface (the shell quick log, another mounted ladder) folded a
+  // meal result into this child's ladder: re-read so this one shows it.
+  useEffect(
+    () => {
+      const listener: LadderSyncListener = (kidId, source) => {
+        if (source === syncSource || kidId !== activeKidRef.current) return;
+        void reload();
+      };
+      ladderSyncListeners.add(listener);
+      return () => {
+        ladderSyncListeners.delete(listener);
+      };
+    },
+    [reload, syncSource]
+  );
 
   /**
    * US-598: populate the ladder from a child's existing attempt history.
@@ -660,27 +938,9 @@ export function useFoodLadder(
     return true;
   }, []);
 
-  /**
-   * Write a ladder state, but only over the version this client based it on.
-   * 'stale' means another device moved the row first.
-   */
+  /** Guarded ladder write; see writeLadderOver. */
   const writeLadderGuarded = useCallback(
-    async (base: LadderRow, state: LadderState): Promise<'ok' | 'stale' | 'error'> => {
-      let query = supabase
-        .from('kid_food_ladder')
-        .update(stateToUpdate(state))
-        .eq('id', base.id);
-      query =
-        base.lastAttemptAt === null
-          ? query.is('last_attempt_at', null)
-          : query.eq('last_attempt_at', base.lastAttemptAt);
-      const { data, error: updateError } = await query.select('id');
-      if (updateError) {
-        logger.error('Ladder update failed:', updateError);
-        return 'error';
-      }
-      return (data ?? []).length > 0 ? 'ok' : 'stale';
-    },
+    (base: LadderRow, state: LadderState) => writeLadderOver(base, state),
     []
   );
 
@@ -1035,14 +1295,22 @@ export function useFoodLadder(
 
   // patchRow runs nextDueOn through the per-day cap, so a resumed food that
   // would be the fourth due today starts tomorrow instead of failing.
+  //
+  // Resuming also moves the fold watermark to now. Meals logged while the
+  // food was paused were meals, not ladder exposures; without this the next
+  // load would replay every one of them onto the rung the moment it resumed.
+  // Never moves the watermark backwards.
   const resume = useCallback(
-    (row: LadderRow) =>
-      patchRow(row, {
+    (row: LadderRow) => {
+      const current = rowsRef.current.find((r) => r.id === row.id) ?? row;
+      return patchRow(row, {
         status: 'active',
         pausedReason: null,
         consecutiveRefusals: 0,
         nextDueOn: todayIsoDate(),
-      }),
+        lastAttemptAt: laterOf(current.lastAttemptAt, new Date().toISOString()),
+      });
+    },
     [patchRow]
   );
 

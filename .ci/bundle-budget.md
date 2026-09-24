@@ -324,3 +324,12 @@ Insights was rebuilt from a static stats page into five per-kid sections
 InsightsDashboard route chunk 3.5 -> 12.2 kB, appLocale +1.8 kB, plus
 about 4 kB of chunk-split overhead from shared modules the page now
 reuses. Eager closure unchanged. Measured total 2638.6 kB.
+
+## 2026-09-24: `totalJs` 2645000 -> 2670000 (approved features, wave 1)
+
+Owner-approved: raise the ceiling for route-only feature growth. Wave 1
+added desktop family grid, week-start preference, try-bite strip
+(Planner +5.9), in-store mode (+4.3), receipt apply (+2.6), grocery kid
+filter (+2.1), radio-group for the week-start setting (+2.1), allergen
+families and severity (+1.7), ladder fold (+1.3). Eager closure 315.7 kB
+(budget 322 kB, unchanged). Measured total 2660.3 kB.

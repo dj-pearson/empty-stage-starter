@@ -73,7 +73,27 @@ describe('evaluateKidConstraint', () => {
     expect(result.score).toBe(0);
     expect(result.hardViolations).toHaveLength(1);
     expect(result.hardViolations[0].foodName).toBe('Cheddar Cheese');
-    expect(result.hardViolations[0].reason).toContain('dairy');
+    // Canonical name: "dairy" folds onto the picker's "milk".
+    expect(result.hardViolations[0].reason).toContain('milk');
+  });
+
+  it('matches allergens canonically, through families and by food name (item 27/28)', () => {
+    const cashews = food('cashew', 'Roasted Cashews', 'protein', ['en:cashews']);
+    const salmonNoTags = food('salmon', 'Baked Salmon', 'protein');
+    const k = kid('k1', 'Emma', { allergens: ['Tree Nuts', 'fish'] });
+    const result = evaluateKidConstraint(recipe('r1', 'Bowl', [cashews, salmonNoTags, rice]), k);
+    expect(result.hardViolations.map((v) => v.foodId)).toEqual(['cashew', 'salmon']);
+    // An almond allergy is not a tree-nut allergy.
+    const almondKid = kid('k2', 'Jack', { allergens: ['almond'] });
+    expect(evaluateKidConstraint(recipe('r2', 'Nuts', [food('tn', 'Mixed', 'protein', ['tree nuts'])]), almondKid).hardViolations).toHaveLength(0);
+  });
+
+  it('dietary rules match canonically (dairy-free catches en:milk and cheese tags)', () => {
+    const k = kid('k1', 'Emma', { dietary: ['dairy-free'] });
+    const milky = food('m', 'Sauce', 'other', ['en:milk']);
+    const cheesy = food('c', 'Topping', 'other', ['Cheese']);
+    const result = evaluateKidConstraint(recipe('r1', 'Pasta', [milky, cheesy]), k);
+    expect(result.hardViolations).toHaveLength(2);
   });
 
   it('scores 0 on dietary restriction conflict (vegetarian + chicken)', () => {
@@ -190,6 +210,39 @@ describe('solveSiblingMeals - resolution tiers', () => {
     expect(result[0].splitPlates).toHaveLength(1);
     expect(result[0].splitPlates[0].kidName).toBe('Emma');
     expect(result[0].splitPlates[0].modifications[0]).toContain('Hold the Cheddar Cheese');
+  });
+
+  it('never split-plates a severe allergy: the recipe is excluded (item 29)', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const emma: SolverKid = { ...kid('k1', 'Emma', { allergens: ['dairy'] }), allergenSeverity: { dairy: 'severe' } };
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [emma, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(true);
+    expect(result[0].excludeReason).toMatch(/severe/i);
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].allergenSeverity).toBe('severe');
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].reason).toContain('severe allergen');
+    expect(topSiblingSolutions({ recipes: [r], pantry: [], kids: [emma, kid('k2', 'Jack')] })).toHaveLength(0);
+  });
+
+  it('a severe allergen listed after a mild one in the same food still excludes the recipe', () => {
+    const omelette = food('om', 'Cheese omelette', 'protein', ['milk', 'eggs']);
+    const r = recipe('r1', 'Omelette plate', [omelette, rice]);
+    const sam: SolverKid = {
+      ...kid('k1', 'Sam', { allergens: ['milk', 'eggs'] }),
+      allergenSeverity: { milk: 'mild', eggs: 'severe' },
+    };
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [sam, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(true);
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].allergenSeverity).toBe('severe');
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].reason).toContain('egg');
+  });
+
+  it('still split-plates a mild or moderate allergy, naming it in the plate note', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const emma: SolverKid = { ...kid('k1', 'Emma', { allergens: ['milk'] }), allergenSeverity: { Milk: 'moderate' } };
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [emma, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(false);
+    expect(result[0].resolutionType).toBe('split_plate');
+    expect(result[0].splitPlates[0].modifications[0]).toContain('allergen (milk)');
   });
 
   it('drops the recipe entirely when split-plate would need too many modifications', () => {

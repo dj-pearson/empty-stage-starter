@@ -364,3 +364,61 @@ describe("selectTryNextFromResults", () => {
     expect(selectTryNextFromResults(new Map(), foods, kid)).toBeNull();
   });
 });
+
+describe("allergen families, names and severity (items 28/29)", () => {
+  const nutKid: KidFitKid = {
+    id: "k9",
+    allergens: ["tree nuts", "milk"],
+    allergen_severity: { "tree nuts": "severe", milk: "mild" },
+    disliked_foods: [],
+    always_eats_foods: [],
+  };
+
+  it("a food tagged with a family member is a hit, with the recorded severity", () => {
+    const fit = getKidFoodFit(nutKid, food({ id: "a", name: "Snack mix", allergens: ["en:almonds"] }), []);
+    expect(fit.allergen).toBe("tree nut");
+    expect(fit.allergenSeverity).toBe("severe");
+  });
+
+  it("a food with no tags is a hit by name, and a guarded name is not", () => {
+    expect(getKidFoodFit(nutKid, food({ id: "b", name: "Cashew butter" }), []).allergen).toBe("tree nut");
+    expect(getKidFoodFit(nutKid, food({ id: "c", name: "Butternut squash" }), []).allergen).toBeNull();
+    expect(getKidFoodFit(nutKid, food({ id: "d", name: "Greek yogurt" }), []).allergenSeverity).toBe("mild");
+  });
+
+  it("a recipe reports its severe hit even when a milder one comes first", () => {
+    const foods = [food({ id: "y", name: "Yogurt" }), food({ id: "p", name: "Pistachios" })];
+    const byId = new Map(foods.map((f) => [f.id, f]));
+    const fit = getKidRecipeFit(nutKid, { food_ids: ["y", "p"] }, byId, []);
+    expect(fit.allergen).toBe("tree nut");
+    expect(fit.allergenSeverity).toBe("severe");
+  });
+
+  it("a severe allergen is not hidden behind a mild one earlier in the same food", () => {
+    const omelette = food({ id: "o", name: "Cheese omelette", allergens: ["milk", "eggs"] });
+    const kid = kidOf("s", { allergens: ["milk", "eggs"], allergen_severity: { milk: "mild", eggs: "severe" } });
+    const out = findAllergenConflicts([kid], ["o"], new Map([["o", omelette]]));
+    expect(out.map((c) => [c.allergen, c.severity])).toEqual([["egg", "severe"]]);
+    const fit = getKidFoodFit(
+      { ...kid, disliked_foods: [], always_eats_foods: [] } as KidFitKid,
+      omelette,
+      [],
+    );
+    expect(fit.allergen).toBe("egg");
+    expect(fit.allergenSeverity).toBe("severe");
+  });
+
+  it("findAllergenConflicts carries severity, null when none was recorded", () => {
+    const foods = [food({ id: "w", name: "Walnuts" }), food({ id: "m", name: "Milk" })];
+    const byId = new Map(foods.map((f) => [f.id, f]));
+    const out = findAllergenConflicts(
+      [kidOf("a", { allergens: ["tree nuts", "milk"], allergen_severity: { "tree nuts": "severe" } })],
+      ["w", "m"],
+      byId,
+    );
+    expect(out.map((c) => [c.food.id, c.allergen, c.severity])).toEqual([
+      ["w", "tree nut", "severe"],
+      ["m", "milk", null],
+    ]);
+  });
+});

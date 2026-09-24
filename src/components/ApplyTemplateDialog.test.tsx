@@ -10,6 +10,7 @@ vi.mock("@/lib/mealPlanTemplatesApi", () => ({
 }));
 
 import { ApplyTemplateDialog } from "./ApplyTemplateDialog";
+import { setWeekStartsOnLocal } from "@/lib/weekStartPref";
 
 const kids: Kid[] = [
   { id: "k1", name: "Emma" },
@@ -48,11 +49,23 @@ describe("ApplyTemplateDialog", () => {
     expect(screen.getByRole("checkbox", { name: /Leo/ })).toBeChecked();
   });
 
-  it("snaps the default start date to the planner's Sunday week start", () => {
+  it("snaps the default start date to the planner's Monday week start", () => {
     render(renderDialog(true));
     expect(screen.getByTestId("apply-template-range")).toHaveTextContent(
-      "Applied from Sun Sep 20 to Sat Sep 26, 2026"
+      "Applied from Mon Sep 21 to Sun Sep 27, 2026"
     );
+  });
+
+  it("follows a user who starts weeks on Sunday, like the grid does (item 3)", () => {
+    setWeekStartsOnLocal(0, null);
+    try {
+      render(renderDialog(true));
+      expect(screen.getByTestId("apply-template-range")).toHaveTextContent(
+        "Applied from Sun Sep 20 to Sat Sep 26, 2026"
+      );
+    } finally {
+      setWeekStartsOnLocal(1, null);
+    }
   });
 
   it("resets selection and mode when reopened", async () => {

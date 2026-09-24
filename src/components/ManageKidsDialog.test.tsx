@@ -119,6 +119,15 @@ describe('ManageKidsDialog', () => {
     expect(mocks.updateKid).toHaveBeenCalledWith('kid-alex', { allergens: [] });
   });
 
+  it('marks a favorite that carries a child allergen through the shared matcher', async () => {
+    mocks.kids = [{ ...alex, allergens: ['eggs'] }];
+    const { dialog } = await openEdit();
+    const pancakes = within(dialog).getByRole('button', { name: /Pancakes/ });
+    expect(pancakes).toBeDisabled();
+    expect(pancakes).toHaveTextContent('Contains eggs');
+    expect(within(dialog).getByRole('button', { name: /Waffles/ })).not.toBeDisabled();
+  });
+
   it('clearing the notes sends notes: null and nothing else', async () => {
     const { user, dialog } = await openEdit();
     await user.clear(within(dialog).getByLabelText('Notes (optional)'));

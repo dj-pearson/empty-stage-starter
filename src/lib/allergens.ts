@@ -5,8 +5,17 @@ export {
   normalizeAllergen,
   canonicalAllergen,
   matchingAllergen,
+  matchingFoodAllergen,
+  matchingFoodAllergens,
+  worstFoodAllergen,
   isAllergenSafeFor,
+  allergenFamilyOf,
+  allergenFamilyMembers,
+  allergensInText,
+  allergenSeverityFor,
+  isSevereAllergen,
 } from "../../supabase/functions/_shared/allergens";
+export type { AllergenCheckedFood } from "../../supabase/functions/_shared/allergens";
 
 export type AllergenSeverity = "mild" | "moderate" | "severe";
 

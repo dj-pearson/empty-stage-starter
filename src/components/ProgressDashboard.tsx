@@ -5,13 +5,15 @@ import { Progress } from '@/components/ui/progress';
 import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
 import { TrendingUp, TrendingDown, Target, Award, Calendar, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { parseIsoDate } from "@/lib/date-utils";
+import { parseIsoDate, startOfWeek } from "@/lib/date-utils";
+import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
 import { currentStreak } from "@/lib/streakRules";
 
 export function ProgressDashboard() {
   const { planEntries } = usePlan();
   const { foods } = useFoods();
   const { activeKidId, kids } = useKids();
+  const weekStartsOn = useWeekStartsOn();
 
   const activeKid = kids.find(k => k.id === activeKidId);
 
@@ -20,10 +22,9 @@ export function ProgressDashboard() {
     const kidEntries = planEntries.filter(p => p.kid_id === activeKidId);
 
     // This week's stats
+    // Item 3: the week begins on the user's planner week start.
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
-    weekStart.setHours(0, 0, 0, 0);
+    const weekStart = startOfWeek(now, weekStartsOn);
 
     const thisWeekEntries = kidEntries.filter(entry => {
       const entryDate = parseIsoDate(entry.date);
@@ -86,7 +87,7 @@ export function ProgressDashboard() {
       },
       streak,
     };
-  }, [planEntries, foods, activeKidId]);
+  }, [planEntries, foods, activeKidId, weekStartsOn]);
 
   // Determine trend
   const getTrend = (current: number, previous: number = 50) => {

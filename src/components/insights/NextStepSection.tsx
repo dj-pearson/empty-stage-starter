@@ -6,7 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFoods, usePlan } from '@/contexts/AppContext';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { useExposureLadderFlag } from '@/hooks/useExposureLadderFlag';
 import type { KidsProgressData } from '@/hooks/useKidsProgressSummary';
 import { addIsoDays } from '@/lib/date-utils';
 import { buildResultIndex, selectTryNextFromResults } from '@/lib/kidFit';
@@ -80,7 +80,7 @@ export const NextStepSection = memo(function NextStepSection({
   compact = false,
 }: NextStepSectionProps) {
   const { t } = useTranslation();
-  const ladderOn = useFeatureFlag('exposure_ladder', false);
+  const ladderOn = useExposureLadderFlag();
   const { foods } = useFoods();
   const { planEntries } = usePlan();
 

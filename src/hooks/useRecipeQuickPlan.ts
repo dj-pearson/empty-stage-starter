@@ -216,11 +216,15 @@ export function useRecipeQuickPlan() {
       const today = toISODate(now);
       const dateISO = now.getHours() >= 16 ? addIsoDays(today, 1) : today;
 
+      // Every hit is skipped, whatever its severity: planning a dish for a
+      // child it hits is never a one-tap action. A severe hit says so.
       const allergenIds = new Set<string>();
       const allergenByKid = new Map<string, string>();
+      const severeIds = new Set<string>();
       for (const hit of fit?.allergenKids ?? []) {
         allergenIds.add(hit.kid.id);
         if (hit.fit.allergen) allergenByKid.set(hit.kid.id, hit.fit.allergen);
+        if (hit.fit.allergenSeverity === "severe") severeIds.add(hit.kid.id);
       }
       // Re-check against the live profile: a caller's fit may be stale, and
       // no caller at all still must not plan a peanut dish for the peanut kid.
@@ -229,6 +233,7 @@ export function useRecipeQuickPlan() {
         if (kidFit.allergen) {
           allergenIds.add(kid.id);
           allergenByKid.set(kid.id, kidFit.allergen);
+          if (kidFit.allergenSeverity === "severe") severeIds.add(kid.id);
         }
       }
       const unchecked = Math.max(fit?.unchecked ?? 0, countUncheckedIngredients(recipe, foodById));
@@ -248,6 +253,13 @@ export function useRecipeQuickPlan() {
             names: joinNames(
               skippedAllergen.map((k) => {
                 const a = allergenByKid.get(k.id);
+                if (a && severeIds.has(k.id)) {
+                  return t("recipes.allergenSafety.severeKid", {
+                    defaultValue: "{{name}}: severe {{allergen}}",
+                    name: k.name,
+                    allergen: a,
+                  });
+                }
                 return a ? `${k.name}: ${a}` : k.name;
               }),
             ),

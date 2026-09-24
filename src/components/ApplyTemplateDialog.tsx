@@ -22,7 +22,8 @@ import { Kid } from "@/types";
 import { format, addDays, startOfWeek } from "date-fns";
 import { calculateAge, cn } from "@/lib/utils";
 import { userFacingError } from "@/lib/networkFailure";
-import { PLANNER_WEEK_STARTS_ON } from "@/lib/date-utils";
+import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
+import type { WeekStartsOn } from "@/lib/date-utils";
 import { applyTemplate, type MealPlanTemplate } from "@/lib/mealPlanTemplatesApi";
 import "@/i18n/appLocale";
 
@@ -48,7 +49,8 @@ interface ApplyTemplateDialogProps {
   onTemplateApplied?: (startDate: string) => void;
 }
 
-const weekStartOf = (d: Date) => startOfWeek(d, { weekStartsOn: PLANNER_WEEK_STARTS_ON });
+/** Snap to the week the planner grid shows: the user's week-start preference. */
+const weekStartOf = (d: Date, weekStartsOn: WeekStartsOn) => startOfWeek(d, { weekStartsOn });
 
 export function ApplyTemplateDialog({
   open,
@@ -60,7 +62,8 @@ export function ApplyTemplateDialog({
   onTemplateApplied,
 }: ApplyTemplateDialogProps) {
   const { t } = useTranslation();
-  const [startDate, setStartDate] = useState<Date>(() => weekStartOf(defaultStartDate ?? new Date()));
+  const weekStartsOn = useWeekStartsOn();
+  const [startDate, setStartDate] = useState<Date>(() => weekStartOf(defaultStartDate ?? new Date(), weekStartsOn));
   // US-716: what to do with meals already planned for the target week.
   const [mode, setMode] = useState<ApplyMode>("merge");
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>([]);
@@ -72,13 +75,13 @@ export function ApplyTemplateDialog({
   const kidIdsKey = kids.map((k) => k.id).join(",");
   useEffect(() => {
     if (!open) return;
-    setStartDate(weekStartOf(defaultStartDate ?? new Date()));
+    setStartDate(weekStartOf(defaultStartDate ?? new Date(), weekStartsOn));
     setMode("merge");
     const active = activeKidId && kids.some((k) => k.id === activeKidId) ? [activeKidId] : kids.map((k) => k.id);
     setSelectedKidIds(active);
     // Keyed on the open transition and on the inputs' identities, not their references.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultStartKey, activeKidId, kidIdsKey]);
+  }, [open, defaultStartKey, activeKidId, kidIdsKey, weekStartsOn]);
 
   const handleApply = async () => {
     if (!template) return;
@@ -182,8 +185,8 @@ export function ApplyTemplateDialog({
                 mode="single"
                 selected={startDate}
                 defaultMonth={startDate}
-                weekStartsOn={PLANNER_WEEK_STARTS_ON}
-                onSelect={(date) => date && setStartDate(weekStartOf(date))}
+                weekStartsOn={weekStartsOn}
+                onSelect={(date) => date && setStartDate(weekStartOf(date, weekStartsOn))}
                 className="rounded-md"
                 disabled={(date) => date < today}
               />

@@ -12,6 +12,12 @@ import {
 } from './quickLog';
 import type { PlanEntry } from '@/types';
 
+// performQuickLog moves the ladder after a save by default (item 41). The
+// fold itself is pinned in useFoodLadder.planResult.test.ts; here only that
+// it is asked for, and when.
+const ladder = vi.hoisted(() => ({ sync: vi.fn(async (_entryId: string): Promise<unknown> => []) }));
+vi.mock('@/hooks/useFoodLadder', () => ({ syncLadderAfterPlanResult: ladder.sync }));
+
 /**
  * The quick-log path has to know which meal it is logging, and whether the
  * write landed (US-812).
@@ -103,7 +109,52 @@ describe('performQuickLog', () => {
       status: 'saved',
       entry: meal('a'),
       patch: { result: 'ate', notes: undefined },
+      ladderSync: expect.any(Promise),
     });
+  });
+
+  it("moves the food's ladder rung for the entry it saved", async () => {
+    ladder.sync.mockClear();
+    const outcome = await performQuickLog({ meals: [meal('a'), meal('b')], mealId: 'b', result: 'tasted', save: ok });
+    expect(outcome.status).toBe('saved');
+    if (outcome.status === 'saved') await outcome.ladderSync;
+    expect(ladder.sync).toHaveBeenCalledTimes(1);
+    expect(ladder.sync).toHaveBeenCalledWith('b');
+  });
+
+  it('does not touch the ladder when the save failed', async () => {
+    ladder.sync.mockClear();
+    const outcome = await performQuickLog({
+      meals: [meal('a')],
+      result: 'ate',
+      save: () => ({ error: { message: 'rls' } }),
+    });
+    expect(outcome.status).toBe('failed');
+    await Promise.resolve();
+    expect(ladder.sync).not.toHaveBeenCalled();
+  });
+
+  it('uses an injected ladder sync, and none when passed null', async () => {
+    ladder.sync.mockClear();
+    const injected = vi.fn(async () => undefined);
+    const first = await performQuickLog({ meals: [meal('a')], result: 'ate', save: ok, syncLadder: injected });
+    if (first.status === 'saved') await first.ladderSync;
+    expect(injected).toHaveBeenCalledWith('a');
+
+    const second = await performQuickLog({ meals: [meal('a')], result: 'ate', save: ok, syncLadder: null });
+    expect(second).toEqual({ status: 'saved', entry: meal('a'), patch: { result: 'ate', notes: undefined } });
+    expect(ladder.sync).not.toHaveBeenCalled();
+  });
+
+  it('reports the save as saved even when the ladder sync fails', async () => {
+    const outcome = await performQuickLog({
+      meals: [meal('a')],
+      result: 'refused',
+      save: ok,
+      syncLadder: () => Promise.reject(new Error('offline')),
+    });
+    expect(outcome.status).toBe('saved');
+    if (outcome.status === 'saved') await expect(outcome.ladderSync).resolves.toBeUndefined();
   });
 
   it('keeps the note already on the entry when none was typed', async () => {

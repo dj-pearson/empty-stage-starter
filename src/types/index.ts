@@ -124,6 +124,8 @@ export interface GroceryItem {
   created_at?: string;
   restock_reason?: string;
   auto_generated?: boolean;
+  /** Item 16: set when a receipt credited this row's stock; checkout skips it. */
+  pantry_credited_at?: string | null;
 }
 
 export interface Recipe {

@@ -158,6 +158,25 @@ export function LadderOverview({ kid, logRequestNonce }: LadderOverviewProps) {
     [reload, reducedMotion]
   );
 
+  // Item 4: the planner's try-bite strip links here as ?food=<id>. Once this
+  // child's ladder has loaded, bring that food's row into view, once per link.
+  const focusedFromLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!loaded || rows.length === 0) return;
+    let foodId: string | null = null;
+    try {
+      foodId = new URLSearchParams(window.location.search).get('food');
+    } catch {
+      return;
+    }
+    if (!foodId) return;
+    const token = `${kid.id}:${foodId}`;
+    if (focusedFromLink.current === token) return;
+    focusedFromLink.current = token;
+    const target = foodId;
+    requestAnimationFrame(() => focusRow(target, 1));
+  }, [loaded, rows.length, kid.id, focusRow]);
+
   // "Log a try" from the page header.
   const lastNonce = useRef(logRequestNonce);
   const dueRef = useRef(groups.dueToday);

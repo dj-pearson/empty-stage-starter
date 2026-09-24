@@ -5,14 +5,14 @@
  * the presentational card so the card stays free of data access, and so the
  * page mounting this only has to render one thing.
  *
- * Gated behind the same `exposure_ladder` flag as the rest of the epic —
- * default OFF. The card's main offer is to start a ladder, so it should not
- * appear anywhere the ladder itself does not.
+ * Gated behind the `exposure_ladder` flag, which is on by default and kept as
+ * a kill switch (see useExposureLadderFlag). The card's main offer is to start
+ * a ladder, so it goes wherever the ladder goes.
  */
 
 import { useEffect, useMemo } from 'react';
 import { useFoods, useKids, usePlan } from '@/contexts/AppContext';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { useExposureLadderFlag } from '@/hooks/useExposureLadderFlag';
 import { useFoodLadder, todayIsoDate } from '@/hooks/useFoodLadder';
 import { useSafeFoodInsurance, type SafeFoodBackupTarget } from '@/hooks/useSafeFoodInsurance';
 import { SafeFoodInsuranceCard } from '@/components/SafeFoodInsuranceCard';
@@ -32,7 +32,7 @@ interface Props {
  * suggestions, so the check happens before any of them run rather than after.
  */
 export function SafeFoodInsuranceSection(props: Props) {
-  const enabled = useFeatureFlag('exposure_ladder', false);
+  const enabled = useExposureLadderFlag();
   const { onAvailabilityChange } = props;
   useEffect(() => {
     if (!enabled) onAvailabilityChange?.(false);

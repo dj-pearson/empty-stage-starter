@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFoods, usePlan } from '@/contexts/AppContext';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { useExposureLadderFlag } from '@/hooks/useExposureLadderFlag';
 import { useSafeFoodInsurance } from '@/hooks/useSafeFoodInsurance';
 import { addIsoDays } from '@/lib/date-utils';
 import { buildResultIndex, selectReliableFoods } from '@/lib/kidFit';
@@ -163,7 +163,7 @@ const SlippingSafeFoods = memo(function SlippingSafeFoods({ kid, todayIso }: Sli
 
 export const WorkingSection = memo(function WorkingSection({ kid, todayIso }: WorkingSectionProps) {
   const { t } = useTranslation();
-  const ladderOn = useFeatureFlag('exposure_ladder', false);
+  const ladderOn = useExposureLadderFlag();
   const { foods } = useFoods();
   const { planEntries } = usePlan();
 

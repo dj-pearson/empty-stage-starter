@@ -26,6 +26,8 @@ interface DbError {
 interface Filter {
   col: string;
   val: unknown;
+  /** Absent means equality (or IS NULL for a null val). */
+  op?: 'gt' | 'notnull';
 }
 interface Query {
   table: string;
@@ -56,7 +58,11 @@ function table(name: string): Map<string, DbRow> {
 }
 
 function matches(row: DbRow, filters: Filter[]): boolean {
-  return filters.every((f) => (f.val === null ? row[f.col] == null : row[f.col] === f.val));
+  return filters.every((f) => {
+    if (f.op === 'notnull') return row[f.col] != null;
+    if (f.op === 'gt') return typeof row[f.col] === 'string' && Date.parse(row[f.col] as string) > Date.parse(String(f.val));
+    return f.val === null ? row[f.col] == null : row[f.col] === f.val;
+  });
 }
 
 function capViolation(candidate: DbRow): DbError | null {
@@ -162,6 +168,19 @@ function builder(tableName: string) {
       return chain;
     },
     in() {
+      return chain;
+    },
+    // The load-time meal-result fold (item 41) reads plan-linked attempts
+    // newer than a row's last fold; see useFoodLadder.planResult.test.ts.
+    gt(col: string, val: unknown) {
+      q.filters.push({ col, val, op: 'gt' });
+      return chain;
+    },
+    not(col: string, _operator: string, _val: unknown) {
+      q.filters.push({ col, val: null, op: 'notnull' });
+      return chain;
+    },
+    order() {
       return chain;
     },
     single() {

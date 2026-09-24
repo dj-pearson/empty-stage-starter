@@ -24,7 +24,6 @@
       "noKidsBody": "Add a child to start tracking the foods they are learning to eat.",
       "addFirstChild": "Add child",
       "pickTitle": "Whose foods?",
-      "pickBody": "Pick a child to see what to offer today.",
       "noLadderYet": "No foods are on a ladder yet. Pick a child to start one."
     },
     "family": {

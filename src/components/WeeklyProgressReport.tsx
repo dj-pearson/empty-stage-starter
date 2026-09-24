@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { useLadderWeek } from '@/hooks/useLadderWeek';
 import { renderLadderWeekly } from '@/lib/ladderWeeklyText';
 import { parseIsoDate } from "@/lib/date-utils";
+import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
 import {
   generateProgressReportPDF,
   downloadBlob,
@@ -53,8 +54,10 @@ export function WeeklyProgressReport({ weekStart, kidId }: WeeklyProgressReportP
   const targetKid = kids.find(k => k.id === targetKidId);
 
   // Calculate week range
-  const weekStartDate = weekStart || startOfWeek(new Date());
-  const weekEndDate = endOfWeek(weekStartDate);
+  // Item 3: the week begins on the user's planner week start.
+  const weekStartsOn = useWeekStartsOn();
+  const weekStartDate = weekStart || startOfWeek(new Date(), { weekStartsOn });
+  const weekEndDate = endOfWeek(weekStartDate, { weekStartsOn });
   const weekDays = eachDayOfInterval({ start: weekStartDate, end: weekEndDate });
 
   // Get this week's entries

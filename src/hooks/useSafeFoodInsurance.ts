@@ -224,7 +224,7 @@ export function useSafeFoodInsurance({
           const [best] = selectHandoffCandidates(suggestions, {
             masteredFoodId: foodId,
             ladderFoodIds: ladderFoodIds ?? [],
-            kidAllergens: (kidAllergens ?? []).map((a) => a.toLowerCase()),
+            kidAllergens: kidAllergens ?? [],
             allergensByFoodId,
             limit: 1,
           });

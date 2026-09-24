@@ -155,6 +155,16 @@ describe('buildKidGrowthSuggestions', () => {
     expect(out!.allergenReintroPrompts[0]).toMatch(/peanut/i);
   });
 
+  it('finds the prompt for picker plurals and synonyms (item 27)', () => {
+    const k = makeKid({
+      date_of_birth: '2020-05-20',
+      allergens: ['peanuts', 'tree nuts', 'eggs', 'dairy', 'milk'],
+    });
+    const out = buildKidGrowthSuggestions(k, [], { asOf: NOW });
+    // dairy and milk share one prompt.
+    expect(out!.allergenReintroPrompts).toHaveLength(4);
+  });
+
   it('does not invent prompts for unknown allergens', () => {
     const k = makeKid({
       date_of_birth: '2020-05-20',
@@ -178,6 +188,10 @@ describe('assertNoAllergenAutoRemoval', () => {
 
   it('passes when the same allergens are preserved', () => {
     expect(assertNoAllergenAutoRemoval(['peanut'], ['peanut'])).toBe(true);
+  });
+
+  it('treats a respelling as the same allergen, not a removal', () => {
+    expect(assertNoAllergenAutoRemoval(['Peanuts', 'dairy'], ['peanut', 'milk'])).toBe(true);
   });
 
   it('throws when an allergen is silently dropped', () => {

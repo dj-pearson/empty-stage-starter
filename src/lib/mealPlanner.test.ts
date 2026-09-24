@@ -157,3 +157,26 @@ describe("buildWeekPlan: per-kid choosing", () => {
     expect(loved).toBeGreaterThan(refused);
   });
 });
+
+describe("buildWeekPlan: allergen families and names (items 28/29)", () => {
+  it("never places a family member or a food named for the allergen, severe or not", () => {
+    const foods = [
+      food("rice", { name: "Rice" }),
+      food("almond", { name: "Almond crackers" }),
+      food("cashew", { name: "Snack mix", allergens: ["en:cashews"] }),
+      food("peas", { name: "Peas", is_safe: false, is_try_bite: true }),
+    ];
+    for (const severity of ["severe", "mild"] as const) {
+      const kid = { id: "k", allergens: ["tree nuts"], allergen_severity: { "tree nuts": severity } };
+      const plan = buildWeekPlan(kid, foods, [], new Date(2026, 0, 5), seeded(7));
+      expect(plan.length).toBeGreaterThan(0);
+      expect(plan.some((e) => e.food_id === "almond" || e.food_id === "cashew")).toBe(false);
+    }
+  });
+
+  it("does not drop a guarded look-alike (butternut squash for a tree-nut allergy)", () => {
+    const foods = [food("squash", { name: "Butternut squash" }), food("peas", { name: "Peas", is_safe: false, is_try_bite: true })];
+    const plan = buildWeekPlan({ id: "k", allergens: ["tree nuts"] }, foods, [], new Date(2026, 0, 5), seeded(3));
+    expect(plan.some((e) => e.food_id === "squash")).toBe(true);
+  });
+});

@@ -16,12 +16,12 @@
  *  - Allergens. Kid and food allergens were compared as exact lowercase
  *    strings, so "Peanuts" vs "peanut", "en:tree-nuts" vs "tree nuts" or
  *    "dairy" vs "milk" all read as safe and the recipe could be the top pick.
- *    kidFitFor goes through matchingAllergen from ./allergens.ts, the matcher
+ *    kidFitFor goes through matchingFoodAllergen from ./allergens.ts, the matcher
  *    the web planner uses.
  *
  * No Deno or browser imports.
  */
-import { matchingAllergen } from './allergens.ts';
+import { matchingFoodAllergen } from './allergens.ts';
 
 export interface KidFit {
   kidId: string;
@@ -102,7 +102,7 @@ export function kidFitFor(
   for (const fid of foodIds) {
     const food = foodById.get(fid);
     if (!food) continue;
-    if (matchingAllergen(kid.allergens, food.allergens) !== null) {
+    if (matchingFoodAllergen(kid.allergens, food) !== null) {
       allergenHits.push(food.name);
       continue;
     }

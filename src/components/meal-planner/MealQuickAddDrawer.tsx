@@ -357,12 +357,23 @@ export function MealQuickAddDrawer({
   const allergenText = (fit: ItemFit): string | null => {
     if (fit.allergenKids.length === 0) return null;
     // One line per allergen, naming every kid it affects.
+    // A severe allergy gets its own line, so the confirm names the child and
+    // the allergen as severe before "Add anyway" (item 29).
     const byAllergen = new Map<string, Kid[]>();
+    const severeByAllergen = new Map<string, Kid[]>();
     for (const h of fit.allergenKids) {
       const a = h.fit.allergen as string;
-      byAllergen.set(a, [...(byAllergen.get(a) ?? []), h.kid]);
+      const bucket = h.fit.allergenSeverity === "severe" ? severeByAllergen : byAllergen;
+      bucket.set(a, [...(bucket.get(a) ?? []), h.kid]);
     }
-    return [...byAllergen]
+    const severeLines = [...severeByAllergen].map(([allergen, ks]) =>
+      t("planner.allergenSafety.drawerSevere", {
+        defaultValue: "Contains {{allergen}} - severe allergy: {{names}}",
+        allergen,
+        names: names(ks),
+      }),
+    );
+    return [...severeLines, ...[...byAllergen]
       .map(([allergen, ks]) =>
         t("planner.mobile.drawer.allergenHit", {
           defaultValue: "Contains {{allergen}} - {{names}} {{verb}} allergic",
@@ -373,8 +384,7 @@ export function MealQuickAddDrawer({
               ? t("planner.mobile.drawer.is", { defaultValue: "is" })
               : t("planner.mobile.drawer.are", { defaultValue: "are" }),
         }),
-      )
-      .join("; ");
+      )].join("; ");
   };
 
   const renderSignals = (fit: ItemFit, showTries: boolean) => {

@@ -15,15 +15,25 @@
  */
 
 import type { Food, Kid, PlanEntry, Recipe } from "@/types";
-import { matchingAllergen } from "./allergens";
+import { worstFoodAllergen, type AllergenSeverity } from "./allergens";
 
-export type KidFitKid = Pick<Kid, "id" | "allergens" | "disliked_foods" | "always_eats_foods">;
+export type KidFitKid = Pick<Kid, "id" | "allergens" | "disliked_foods" | "always_eats_foods"> &
+  Partial<Pick<Kid, "allergen_severity">>;
 
 export type KidFitResult = "ate" | "tasted" | "refused";
 
 export interface KidFit {
-  /** The first of the kid's allergens this item carries, canonicalized, or null. */
+  /**
+   * The first of the kid's allergens this item carries, canonicalized, or null.
+   * Read from the food's allergen list and its name, through allergen families
+   * ("Almond flour" is a tree-nut hit).
+   */
   allergen: string | null;
+  /**
+   * Severity the parent recorded for `allergen`, or null when there is no hit
+   * or none was recorded. Optional so older fixtures still type-check.
+   */
+  allergenSeverity?: AllergenSeverity | null;
   disliked: boolean;
   alwaysEats: boolean;
   safe: boolean;
@@ -122,12 +132,14 @@ function statsFor(index: ResultIndex, foodId: string): ResultStats {
 function fitFromStats(
   food: Pick<Food, "is_safe" | "is_try_bite">,
   allergen: string | null,
+  allergenSeverity: AllergenSeverity | null,
   disliked: boolean,
   alwaysEats: boolean,
   stats: ResultStats,
 ): KidFit {
   return {
     allergen,
+    allergenSeverity,
     disliked,
     alwaysEats,
     safe: Boolean(food.is_safe),
@@ -155,9 +167,13 @@ export function getKidFoodFit(
   history: readonly PlanEntry[] | ResultIndex,
 ): KidFit {
   const index = history instanceof Map ? history : buildResultIndex(history, kid.id);
+  // Worst hit, not first: a mild milk tag listed before a severe egg tag must
+  // not hide the egg.
+  const hit = worstFoodAllergen(kid, food);
   return fitFromStats(
     food,
-    matchingAllergen(kid.allergens, food.allergens),
+    hit?.allergen ?? null,
+    hit?.severity ?? null,
     listMatches(kid.disliked_foods, food),
     listMatches(kid.always_eats_foods, food),
     statsFor(index, food.id),
@@ -190,6 +206,7 @@ export function getKidRecipeFit(
     .filter((f): f is Food => Boolean(f));
 
   let allergen: string | null = null;
+  let allergenSeverity: AllergenSeverity | null = null;
   let disliked = false;
   let tryBite = false;
   let alwaysEats = foods.length > 0;
@@ -198,7 +215,14 @@ export function getKidRecipeFit(
 
   for (const food of foods) {
     const fit = getKidFoodFit(kid, food, index);
-    if (allergen === null && fit.allergen) allergen = fit.allergen;
+    if (allergen === null && fit.allergen) {
+      allergen = fit.allergen;
+      allergenSeverity = fit.allergenSeverity ?? null;
+    } else if (fit.allergen && fit.allergenSeverity === "severe" && allergenSeverity !== "severe") {
+      // A severe hit anywhere in the recipe outranks a milder first hit.
+      allergen = fit.allergen;
+      allergenSeverity = "severe";
+    }
     if (fit.disliked) disliked = true;
     if (fit.tryBite) tryBite = true;
     if (!fit.alwaysEats) alwaysEats = false;
@@ -217,6 +241,7 @@ export function getKidRecipeFit(
 
   return {
     allergen,
+    allergenSeverity,
     disliked,
     alwaysEats,
     safe,
@@ -352,6 +377,18 @@ type FoodLookup = ReadonlyMap<string, Food>;
  * `foodById`, plus recipe_ingredients rows with no food at all (typed-in
  * ingredients, or an import nothing matched).
  */
+/** Conflicts whose recorded severity is "severe": never placed by a suggestion or auto-plan. */
+export function severeConflicts<K extends Pick<Kid, "id" | "allergens">>(
+  conflicts: readonly AllergenConflict<K>[],
+): AllergenConflict<K>[] {
+  return conflicts.filter((c) => c.severity === "severe");
+}
+
+/** True when any target kid has a severe hit in this item (a KidHit list or an ItemFit). */
+export function hasSevereAllergenHit(fit: Pick<ItemFit, "allergenKids"> | null | undefined): boolean {
+  return Boolean(fit?.allergenKids.some((h) => h.fit.allergenSeverity === "severe"));
+}
+
 export function countUncheckedIngredients(
   recipe: Pick<Recipe, "food_ids" | "recipe_ingredients">,
   foodById: FoodLookup,
@@ -367,11 +404,14 @@ export interface AllergenConflict<K extends Pick<Kid, "id" | "allergens"> = Kid>
   food: Food;
   /** Canonical allergen name, e.g. "peanut". */
   allergen: string;
+  /** Severity recorded on the kid for this allergen, or null when none was. */
+  severity: AllergenSeverity | null;
 }
 
 /**
  * Every (kid, food) pair where the food carries one of the kid's allergens.
- * Canonical matching, so a kid's "peanuts" matches a food's "en:peanuts".
+ * Canonical matching, so a kid's "peanuts" matches a food's "en:peanuts";
+ * families and the food's name count too (matchingFoodAllergen).
  * Foods missing from `foodById` are skipped: they are "unknown", not a hit.
  */
 export function findAllergenConflicts<K extends Pick<Kid, "id" | "allergens">>(
@@ -386,8 +426,9 @@ export function findAllergenConflicts<K extends Pick<Kid, "id" | "allergens">>(
   for (const kid of kids) {
     if (!kid.allergens || kid.allergens.length === 0) continue;
     for (const food of foods) {
-      const allergen = matchingAllergen(kid.allergens, food.allergens);
-      if (allergen) out.push({ kid, food, allergen });
+      const hit = worstFoodAllergen(kid as Partial<Pick<Kid, "allergens" | "allergen_severity">>, food);
+      if (!hit) continue;
+      out.push({ kid, food, allergen: hit.allergen, severity: hit.severity });
     }
   }
   return out;

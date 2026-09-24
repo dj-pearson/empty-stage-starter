@@ -583,3 +583,94 @@ export function planRegenerationFromPlan(args: {
 
   return { retireIds, additions, preservedCount: preserved.length, updates };
 }
+
+// --- Checkout exclusion (Item 16) -------------------------------------------
+
+/**
+ * Split the checked rows at checkout into those checkout still has to credit
+ * and those something else (a receipt scan) already credited. Both halves are
+ * cleared off the list; only the first reaches the pantry.
+ */
+export function partitionForCheckout(rows: readonly GroceryItem[]): {
+  toCredit: GroceryItem[];
+  alreadyCredited: GroceryItem[];
+} {
+  const toCredit: GroceryItem[] = [];
+  const alreadyCredited: GroceryItem[] = [];
+  for (const row of rows) (row.pantry_credited_at ? alreadyCredited : toCredit).push(row);
+  return { toCredit, alreadyCredited };
+}
+
+// --- Show only one kid's items (Item 42) ------------------------------------
+
+/** True when the plan puts this row's food in front of `kidId`. */
+export function isRowForKid(
+  item: GroceryItem,
+  kidIndex: ReadonlyMap<string, readonly string[]>,
+  kidId: string,
+): boolean {
+  return (kidIndex.get(groceryKidKey(item.name)) ?? []).includes(kidId);
+}
+
+export interface KidFilterResult {
+  /** The rows the filter keeps, in their original order. */
+  shown: GroceryItem[];
+  /** How many rows it hides, so the page can say so. */
+  hidden: number;
+}
+
+/**
+ * Keep the rows planned for one kid. A null kid is "everyone" and keeps all.
+ * Hand-added rows (nobody planned them) are hidden only while a kid is chosen,
+ * and counted in `hidden` like any other row the filter takes off screen.
+ */
+export function filterItemsForKid(
+  items: readonly GroceryItem[],
+  kidIndex: ReadonlyMap<string, readonly string[]>,
+  kidId: string | null,
+): KidFilterResult {
+  if (!kidId) return { shown: items.slice(), hidden: 0 };
+  const shown = items.filter((item) => isRowForKid(item, kidIndex, kidId));
+  return { shown, hidden: items.length - shown.length };
+}
+
+/** Kids with at least one row on the list, in the order `kidIds` gives them. */
+export function kidsWithRows(
+  items: readonly GroceryItem[],
+  kidIndex: ReadonlyMap<string, readonly string[]>,
+  kidIds: readonly string[],
+): string[] {
+  const present = new Set<string>();
+  for (const item of items) for (const id of kidIndex.get(groceryKidKey(item.name)) ?? []) present.add(id);
+  return kidIds.filter((id) => present.has(id));
+}
+
+// --- In-store mode (Item 18) -------------------------------------------------
+
+/**
+ * The aisle to show once `current` has no rows left.
+ *
+ * `previousOrder` is the walk order as it was while `current` was on screen;
+ * `nextOrder` is what is left now. The next aisle is the first one after
+ * `current` in the old order that still has rows, so emptying aisle 3 moves on
+ * to aisle 4, not back to the start. When nothing after it is left, an earlier
+ * aisle the shopper skipped comes up. Null when the list is done.
+ */
+export function nextAisleAfter(
+  previousOrder: readonly string[],
+  current: string | null,
+  nextOrder: readonly string[],
+): string | null {
+  if (nextOrder.length === 0) return null;
+  if (current && nextOrder.includes(current)) return current;
+  const remaining = new Set(nextOrder);
+  const from = current ? previousOrder.indexOf(current) : -1;
+  if (from >= 0) {
+    for (let i = from + 1; i < previousOrder.length; i++) {
+      if (remaining.has(previousOrder[i])) return previousOrder[i];
+    }
+  }
+  // Aisles that were not in the old order (a row filed while in the store),
+  // then anything before `current`.
+  return nextOrder[0];
+}

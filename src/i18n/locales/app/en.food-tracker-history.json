@@ -41,40 +41,6 @@
         "milestone": "Milestone",
         "stageUnknown": "Step not recorded"
       }
-    },
-    "legacy": {
-      "logAttempt": "Log attempt",
-      "dialogTitle": "Log a food attempt",
-      "dialogDescription": "Only the food and how it went are needed. Everything else is optional.",
-      "food": "Food",
-      "searchFoods": "Search foods...",
-      "noFoods": "No foods in your pantry yet.",
-      "addFoodsFirst": "Add foods in your Pantry first",
-      "noMatch": "No foods match \"{{query}}\"",
-      "selected": "Selected: {{food}}",
-      "tryBite": "Try bite",
-      "howDidItGo": "How did it go?",
-      "result": {
-        "accepted": "Took it",
-        "held": "Partway",
-        "refused": "Not today"
-      },
-      "hardTime": "It was a hard time (upset, gagging, meltdown)",
-      "bitesTaken": "Bites taken",
-      "reactionNotes": "Reaction",
-      "reactionPlaceholder": "Gagging, a rash, a tummy ache... anything to watch for next time",
-      "parentNotes": "Parent notes",
-      "parentNotesPlaceholder": "Observations, strategies used, or context...",
-      "milestone": "Mark as a milestone (first time, breakthrough)",
-      "cancel": "Cancel",
-      "save": "Save attempt",
-      "saving": "Saving...",
-      "selectFood": "Pick a food first",
-      "selectResult": "Pick how it went",
-      "saved": "Attempt logged",
-      "saveFailed": "That didn't save. Try again in a moment.",
-      "inFlight": "Still saving the last one for this food.",
-      "cap": "Too many foods are due that day. Try again tomorrow."
     }
   }
 }

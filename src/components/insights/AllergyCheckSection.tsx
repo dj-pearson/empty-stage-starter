@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Badge } from '@/components/ui/badge';
 import { useFoods, usePlan } from '@/contexts/AppContext';
-import { KID_ALLERGEN_PICKER, canonicalAllergen } from '@/lib/allergens';
+import { KID_ALLERGEN_PICKER, allergenSeverityFor, canonicalAllergen } from '@/lib/allergens';
 import { addIsoDays } from '@/lib/date-utils';
 import { buildFoodById, checkUpcomingAllergens, type AllergenHit } from '@/lib/insights';
 import type { Kid, MealSlot } from '@/types';
@@ -128,7 +128,8 @@ function AllergyCheckSectionImpl({ kid, todayIso }: AllergyCheckSectionProps) {
         <ul className="flex flex-wrap gap-2" aria-label={t('insightsVariety.allergy.listLabel', { name: kid.name, defaultValue: "{{name}}'s allergies" })}>
           {allergens.map((a) => {
             const label = allergenLabel(t, a);
-            const level = kid.allergen_severity?.[a];
+            // Canonical: a severity saved under "Peanuts" still labels "peanuts".
+            const level = allergenSeverityFor(kid, a);
             const aria = level
               ? t('insightsVariety.allergy.chipAria', {
                   allergen: label,

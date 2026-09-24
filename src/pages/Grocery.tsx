@@ -33,15 +33,18 @@ import { CheckoutBar } from "@/components/grocery/CheckoutBar";
 import { PlanSyncBanner } from "@/components/grocery/PlanSyncBanner";
 import { StorePicker } from "@/components/grocery/StorePicker";
 import { PlaceInAisleChips } from "@/components/grocery/PlaceInAisleChips";
+import { KidFilterBar, type KidFilterOption } from "@/components/grocery/KidFilterBar";
+import { applyReceiptPlan, type ReceiptApplyPlan } from "@/lib/receiptApply";
 import { useStoreLayouts } from "@/hooks/useStoreLayouts";
 import { useGroceryLists } from "@/hooks/useGroceryLists";
-import type { StoreLayoutRow } from "@/lib/storeLayouts";
+import { storeDisplayName, type StoreLayoutRow } from "@/lib/storeLayouts";
 import { aislePosition, isUnplaced as isUnplacedAisle, sortAisleGroupNames } from "@/lib/storeWalkOrder";
 import { startOfWeek, endOfWeek, toISODate } from "@/lib/date-utils";
+import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
 import {
   ShoppingCart, Printer, Download, Plus, Share2, FileText,
   Store, Barcode, RefreshCw, ChevronDown, MoreHorizontal, PackageCheck,
-  ShoppingBag, CloudOff, CalendarDays, ClipboardPaste, Loader2, Check,
+  ShoppingBag, CloudOff, CalendarDays, ClipboardPaste, Loader2, Check, Footprints,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Food, GroceryItem } from "@/types";
@@ -62,6 +65,9 @@ import {
   slugifyGroupId,
   stepQuantity,
   withLingering,
+  partitionForCheckout,
+  filterItemsForKid,
+  kidsWithRows,
 } from "@/lib/groceryData";
 import { buildResultIndex, getKidFoodFit, summarizeKidFits, type ItemFit, type ResultIndex } from "@/lib/kidFit";
 import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
@@ -95,6 +101,10 @@ const ManageStoreLayoutsDialog = lazy(() =>
 const ManageStoreAislesDialog = lazy(() =>
   import("@/components/ManageStoreAislesDialog").then((m) => ({ default: m.ManageStoreAislesDialog })),
 );
+// Item 18: mounted only while a parent is in the shop.
+const InStoreMode = lazy(() =>
+  import("@/components/grocery/InStoreMode").then((m) => ({ default: m.InStoreMode })),
+);
 
 // Grocery data derivations (labels, grouping, split, progress, flatten) live in
 // src/lib/groceryData.ts (unit-tested) so they're separated from this JSX and
@@ -126,10 +136,10 @@ interface RowMeta {
 
 export default function Grocery() {
   const { t } = useTranslation();
-  const { foods, addFood, updateFood, catalogById } = useFoods();
+  const { foods, addFood, updateFood, deleteFood, catalogById } = useFoods();
   // US-672: with writes on, checkout appends purchase movements and the pantry
   // is credited by the ledger rather than by the per-item toggle.
-  const { ledgerWritesEnabled, recordPurchases, recordPurchaseReversal } = useInventory();
+  const { ledgerWritesEnabled, recordPurchases, recordPurchaseReversal, recordRestock } = useInventory();
   const { kids, activeKidId } = useKids();
   const { planEntries } = usePlan();
   const {
@@ -149,6 +159,10 @@ export default function Grocery() {
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showScanReceipt, setShowScanReceipt] = useState(false);
+  // Item 18: one aisle at a time, full screen.
+  const [inStore, setInStore] = useState(false);
+  // Item 42: "Show only <kid>'s items". Null shows everyone's.
+  const [kidFilterId, setKidFilterId] = useState<string | null>(null);
   const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   // The lists, the selection (remembered per user) and the default. US-714:
@@ -223,11 +237,12 @@ export default function Grocery() {
   );
 
   // US-713: the days a sync shops for. The Grocery page has no week picker, so
-  // the visible week is the current one.
+  // the visible week is the current one, on the planner's week start (item 3).
+  const weekStartsOn = useWeekStartsOn();
   const shoppingWindow = useMemo(() => {
     const now = new Date();
-    return { from: toISODate(startOfWeek(now)), to: toISODate(endOfWeek(now)) };
-  }, []);
+    return { from: toISODate(startOfWeek(now, weekStartsOn)), to: toISODate(endOfWeek(now, weekStartsOn)) };
+  }, [weekStartsOn]);
 
   // US-795: match a grocery row back to a pantry food by resolved or raw name.
   const foodByDisplayName = useMemo(
@@ -238,6 +253,11 @@ export default function Grocery() {
     (name: string): Food | undefined => foodByDisplayName.get(name.toLowerCase()),
     [foodByDisplayName]
   );
+  const resolveFoodForRow = useCallback(
+    (row: GroceryItem): Food | undefined => findFoodByDisplayName(row.name),
+    [findFoodByDisplayName]
+  );
+  const exitInStore = useCallback(() => setInStore(false), []);
 
   const effectiveFoodById = useMemo(() => {
     const map: Record<string, EffectiveFood> = {};
@@ -254,6 +274,31 @@ export default function Grocery() {
     [planEntries, foods, effectiveFoodById, shoppingWindow]
   );
   const kidById = useMemo(() => new Map(kids.map((k) => [k.id, k])), [kids]);
+
+  // ─── Show only one kid's items (Item 42) ──────────────────────────────
+  // Opt-in and loud about it: the toolbar's "N left" and progress bar count
+  // the kid's rows while it is on, and a status line says how many other rows
+  // are off screen, with the way back beside it.
+  const kidFilterKid = kidFilterId ? kidById.get(kidFilterId) ?? null : null;
+  useEffect(() => {
+    // The kid was removed from the household: back to everyone's items.
+    if (kidFilterId && kids.length > 0 && !kidById.has(kidFilterId)) setKidFilterId(null);
+  }, [kidFilterId, kids.length, kidById]);
+  const kidFilterOptions = useMemo<KidFilterOption[]>(() => {
+    const ids = kidsWithRows(filteredGroceryItems, kidIndex, kids.map((k) => k.id));
+    if (kidFilterId && !ids.includes(kidFilterId) && kidById.has(kidFilterId)) ids.push(kidFilterId);
+    return ids.map((id) => ({ id, name: kidById.get(id)?.name ?? "" }));
+  }, [filteredGroceryItems, kidIndex, kids, kidFilterId, kidById]);
+  const kidScope = useMemo(
+    () => filterItemsForKid(filteredGroceryItems, kidIndex, kidFilterKid ? kidFilterKid.id : null),
+    [filteredGroceryItems, kidIndex, kidFilterKid]
+  );
+  const scopedTotal = kidScope.shown.length;
+  const scopedLeft = kidFilterKid ? kidScope.shown.filter((i) => !i.checked).length : leftCount;
+  const scopedDone = scopedTotal - scopedLeft;
+  const scopedProgress = computeProgressPercent(scopedTotal, scopedDone);
+  /** Rows still to buy that the filter keeps off screen. */
+  const hiddenToBuy = kidFilterKid ? leftCount - scopedLeft : 0;
   const resultIndexByKid = useMemo(() => {
     const map = new Map<string, ResultIndex>();
     for (const kid of kids) map.set(kid.id, buildResultIndex(planEntries, kid.id));
@@ -415,7 +460,6 @@ export default function Grocery() {
     updateFood(food.id, { quantity: Math.max(0, food.quantity - item.quantity) });
   }, [findFoodByDisplayName, updateFood]);
 
-  // ─── Check-off ─────────────────────────────────────────────────────────
   const announce = useCallback((text: string) => {
     if (announceTimer.current) clearTimeout(announceTimer.current);
     announceTimer.current = setTimeout(() => setAnnouncement(text), ANNOUNCE_DEBOUNCE_MS);
@@ -424,8 +468,78 @@ export default function Grocery() {
     if (announceTimer.current) clearTimeout(announceTimer.current);
   }, []);
 
-  const leftCountRef = useRef(leftCount);
-  leftCountRef.current = leftCount;
+  // ─── Receipt scan (Item 16) ────────────────────────────────────────────
+  // One step: the rows the receipt pays for are checked off, and the pantry
+  // is credited through the ledger when it is on, the legacy sum otherwise.
+  // Rows it credited are stamped so checkout leaves them alone.
+  const foodsRef = useRef(foods);
+  foodsRef.current = foods;
+  const handleApplyReceipt = useCallback(async (plan: ReceiptApplyPlan): Promise<boolean> => {
+    try {
+      const outcome = await applyReceiptPlan(plan, {
+        ledgerWritesEnabled,
+        getFood: (id) => foodsRef.current.find((f) => f.id === id),
+        getFoods: () => foodsRef.current,
+        getRow: (id) => itemsRef.current.find((i) => i.id === id),
+        addFood,
+        deleteFood,
+        updateFood,
+        recordRestock: (food, signedQuantity, opts) =>
+          recordRestock(food as unknown as MovementItem, signedQuantity, opts),
+        updateGroceryItem,
+      });
+      const details: string[] = [
+        t("grocery.receiptList.appliedBody", {
+          defaultValue: "{{topped}} topped up, {{added}} new in the pantry",
+          topped: outcome.toppedUp,
+          added: outcome.created,
+        }),
+      ];
+      if (outcome.blocked > 0) {
+        details.push(t("grocery.checkout.blocked", {
+          defaultValue: "{{count}} not added: pantry full on your plan",
+          count: outcome.blocked,
+        }));
+      }
+      const title = outcome.checkedOff > 0
+        ? t("grocery.receiptList.appliedTitle", {
+            defaultValue: "Checked off {{count}} from your receipt",
+            count: outcome.checkedOff,
+          })
+        : t("grocery.receipt.saved", {
+            defaultValue: "Pantry updated: {{added}} new, {{topped}} topped up",
+            added: outcome.created,
+            topped: outcome.toppedUp,
+          });
+      toast.success(
+        title,
+        {
+          description: details.join(". "),
+          action: {
+            label: t("grocery.undo", { defaultValue: "Undo" }),
+            onClick: () => {
+              void outcome.undo().then(() =>
+                toast.info(t("grocery.receiptList.undone", {
+                  defaultValue: "Receipt undone: list and pantry put back",
+                })),
+              );
+            },
+          },
+        },
+      );
+      announce(title);
+      return true;
+    } catch (error) {
+      logger.error("Receipt apply failed", error);
+      toast.error(t("grocery.receipt.saveFailed", { defaultValue: "Couldn't save pantry items. Try again." }));
+      return false;
+    }
+  }, [ledgerWritesEnabled, addFood, deleteFood, updateFood, recordRestock, updateGroceryItem, announce, t]);
+
+  // ─── Check-off ─────────────────────────────────────────────────────────
+
+  const leftCountRef = useRef(scopedLeft);
+  leftCountRef.current = scopedLeft;
 
   const handleToggleItem = useCallback(async (itemId: string) => {
     const item = itemsRef.current.find(i => i.id === itemId);
@@ -442,8 +556,9 @@ export default function Grocery() {
       }));
 
       // US-672 criterion 3: with the ledger on, checking off is just marking
-      // it bought; checkout credits the pantry once.
-      if (ledgerWritesEnabled) return;
+      // it bought; checkout credits the pantry once. Item 16: a row a receipt
+      // already credited is in the pantry either way.
+      if (ledgerWritesEnabled || item.pantry_credited_at) return;
       const outcome = await creditRow(item);
       if (outcome === "blocked") {
         // The plan limit stopped the pantry add. The row stays checked so the
@@ -460,11 +575,24 @@ export default function Grocery() {
         next.delete(itemId);
         return next;
       });
+      // A receipt's credit is taken back by the receipt's own Undo, not by
+      // unticking one row: the stock stays in the pantry. The stamp goes,
+      // though. It describes this purchase, and a row back on the to-buy list
+      // that kept it would be skipped by checkout (and by the legacy credit)
+      // when it is really bought later.
+      if (item.pantry_credited_at) {
+        updateGroceryItem(itemId, { pantry_credited_at: null });
+        toast.info(t("grocery.receiptList.untickedCredited", {
+          defaultValue: "{{name}} is back on the list. What the receipt added stays in your pantry.",
+          name: item.name,
+        }));
+        return;
+      }
       // Nothing to take back when nothing was credited yet.
       if (ledgerWritesEnabled) return;
       uncreditRow(item);
     }
-  }, [toggleGroceryItem, announce, t, ledgerWritesEnabled, creditRow, uncreditRow]);
+  }, [toggleGroceryItem, updateGroceryItem, announce, t, ledgerWritesEnabled, creditRow, uncreditRow]);
 
   // Flush lingering rows. 0ms under reduced motion: nothing animates, so
   // nothing needs to wait.
@@ -527,6 +655,9 @@ export default function Grocery() {
     if (checkingOutRef.current) return;
     const rows = purchasedRef.current.map(snapshot);
     if (rows.length === 0) return;
+    // Item 16: rows a receipt already credited are cleared with the rest but
+    // never credited a second time.
+    const { toCredit, alreadyCredited } = partitionForCheckout(rows);
     checkingOutRef.current = true;
     setCheckingOut(true);
     try {
@@ -535,9 +666,9 @@ export default function Grocery() {
       let unitDiffers = 0;
       let blocked = 0;
 
-      if (ledgerWritesEnabled) {
+      if (ledgerWritesEnabled && toCredit.length > 0) {
         const result = await recordPurchases(
-          rows as unknown as PurchasableGroceryItem[],
+          toCredit as unknown as PurchasableGroceryItem[],
           foods as unknown as MovementItem[],
           findFoodByDisplayName,
         );
@@ -555,7 +686,7 @@ export default function Grocery() {
         }
         recordedIds = result.recordedRowIds;
         const recorded = new Set(recordedIds);
-        for (const row of rows.filter((r) => !recorded.has(r.id))) {
+        for (const row of toCredit.filter((r) => !recorded.has(r.id))) {
           const outcome = await creditRow(row);
           if (outcome === "credited") fallbackCredited.push(row);
           else if (outcome === "unitDiffers") unitDiffers++;
@@ -565,8 +696,8 @@ export default function Grocery() {
 
       // US-292: plan entries whose missing-ingredient badge this shop cleared.
       const credited = ledgerWritesEnabled
-        ? rows.filter((r) => recordedIds.includes(r.id) || fallbackCredited.includes(r))
-        : rows;
+        ? toCredit.filter((r) => recordedIds.includes(r.id) || fallbackCredited.includes(r))
+        : toCredit;
       const preFoods = foods.map(f => ({ ...f }));
       for (const item of credited) {
         const food = findFoodByDisplayName(item.name);
@@ -613,6 +744,12 @@ export default function Grocery() {
       };
 
       const notes: string[] = [];
+      if (alreadyCredited.length > 0) {
+        notes.push(t("grocery.receiptList.checkoutSkipped", {
+          defaultValue: "{{count}} already added from your receipt",
+          count: alreadyCredited.length,
+        }));
+      }
       if (unitDiffers > 0) {
         notes.push(t("grocery.checkout.unitDiffers", {
           defaultValue: "{{count}} not added to the pantry: unit differs",
@@ -675,8 +812,12 @@ export default function Grocery() {
   // Every row shows whichever kid is selected elsewhere in the app. Filtering
   // to one kid's planned foods hid hand-added rows (milk, nappies) with no
   // way back from this page, and left a blank list while the progress bar
-  // still counted them. Who a row is for is on the row instead.
-  const visibleActive = shownActive;
+  // still counted them. Who a row is for is on the row instead. Item 42's
+  // "Only <kid>'s items" is the opt-in version, which says what it hides.
+  const visibleActive = useMemo(
+    () => (kidFilterKid ? filterItemsForKid(shownActive, kidIndex, kidFilterKid.id).shown : shownActive),
+    [kidFilterKid, shownActive, kidIndex]
+  );
 
   const activeItemsByGroup = useMemo(
     () => groupItems(visibleActive, groupBy),
@@ -934,6 +1075,7 @@ export default function Grocery() {
         forKidNames={meta?.forKidNames}
         addedByName={meta?.addedByName}
         pending={meta?.pending}
+        inPantry={item.checked && Boolean(item.pantry_credited_at)}
         compact={isPhoneWidth}
         onToggle={onRowToggle}
         onOpen={onRowOpen}
@@ -1026,13 +1168,20 @@ export default function Grocery() {
                 onListChange={setSelectedListId}
                 onCreateNew={() => setShowCreateListDialog(true)}
                 onManageLists={() => setShowManageListsDialog(true)}
-                summary={hasItems
-                  ? t("grocery.toolbar.left", {
-                      defaultValue: "{{left}} left of {{total}}",
-                      left: leftCount,
-                      total: totalItems,
-                    })
-                  : undefined}
+                summary={!hasItems
+                  ? undefined
+                  : kidFilterKid
+                    ? t("grocery.kidFilter.left", {
+                        defaultValue: "{{left}} left of {{total}} for {{name}}",
+                        left: scopedLeft,
+                        total: scopedTotal,
+                        name: kidFilterKid.name,
+                      })
+                    : t("grocery.toolbar.left", {
+                        defaultValue: "{{left}} left of {{total}}",
+                        left: leftCount,
+                        total: totalItems,
+                      })}
               />
             ) : (
               // Same height as the picker, so the toolbar does not jump when
@@ -1118,13 +1267,20 @@ export default function Grocery() {
 
           {hasItems && (
             <Progress
-              value={progressPercent}
+              value={kidFilterKid ? scopedProgress : progressPercent}
               className="absolute inset-x-0 bottom-0 h-0.5 rounded-none bg-transparent"
-              aria-label={t("grocery.progress.label", {
-                defaultValue: "Shopping progress: {{done}} of {{total}} bought",
-                done: purchasedCount,
-                total: totalItems,
-              })}
+              aria-label={kidFilterKid
+                ? t("grocery.kidFilter.progressLabel", {
+                    defaultValue: "{{name}}'s items: {{done}} of {{total}} bought",
+                    name: kidFilterKid.name,
+                    done: scopedDone,
+                    total: scopedTotal,
+                  })
+                : t("grocery.progress.label", {
+                    defaultValue: "Shopping progress: {{done}} of {{total}} bought",
+                    done: purchasedCount,
+                    total: totalItems,
+                  })}
             />
           )}
         </div>
@@ -1218,6 +1374,15 @@ export default function Grocery() {
           </Card>
         ) : (
           <>
+            {(kidFilterOptions.length > 0 || kidFilterKid) && (
+              <KidFilterBar
+                kids={kidFilterOptions}
+                selectedKidId={kidFilterKid?.id ?? null}
+                onChange={setKidFilterId}
+                hiddenCount={hiddenToBuy}
+              />
+            )}
+
             {/* ─── Grouping + store ─── */}
             {visibleActive.length > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
@@ -1255,6 +1420,15 @@ export default function Grocery() {
                     onChange={(id) => void storeLayouts.setSelectedStoreId(id)}
                   />
                 )}
+                <Button
+                  variant="outline"
+                  className="h-11 gap-1.5"
+                  onClick={() => setInStore(true)}
+                  data-testid="grocery-in-store-open"
+                >
+                  <Footprints className="h-4 w-4" aria-hidden="true" />
+                  {t("grocery.inStore.open", { defaultValue: "In-store mode" })}
+                </Button>
               </div>
             )}
 
@@ -1339,6 +1513,25 @@ export default function Grocery() {
                   })}
                 </section>
               )
+            ) : kidFilterKid && activeItems.length > 0 ? (
+              <Card className="p-6 text-center mb-4" data-testid="grocery-kid-filter-empty">
+                <h2 className="text-lg font-semibold mb-1">
+                  {t("grocery.kidFilter.emptyTitle", {
+                    defaultValue: "Nothing left to buy for {{name}}",
+                    name: kidFilterKid.name,
+                  })}
+                </h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {t("grocery.kidFilter.emptyBody", {
+                    defaultValue: "{{count}} other item is still on the list.",
+                    defaultValue_other: "{{count}} other items are still on the list.",
+                    count: hiddenToBuy,
+                  })}
+                </p>
+                <Button variant="outline" className="h-11" onClick={() => setKidFilterId(null)}>
+                  {t("grocery.kidFilter.showAll", { defaultValue: "Show all items" })}
+                </Button>
+              </Card>
             ) : allBought ? (
               <Card className="p-6 text-center mb-4">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
@@ -1388,6 +1581,7 @@ export default function Grocery() {
                           <GroceryRow
                             item={item}
                             checked
+                            inPantry={Boolean(item.pantry_credited_at)}
                             compact
                             onToggle={onRowToggle}
                             onOpen={onRowOpen}
@@ -1431,7 +1625,37 @@ export default function Grocery() {
           />
         )}
         {showScanReceipt && (
-          <ScanReceiptDialog open={showScanReceipt} onClose={() => setShowScanReceipt(false)} />
+          <ScanReceiptDialog
+            open={showScanReceipt}
+            onClose={() => setShowScanReceipt(false)}
+            listRows={activeItems}
+            resolveFoodForRow={resolveFoodForRow}
+            onApplyToList={handleApplyReceipt}
+          />
+        )}
+        {inStore && (
+          <InStoreMode
+            items={visibleActive}
+            walkContext={storeLayouts.walkContext}
+            storeName={storeLayouts.selectedStore ? storeDisplayName(storeLayouts.selectedStore) : null}
+            done={kidFilterKid ? scopedDone : purchasedCount}
+            total={kidFilterKid ? scopedTotal : totalItems}
+            filterLabel={kidFilterKid
+              ? t("grocery.kidFilter.inStoreLabel", {
+                  defaultValue: "Only {{name}}'s items. {{count}} other hidden.",
+                  name: kidFilterKid.name,
+                  count: hiddenToBuy,
+                })
+              : null}
+            onToggle={onRowToggle}
+            onQuantityStep={onRowQuantityStep}
+            onEdit={onRowOpen}
+            onDelete={onRowDelete}
+            onExit={exitInStore}
+            onFinish={purchasedCount > 0 ? handleDoneShopping : undefined}
+            finishLabel={checkoutLabel}
+            finishing={checkingOut}
+          />
         )}
         {userId && showCreateStoreDialog && (
           <CreateStoreLayoutDialog

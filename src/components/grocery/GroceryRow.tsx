@@ -27,6 +27,8 @@ export interface GroceryRowProps {
   addedByName?: string;
   /** The row's last change is still in the offline queue. */
   pending?: boolean;
+  /** Item 16: a receipt already put this in the pantry; checkout will not again. */
+  inPantry?: boolean;
   /** Phone layout: name first, controls behind a tap on the row. */
   compact: boolean;
   onToggle: (item: GroceryItem) => void;
@@ -65,6 +67,7 @@ export const GroceryRow = memo(function GroceryRow({
   forKidNames,
   addedByName,
   pending,
+  inPantry,
   compact,
   onToggle,
   onOpen,
@@ -95,6 +98,14 @@ export const GroceryRow = memo(function GroceryRow({
     meta.push(
       <span key="by" className="truncate">
         {t("grocery.row.addedBy", { defaultValue: "Added by {{name}}", name: addedByName })}
+      </span>,
+    );
+  }
+
+  if (inPantry) {
+    meta.push(
+      <span key="pantry" className="truncate" data-testid="grocery-row-in-pantry">
+        {t("grocery.receiptList.inPantry", { defaultValue: "In pantry from receipt" })}
       </span>,
     );
   }

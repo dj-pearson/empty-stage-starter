@@ -13,7 +13,6 @@ const h = vi.hoisted(() => ({
   kidsLoadError: null as string | null,
   refreshKids: vi.fn(),
   setActiveKid: vi.fn(),
-  flag: false,
   openForAdd: vi.fn(),
   openForEdit: vi.fn(),
 }));
@@ -30,11 +29,14 @@ vi.mock('@/contexts/AppContext', () => ({
   }),
   useFoods: () => ({ foods: [] }),
 }));
+// Item 40: the page no longer asks the flag. If it ever does again, this
+// makes the test fail loudly rather than quietly render a fallback.
+const flagCalls = vi.hoisted(() => [] as string[]);
 vi.mock('@/hooks/useFeatureFlag', () => ({
-  useFeatureFlag: () => h.flag,
-}));
-vi.mock('@/components/FoodSuccessTracker', () => ({
-  FoodSuccessTracker: () => <div data-testid="legacy-tracker" />,
+  useFeatureFlag: (key: string) => {
+    flagCalls.push(key);
+    return false;
+  },
 }));
 vi.mock('@/components/foodTracker/LadderOverview', () => ({
   LadderOverview: ({ kid, logRequestNonce }: { kid: Kid; logRequestNonce?: number }) => (
@@ -70,7 +72,7 @@ beforeEach(() => {
   h.activeKidId = 'kid-1';
   h.kidsHydrated = true;
   h.kidsLoadError = null;
-  h.flag = false;
+  flagCalls.length = 0;
   h.refreshKids.mockReset().mockResolvedValue(undefined);
   h.setActiveKid.mockReset();
   h.openForAdd.mockReset();
@@ -110,29 +112,21 @@ describe('FoodTracker kid gating', () => {
   it('falls through to family mode when activeKidId resolves to no child', () => {
     h.activeKidId = 'deleted-kid';
     wrap(<FoodTracker />);
-    expect(screen.queryByTestId('legacy-tracker')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Whose foods?' })).toBeInTheDocument();
+    expect(screen.getByTestId('family-summary')).toBeInTheDocument();
+    expect(screen.queryByTestId('ladder-overview')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add child/i })).toBeInTheDocument();
   });
 });
 
 describe('FoodTracker body', () => {
-  it('renders the legacy tracker with the flag off', () => {
-    wrap(<FoodTracker />);
-    expect(screen.getByTestId('legacy-tracker')).toBeInTheDocument();
-    expect(screen.queryByTestId('ladder-overview')).not.toBeInTheDocument();
-  });
-
-  it('renders LadderOverview and FoodHistoryList with the flag on', () => {
-    h.flag = true;
+  it('renders LadderOverview and FoodHistoryList for everyone, without asking a flag', () => {
     wrap(<FoodTracker />);
     expect(screen.getByTestId('ladder-overview')).toHaveAttribute('data-kid', 'kid-1');
     expect(screen.getByTestId('food-history')).toHaveAttribute('data-kid', 'kid-1');
-    expect(screen.queryByTestId('legacy-tracker')).not.toBeInTheDocument();
+    expect(flagCalls).not.toContain('exposure_ladder');
   });
 
-  it('renders the family summary in family mode with the flag on', () => {
-    h.flag = true;
+  it('renders the family summary in family mode', () => {
     h.activeKidId = null;
     wrap(<FoodTracker />);
     expect(screen.getByTestId('family-summary')).toBeInTheDocument();
@@ -193,7 +187,6 @@ describe('FoodTracker FAB action', () => {
   }
 
   it("reads 'Log a tasting' on Food Tracker and reverts after unmount", async () => {
-    h.flag = true;
     const user = userEvent.setup();
     wrap(<Harness />);
     await user.click(screen.getByRole('button', { name: 'Quick actions' }));

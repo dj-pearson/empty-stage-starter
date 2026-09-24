@@ -50,6 +50,10 @@ export const grocery = {
   fns: {
     addFood: vi.fn(async () => true),
     updateFood: vi.fn(),
+    deleteFood: vi.fn(),
+    recordRestock: vi.fn(async (_item: unknown, _qty: number, _opts?: unknown) => ({
+      recorded: true, count: 1, reason: null as string | null,
+    })),
     toggleGroceryItem: vi.fn(),
     updateGroceryItem: vi.fn(),
     deleteGroceryItem: vi.fn(),
@@ -103,12 +107,14 @@ export const appContextMock = {
     foods: grocery.foods,
     addFood: grocery.fns.addFood,
     updateFood: grocery.fns.updateFood,
+    deleteFood: grocery.fns.deleteFood,
     catalogById: stable.catalogById,
   }),
   useInventory: () => ({
     ledgerWritesEnabled: grocery.ledger,
     recordPurchases: grocery.fns.recordPurchases,
     recordPurchaseReversal: grocery.fns.recordPurchaseReversal,
+    recordRestock: grocery.fns.recordRestock,
   }),
   useKids: () => ({ kids: grocery.kids, activeKidId: null }),
   usePlan: () => stable.plan,

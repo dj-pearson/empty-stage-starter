@@ -1,0 +1,27 @@
+{
+  "planner": {
+    "familyGrid": {
+      "tableLabel": "Family meal plan",
+      "oneKid": "One child's week:",
+      "copyWeek": "Copy everyone to next week",
+      "clearWeek": "Clear everyone's week",
+      "addFamilyOn": "Add family {{slot}} on {{day}}",
+      "addForOn": "Add {{slot}} for {{name}} on {{day}}",
+      "changeFamily": "Change family {{slot}} on {{day}}: {{name}}",
+      "changeFamilyShort": "Change family meal",
+      "checkIngredients": "Check ingredients",
+      "familyActions": "Family {{slot}} options for {{day}}",
+      "kidActions": "{{name}}'s {{slot}} options for {{day}}",
+      "moveTo": "Move to",
+      "fitFor": "How it fits {{name}}",
+      "chip": {
+        "allergen": "Not for {{name}}: {{allergen}}",
+        "allergenSevere": "Severe {{allergen}} allergy",
+        "dislike": "Dislikes",
+        "goTo": "Go-to",
+        "tryBite": "Try bite",
+        "history": "Ate {{ate}} of {{tries}}"
+      }
+    }
+  }
+}

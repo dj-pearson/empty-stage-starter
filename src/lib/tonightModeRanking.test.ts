@@ -345,3 +345,32 @@ describe('recentRecipeServings / fatigueByRecipe', () => {
     expect(recent).toEqual([{ recipeId: 'r1', daysAgo: 0 }]);
   });
 });
+
+describe('tonight ranking: severity and families (items 28/29)', () => {
+  it('never suggests a recipe with a severe hit, and labels the severity', () => {
+    const r = recipe('r1', 'Pesto pasta', [food('p', 'Pasta'), food('pn', 'Pine-free pesto', ['en:cashews'])]);
+    const safe = recipe('r2', 'Plain pasta', [food('p', 'Pasta')]);
+    const k: KidContext = { ...kid('k', 'Ava', { allergens: ['tree nuts'] }), allergenSeverity: { 'tree nuts': 'severe' } };
+    const scored = scoreRecipes({ recipes: [r, safe], pantry: [], kids: [k], recentEntries: [] }, { maxMinutes: 30 });
+    const hit = scored.find((s) => s.recipeId === 'r1')!;
+    expect(hit.excluded).toBe(true);
+    expect(hit.kidFit[0].allergenSeverity).toBe('severe');
+    const top = topSuggestions({ recipes: [r, safe], pantry: [], kids: [k], recentEntries: [] }, { maxMinutes: 30 });
+    expect(top.map((s) => s.recipeId)).toEqual(['r2']);
+  });
+
+  it('labels the severe hit when a mild allergen comes first in the same food', () => {
+    const r = recipe('r1', 'Omelette', [food('om', 'Cheese omelette', ['milk', 'eggs'])]);
+    const k: KidContext = {
+      ...kid('k', 'Sam', { allergens: ['milk', 'eggs'] }),
+      allergenSeverity: { milk: 'mild', eggs: 'severe' },
+    };
+    expect(evaluateKidFit(r, k).allergenSeverity).toBe('severe');
+  });
+
+  it('matches a food by name when it carries no tags', () => {
+    const fit = evaluateKidFit(recipe('r', 'Salmon bowl', [food('s', 'Baked salmon')]), kid('k', 'Ava', { allergens: ['fish'] }));
+    expect(fit.allergenHits).toEqual(['Baked salmon']);
+    expect(fit.allergenSeverity).toBeNull();
+  });
+});

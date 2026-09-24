@@ -1,0 +1,16 @@
+{
+  "planner": {
+    "allergenSafety": {
+      "severeLine": "{{food}} contains {{allergen}}. {{name}} has a severe {{allergen}} allergy.",
+      "severeTitle": "Severe {{allergen}} allergy: {{name}}",
+      "severeConfirm": "Add it for {{name}} anyway",
+      "aiDropped": "Left out {{foods}}: {{name}} is allergic.",
+      "drawerSevere": "Contains {{allergen}} - severe allergy: {{names}}"
+    }
+  },
+  "recipes": {
+    "allergenSafety": {
+      "severeKid": "{{name}}: severe {{allergen}}"
+    }
+  }
+}

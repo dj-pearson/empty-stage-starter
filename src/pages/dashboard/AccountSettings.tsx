@@ -64,6 +64,7 @@ import { useAutoRestockPref } from "@/hooks/useAutoRestockPref";
 import { usePickyWinSharePref } from "@/hooks/usePickyWinSharePref";
 import { EmailPreferences } from "@/components/EmailPreferences";
 import { DataImport } from "@/components/settings/DataImport";
+import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { BindEmailFlow } from "@/components/auth/BindEmailFlow";
 import { useBindStatus } from "@/hooks/useBindStatus";
 import { getErrorMessage } from "@/lib/api-errors";
@@ -635,6 +636,9 @@ export default function AccountSettings() {
                 </Button>
               </CardFooter>
             </Card>
+
+            {/* Item 3: the day the planner week begins, saved per user. */}
+            <WeekStartSetting />
 
             {/* Data Export */}
             <Card>

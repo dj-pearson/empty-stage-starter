@@ -19,10 +19,8 @@ import { Helmet } from 'react-helmet-async';
 import { Target, UserCog, UserPlus } from 'lucide-react';
 import { useKids } from '@/contexts/AppContext';
 import { useQuickLog } from '@/contexts/QuickLogContext';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag';
-import { FoodSuccessTracker } from '@/components/FoodSuccessTracker';
 import { FoodTrackerGate } from '@/components/foodTracker/FoodTrackerGate';
-import { KidChips, KidPickerGrid } from '@/components/foodTracker/KidChips';
+import { KidChips } from '@/components/foodTracker/KidChips';
 import { FamilyLadderSummary } from '@/components/foodTracker/FamilyLadderSummary';
 import { LadderOverview } from '@/components/foodTracker/LadderOverview';
 import { FoodHistoryList } from '@/components/foodTracker/FoodHistoryList';
@@ -86,7 +84,6 @@ function useManageKidsDialog() {
 export default function FoodTracker() {
   const { t } = useTranslation();
   const { kids, activeKidId } = useKids();
-  const ladderOn = useFeatureFlag('exposure_ladder', false);
   const { registerPageAction } = useQuickLog();
   const { openForAdd, openForEdit, dialog } = useManageKidsDialog();
 
@@ -97,15 +94,15 @@ export default function FoodTracker() {
 
   const [logNonce, setLogNonce] = useState(0);
 
-  // The FAB's primary item becomes "Log a tasting" while there is a ladder
-  // to log against. Unmounting (or leaving family mode) hands it back.
+  // The FAB's primary item becomes "Log a tasting" while a child is picked.
+  // Unmounting (or going back to family mode) hands it back.
   useEffect(() => {
-    if (!ladderOn || !activeKidKey) return;
+    if (!activeKidKey) return;
     return registerPageAction({
       label: t('foodTracker.logTasting', { defaultValue: 'Log a tasting' }),
       run: () => setLogNonce((n) => n + 1),
     });
-  }, [ladderOn, activeKidKey, registerPageAction, t]);
+  }, [activeKidKey, registerPageAction, t]);
 
   // After a switch, focus the new child's heading and say whose foods these
   // are. Not on first render: landing on the page is not a switch.
@@ -204,28 +201,15 @@ export default function FoodTracker() {
             >
               {t('foodTracker.kidHeading', { defaultValue: "{{name}}'s foods", name: activeKid.name })}
             </h2>
-            {ladderOn ? (
-              <>
-                <LadderOverview kid={activeKid} logRequestNonce={logNonce} />
-                <FoodHistoryList kidId={activeKid.id} />
-              </>
-            ) : (
-              <FoodSuccessTracker />
-            )}
+            <LadderOverview kid={activeKid} logRequestNonce={logNonce} />
+            <FoodHistoryList kidId={activeKid.id} />
           </section>
         ) : (
           <section aria-labelledby="food-tracker-family-heading" className="space-y-4">
             <h2 id="food-tracker-family-heading" className="sr-only">
               {t('foodTracker.familyHeading', { defaultValue: 'Family' })}
             </h2>
-            {ladderOn ? (
-              <FamilyLadderSummary kids={kids} />
-            ) : (
-              <KidPickerGrid
-                kids={kids}
-                body={t('foodTracker.gate.pickBody', { defaultValue: 'Pick a child to see what to offer today.' })}
-              />
-            )}
+            <FamilyLadderSummary kids={kids} />
           </section>
         )}
       </FoodTrackerGate>

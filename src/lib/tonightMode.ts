@@ -169,6 +169,7 @@ export function clientFallbackSuggestions(args: {
     id: k.id,
     name: k.name,
     allergens: (k as Kid & { allergens?: string[] }).allergens ?? [],
+    allergenSeverity: k.allergen_severity ?? null,
     dislikedFoods: (k as Kid & { disliked_foods?: string[] }).disliked_foods ?? [],
   }));
 

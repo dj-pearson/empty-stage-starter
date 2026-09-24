@@ -99,6 +99,21 @@ describe('allergen and texture predicates', () => {
     ).toBe(false);
   });
 
+  it('matches families and food names one way (items 28)', () => {
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Snack', allergens: ['almonds'] }), kid({ allergens: ['tree nuts'] }))
+    ).toBe(true);
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Almond crackers', allergens: [] }), kid({ allergens: ['tree nuts'] }))
+    ).toBe(true);
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Nutmeg', allergens: ['tree nuts'] }), kid({ allergens: ['almond'] }))
+    ).toBe(false);
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Butternut squash', allergens: [] }), kid({ allergens: ['tree nuts'] }))
+    ).toBe(false);
+  });
+
   it('never schedules a synonym allergen either', () => {
     const { scheduled, skipped } = selectDueExposures(
       [row({ id: 'r1', foodId: 'yogurt' })],

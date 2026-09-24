@@ -27,10 +27,10 @@ const invokeEdgeFunction = vi.fn();
 
 const KID = { id: 'kid-1', name: 'Robin', date_of_birth: '2020-01-01', allergens: ['peanuts'], notes: 'secret' };
 
-/** The Sunday of the current week, which is what the page opens on. */
+/** The Monday of the current week (item 3's default), which is what the page opens on. */
 const thisWeekStart = () => {
   const d = new Date();
-  d.setDate(d.getDate() - d.getDay());
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const plusDays = (iso: string, n: number) => {
@@ -149,8 +149,12 @@ vi.mock('@/components/meal-planner/PlannerTemplatesController', () => ({ Planner
 vi.mock('@/components/MissingIngredientsDialog', () => ({ MissingIngredientsDialog: () => <div /> }));
 vi.mock('@/components/VarietyFatigueBanner', () => ({ VarietyFatigueBanner: () => <div /> }));
 
+const syncLadderAfterPlanResult = vi.fn().mockResolvedValue([]);
+vi.mock('@/hooks/useFoodLadder', () => ({ syncLadderAfterPlanResult }));
+
 interface GridStubProps {
   kidId: string;
+  onMarkResult?: (entry: PlanEntry, result: 'ate' | 'tasted' | 'refused', attemptId?: string) => void;
   onClearWeek?: (kidId: string) => void;
   onAddEntry?: (date: string, slot: MealSlot, foodId: string) => void;
 }
@@ -159,6 +163,8 @@ vi.mock('@/components/GSAPCalendarMealPlanner', () => ({
     <div>
       <button onClick={() => p.onClearWeek?.(p.kidId)}>grid-clear</button>
       <button onClick={() => p.onAddEntry?.(thisWeekStart(), 'lunch', 'nut1')}>grid-add-nut</button>
+      <button onClick={() => p.onMarkResult?.(OTHER_KID_ENTRY, 'ate')}>grid-mark-ate</button>
+      <button onClick={() => p.onMarkResult?.(OTHER_KID_ENTRY, 'ate', 'attempt-1')}>grid-mark-ladder</button>
     </div>
   ),
 }));
@@ -186,6 +192,20 @@ beforeEach(() => {
   addPlanEntries.mockResolvedValue({ error: null, insertedIds: [] });
   addPlanEntry.mockResolvedValue({ error: null, insertedIds: ['n1'] });
   deletePlanEntries.mockResolvedValue({ error: null, removed: [] });
+});
+
+describe('planner result marks move the ladder (item 41)', () => {
+  it('a NULL -> result mark syncs the ladder once; a ladder-logged mark does not', async () => {
+    const user = userEvent.setup();
+    renderPlanner();
+    await user.click(await screen.findByRole('button', { name: 'grid-mark-ate' }));
+    await waitFor(() => expect(syncLadderAfterPlanResult).toHaveBeenCalledTimes(1));
+    expect(syncLadderAfterPlanResult).toHaveBeenCalledWith('other');
+
+    await user.click(screen.getByRole('button', { name: 'grid-mark-ladder' }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(syncLadderAfterPlanResult).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Planner generation persists (US-715)', () => {
@@ -340,6 +360,70 @@ describe('Allergen guard', () => {
     await screen.findByRole('alertdialog');
     await user.click(screen.getByRole('button', { name: /add anyway/i }));
     await waitFor(() => expect(addPlanEntry).toHaveBeenCalledWith(expect.objectContaining({ food_id: 'nut1', kid_id: 'kid-1' })));
+  });
+
+  describe('severe allergy (item 29)', () => {
+    const kidRecord = KID as Record<string, unknown>;
+    beforeEach(() => { kidRecord.allergen_severity = { peanuts: 'severe' }; });
+    afterEach(() => { delete kidRecord.allergen_severity; });
+
+    it('names the child and the allergen in the title and on the button, and writes nothing on Cancel', async () => {
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog.textContent).toMatch(/Severe peanut allergy: Robin/);
+      expect(dialog.textContent).toMatch(/Robin has a severe peanut allergy/);
+      expect(screen.queryByRole('button', { name: /^add anyway$/i })).toBeNull();
+      expect(screen.getByRole('button', { name: /add it for Robin anyway/i })).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+      expect(addPlanEntry).not.toHaveBeenCalled();
+    });
+
+    it('writes only after the named confirm', async () => {
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click(await screen.findByRole('button', { name: 'grid-add-nut' }));
+      await screen.findByRole('alertdialog');
+      await user.click(screen.getByRole('button', { name: /add it for Robin anyway/i }));
+      await waitFor(() => expect(addPlanEntry).toHaveBeenCalledWith(expect.objectContaining({ food_id: 'nut1' })));
+    });
+
+    it('Quick Build never places the severe allergen', async () => {
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click((await screen.findAllByRole('button', { name: QUICK_BUILD }))[0]);
+      await waitFor(() => expect(replaceWeekPlan).toHaveBeenCalled());
+      const entries = replaceWeekPlan.mock.calls[0][2] as Array<{ food_id: string }>;
+      expect(entries.length).toBeGreaterThan(0);
+      expect(entries.some((e) => e.food_id === 'nut1')).toBe(false);
+    });
+
+    it('AI Generate drops a reply that names the allergen food (client-side guard)', async () => {
+      const start = thisWeekStart();
+      invokeEdgeFunction.mockResolvedValue({
+        data: { plan: [{ date: start, meals: { lunch: 'nut1', dinner: 'safe1' } }] },
+        error: null,
+      });
+      const user = userEvent.setup();
+      renderPlanner();
+      await user.click(await screen.findByRole('button', { name: AI_GENERATE }));
+      await waitFor(() => expect(replaceWeekPlan).toHaveBeenCalled());
+      const entries = replaceWeekPlan.mock.calls[0][2] as Array<{ food_id: string }>;
+      expect(entries.map((e) => e.food_id)).toEqual(['safe1']);
+    });
+  });
+
+  it('AI Generate drops a mild or unrated allergen food too, and refuses a week of only that', async () => {
+    invokeEdgeFunction.mockResolvedValue({
+      data: { plan: [{ date: thisWeekStart(), meals: { lunch: 'nut1' } }] },
+      error: null,
+    });
+    const user = userEvent.setup();
+    renderPlanner();
+    await user.click(await screen.findByRole('button', { name: AI_GENERATE }));
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(replaceWeekPlan).not.toHaveBeenCalled();
   });
 });
 

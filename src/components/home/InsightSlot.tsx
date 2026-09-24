@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
 import { useFoods, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { useExposureLadderFlag } from "@/hooks/useExposureLadderFlag";
 import { useVarietyNudgePref } from "@/hooks/useVarietyNudgePref";
 import { SafeFoodInsuranceSection } from "@/components/SafeFoodInsuranceSection";
 import { KidBirthdayCard, hasBirthdayToday } from "@/components/KidBirthdayCard";
@@ -41,7 +41,7 @@ export function InsightSlot() {
   const { planEntries } = usePlan();
   const { recipes } = useRecipes();
   const { enabled: nudgesEnabled } = useVarietyNudgePref();
-  const ladderEnabled = useFeatureFlag("exposure_ladder", false);
+  const ladderEnabled = useExposureLadderFlag();
 
   // Bumped by any card's dismiss so the predicates re-read storage.
   const [dismissVersion, setDismissVersion] = useState(0);
@@ -51,6 +51,12 @@ export function InsightSlot() {
 
   const safeEligible = ladderEnabled && !!activeKidId && foods.some((f) => f.is_safe);
   const safeActive = safeEligible && safeHasContent;
+  // The section only reports while mounted. Once it unmounts (no child, no
+  // safe food, flag switched off) its last "has content" must not carry over
+  // and win the slot for a moment the next time it becomes eligible.
+  useEffect(() => {
+    if (!safeEligible) setSafeHasContent(false);
+  }, [safeEligible]);
 
   const birthdayDue = useMemo(() => {
     void dismissVersion;

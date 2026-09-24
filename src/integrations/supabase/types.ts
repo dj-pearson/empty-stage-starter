@@ -6112,6 +6112,7 @@ export type Database = {
           item_id: string | null
           name: string
           notes: string | null
+          pantry_credited_at: string | null
           photo_url: string | null
           price_per_unit: number | null
           priority: string | null
@@ -6141,6 +6142,7 @@ export type Database = {
           item_id?: string | null
           name: string
           notes?: string | null
+          pantry_credited_at?: string | null
           photo_url?: string | null
           price_per_unit?: number | null
           priority?: string | null
@@ -6170,6 +6172,7 @@ export type Database = {
           item_id?: string | null
           name?: string
           notes?: string | null
+          pantry_credited_at?: string | null
           photo_url?: string | null
           price_per_unit?: number | null
           priority?: string | null

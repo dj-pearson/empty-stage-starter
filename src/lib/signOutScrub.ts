@@ -46,6 +46,8 @@ export const SCRUBBED_KEYS: readonly string[] = [
   'eatpal.share_chain_outcomes',
   // The Pantry kid lens holds a kid id from the previous household.
   'eatpal.pantry.lensKid',
+  // Item 3: the week-start cache names the user it belongs to.
+  'eatpal.week_starts_on',
 ];
 
 /**
@@ -116,6 +118,8 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
     'list or grid on the Pantry page is a layout choice for this screen size, not account data',
   'eatpal.pantry.sortBy':
     'the Pantry sort order is a viewing preference holding one of a fixed set of option names',
+  'eatpal.planner.tryBitesOpen':
+    'whether the planner try-bite strip starts open; a yes/no layout choice with no account data in it',
   'eatpal.recipes.plan.addMissing':
     'whether "add missing ingredients" starts ticked when planning a recipe; a yes/no with no account data in it',
   'eatpal.activation.fired':

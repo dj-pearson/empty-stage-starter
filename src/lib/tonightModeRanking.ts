@@ -16,7 +16,7 @@
  * collapses to -Infinity).
  */
 
-import { matchingAllergen } from './allergens';
+import { worstFoodAllergen, type AllergenSeverity } from './allergens';
 
 export interface PantryFood {
   id: string;
@@ -28,6 +28,8 @@ export interface KidContext {
   id: string;
   name: string;
   allergens?: string[] | null;
+  /** kids.allergen_severity, for labelling the hit. Every hit is still excluded. */
+  allergenSeverity?: Partial<Record<string, AllergenSeverity>> | null;
   dislikedFoods?: string[] | null;
 }
 
@@ -62,6 +64,8 @@ export interface KidFit {
   score: number;
   blockingAversions: string[];
   allergenHits: string[];
+  /** Worst recorded severity among this kid's hits, or null (no hit, or none recorded). */
+  allergenSeverity?: AllergenSeverity | null;
 }
 
 export interface ScoredRecipe {
@@ -117,18 +121,28 @@ export function computeVarietyScore(
   return clamp01((weighted / Math.max(1, lookbackDays)) * 3);
 }
 
+const SEVERITY_RANK: Record<AllergenSeverity | 'none', number> = { none: 0, mild: 1, moderate: 2, severe: 3 };
+
 export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
   const dislikedIds = new Set(kid.dislikedFoods ?? []);
   const dislikedNames = lowerSet(kid.dislikedFoods);
 
   const allergenHits: string[] = [];
   const blockingAversions: string[] = [];
+  let worst: AllergenSeverity | null = null;
 
   for (const food of recipe.foods) {
     // Canonical matching, as kidFit does: a kid's "Peanuts" has to catch a
     // food's "en:peanuts", which a lowercased exact compare let through.
-    if (matchingAllergen(kid.allergens, food.allergens)) {
+    // Families and the food's name count too ("Almond flour", tree nuts).
+    const worstHit = worstFoodAllergen(
+      { allergens: kid.allergens, allergen_severity: kid.allergenSeverity },
+      food,
+    );
+    if (worstHit) {
       allergenHits.push(food.name);
+      const level = worstHit.severity;
+      if (level && SEVERITY_RANK[level] > SEVERITY_RANK[worst ?? 'none']) worst = level;
       continue;
     }
     if (
@@ -148,6 +162,7 @@ export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
     score: clamp01(score),
     blockingAversions,
     allergenHits,
+    allergenSeverity: worst,
   };
 }
 

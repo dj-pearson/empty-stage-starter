@@ -45,6 +45,7 @@ export function kidToSolverKid(k: Kid): SolverKid {
     id: k.id,
     name: k.name,
     allergens: k.allergens ?? [],
+    allergenSeverity: k.allergen_severity ?? null,
     dietaryRestrictions: k.dietary_restrictions ?? [],
     dislikedFoods: k.disliked_foods ?? [],
     favoriteFoods: k.favorite_foods ?? [],

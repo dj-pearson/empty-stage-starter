@@ -1,0 +1,14 @@
+{
+  "planner": {
+    "weekStart": {
+      "title": "Planner week",
+      "description": "The day your meal plan and grocery week begin. Planned meals stay on their dates; only the seven-day view moves.",
+      "label": "Week starts on",
+      "monday": "Monday",
+      "sunday": "Sunday",
+      "savedMonday": "Weeks now start on Monday",
+      "savedSunday": "Weeks now start on Sunday",
+      "saveFailed": "Couldn't save that to your account. It applies on this device for now."
+    }
+  }
+}

@@ -52,7 +52,16 @@ export interface QuickLogEntry extends QuickLogMeal {
 export type QuickLogOutcome =
   | { status: 'nothing-planned' }
   | { status: 'unknown-meal'; mealId: string }
-  | { status: 'saved'; entry: QuickLogEntry; patch: QuickLogPatch }
+  | {
+      status: 'saved';
+      entry: QuickLogEntry;
+      patch: QuickLogPatch;
+      /**
+       * The ladder fold started after the save (item 41). Settles, never
+       * rejects; the outcome is already final without it.
+       */
+      ladderSync?: Promise<unknown>;
+    }
   | { status: 'failed'; entry: QuickLogEntry; error: unknown };
 
 /**
@@ -165,8 +174,15 @@ export async function performQuickLog<T extends QuickLogEntry>(options: {
   /** Defaults to 'append'; see QuickLogNoteMode. */
   noteMode?: QuickLogNoteMode;
   save: (entryId: string, patch: QuickLogPatch) => PromiseLike<{ error: unknown }> | { error: unknown };
+  /**
+   * Move the food's ladder rung after the result lands (item 41). Defaults to
+   * useFoodLadder's syncLadderAfterPlanResult, loaded on first use so the
+   * ladder code stays out of the dashboard's first chunk. Pass null to skip.
+   */
+  syncLadder?: ((entryId: string) => PromiseLike<unknown>) | null;
 }): Promise<QuickLogOutcome> {
   const { meals, result, notes, mealId, amount, noteMode = 'append', save } = options;
+  const syncLadder = options.syncLadder === undefined ? defaultSyncLadder : options.syncLadder;
   const entry = selectQuickLogEntry(meals, mealId);
 
   if (!entry) {
@@ -188,10 +204,22 @@ export async function performQuickLog<T extends QuickLogEntry>(options: {
       amount === null ? null : amountForResult(result, amount, entry.amount_eaten);
     if (amountEaten !== (entry.amount_eaten ?? null)) patch.amount_eaten = amountEaten;
     const { error } = await save(entry.id, patch);
-    return error ? { status: 'failed', entry, error } : { status: 'saved', entry, patch };
+    if (error) return { status: 'failed', entry, error };
+    // Not awaited: the result is saved, and the modal should not wait on the
+    // ladder. The fold is idempotent, so a re-log that wrote no new attempt
+    // moves nothing.
+    if (!syncLadder) return { status: 'saved', entry, patch };
+    const ladderSync = Promise.resolve()
+      .then(() => syncLadder(entry.id))
+      .catch(() => undefined);
+    return { status: 'saved', entry, patch, ladderSync };
   } catch (error) {
     return { status: 'failed', entry, error };
   }
+}
+
+function defaultSyncLadder(entryId: string): Promise<unknown> {
+  return import('@/hooks/useFoodLadder').then((m) => m.syncLadderAfterPlanResult(entryId));
 }
 
 /** The order a day reads in, so the picker lists breakfast before dinner. */

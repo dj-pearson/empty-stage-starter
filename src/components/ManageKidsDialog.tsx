@@ -42,6 +42,7 @@ import { deleteReplacedStorageObject, deleteStorageObject } from "@/lib/storageC
 import {
   KID_ALLERGEN_PICKER,
   canonicalAllergen,
+  matchingFoodAllergen,
   normalizeKidAllergenInput,
   pruneAllergenSeverity,
 } from "@/lib/allergens";
@@ -238,7 +239,9 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((_props, ref) 
 
   const allergenLabel = useCallback(
     (value: string) => {
-      const picker = KID_ALLERGEN_PICKER.find((p) => p.value === value);
+      const picker = KID_ALLERGEN_PICKER.find(
+        (p) => p.value === value || canonicalAllergen(p.value) === canonicalAllergen(value),
+      );
       return picker ? t(picker.labelKey, { defaultValue: value }) : value;
     },
     [t],
@@ -570,7 +573,6 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((_props, ref) 
   };
 
   const currentAllergens = effectiveAllergens(formData) ?? [];
-  const allergenCanon = new Set(currentAllergens.map((a) => canonicalAllergen(a)));
   const customAllergens = formData.allergens.filter((a) => !PICKER_VALUES.has(a));
   const avatarSrc = previewUrl ?? formData.profile_picture_url ?? undefined;
   const currentYear = new Date().getFullYear();
@@ -938,7 +940,7 @@ const ManageKidsDialogComponent = forwardRef<ManageKidsDialogRef>((_props, ref) 
                 <div className="flex flex-wrap gap-2">
                   {COMMON_FOODS.map((food) => {
                     const pressed = formData.favorite_foods.includes(food.name);
-                    const conflict = (food.allergens ?? []).find((a) => allergenCanon.has(canonicalAllergen(a)));
+                    const conflict = matchingFoodAllergen(currentAllergens, food);
                     const disabled = !!conflict && !pressed;
                     return (
                       <button

@@ -1,0 +1,25 @@
+{
+  "grocery": {
+    "receiptList": {
+      "inPantry": "In pantry from receipt",
+      "confirm": "Check off {{checked}}, update pantry",
+      "pickRow": "Which list item {{name}} pays for",
+      "notOnListOption": "Not on this list",
+      "checksOff": "Checks off {{name}}",
+      "newToPantryNote": "New to your pantry",
+      "matchedTitle": "On your list",
+      "matchedBody": "Checked off the list and added to the pantry.",
+      "newTitle": "New to pantry",
+      "newBody": "Not on this list and not in your pantry yet. Added as new foods.",
+      "unmatchedTitle": "Not on this list",
+      "unmatchedBody": "Matched no list item. Each tops up the pantry food shown.",
+      "checkoutSkipped_one": "{{count}} already added from your receipt",
+      "checkoutSkipped_other": "{{count}} already added from your receipt",
+      "appliedTitle_one": "Checked off {{count}} item from your receipt",
+      "appliedTitle_other": "Checked off {{count}} items from your receipt",
+      "appliedBody": "{{topped}} topped up, {{added}} new in the pantry",
+      "undone": "Receipt undone: list and pantry put back",
+      "untickedCredited": "{{name}} is back on the list. What the receipt added stays in your pantry."
+    }
+  }
+}

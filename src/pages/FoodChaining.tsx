@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { FoodChainingRecommendations } from "@/components/FoodChainingRecommendations";
 import { FeatureGate } from "@/components/FeatureGate";
 import { useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { useExposureLadderFlag } from "@/hooks/useExposureLadderFlag";
 import { useFoodLadder } from "@/hooks/useFoodLadder";
 import { useKids } from "@/contexts/AppContext";
 import { localIsoDate } from "@/components/foodTracker/ladderDates";
@@ -62,9 +63,9 @@ export default function FoodChaining() {
   // when the dedicated community-wins surface flag is on. Default OFF.
   const pickyWinEnabled = useFeatureFlag("picky_win_network", false);
   // US-601: the ladder answers "where are we now" and lives on Food Tracker;
-  // chaining answers "what next" and keeps a one-line link to it. Default OFF
-  // so the epic can land in pieces without changing the live page.
-  const ladderEnabled = useFeatureFlag("exposure_ladder", false);
+  // chaining answers "what next" and keeps a one-line link to it. On by
+  // default; the flag is a kill switch now (useExposureLadderFlag).
+  const ladderEnabled = useExposureLadderFlag();
 
   useEffect(() => {
     if (pickyWinEnabled) {

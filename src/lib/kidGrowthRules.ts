@@ -18,6 +18,7 @@
  * `KidBirthdayCard` UI; the actual mutation paths live in AppContext.
  */
 import type { Food, Kid } from '@/types';
+import { canonicalAllergen } from '@/lib/allergens';
 
 export interface KidGrowthSuggestions {
   /** Total years today; 0..18+ */
@@ -40,17 +41,18 @@ export type AgeMilestone =
   | 'tween'
   | 'teen';
 
+/**
+ * Keyed by canonicalAllergen. The kid pickers store plurals ("peanuts",
+ * "tree nuts", "eggs"), which a lowercased lookup never found, so the prompt
+ * never showed for the most common allergies.
+ */
 const ALLERGEN_REINTRO_RULES: Record<string, string> = {
   peanut:
     'Many pediatricians revisit peanut tolerance around now. Bring it up at the next well-visit before reintroducing.',
   'tree nut':
     'Tree-nut tolerance can change with age. Ask your pediatrician about a structured rechallenge.',
-  tree_nut:
-    'Tree-nut tolerance can change with age. Ask your pediatrician about a structured rechallenge.',
   egg:
     'Egg allergy often outgrows in childhood. Don\'t reintroduce at home without confirming with your pediatrician.',
-  dairy:
-    'Dairy tolerance often shifts. Talk with your pediatrician about whether a milk-ladder is appropriate.',
   milk:
     'Dairy tolerance often shifts. Talk with your pediatrician about whether a milk-ladder is appropriate.',
 };
@@ -193,8 +195,7 @@ export function buildKidGrowthSuggestions(
   // Allergen reintro prompts — informational only.
   const allergenReintroPrompts: string[] = [];
   for (const allergen of kid.allergens ?? []) {
-    const key = allergen.trim().toLowerCase();
-    const message = ALLERGEN_REINTRO_RULES[key];
+    const message = ALLERGEN_REINTRO_RULES[canonicalAllergen(allergen)];
     if (message && !allergenReintroPrompts.includes(message)) {
       allergenReintroPrompts.push(message);
     }
@@ -220,12 +221,11 @@ export function assertNoAllergenAutoRemoval(
   proposedAllergens: ReadonlyArray<string> | undefined
 ): true {
   if (!prevAllergens || prevAllergens.length === 0) return true;
-  const prevSet = new Set(prevAllergens.map((s) => s.trim().toLowerCase()));
-  const proposedSet = new Set(
-    (proposedAllergens ?? []).map((s) => s.trim().toLowerCase())
-  );
-  for (const a of prevSet) {
-    if (!proposedSet.has(a)) {
+  // Canonical: "Peanuts" rewritten as "peanut" is the same allergen, not a removal.
+  const proposedSet = new Set((proposedAllergens ?? []).map((s) => canonicalAllergen(s)));
+  for (const a of prevAllergens) {
+    if (!canonicalAllergen(a)) continue;
+    if (!proposedSet.has(canonicalAllergen(a))) {
       throw new Error(
         `assertNoAllergenAutoRemoval: refusing to drop allergen "${a}" — confirmed pediatrician review required.`
       );

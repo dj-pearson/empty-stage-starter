@@ -80,6 +80,21 @@ describe("MealQuickAddDrawer", () => {
     expect(onSelectFood).toHaveBeenCalledWith("cheese", expect.anything(), ["sam"]);
   });
 
+  it("names a severe allergy as severe before the confirm (item 29)", async () => {
+    const user = userEvent.setup();
+    KIDS[0] = { id: "sam", name: "Sam", allergens: ["milk"], allergen_severity: { milk: "severe" } };
+    try {
+      const { onSelectFood } = renderDrawer({ date: "2026-09-24", slot: "lunch", kidId: "sam", mode: "add" });
+      expect(screen.getByText("Contains milk - severe allergy: Sam")).toBeInTheDocument();
+      expect(screen.queryByText("Contains milk - Sam is allergic")).toBeNull();
+      await user.click(screen.getByRole("button", { name: /Cheese/ }));
+      expect(onSelectFood).not.toHaveBeenCalled();
+      expect(screen.getByRole("group", { name: "Contains milk - severe allergy: Sam" })).toBeInTheDocument();
+    } finally {
+      KIDS[0] = { id: "sam", name: "Sam", allergens: ["milk"] };
+    }
+  });
+
   it("offers a family action for everyone except the allergic kid", async () => {
     const user = userEvent.setup();
     const { onSelectFood } = renderDrawer({ date: "2026-09-24", slot: "lunch", mode: "add" });

@@ -1,0 +1,20 @@
+{
+  "planner": {
+    "tryBites": {
+      "title": "Try bites this week",
+      "summary_one": "1 food",
+      "summary_other": "{{count}} foods",
+      "kidList": "{{name}}'s try bites this week",
+      "notTried": "Not tried this month",
+      "tries_one": "1 try this month",
+      "tries_other": "{{count}} tries this month",
+      "last": "last: {{result}}",
+      "result": {
+        "ate": "ate it",
+        "tasted": "tasted",
+        "refused": "refused"
+      },
+      "linkLabel": "{{food}} for {{name}}: {{exposure}}. Open in Food Tracker"
+    }
+  }
+}
