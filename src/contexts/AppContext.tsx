@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useEffect, useRef, createContext, useConte
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { seedStarterFoods } from "@/lib/starterFoods";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
 import { scrubOnSignOut } from "@/lib/signOutScrub";
@@ -110,24 +111,6 @@ const LEDGER_COMPARISON_DEBOUNCE_MS = 1000;
  */
 export const RETIRED_ROW_CAPS = { foods: 500, recipes: 200, groceryItems: 500 } as const;
 
-const STARTER_FOODS: Omit<Food, "id">[] = [
-  { name: "Chicken Nuggets", category: "protein", is_safe: true, is_try_bite: false },
-  { name: "Mac & Cheese", category: "carb", is_safe: true, is_try_bite: false },
-  { name: "Pizza", category: "carb", is_safe: true, is_try_bite: false },
-  { name: "Yogurt", category: "dairy", is_safe: true, is_try_bite: false },
-  { name: "Apple Slices", category: "fruit", is_safe: true, is_try_bite: false },
-  { name: "Banana", category: "fruit", is_safe: true, is_try_bite: false },
-  { name: "Goldfish Crackers", category: "snack", is_safe: true, is_try_bite: false },
-  { name: "String Cheese", category: "dairy", is_safe: true, is_try_bite: false },
-  { name: "Grapes", category: "fruit", is_safe: true, is_try_bite: false },
-  { name: "Carrots", category: "vegetable", is_safe: true, is_try_bite: false },
-  { name: "Broccoli", category: "vegetable", is_safe: false, is_try_bite: true },
-  { name: "Strawberries", category: "fruit", is_safe: false, is_try_bite: true },
-  { name: "Hummus", category: "protein", is_safe: false, is_try_bite: true },
-  { name: "Avocado", category: "vegetable", is_safe: false, is_try_bite: true },
-  { name: "Turkey Slices", category: "protein", is_safe: false, is_try_bite: true },
-];
-
 /** Inner component that composes all domain contexts into a single AppContext for backward compatibility */
 function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { userId, householdId } = useAuth();
@@ -228,7 +211,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           setMovements(parseMovementRows(data.movements || []));
           setItemStock(parseStockRows(data.itemStock || []));
         } else {
-          const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+          const starterFoods = seedStarterFoods(generateId);
           setFoods(starterFoods);
           await seedLocalPlaceholder();
         }
@@ -236,7 +219,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         logger.error("Error loading data from storage:", error);
         // Same precedence guard: don't seed starter data over server data.
         if (serverLoadAppliedRef.current) return;
-        const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+        const starterFoods = seedStarterFoods(generateId);
         setFoods(starterFoods);
         await seedLocalPlaceholder();
       }
@@ -800,7 +783,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   }, [setFoods, setKids, setRecipes, setActiveKidId, setPlanEntriesState, setGroceryItemsState]);
 
   const resetAllData = useCallback(() => {
-    const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+    const starterFoods = seedStarterFoods(generateId);
     setFoods(starterFoods);
     const defaultKid = { id: generateId(), name: "My Child", age: 5 };
     setKids([defaultKid]);

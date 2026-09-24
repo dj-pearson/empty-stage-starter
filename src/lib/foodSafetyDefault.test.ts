@@ -95,13 +95,10 @@ describe('no acquisition path hardcodes a safe food', () => {
 
   it('finds no sixth path that slipped in', () => {
     // A new "add this food for me" flow is exactly how this comes back. The
-    // curated onboarding starters are the deliberate exception: a parent is
-    // picking those from a list of typical safe foods, which is a choice rather
-    // than an assumption.
-    const ALLOWED = new Set([
-      'src/contexts/AppContext.tsx', // STARTER_FOODS, offered at onboarding
-      'src/lib/starterFoods.ts', // the same curated list
-    ]);
+    // starter foods used to be allowed here as "a curated list of typical safe
+    // foods"; they were seeded without the parent picking anything, so they
+    // are held to the same rule now (src/lib/starterFoods.ts).
+    const ALLOWED = new Set<string>([]);
 
     // Product code only. A test fixture saying is_safe: true is a test fixture.
     const offenders: string[] = [];
