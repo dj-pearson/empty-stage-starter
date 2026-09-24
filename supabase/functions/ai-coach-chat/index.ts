@@ -2,13 +2,40 @@ import { getCorsHeaders, securityHeaders, noCacheHeaders } from "../common/heade
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { AIServiceV2, AIMessage } from "../_shared/ai-service-v2.ts";
 import { withSafetyRules } from "../_shared/safety.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  COACH_CLIENT_HEADER,
+  LEGACY_ENFORCE_FLAG,
+  classifyCoachClient,
+  runCoachTurn,
+  type LimitLookup,
+} from '../_shared/aiCoachGate.ts';
 
 /**
  * AI Coach Chat Edge Function
  * 
  * Handles conversational AI coaching for meal planning and picky eaters.
  * Uses AIServiceV2 for centralized AI configuration.
+ *
+ * The daily plan limit (check_feature_limit / increment_usage for 'ai_coach')
+ * is enforced here, not only drawn by the web page. Web callers are refused
+ * over the limit; shipped iOS builds get a grace period that ends when the
+ * feature_flags row 'ai_coach_limit_enforce_legacy' is enabled. The whole
+ * contract is in ../_shared/aiCoachGate.ts.
  */
+
+/**
+ * Service-role client for the two SECURITY DEFINER calls. auth.uid() is NULL
+ * under service_role, so check_feature_limit / increment_usage's caller-id
+ * guard (20260925000001) lets us act for the user the JWT named. Null when the
+ * env is missing: the check then reads as failed (web fails closed).
+ */
+function serviceClient() {
+  const url = Deno.env.get('SUPABASE_URL') ?? '';
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
 
 export default async (req: Request) => {
   // Get secure CORS headers based on request origin
@@ -121,16 +148,82 @@ Your role is to:
 
     console.log('[ai-coach-chat] Processing request with', aiMessages.length, 'messages');
 
-    // Use AI service to generate response
-    const aiService = new AIServiceV2();
-    const response = await aiService.generateContent(
-      {
-        messages: aiMessages,
-        maxTokens,
-        temperature: 0.7
-      },
-      'standard' // Use standard model for conversational quality
-    );
+    const generate = () =>
+      new AIServiceV2().generateContent(
+        {
+          messages: aiMessages,
+          maxTokens,
+          temperature: 0.7
+        },
+        'standard' // Use standard model for conversational quality
+      );
+
+    let response: Awaited<ReturnType<typeof generate>>;
+    if (!gate.userId) {
+      // Trusted service-role call (function-to-function): no user to bill.
+      response = await generate();
+    } else {
+      const userId = gate.userId;
+      const client = classifyCoachClient(req.headers.get(COACH_CLIENT_HEADER));
+      const admin = serviceClient();
+      const outcome = await runCoachTurn({
+        client,
+        checkLimit: async (): Promise<LimitLookup> => {
+          if (!admin) return { ok: false };
+          const { data, error } = await admin.rpc('check_feature_limit', {
+            p_user_id: userId,
+            p_feature_type: 'ai_coach',
+          });
+          if (error) {
+            console.error('[ai-coach-chat] check_feature_limit failed:', error.message);
+            return { ok: false };
+          }
+          if (!data || typeof data !== 'object' || typeof (data as { allowed?: unknown }).allowed !== 'boolean') {
+            console.error('[ai-coach-chat] check_feature_limit returned an unexpected shape');
+            return { ok: false };
+          }
+          return { ok: true, result: data as { allowed: boolean; limit?: number | null; current?: number | null } };
+        },
+        readEnforceLegacy: async () => {
+          if (!admin) return false;
+          const { data, error } = await admin
+            .from('feature_flags')
+            .select('enabled')
+            .eq('key', LEGACY_ENFORCE_FLAG)
+            .maybeSingle();
+          if (error) throw error;
+          return (data as { enabled?: unknown } | null)?.enabled === true;
+        },
+        generate,
+        incrementUsage: async () => {
+          if (!admin) throw new Error('no service client');
+          const { error } = await admin.rpc('increment_usage', {
+            p_user_id: userId,
+            p_feature_type: 'ai_coach',
+          });
+          if (error) {
+            console.error('[ai-coach-chat] increment_usage failed:', error.message);
+            throw error;
+          }
+        },
+        log: (event, detail) => console.log(`[ai-coach-chat] limit ${event}`, { userId, ...detail }),
+      });
+
+      if (outcome.kind === 'refused') {
+        const { status, body } = outcome.decision;
+        return new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            ...corsHeaders,
+            ...securityHeaders,
+            ...noCacheHeaders(),
+            ...(status === 503 ? { 'Retry-After': '60' } : {}),
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+      response = outcome.value;
+    }
 
     console.log('[ai-coach-chat] Response generated:', {
       model: response.model,
@@ -156,13 +249,12 @@ Your role is to:
     );
 
   } catch (error) {
-    console.error('[ai-coach-chat] Error:', error);
-    
+    // The detail stays in the log: it can carry a provider's response body or
+    // a Postgres error naming internals (US-870). The caller gets a sentence.
+    console.error('[ai-coach-chat] Error:', error instanceof Error ? error.message : error);
+
     return new Response(
-      JSON.stringify({ 
-        error: 'Failed to generate AI response',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
+      JSON.stringify({ error: 'Failed to generate AI response' }),
       {
         status: 500,
         headers: {

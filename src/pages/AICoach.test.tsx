@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import type { FeatureLimitResult } from "@/lib/featureLimits";
@@ -10,7 +10,14 @@ vi.mock("@/lib/featureLimits", () => ({
 }));
 vi.mock("@/lib/upgradePromptBus", () => ({ requestUpgradePrompt: vi.fn() }));
 vi.mock("@/components/AIMealCoach", () => ({
-  AIMealCoach: ({ exhausted }: { exhausted?: boolean }) => <div data-testid="coach">exhausted:{String(exhausted)}</div>,
+  AIMealCoach: ({ exhausted, onLimitReached }: { exhausted?: boolean; onLimitReached?: () => void }) => (
+    <div data-testid="coach">
+      exhausted:{String(exhausted)}
+      <button type="button" onClick={() => onLimitReached?.()}>
+        server-402
+      </button>
+    </div>
+  ),
 }));
 
 import AICoach from "./AICoach";
@@ -69,5 +76,27 @@ describe("AICoach page", () => {
     renderPage();
     expect(await screen.findByText("exhausted:true")).toBeInTheDocument();
     expect(screen.getByTestId("ai-coach-usage")).toHaveTextContent("No questions left today");
+  });
+
+  it("a server refusal mid-session flips the line to none with the upgrade link", async () => {
+    checkFeatureLimit.mockResolvedValue({ allowed: true, limit: 10, current: 9 });
+    renderPage();
+    expect(await screen.findByText("1 of 10 question left today")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "server-402" }));
+    expect(await screen.findByText("exhausted:true")).toBeInTheDocument();
+    expect(screen.getByTestId("ai-coach-usage")).toHaveTextContent("No questions left today");
+    expect(screen.getByRole("link", { name: "See plans" })).toHaveAttribute("href", "/pricing");
+  });
+
+  it("shows the upgrade path after a server refusal even when the page never learned a limit", async () => {
+    // checkFeatureLimit fails open to { allowed: true } with no limit; the
+    // server's 402 is then the first word on the quota.
+    checkFeatureLimit.mockResolvedValue({ allowed: true });
+    renderPage();
+    await screen.findByText("exhausted:false");
+    expect(screen.queryByTestId("ai-coach-usage")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "server-402" }));
+    expect(await screen.findByText("exhausted:true")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See plans" })).toHaveAttribute("href", "/pricing");
   });
 });

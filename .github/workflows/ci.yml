@@ -594,6 +594,14 @@ jobs:
       - name: Deno barcode provider shapes
         run: deno test supabase/functions/_shared/barcodeProviderShape.test.ts
 
+      # Owner decision 1a: the AI Coach daily limit on the server. Web over the
+      # limit is refused (402) and a failed check fails closed (503); shipped
+      # iOS builds are metered but not refused until the feature_flags row
+      # ai_coach_limit_enforce_legacy is enabled; usage is incremented once,
+      # after a reply, never on a failed turn. Pure, no network, no DB.
+      - name: Deno AI Coach limit gate
+        run: deno test supabase/functions/_shared/aiCoachGate.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           # US-760: pinned, not `latest`. Both Supabase jobs run the same

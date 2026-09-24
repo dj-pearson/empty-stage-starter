@@ -14,6 +14,7 @@ import { useCoachActions } from "@/hooks/useCoachActions";
 import { logger } from "@/lib/logger";
 import { toISODate } from "@/lib/date-utils";
 import { isOfflineFailure } from "@/lib/networkFailure";
+import { AI_COACH_CLIENT_HEADERS } from "@/lib/aiCoachClient";
 import { AI_COACH_DISCLAIMER, CRISIS_HELP_LINE, detectRedFlags } from "@/lib/aiSafety";
 import { buildCoachContext, coachAllergenLines, composeModelTurn, redactKidNames } from "@/lib/coachContext";
 import type { CoachContext } from "@/lib/coachContext";
@@ -109,7 +110,11 @@ async function classifySendError(error: unknown): Promise<SendFailure> {
       if (status === 402 || status === 403) return "limit";
       try {
         const body = ctx?.clone ? await ctx.clone().json() : null;
-        if (body && typeof body === "object" && (body as { code?: unknown }).code === "ai_coach_limit") return "limit";
+        const code = body && typeof body === "object" ? (body as { code?: unknown }).code : undefined;
+        if (code === "ai_coach_limit") return "limit";
+        // The server could not check the plan and failed closed (503). Not a
+        // used-up quota: say so, and let the user try again shortly.
+        if (code === "ai_coach_limit_unavailable") return "busy";
       } catch {
         // Body was not JSON; fall through.
       }
@@ -400,8 +405,11 @@ export function AIMealCoach({ exhausted = false, onLimitReached }: AIMealCoachPr
           : null;
 
         const startTime = Date.now();
+        // The client header opts this call into the server-side daily limit
+        // (402 ai_coach_limit when today's questions are used up).
         const { data: invokeData, error: aiError } = await supabase.functions.invoke("ai-coach-chat", {
           body: { messages: outbound, kidContext, maxTokens: 2000 },
+          headers: { ...AI_COACH_CLIENT_HEADERS },
         });
         const result = (invokeData ?? null) as CoachInvokeResult | null;
         logger.debug("[AI Coach] reply", { status: aiError ? "error" : "ok", model: result?.model ?? null });

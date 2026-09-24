@@ -427,3 +427,84 @@ describe("AIMealCoach composer keys and offline", () => {
     expect(within(log).getByText("Only eats beige food")).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Server-side daily limit (owner decision 1a): the web identifies itself so
+// ai-coach-chat enforces the limit, and a refusal leaves past advice readable.
+// ---------------------------------------------------------------------------
+
+function httpError(status: number, body: unknown) {
+  const response = { status, clone: () => ({ json: async () => body }) };
+  return { name: "FunctionsHttpError", message: "Edge Function returned a non-2xx status code", context: response };
+}
+
+describe("AIMealCoach server-side daily limit", () => {
+  const pastThread = () => {
+    db.conversations = [
+      { id: "conv-1", conversation_title: "Beige food", kid_id: "kid-a", updated_at: "2026-09-20T10:00:00Z", created_at: "2026-09-20T10:00:00Z", is_archived: false },
+    ];
+    db.messages["conv-1"] = [
+      { id: "old-u", role: "user", content: "Only eats pasta", created_at: "2026-09-20T10:00:00Z" },
+      { id: "old-a", role: "assistant", content: "Put one pea beside the pasta.", created_at: "2026-09-20T10:00:05Z" },
+    ];
+  };
+
+  it("sends the web client header on every coach call", async () => {
+    await renderReady();
+    type("Refuses vegetables");
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+    expect(invoke.mock.calls[0][0]).toBe("ai-coach-chat");
+    expect(invoke.mock.calls[0][1].headers).toEqual({ "X-Client-Info": "eatpal-web/1" });
+  });
+
+  it("a 402 ai_coach_limit reports the limit, removes the unanswered row and keeps past advice on screen", async () => {
+    pastThread();
+    const onLimitReached = vi.fn();
+    invoke.mockResolvedValueOnce({
+      data: null,
+      error: httpError(402, { error: "Daily AI Coach limit reached.", code: "ai_coach_limit", limit: 5, current: 5 }),
+    });
+    render(<AIMealCoach onLimitReached={onLimitReached} />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Beige food/ }));
+    expect(await screen.findByText("Put one pea beside the pasta.")).toBeInTheDocument();
+    await waitFor(() => expect(textbox()).toBeEnabled());
+
+    type("What about carrots?");
+    fireEvent.click(sendButton());
+
+    await waitFor(() => expect(onLimitReached).toHaveBeenCalledTimes(1));
+    expect(toastMock.error).toHaveBeenCalledWith("You've used today's coach questions. Past answers are still here.");
+    expect(callsFor("ai_coach_messages", "delete")).toHaveLength(1);
+    expect(callsFor("ai_coach_messages", "insert").map((c) => (c.payload as Row[])[0].role)).toEqual(["user"]);
+    expect(screen.getByText("Put one pea beside the pasta.")).toBeInTheDocument();
+  });
+
+  it("a 503 from a failed plan check reads as busy, not as a used-up quota", async () => {
+    const onLimitReached = vi.fn();
+    invoke.mockResolvedValueOnce({
+      data: null,
+      error: httpError(503, { error: "Could not check your AI Coach plan.", code: "ai_coach_limit_unavailable" }),
+    });
+    render(<AIMealCoach onLimitReached={onLimitReached} />);
+    await waitFor(() => expect(callsFor("ai_coach_conversations", "select").length).toBeGreaterThan(0));
+    type("Help");
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledTimes(1));
+    expect(toastMock.error).toHaveBeenCalledWith("The coach is busy right now. Try again in a minute.");
+    expect(onLimitReached).not.toHaveBeenCalled();
+  });
+
+  it("when exhausted, the composer is closed with a notice and past conversations stay readable", async () => {
+    pastThread();
+    render(<AIMealCoach exhausted />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Beige food/ }));
+    expect(await screen.findByText("Put one pea beside the pasta.")).toBeInTheDocument();
+    expect(
+      screen.getByText("You've used today's coach questions. Your past conversations are still here."),
+    ).toBeInTheDocument();
+    type("One more?");
+    expect(sendButton()).toBeDisabled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});

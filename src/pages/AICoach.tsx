@@ -6,11 +6,15 @@ import "@/i18n/appLocale";
 import { AIMealCoach } from "@/components/AIMealCoach";
 import { FeatureGate, type FeatureGateState } from "@/components/FeatureGate";
 
-/** The remaining-uses line, shown only when the plan has a numeric daily limit. */
+/** The remaining-uses line: shown when the plan has a numeric daily limit, and always once today's quota is spent. */
 function UsageLine({ gate }: { gate: FeatureGateState | null }) {
   const { t } = useTranslation();
-  if (!gate || gate.limit === null || gate.limit <= 0) return null;
-  const remaining = gate.exhausted ? 0 : Math.max(0, gate.limit - (gate.current ?? 0));
+  if (!gate) return null;
+  // Exhausted always shows the upgrade path, even when the page's own check
+  // never learned a numeric limit (it fails open) and the server's 402 was the
+  // first word on it.
+  if (!gate.exhausted && (gate.limit === null || gate.limit <= 0)) return null;
+  const remaining = gate.exhausted || gate.limit === null ? 0 : Math.max(0, gate.limit - (gate.current ?? 0));
 
   if (remaining === 0) {
     return (
