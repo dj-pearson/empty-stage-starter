@@ -14,7 +14,7 @@
  *   bridge   a chain suggestion next to the chosen safe food (food chaining).
  *   gap      a food group the child's day has not covered yet.
  *
- * The allergen floor: any hit on the child's allergens drops the food from
+ * The allergen floor: a hit on one of the child's allergens drops the food from
  * every zone, whatever the severity, with an unrated allergy counted as
  * severe (kidFit / worstFoodAllergen, which read tags, families and the name).
  * Every food held back is listed with its reason, so the screen can say why.
