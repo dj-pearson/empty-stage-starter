@@ -196,6 +196,8 @@ export function useSafeFoodInsurance({
     (async () => {
       const found = new Map<string, SafeFoodBackupTarget>();
       const allergensByFoodId = new Map(foods.map((f) => [f.id, f.allergens ?? []]));
+      // Name-aware check: an untagged "Peanut butter crackers" is still caught.
+      const foodsById = new Map(foods.map((f) => [f.id, f]));
 
       for (const foodId of foodIds) {
         try {
@@ -226,6 +228,7 @@ export function useSafeFoodInsurance({
             ladderFoodIds: ladderFoodIds ?? [],
             kidAllergens: kidAllergens ?? [],
             allergensByFoodId,
+            foodsById,
             limit: 1,
           });
 

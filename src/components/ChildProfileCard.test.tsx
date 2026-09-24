@@ -71,11 +71,11 @@ describe('ChildProfileCard', () => {
     expect(screen.getByText('Tiny taste')).toBeInTheDocument();
   });
 
-  it('points at the ladder when no food is in progress', () => {
+  it('points at Food Chaining for this child when no food is in progress', () => {
     setup(maya, { ...progress, activeLadder: [] });
     expect(screen.getByRole('link', { name: 'Pick a first food to work on' })).toHaveAttribute(
       'href',
-      '/dashboard/food-chaining',
+      `/dashboard/food-chaining?kid=${encodeURIComponent(maya.id)}`,
     );
   });
 

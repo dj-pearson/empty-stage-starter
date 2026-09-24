@@ -1,0 +1,41 @@
+{
+  "foodChaining": {
+    "winNetwork": {
+      "title": "Other families' wins",
+      "pickSource": "Pick a food your child already eats to see what other families moved on to from it.",
+      "fromSource": "What families moved on to from {{food}}.",
+      "similarPickiness": "Kids who are {{bucket}}.",
+      "bucket": {
+        "low": "adventurous",
+        "medium": "somewhat picky",
+        "high": "very picky"
+      },
+      "earlyDays": "Early days for {{food}}.",
+      "earlyDaysFloor": "We show a food once at least {{count}} tries from other families are logged. Log a try bite that works and it counts toward that.",
+      "row": {
+        "tries": "{{success}} of {{total}} tries went well"
+      },
+      "tryThis": "Try this",
+      "addAndStart": "Add and start",
+      "onLadder": "On ladder",
+      "startFor": "Start {{food}} on {{kid}}'s ladder",
+      "addAndStartFor": "Add {{food}} to your foods and start it on {{kid}}'s ladder",
+      "openOnLadder": "Open {{food}} on the ladder",
+      "hiddenForAllergies_one": "{{count}} food hidden for {{name}}'s allergies.",
+      "hiddenForAllergies_other": "{{count}} foods hidden for {{name}}'s allergies.",
+      "allergiesUnknown": "Add {{name}}'s allergies to see other families' wins.",
+      "allergiesUnknownLink": "Set allergies",
+      "error": "Couldn't load other families' wins.",
+      "retry": "Try again",
+      "showMore": "Show more",
+      "toast": {
+        "started": "{{food}} is on {{kid}}'s ladder.",
+        "duplicate": "{{food}} is already on {{kid}}'s ladder.",
+        "cap": "{{kid}} already has enough new foods due today. Try {{food}} tomorrow.",
+        "error": "Couldn't start {{food}}. Try again.",
+        "createFailed": "Couldn't add {{food}} to your foods.",
+        "allergen": "{{food}} matches {{kid}}'s allergies, so it wasn't started."
+      }
+    }
+  }
+}

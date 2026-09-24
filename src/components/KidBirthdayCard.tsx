@@ -242,7 +242,7 @@ function SingleKidCard({ kid, suggestions, dismissStorageKey, onDismiss }: Singl
                   className="min-h-11 text-xs"
                 >
                   <Link
-                    to={`/dashboard/food-chaining?food=${encodeURIComponent(food.id)}`}
+                    to={`/dashboard/food-chaining?food=${encodeURIComponent(food.id)}&kid=${encodeURIComponent(kid.id)}`}
                     onClick={() => handleRetryAversion(food.id)}
                   >
                     {food.name}

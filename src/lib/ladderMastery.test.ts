@@ -15,6 +15,7 @@ import {
   type ChainSuggestion,
   type HandoffContext,
 } from './ladderMastery';
+import { deterministicUuid } from './chainNetworkKeys';
 
 function suggestion(over: Partial<ChainSuggestion> & { foodId: string }): ChainSuggestion {
   return {
@@ -108,7 +109,11 @@ describe('selectHandoffCandidates', () => {
   it('drops an untagged food whose name carries the allergen when foodsById is given', () => {
     const candidates = selectHandoffCandidates(
       [
-        suggestion({ foodId: 'pb-crackers', foodName: 'Peanut butter crackers', similarityScore: 95 }),
+        suggestion({
+          foodId: 'pb-crackers',
+          foodName: 'Peanut butter crackers',
+          similarityScore: 95,
+        }),
         suggestion({ foodId: 'rice-cake', foodName: 'Rice cake', similarityScore: 40 }),
       ],
       ctx({
@@ -143,6 +148,32 @@ describe('selectHandoffCandidates', () => {
     );
 
     expect(candidates.map((c) => c.foodId)).toEqual(['rice-cake']);
+  });
+
+  it('without foodsById, a name-only allergen with empty tags slips through (why callers pass it)', () => {
+    // Documents the tag-only hole: 'Peanut butter crackers' tagged [] passes
+    // when only allergensByFoodId is given. useFoodLadder and
+    // useSafeFoodInsurance pass foodsById so the name is checked too.
+    const suggestions = [
+      suggestion({
+        foodId: 'pb-crackers',
+        foodName: 'Peanut butter crackers',
+        similarityScore: 95,
+      }),
+    ];
+    const tagsOnly = ctx({
+      kidAllergens: ['peanuts'],
+      allergensByFoodId: new Map([['pb-crackers', []]]),
+    });
+    expect(selectHandoffCandidates(suggestions, tagsOnly).map((c) => c.foodId)).toEqual([
+      'pb-crackers',
+    ]);
+    expect(
+      selectHandoffCandidates(suggestions, {
+        ...tagsOnly,
+        foodsById: new Map([['pb-crackers', { name: 'Peanut butter crackers', allergens: [] }]]),
+      })
+    ).toEqual([]);
   });
 
   it('keeps a candidate with unknown allergens when the child has none', () => {
@@ -210,8 +241,26 @@ describe('buildWinContribution', () => {
 
   it('keys the contribution to the ladder row so a replay cannot double count', () => {
     const contribution = buildWinContribution(base);
-    expect(contribution?.contributionKey).toBe('ladder:ladder-1');
+    expect(contribution?.contributionKey).toBe(deterministicUuid('ladder:ladder-1'));
     expect(contribution?.outcome).toBe('success');
+  });
+
+  it('emits a UUID key, because p_contribution_key is a uuid column', () => {
+    const key = buildWinContribution(base)?.contributionKey ?? '';
+    expect(key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(buildWinContribution({ ...base, ladderRowId: 'ladder-2' })?.contributionKey).not.toBe(
+      key
+    );
+  });
+
+  it('contributes nothing when source and target normalize to the same food', () => {
+    expect(
+      buildWinContribution({
+        ...base,
+        sourceFoodName: 'The Fish Sticks',
+        targetFoodName: 'fish sticks',
+      })
+    ).toBeNull();
   });
 
   it('contributes nothing when the household has opted out', () => {

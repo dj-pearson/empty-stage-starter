@@ -16,7 +16,7 @@ import "@/i18n/appLocale";
  */
 export const KidWeekLine = memo(function KidWeekLine() {
   const { t } = useTranslation();
-  const { kids, activeKidId } = useKids();
+  const { kids, activeKidId, setActiveKid } = useKids();
   const { planEntries } = usePlan();
   const { foods } = useFoods();
   const todayKey = useTodayKey();
@@ -59,7 +59,8 @@ export const KidWeekLine = memo(function KidWeekLine() {
               </span>
               {ladder && (
                 <Link
-                  to="/dashboard/food-chaining"
+                  to={`/dashboard/food-tracker?food=${encodeURIComponent(ladder.foodId)}`}
+                  onClick={() => setActiveKid(kid.id)}
                   className="inline-flex min-h-8 items-center rounded-full border border-try-bite/30 bg-try-bite/10 px-2.5 text-xs text-foreground"
                 >
                   {t("home.week.ladder", {

@@ -18,6 +18,7 @@
 
 import { matchingAllergen, matchingFoodAllergen } from '@/lib/allergens';
 import type { ChainOutcome, PickinessBucket } from './chainNetwork';
+import { deterministicUuid, normalizeChainFoodName } from './chainNetworkKeys';
 
 export interface ChainSuggestion {
   foodId: string;
@@ -138,7 +139,9 @@ export interface WinContribution {
  *
  * The ladder row id is the idempotency key, mirroring how US-296 reuses an
  * attempt's UUID: a row can only be mastered once, so re-saving or replaying
- * a queued write cannot inflate the cross-family counts.
+ * a queued write cannot inflate the cross-family counts. The server column is
+ * a UUID, so the key is `deterministicUuid('ladder:<rowId>')`: a readable
+ * `ladder:<id>` string failed the cast and every mastery contribution was lost.
  */
 export function buildWinContribution(args: WinContributionArgs): WinContribution | null {
   if (!args.shareEnabled) return null;
@@ -147,9 +150,11 @@ export function buildWinContribution(args: WinContributionArgs): WinContribution
   const target = args.targetFoodName.trim();
   // A contribution keyed to an unnamed food teaches the network nothing.
   if (!source || !target) return null;
+  // The server drops source == target after normalizing; don't send one.
+  if (normalizeChainFoodName(source) === normalizeChainFoodName(target)) return null;
 
   return {
-    contributionKey: `ladder:${args.ladderRowId}`,
+    contributionKey: deterministicUuid(`ladder:${args.ladderRowId}`),
     sourceFoodName: source,
     targetFoodName: target,
     pickinessBucket: args.pickinessBucket,

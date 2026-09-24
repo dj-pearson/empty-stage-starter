@@ -902,6 +902,8 @@ export function useFoodLadder(
         ladderFoodIds: currentRows.map((r) => r.foodId),
         kidAllergens: kid?.allergens ?? [],
         allergensByFoodId: new Map(foods.map((f) => [f.id, f.allergens ?? []])),
+        // Name-aware check: an untagged "Peanut butter crackers" is still caught.
+        foodsById: new Map(foods.map((f) => [f.id, f])),
         kidId: row.kidId,
       });
 

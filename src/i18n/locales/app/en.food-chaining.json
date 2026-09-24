@@ -1,0 +1,61 @@
+{
+  "foodChaining": {
+    "anchors": {
+      "label": "Start from a food they already eat",
+      "always": "always eats",
+      "mastered": "mastered",
+      "reliable_one": "ate {{ate}} of {{tries}} try",
+      "reliable_other": "ate {{ate}} of {{tries}} tries",
+      "climbing": "climbing",
+      "household": "household safe food"
+    },
+    "chainFor": "Next links from {{food}}",
+    "reasonsLabel": "Why it is close",
+    "reason": {
+      "taste": "Similar taste",
+      "texture": "Similar texture",
+      "color": "Similar color",
+      "shape": "Similar shape",
+      "type": "Same kind of food"
+    },
+    "closeness": {
+      "small": "Small step",
+      "medium": "Medium step",
+      "big": "Bigger step"
+    },
+    "actions": {
+      "startOnLadder": "Start on ladder",
+      "startOnLadderFor": "Start {{food}} on {{kid}}'s ladder",
+      "addToPlan": "Add to plan",
+      "addToPlanFor": "Add {{food}} to {{kid}}'s plan as a try bite",
+      "openLadder": "Open ladder",
+      "undo": "Undo"
+    },
+    "toast": {
+      "started": "{{name}} is on the ladder",
+      "alreadyOnLadder": "{{name}} is already on the ladder",
+      "cap": "The ladder is full for now. Finish or pause a food first.",
+      "error": "That didn't save. Please try again.",
+      "allergenRefused": "{{name}} conflicts with {{kid}}'s allergies, so it wasn't added.",
+      "plannedToday": "{{name}} is today's try bite",
+      "plannedTomorrow": "{{name}} is tomorrow's try bite"
+    },
+    "empty": {
+      "noAnchors": "A chain starts from a food {{name}} already eats, and there isn't one yet.",
+      "addAlwaysEats": "Add foods {{name}} always eats",
+      "noMatches": "Nothing in your pantry is close enough to {{food}} yet. Add a food that shares its taste or texture and it will show up here."
+    },
+    "bridge": {
+      "title": "Bridge to {{food}}",
+      "startWith": "Start {{food}} with {{anchor}}",
+      "allergen": "{{food}} conflicts with {{name}}'s allergies. Talk to {{name}}'s pediatrician or allergist before offering it.",
+      "showAll": "Show all next links"
+    },
+    "allergiesUnknown": "{{name}}'s allergies aren't recorded yet, so suggestions can't be checked against them.",
+    "addAllergies": "Add allergies",
+    "checkedAgainst": "Checked against {{name}}'s allergies ({{list}})",
+    "error": "Couldn't load the foods this chain starts from.",
+    "retry": "Retry",
+    "offline": "You're offline. Showing what's saved on this device."
+  }
+}

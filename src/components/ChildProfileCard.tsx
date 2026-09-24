@@ -43,8 +43,8 @@ interface ChildProfileCardProps {
 
 /** Ladder foods listed under "This week". */
 const LADDER_PREVIEW = 3;
-/** Where a parent starts a food on the exposure ladder (src/App.tsx). */
-const LADDER_ROUTE = "/dashboard/food-chaining";
+/** Food Chaining, where a parent picks a first food to work on (src/App.tsx). */
+const CHAINING_ROUTE = "/dashboard/food-chaining";
 
 const GAP_CTA: Record<ProfileGap, { key: string; english: string }> = {
   allergies: { key: "kids.card.completeness.cta.allergies", english: "Add allergies" },
@@ -369,7 +369,7 @@ function ChildProfileCardImpl({ kid, progress, onEditSection }: ChildProfileCard
                 ))}
               </ul>
             ) : (
-              <Link to={LADDER_ROUTE} className="inline-block text-sm font-medium text-primary hover:underline">
+              <Link to={`${CHAINING_ROUTE}?kid=${encodeURIComponent(kid.id)}`} className="inline-block text-sm font-medium text-primary hover:underline">
                 {t("kids.card.progress.empty", { defaultValue: "Pick a first food to work on" })}
               </Link>
             )}
