@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { GroceryItem } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
@@ -8,7 +8,7 @@ import { queueWrite, queueWrites } from "@/lib/webSyncQueue";
 import { useAuth } from "./AuthContext";
 import { inferFoodCategory } from "@/lib/foodCategoryMap";
 import { planGroceryMerge, splitIngredientBlock, type GroceryAddInput } from "@/lib/groceryMerge";
-import { buildGroceryRow } from "@/lib/groceryRow";
+import { buildGroceryRow, GROCERY_DRAFT_PASSTHROUGH_KEYS, type GroceryRowDraftWithId } from "@/lib/groceryRow";
 import { parseGroceryItemRow, parseGroceryItemRows, upsertById, upsertManyById } from "@/lib/normalizeEntities";
 
 interface RealtimePayload<T> {
@@ -40,8 +40,64 @@ export function applyGroceryItemRealtime(
   return next;
 }
 
+/** A bumped row and what it held before, so an Undo can put it back exactly. */
+export interface GroceryMergeBump {
+  id: string;
+  prev: { quantity: number; unit: string; name: string };
+}
+
+/**
+ * What a merge did. `insertedIds` is known synchronously because
+ * buildGroceryRow mints the ids on the client (US-823), so a caller never has
+ * to guess which rows are its own by matching names.
+ */
+export interface GroceryMergeResult {
+  /** List lines touched: inserts plus bumps. */
+  touched: number;
+  insertedIds: string[];
+  bumps: GroceryMergeBump[];
+}
+
+/** Postgres unique_violation: the row is already there. */
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
+}
+
+/**
+ * The insert draft that puts a row back exactly as it was: its own id, its
+ * checked state, and every column the builder passes through. Reads the row
+ * as a record because a loaded row carries columns (currency, item_id...)
+ * the GroceryItem interface does not name.
+ */
+function restoreDraft(row: GroceryItem): GroceryRowDraftWithId {
+  const source = row as unknown as Record<string, unknown>;
+  const draft: Record<string, unknown> = {
+    id: row.id,
+    name: row.name,
+    quantity: row.quantity,
+    unit: row.unit,
+    category: row.category,
+    notes: row.notes ?? null,
+    aisle: row.aisle ?? null,
+    added_by_user_id: row.added_by_user_id ?? null,
+    checked: row.checked,
+  };
+  for (const key of GROCERY_DRAFT_PASSTHROUGH_KEYS) {
+    if (source[key] !== undefined) draft[key] = source[key];
+  }
+  return draft as unknown as GroceryRowDraftWithId;
+}
+
 interface GroceryContextType {
   groceryItems: GroceryItem[];
+  /**
+   * False until the list has something honest to show: the cache held rows, or
+   * the server load for this account settled (either way). Lets the page tell
+   * "still loading" from "your list is empty".
+   */
+  groceryHydrated: boolean;
+  /** Set by AppContext, which owns the load. */
+  setGroceryHydrated: (hydrated: boolean) => void;
   setGroceryItems: (items: GroceryItem[]) => void;
   setGroceryItemsState: React.Dispatch<React.SetStateAction<GroceryItem[]>>;
   addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
@@ -55,6 +111,17 @@ interface GroceryContextType {
     items: GroceryAddInput[],
     opts?: { defaultListId?: string | null },
   ) => number;
+  /** addGroceryItemsMerged with the detail an Undo needs. */
+  mergeGroceryItems: (
+    items: GroceryAddInput[],
+    opts?: { defaultListId?: string | null },
+  ) => GroceryMergeResult;
+  /**
+   * Put rows back under their original ids with every field they had,
+   * checked state included. Optimistic, and queued as grocery.insert offline;
+   * a row that is somehow still there reads as restored.
+   */
+  restoreGroceryItems: (rows: GroceryItem[]) => void;
   toggleGroceryItem: (id: string) => void;
   updateGroceryItem: (id: string, updates: Partial<GroceryItem>) => void;
   deleteGroceryItem: (id: string) => void;
@@ -65,8 +132,50 @@ interface GroceryContextType {
 const GroceryContext = createContext<GroceryContextType | undefined>(undefined);
 
 export function GroceryProvider({ children }: { children: React.ReactNode }) {
-  const [groceryItems, setGroceryItemsRaw] = useState<GroceryItem[]>([]);
+  const [groceryItems, setGroceryItemsState] = useState<GroceryItem[]>([]);
+  const [groceryHydrated, setGroceryHydratedState] = useState(false);
   const { userId, householdId } = useAuth();
+
+  // The list as the NEXT render will see it. Callbacks that plan against the
+  // list (merge, toggle, delete, clear) read this instead of the render's
+  // `groceryItems`, so two merges fired in one tick stack onto the same row
+  // instead of both planning against the list before either landed, and the
+  // callbacks keep a stable identity while the list changes.
+  //
+  // It is written in two places. Every state update goes through
+  // setGroceryItemsRaw below, whose updater records what it produced. And
+  // every optimistic change is also applied to the ref eagerly (see
+  // `project`), because React defers an updater while the fiber has pending
+  // work, so the second of two back-to-back writes would otherwise read a ref
+  // the first had not reached yet. The updater's later write is computed from
+  // the real previous state, so the ref converges on it either way.
+  const itemsRef = useRef<GroceryItem[]>([]);
+
+  const setGroceryItemsRaw = useCallback<React.Dispatch<React.SetStateAction<GroceryItem[]>>>((action) => {
+    if (typeof action !== "function") itemsRef.current = action;
+    setGroceryItemsState((prev) => {
+      const next = typeof action === "function" ? action(prev) : action;
+      itemsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  /** Apply an optimistic change to the ref now; returns it for the setState. */
+  const project = useCallback((change: (prev: GroceryItem[]) => GroceryItem[]) => {
+    itemsRef.current = change(itemsRef.current);
+    return change;
+  }, []);
+
+  // Inserts still on their way to the server, by row id. A second merge in
+  // the same moment can bump a row the first one is still inserting, and an
+  // RPC that reaches Postgres before the row does updates nothing -- the
+  // screen would say 2 and the database 1. So a bump waits for the inserts of
+  // the rows it touches.
+  const inFlightInserts = useRef(new Map<string, Promise<unknown>>());
+
+  const setGroceryHydrated = useCallback((hydrated: boolean) => {
+    setGroceryHydratedState(hydrated);
+  }, []);
 
   // Real-time subscription for grocery_items
   useEffect(() => {
@@ -98,11 +207,11 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       unregisterSubscription(channelName);
       supabase.removeChannel(channel);
     };
-  }, [userId, householdId]);
+  }, [userId, householdId, setGroceryItemsRaw]);
 
   const setGroceryItems = useCallback((items: GroceryItem[]) => {
     setGroceryItemsRaw(items);
-  }, []);
+  }, [setGroceryItemsRaw]);
 
   const addGroceryItem = useCallback((item: Omit<GroceryItem, "id" | "checked">) => {
     if (userId && householdId) {
@@ -133,7 +242,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
 
       void runOptimisticMutation<GroceryItem>(
         setGroceryItemsRaw,
-        prev => [...prev, optimistic],
+        project(prev => [...prev, optimistic]),
         async () => {
           const { data, error } = await supabase
             .from('grocery_items')
@@ -156,13 +265,14 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     } else {
       setGroceryItemsRaw(prev => [...prev, { ...item, id: generateId(), checked: false }]);
     }
-  }, [userId, householdId]);
+  }, [userId, householdId, setGroceryItemsRaw, project]);
 
   const toggleGroceryItem = useCallback((id: string) => {
-    // Read current state from the closure (groceryItems is in deps) — not via
-    // a setState updater, whose run is deferred to render and so wouldn't be
-    // available for the synchronous branch below.
-    const item = groceryItems.find(i => i.id === id);
+    // Read the latest list from the ref, not a setState updater (deferred to
+    // render, so unavailable for the branch below) and not the render's
+    // closure (stale after a first tap in the same tick, which is how a quick
+    // double tap used to set the same value twice instead of undoing).
+    const item = itemsRef.current.find(i => i.id === id);
     if (!item) return;
     const newChecked = !item.checked;
 
@@ -170,7 +280,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       // US-320: optimistic toggle with rollback on server rejection.
       void runOptimisticMutation<GroceryItem>(
         setGroceryItemsRaw,
-        prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i),
+        project(prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i)),
         () => supabase.from('grocery_items').update({ checked: newChecked }).eq('id', id),
         {
           logLabel: 'Supabase toggleGroceryItem error:',
@@ -180,15 +290,15 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         }
       );
     } else {
-      setGroceryItemsRaw(prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i));
+      setGroceryItemsRaw(project(prev => prev.map(i => i.id === id ? { ...i, checked: newChecked } : i)));
     }
-  }, [userId, groceryItems]);
+  }, [userId, setGroceryItemsRaw, project]);
 
   const updateGroceryItem = useCallback((id: string, updates: Partial<GroceryItem>) => {
     if (userId) {
       void runOptimisticMutation<GroceryItem>(
         setGroceryItemsRaw,
-        prev => prev.map(item => item.id === id ? { ...item, ...updates } : item),
+        project(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item)),
         () => supabase.from('grocery_items').update(updates).eq('id', id),
         {
           logLabel: 'Supabase updateGroceryItem error:',
@@ -196,16 +306,18 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         }
       );
     } else {
-      setGroceryItemsRaw(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+      setGroceryItemsRaw(project(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item)));
     }
-  }, [userId]);
+  }, [userId, setGroceryItemsRaw, project]);
 
-  const addGroceryItemsMerged = useCallback((
+
+  const mergeGroceryItems = useCallback((
     items: GroceryAddInput[],
     opts: { defaultListId?: string | null } = {},
-  ): number => {
+  ): GroceryMergeResult => {
+    const empty: GroceryMergeResult = { touched: 0, insertedIds: [], bumps: [] };
     const cleaned = items.filter((i) => i.name && i.name.trim().length > 0);
-    if (cleaned.length === 0) return 0;
+    if (cleaned.length === 0) return empty;
 
     // Issue #2: a recipe whose ingredients arrived as one newline/bullet blob
     // should explode into individual lines. Only split on hard separators
@@ -222,11 +334,13 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     );
 
     // Plan against the current list so duplicates stack (issue #3) instead of
-    // piling up as separate rows.
+    // piling up as separate rows. The ref, not the render's list: a second
+    // merge in the same tick has to see the first one's rows.
     //
     // US-714: scoped per target list. A batch normally shares one list, but a
     // caller may mix them, and merging across lists bumped a row the shopper
     // was not looking at instead of inserting the one they asked for.
+    const current = itemsRef.current;
     const byList = new Map<string | null, GroceryAddInput[]>();
     for (const item of expanded) {
       const key = item.grocery_list_id ?? null;
@@ -236,7 +350,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     }
     const plan = { inserts: [], updates: [] } as ReturnType<typeof planGroceryMerge>;
     for (const [listId, group] of byList) {
-      const part = planGroceryMerge(group, groceryItems, {
+      const part = planGroceryMerge(group, current, {
         targetListId: listId,
         defaultListId: opts.defaultListId,
       });
@@ -244,31 +358,62 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
       plan.updates.push(...part.updates);
     }
 
+    const byIdNow = new Map(current.map((item) => [item.id, item]));
+    const bumps: GroceryMergeBump[] = plan.updates.map((u) => {
+      const before = byIdNow.get(u.id);
+      return {
+        id: u.id,
+        prev: {
+          quantity: before?.quantity ?? 0,
+          unit: before?.unit ?? '',
+          name: before?.name ?? u.name,
+        },
+      };
+    });
+
     // 1) Bump existing unchecked rows — ONE optimistic re-render + ONE request
     // (US-334), instead of looping updateGroceryItem (N writes + N re-renders).
     if (plan.updates.length > 0) {
       const byId = new Map(plan.updates.map((u) => [u.id, u]));
-      const applyBumps = (prev: GroceryItem[]) =>
+      const applyBumps = project((prev: GroceryItem[]) =>
         prev.map((item) => {
           const u = byId.get(item.id);
           return u ? { ...item, quantity: u.quantity, unit: u.unit, name: u.name } : item;
-        });
+        }));
       if (userId) {
+        const waitFor = plan.updates
+          .map((u) => inFlightInserts.current.get(u.id))
+          .filter((p): p is Promise<unknown> => p !== undefined);
         // Single RPC bulk-update + rollback on error (reuses the US-320 helper).
         void runOptimisticMutation<GroceryItem>(
           setGroceryItemsRaw,
           applyBumps,
-          () =>
+          async () => {
+            if (waitFor.length > 0) await Promise.all(waitFor);
             // types.ts is regenerated in CI and doesn't yet list this RPC.
-            (
+            return (
               supabase.rpc as unknown as (
                 fn: string,
                 args: Record<string, unknown>,
               ) => PromiseLike<{ error: unknown }>
-            )('bump_grocery_item_quantities', { p_updates: plan.updates }),
+            )('bump_grocery_item_quantities', { p_updates: plan.updates });
+          },
           {
             logLabel: 'Supabase bump_grocery_item_quantities error:',
             toastMessage: "Couldn't merge those items — restored. Please try again.",
+            // Offline, the bump used to roll back while the insert beside it
+            // was queued, so half of one add survived. Each update carries
+            // the absolute value, not a delta, so a replay that lands twice
+            // still lands on the same number.
+            offlineQueue: () =>
+              queueWrites(
+                userId,
+                'grocery.update',
+                plan.updates.map((u) => ({
+                  id: u.id,
+                  updates: { quantity: u.quantity, unit: u.unit, name: u.name },
+                })),
+              ),
           },
         );
       } else {
@@ -277,6 +422,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2) Insert the genuinely-new rows.
+    let insertedIds: string[] = [];
     if (plan.inserts.length > 0) {
       if (userId && householdId) {
         // US-777: the same builder the single-add path uses. Two hand-written
@@ -285,6 +431,7 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         const rows = plan.inserts.map((item) =>
           buildGroceryRow(item, { userId, householdId, inferCategory: inferFoodCategory })
         );
+        insertedIds = rows.map((row) => row.id as string);
         // US-823: same shape as the single add. The rows carry their own ids,
         // so they go on screen first and the server's copies replace them by
         // id; offline, each row is queued as its own op so one the server
@@ -297,10 +444,13 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
           checked: false,
         }) as GroceryItem);
         let insertedRows: GroceryItem[] = [];
+        let settle: () => void = () => {};
+        const landed = new Promise<void>((resolve) => { settle = resolve; });
+        for (const id of insertedIds) inFlightInserts.current.set(id, landed);
 
         void runOptimisticMutation<GroceryItem>(
           setGroceryItemsRaw,
-          prev => [...prev, ...optimisticRows],
+          project(prev => [...prev, ...optimisticRows]),
           async () => {
             const { data, error } = await supabase.from('grocery_items').insert(rows).select();
             if (!error && data) insertedRows = parseGroceryItemRows(data as unknown[]);
@@ -317,23 +467,83 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
           if (insertedRows.length > 0) {
             setGroceryItemsRaw(prev => upsertManyById(prev, insertedRows));
           }
+        }).finally(() => {
+          // Released only once the insert has landed, been queued, or been
+          // rolled back, so an offline bump is queued AFTER the insert it
+          // depends on and the FIFO replay sends them in that order.
+          for (const id of insertedIds) {
+            if (inFlightInserts.current.get(id) === landed) inFlightInserts.current.delete(id);
+          }
+          settle();
         });
       } else {
-        setGroceryItemsRaw(prev => [
-          ...prev,
-          ...plan.inserts.map(i => ({ ...i, unit: i.unit ?? '', category: i.category as GroceryItem['category'], id: generateId(), checked: false }) as GroceryItem),
-        ]);
+        const localRows = plan.inserts.map(i => ({ ...i, unit: i.unit ?? '', category: i.category as GroceryItem['category'], id: generateId(), checked: false }) as GroceryItem);
+        insertedIds = localRows.map((row) => row.id);
+        setGroceryItemsRaw(project(prev => [...prev, ...localRows]));
       }
     }
 
-    return plan.inserts.length + plan.updates.length;
-  }, [userId, householdId, groceryItems]);
+    return { touched: plan.inserts.length + plan.updates.length, insertedIds, bumps };
+  }, [userId, householdId, setGroceryItemsRaw, project]);
+
+  const addGroceryItemsMerged = useCallback((
+    items: GroceryAddInput[],
+    opts: { defaultListId?: string | null } = {},
+  ): number => mergeGroceryItems(items, opts).touched, [mergeGroceryItems]);
+
+  const restoreGroceryItems = useCallback((rows: GroceryItem[]) => {
+    if (rows.length === 0) return;
+    if (userId && householdId) {
+      const dbRows = rows.map((row) =>
+        buildGroceryRow(restoreDraft(row), { userId, householdId, inferCategory: inferFoodCategory })
+      );
+      // On screen exactly as they were, under the same ids, so an undo of a
+      // checkout or a retire does not reshuffle the list or lose a field.
+      const restored = rows.map((row) => ({ ...row }));
+      let insertedRows: GroceryItem[] = [];
+
+      void runOptimisticMutation<GroceryItem>(
+        setGroceryItemsRaw,
+        project(prev => upsertManyById(prev, restored)),
+        async () => {
+          const first = await supabase.from('grocery_items').insert(dbRows).select();
+          if (!first.error) {
+            if (first.data) insertedRows = parseGroceryItemRows(first.data as unknown[]);
+            return { error: null };
+          }
+          if (!isUniqueViolation(first.error)) return { error: first.error };
+          // One of them is already there (the delete never landed, or a
+          // replay beat us). A batch insert is all-or-nothing, so the others
+          // go one at a time and a duplicate reads as restored.
+          for (const row of dbRows) {
+            const { data, error } = await supabase.from('grocery_items').insert(row).select();
+            if (error && !isUniqueViolation(error)) return { error };
+            if (!error && data) insertedRows.push(...parseGroceryItemRows(data as unknown[]));
+          }
+          return { error: null };
+        },
+        {
+          logLabel: 'Supabase restoreGroceryItems error:',
+          toastMessage: "Couldn't put those items back. Please try again.",
+          offlineQueue: () =>
+            queueWrites(userId, 'grocery.insert', dbRows.map((row) => ({ row }))),
+        },
+      ).then(() => {
+        if (insertedRows.length > 0) {
+          setGroceryItemsRaw(prev => upsertManyById(prev, insertedRows));
+        }
+      });
+    } else {
+      setGroceryItemsRaw(project(prev => upsertManyById(prev, rows.map((row) => ({ ...row })))));
+    }
+  }, [userId, householdId, setGroceryItemsRaw, project]);
 
   const deleteGroceryItem = useCallback((id: string) => {
+    const remove = project((prev: GroceryItem[]) => prev.filter(item => item.id !== id));
     if (userId) {
       void runOptimisticMutation<GroceryItem>(
         setGroceryItemsRaw,
-        prev => prev.filter(item => item.id !== id),
+        remove,
         () => supabase.from('grocery_items').delete().eq('id', id),
         {
           logLabel: 'Supabase deleteGroceryItem error:',
@@ -342,17 +552,18 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         }
       );
     } else {
-      setGroceryItemsRaw(prev => prev.filter(item => item.id !== id));
+      setGroceryItemsRaw(remove);
     }
-  }, [userId]);
+  }, [userId, setGroceryItemsRaw, project]);
 
   const deleteGroceryItems = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
     const idSet = new Set(ids);
+    const remove = project((prev: GroceryItem[]) => prev.filter(item => !idSet.has(item.id)));
     if (userId) {
       void runOptimisticMutation<GroceryItem>(
         setGroceryItemsRaw,
-        prev => prev.filter(item => !idSet.has(item.id)),
+        remove,
         () => supabase.from('grocery_items').delete().in('id', ids),
         {
           logLabel: 'Supabase deleteGroceryItems error:',
@@ -361,23 +572,25 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         }
       );
     } else {
-      setGroceryItemsRaw(prev => prev.filter(item => !idSet.has(item.id)));
+      setGroceryItemsRaw(remove);
     }
-  }, [userId]);
+  }, [userId, setGroceryItemsRaw, project]);
 
   const clearCheckedGroceryItems = useCallback(() => {
-    // Read from the closure (groceryItems is in deps) rather than firing the
-    // network call inside a setState updater (a side-effect anti-pattern that
-    // can double-fire under StrictMode).
-    const checkedIds = groceryItems.filter(item => item.checked).map(item => item.id);
+    // Read from the ref rather than firing the network call inside a setState
+    // updater (a side-effect anti-pattern that can double-fire under
+    // StrictMode), and rather than the render's closure, which misses a tick
+    // made in the same event.
+    const checkedIds = itemsRef.current.filter(item => item.checked).map(item => item.id);
     if (checkedIds.length === 0) return;
     const idSet = new Set(checkedIds);
+    const remove = project((prev: GroceryItem[]) => prev.filter(item => !idSet.has(item.id)));
 
     if (userId) {
       // US-320: optimistic clear with rollback on server rejection.
       void runOptimisticMutation<GroceryItem>(
         setGroceryItemsRaw,
-        prev => prev.filter(item => !idSet.has(item.id)),
+        remove,
         () => supabase.from('grocery_items').delete().in('id', checkedIds),
         {
           logLabel: 'Supabase clearCheckedGroceryItems error:',
@@ -386,15 +599,18 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         }
       );
     } else {
-      setGroceryItemsRaw(prev => prev.filter(item => !idSet.has(item.id)));
+      setGroceryItemsRaw(remove);
     }
-  }, [userId, groceryItems]);
+  }, [userId, setGroceryItemsRaw, project]);
 
   const value = useMemo(() => ({
-    groceryItems, setGroceryItems, setGroceryItemsState: setGroceryItemsRaw,
-    addGroceryItem, addGroceryItemsMerged, toggleGroceryItem, updateGroceryItem,
+    groceryItems, groceryHydrated, setGroceryHydrated,
+    setGroceryItems, setGroceryItemsState: setGroceryItemsRaw,
+    addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems,
+    toggleGroceryItem, updateGroceryItem,
     deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems
-  }), [groceryItems, setGroceryItems, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem,
+  }), [groceryItems, groceryHydrated, setGroceryHydrated, setGroceryItems, setGroceryItemsRaw,
+    addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems]);
 
   return (

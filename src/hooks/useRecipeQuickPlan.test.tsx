@@ -52,17 +52,25 @@ const scheduleRecipe = vi.fn(
 );
 const deletePlanEntries = vi.fn(async () => ({ error: null, removed: [] }));
 const deleteGroceryItems = vi.fn();
+const updateGroceryItem = vi.fn();
 let currentPlan: PlanEntry[] = [];
 
 vi.mock("@/contexts/AppContext", () => ({
   usePlan: () => ({ planEntries: currentPlan, scheduleRecipe, deletePlanEntries }),
   useKids: () => ({ kids: KIDS }),
   useFoods: () => ({ foods: FOODS, catalogById: {} }),
-  useGrocery: () => ({ groceryItems: [], deleteGroceryItems }),
+  useGrocery: () => ({ groceryItems: [], deleteGroceryItems, updateGroceryItem }),
 }));
 
 const preview = vi.fn(() => ({ toAdd: 2, alreadyHave: 0, onList: 0 }));
-const push = vi.fn(() => ({ added: 2, retired: 0, kept: 0, insertedIds: ["g1", "g2"], generated: 2 }));
+const push = vi.fn(() => ({
+  added: 2,
+  retired: 0,
+  kept: 0,
+  insertedIds: ["g1", "g2"],
+  generated: 2,
+  bumps: [{ id: "g0", prev: { quantity: 1 } }],
+}));
 vi.mock("@/hooks/usePlanToGrocery", () => ({ usePlanToGrocery: () => ({ preview, push }) }));
 
 import { useRecipeQuickPlan } from "./useRecipeQuickPlan";
@@ -133,6 +141,8 @@ describe("useRecipeQuickPlan", () => {
     const added = toastCalls.filter((c) => c.kind === "success").pop()!;
     added.opts!.action!.onClick();
     expect(deleteGroceryItems).toHaveBeenCalledWith(["g1", "g2"]);
+    // A row already on the list had its quantity bumped; Undo restores it.
+    expect(updateGroceryItem).toHaveBeenCalledWith("g0", { quantity: 1 });
   });
 
   it("toasts the failure and offers nothing when every kid failed", async () => {

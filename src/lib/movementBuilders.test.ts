@@ -12,6 +12,7 @@ import {
   buildPurchaseMovement,
   buildWasteMovement,
   partitionMovements,
+  planPurchaseMovements,
   resolveGroceryItemId,
   isSkipped,
   type MovementItem,
@@ -286,6 +287,64 @@ describe('resolveGroceryItemId', () => {
   it('returns null rather than guessing when nothing matches', () => {
     expect(resolveGroceryItemId({ id: 'g', name: 'Saffron' }, items)).toBeNull();
     expect(resolveGroceryItemId({ id: 'g' }, items)).toBeNull();
+  });
+});
+
+describe('resolveGroceryItemId with the page resolver', () => {
+  const items: MovementItem[] = [{ id: 'milk', name: 'Milk', unit: 'gal' }];
+  const resolveByName = (name: string) =>
+    name === 'Whole milk, 2%' ? { id: 'milk' } : undefined;
+
+  it('resolves a catalog-named row through resolveByName', () => {
+    expect(resolveGroceryItemId({ id: 'g', name: 'Whole milk, 2%' }, items, resolveByName)).toBe('milk');
+  });
+
+  it('ignores a resolved id that is not one of the items', () => {
+    expect(resolveGroceryItemId({ id: 'g', name: 'Ghost' }, items, () => ({ id: 'elsewhere' }))).toBeNull();
+  });
+
+  it('still falls back to the name match when the resolver misses', () => {
+    expect(resolveGroceryItemId({ id: 'g', name: 'MILK' }, items, () => undefined)).toBe('milk');
+  });
+});
+
+describe('planPurchaseMovements', () => {
+  const flour: MovementItem = { ...FLOUR, name: 'Flour' };
+
+  it('for flour at 2 lb plus 3 cups, recordedRowIds holds only the lb row', () => {
+    const plan = planPurchaseMovements({
+      ...COMMON,
+      items: [flour],
+      groceryItems: [
+        { id: 'row-lb', name: 'Flour', quantity: 2, unit: 'lb' },
+        { id: 'row-cups', name: 'Flour', quantity: 3, unit: 'cups' },
+      ],
+    });
+    expect(plan.recordedRowIds).toEqual(['row-lb']);
+    expect(plan.movements).toHaveLength(1);
+    expect(plan.skipped).toHaveLength(1);
+    expect(plan.skipped[0].groceryItemId).toBe('row-cups');
+  });
+
+  it('names the grocery row on an unresolved skip', () => {
+    const plan = planPurchaseMovements({
+      ...COMMON,
+      items: [flour],
+      groceryItems: [{ id: 'row-saffron', name: 'Saffron', quantity: 1, unit: 'g' }],
+    });
+    expect(plan.recordedRowIds).toEqual([]);
+    expect(plan.skipped[0]).toMatchObject({ groceryItemId: 'row-saffron', itemId: null });
+  });
+
+  it('credits a catalog-named row through resolveByName', () => {
+    const plan = planPurchaseMovements({
+      ...COMMON,
+      items: [flour],
+      groceryItems: [{ id: 'row-ap', name: 'All-purpose flour', quantity: 1, unit: 'kg' }],
+      resolveByName: (name) => (name === 'All-purpose flour' ? { id: 'flour' } : undefined),
+    });
+    expect(plan.recordedRowIds).toEqual(['row-ap']);
+    expect(plan.movements[0].item_id).toBe('flour');
   });
 });
 

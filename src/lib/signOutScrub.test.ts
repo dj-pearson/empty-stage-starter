@@ -59,6 +59,11 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
   'src/lib/offlineQueue.ts': 'generic queue; webSyncQueue supplies the key',
   'src/lib/signOutScrub.ts': 'this module removes keys it is given; it writes none',
   'src/hooks/useOAuthToken.ts': 'keys itself by provider name; nothing survives the exchange',
+  'src/hooks/useGroceryLists.ts':
+    'listsCacheKey/selectedListCacheKey(userId) -- scrubbed by the grocery:lists: and grocery:selectedList: prefixes',
+  'src/hooks/useStoreLayouts.ts': 'storeLayoutsCacheKey(householdId) -- scrubbed by the grocery:storeLayouts: prefix',
+  'src/components/grocery/PlaceInAisleChips.tsx':
+    'aislePromptDismissedKey(storeId) -- scrubbed by the grocery.aislePrompt.dismissed. prefix',
 };
 
 const STORAGE_CALL =
@@ -213,6 +218,10 @@ describe('US-835: keysToScrub', () => {
       'eatpal.seasonal_recall_dismissed.2026.14.r-3',
       'eatpal-budget-calc-draft',
       'autosave-recipe-draft',
+      'grocery:lists:user-1',
+      'grocery:selectedList:user-1',
+      'grocery:storeLayouts:hh-1',
+      'grocery.aislePrompt.dismissed.store-1',
     ];
     expect(keysToScrub(present).sort()).toEqual(present.sort());
   });

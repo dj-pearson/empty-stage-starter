@@ -1,0 +1,32 @@
+{
+  "grocery": {
+    "row": {
+      "check": "Check off {{name}}",
+      "uncheck": "Uncheck {{name}}",
+      "servings": "×{{count}}",
+      "quantityUnit": "{{quantity}} {{unit}}",
+      "forKids": "For {{names}}",
+      "addedBy": "Added by {{name}}",
+      "notSynced": "Not synced yet",
+      "alsoNeeded": "Also needed: {{list}}",
+      "decrease": "Decrease {{name}}",
+      "increase": "Increase {{name}}",
+      "edit": "Edit {{name}}",
+      "delete": "Delete {{name}}"
+    },
+    "group": {
+      "aisleLabel": "Aisle {{number}} - {{label}}",
+      "position": "{{position}} of {{total}}",
+      "itemCount_one": "{{count}} item",
+      "itemCount_other": "{{count}} items"
+    },
+    "progress": {
+      "milestone": {
+        "start": "Great start!",
+        "halfway": "Halfway there!",
+        "almost": "Almost done!",
+        "complete": "Shopping complete!"
+      }
+    }
+  }
+}

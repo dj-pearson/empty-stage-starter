@@ -19,6 +19,7 @@ import {
   WEB_QUEUE_KEY_PREFIX,
   applyPendingOpsToGroceryItems,
   pendingWebOps,
+  SYNC_QUEUE_EVENT,
 } from "./webSyncQueue";
 import type { GroceryItem } from "@/types";
 
@@ -441,5 +442,38 @@ describe('projecting the unsent queue onto a server load', () => {
   it('survives a queue that cannot be parsed instead of wedging the load', async () => {
     localStorage.setItem(webQueueKey('user-a'), '{ not json');
     expect(await pendingWebOps('user-a')).toEqual([]);
+  });
+});
+
+describe("queue visibility (eatpal:syncqueue)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("queueWrite dispatches eatpal:syncqueue once the op is stored", async () => {
+    const seen: number[] = [];
+    const onChange = async () => {
+      seen.push((await pendingWebOps("user-a")).length);
+    };
+    window.addEventListener(SYNC_QUEUE_EVENT, onChange);
+    try {
+      expect(SYNC_QUEUE_EVENT).toBe("eatpal:syncqueue");
+      await queueWrite("user-a", "grocery.toggle", { id: "row", checked: true });
+      await queueWrites("user-a", "grocery.delete", [{ id: "a" }, { id: "b" }]);
+      await vi.waitFor(() => expect(seen).toHaveLength(2));
+      // A listener that re-reads the queue sees the op it was told about.
+      expect(seen[0]).toBeGreaterThanOrEqual(1);
+    } finally {
+      window.removeEventListener(SYNC_QUEUE_EVENT, onChange);
+    }
+  });
+
+  it("does not dispatch for a signed-out visitor, whose write was never queued", async () => {
+    const onChange = vi.fn();
+    window.addEventListener(SYNC_QUEUE_EVENT, onChange);
+    try {
+      await queueWrite(null, "grocery.toggle", { id: "row", checked: true });
+      expect(onChange).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(SYNC_QUEUE_EVENT, onChange);
+    }
   });
 });

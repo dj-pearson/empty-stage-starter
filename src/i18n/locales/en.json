@@ -701,7 +701,113 @@
       "addedRetiredBody": "Removed {{retired}} no longer planned, kept {{kept}}",
       "addedKeptBody_one": "Kept {{count}} existing item",
       "addedKeptBody_other": "Kept {{count}} existing items"
-    }
+    },
+    "subtitleCount_one": "{{count}} item on this list",
+    "subtitleCount_other": "{{count}} items on this list",
+    "undo": "Undo",
+    "removed": "Removed {{name}}",
+    "toolbar": {
+      "label": "Grocery list tools",
+      "left": "{{left}} left of {{total}}",
+      "add": "Add",
+      "more": "More options"
+    },
+    "menu": {
+      "addItem": "Add an item",
+      "fromRecipe": "From a recipe",
+      "scanReceipt": "Scan a receipt",
+      "syncPlan": "Add this week's plan",
+      "removeUnplanned": "Remove meals no longer planned",
+      "stores": "Store layouts",
+      "copyText": "Copy as text",
+      "share": "Share",
+      "exportCsv": "Export CSV",
+      "exportAnyList": "Export for AnyList",
+      "print": "Print list"
+    },
+    "progress": {
+      "label": "Shopping progress: {{done}} of {{total}} bought",
+      "done": "Everything is in the cart"
+    },
+    "purchased": {
+      "headerLedger": "Purchased - {{count}} - goes to pantry at checkout",
+      "headerLegacy": "Purchased - in pantry",
+      "allLedger": "Finish shopping to add it all to your pantry.",
+      "allLegacy": "It's in your pantry. Clear the bought items when you're ready."
+    },
+    "checkout": {
+      "progress": "{{done}} of {{total}}",
+      "ctaLedger": "Finish shopping ({{count}})",
+      "ctaLegacy": "Clear {{count}} bought",
+      "failed": "Couldn't record this shop. Your items are still checked, try again.",
+      "pantryFull": "Pantry full on your plan, {{name}} not added",
+      "recorded_one": "Added {{count}} item to your pantry",
+      "recorded_other": "Added {{count}} items to your pantry",
+      "cleared_one": "Cleared {{count}} bought item",
+      "cleared_other": "Cleared {{count}} bought items",
+      "unitDiffers_one": "{{count}} not added to the pantry: unit differs",
+      "unitDiffers_other": "{{count}} not added to the pantry: unit differs",
+      "blocked_one": "{{count}} not added: pantry full on your plan",
+      "blocked_other": "{{count}} not added: pantry full on your plan"
+    },
+    "plan": {
+      "cta_one": "This week's plan needs {{count}} thing",
+      "cta_other": "This week's plan needs {{count}} things",
+      "have": "({{count}} already in the pantry)",
+      "add": "Add",
+      "removed_one": "Removed {{count}} no longer planned",
+      "removed_other": "Removed {{count}} no longer planned"
+    },
+    "restock": {
+      "added_one": "Added {{count}} restock item",
+      "added_other": "Added {{count}} restock items",
+      "addedNames": "Running low: {{names}}"
+    },
+    "export": {
+      "textTitle": "Grocery List",
+      "textSubtitle_one": "{{date}} - {{count}} item",
+      "textSubtitle_other": "{{date}} - {{count}} items",
+      "copied": "List copied",
+      "csvDone": "CSV exported",
+      "anyListDone": "AnyList file exported",
+      "copyFallbackTitle": "Copy your list",
+      "copyFallbackBody": "This browser didn't let us copy. Select the text below and copy it.",
+      "csv": {
+        "category": "Category",
+        "item": "Item",
+        "quantity": "Quantity",
+        "unit": "Unit",
+        "aisle": "Aisle",
+        "status": "Status",
+        "toBuy": "To buy"
+      }
+    },
+    "offline": {
+      "pending_one": "{{count}} change waiting for signal",
+      "pending_other": "{{count}} changes waiting for signal"
+    },
+    "empty": {
+      "title": "Your list is empty",
+      "body": "Plan the week and the list writes itself, or add what you need.",
+      "addPlan": "Add {{count}} from this week's plan",
+      "planWeek": "Plan this week",
+      "fromRecipe": "Add from a recipe",
+      "pasteList": "Paste a list"
+    },
+    "groupBy": {
+      "label": "Group items by",
+      "aisle": "By aisle",
+      "category": "By category"
+    },
+    "list": {
+      "label": "Shopping list"
+    },
+    "row": {
+      "checkedAnnounce": "{{name}} checked off, {{left}} left"
+    },
+    "placeCaption": "Where is {{name}} in this store?",
+    "subtitleList_one": "{{name}} - {{count}} item",
+    "subtitleList_other": "{{name}} - {{count}} items"
   },
   "pantry": {
     "title": "My Pantry",

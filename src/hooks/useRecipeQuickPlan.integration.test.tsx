@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import "@/i18n";
 import type { Food, GroceryItem, Kid, PlanEntry, Recipe } from "@/types";
 import type { ScheduleRecipeResult } from "@/contexts/PlanContext";
+import type { GroceryMergeResult } from "@/contexts/GroceryContext";
 
 /**
  * useRecipeQuickPlan against the REAL usePlanToGrocery: the rows that
@@ -42,24 +43,29 @@ const ROWS: PlanEntry[] = [
 ];
 
 const added: Array<Array<{ name: string }>> = [];
+const deleted: string[][] = [];
 let nextId = 0;
 function useFakeGrocery() {
   const [groceryItems, setItems] = useState<GroceryItem[]>([]);
-  const addGroceryItemsMerged = useCallback(
-    (items: Array<Partial<GroceryItem> & { name: string; quantity: number }>) => {
+  // Same contract as GroceryContext.mergeGroceryItems: ids are minted
+  // synchronously on the client (US-823) and returned with the result.
+  const mergeGroceryItems = useCallback(
+    (items: Array<Partial<GroceryItem> & { name: string; quantity: number }>): GroceryMergeResult => {
       added.push(items.map((i) => ({ name: i.name })));
-      setItems((prev) => [
-        ...prev,
-        ...items.map((i) => ({ ...i, id: `g${++nextId}`, unit: i.unit ?? "", category: "carb", checked: false }) as GroceryItem),
-      ]);
-      return items.length;
+      const rows = items.map(
+        (i) => ({ ...i, id: `g${++nextId}`, unit: i.unit ?? "", category: "carb", checked: false }) as GroceryItem,
+      );
+      setItems((prev) => [...prev, ...rows]);
+      return { touched: rows.length, insertedIds: rows.map((r) => r.id), bumps: [] };
     },
     [],
   );
   const deleteGroceryItems = useCallback((ids: string[]) => {
+    deleted.push([...ids]);
     setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
   }, []);
-  return { groceryItems, addGroceryItemsMerged, deleteGroceryItems };
+  const updateGroceryItem = useCallback(() => {}, []);
+  return { groceryItems, mergeGroceryItems, deleteGroceryItems, updateGroceryItem };
 }
 
 const scheduleRecipe = vi.fn(
@@ -84,6 +90,7 @@ describe("useRecipeQuickPlan + usePlanToGrocery (unmocked)", () => {
   beforeEach(() => {
     toastCalls.length = 0;
     added.length = 0;
+    deleted.length = 0;
     nextId = 0;
   });
 
@@ -105,5 +112,16 @@ describe("useRecipeQuickPlan + usePlanToGrocery (unmocked)", () => {
     });
     expect(added).toEqual([[{ name: "Pasta" }]]);
     expect(toastCalls.some((c) => c.kind === "default")).toBe(false);
+  });
+
+  it("Undo removes exactly the rows push inserted, by the ids the merge returned", async () => {
+    const { result } = renderHook(() => useRecipeQuickPlan());
+    await act(async () => {
+      await result.current.schedule(RECIPE, "2026-09-24", "dinner", ["k1"], { addMissing: true });
+    });
+    const done = toastCalls.find((c) => c.kind === "success" && /to your list/.test(c.title));
+    expect(done).toBeDefined();
+    act(() => done!.opts!.action!.onClick());
+    expect(deleted).toEqual([["g1"]]);
   });
 });

@@ -93,15 +93,40 @@ export function parseResponseToReviewRows(
   });
 }
 
+/** Stock to add to a pantry food the receipt row was matched to. */
+export interface ReceiptFoodUpdate {
+  foodId: string;
+  quantityDelta: number;
+}
+
+export interface ReceiptPantryPlan {
+  /** One entry per matched food, with the quantities of its rows summed. */
+  updates: ReceiptFoodUpdate[];
+  /** New pantry foods, for accepted rows that matched nothing. */
+  creates: Omit<Food, 'id'>[];
+}
+
 /**
  * Final transform a confirmed reviewer's accepted rows go through before
- * landing as pantry foods. Mirrors the dialog's handleConfirm so a vitest
+ * landing in the pantry. Mirrors the dialog's handleConfirm so a vitest
  * fixture can lock the contract without rendering React.
+ *
+ * A row matched to an existing pantry food (matchedFoodId) tops that food up
+ * rather than creating a second one. Before this, every weekly receipt added
+ * another "Milk" to the pantry. Two rows matched to the same food (two cartons
+ * rung up separately) become one update with the quantities summed.
  */
-export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): Omit<Food, 'id'>[] {
-  return rows
-    .filter((r) => r.accept)
-    .map((r) => ({
+export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): ReceiptPantryPlan {
+  const deltas = new Map<string, number>();
+  const creates: Omit<Food, 'id'>[] = [];
+  for (const r of rows) {
+    if (!r.accept) continue;
+    const qty = Number.isFinite(r.qty) && r.qty > 0 ? r.qty : 1;
+    if (r.matchedFoodId) {
+      deltas.set(r.matchedFoodId, (deltas.get(r.matchedFoodId) ?? 0) + qty);
+      continue;
+    }
+    creates.push({
       name: r.parsedName,
       category: categoryFromString(r.category),
       // US-803: a receipt says what was bought. Nothing on it says a
@@ -110,7 +135,13 @@ export function acceptedRowsToFoods(rows: ReadonlyArray<ReviewRow>): Omit<Food, 
       is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
       quantity: r.qty,
       unit: r.unit || undefined,
-    }));
+    });
+  }
+  const updates = [...deltas].map(([foodId, quantityDelta]) => ({
+    foodId,
+    quantityDelta: Math.round(quantityDelta * 100) / 100,
+  }));
+  return { updates, creates };
 }
 
 /**

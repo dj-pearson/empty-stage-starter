@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -17,113 +18,131 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { logger } from "@/lib/logger";
-import { useFormValidation, validationRules } from "@/hooks/useFormValidation";
+import type { GroceryListRow } from "@/hooks/useGroceryLists";
 
+/** Icon values are emoji; the key names the label so it can be translated. */
 const LIST_ICONS = [
-  { value: "🛒", label: "Shopping Cart" },
-  { value: "🏪", label: "Store" },
-  { value: "📦", label: "Package" },
-  { value: "🎉", label: "Party" },
-  { value: "🍕", label: "Pizza" },
-  { value: "🍰", label: "Cake" },
-  { value: "🏠", label: "Home" },
-  { value: "💚", label: "Heart" },
-];
+  { value: "🛒", key: "cart" },
+  { value: "🏪", key: "store" },
+  { value: "📦", key: "package" },
+  { value: "🎉", key: "party" },
+  { value: "🍕", key: "pizza" },
+  { value: "🍰", key: "cake" },
+  { value: "🏠", key: "home" },
+  { value: "💚", key: "heart" },
+] as const;
 
+/**
+ * Templates carry a stable key, not an English name: the name is translated
+ * at render and again at the moment it is copied into the form, so a
+ * template's identity never depends on the UI language.
+ */
 const LIST_TEMPLATES = [
-  { name: "Weekly Groceries", icon: "🛒", description: "Regular weekly shopping" },
-  { name: "Costco Run", icon: "📦", description: "Bulk shopping" },
-  { name: "Party Supplies", icon: "🎉", description: "For events and parties" },
-  { name: "Quick Shop", icon: "🏪", description: "Quick essentials" },
-];
+  { key: "weekly", icon: "🛒", name: "Weekly groceries", description: "Regular weekly shopping" },
+  { key: "bulk", icon: "📦", name: "Costco run", description: "Bulk shopping" },
+  { key: "party", icon: "🎉", name: "Party supplies", description: "For events and parties" },
+  { key: "quick", icon: "🏪", name: "Quick shop", description: "Quick essentials" },
+] as const;
+
+type TemplateKey = (typeof LIST_TEMPLATES)[number]["key"];
 
 interface CreateGroceryListDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
-  householdId?: string;
-  onListCreated: (listId: string) => void;
+  householdId?: string | null;
+  /** The inserted row. The page puts it in the lists (upsertLocal) and selects it. */
+  onCreated: (row: GroceryListRow) => void;
 }
+
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  icon: "🛒",
+  store_name: "",
+  is_default: false,
+};
 
 export function CreateGroceryListDialog({
   open,
   onOpenChange,
   userId,
   householdId,
-  onListCreated,
+  onCreated,
 }: CreateGroceryListDialogProps) {
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    icon: "🛒",
-    store_name: "",
-    is_default: false,
-  });
+  const { t } = useTranslation();
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [nameError, setNameError] = useState<string | undefined>();
   const [creating, setCreating] = useState(false);
 
-  // Form validation
-  const { errors, validate, clearError, clearErrors } = useFormValidation({
-    name: validationRules.required("List name"),
-  });
-
-  // Reset form when dialog opens/closes
   useEffect(() => {
     if (open) {
-      setFormData({
-        name: "",
-        description: "",
-        icon: "🛒",
-        store_name: "",
-        is_default: false,
-      });
-      clearErrors();
+      setFormData(EMPTY_FORM);
+      setNameError(undefined);
     }
-  }, [open, clearErrors]);
+  }, [open]);
 
-  const handleTemplateSelect = (template: typeof LIST_TEMPLATES[0]) => {
-    setFormData({
-      ...formData,
-      name: template.name,
-      description: template.description,
+  const templateName = (key: TemplateKey, fallback: string) =>
+    t(`grocery.lists.templates.${key}.name`, fallback);
+  const templateDescription = (key: TemplateKey, fallback: string) =>
+    t(`grocery.lists.templates.${key}.description`, fallback);
+
+  const handleTemplateSelect = (template: (typeof LIST_TEMPLATES)[number]) => {
+    setFormData((prev) => ({
+      ...prev,
+      name: templateName(template.key, template.name),
+      description: templateDescription(template.key, template.description),
       icon: template.icon,
-    });
+    }));
+    setNameError(undefined);
+  };
+
+  /**
+   * Clear the current default before writing a new one. Scoped by household,
+   * like the lists themselves: clearing by user_id left a co-parent's default
+   * standing, and the household ended up with two.
+   */
+  const clearExistingDefault = async () => {
+    const base = supabase.from("grocery_lists").update({ is_default: false }).eq("is_default", true);
+    const { error } = householdId ? await base.eq("household_id", householdId) : await base.eq("user_id", userId);
+    if (error) throw error;
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validate form
-    if (!validate(formData)) {
+    const name = formData.name.trim();
+    if (!name) {
+      setNameError(t("grocery.lists.create.nameRequired", "Give the list a name"));
       return;
     }
 
     setCreating(true);
     try {
+      if (formData.is_default) await clearExistingDefault();
+
       const { data, error } = await supabase
-        .from('grocery_lists')
-        .insert([
-          {
-            user_id: userId,
-            household_id: householdId,
-            name: formData.name.trim(),
-            description: formData.description.trim() || null,
-            icon: formData.icon,
-            store_name: formData.store_name.trim() || null,
-            is_default: formData.is_default,
-            is_archived: false,
-          },
-        ])
+        .from("grocery_lists")
+        .insert({
+          user_id: userId,
+          household_id: householdId ?? null,
+          name,
+          description: formData.description.trim() || null,
+          icon: formData.icon,
+          store_name: formData.store_name.trim() || null,
+          is_default: formData.is_default,
+          is_archived: false,
+        })
         .select()
         .single();
 
       if (error) throw error;
 
-      toast.success(`List "${formData.name}" created!`);
-      onListCreated(data.id);
+      toast.success(t("grocery.lists.create.created", { defaultValue: "{{name}} created", name }));
+      onCreated(data);
       onOpenChange(false);
     } catch (error) {
-      logger.error('Error creating list:', error);
-      toast.error("Failed to create list. Please try again.");
+      logger.error("Error creating list:", error);
+      toast.error(t("grocery.lists.create.failed", "Couldn't create the list. Try again."));
     } finally {
       setCreating(false);
     }
@@ -133,60 +152,62 @@ export function CreateGroceryListDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Create New Grocery List</DialogTitle>
+          <DialogTitle>{t("grocery.lists.create.title", "New grocery list")}</DialogTitle>
           <DialogDescription>
-            Create a new list to organize your shopping by store, occasion, or category.
+            {t("grocery.lists.create.description", "Keep a separate list for each store or occasion.")}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleCreate} className="space-y-4">
-          {/* Quick Templates */}
           <div className="space-y-2">
-            <Label>Quick Templates</Label>
+            <Label>{t("grocery.lists.create.templates", "Start from")}</Label>
             <div className="grid grid-cols-2 gap-2">
               {LIST_TEMPLATES.map((template) => (
                 <Button
-                  key={template.name}
+                  key={template.key}
                   type="button"
                   variant="outline"
                   onClick={() => handleTemplateSelect(template)}
-                  className="justify-start h-auto py-2"
+                  className="h-auto min-h-11 justify-start py-2"
                 >
-                  <span className="text-xl mr-2">{template.icon}</span>
-                  <div className="text-left">
-                    <div className="text-sm font-medium">{template.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {template.description}
-                    </div>
-                  </div>
+                  <span className="mr-2 text-xl" aria-hidden="true">
+                    {template.icon}
+                  </span>
+                  <span className="text-left">
+                    <span className="block text-sm font-medium">{templateName(template.key, template.name)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {templateDescription(template.key, template.description)}
+                    </span>
+                  </span>
                 </Button>
               ))}
             </div>
           </div>
 
-          {/* Name */}
-          <FormField label="List Name" htmlFor="name" error={errors.name} required>
+          <FormField
+            label={t("grocery.lists.create.nameLabel", "List name")}
+            htmlFor="grocery-list-name"
+            error={nameError}
+            required
+          >
             <Input
-              id="name"
+              id="grocery-list-name"
               value={formData.name}
               onChange={(e) => {
                 setFormData({ ...formData, name: e.target.value });
-                if (errors.name && e.target.value.trim()) {
-                  clearError("name");
-                }
+                if (nameError && e.target.value.trim()) setNameError(undefined);
               }}
-              placeholder="e.g., Weekly Groceries, Costco Run"
-              className={errors.name ? "border-destructive" : ""}
-              aria-invalid={!!errors.name}
-              aria-describedby={errors.name ? "name-error" : undefined}
+              placeholder={t("grocery.lists.create.namePlaceholder", "e.g. Weekly groceries, Costco run")}
+              className={nameError ? "border-destructive" : ""}
+              aria-invalid={!!nameError}
+              aria-describedby={nameError ? "grocery-list-name-error" : undefined}
               autoFocus
             />
           </FormField>
 
-          {/* Icon */}
           <div className="space-y-2">
-            <Label>Icon</Label>
-            <div className="flex flex-wrap gap-2">
+            <Label id="grocery-list-icon-label">{t("grocery.lists.create.iconLabel", "Icon")}</Label>
+            <div className="flex flex-wrap gap-2" role="group" aria-labelledby="grocery-list-icon-label">
               {LIST_ICONS.map((icon) => (
                 <Button
                   key={icon.value}
@@ -194,8 +215,9 @@ export function CreateGroceryListDialog({
                   variant={formData.icon === icon.value ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFormData({ ...formData, icon: icon.value })}
-                  className="text-xl h-12 w-12"
-                  title={icon.label}
+                  className="h-12 w-12 text-xl"
+                  aria-pressed={formData.icon === icon.value}
+                  aria-label={t(`grocery.lists.icons.${icon.key}`, icon.key)}
                 >
                   {icon.value}
                 </Button>
@@ -203,63 +225,58 @@ export function CreateGroceryListDialog({
             </div>
           </div>
 
-          {/* Store Name */}
           <div className="space-y-2">
-            <Label htmlFor="store_name">Store Name (optional)</Label>
+            <Label htmlFor="grocery-list-store">{t("grocery.lists.create.storeLabel", "Store (optional)")}</Label>
             <Input
-              id="store_name"
+              id="grocery-list-store"
               value={formData.store_name}
               onChange={(e) => setFormData({ ...formData, store_name: e.target.value })}
-              placeholder="e.g., Costco, Whole Foods, Target"
+              placeholder={t("grocery.lists.create.storePlaceholder", "e.g. Costco, Whole Foods, Target")}
             />
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Description (optional)</Label>
+            <Label htmlFor="grocery-list-description">
+              {t("grocery.lists.create.descriptionLabel", "Notes (optional)")}
+            </Label>
             <Textarea
-              id="description"
+              id="grocery-list-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="What is this list for?"
+              placeholder={t("grocery.lists.create.descriptionPlaceholder", "What is this list for?")}
               rows={2}
             />
           </div>
 
-          {/* Default List */}
-          <div className="flex items-center space-x-2">
+          <div className="flex min-h-11 items-center space-x-2">
             <Checkbox
-              id="is_default"
+              id="grocery-list-is-default"
               checked={formData.is_default}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, is_default: checked as boolean })
-              }
+              onCheckedChange={(checked) => setFormData({ ...formData, is_default: checked === true })}
             />
-            <label
-              htmlFor="is_default"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Set as default list
-            </label>
+            <Label htmlFor="grocery-list-is-default" className="text-sm font-medium leading-none">
+              {t("grocery.lists.create.setDefault", "Open this list by default")}
+            </Label>
           </div>
 
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
+              className="h-11"
               onClick={() => onOpenChange(false)}
               disabled={creating}
             >
-              Cancel
+              {t("grocery.lists.common.cancel", "Cancel")}
             </Button>
-            <Button type="submit" disabled={creating}>
+            <Button type="submit" className="h-11" disabled={creating}>
               {creating ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  {t("grocery.lists.create.creating", "Creating...")}
                 </>
               ) : (
-                "Create List"
+                t("grocery.lists.create.submit", "Create list")
               )}
             </Button>
           </DialogFooter>
@@ -268,4 +285,3 @@ export function CreateGroceryListDialog({
     </Dialog>
   );
 }
-

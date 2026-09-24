@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import en from './locales/en.json';
+import { enFragments, enTranslation, findLeafCollisions, mergeLocaleTrees } from './index';
 
 /**
  * US-833: a key with no entry renders as the key.
@@ -34,7 +35,10 @@ function definedKeys(): Set<string> {
       }
     }
   };
-  walk(en as Record<string, unknown>, '');
+  // The merged resource, not en.json alone: grocery copy lives in locale
+  // fragments that src/i18n/index.ts folds in, and a key defined only there
+  // is still defined.
+  walk(enTranslation as Record<string, unknown>, '');
   return out;
 }
 
@@ -87,5 +91,34 @@ describe('every translation key the app uses has English copy', () => {
     ]) {
       expect(defined.has(key), `${key} should resolve through its plural forms`).toBe(true);
     }
+  });
+});
+
+describe('grocery locale fragments merge into en.json without overriding it', () => {
+  it('merges nested branches rather than replacing them', () => {
+    const merged = mergeLocaleTrees(
+      { grocery: { title: 'Grocery List', planSync: { a: 'A' } } },
+      { grocery: { planSync: { b: 'B' }, row: { c: 'C' } } },
+    );
+    expect(merged).toEqual({
+      grocery: { title: 'Grocery List', planSync: { a: 'A', b: 'B' }, row: { c: 'C' } },
+    });
+  });
+
+  it('reports a fragment leaf that collides with an en.json leaf', () => {
+    // Assert the instrument before trusting its empty answer below.
+    expect(
+      findLeafCollisions({ grocery: { title: 'x', a: { b: 'y' } } }, { grocery: { title: 'z', a: 'w', n: 'new' } }),
+    ).toEqual(['grocery.title', 'grocery.a']);
+  });
+
+  it('has no fragment that overrides en.json or another fragment', () => {
+    const collisions: string[] = [];
+    let seen = en as Parameters<typeof findLeafCollisions>[0];
+    for (const { path: file, tree } of enFragments) {
+      for (const key of findLeafCollisions(seen, tree)) collisions.push(`${key}  (${file})`);
+      seen = mergeLocaleTrees(seen, tree);
+    }
+    expect(collisions).toEqual([]);
   });
 });

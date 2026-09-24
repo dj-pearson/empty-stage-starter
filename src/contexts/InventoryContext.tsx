@@ -38,7 +38,6 @@ import { foldMovements, balanceOf, type LedgerState } from "@/lib/inventoryLedge
 import type { ComparableItem, StockRow } from "@/lib/stockComparison";
 import {
   buildCorrectionMovement,
-  buildPurchaseMovement,
   buildWasteMovement,
   buildAdjustmentMovement,
   partitionMovements,
@@ -46,8 +45,10 @@ import {
   isSkipped,
   type MovementDraft,
   type MovementItem,
-  type MovementSkipped,
+  planPurchaseMovements,
   type PurchasableGroceryItem,
+  type PurchaseSkipped,
+  type ResolveFoodByName,
 } from "@/lib/movementBuilders";
 import { generateId } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
@@ -244,7 +245,8 @@ interface InventoryContextType {
   recordPurchases: (
     groceryItems: readonly PurchasableGroceryItem[],
     items: readonly MovementItem[],
-  ) => Promise<RecordResult & { skipped: MovementSkipped[] }>;
+    resolveByName?: ResolveFoodByName,
+  ) => Promise<PurchaseRecordResult>;
   /**
    * Undo a checkout: append a correction that negates each purchase.
    *
@@ -255,6 +257,7 @@ interface InventoryContextType {
   recordPurchaseReversal: (
     groceryItems: readonly PurchasableGroceryItem[],
     items: readonly MovementItem[],
+    resolveByName?: ResolveFoodByName,
   ) => Promise<RecordResult>;
   refreshInventory: () => Promise<void>;
 }
@@ -276,6 +279,17 @@ export interface RecordResult {
   count: number;
   /** Why nothing was recorded, when nothing was. */
   reason: string | null;
+}
+
+/**
+ * What checkout learns. `recordedRowIds` names the grocery rows whose purchase
+ * movement reached the server, and is empty when the append failed, so a
+ * caller can credit, clear and describe exactly those rows. Each skipped entry
+ * names its grocery row for the same reason.
+ */
+export interface PurchaseRecordResult extends RecordResult {
+  skipped: PurchaseSkipped[];
+  recordedRowIds: string[];
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -460,31 +474,20 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     async (
       groceryItems: readonly PurchasableGroceryItem[],
       items: readonly MovementItem[],
-    ): Promise<RecordResult & { skipped: MovementSkipped[] }> => {
+      resolveByName?: ResolveFoodByName,
+    ): Promise<PurchaseRecordResult> => {
       if (!ledgerWritesEnabled) {
-        return { recorded: false, count: 0, reason: "ledger writes are off", skipped: [] };
+        return { recorded: false, count: 0, reason: "ledger writes are off", skipped: [], recordedRowIds: [] };
       }
-      const results = (groceryItems ?? []).map((row) => {
-        const itemId = resolveGroceryItemId(row, items);
-        const item = itemId ? items.find((i) => i.id === itemId) : undefined;
-        if (!item) {
-          return {
-            skipped: true as const,
-            reason: `no pantry item matches "${row?.name ?? ""}"`,
-            itemId: null,
-          };
-        }
-        return buildPurchaseMovement({
-          householdId: householdId ?? "",
-          userId: userId ?? "",
-          item,
-          groceryItem: row,
-        });
+      const { movements: drafts, skipped, recordedRowIds } = planPurchaseMovements({
+        groceryItems,
+        items,
+        householdId: householdId ?? "",
+        userId: userId ?? "",
+        resolveByName,
       });
-
-      const { movements: drafts, skipped } = partitionMovements(results);
       if (drafts.length === 0) {
-        return { recorded: false, count: 0, reason: "nothing resolved to a pantry item", skipped };
+        return { recorded: false, count: 0, reason: "nothing resolved to a pantry item", skipped, recordedRowIds: [] };
       }
       const result = await appendMovements(drafts);
       return {
@@ -492,6 +495,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         count: result.ok ? result.attempted : 0,
         reason: result.ok ? null : "the append failed",
         skipped,
+        // A failed append credited nothing, so no row may be treated as bought.
+        recordedRowIds: result.ok ? recordedRowIds : [],
       };
     },
     [ledgerWritesEnabled, householdId, userId, appendMovements],
@@ -501,10 +506,11 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     async (
       groceryItems: readonly PurchasableGroceryItem[],
       items: readonly MovementItem[],
+      resolveByName?: ResolveFoodByName,
     ): Promise<RecordResult> => {
       if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
       const results = (groceryItems ?? []).map((row) => {
-        const itemId = resolveGroceryItemId(row, items);
+        const itemId = resolveGroceryItemId(row, items, resolveByName);
         const item = itemId ? items.find((i) => i.id === itemId) : undefined;
         if (!item) {
           return { skipped: true as const, reason: `no pantry item matches "${row?.name ?? ""}"`, itemId: null };

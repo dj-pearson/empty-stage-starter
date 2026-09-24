@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Card } from "@/components/ui/card";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, Zap, X } from "lucide-react";
+import { ChevronDown, Plus, Zap, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Skeleton } from "@/components/ui/skeleton";
-import { FoodCategory } from "@/types";
+import type { FoodCategory } from "@/types";
+import type { GroceryAddInput } from "@/lib/groceryMerge";
+import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { useFoods, useGrocery } from "@/contexts/AppContext";
 import { useAutoRestockPref } from "@/hooks/useAutoRestockPref";
@@ -30,22 +31,24 @@ interface RestockSuggestion {
   aisle?: string;
 }
 
+/**
+ * A restock add. restock_reason is a grocery_items column (and a GroceryRowDraft
+ * key) that GroceryAddInput does not declare yet, so it rides along here.
+ */
+export type RestockAddInput = GroceryAddInput & { restock_reason?: string };
+
+/** Who asked for the add: a tap here, or the auto-restock pass. */
+export type RestockAddSource = 'manual' | 'auto';
+
 interface SmartRestockSuggestionsProps {
   userId: string;
   kidId?: string;
-  onAddItems: (items: Array<{
-    name: string;
-    quantity: number;
-    unit: string;
-    category: FoodCategory;
-    aisle?: string;
-    auto_generated?: boolean;
-    restock_reason?: string;
-    // US-714: the union GroceryItem actually declares. This was `string`, so
-    // every consumer spreading one of these into a grocery add failed to
-    // typecheck on `priority` alone.
-    priority?: 'low' | 'medium' | 'high';
-  }>) => void;
+  /**
+   * Rows arrive tagged added_via 'restock' (a tap) or 'auto_restock'. This
+   * component shows no success toast of its own: the page does, with Undo,
+   * and `source` tells it which copy to use.
+   */
+  onAddItems: (items: GroceryAddInput[], source: RestockAddSource) => void;
 }
 
 // US-299 auto-restock safety rails. Tracked in localStorage so they
@@ -120,10 +123,11 @@ function isBlocklisted(nameLower: string): boolean {
   return ageMs < BLOCKLIST_TTL_DAYS * 86_400_000;
 }
 
+/** Urgency on semantic tokens, so both themes and high contrast follow. */
 const URGENCY_CHIP_STYLES: Record<ReturnType<typeof urgencyBucket>, string> = {
-  critical: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30",
-  soon: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
-  later: "bg-muted text-muted-foreground border-muted-foreground/20",
+  critical: "bg-destructive/10 text-destructive border-destructive/30",
+  soon: "bg-warning/15 text-foreground border-warning/50",
+  later: "bg-muted text-muted-foreground border-border",
 };
 
 const CONFIDENCE_OPACITY: Record<DepletionForecast["confidence"], string> = {
@@ -133,79 +137,97 @@ const CONFIDENCE_OPACITY: Record<DepletionForecast["confidence"], string> = {
   "cold-start": "opacity-50",
 };
 
+const nameKey = (name: string) => name.trim().toLowerCase();
+
 export function SmartRestockSuggestions({
   userId,
   kidId,
   onAddItems
 }: SmartRestockSuggestionsProps) {
+  const { t } = useTranslation();
   const [suggestions, setSuggestions] = useState<RestockSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const { foods } = useFoods();
   const { groceryItems } = useGrocery();
   const { enabled: autoRestockEnabled, leadDays: autoRestockLeadDays } = useAutoRestockPref();
   const autoAddedRef = useRef(false);
+  const listId = useId();
 
+  // One request per (user, kid). A slow answer for the kid the parent just
+  // switched away from used to land after the new kid's and overwrite it; the
+  // ignore flag drops every answer but the latest.
   useEffect(() => {
-    loadSuggestions();
+    let ignore = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('detect_restock_needs', {
+          p_user_id: userId,
+          // Omitted rather than null: the function defaults it to NULL, and
+          // the generated RPC type does not accept an explicit null.
+          p_kid_id: kidId || undefined
+        });
+        if (ignore) return;
+        if (error) {
+          logger.error('Error loading restock suggestions:', error);
+        } else if (data) {
+          setSuggestions(data.map((item) => ({
+            ...item,
+            priority: item.priority as 'low' | 'medium' | 'high',
+            category: item.category as FoodCategory,
+          })));
+        }
+      } catch (err) {
+        if (!ignore) logger.error('Failed to load suggestions:', err);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
   }, [userId, kidId]);
 
-  const loadSuggestions = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('detect_restock_needs', {
-        p_user_id: userId,
-        p_kid_id: kidId || null
-      });
+  const foodById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
 
-      if (error) {
-        logger.error('Error loading restock suggestions:', error);
-      } else if (data) {
-        setSuggestions(data.map((item) => ({
-          ...item,
-          priority: item.priority as 'low' | 'medium' | 'high',
-          category: item.category as FoodCategory,
-        })));
-      }
-    } catch (err) {
-      logger.error('Failed to load suggestions:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Names already waiting on the list (unchecked). A suggestion for one of
+  // them is shown as "on list", never offered again.
+  const onListNames = useMemo(
+    () => new Set(groceryItems.filter((g) => !g.checked).map((g) => nameKey(g.name))),
+    [groceryItems],
+  );
+  const isOnList = useCallback((s: RestockSuggestion) => onListNames.has(nameKey(s.food_name)), [onListNames]);
 
-  const addAllToList = () => {
-    const items = suggestions.map(s => ({
+  /** The pantry's own unit for the food, not a blanket "servings". */
+  const unitFor = useCallback((s: RestockSuggestion) => foodById.get(s.food_id)?.unit ?? "", [foodById]);
+
+  const toAddInput = useCallback(
+    (s: RestockSuggestion, source: RestockAddSource, reason: string): RestockAddInput => ({
       name: s.food_name,
       quantity: s.recommended_quantity,
-      unit: 'servings',
+      unit: unitFor(s),
       category: s.category,
       aisle: s.aisle,
       auto_generated: true,
-      restock_reason: s.reason,
-      priority: s.priority
-    }));
+      restock_reason: reason,
+      priority: s.priority,
+      added_via: source === 'auto' ? 'auto_restock' : 'restock',
+    }),
+    [unitFor],
+  );
 
-    onAddItems(items);
-    toast.success(`Added ${items.length} items to your grocery list!`, {
-      description: 'Smart restock suggestions applied'
-    });
+  const addable = useMemo(() => suggestions.filter((s) => !isOnList(s)), [suggestions, isOnList]);
+
+  const addAllToList = () => {
+    if (loading || addable.length === 0) return;
+    onAddItems(addable.map((s) => toAddInput(s, 'manual', s.reason)), 'manual');
     setDismissed(true);
   };
 
   const addSingleItem = (suggestion: RestockSuggestion) => {
-    onAddItems([{
-      name: suggestion.food_name,
-      quantity: suggestion.recommended_quantity,
-      unit: 'servings',
-      category: suggestion.category,
-      aisle: suggestion.aisle,
-      auto_generated: true,
-      restock_reason: suggestion.reason,
-      priority: suggestion.priority
-    }]);
-    
-    toast.success(`Added ${suggestion.food_name} to list`);
+    onAddItems([toAddInput(suggestion, 'manual', suggestion.reason)], 'manual');
     setSuggestions(prev => prev.filter(s => s.food_id !== suggestion.food_id));
   };
 
@@ -215,7 +237,6 @@ export function SmartRestockSuggestions({
   // than fail loudly.
   const forecastsByFoodId = useMemo(() => {
     const out = new Map<string, DepletionForecast>();
-    const foodById = new Map(foods.map((f) => [f.id, f]));
     for (const s of suggestions) {
       const food = foodById.get(s.food_id);
       if (!food) continue;
@@ -252,10 +273,12 @@ export function SmartRestockSuggestions({
   }, [forecastsByFoodId]);
 
   // US-299 auto-add effect. Gated by the user preference + per-day cap +
-  // 7-day blocklist for items the user removed recently.
+  // 7-day blocklist for items the user removed recently. The page shows the
+  // toast (with Undo); this only reports the add with source 'auto'.
   useEffect(() => {
     if (!autoRestockEnabled) return;
     if (autoAddedRef.current) return;
+    if (loading) return;
     if (forecastsByFoodId.size === 0) return;
     autoAddedRef.current = true;
 
@@ -263,19 +286,13 @@ export function SmartRestockSuggestions({
     const remainingBudget = MAX_AUTO_ADDS_PER_DAY - log.count;
     if (remainingBudget <= 0) return;
 
-    // Dedupe against current grocery list contents (unchecked rows only).
-    const existingNames = new Set(
-      groceryItems
-        .filter((g) => !g.checked)
-        .map((g) => g.name.trim().toLowerCase())
-    );
-
     const candidates = suggestions.filter((s) => {
       const forecast = forecastsByFoodId.get(s.food_id);
       if (!forecast) return false;
       if (forecast.daysToDepletion > autoRestockLeadDays) return false;
-      const nameLower = s.food_name.trim().toLowerCase();
-      if (existingNames.has(nameLower)) return false;
+      const nameLower = nameKey(s.food_name);
+      // Dedupe against current grocery list contents (unchecked rows only).
+      if (onListNames.has(nameLower)) return false;
       if (isBlocklisted(nameLower)) return false;
       return true;
     });
@@ -284,16 +301,14 @@ export function SmartRestockSuggestions({
     const toAdd = candidates.slice(0, remainingBudget);
 
     onAddItems(
-      toAdd.map((s) => ({
-        name: s.food_name,
-        quantity: s.recommended_quantity,
-        unit: "servings",
-        category: s.category,
-        aisle: s.aisle,
-        auto_generated: true,
-        restock_reason: `forecast: runs out in ${forecastsByFoodId.get(s.food_id)?.daysToDepletion ?? "?"} days`,
-        priority: s.priority,
-      }))
+      toAdd.map((s) =>
+        toAddInput(
+          s,
+          'auto',
+          `forecast: runs out in ${forecastsByFoodId.get(s.food_id)?.daysToDepletion ?? "?"} days`,
+        ),
+      ),
+      'auto',
     );
 
     writeAutoAddLog({ date: log.date, count: log.count + toAdd.length });
@@ -307,10 +322,6 @@ export function SmartRestockSuggestions({
       });
     }
 
-    toast.success(
-      `Auto-restocked ${toAdd.length} item${toAdd.length !== 1 ? "s" : ""}`,
-      { description: "Predicted to run out soon — tap 'Not quite' to opt out for a week." }
-    );
     setSuggestions((prev) =>
       prev.filter((s) => !toAdd.some((added) => added.food_id === s.food_id))
     );
@@ -318,14 +329,16 @@ export function SmartRestockSuggestions({
     autoRestockEnabled,
     autoRestockLeadDays,
     forecastsByFoodId,
-    groceryItems,
+    loading,
+    onListNames,
     onAddItems,
     suggestions,
+    toAddInput,
   ]);
 
   const handleNotQuite = (suggestion: RestockSuggestion) => {
     const blocklist = readBlocklist();
-    const nameLower = suggestion.food_name.trim().toLowerCase();
+    const nameLower = nameKey(suggestion.food_name);
     blocklist[nameLower] = new Date().toISOString();
     try {
       localStorage.setItem(BLOCKLIST_KEY, JSON.stringify(blocklist));
@@ -336,140 +349,164 @@ export function SmartRestockSuggestions({
       food_id: suggestion.food_id,
     });
     setSuggestions((prev) => prev.filter((s) => s.food_id !== suggestion.food_id));
-    toast("Got it — we'll skip this for a week.");
+    toast(t("grocery.restock.skipped", "Got it. We'll skip this for a week."));
   };
 
   // Early returns must come AFTER all hooks above. Previously the `loading`
   // skeleton returned before useMemo/useEffect ran, so the hook count changed
   // when loading flipped and React threw "rendered fewer hooks than expected"
   // (#310), crashing the whole grocery route via the error boundary.
-  if (loading) {
-    return (
-      <Card className="p-6 bg-gradient-to-br from-accent/10 to-accent/5 border-accent/20">
-        <Skeleton className="h-6 w-48 mb-4" />
-        <Skeleton className="h-16 w-full" />
-      </Card>
-    );
-  }
+  //
+  // Nothing while the first answer is out: a skeleton card pushed the list
+  // down and then vanished for the many households with nothing running low.
+  if (loading && suggestions.length === 0) return null;
+  // Everything suggested is already waiting on the list: nothing to offer.
+  if (addable.length === 0 || dismissed) return null;
 
-  if (suggestions.length === 0 || dismissed) return null;
-
-  const highPriority = suggestions.filter(s => s.priority === 'high').length;
+  const highPriority = addable.filter(s => s.priority === 'high').length;
 
   return (
-    <Card className="p-6 bg-gradient-to-br from-accent/10 to-accent/5 border-accent/20 animate-in slide-in-from-top">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <Zap className="h-5 w-5 text-accent" />
-            <h3 className="text-lg font-semibold">Smart Restock Suggestions</h3>
-            {highPriority > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {highPriority} Urgent
-              </Badge>
+    <section
+      className="rounded-lg border bg-card text-card-foreground motion-safe:animate-in motion-safe:fade-in"
+      aria-label={t("grocery.restock.label", "Running low")}
+    >
+      <div className="flex min-h-12 items-center gap-2 px-3 py-1.5">
+        <button
+          type="button"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-sm"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <Zap className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className="truncate font-medium">
+            {t("grocery.restock.summary", {
+              defaultValue: "{{count}} running low",
+              count: addable.length,
+            })}
+          </span>
+          {highPriority > 0 && (
+            <Badge variant="destructive" className="shrink-0 text-xs">
+              {t("grocery.restock.urgentCount", { defaultValue: "{{count}} urgent", count: highPriority })}
+            </Badge>
+          )}
+          <ChevronDown
+            className={cn(
+              "ml-auto h-4 w-4 shrink-0 text-muted-foreground motion-safe:transition-transform",
+              expanded && "rotate-180",
             )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {suggestions.length} item{suggestions.length !== 1 ? 's' : ''} need restocking based on your meal plan and shopping patterns
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={addAllToList} size="sm" className="whitespace-nowrap">
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Add All
-          </Button>
-          <Button 
-            onClick={() => setDismissed(true)}
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            aria-label="Dismiss restock suggestions"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+            aria-hidden="true"
+          />
+        </button>
+        <Button
+          onClick={addAllToList}
+          size="sm"
+          className="h-11 shrink-0 whitespace-nowrap sm:h-9"
+          disabled={loading || addable.length === 0}
+        >
+          <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+          {t("grocery.restock.addAll", "Add all")}
+        </Button>
+        <Button
+          onClick={() => setDismissed(true)}
+          variant="ghost"
+          size="icon"
+          className="h-11 w-11 shrink-0"
+          aria-label={t("grocery.restock.dismiss", "Dismiss restock suggestions")}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
       </div>
 
-      <div className="space-y-2 max-h-64 overflow-y-auto">
-        {suggestions.map((suggestion) => {
-          const forecast = forecastsByFoodId.get(suggestion.food_id);
-          const urgency = forecast ? urgencyBucket(forecast.daysToDepletion) : null;
-          return (
-          <div
-            key={suggestion.food_id}
-            className="flex items-center justify-between p-3 bg-background rounded-lg hover:bg-muted/50 transition-colors"
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <p className="font-medium truncate">{suggestion.food_name}</p>
-                {suggestion.priority === 'high' && (
-                  <Badge variant="destructive" className="text-xs shrink-0">
-                    Urgent
-                  </Badge>
-                )}
-                {suggestion.priority === 'medium' && (
-                  <Badge variant="secondary" className="text-xs shrink-0">
-                    Soon
-                  </Badge>
-                )}
-                {forecast && urgency && (
-                  <Badge
-                    variant="outline"
-                    className={`text-xs shrink-0 ${URGENCY_CHIP_STYLES[urgency]} ${CONFIDENCE_OPACITY[forecast.confidence]}`}
-                    title={`Confidence: ${forecast.confidence} (${forecast.cycleCount} cycles)`}
-                  >
-                    {chipLabel(forecast.daysToDepletion)}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground line-clamp-1">
-                {suggestion.reason}
-              </p>
-              {forecast && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNotQuite(suggestion);
-                  }}
-                  className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline mt-0.5"
-                  aria-label={`Skip ${suggestion.food_name} for a week`}
-                >
-                  Not quite
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-3 ml-4">
-              <div className="text-right">
-                <p className="text-sm font-medium">
-                  Need: {suggestion.recommended_quantity}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Have: {suggestion.current_quantity}
-                </p>
-              </div>
-              {/*
-                US-778: this had no accessible name at all -- its only child is
-                an icon, and axe rates a nameless control critical. A screen
-                reader announced "button" once per suggestion with nothing to
-                distinguish them, on the control that adds the item. The "Not
-                quite" button a few lines up was already labelled this way.
-              */}
-              <Button
-                onClick={() => addSingleItem(suggestion)}
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                aria-label={`Add ${suggestion.food_name} to the grocery list`}
+      {expanded && (
+        <ul id={listId} className="max-h-64 space-y-1 overflow-y-auto border-t px-2 py-2">
+          {suggestions.map((suggestion) => {
+            const forecast = forecastsByFoodId.get(suggestion.food_id);
+            const urgency = forecast ? urgencyBucket(forecast.daysToDepletion) : null;
+            const onList = isOnList(suggestion);
+            const unit = unitFor(suggestion);
+            return (
+              <li
+                key={suggestion.food_id}
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-2"
               >
-                <ShoppingCart className="h-3 w-3" aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-          );
-        })}
-      </div>
-    </Card>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-0.5 flex flex-wrap items-center gap-2">
+                    <p className="truncate font-medium">{suggestion.food_name}</p>
+                    {suggestion.priority === 'high' && (
+                      <Badge variant="destructive" className="shrink-0 text-xs">
+                        {t("grocery.restock.urgent", "Urgent")}
+                      </Badge>
+                    )}
+                    {suggestion.priority === 'medium' && (
+                      <Badge variant="secondary" className="shrink-0 text-xs">
+                        {t("grocery.restock.soon", "Soon")}
+                      </Badge>
+                    )}
+                    {forecast && urgency && (
+                      <Badge
+                        variant="outline"
+                        className={cn("shrink-0 text-xs", URGENCY_CHIP_STYLES[urgency], CONFIDENCE_OPACITY[forecast.confidence])}
+                        title={t("grocery.restock.confidence", {
+                          defaultValue: "Confidence: {{level}} ({{cycles}} cycles)",
+                          level: forecast.confidence,
+                          cycles: forecast.cycleCount,
+                        })}
+                      >
+                        {chipLabel(forecast.daysToDepletion)}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="line-clamp-1 text-xs text-muted-foreground">
+                    {t("grocery.restock.needHave", {
+                      defaultValue: "Need {{need}} {{unit}} - have {{have}}",
+                      need: suggestion.recommended_quantity,
+                      have: suggestion.current_quantity,
+                      unit,
+                    })}
+                    {suggestion.reason ? ` - ${suggestion.reason}` : ""}
+                  </p>
+                  {forecast && !onList && (
+                    <button
+                      type="button"
+                      onClick={() => handleNotQuite(suggestion)}
+                      className="mt-0.5 min-h-8 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                      aria-label={t("grocery.restock.notQuiteLabel", {
+                        defaultValue: "Skip {{name}} for a week",
+                        name: suggestion.food_name,
+                      })}
+                    >
+                      {t("grocery.restock.notQuite", "Not quite")}
+                    </button>
+                  )}
+                </div>
+                {onList ? (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {t("grocery.restock.onList", "On list")}
+                  </span>
+                ) : (
+                  /*
+                    US-778: this had no accessible name at all -- its only child is
+                    an icon, and axe rates a nameless control critical.
+                  */
+                  <Button
+                    onClick={() => addSingleItem(suggestion)}
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 shrink-0"
+                    aria-label={t("grocery.restock.addOne", {
+                      defaultValue: "Add {{name}} to the grocery list",
+                      name: suggestion.food_name,
+                    })}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
-

@@ -224,7 +224,9 @@ test.describe('Grocery dialogs are bottom sheets at phone width', () => {
    * width" assertion below while testing nothing.
    */
   async function openAddItem(page: import('@playwright/test').Page) {
-    await page.getByRole('button', { name: /^Add Item$/i }).first().click();
+    // Add is a menu now (item, recipe, receipt); the full form is its first entry.
+    await page.getByRole('button', { name: /^Add$/ }).first().click();
+    await page.getByRole('menuitem', { name: /Add an item/i }).click();
     const panel = page.getByRole("dialog", { name: /Add Grocery Item/i });
     await expect(panel).toBeVisible();
     return panel;
@@ -307,9 +309,9 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
     expect(after.y).toBeLessThan(before.y);
   });
 
-  test('Add Item is still on screen after scrolling the list', async ({ page }) => {
+  test('Add is still on screen after scrolling the list', async ({ page }) => {
     await scrollDown(page);
-    const add = page.getByRole('button', { name: /^Add Item$/i }).first();
+    const add = page.getByRole('button', { name: /^Add$/ }).first();
     const box = (await add.boundingBox())!;
     const viewport = page.viewportSize()!;
 
@@ -317,6 +319,7 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
     // And it still opens the sheet from where it is stuck.
     await add.click();
+    await page.getByRole('menuitem', { name: /Add an item/i }).click();
     await expect(page.getByRole('dialog', { name: /Add Grocery Item/i })).toBeVisible();
   });
 
@@ -352,12 +355,11 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
       return (bar.getBoundingClientRect().height + nav.getBoundingClientRect().height) / window.innerHeight;
     }, PICKER);
 
-    // Measured: a 97px header and a 120px bar on a 664px viewport, 33%, which
-    // leaves about 450px of list. The whole Quick Actions row was the obvious
-    // thing to stick instead -- at 390px each of its four buttons takes a line,
-    // 225px, and sticking it would have put this at 49%. The ceiling is here so
-    // that a third row added to the bar later fails rather than creeps.
-    expect(share, `header plus sticky bar is ${Math.round(share * 100)}% of the viewport`).toBeLessThan(0.36);
+    // The bar was two rows (picker, then a full-width Add Item), 120px pinned:
+    // 33% of a 664px screen with the header. It is one row now, picker + Add +
+    // overflow, about 56px. The ceiling is here so that a second row added to
+    // the bar later fails rather than creeps.
+    expect(share, `header plus sticky bar is ${Math.round(share * 100)}% of the viewport`).toBeLessThan(0.26);
   });
 
   test('scrolling with the bar stuck still does not pan the page sideways', async ({ page }) => {
@@ -400,5 +402,114 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
     });
 
     expect(fixedAtTop).toEqual(['Mobile header navigation']);
+  });
+});
+
+/**
+ * The phone budget: the list itself has to start on the first screen.
+ *
+ * The page used to stack a header, a subtitle naming a kid, a two-row sticky
+ * bar, a progress block and a row of four quick-action buttons above the
+ * first item, and at 390x664 the first checkbox sat below the fold. One
+ * toolbar row, the progress bar on its bottom edge and the quick actions in
+ * the Add menu is what brings it up.
+ */
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+};
+
+/** Serve `count` unchecked rows across six aisles instead of the fixture's eight. */
+async function seedGroceryItems(page: import('@playwright/test').Page, count: number) {
+  const aisles = ['Produce', 'Dairy', 'Meat & Deli', 'Frozen Vegetables', 'Rice & Grains', 'Condiments & Sauces'];
+  const rows = Array.from({ length: count }, (_, i) => ({
+    id: `dddddddd-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    name: `Seeded item ${i + 1}`,
+    category: 'snack',
+    aisle: aisles[i % aisles.length],
+    quantity: 1,
+    unit: 'count',
+    checked: false,
+    created_at: `2026-09-01T00:00:${String(i % 60).padStart(2, '0')}.000Z`,
+  }));
+  await page.route('**/rest/v1/grocery_items**', (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    if (route.request().method() !== 'GET') return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    return route.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify(rows) });
+  });
+}
+
+const VISIBLE_CHECKBOX = '[role="checkbox"]:visible, input[type="checkbox"]:visible';
+
+test.describe('Grocery list fits the first phone screen', () => {
+  test.use({ viewport: { width: 390, height: 664 } });
+
+  test('with five items, the first checkbox is fully on screen', async ({ context, page }) => {
+    await signIn(context);
+    await seedGroceryItems(page, 5);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+
+    const first = page.locator(VISIBLE_CHECKBOX).first();
+    await expect(first).toBeVisible();
+    const box = (await first.boundingBox())!;
+    expect(box.y, 'the first checkbox starts above the top edge').toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height, `the first checkbox ends at ${Math.round(box.y + box.height)}px`).toBeLessThanOrEqual(664);
+  });
+
+  test('the item name gets at least 150px of the row', async ({ context, page }) => {
+    await signIn(context);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+
+    const name = page.getByRole('button', { name: 'Whole milk', exact: true }).first();
+    const box = (await name.boundingBox())!;
+    expect(box.width, `the name box is ${Math.round(box.width)}px wide`).toBeGreaterThanOrEqual(150);
+  });
+
+  test('the checkout bar does not cover the last row at the bottom of the page', async ({ context, page }) => {
+    await signIn(context);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+
+    // Something has to be bought for the bar to show.
+    await page.locator(VISIBLE_CHECKBOX).first().click();
+    const bar = page.getByTestId('grocery-checkout-bar');
+    await expect(bar).toBeVisible();
+
+    // Open every aisle, then scroll to the very bottom.
+    const folded = page.locator('button[aria-controls^="grocery-group-"][aria-expanded="false"]');
+    for (let guard = 0; guard < 20 && (await folded.count()) > 0; guard++) await folded.first().click();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(400);
+
+    const lastRow = page.locator('[id^="grocery-group-"]:visible [data-checked]').last();
+    const rowBox = (await lastRow.boundingBox())!;
+    const barBox = (await bar.boundingBox())!;
+    expect(
+      rowBox.y + rowBox.height,
+      `the last row ends at ${Math.round(rowBox.y + rowBox.height)}px, under the bar at ${Math.round(barBox.y)}px`,
+    ).toBeLessThanOrEqual(barBox.y + 1);
+  });
+
+  test('aisles still fold with 60 items, past the old virtualization cap', async ({ context, page }) => {
+    await signIn(context);
+    await seedGroceryItems(page, 61);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+
+    // Above 60 rows the list is window-virtualized. The fold used to exist
+    // only below 50: past it every aisle rendered open in a 70vh box.
+    const headers = page.locator('button[aria-expanded]').filter({ hasText: /Produce|Dairy|Meat|Frozen|Rice|Condiments/ });
+    await expect(headers.first()).toBeVisible();
+    await expect(headers.first()).toHaveAttribute('aria-expanded', 'true');
+    const second = headers.nth(1);
+    await expect(second).toHaveAttribute('aria-expanded', 'false');
+
+    const before = await page.locator(VISIBLE_CHECKBOX).count();
+    await second.click();
+    await expect(second).toHaveAttribute('aria-expanded', 'true');
+    await expect.poll(() => page.locator(VISIBLE_CHECKBOX).count()).toBeGreaterThan(before);
   });
 });

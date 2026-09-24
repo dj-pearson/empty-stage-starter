@@ -1,40 +1,90 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
+import { createElement } from 'react';
+import { screen, within } from '@testing-library/react';
+import '@/i18n';
+import { grocery, groceryRow, resetGroceryHarness, renderWithShell } from '@/test/groceryPageHarness';
 
 /**
- * US-576: the grocery row controls (qty -/+, edit, delete) are hover-reveal.
- * Hover does not exist on touch, and jsdom applies neither media queries nor
- * layout, so these are source guards rather than rendered assertions -- the
- * same approach as src/lib/trialDisclosure.test.ts.
+ * What a screen reader gets from the grocery list.
  *
- * The failure mode worth guarding is the quiet one: `pointer-coarse:` is a
- * custom variant registered in tailwind.config.ts, not a Tailwind 3 built-in.
- * Drop the plugin and every `pointer-coarse:*` class in the app compiles to
- * nothing, with no build error and no visible diff on a desktop browser.
+ * aria-live used to sit on the progress block AND on both list containers, so
+ * one check-off re-read the progress line and then the whole list, three live
+ * regions talking over each other. The page now has one polite role="status",
+ * written (debounced) when an item is checked off.
  */
 
-const read = (rel: string) =>
-  readFileSync(path.resolve(__dirname, '../..', rel), 'utf-8');
+vi.mock('@/contexts/AppContext', async () => (await import('@/test/groceryPageHarness')).appContextMock);
+vi.mock('@/hooks/usePlanToGrocery', async () => (await import('@/test/groceryPageHarness')).planToGroceryMock);
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ userId: 'u1', householdId: 'h1' }) }));
+vi.mock('@/hooks/useHousehold', () => ({ useHousehold: () => ({ members: [] }) }));
+vi.mock('@/hooks/usePendingGroceryIds', () => ({
+  usePendingGroceryIds: () => ({ ids: new Set<string>(), count: 0 }),
+}));
+vi.mock('@/hooks/useGroceryLists', async () => (await import('@/test/groceryPageHarness')).groceryListsMock);
+vi.mock('@/hooks/useStoreLayouts', () => ({
+  useStoreLayouts: () => ({ walkContext: null, rememberAisle: vi.fn(), stores: [], selectedStore: null, aisles: [], setSelectedStoreId: vi.fn(), refresh: vi.fn() }),
+}));
+vi.mock('@/components/grocery/StorePicker', () => ({ StorePicker: () => null }));
+vi.mock('@/components/grocery/PlaceInAisleChips', () => ({ PlaceInAisleChips: () => null }));
+vi.mock('@/components/grocery/GroceryQuickAdd', () => ({ GroceryQuickAdd: () => null }));
+vi.mock('@/components/SmartRestockSuggestions', () => ({ SmartRestockSuggestions: () => null }));
+vi.mock('@/components/GroceryListSelector', async () => ({
+  GroceryListSelector: (await import('@/test/groceryPageHarness')).StubListSelector,
+}));
+vi.mock('@/components/CreateGroceryListDialog', () => ({ CreateGroceryListDialog: () => null }));
+vi.mock('@/components/ManageGroceryListsDialog', () => ({ ManageGroceryListsDialog: () => null }));
+vi.mock('@/components/EditGroceryItemDialog', () => ({ EditGroceryItemDialog: () => null }));
+vi.mock('@/lib/analytics', () => ({ analytics: { trackEvent: vi.fn() } }));
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), dismiss: vi.fn() }),
+}));
 
-describe('grocery hover-reveal controls (US-576)', () => {
-  const source = read('src/pages/Grocery.tsx');
+import Grocery from './Grocery';
 
-  /** Every className string on a control that starts hidden. */
-  const hoverRevealClasses = (source.match(/className="[^"]*opacity-0[^"]*"/g) ?? []);
+const read = (rel: string) => readFileSync(path.resolve(__dirname, '../..', rel), 'utf-8');
 
-  it('has hover-reveal controls to check', () => {
-    expect(hoverRevealClasses.length).toBeGreaterThan(0);
+describe('Grocery screen-reader surface', () => {
+  beforeEach(() => {
+    resetGroceryHarness();
+    grocery.items = [
+      groceryRow({ id: 'a1', name: 'Whole milk', aisle: 'Dairy' }),
+      groceryRow({ id: 'a2', name: 'Frozen peas', aisle: 'Frozen' }),
+      groceryRow({ id: 'a3', name: 'Apples', checked: true, aisle: 'Produce' }),
+    ];
   });
 
-  it.each([
-    ['group-hover:opacity-100', 'mouse'],
-    ['group-focus-within:opacity-100', 'keyboard tabbing into the row'],
-    ['focus-visible:opacity-100', 'keyboard focus on the control itself'],
-    ['pointer-coarse:opacity-100', 'touch, which has no hover'],
-  ])('reveals every hidden control via %s (%s)', (cls) => {
-    const missing = hoverRevealClasses.filter((c) => !c.includes(cls));
-    expect(missing).toEqual([]);
+  it('has exactly one live region, a role=status', async () => {
+    const { container } = renderWithShell(createElement(Grocery));
+    await screen.findByText('Whole milk');
+    expect(container.querySelectorAll('[aria-live]:not([role="status"])')).toHaveLength(0);
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+
+  it('names every check-off control after its item', async () => {
+    renderWithShell(createElement(Grocery));
+    expect(await screen.findByRole('checkbox', { name: /Whole milk/ })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Frozen peas/ })).toBeInTheDocument();
+  });
+
+  it('makes each aisle a heading', async () => {
+    renderWithShell(createElement(Grocery));
+    await screen.findByText('Whole milk');
+    expect(screen.getByRole('heading', { name: /Dairy/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Frozen/ })).toBeInTheDocument();
+  });
+
+  it('names the list section', async () => {
+    renderWithShell(createElement(Grocery));
+    const list = await screen.findByRole('region', { name: /shopping list/i });
+    expect(within(list).getByText('Whole milk')).toBeInTheDocument();
+  });
+
+  it('puts no aria-live on the list containers in either renderer', () => {
+    // The virtual path only renders above 60 rows; guard its source too.
+    const source = read('src/pages/Grocery.tsx');
+    expect(source).not.toMatch(/aria-live=/);
   });
 });
 
@@ -47,20 +97,15 @@ describe('touch target sizing (US-576 / US-043)', () => {
   it('still forces 44px minimum touch targets on coarse pointers', () => {
     const css = read('src/index.css');
     const coarseBlock = css.slice(css.indexOf('@media (pointer: coarse)'));
-
     expect(coarseBlock).toMatch(/min-height:\s*44px/);
     expect(coarseBlock).toMatch(/min-width:\s*44px/);
-    // The grocery controls are plain <button> (no asChild), so the bare
-    // `button` selector is what carries them to 44px despite their h-7 w-7.
-    expect(coarseBlock.slice(0, coarseBlock.indexOf('}'))).toMatch(/\bbutton\b/);
   });
 
-  it('leaves the grocery controls relying on that rule rather than a fixed height', () => {
+  it('gives the toolbar controls a 44px box without leaning on that rule', () => {
     const source = read('src/pages/Grocery.tsx');
-    // h-7 w-7 is 28px; min-height/min-width win over height/width, so the
-    // rendered target is 44px on touch and stays compact on desktop. If these
-    // ever gain an explicit pointer-coarse height, this test should be
-    // rewritten rather than deleted.
     expect(source).not.toMatch(/pointer-coarse:h-\d/);
+    // Add and the overflow trigger are h-11 (44px) at every width.
+    expect(source).toMatch(/className="h-11 shrink-0 px-4"/);
+    expect(source).toMatch(/className="h-11 w-11 shrink-0"/);
   });
 });

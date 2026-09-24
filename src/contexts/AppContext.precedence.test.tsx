@@ -26,6 +26,10 @@ import { queueWrite } from '@/lib/webSyncQueue';
 // ---- Supabase mock: a chainable, thenable query builder per table ----------
 const tableData: Record<string, unknown[]> = {};
 let sessionUser: { id: string } | null = null;
+/** When set, the grocery_items read waits for it: a server that has not answered yet. */
+let groceryGate: Promise<void> | null = null;
+/** When set, the grocery_items read fails with it. */
+let groceryError: unknown = null;
 
 function makeBuilder(table: string) {
   const builder: Record<string, unknown> = {};
@@ -50,11 +54,16 @@ function makeBuilder(table: string) {
     return builder;
   });
   // thenable: awaiting the builder resolves to the table's dataset.
-  builder.then = (resolve: (v: { data: unknown[]; error: null }) => unknown) => {
+  builder.then = (resolve: (v: { data: unknown[] | null; error: unknown }) => unknown) => {
     let rows = tableData[table] ?? [];
     if (window) rows = rows.slice(window.from, window.to + 1);
     if (cap !== null) rows = rows.slice(0, cap);
-    return resolve({ data: rows, error: null });
+    const answer = () =>
+      table === 'grocery_items' && groceryError
+        ? resolve({ data: null, error: groceryError })
+        : resolve({ data: rows, error: null });
+    if (table === 'grocery_items' && groceryGate) return groceryGate.then(answer);
+    return answer();
   };
   return builder;
 }
@@ -581,5 +590,89 @@ describe('US-819: the load reaches past the old row caps', () => {
 
     await waitFor(() => expect(rows.length).toBe(1));
     expect(rows[0].checked).toBe(false);
+  });
+});
+
+/**
+ * groceryHydrated lets the Grocery page tell "still loading" from "your list is
+ * empty". It must not claim ready before the server has answered (an empty
+ * cache is not an answer), and it must not wait forever when the load fails.
+ */
+describe('groceryHydrated', () => {
+  const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    localStorage.clear();
+    groceryGate = null;
+    groceryError = null;
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+    tableData['grocery_items'] = [
+      { id: 'g1', name: 'Milk', quantity: 1, checked: false, household_id: HOUSEHOLD },
+      { id: 'g2', name: 'Bread', quantity: 1, checked: false, household_id: HOUSEHOLD },
+    ];
+  });
+
+  function probe() {
+    const seen = { hydrated: [] as boolean[], rows: [] as Array<{ id: string; checked: boolean }> };
+    function GroceryProbe() {
+      const { groceryItems, groceryHydrated } = useApp();
+      seen.hydrated.push(groceryHydrated);
+      seen.rows = groceryItems.map((g) => ({ id: g.id, checked: g.checked }));
+      return null;
+    }
+    return { seen, GroceryProbe };
+  }
+
+  it('is false until the server load resolves, then true', async () => {
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, GroceryProbe } = probe();
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    // Everything else has loaded; the grocery read is still out.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.hydrated.at(-1)).toBe(false);
+    expect(seen.hydrated).not.toContain(true);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.rows.map((r) => r.id)).toEqual(['g1', 'g2']);
+  });
+
+  it('turns true when the load fails, so the page does not spin forever', async () => {
+    groceryError = { message: 'boom', code: 'XX000' };
+    const { seen, GroceryProbe } = probe();
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+  });
+
+  it('a queued toggle still survives the load that marks the list ready', async () => {
+    await queueWrite('user-1', 'grocery.toggle', { id: 'g2', checked: true });
+    const { seen, GroceryProbe } = probe();
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.rows.find((r) => r.id === 'g2')?.checked).toBe(true);
+    expect(seen.rows.find((r) => r.id === 'g1')?.checked).toBe(false);
   });
 });

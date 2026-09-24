@@ -25,6 +25,7 @@
  */
 
 import { toCanonicalInItemUnit, isUnknown, type CanonicalUnit, type CanonicalItemFacts } from '@/lib/canonicalUnits';
+import type { Food } from '@/types';
 
 /** Matches the `reason` CHECK on inventory_movements. */
 export type MovementReason = 'purchase' | 'cook' | 'waste' | 'expire' | 'correction' | 'initial';
@@ -332,27 +333,102 @@ export function partitionMovements(results: readonly MovementResult[]): {
 }
 
 /**
+ * How the page names a grocery row's food. A row added from the catalog is
+ * called by the catalog's name ("Whole milk, 2%") while the pantry row may be
+ * the household's spelling ("Milk"), so a plain name match misses it. Passing
+ * the page's resolver makes checkout credit the item the row shows as.
+ */
+export type ResolveFoodByName = (name: string) => Pick<Food, 'id'> | undefined;
+
+/**
  * Which pantry item a grocery row credits.
  *
- * Prefers the resolved `item_id` the catalog work populates, and falls back to
- * the SAME lowercased-name match the legacy checkout uses. The fallback is
- * deliberately not the better normalizer from US-657: while both paths can run,
- * they must credit the same item, and a ledger that quietly picked a different
- * row than the legacy write would be far worse than one that matches its
- * mistakes. Moving grocery rows onto the resolver belongs with US-661/US-684.
+ * Prefers the resolved `item_id` the catalog work populates. Then, when the
+ * caller supplies one, the page's own resolver (`resolveByName`), so a row
+ * credits the item the list shows it as. Only a resolved id that is one of
+ * `items` counts; anything else falls through. Last comes the SAME
+ * lowercased-name match the legacy checkout uses. That fallback is
+ * deliberately not the better normalizer from US-657: while both paths can
+ * run, they must credit the same item, and a ledger that quietly picked a
+ * different row than the legacy write would be far worse than one that
+ * matches its mistakes. Moving grocery rows onto the resolver belongs with
+ * US-661/US-684.
  */
 export function resolveGroceryItemId(
   groceryItem: PurchasableGroceryItem,
-  items: readonly MovementItem[]
+  items: readonly MovementItem[],
+  resolveByName?: ResolveFoodByName
 ): string | null {
   if (!groceryItem) return null;
   if (typeof groceryItem.item_id === 'string' && groceryItem.item_id.length > 0) {
     return groceryItem.item_id;
   }
-  const name = typeof groceryItem.name === 'string' ? groceryItem.name.toLowerCase() : '';
-  if (name === '') return null;
+  const rawName = typeof groceryItem.name === 'string' ? groceryItem.name : '';
+  if (rawName.trim() === '') return null;
+  if (resolveByName) {
+    const resolvedId = resolveByName(rawName)?.id;
+    if (resolvedId && (items ?? []).some((i) => i?.id === resolvedId)) return resolvedId;
+  }
+  const name = rawName.toLowerCase();
   const match = (items ?? []).find(
     (i) => typeof i?.name === 'string' && i.name.toLowerCase() === name
   );
   return match?.id ?? null;
+}
+
+/** A skipped purchase, tied back to the grocery row that produced it. */
+export interface PurchaseSkipped extends MovementSkipped {
+  groceryItemId: string;
+}
+
+export interface PurchasePlan {
+  movements: MovementDraft[];
+  skipped: PurchaseSkipped[];
+  /**
+   * Grocery row ids that produced a movement. A checkout may only say a row
+   * reached the pantry, or remove it from the list as credited, when its id
+   * is here. Two rows by the same name are two entries: flour at 2 lb and
+   * flour at 3 cups can record the first and skip the second.
+   */
+  recordedRowIds: string[];
+}
+
+/**
+ * Checkout, as data: one purchase movement per grocery row that resolves and
+ * converts, and a skipped entry (naming the row) for every one that does not.
+ * Pure, so which rows a checkout credits is testable without the context.
+ */
+export function planPurchaseMovements(input: {
+  groceryItems: readonly PurchasableGroceryItem[];
+  items: readonly MovementItem[];
+  householdId: string;
+  userId: string;
+  resolveByName?: ResolveFoodByName;
+}): PurchasePlan {
+  const { items, householdId, userId, resolveByName } = input;
+  const movements: MovementDraft[] = [];
+  const skipped: PurchaseSkipped[] = [];
+  const recordedRowIds: string[] = [];
+  for (const row of input.groceryItems ?? []) {
+    if (!row) continue;
+    const itemId = resolveGroceryItemId(row, items, resolveByName);
+    const item = itemId ? (items ?? []).find((i) => i.id === itemId) : undefined;
+    if (!item) {
+      skipped.push({
+        skipped: true,
+        reason: `no pantry item matches "${row.name ?? ''}"`,
+        itemId: null,
+        groceryItemId: row.id,
+      });
+      continue;
+    }
+    const result = buildPurchaseMovement({ householdId, userId, item, groceryItem: row });
+    if (isSkipped(result)) {
+      skipped.push({ ...result, groceryItemId: row.id });
+    } else {
+      movements.push(result);
+      recordedRowIds.push(row.id);
+    }
+  }
+  return { movements, skipped, recordedRowIds };
 }

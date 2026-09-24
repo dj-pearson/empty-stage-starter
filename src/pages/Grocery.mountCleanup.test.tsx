@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import React from 'react';
+import '@/i18n';
+import { grocery, groceryRow, resetGroceryHarness } from '@/test/groceryPageHarness';
 
 /**
  * US-712: checked grocery rows must survive a reload.
@@ -18,55 +20,42 @@ import React from 'react';
  * the way a reload hands them over from cache, and asserts nothing is deleted.
  */
 
-const deleteGroceryItem = vi.fn();
-const deleteGroceryItems = vi.fn();
-const clearCheckedGroceryItems = vi.fn();
-const setGroceryItems = vi.fn();
+const getUser = vi.fn().mockResolvedValue({ data: { user: null }, error: null });
 
-const CHECKED_ITEM = {
+const CHECKED_ITEM = groceryRow({
   id: 'g1',
   name: 'Milk',
   category: 'dairy',
-  quantity: 1,
   unit: 'gal',
   checked: true,
-  is_manual: true,
-  grocery_list_id: null,
-};
+  grocery_list_id: undefined,
+});
 
-const UNCHECKED_ITEM = {
-  ...CHECKED_ITEM,
+const UNCHECKED_ITEM = groceryRow({
   id: 'g2',
   name: 'Bread',
-  category: 'bakery',
-  checked: false,
-};
+  category: 'carb',
+  unit: 'gal',
+  grocery_list_id: undefined,
+});
 
-vi.mock('@/contexts/AppContext', () => ({
-  useFoods: () => ({ foods: [], addFood: vi.fn(), updateFood: vi.fn() }),
-  useInventory: () => ({
-    ledgerWritesEnabled: false,
-    recordPurchases: vi.fn(),
-    recordPurchaseReversal: vi.fn(),
-  }),
-  useKids: () => ({ kids: [], activeKidId: null }),
-  usePlan: () => ({ planEntries: [] }),
-  useRecipes: () => ({ recipes: [] }),
-  useGrocery: () => ({
-    groceryItems: [CHECKED_ITEM, UNCHECKED_ITEM],
-    setGroceryItems,
-    addGroceryItem: vi.fn(),
-    toggleGroceryItem: vi.fn(),
-    updateGroceryItem: vi.fn(),
-    deleteGroceryItem,
-    deleteGroceryItems,
-    clearCheckedGroceryItems,
-  }),
+vi.mock('@/contexts/AppContext', async () => (await import('@/test/groceryPageHarness')).appContextMock);
+vi.mock('@/hooks/usePlanToGrocery', async () => (await import('@/test/groceryPageHarness')).planToGroceryMock);
+// The session comes from AuthContext. The page used to run its own getUser()
+// here, which rejects offline and took the Add button down with it.
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ userId: 'u1', householdId: 'h1' }) }));
+vi.mock('@/hooks/useHousehold', () => ({ useHousehold: () => ({ members: [] }) }));
+vi.mock('@/hooks/usePendingGroceryIds', () => ({
+  usePendingGroceryIds: () => ({ ids: new Set<string>(), count: 0 }),
+}));
+vi.mock('@/hooks/useGroceryLists', async () => (await import('@/test/groceryPageHarness')).groceryListsMock);
+vi.mock('@/hooks/useStoreLayouts', () => ({
+  useStoreLayouts: () => ({ walkContext: null, rememberAisle: vi.fn(), stores: [], selectedStore: null, aisles: [], setSelectedStoreId: vi.fn(), refresh: vi.fn() }),
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }) },
+    auth: { getUser: (...a: unknown[]) => getUser(...a) },
     rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     from: () => ({
       select: () => ({
@@ -77,7 +66,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
-vi.mock('@/lib/analytics', () => ({ analytics: { track: vi.fn(), page: vi.fn() } }));
+vi.mock('@/lib/analytics', () => ({ analytics: { trackEvent: vi.fn(), track: vi.fn(), page: vi.fn() } }));
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
@@ -102,32 +91,14 @@ vi.mock('@/components/SmartRestockSuggestions', () => ({
 vi.mock('@/components/GroceryListSelector', () => ({
   GroceryListSelector: () => <div data-testid="stub-GroceryListSelector" />,
 }));
+vi.mock('@/components/grocery/GroceryQuickAdd', () => ({ GroceryQuickAdd: () => null }));
+vi.mock('@/components/grocery/StorePicker', () => ({ StorePicker: () => null }));
+vi.mock('@/components/grocery/PlaceInAisleChips', () => ({ PlaceInAisleChips: () => null }));
 vi.mock('@/components/CreateGroceryListDialog', () => ({
   CreateGroceryListDialog: () => <div data-testid="stub-CreateGroceryListDialog" />,
 }));
 vi.mock('@/components/ManageGroceryListsDialog', () => ({
   ManageGroceryListsDialog: () => <div data-testid="stub-ManageGroceryListsDialog" />,
-}));
-vi.mock('@/components/CreateStoreLayoutDialog', () => ({
-  CreateStoreLayoutDialog: () => <div data-testid="stub-CreateStoreLayoutDialog" />,
-}));
-vi.mock('@/components/ManageStoreLayoutsDialog', () => ({
-  ManageStoreLayoutsDialog: () => <div data-testid="stub-ManageStoreLayoutsDialog" />,
-}));
-vi.mock('@/components/ManageStoreAislesDialog', () => ({
-  ManageStoreAislesDialog: () => <div data-testid="stub-ManageStoreAislesDialog" />,
-}));
-vi.mock('@/components/AisleContributionDialog', () => ({
-  AisleContributionDialog: () => <div data-testid="stub-AisleContributionDialog" />,
-}));
-vi.mock('@/components/ImportRecipeToGroceryDialog', () => ({
-  ImportRecipeToGroceryDialog: () => <div data-testid="stub-ImportRecipeToGroceryDialog" />,
-}));
-vi.mock('@/components/ScanReceiptDialog', () => ({
-  ScanReceiptDialog: () => <div data-testid="stub-ScanReceiptDialog" />,
-}));
-vi.mock('@/components/AddGroceryItemDialog', () => ({
-  AddGroceryItemDialog: () => <div data-testid="stub-AddGroceryItemDialog" />,
 }));
 vi.mock('@/components/EditGroceryItemDialog', () => ({
   EditGroceryItemDialog: () => <div data-testid="stub-EditGroceryItemDialog" />,
@@ -146,7 +117,12 @@ function renderGrocery() {
 }
 
 describe('Grocery page mount (US-712)', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    resetGroceryHarness();
+    getUser.mockClear();
+    toastInfo.mockClear();
+    grocery.items = [CHECKED_ITEM, UNCHECKED_ITEM];
+  });
 
   it('deletes nothing when the cache hands it pre-checked items', async () => {
     renderGrocery();
@@ -154,9 +130,9 @@ describe('Grocery page mount (US-712)', () => {
     // Let every mount effect settle, including the async user/household load.
     await waitFor(() => expect(screen.getByText('Bread')).toBeInTheDocument());
 
-    expect(deleteGroceryItems).not.toHaveBeenCalled();
-    expect(deleteGroceryItem).not.toHaveBeenCalled();
-    expect(clearCheckedGroceryItems).not.toHaveBeenCalled();
+    expect(grocery.fns.deleteGroceryItems).not.toHaveBeenCalled();
+    expect(grocery.fns.deleteGroceryItem).not.toHaveBeenCalled();
+    expect(grocery.fns.clearCheckedGroceryItems).not.toHaveBeenCalled();
   });
 
   it('does not claim the checked items were added to the pantry', async () => {
@@ -172,9 +148,10 @@ describe('Grocery page mount (US-712)', () => {
     await waitFor(() => expect(screen.getByText('Bread')).toBeInTheDocument());
 
     // The section is collapsed by default, so Radix has not mounted the row
-    // itself. What proves the item survived is the section and its count.
-    expect(screen.getByText('Purchased')).toBeInTheDocument();
-    expect(screen.getByText(/move 1 to pantry/i)).toBeInTheDocument();
+    // itself. What proves the item survived is the section and the checkout
+    // bar's count.
+    expect(screen.getByText(/^Purchased/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clear 1 bought/i })).toBeInTheDocument();
   });
 
   it('expands the Purchased section to reveal the checked row', async () => {
@@ -182,8 +159,20 @@ describe('Grocery page mount (US-712)', () => {
     renderGrocery();
     await waitFor(() => expect(screen.getByText('Bread')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Purchased'));
+    await user.click(screen.getByText(/^Purchased/));
     expect(await screen.findByText('Milk')).toBeInTheDocument();
-    expect(deleteGroceryItems).not.toHaveBeenCalled();
+    expect(grocery.fns.deleteGroceryItems).not.toHaveBeenCalled();
+  });
+
+  it('never asks supabase.auth for the user on mount', async () => {
+    renderGrocery();
+    await waitFor(() => expect(screen.getByText('Bread')).toBeInTheDocument());
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps Add on screen even when a getUser() call would have rejected', async () => {
+    getUser.mockRejectedValue(new Error('offline'));
+    renderGrocery();
+    expect(await screen.findByRole('button', { name: /^Add$/ })).toBeInTheDocument();
   });
 });

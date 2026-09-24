@@ -17,7 +17,7 @@ import { fetchAllRows, ROW_CEILING } from "@/lib/fetchAllRows";
 import { toISODate, addIsoDays } from "@/lib/date-utils";
 import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { PlanProvider, usePlan, type CopyWeekResult, type PlanDeleteResult } from "./PlanContext";
-import { GroceryProvider, useGrocery } from "./GroceryContext";
+import { GroceryProvider, useGrocery, type GroceryMergeResult } from "./GroceryContext";
 import { InventoryProvider, useInventory, parseMovementRows, parseStockRows, MOVEMENT_WINDOW_DAYS, MOVEMENT_LIMIT } from "./InventoryContext";
 import { toast } from "sonner";
 import { compareLedgerToLegacy, summarizeDivergences, type ComparableItem } from "@/lib/stockComparison";
@@ -45,6 +45,8 @@ interface AppContextType {
   activeKidId: string | null;
   planEntries: PlanEntry[];
   groceryItems: GroceryItem[];
+  /** See GroceryContext: false until the cache held rows or the server load settled. */
+  groceryHydrated: boolean;
   addFood: (food: Omit<Food, "id">) => Promise<boolean>;
   updateFood: (id: string, food: Partial<Food>) => void;
   deleteFood: (id: string) => void;
@@ -63,6 +65,8 @@ interface AppContextType {
   setGroceryItems: (items: GroceryItem[]) => void;
   addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
   addGroceryItemsMerged: (items: GroceryAddInput[]) => number;
+  mergeGroceryItems: (items: GroceryAddInput[], opts?: { defaultListId?: string | null }) => GroceryMergeResult;
+  restoreGroceryItems: (rows: GroceryItem[]) => void;
   toggleGroceryItem: (id: string) => void;
   updateGroceryItem: (id: string, updates: Partial<GroceryItem>) => void;
   deleteGroceryItem: (id: string) => void;
@@ -125,7 +129,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids } = useKids();
   const { recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes } = useRecipes();
   const { planEntries, setPlanEntries, setPlanEntriesState, addPlanEntry, addPlanEntries, updatePlanEntry, copyWeekPlan, deleteWeekPlan } = usePlan();
-  const { groceryItems, setGroceryItems, setGroceryItemsState, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
+  const { groceryItems, groceryHydrated, setGroceryHydrated, setGroceryItems, setGroceryItemsState, addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
   // US-671: the ledger slices. Read-only here; nothing in the composer appends.
   const { movements, setMovements, itemStock, setItemStock, stockRows, ledgerReadsEnabled } = useInventory();
 
@@ -144,6 +148,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // cross-device-edited row — a violation of the US-341 precedence contract).
   const serverLoadAppliedRef = useRef(false);
 
+  // The scope the latest load effect is for, so a load that settles after the
+  // account or household changed does not mark the new scope's list ready.
+  const currentScopeRef = useRef<string | null>(null);
+
   // Load from storage on mount (platform-aware)
   useEffect(() => {
     const loadData = async () => {
@@ -161,6 +169,12 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
           setActiveKidId(data.activeKidId || (data.kids?.[0]?.id ?? null));
           setPlanEntriesState(data.planEntries || []);
           setGroceryItemsState(data.groceryItems || []);
+          // A cached list is something true to show while the server answers.
+          // An empty cache is not: "your list is empty" before the load lands
+          // is a claim nobody has checked yet.
+          if (Array.isArray(data.groceryItems) && data.groceryItems.length > 0) {
+            setGroceryHydrated(true);
+          }
           // US-671: the ledger slices hydrate from the cache like every other
           // domain, so an offline pantry still has a balance to render.
           setMovements(parseMovementRows(data.movements || []));
@@ -252,6 +266,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     // prior sign-out (US-537).
     signedOutRef.current = false;
     const scope = `${userId}:${householdId}`;
+    currentScopeRef.current = scope;
     if (loadedScopeRef.current === scope) return;
     const prevUserId = loadedScopeRef.current?.split(':')[0] ?? null;
     loadedScopeRef.current = scope;
@@ -271,6 +286,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setActiveKidId(null);
       setPlanEntriesState([]);
       setGroceryItemsState([]);
+      setGroceryHydrated(false);
       setMovements([]);
       setItemStock([]);
     }
@@ -513,7 +529,11 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       }
     };
 
-    loadUserData();
+    // Settled either way -- loaded, failed, or bounced to /auth -- the list
+    // has stopped waiting on this load. Only for the scope it was started for.
+    void loadUserData().finally(() => {
+      if (currentScopeRef.current === scope) setGroceryHydrated(true);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, householdId]);
 
@@ -525,6 +545,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event !== 'SIGNED_OUT') return;
       loadedScopeRef.current = null;
+      currentScopeRef.current = null;
       serverLoadAppliedRef.current = false;
       // US-537: block + cancel any pending debounced save so it can't re-write
       // the cache (with child PII) after we scrub it below.
@@ -539,6 +560,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setActiveKidId(null);
       setPlanEntriesState([]);
       setGroceryItemsState([]);
+      setGroceryHydrated(false);
       setMovements([]);
       setItemStock([]);
       getStorage()
@@ -708,24 +730,24 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   }, [setFoods, setKids, setActiveKidId, setPlanEntriesState, setGroceryItemsState]);
 
   const value = useMemo<AppContextType>(() => ({
-    foods, kids, recipes, activeKidId, planEntries, groceryItems,
+    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
     setPlanEntries, addPlanEntry, addPlanEntries, updatePlanEntry,
-    setGroceryItems, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem,
+    setGroceryItems, addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems,
     exportData, importData, resetAllData,
     addFoods, updateFoods, deleteFoods,
     copyWeekPlan, deleteWeekPlan,
     refreshFoods, refreshRecipes, refreshKids,
   }), [
-    foods, kids, recipes, activeKidId, planEntries, groceryItems,
+    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
     setPlanEntries, addPlanEntry, addPlanEntries, updatePlanEntry,
-    setGroceryItems, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem,
+    setGroceryItems, addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems,
     exportData, importData, resetAllData,
     addFoods, updateFoods, deleteFoods,

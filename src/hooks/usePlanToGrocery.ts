@@ -8,8 +8,10 @@
  *   - Generation is window-scoped (US-713): the days asked for, not the
  *     120-day context the plan holds.
  *   - A family recipe counts once across kids (mealPlanner.generateGroceryList).
- *   - Writes go through addGroceryItemsMerged and deleteGroceryItems, which
+ *   - Writes go through mergeGroceryItems and deleteGroceryItems, which
  *     persist and stack duplicates; nothing here sets local state directly.
+ *   - A kept row the week now needs more of is bumped to the new count through
+ *     the same merge, so it is one request and one Undo entry.
  *   - "replace" retires stale plan-sync rows, but only those whose source plan
  *     entry is inside the window (or no longer in the plan at all), so pushing
  *     next week cannot delete this week's rows. "additive" (the default) never
@@ -18,12 +20,14 @@
  *   - Running push twice for the same week is a no-op.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useFoods, useGrocery } from "@/contexts/AppContext";
+import type { GroceryMergeBump } from "@/contexts/GroceryContext";
 import { generateGroceryList, type ShoppingWindow } from "@/lib/mealPlanner";
 import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
-import { MEAL_PLAN_SYNC, planRegenerationFromPlan } from "@/lib/groceryData";
-import type { PlanEntry } from "@/types";
+import { planRegenerationFromPlan } from "@/lib/groceryData";
+import type { GroceryAddInput } from "@/lib/groceryMerge";
+import type { GroceryItem, PlanEntry } from "@/types";
 
 export type PlanToGroceryWindow = ShoppingWindow;
 
@@ -54,26 +58,28 @@ export interface PlanToGroceryResult {
   /** Rows left exactly as they were (hand-added, bought, or already synced). */
   kept: number;
   /**
-   * Ids of the rows this push inserted, for an Undo. The ids are assigned
-   * inside the grocery context, so this array is filled when the inserted
-   * rows commit, which happens in the same act/tick as the push and before
-   * any toast action can be clicked. Read it lazily (e.g. inside onClick).
+   * Ids of the rows this push inserted, for an Undo. Known when push returns:
+   * the grocery context mints them on the client (US-823), so there is no
+   * matching by name, and a co-parent's row that happens to share a name can
+   * never be swept into this push's Undo.
    */
   insertedIds: string[];
   /** Rows the plan called for before comparing with the list; 0 means nothing needed. */
   generated: number;
+  /** The rows a replace retired, as they were, so an Undo can restore them. */
+  retiredRows: GroceryItem[];
+  /** Existing rows whose quantity this push raised, with what they held before. */
+  bumps: GroceryMergeBump[];
 }
 
-interface PendingInsert {
-  before: ReadonlySet<string>;
-  names: ReadonlySet<string>;
-  target: string[];
-}
-
-const nameKey = (name: string) => name.trim().toLowerCase();
 const dateKey = (value: string) => value.slice(0, 10);
 
-function scopeEntries(
+/**
+ * The plan entries a push covers: inside the window, and for the given kids
+ * when there are any. Exported so the page can build its kid index
+ * (buildGroceryKidIndex) from exactly the entries a push would read.
+ */
+export function scopeEntries(
   entries: readonly PlanEntry[],
   window: PlanToGroceryWindow,
   kidIds: readonly string[] | undefined,
@@ -90,7 +96,7 @@ function scopeEntries(
 
 export function usePlanToGrocery() {
   const { foods, catalogById } = useFoods();
-  const { groceryItems, addGroceryItemsMerged, deleteGroceryItems } = useGrocery();
+  const { groceryItems, mergeGroceryItems, deleteGroceryItems } = useGrocery();
 
   // US-795: resolve every food once; generateGroceryList is a plain library
   // and cannot read the catalog itself.
@@ -103,25 +109,10 @@ export function usePlanToGrocery() {
     return map;
   }, [foods, catalogById]);
 
-  // push reads the list through a ref so two pushes in one handler see the
-  // same list, and so push keeps a stable identity while the list changes.
+  // push reads the list through a ref so it keeps a stable identity while the
+  // list changes.
   const groceryRef = useRef(groceryItems);
   groceryRef.current = groceryItems;
-  const pendingRef = useRef<PendingInsert[]>([]);
-
-  useEffect(() => {
-    const pending = pendingRef.current;
-    if (pending.length === 0) return;
-    pendingRef.current = [];
-    for (const p of pending) {
-      for (const item of groceryItems) {
-        if (p.before.has(item.id)) continue;
-        if (item.added_via !== MEAL_PLAN_SYNC) continue;
-        if (!p.names.has(nameKey(item.name))) continue;
-        if (!p.target.includes(item.id)) p.target.push(item.id);
-      }
-    }
-  }, [groceryItems]);
 
   const compute = useCallback(
     (entries: readonly PlanEntry[], window: PlanToGroceryWindow, opts: PlanToGroceryOptions = {}) => {
@@ -170,22 +161,46 @@ export function usePlanToGrocery() {
     (entries: readonly PlanEntry[], window: PlanToGroceryWindow, opts: PlanToGroceryOptions = {}): PlanToGroceryResult => {
       const mode = opts.mode ?? "additive";
       const { generated, plan } = compute(entries, window, opts);
-      const insertedIds: string[] = [];
-      if (generated.length === 0) {
-        return { added: 0, retired: 0, kept: plan.preservedCount, insertedIds, generated: 0 };
-      }
 
+      // Retire BEFORE the nothing-to-add return. A replace over a week the
+      // parent emptied is exactly the case that has to clear the old rows;
+      // returning first left every one of them on the list.
       const retireIds = mode === "replace" ? plan.retireIds : [];
+      const retireSet = new Set(retireIds);
+      const retiredRows = groceryRef.current.filter((item) => retireSet.has(item.id)).map((item) => ({ ...item }));
       if (retireIds.length > 0) deleteGroceryItems(retireIds);
 
+      if (generated.length === 0) {
+        return {
+          added: 0,
+          retired: retireIds.length,
+          kept: plan.preservedCount,
+          insertedIds: [],
+          generated: 0,
+          retiredRows,
+          bumps: [],
+        };
+      }
+
+      // A kept row the week needs more of goes in as the difference, so the
+      // merge's bump lands it on the new total (absolute on the wire, so a
+      // replayed bump is idempotent).
+      const growth: GroceryAddInput[] = plan.updates.map((u) => ({
+        name: u.name,
+        quantity: u.delta,
+        unit: u.unit,
+        grocery_list_id: opts.selectedListId ?? undefined,
+      }));
+      const batch: GroceryAddInput[] = [...plan.additions, ...growth];
+
       let added = 0;
-      if (plan.additions.length > 0) {
-        pendingRef.current.push({
-          before: new Set(groceryRef.current.map((i) => i.id)),
-          names: new Set(plan.additions.map((a) => nameKey(a.name))),
-          target: insertedIds,
-        });
-        added = addGroceryItemsMerged(plan.additions, { defaultListId: opts.defaultListId });
+      let insertedIds: string[] = [];
+      let bumps: GroceryMergeBump[] = [];
+      if (batch.length > 0) {
+        const result = mergeGroceryItems(batch, { defaultListId: opts.defaultListId });
+        added = result.touched;
+        insertedIds = result.insertedIds;
+        bumps = result.bumps;
       }
 
       return {
@@ -194,9 +209,11 @@ export function usePlanToGrocery() {
         kept: plan.preservedCount,
         insertedIds,
         generated: generated.length,
+        retiredRows,
+        bumps,
       };
     },
-    [compute, addGroceryItemsMerged, deleteGroceryItems],
+    [compute, mergeGroceryItems, deleteGroceryItems],
   );
 
   return { preview, push };

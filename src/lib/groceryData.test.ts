@@ -12,9 +12,15 @@ import {
   buildFoodByDisplayNameIndex,
   initialExpandedGroups,
   reconcileExpandedGroups,
+  orderGroupNames,
+  withLingering,
+  stepQuantity,
+  milestoneKey,
+  buildGroceryKidIndex,
+  groceryKidKey,
 } from './groceryData';
-import type { CatalogEntry } from '@/lib/effectiveFood';
-import type { Food, GroceryItem } from '@/types';
+import { resolveFood, type CatalogEntry, type EffectiveFood } from '@/lib/effectiveFood';
+import type { Food, GroceryItem, PlanEntry } from '@/types';
 
 const item = (id: string, over: Partial<GroceryItem> = {}): GroceryItem =>
   ({
@@ -49,7 +55,7 @@ describe('groceryData (US-553 AC2)', () => {
     expect(purchased.map((i) => i.id)).toEqual(['b']);
   });
 
-  it('computeProgressPercent rounds and guards divide-by-zero', () => {
+  it('computeProgressPercent floors and guards divide-by-zero', () => {
     expect(computeProgressPercent(0, 0)).toBe(0);
     expect(computeProgressPercent(4, 1)).toBe(25);
     expect(computeProgressPercent(3, 1)).toBe(33);
@@ -288,5 +294,172 @@ describe('planRegenerationFromPlan window scope', () => {
       selectedListId: null,
     });
     expect(plan.retireIds.sort()).toEqual(['next-week-stale', 'no-source', 'this-week']);
+  });
+});
+
+describe('grocery list layout helpers', () => {
+  const grouped = {
+    Dairy: [item('milk'), item('cheese')],
+    Produce: [item('apple')],
+    Uncategorized: [item('mystery')],
+  };
+
+  it('flattenGroupedRows emits every header but only expanded groups items, in order', () => {
+    const rows = flattenGroupedRows(grouped, {
+      expanded: new Set(['Produce']),
+      order: ['Produce', 'Dairy', 'Uncategorized'],
+    });
+    expect(rows.map((r) => (r.type === 'header' ? `#${r.group}:${r.count}` : r.item.id))).toEqual([
+      '#Produce:1',
+      'apple',
+      '#Dairy:2',
+      '#Uncategorized:1',
+    ]);
+  });
+
+  it('flattenGroupedRows keeps groups the order does not name, and opens all by default', () => {
+    const rows = flattenGroupedRows(grouped, { order: ['Uncategorized'] });
+    expect(rows.filter((r) => r.type === 'header').map((r) => r.group)).toEqual([
+      'Uncategorized',
+      'Dairy',
+      'Produce',
+    ]);
+    expect(rows.filter((r) => r.type === 'item')).toHaveLength(4);
+  });
+
+  it('orderGroupNames sorts alphabetically with Uncategorized and Other last', () => {
+    expect(orderGroupNames(['Uncategorized', 'Produce', 'Aisle 12', 'Aisle 2', 'Bakery'], 'aisle')).toEqual([
+      'Aisle 2',
+      'Aisle 12',
+      'Bakery',
+      'Produce',
+      'Uncategorized',
+    ]);
+    expect(orderGroupNames(['Other', 'Snacks', 'Dairy'], 'category')).toEqual(['Dairy', 'Snacks', 'Other']);
+  });
+
+  it('initialExpandedGroups opens the first group in the given order on a phone', () => {
+    expect([...initialExpandedGroups(['Dairy', 'Produce'], true, ['Produce', 'Dairy'])]).toEqual(['Produce']);
+    expect([...initialExpandedGroups(['Dairy', 'Produce'], true)]).toEqual(['Dairy']);
+  });
+
+  it('withLingering keeps a just-checked row in active, in place', () => {
+    const all = [item('a'), item('b', { checked: true }), item('c'), item('d', { checked: true })];
+    const active = all.filter((i) => !i.checked);
+    const purchased = all.filter((i) => i.checked);
+
+    const placed = withLingering(active, purchased, new Set(['b']), all);
+    expect(placed.active.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+    expect(placed.purchased.map((i) => i.id)).toEqual(['d']);
+
+    const appended = withLingering(active, purchased, new Set(['b']));
+    expect(appended.active.map((i) => i.id)).toEqual(['a', 'c', 'b']);
+
+    const none = withLingering(active, purchased, new Set());
+    expect(none.active).toBe(active);
+    expect(none.purchased).toBe(purchased);
+  });
+
+  it('stepQuantity takes quarters below 1 and whole steps from 1, never below 0.25', () => {
+    expect(stepQuantity(0.25, 1)).toBe(0.5);
+    expect(stepQuantity(0.75, 1)).toBe(1);
+    expect(stepQuantity(1, 1)).toBe(2);
+    expect(stepQuantity(3, -1)).toBe(2);
+    expect(stepQuantity(1, -1)).toBe(0.75);
+    expect(stepQuantity(1.5, -1)).toBe(1);
+    expect(stepQuantity(0.25, -1)).toBe(0.25);
+    expect(stepQuantity(0.5, -3)).toBe(0.25);
+    expect(stepQuantity(2, 0)).toBe(2);
+  });
+
+  it('milestoneKey maps progress to an i18n key', () => {
+    expect(milestoneKey(0)).toBeNull();
+    expect(milestoneKey(24)).toBeNull();
+    expect(milestoneKey(25)).toBe('grocery.progress.milestone.start');
+    expect(milestoneKey(50)).toBe('grocery.progress.milestone.halfway');
+    expect(milestoneKey(75)).toBe('grocery.progress.milestone.almost');
+    expect(milestoneKey(100)).toBe('grocery.progress.milestone.complete');
+  });
+
+  it('does not call a list complete while an item is left (Math.floor at 199/200)', () => {
+    expect(computeProgressPercent(200, 199)).toBe(99);
+    expect(milestoneKey(computeProgressPercent(200, 199))).toBe('grocery.progress.milestone.almost');
+    expect(computeProgressPercent(200, 200)).toBe(100);
+  });
+});
+
+describe('buildGroceryKidIndex', () => {
+  const foods: Food[] = [
+    { id: 'f-milk', name: 'milk', category: 'dairy', is_safe: true, is_try_bite: false },
+    { id: 'f-pasta', name: 'Pasta', category: 'carb', is_safe: true, is_try_bite: false },
+  ];
+  const effective: Record<string, EffectiveFood> = Object.fromEntries(
+    foods.map((f) => [f.id, resolveFood(f, null)]),
+  );
+  const WEEK = { from: '2026-09-06', to: '2026-09-12' };
+
+  it('attributes milk to both kids, not just the entry that first put it on the list', () => {
+    const entries: PlanEntry[] = [
+      { id: 'e1', kid_id: 'ava', date: '2026-09-07', meal_slot: 'breakfast', food_id: 'f-milk', result: null },
+      { id: 'e2', kid_id: 'sam', date: '2026-09-08', meal_slot: 'breakfast', food_id: 'f-milk', result: null },
+      { id: 'e3', kid_id: 'ava', date: '2026-09-09', meal_slot: 'breakfast', food_id: 'f-milk', result: null },
+      { id: 'e4', kid_id: 'sam', date: '2026-09-07', meal_slot: 'dinner', food_id: 'f-pasta', result: null },
+      // Next week: not this list's business.
+      { id: 'e5', kid_id: 'leo', date: '2026-09-14', meal_slot: 'dinner', food_id: 'f-pasta', result: null },
+    ];
+    const index = buildGroceryKidIndex(entries, foods, effective, WEEK);
+    expect(index.get(groceryKidKey('Milk'))).toEqual(['ava', 'sam']);
+    expect(index.get(groceryKidKey(' pasta '))).toEqual(['sam']);
+  });
+});
+
+describe('planRegenerationFromPlan grows a kept row', () => {
+  it('emits a bump when the plan now needs more of a kept row', () => {
+    const existing = [
+      item('pasta-row', {
+        name: 'Pasta',
+        quantity: 1,
+        unit: 'box',
+        auto_generated: true,
+        added_via: MEAL_PLAN_SYNC,
+        source_plan_entry_id: 'e1',
+      }),
+    ];
+    const plan = planRegenerationFromPlan({
+      existing,
+      generated: [{ name: 'Pasta', quantity: 3, unit: 'box', source_plan_entry_id: 'e1' }],
+      selectedListId: null,
+    });
+    expect(plan.additions).toEqual([]);
+    expect(plan.retireIds).toEqual([]);
+    expect(plan.updates).toEqual([{ id: 'pasta-row', name: 'Pasta', unit: 'box', quantity: 3, delta: 2 }]);
+  });
+
+  it('never shrinks a row, and leaves a row in another unit or with a hand-added twin', () => {
+    const syncRow = (over: Partial<GroceryItem>) =>
+      item(over.id ?? 'x', { auto_generated: true, added_via: MEAL_PLAN_SYNC, ...over });
+    const shrink = planRegenerationFromPlan({
+      existing: [syncRow({ id: 'p', name: 'Pasta', quantity: 5, unit: 'box' })],
+      generated: [{ name: 'Pasta', quantity: 2, unit: 'box' }],
+      selectedListId: null,
+    });
+    expect(shrink.updates).toEqual([]);
+
+    const otherUnit = planRegenerationFromPlan({
+      existing: [syncRow({ id: 'p', name: 'Pasta', quantity: 1, unit: 'lb' })],
+      generated: [{ name: 'Pasta', quantity: 3, unit: 'box' }],
+      selectedListId: null,
+    });
+    expect(otherUnit.updates).toEqual([]);
+
+    const twin = planRegenerationFromPlan({
+      existing: [
+        item('hand', { name: 'Pasta', quantity: 1, unit: 'box' }),
+        syncRow({ id: 'p', name: 'Pasta', quantity: 1, unit: 'box' }),
+      ],
+      generated: [{ name: 'Pasta', quantity: 3, unit: 'box' }],
+      selectedListId: null,
+    });
+    expect(twin.updates).toEqual([]);
   });
 });

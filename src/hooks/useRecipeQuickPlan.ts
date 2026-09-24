@@ -87,7 +87,7 @@ export function useRecipeQuickPlan() {
   const { kids } = useKids();
   const { foods } = useFoods();
   const { preview, push } = usePlanToGrocery();
-  const { deleteGroceryItems } = useGrocery();
+  const { deleteGroceryItems, updateGroceryItem } = useGrocery();
 
   const foodById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
   const kidName = useCallback(
@@ -172,8 +172,10 @@ export function useRecipeQuickPlan() {
               action: {
                 label: t("planner.actions.undo", { defaultValue: "Undo" }),
                 onClick: () => {
-                  // insertedIds fills when the rows commit; read it lazily.
+                  // insertedIds is known when push returns: the ids are minted on the client.
                   if (out.insertedIds.length > 0) deleteGroceryItems([...out.insertedIds]);
+                  // Rows already on the list had their quantity bumped; put it back.
+                  for (const bump of out.bumps) updateGroceryItem(bump.id, bump.prev);
                 },
               },
             },
@@ -200,7 +202,7 @@ export function useRecipeQuickPlan() {
 
       return res;
     },
-    [planEntries, scheduleRecipe, deletePlanEntries, preview, push, deleteGroceryItems, navigate, t, i18n.language, kidName],
+    [planEntries, scheduleRecipe, deletePlanEntries, preview, push, deleteGroceryItems, updateGroceryItem, navigate, t, i18n.language, kidName],
   );
 
   const planTonight = useCallback(

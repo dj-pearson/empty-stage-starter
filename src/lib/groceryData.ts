@@ -1,5 +1,5 @@
-import type { Food, FoodCategory, GroceryItem } from '@/types';
-import { resolveFood, type CatalogEntry } from '@/lib/effectiveFood';
+import type { Food, FoodCategory, GroceryItem, PlanEntry } from '@/types';
+import { resolveFood, type CatalogEntry, type EffectiveFood } from '@/lib/effectiveFood';
 
 /**
  * Pure derivations for the Grocery page (US-553 AC2) — extracted out of the JSX
@@ -110,12 +110,35 @@ export function splitByChecked(items: GroceryItem[]): SplitItems {
   };
 }
 
-/** Percent of items purchased, rounded; 0 when the list is empty. */
+/**
+ * Percent of items purchased, floored; 0 when the list is empty.
+ *
+ * Floored, not rounded: 199 of 200 rounded to 100, so the bar read "complete"
+ * with one item still in the trolley's future.
+ */
 export function computeProgressPercent(total: number, purchased: number): number {
-  return total > 0 ? Math.round((purchased / total) * 100) : 0;
+  return total > 0 ? Math.floor((purchased / total) * 100) : 0;
 }
 
-/** Encouragement message keyed off the progress percentage. */
+export type MilestoneKey =
+  | 'grocery.progress.milestone.start'
+  | 'grocery.progress.milestone.halfway'
+  | 'grocery.progress.milestone.almost'
+  | 'grocery.progress.milestone.complete';
+
+/** The i18n key for the encouragement line at this progress, or null for none. */
+export function milestoneKey(progressPercent: number): MilestoneKey | null {
+  if (progressPercent >= 100) return 'grocery.progress.milestone.complete';
+  if (progressPercent >= 75) return 'grocery.progress.milestone.almost';
+  if (progressPercent >= 50) return 'grocery.progress.milestone.halfway';
+  if (progressPercent >= 25) return 'grocery.progress.milestone.start';
+  return null;
+}
+
+/**
+ * @deprecated English-only; use milestoneKey with t(). Kept so the page keeps
+ * compiling until it moves over.
+ */
 export function milestoneMessage(progressPercent: number): string {
   if (progressPercent >= 100) return 'Shopping complete!';
   if (progressPercent >= 75) return 'Almost done!';
@@ -144,6 +167,27 @@ export function groupItems(items: GroceryItem[], groupBy: GroupBy): Record<strin
     });
   }
   return groups;
+}
+
+/** Group names that always sort last: the bucket for rows with no home. */
+const LEFTOVER_GROUPS = new Set(['uncategorized', 'other']);
+
+/**
+ * The order groups render in: alphabetical (numeric-aware, so "Aisle 2" comes
+ * before "Aisle 12"), with Uncategorized / Other last whatever the grouping.
+ * A leftover bucket first would put the rows nobody sorted at the top of the
+ * shop, which is the one place they are never needed.
+ */
+export function orderGroupNames(names: readonly string[], groupBy: GroupBy): string[] {
+  const leftover = (name: string) =>
+    LEFTOVER_GROUPS.has(name.trim().toLowerCase()) ||
+    (groupBy === 'category' && name === OTHER_CATEGORY_LABEL);
+  return [...names].sort((a, b) => {
+    const la = leftover(a);
+    const lb = leftover(b);
+    if (la !== lb) return la ? 1 : -1;
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  });
 }
 
 /**
@@ -185,9 +229,13 @@ export function slugifyGroupId(group: string): string {
 export function initialExpandedGroups(
   groupNames: readonly string[],
   isPhoneWidth: boolean,
+  order?: readonly string[],
 ): Set<string> {
   if (!isPhoneWidth) return new Set(groupNames);
-  const first = groupNames[0];
+  // With a render order (store walk order, or orderGroupNames), the first
+  // group is the first one the shopper reaches, not the first one inserted.
+  const present = new Set(groupNames);
+  const first = order ? order.find((name) => present.has(name)) ?? groupNames[0] : groupNames[0];
   return first === undefined ? new Set() : new Set([first]);
 }
 
@@ -235,17 +283,144 @@ export type VirtualRow =
   | { type: 'header'; group: string; count: number }
   | { type: 'item'; item: GroceryItem; group: string };
 
-/** Flatten grouped items into virtualizable rows (header row per non-empty group). */
-export function flattenGroupedRows(grouped: Record<string, GroceryItem[]>): VirtualRow[] {
+/**
+ * Flatten grouped items into virtualizable rows.
+ *
+ * Every non-empty group gets a header row; its item rows follow only when the
+ * group is expanded, so a folded aisle costs one row however long it is, and
+ * the fold works at any list size rather than only below the virtualization
+ * threshold. `expanded` omitted means every group is open.
+ *
+ * `order` sets the group order. Groups it does not name follow in their
+ * object order, so a new aisle is never dropped for missing from a layout.
+ */
+export function flattenGroupedRows(
+  grouped: Record<string, GroceryItem[]>,
+  opts: { expanded?: ReadonlySet<string>; order?: readonly string[] } = {},
+): VirtualRow[] {
+  const names = Object.keys(grouped);
+  let ordered = names;
+  if (opts.order) {
+    const present = new Set(names);
+    const named = opts.order.filter((name, i) => present.has(name) && opts.order!.indexOf(name) === i);
+    const namedSet = new Set(named);
+    ordered = [...named, ...names.filter((name) => !namedSet.has(name))];
+  }
+
   const rows: VirtualRow[] = [];
-  for (const [group, items] of Object.entries(grouped)) {
-    if (items.length === 0) continue;
+  for (const group of ordered) {
+    const items = grouped[group];
+    if (!items || items.length === 0) continue;
     rows.push({ type: 'header', group, count: items.length });
+    if (opts.expanded && !opts.expanded.has(group)) continue;
     for (const item of items) {
       rows.push({ type: 'item', item, group });
     }
   }
   return rows;
+}
+
+/**
+ * Keep just-checked rows in the active list for a moment.
+ *
+ * A checked row that jumps out from under the thumb puts the next row where
+ * the finger is, so a second tap checks the wrong item. The page holds the
+ * ids it wants to linger; this moves those rows back into `active` (crossed
+ * out, since they are still checked) and out of `purchased`.
+ *
+ * `order` is the full list the two halves were split from. Given, lingering
+ * rows sit exactly where they were; omitted, they are appended.
+ */
+export function withLingering(
+  active: GroceryItem[],
+  purchased: GroceryItem[],
+  lingerIds: ReadonlySet<string>,
+  order?: readonly GroceryItem[],
+): SplitItems {
+  if (lingerIds.size === 0) return { active, purchased };
+  const lingering = purchased.filter((item) => lingerIds.has(item.id));
+  if (lingering.length === 0) return { active, purchased };
+  const rest = purchased.filter((item) => !lingerIds.has(item.id));
+
+  if (!order) return { active: [...active, ...lingering], purchased: rest };
+
+  const keep = new Set<string>([...active, ...lingering].map((item) => item.id));
+  const byId = new Map<string, GroceryItem>([...active, ...lingering].map((item) => [item.id, item]));
+  const placed = order.filter((item) => keep.has(item.id)).map((item) => byId.get(item.id) as GroceryItem);
+  // Anything the order did not know about still shows.
+  const placedIds = new Set(placed.map((item) => item.id));
+  for (const item of [...active, ...lingering]) if (!placedIds.has(item.id)) placed.push(item);
+  return { active: placed, purchased: rest };
+}
+
+/**
+ * One tap on the row stepper.
+ *
+ * Quarters below 1 (a quarter pound of ham, half a bag of spinach) and whole
+ * units from 1 up. Going down from above 1 stops at 1 before it starts taking
+ * quarters, so 1.5 steps to 1 and then 0.75, never straight to 0.5. The floor
+ * is 0.25: removing a row is the delete button's job, not the minus button's.
+ *
+ * `delta` is a count of taps; its sign is the direction.
+ */
+export function stepQuantity(qty: number, delta: number): number {
+  const MIN = 0.25;
+  let next = Number.isFinite(qty) && qty > 0 ? qty : MIN;
+  const steps = Math.abs(Math.trunc(delta));
+  for (let i = 0; i < steps; i++) {
+    if (delta > 0) next = next < 1 ? Math.min(1, next + 0.25) : next + 1;
+    else next = next > 1 ? Math.max(1, next - 1) : next - 0.25;
+    next = Math.max(MIN, Math.round(next * 100) / 100);
+  }
+  return next;
+}
+
+// --- Which kid an item is for -----------------------------------------------
+
+/** The key buildGroceryKidIndex files a name under. Use it to look a row up. */
+export function groceryKidKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * Which kids each grocery name is for, from the plan.
+ *
+ * Built from EVERY in-window entry, not from a row's source_plan_entry_id:
+ * that column names only the first entry that put the food on the list, so
+ * milk planned for Ava on Monday and Sam on Tuesday would read "For Ava" and
+ * a parent would shop for one child. A food is filed under its resolved
+ * (catalog) name, which is what a plan-sync row is called, and under the
+ * household's own spelling, which is what a hand-added row is likely called.
+ *
+ * Kid ids come back in first-seen order, without repeats.
+ */
+export function buildGroceryKidIndex(
+  entries: readonly PlanEntry[],
+  foods: readonly Food[],
+  effectiveFoodById: Record<string, EffectiveFood>,
+  window: { from: string; to: string },
+): Map<string, string[]> {
+  const foodById = new Map(foods.map((food) => [food.id, food]));
+  const index = new Map<string, string[]>();
+  const file = (name: string | undefined, kidId: string) => {
+    if (!name) return;
+    const key = groceryKidKey(name);
+    if (!key) return;
+    const kids = index.get(key);
+    if (!kids) index.set(key, [kidId]);
+    else if (!kids.includes(kidId)) kids.push(kidId);
+  };
+  for (const entry of entries) {
+    if (typeof entry.date !== 'string') continue;
+    const day = entry.date.slice(0, 10);
+    if (day < window.from || day > window.to) continue;
+    if (!entry.kid_id) continue;
+    const food = foodById.get(entry.food_id);
+    if (!food) continue;
+    file(effectiveFoodById[food.id]?.name, entry.kid_id);
+    file(food.name, entry.kid_id);
+  }
+  return index;
 }
 
 // --- Plan sync (US-713) -----------------------------------------------------
@@ -281,6 +456,12 @@ export interface RegenerationPlan {
   }>;
   /** Rows left exactly as they are: hand-added, or already bought. */
   preservedCount: number;
+  /**
+   * Kept plan-sync rows the plan now needs more of: same unit, unchecked, and
+   * below the generated quantity. `quantity` is the absolute target and
+   * `delta` what to add to reach it, which is what a merge bump takes.
+   */
+  updates: Array<{ id: string; name: string; unit: string; quantity: number; delta: number }>;
 }
 
 /**
@@ -351,9 +532,40 @@ export function planRegenerationFromPlan(args: {
   const retireIds = regenerable
     .filter((item) => !generatedNames.has(key(item.name)) && inScope(item))
     .map((item) => item.id);
-  const keptNames = new Set(
-    regenerable.filter((item) => generatedNames.has(key(item.name))).map((item) => key(item.name)),
-  );
+  const kept = regenerable.filter((item) => generatedNames.has(key(item.name)));
+  const keptNames = new Set(kept.map((item) => key(item.name)));
+
+  // A week that grew (two more pasta dinners) used to leave the kept row at
+  // last week's count, because a kept row was "neither new nor stale". Only
+  // grow, never shrink: a parent who bumped it by hand meant it. And only when
+  // this row is the one unchecked row by that name on the list, since a merge
+  // bump lands on the first match and would otherwise hit a hand-added twin.
+  const unitKey = (unit: string | undefined | null) => (unit ?? '').trim().toLowerCase();
+  const uncheckedByName = new Map<string, number>();
+  for (const item of inSelectedList) {
+    if (item.checked) continue;
+    uncheckedByName.set(key(item.name), (uncheckedByName.get(key(item.name)) ?? 0) + 1);
+  }
+  const generatedByName = new Map<string, GeneratedRow>();
+  for (const row of generated) if (!generatedByName.has(key(row.name))) generatedByName.set(key(row.name), row);
+  const bumped = new Set<string>();
+  const updates: RegenerationPlan['updates'] = [];
+  for (const item of kept) {
+    const name = key(item.name);
+    if (bumped.has(name) || uncheckedByName.get(name) !== 1) continue;
+    const row = generatedByName.get(name);
+    if (!row || unitKey(row.unit) !== unitKey(item.unit)) continue;
+    const have = Number(item.quantity) || 0;
+    if (!(have < row.quantity)) continue;
+    bumped.add(name);
+    updates.push({
+      id: item.id,
+      name: item.name,
+      unit: item.unit ?? '',
+      quantity: row.quantity,
+      delta: Math.round((row.quantity - have) * 100) / 100,
+    });
+  }
 
   const additions = generated
     .filter((row) => !preservedNames.has(key(row.name)) && !keptNames.has(key(row.name)))
@@ -369,5 +581,5 @@ export function planRegenerationFromPlan(args: {
       added_via: MEAL_PLAN_SYNC,
     }));
 
-  return { retireIds, additions, preservedCount: preserved.length };
+  return { retireIds, additions, preservedCount: preserved.length, updates };
 }

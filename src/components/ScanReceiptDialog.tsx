@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Camera, Upload, Loader2, Check, X, Trash2, Receipt } from "lucide-react";
+import { Camera, Upload, Loader2, Check, X, Trash2, Receipt, Link2Off } from "lucide-react";
 import { toast } from "sonner";
 import { useFoods } from "@/contexts/AppContext";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
@@ -26,7 +27,6 @@ import { analytics } from "@/lib/analytics";
 import { useFeatureLimit } from "@/hooks/useFeatureLimit";
 import { logger } from "@/lib/logger";
 import { PHOTO_AI_NOTICE } from "@/lib/aiSafety";
-import type { Food } from "@/types";
 import {
   acceptedRowsToFoods,
   averageConfidence,
@@ -58,7 +58,8 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export function ScanReceiptDialog({ open, onClose }: Props) {
-  const { foods, addFoods } = useFoods();
+  const { t } = useTranslation();
+  const { foods, addFoods, updateFood } = useFoods();
   const { checkFeatureLimit, incrementUsage } = useFeatureLimit();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<"upload" | "parsing" | "review" | "saving">("upload");
@@ -88,11 +89,11 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
       if (!file) return;
 
       if (!file.type.startsWith("image/")) {
-        toast.error("Please select an image file");
+        toast.error(t("grocery.receipt.notImage", "Please select an image file"));
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
-        toast.error("Image too large — max 10 MB");
+        toast.error(t("grocery.receipt.tooLarge", "Image too large - max 10 MB"));
         return;
       }
 
@@ -141,9 +142,9 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
             avg_confidence: Number(avgConfidence.toFixed(2)),
           });
           toast.error(
-            "Couldn't read this receipt clearly — try better light or use bulk paste",
+            t("grocery.receipt.unclear", "Couldn't read this receipt clearly. Try better light, or paste the list instead."),
           );
-          setError("Low confidence parse. Try a clearer photo.");
+          setError(t("grocery.receipt.lowConfidence", "Low confidence parse. Try a clearer photo."));
           setStage("upload");
           return;
         }
@@ -158,12 +159,12 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
         void incrementUsage("receipt_scan");
       } catch (err) {
         logger.error("receipt scan failed", err);
-        toast.error("Receipt scan failed. Try again or use bulk add.");
-        setError(err instanceof Error ? err.message : "Unknown error");
+        toast.error(t("grocery.receipt.failed", "Receipt scan failed. Try again, or paste the list instead."));
+        setError(err instanceof Error ? err.message : t("grocery.receipt.unknownError", "Unknown error"));
         setStage("upload");
       }
     },
-    [foods, checkFeatureLimit, incrementUsage],
+    [foods, checkFeatureLimit, incrementUsage, t],
   );
 
   const updateRow = useCallback(
@@ -190,14 +191,30 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
 
   const handleConfirm = useCallback(async () => {
     if (acceptedRows.length === 0) {
-      toast.error("No items selected");
+      toast.error(t("grocery.receipt.noneSelected", "No items selected"));
       return;
     }
     setStage("saving");
     try {
-      const newFoods: Omit<Food, "id">[] = acceptedRowsToFoods(acceptedRows);
-      const ok = await addFoods(newFoods);
-      if (!ok) throw new Error("addFoods returned false");
+      // A match can go stale while the review is open (the food was deleted on
+      // another device). That row becomes a new food rather than an update to
+      // nothing.
+      const foodById = new Map(foods.map((f) => [f.id, f]));
+      const rowsToSave = acceptedRows.map((r) =>
+        r.matchedFoodId && !foodById.has(r.matchedFoodId) ? { ...r, matchedFoodId: null } : r,
+      );
+      const { updates, creates } = acceptedRowsToFoods(rowsToSave);
+
+      // Creates first: addFoods can fail, and a retry after that must not top
+      // up the matched foods a second time.
+      if (creates.length > 0) {
+        const ok = await addFoods(creates);
+        if (!ok) throw new Error("addFoods returned false");
+      }
+      for (const { foodId, quantityDelta } of updates) {
+        const current = foodById.get(foodId)?.quantity ?? 0;
+        updateFood(foodId, { quantity: Math.round((current + quantityDelta) * 100) / 100 });
+      }
 
       analytics.trackEvent("receipt_items_accepted", {
         accepted_count: acceptedRows.length,
@@ -209,14 +226,22 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
         item_count: acceptedRows.length,
       });
 
-      toast.success(`Added ${acceptedRows.length} items to pantry`);
+      toast.success(
+        t("grocery.receipt.saved", {
+          defaultValue: "Pantry updated: {{added}} new, {{topped}} topped up",
+          added: creates.length,
+          topped: updates.length,
+        }),
+      );
       handleClose();
     } catch (err) {
       logger.error("receipt save failed", err);
-      toast.error("Couldn't save pantry items. Try again.");
+      toast.error(t("grocery.receipt.saveFailed", "Couldn't save pantry items. Try again."));
       setStage("review");
     }
-  }, [acceptedRows, addFoods, droppedCount, handleClose, merchant]);
+  }, [acceptedRows, addFoods, updateFood, foods, droppedCount, handleClose, merchant, t]);
+
+  const foodNameById = useMemo(() => new Map(foods.map((f) => [f.id, f.name])), [foods]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : handleClose())}>
@@ -224,10 +249,13 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5" aria-hidden="true" />
-            Scan a receipt
+            {t("grocery.receipt.title", "Scan a receipt")}
           </DialogTitle>
           <DialogDescription>
-            Snap a photo of your grocery receipt and we'll add the items to your pantry.
+            {t(
+              "grocery.receipt.description",
+              "Snap a photo of your grocery receipt. Items already in your pantry are topped up; the rest are added.",
+            )}
           </DialogDescription>
           {/* US-632: see ImageFoodCapture. */}
           <p className="text-xs text-muted-foreground">{PHOTO_AI_NOTICE}</p>
@@ -255,7 +283,7 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
                 className="gap-2 h-24 text-base"
               >
                 <Camera className="h-6 w-6" aria-hidden="true" />
-                Take photo
+                {t("grocery.receipt.takePhoto", "Take photo")}
               </Button>
               <Button
                 onClick={() => {
@@ -270,11 +298,11 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
                 className="gap-2 h-24 text-base"
               >
                 <Upload className="h-6 w-6" aria-hidden="true" />
-                Upload image
+                {t("grocery.receipt.uploadImage", "Upload image")}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center">
-              Tip: lay the receipt flat, fill the frame, even light. We'll handle the rest.
+              {t("grocery.receipt.tip", "Tip: lay the receipt flat, fill the frame, and use even light.")}
             </p>
             {error && (
               <p className="text-sm text-destructive text-center" role="alert">
@@ -288,7 +316,7 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
           <div className="space-y-3 py-6" aria-live="polite" aria-busy="true">
             <div className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-              <span>Reading your receipt…</span>
+              <span>{t("grocery.receipt.reading", "Reading your receipt...")}</span>
             </div>
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
@@ -306,19 +334,25 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
             onRemoveRow={removeRow}
             onTrustAll={trustAll}
             onSkipLowConfidence={skipLowConfidence}
+            foodNameById={foodNameById}
           />
         )}
 
         {stage === "saving" && (
           <div className="flex items-center gap-3 py-6" aria-live="polite" aria-busy="true">
             <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-            <span>Saving {acceptedRows.length} items to pantry…</span>
+            <span>
+              {t("grocery.receipt.saving", {
+                defaultValue: "Saving {{count}} items to pantry...",
+                count: acceptedRows.length,
+              })}
+            </span>
           </div>
         )}
 
         <DialogFooter>
           <Button variant="ghost" onClick={handleClose}>
-            Cancel
+            {t("grocery.receipt.cancel", "Cancel")}
           </Button>
           {stage === "review" && (
             <Button
@@ -327,7 +361,10 @@ export function ScanReceiptDialog({ open, onClose }: Props) {
               className="gap-2"
             >
               <Check className="h-4 w-4" aria-hidden="true" />
-              Add {acceptedRows.length} to pantry
+              {t("grocery.receipt.confirm", {
+                defaultValue: "Add {{count}} to pantry",
+                count: acceptedRows.length,
+              })}
             </Button>
           )}
         </DialogFooter>
@@ -345,7 +382,22 @@ interface ReviewScreenProps {
   onRemoveRow: (uid: string) => void;
   onTrustAll: () => void;
   onSkipLowConfidence: () => void;
+  foodNameById: ReadonlyMap<string, string>;
 }
+
+const RECEIPT_CATEGORIES = [
+  "protein",
+  "carb",
+  "dairy",
+  "fruit",
+  "vegetable",
+  "snack",
+  "beverage",
+  "pantry",
+  "frozen",
+  "household",
+  "other",
+] as const;
 
 function ReviewScreen({
   merchant,
@@ -356,7 +408,16 @@ function ReviewScreen({
   onRemoveRow,
   onTrustAll,
   onSkipLowConfidence,
+  foodNameById,
 }: ReviewScreenProps) {
+  const { t } = useTranslation();
+  const money = useMemo(() => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency });
+    } catch {
+      return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+  }, [currency]);
   return (
     <div className="space-y-4 py-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -367,10 +428,10 @@ function ReviewScreen({
         <span className="text-muted-foreground">{currency}</span>
         <div className="ml-auto flex gap-2">
           <Button size="sm" variant="ghost" onClick={onTrustAll}>
-            Trust all
+            {t("grocery.receipt.trustAll", "Trust all")}
           </Button>
           <Button size="sm" variant="ghost" onClick={onSkipLowConfidence}>
-            Skip low-confidence
+            {t("grocery.receipt.skipLow", "Skip low-confidence")}
           </Button>
         </div>
       </div>
@@ -386,7 +447,7 @@ function ReviewScreen({
                 onUpdateRow(row.uid, { accept: e.target.checked })
               }
               className="mt-2"
-              aria-label={`Include ${row.parsedName}`}
+              aria-label={t("grocery.receipt.include", { defaultValue: "Include {{name}}", name: row.parsedName })}
             />
             <div className="flex-1 grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr] gap-2 items-center">
               <Input
@@ -394,7 +455,7 @@ function ReviewScreen({
                 onChange={(e) =>
                   onUpdateRow(row.uid, { parsedName: e.target.value })
                 }
-                aria-label="Item name"
+                aria-label={t("grocery.receipt.itemName", "Item name")}
                 className="h-8"
               />
               <div className="flex gap-1">
@@ -406,14 +467,14 @@ function ReviewScreen({
                   onChange={(e) =>
                     onUpdateRow(row.uid, { qty: Number(e.target.value) || 1 })
                   }
-                  aria-label="Quantity"
+                  aria-label={t("grocery.receipt.quantity", "Quantity")}
                   className="h-8"
                 />
                 <Input
                   value={row.unit}
                   onChange={(e) => onUpdateRow(row.uid, { unit: e.target.value })}
-                  placeholder="unit"
-                  aria-label="Unit"
+                  placeholder={t("grocery.receipt.unitPlaceholder", "unit")}
+                  aria-label={t("grocery.receipt.unit", "Unit")}
                   className="h-8 w-16"
                 />
               </div>
@@ -421,38 +482,46 @@ function ReviewScreen({
                 value={row.category}
                 onValueChange={(value) => onUpdateRow(row.uid, { category: value })}
               >
-                <SelectTrigger className="h-8" aria-label="Category">
+                <SelectTrigger className="h-8" aria-label={t("grocery.receipt.categoryLabel", "Category")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[
-                    "protein",
-                    "carb",
-                    "dairy",
-                    "fruit",
-                    "vegetable",
-                    "snack",
-                    "beverage",
-                    "pantry",
-                    "frozen",
-                    "household",
-                    "other",
-                  ].map((c) => (
+                  {RECEIPT_CATEGORIES.map((c) => (
                     <SelectItem key={c} value={c}>
-                      {c}
+                      {t(`grocery.receipt.category.${c}`, c)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <span className="text-sm text-muted-foreground tabular-nums text-right">
-                ${row.lineTotal.toFixed(2)}
+                {money.format(row.lineTotal)}
               </span>
+              {row.matchedFoodId && foodNameById.has(row.matchedFoodId) && (
+                <div className="sm:col-span-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {t("grocery.receipt.topsUp", {
+                      defaultValue: "Tops up {{name}} in your pantry",
+                      name: foodNameById.get(row.matchedFoodId),
+                    })}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs"
+                    onClick={() => onUpdateRow(row.uid, { matchedFoodId: null })}
+                  >
+                    <Link2Off className="h-3 w-3" aria-hidden="true" />
+                    {t("grocery.receipt.addAsNew", "Add as new item")}
+                  </Button>
+                </div>
+              )}
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => onRemoveRow(row.uid)}
-              aria-label={`Remove ${row.parsedName}`}
+              aria-label={t("grocery.receipt.remove", { defaultValue: "Remove {{name}}", name: row.parsedName })}
               className="h-8 w-8"
             >
               <Trash2 className="h-4 w-4" />
@@ -463,7 +532,7 @@ function ReviewScreen({
       {rows.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-4">
           <X className="inline h-4 w-4 mr-1" />
-          No items remaining. Cancel and try a clearer photo.
+          {t("grocery.receipt.empty", "No items remaining. Cancel and try a clearer photo.")}
         </p>
       )}
     </div>
@@ -471,19 +540,25 @@ function ReviewScreen({
 }
 
 function ConfidenceDot({ confidence }: { confidence: number }) {
+  const { t } = useTranslation();
   const cls =
     confidence >= 0.8
-      ? "bg-emerald-500"
+      ? "bg-success"
       : confidence >= 0.5
-        ? "bg-amber-500"
-        : "bg-red-500";
+        ? "bg-warning"
+        : "bg-destructive";
   const label =
-    confidence >= 0.8 ? "high" : confidence >= 0.5 ? "medium" : "low";
+    confidence >= 0.8
+      ? t("grocery.receipt.confidence.high", "High confidence")
+      : confidence >= 0.5
+        ? t("grocery.receipt.confidence.medium", "Medium confidence")
+        : t("grocery.receipt.confidence.low", "Low confidence");
   return (
     <span
+      role="img"
       className={`inline-block h-2.5 w-2.5 rounded-full mt-3 shrink-0 ${cls}`}
-      title={`${label} confidence (${Math.round(confidence * 100)}%)`}
-      aria-label={`${label} confidence`}
+      title={`${label} (${Math.round(confidence * 100)}%)`}
+      aria-label={label}
     />
   );
 }

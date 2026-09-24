@@ -89,7 +89,7 @@ export interface GroceryItem {
   // Phase 1 additions
   grocery_list_id?: string;
   photo_url?: string;
-  notes?: string;
+  notes?: string | null;
   brand_preference?: string;
   barcode?: string;
   source_recipe_id?: string;

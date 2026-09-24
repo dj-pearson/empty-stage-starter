@@ -178,7 +178,11 @@ describe('both grocery row renderers show it', () => {
   });
 
   it('renders the note in both row renderers', () => {
-    const occurrences = page.split('measureNotes.has(item.id)').length - 1;
-    expect(occurrences, 'both the virtualised and plain rows need the note').toBe(2);
+    // Both paths now go through one renderRow, which passes the note to
+    // GroceryRow; the note is computed per row id in rowMeta.
+    expect(page).toContain('measureNotes.get(item.id)');
+    expect(page).toContain('measureNote={meta?.measureNote}');
+    expect(page, 'the virtualised rows').toContain('renderRow(row.item)');
+    expect(page, 'the plain rows').toContain('renderRow(item)');
   });
 });

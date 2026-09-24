@@ -27,7 +27,7 @@ describe('a food the app created is not marked safe', () => {
   it('a receipt row becomes an unmarked pantry food', () => {
     // The one path that is a pure function, so it can be exercised rather than
     // read. A receipt says what was bought and nothing more.
-    const foods = acceptedRowsToFoods([
+    const { creates: foods } = acceptedRowsToFoods([
       {
         accept: true,
         parsedName: 'Broccoli',

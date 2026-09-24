@@ -106,7 +106,8 @@ export async function runOptimisticMutation<T extends { id: string }>(
   // user it is waiting. Checked before the auth handler, whose refreshSession()
   // would only fail the same way.
   if (options.offlineQueue && isOfflineFailure(error) && (await options.offlineQueue(error))) {
-    toast.success(OFFLINE_QUEUED_MESSAGE);
+    // One id, so ten ticks in a dead aisle show one toast rather than a stack.
+    toast.success(OFFLINE_QUEUED_MESSAGE, { id: "offline-queued" });
     return { error };
   }
 

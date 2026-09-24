@@ -125,7 +125,8 @@ describe("offlineQueue: a queued write is kept, not rolled back", () => {
       () => Promise.resolve({ error: offlineError }),
       { logLabel: "x", offlineQueue: async () => true },
     );
-    expect(toastSuccess).toHaveBeenCalledWith(expect.stringMatching(/sync/i));
+    // Deduped by id, so a burst of offline ticks shows one toast.
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringMatching(/sync/i), { id: "offline-queued" });
     expect(toastError).not.toHaveBeenCalled();
   });
 

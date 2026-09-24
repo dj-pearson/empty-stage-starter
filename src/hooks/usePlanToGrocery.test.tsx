@@ -5,8 +5,9 @@ import type { Food, GroceryItem, PlanEntry } from "@/types";
 
 /**
  * The grocery context is replaced with a small in-memory one that behaves like
- * the real add path where it matters here: addGroceryItemsMerged assigns ids
- * and commits the rows through state, and returns how many lines it touched.
+ * the real add path where it matters here: mergeGroceryItems mints the ids up
+ * front (as buildGroceryRow does), returns them synchronously, and commits the
+ * rows through state.
  */
 const FOODS: Food[] = [
   { id: "f-pasta", name: "Pasta", category: "carb", is_safe: true, is_try_bite: false, quantity: 0, unit: "box" },
@@ -16,26 +17,27 @@ const FOODS: Food[] = [
 
 let nextId = 0;
 const calls = { add: 0, del: 0 };
+/** The fake's setter, so a test can land a row the way realtime would. */
+let setFakeItems: ((update: (prev: GroceryItem[]) => GroceryItem[]) => void) | null = null;
 
 function useFakeGrocery() {
   const [groceryItems, setItems] = useState<GroceryItem[]>([]);
-  const addGroceryItemsMerged = useCallback(
+  setFakeItems = setItems;
+  const mergeGroceryItems = useCallback(
     (items: Array<Partial<GroceryItem> & { name: string; quantity: number }>) => {
       calls.add++;
-      setItems((prev) => [
-        ...prev,
-        ...items.map(
-          (i) =>
-            ({
-              ...i,
-              id: `g${++nextId}`,
-              unit: i.unit ?? "",
-              category: "carb",
-              checked: false,
-            }) as GroceryItem,
-        ),
-      ]);
-      return items.length;
+      const rows = items.map(
+        (i) =>
+          ({
+            ...i,
+            id: `g${++nextId}`,
+            unit: i.unit ?? "",
+            category: "carb",
+            checked: false,
+          }) as GroceryItem,
+      );
+      setItems((prev) => [...prev, ...rows]);
+      return { touched: rows.length, insertedIds: rows.map((r) => r.id), bumps: [] };
     },
     [],
   );
@@ -43,7 +45,7 @@ function useFakeGrocery() {
     calls.del++;
     setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
   }, []);
-  return { groceryItems, addGroceryItemsMerged, deleteGroceryItems };
+  return { groceryItems, mergeGroceryItems, deleteGroceryItems };
 }
 
 vi.mock("@/contexts/AppContext", () => ({
@@ -134,5 +136,76 @@ describe("usePlanToGrocery", () => {
       replace = result.current.push(edited, WEEK, { mode: "replace" });
     });
     expect(replace.retired).toBe(1);
+  });
+
+  it("insertedIds is filled when push returns, not on a later render", () => {
+    const { result } = renderHook(() => usePlanToGrocery());
+    let ids: string[] | null = null;
+    act(() => {
+      // Read inside the same act, before any commit: the old name-matching
+      // effect only filled this array after the rows rendered.
+      ids = [...result.current.push(entries, WEEK).insertedIds];
+    });
+    expect(ids).toEqual(["g1"]);
+  });
+
+  it("returns the retired rows as they were, for an Undo", () => {
+    const { result } = renderHook(() => usePlanToGrocery());
+    act(() => {
+      result.current.push(entries, WEEK);
+    });
+    const edited: PlanEntry[] = [
+      ...entries.filter((e) => e.id !== "e1"),
+      { id: "e4", kid_id: "k1", date: "2026-09-07", meal_slot: "dinner", food_id: "f-bread", result: null },
+    ];
+    let replace!: ReturnType<typeof result.current.push>;
+    act(() => {
+      replace = result.current.push(edited, WEEK, { mode: "replace" });
+    });
+    expect(replace.retired).toBe(1);
+    expect(replace.retiredRows).toHaveLength(1);
+    expect(replace.retiredRows[0]).toMatchObject({ id: "g1", name: "Pasta", source_plan_entry_id: "e1" });
+    expect(replace.bumps).toEqual([]);
+  });
+
+  it("replace over a week the parent emptied retires its rows", () => {
+    const { result } = renderHook(() => usePlanToGrocery());
+    act(() => {
+      result.current.push(entries, WEEK);
+    });
+    // Every meal in the week deleted; next week's entry is still planned.
+    const emptied = entries.filter((e) => e.id === "e3");
+    let out!: ReturnType<typeof result.current.push>;
+    act(() => {
+      out = result.current.push(emptied, WEEK, { mode: "replace" });
+    });
+    expect(out.generated).toBe(0);
+    expect(out.retired).toBe(1);
+    expect(out.retiredRows.map((r) => r.name)).toEqual(["Pasta"]);
+    expect(result.current.preview(entries, WEEK).toAdd).toBe(1);
+  });
+
+  it("does not capture a co-parent's row that shares a name", () => {
+    const { result } = renderHook(() => usePlanToGrocery());
+    let out!: ReturnType<typeof result.current.push>;
+    act(() => {
+      out = result.current.push(entries, WEEK);
+      // The other parent's phone synced pasta from the plan at the same
+      // moment; realtime lands it here in the same tick.
+      setFakeItems?.((prev) => [
+        ...prev,
+        {
+          id: "coparent-1",
+          name: "Pasta",
+          quantity: 1,
+          unit: "box",
+          category: "carb",
+          checked: false,
+          added_via: "meal_plan_sync",
+          auto_generated: true,
+        } as GroceryItem,
+      ]);
+    });
+    expect(out.insertedIds).toEqual(["g1"]);
   });
 });

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -22,18 +23,26 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { assertUUID } from "@/lib/query-sanitize";
 import { toast } from "sonner";
-import { GroceryList } from "@/types";
-import { Trash2, Archive, Star, StarOff, ArchiveRestore } from "lucide-react";
+import { Trash2, Archive, Star, ArchiveRestore } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { logger } from "@/lib/logger";
+import type { GroceryListRow } from "@/hooks/useGroceryLists";
 
 interface ManageGroceryListsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
-  householdId?: string;
+  householdId?: string | null;
   currentListId?: string | null;
-  onListDeleted?: (listId: string) => void;
+  /**
+   * The list and its items are gone on the server (ON DELETE CASCADE). The
+   * page drops the matching local rows, e.g. via deleteGroceryItems.
+   */
+  onListDeleted: (listId: string) => void;
+  /** useGroceryLists().refresh, called after set-default, archive and restore. */
+  refresh?: () => Promise<void>;
+  /** useGroceryLists().removeLocal, called after a delete. It refetches too. */
+  removeLocal?: (listId: string) => void;
 }
 
 export function ManageGroceryListsDialog({
@@ -43,281 +52,326 @@ export function ManageGroceryListsDialog({
   householdId,
   currentListId,
   onListDeleted,
+  refresh,
+  removeLocal,
 }: ManageGroceryListsDialogProps) {
-  const [lists, setLists] = useState<GroceryList[]>([]);
+  const { t } = useTranslation();
+  const [lists, setLists] = useState<GroceryListRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<GroceryListRow | null>(null);
+  const [deleteItemCount, setDeleteItemCount] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      loadLists();
-    }
-  }, [open, userId, householdId, showArchived]);
-
-  const loadLists = async () => {
+  const loadLists = useCallback(async () => {
     setLoading(true);
     try {
-      const query = supabase
-        .from('grocery_lists')
-        .select('*')
-        .eq('is_archived', showArchived)
-        .order('is_default', { ascending: false })
-        .order('name');
-
-      if (householdId) {
-        query.or(`user_id.eq.${assertUUID(userId, 'userId')},household_id.eq.${assertUUID(householdId, 'householdId')}`);
-      } else {
-        query.eq('user_id', userId);
-      }
+      let query = supabase
+        .from("grocery_lists")
+        .select("*")
+        .eq("is_archived", showArchived)
+        .order("is_default", { ascending: false })
+        .order("name");
+      query = householdId
+        ? query.or(`user_id.eq.${assertUUID(userId, "userId")},household_id.eq.${assertUUID(householdId, "householdId")}`)
+        : query.eq("user_id", userId);
 
       const { data, error } = await query;
-
-      if (!error && data) {
-        setLists(data as unknown as GroceryList[]);
-      }
+      if (error) throw error;
+      setLists(data ?? []);
     } catch (err) {
-      logger.error('Error loading lists:', err);
+      logger.error("Error loading lists:", err);
+      toast.error(t("grocery.lists.manage.loadFailed", "Couldn't load your lists"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [householdId, showArchived, t, userId]);
 
-  const handleSetDefault = async (listId: string) => {
+  useEffect(() => {
+    if (open) void loadLists();
+  }, [open, loadLists]);
+
+  const handleSetDefault = async (list: GroceryListRow) => {
     try {
-      // Unset all defaults first
-      await supabase
-        .from('grocery_lists')
-        .update({ is_default: false })
-        .eq('user_id', userId);
+      // Household-scoped, matching how lists are shared. Clearing by user_id
+      // left a co-parent's default in place and gave the household two.
+      const clear = supabase.from("grocery_lists").update({ is_default: false }).eq("is_default", true);
+      const { error: clearError } = householdId
+        ? await clear.eq("household_id", householdId)
+        : await clear.eq("user_id", userId);
+      if (clearError) throw clearError;
 
-      // Set new default
-      const { error } = await supabase
-        .from('grocery_lists')
+      const { data, error } = await supabase
+        .from("grocery_lists")
         .update({ is_default: true })
-        .eq('id', listId);
-
+        .eq("id", list.id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No list updated");
 
-      toast.success("Default list updated");
-      loadLists();
+      toast.success(t("grocery.lists.manage.defaultSet", { defaultValue: "{{name}} is now the default", name: list.name }));
     } catch (error) {
-      logger.error('Error setting default:', error);
-      toast.error("Failed to set default list");
+      logger.error("Error setting default:", error);
+      toast.error(t("grocery.lists.manage.defaultFailed", "Couldn't change the default list"));
     }
+    void loadLists();
+    void refresh?.();
   };
 
-  const handleArchive = async (listId: string, archive: boolean) => {
-    if (listId === currentListId) {
-      toast.error("Cannot archive the currently active list");
+  const handleArchive = async (list: GroceryListRow, archive: boolean) => {
+    if (list.id === currentListId) {
+      toast.error(t("grocery.lists.manage.cannotArchiveActive", "Switch to another list before archiving this one"));
       return;
     }
-
     try {
-      const { error } = await supabase
-        .from('grocery_lists')
+      const { data, error } = await supabase
+        .from("grocery_lists")
         .update({ is_archived: archive })
-        .eq('id', listId);
-
+        .eq("id", list.id)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No list updated");
 
-      toast.success(archive ? "List archived" : "List restored");
-      loadLists();
+      toast.success(
+        archive
+          ? t("grocery.lists.manage.archived", { defaultValue: "{{name}} archived", name: list.name })
+          : t("grocery.lists.manage.restored", { defaultValue: "{{name}} restored", name: list.name }),
+      );
     } catch (error) {
-      logger.error('Error archiving list:', error);
-      toast.error(archive ? "Failed to archive list" : "Failed to restore list");
+      logger.error("Error archiving list:", error);
+      toast.error(
+        archive
+          ? t("grocery.lists.manage.archiveFailed", "Couldn't archive the list")
+          : t("grocery.lists.manage.restoreFailed", "Couldn't restore the list"),
+      );
+    }
+    void loadLists();
+    void refresh?.();
+  };
+
+  const askDelete = async (list: GroceryListRow) => {
+    setToDelete(list);
+    setDeleteItemCount(null);
+    try {
+      const { count, error } = await supabase
+        .from("grocery_items")
+        .select("id", { count: "exact", head: true })
+        .eq("grocery_list_id", list.id);
+      if (!error && typeof count === "number") setDeleteItemCount(count);
+    } catch (err) {
+      logger.warn("Could not count list items", err);
     }
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
-
-    if (deleteId === currentListId) {
-      toast.error("Cannot delete the currently active list");
-      setDeleteId(null);
+    const list = toDelete;
+    if (!list) return;
+    if (list.id === currentListId) {
+      toast.error(t("grocery.lists.manage.cannotDeleteActive", "Switch to another list before deleting this one"));
+      setToDelete(null);
       return;
     }
 
+    setDeleting(true);
     try {
-      // Delete all items in the list first
-      await supabase.from('grocery_items').delete().eq('grocery_list_id', deleteId);
-
-      // Delete the list
-      const { error } = await supabase.from('grocery_lists').delete().eq('id', deleteId);
-
+      // grocery_items.grocery_list_id is ON DELETE CASCADE, so the items go
+      // with the list in one statement. .select() so an RLS-filtered delete
+      // (zero rows, no error) is reported instead of toasted as a success.
+      const { data, error } = await supabase.from("grocery_lists").delete().eq("id", list.id).select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No list deleted");
 
-      toast.success("List deleted");
-      if (onListDeleted) onListDeleted(deleteId);
-      setDeleteId(null);
-      loadLists();
+      toast.success(t("grocery.lists.manage.deleted", { defaultValue: "{{name}} deleted", name: list.name }));
+      onListDeleted(list.id);
+      setLists((prev) => prev.filter((l) => l.id !== list.id));
+      if (removeLocal) removeLocal(list.id);
+      else void refresh?.();
+      setToDelete(null);
     } catch (error) {
-      logger.error('Error deleting list:', error);
-      toast.error("Failed to delete list");
+      logger.error("Error deleting list:", error);
+      toast.error(t("grocery.lists.manage.deleteFailed", "Couldn't delete the list"));
+    } finally {
+      setDeleting(false);
     }
   };
+
+  const confirmTitle = toDelete
+    ? deleteItemCount && deleteItemCount > 0
+      ? t("grocery.lists.manage.deleteConfirmWithItems", {
+          defaultValue: "Delete {{name}} and its {{count}} items?",
+          name: toDelete.name,
+          count: deleteItemCount,
+        })
+      : t("grocery.lists.manage.deleteConfirm", { defaultValue: "Delete {{name}}?", name: toDelete.name })
+    : "";
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Manage Grocery Lists</DialogTitle>
+            <DialogTitle>{t("grocery.lists.manage.title", "Manage lists")}</DialogTitle>
             <DialogDescription>
-              Organize, archive, or delete your grocery lists.
+              {t("grocery.lists.manage.description", "Pick the default list, archive old ones, or delete them.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Toggle archived */}
-            <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowArchived(!showArchived)}
-              >
+            <div className="flex items-center justify-between gap-2">
+              <Button variant="outline" className="h-11" onClick={() => setShowArchived(!showArchived)}>
                 {showArchived ? (
                   <>
-                    <ArchiveRestore className="h-4 w-4 mr-2" />
-                    Show Active Lists
+                    <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {t("grocery.lists.manage.showActive", "Show active lists")}
                   </>
                 ) : (
                   <>
-                    <Archive className="h-4 w-4 mr-2" />
-                    Show Archived
+                    <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {t("grocery.lists.manage.showArchived", "Show archived")}
                   </>
                 )}
               </Button>
               <p className="text-sm text-muted-foreground">
-                {lists.length} {showArchived ? "archived" : "active"} list{lists.length !== 1 ? 's' : ''}
+                {showArchived
+                  ? t("grocery.lists.manage.archivedCount", { defaultValue: "{{count}} archived", count: lists.length })
+                  : t("grocery.lists.manage.activeCount", { defaultValue: "{{count}} active", count: lists.length })}
               </p>
             </div>
 
-            {/* Lists */}
             {loading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-24 w-full" />
+                  <Skeleton key={i} className="h-20 w-full" />
                 ))}
               </div>
             ) : lists.length === 0 ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <p className="text-muted-foreground">
-                    {showArchived
-                      ? "No archived lists"
-                      : "No active lists. Create one to get started!"}
-                  </p>
-                </CardContent>
-              </Card>
+              <p className="py-8 text-center text-muted-foreground">
+                {showArchived
+                  ? t("grocery.lists.manage.emptyArchived", "No archived lists")
+                  : t("grocery.lists.manage.emptyActive", "No lists yet")}
+              </p>
             ) : (
               <div className="space-y-2">
-                {lists.map((list) => (
-                  <Card
-                    key={list.id}
-                    className={list.id === currentListId ? "border-primary" : ""}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            {list.icon && <span className="text-xl">{list.icon}</span>}
-                            <h4 className="font-medium">{list.name}</h4>
-                            {list.is_default && (
-                              <Badge variant="default" className="text-xs">
-                                Default
-                              </Badge>
-                            )}
-                            {list.id === currentListId && (
-                              <Badge variant="outline" className="text-xs">
-                                Active
-                              </Badge>
+                {lists.map((list) => {
+                  const isCurrent = list.id === currentListId;
+                  return (
+                    <Card key={list.id} className={isCurrent ? "border-primary" : ""}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              {list.icon && (
+                                <span className="text-xl" aria-hidden="true">
+                                  {list.icon}
+                                </span>
+                              )}
+                              <h4 className="font-medium">{list.name}</h4>
+                              {list.is_default && (
+                                <Badge variant="default" className="text-xs">
+                                  {t("grocery.lists.manage.defaultBadge", "Default")}
+                                </Badge>
+                              )}
+                              {isCurrent && (
+                                <Badge variant="outline" className="text-xs">
+                                  {t("grocery.lists.manage.openBadge", "Open")}
+                                </Badge>
+                              )}
+                            </div>
+                            {list.description && <p className="text-sm text-muted-foreground">{list.description}</p>}
+                            {list.store_name && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {t("grocery.lists.manage.store", { defaultValue: "Store: {{name}}", name: list.store_name })}
+                              </p>
                             )}
                           </div>
-                          {list.description && (
-                            <p className="text-sm text-muted-foreground">
-                              {list.description}
-                            </p>
-                          )}
-                          {list.store_name && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Store: {list.store_name}
-                            </p>
-                          )}
-                        </div>
 
-                        <div className="flex gap-1">
-                          {!showArchived && !list.is_default && (
+                          <div className="flex shrink-0 gap-1">
+                            {!showArchived && !list.is_default && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11"
+                                onClick={() => void handleSetDefault(list)}
+                                aria-label={t("grocery.lists.manage.setDefaultFor", {
+                                  defaultValue: "Make {{name}} the default",
+                                  name: list.name,
+                                })}
+                              >
+                                <Star className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                            )}
+                            {!showArchived ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11"
+                                onClick={() => void handleArchive(list, true)}
+                                aria-label={t("grocery.lists.manage.archiveFor", {
+                                  defaultValue: "Archive {{name}}",
+                                  name: list.name,
+                                })}
+                                disabled={isCurrent}
+                              >
+                                <Archive className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11"
+                                onClick={() => void handleArchive(list, false)}
+                                aria-label={t("grocery.lists.manage.restoreFor", {
+                                  defaultValue: "Restore {{name}}",
+                                  name: list.name,
+                                })}
+                              >
+                                <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleSetDefault(list.id)}
-                              title="Set as default"
-                              aria-label="Set as default list"
+                              className="h-11 w-11"
+                              onClick={() => void askDelete(list)}
+                              aria-label={t("grocery.lists.manage.deleteFor", {
+                                defaultValue: "Delete {{name}}",
+                                name: list.name,
+                              })}
+                              disabled={isCurrent}
                             >
-                              <Star className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </Button>
-                          )}
-                          {!showArchived ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleArchive(list.id, true)}
-                              title="Archive"
-                              aria-label="Archive list"
-                              disabled={list.id === currentListId}
-                            >
-                              <Archive className="h-4 w-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleArchive(list.id, false)}
-                              title="Restore"
-                              aria-label="Restore list"
-                            >
-                              <ArchiveRestore className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteId(list.id)}
-                            title="Delete"
-                            aria-label="Delete list"
-                            disabled={list.id === currentListId}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+      <AlertDialog open={!!toDelete} onOpenChange={(next) => !next && !deleting && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete List?</AlertDialogTitle>
+            <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this list and all items in it. This action cannot
-              be undone.
+              {t("grocery.lists.manage.deleteWarning", "This can't be undone, on this phone or anyone else's.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{t("grocery.lists.common.cancel", "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDelete();
+              }}
+              disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {deleting ? t("grocery.lists.common.deleting", "Deleting...") : t("grocery.lists.common.delete", "Delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -325,4 +379,3 @@ export function ManageGroceryListsDialog({
     </>
   );
 }
-

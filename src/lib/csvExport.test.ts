@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toCsv } from './csvExport';
+import { escapeCell, sanitizeFilename, toCsv } from './csvExport';
 
 describe('toCsv (US-346)', () => {
   const cols = [
@@ -25,5 +25,36 @@ describe('toCsv (US-346)', () => {
 
   it('handles an empty dataset (header only)', () => {
     expect(toCsv([], cols)).toBe('Platform,Note');
+  });
+});
+
+describe('escapeCell formula guard', () => {
+  it("prefixes a quote on '=SUM(A1)' so a spreadsheet does not evaluate it", () => {
+    expect(escapeCell('=SUM(A1)')).toBe("'=SUM(A1)");
+    expect(escapeCell('+1')).toBe("'+1");
+    expect(escapeCell('-2 lb')).toBe("'-2 lb");
+    expect(escapeCell('@cmd')).toBe("'@cmd");
+  });
+
+  it('leaves -3 as a number untouched', () => {
+    expect(escapeCell(-3)).toBe('-3');
+  });
+
+  it('round-trips a name holding a quote and a comma', () => {
+    const name = 'Ben & Jerry\'s "Chunky", large';
+    const cell = escapeCell(name);
+    expect(cell).toBe('"Ben & Jerry\'s ""Chunky"", large"');
+    // Undo RFC-4180 quoting the way a spreadsheet would.
+    expect(cell.slice(1, -1).replace(/""/g, '"')).toBe(name);
+  });
+});
+
+describe('sanitizeFilename', () => {
+  it('strips separators, colons and control characters', () => {
+    expect(sanitizeFilename('Costco / Sat: list\\x\u0007.csv')).toBe('Costco  Sat listx.csv');
+  });
+
+  it('falls back when nothing is left', () => {
+    expect(sanitizeFilename('//')).toBe('export');
   });
 });

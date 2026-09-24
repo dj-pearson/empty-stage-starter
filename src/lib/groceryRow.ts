@@ -52,7 +52,21 @@ export interface GroceryRowDraft {
   source_recipe_id?: string | null;
   source_plan_entry_id?: string | null;
   auto_generated?: boolean | null;
+  /** A restored row keeps the checked state it had. New rows default to false. */
   checked?: boolean;
+}
+
+/**
+ * A draft that may name its own id. Undo re-inserts a deleted row under the id
+ * it had, so a queued delete and the restore address the same row. Omitted,
+ * the builder mints one; either way the row always leaves here with a client
+ * id (US-823).
+ *
+ * A separate type rather than a field on GroceryRowDraft, so the test that
+ * requires every passthrough column to be set does not also demand an id.
+ */
+export interface GroceryRowDraftWithId extends GroceryRowDraft {
+  id?: string;
 }
 
 export interface GroceryRowContext {
@@ -98,11 +112,12 @@ const PASSTHROUGH_KEYS = [
  * column's type.
  */
 export function buildGroceryRow(
-  draft: GroceryRowDraft,
+  draft: GroceryRowDraftWithId,
   ctx: GroceryRowContext
 ): GroceryItemInsert {
   const row: GroceryItemInsert = {
-    id: generateId(),
+    // An empty string is not an id; fall back rather than send one.
+    id: draft.id || generateId(),
     name: draft.name,
     // `?? 1` rather than `|| 1`: a legitimate 0 (a row zeroed before removal)
     // should not silently become 1.

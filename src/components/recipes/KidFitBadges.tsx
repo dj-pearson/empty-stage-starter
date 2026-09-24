@@ -34,8 +34,16 @@ const TONE_CLASS: Record<KidFitChipTone, string> = {
  * 4. safe for everyone (or "No allergens" when only the allergy check passed)
  * 5. a try-bite someone is working on
  * 6. with one kid, how it went before ("Ate 3 of 4")
+ *
+ * "grocery" is the shopping-list row, where a chip has to earn its space on a
+ * 390px line: only allergen hits (1) and dislikes (3). "Allergy not checked"
+ * shows only when the item matched a food, since a list row that matched
+ * nothing (fit.unchecked > 0) would carry it on every line of a shop and
+ * teach the parent to ignore it.
  */
-export function kidFitChips(fit: ItemFit | undefined, t: TFunction, mode: "compact" | "full"): KidFitChip[] {
+export type KidFitMode = "compact" | "full" | "grocery";
+
+export function kidFitChips(fit: ItemFit | undefined, t: TFunction, mode: KidFitMode): KidFitChip[] {
   if (!fit || fit.perKid.length === 0) return [];
   const chips: KidFitChip[] = [];
   const single = fit.perKid.length === 1 ? fit.perKid[0] : null;
@@ -53,7 +61,9 @@ export function kidFitChips(fit: ItemFit | undefined, t: TFunction, mode: "compa
     });
   }
 
-  if (fit.allergenStatus === "unknown") {
+  const grocery = mode === "grocery";
+
+  if (fit.allergenStatus === "unknown" && !(grocery && fit.unchecked > 0)) {
     chips.push({
       key: "unknown",
       tone: "unknown",
@@ -80,6 +90,8 @@ export function kidFitChips(fit: ItemFit | undefined, t: TFunction, mode: "compa
       }),
     });
   }
+
+  if (grocery) return chips;
 
   if (fit.safeForAll) {
     chips.push({
@@ -128,7 +140,7 @@ export const COMPACT_CHIP_LIMIT = 3;
 
 interface KidFitBadgesProps {
   fit?: ItemFit;
-  mode?: "compact" | "full";
+  mode?: KidFitMode;
   className?: string;
 }
 
@@ -141,7 +153,7 @@ export const KidFitBadges = memo(function KidFitBadges({ fit, mode = "compact", 
   const chips = useMemo(() => kidFitChips(fit, t, mode), [fit, t, mode]);
   if (chips.length === 0) return null;
 
-  const shown = mode === "compact" ? chips.slice(0, COMPACT_CHIP_LIMIT) : chips;
+  const shown = mode === "full" ? chips : chips.slice(0, COMPACT_CHIP_LIMIT);
   const hidden = chips.slice(shown.length);
 
   return (

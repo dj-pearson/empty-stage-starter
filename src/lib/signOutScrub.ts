@@ -86,6 +86,12 @@ export const SCRUBBED_PREFIXES: readonly string[] = [
   'frequency-',
   'recent-',
   'prefs-',
+  // The Grocery page's caches: list names, the chosen list and the household's
+  // store layouts, keyed by user or household id, plus per-store dismissals.
+  'grocery:lists:',
+  'grocery:selectedList:',
+  'grocery:storeLayouts:',
+  'grocery.aislePrompt.dismissed.',
 ];
 
 /** Keys that survive sign-out on purpose, each with the reason it does. */

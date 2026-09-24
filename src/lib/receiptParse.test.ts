@@ -87,13 +87,14 @@ describe('acceptedRowsToFoods (post-confirm shape)', () => {
   it('drops rejected rows', () => {
     // Corner-store fixture has a row at confidence 0.45 → default-rejected.
     const rows = parseResponseToReviewRows(cornerStoreFixture, []);
-    const foods = acceptedRowsToFoods(rows);
-    expect(foods).toHaveLength(rows.length - 1);
+    const { creates, updates } = acceptedRowsToFoods(rows);
+    expect(creates).toHaveLength(rows.length - 1);
+    expect(updates).toEqual([]);
   });
 
   it('produces a Food shape with the right defaults', () => {
     const rows = parseResponseToReviewRows(walmartFixture, []);
-    const foods = acceptedRowsToFoods(rows);
+    const foods = acceptedRowsToFoods(rows).creates;
     for (const f of foods) {
       // US-803: a receipt says what was bought. It says nothing about whether
       // a child eats any of it, and is_safe is the flag a parent sets. This
@@ -109,7 +110,7 @@ describe('acceptedRowsToFoods (post-confirm shape)', () => {
 
   it('collapses extended categories onto the strict FoodCategory enum', () => {
     const rows = parseResponseToReviewRows(walmartFixture, []);
-    const foods = acceptedRowsToFoods(rows);
+    const foods = acceptedRowsToFoods(rows).creates;
     const validCategories = new Set(['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack']);
     for (const f of foods) {
       expect(validCategories.has(f.category)).toBe(true);
@@ -128,6 +129,41 @@ describe('parseResponseToReviewRows — pantry fuzzy match', () => {
   it('leaves matchedFoodId null when no pantry hit', () => {
     const rows = parseResponseToReviewRows(walmartFixture, []);
     expect(rows.every((r) => r.matchedFoodId === null)).toBe(true);
+  });
+});
+
+describe('acceptedRowsToFoods: matched rows top up the pantry', () => {
+  it('a matched row yields an update, not a create', () => {
+    const existingFoods = [food('milk-1', 'Whole Milk', 'dairy')];
+    const rows = parseResponseToReviewRows(walmartFixture, existingFoods).map((r) => ({
+      ...r,
+      accept: true,
+    }));
+    const milkRow = rows.find((r) => r.matchedFoodId === 'milk-1');
+    expect(milkRow).toBeDefined();
+
+    const { updates, creates } = acceptedRowsToFoods(rows);
+    expect(updates).toEqual([{ foodId: 'milk-1', quantityDelta: milkRow!.qty }]);
+    expect(creates.some((c) => c.name.toLowerCase() === 'whole milk')).toBe(false);
+    expect(creates).toHaveLength(rows.length - 1);
+  });
+
+  it('sums two rows matched to the same food into one update', () => {
+    const base = parseResponseToReviewRows(walmartFixture, [])[0];
+    const rows = [
+      { ...base, uid: 'a', accept: true, qty: 1, matchedFoodId: 'milk-1' },
+      { ...base, uid: 'b', accept: true, qty: 2, matchedFoodId: 'milk-1' },
+    ];
+    expect(acceptedRowsToFoods(rows)).toEqual({
+      updates: [{ foodId: 'milk-1', quantityDelta: 3 }],
+      creates: [],
+    });
+  });
+
+  it('ignores a rejected matched row', () => {
+    const base = parseResponseToReviewRows(walmartFixture, [])[0];
+    const rows = [{ ...base, accept: false, matchedFoodId: 'milk-1' }];
+    expect(acceptedRowsToFoods(rows).updates).toEqual([]);
   });
 });
 
