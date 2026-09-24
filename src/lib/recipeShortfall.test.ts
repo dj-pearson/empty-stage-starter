@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeRecipeShortfall, countMissingForRecipe } from './recipeShortfall';
-import type { Food, Recipe, RecipeIngredient } from '@/types';
+import type { Food, GroceryItem, Recipe, RecipeIngredient } from '@/types';
 
 /**
  * US-292: integration-style coverage that simulates the full loop —
@@ -15,8 +15,6 @@ function buildFood(
   partial: Partial<Food> & Pick<Food, 'id' | 'name'>
 ): Food {
   return {
-    id: partial.id,
-    name: partial.name,
     category: partial.category ?? 'protein',
     is_safe: true,
     is_try_bite: false,
@@ -30,10 +28,8 @@ function buildIngredient(
   partial: Partial<RecipeIngredient> & Pick<RecipeIngredient, 'id' | 'name'>
 ): RecipeIngredient {
   return {
-    id: partial.id,
     recipe_id: 'recipe-1',
     sort_order: 0,
-    name: partial.name,
     food_id: null,
     quantity: 1,
     unit: 'lb',
@@ -153,5 +149,79 @@ describe('computeRecipeShortfall (sanity, since US-290 builds on it)', () => {
       buildFood({ id: 'f-1', name: 'Onion', quantity: 5, unit: 'lb' }),
     ];
     expect(computeRecipeShortfall(recipe, foods)).toEqual([]);
+  });
+});
+
+describe('computeRecipeShortfall: units, unknown amounts and the list', () => {
+  const recipeWith = (...ings: RecipeIngredient[]): Recipe => ({
+    id: 'r-u',
+    name: 'U',
+    food_ids: [],
+    recipe_ingredients: ings,
+  });
+  const listItem = (p: Partial<GroceryItem> & Pick<GroceryItem, 'id' | 'name'>): GroceryItem => ({
+    quantity: 1,
+    unit: '',
+    checked: false,
+    category: 'protein',
+    ...p,
+  });
+
+  it('2 lb on hand covers 16 oz', () => {
+    const recipe = recipeWith(buildIngredient({ id: 'i', name: 'Beef', quantity: 16, unit: 'oz' }));
+    const foods = [buildFood({ id: 'f', name: 'Beef', quantity: 2, unit: 'lb' })];
+    expect(computeRecipeShortfall(recipe, foods)).toEqual([]);
+  });
+
+  it('converts a partial cover into the recipe unit', () => {
+    const recipe = recipeWith(buildIngredient({ id: 'i', name: 'Beef', quantity: 32, unit: 'oz' }));
+    const foods = [buildFood({ id: 'f', name: 'Beef', quantity: 1, unit: 'lb' })];
+    const [row] = computeRecipeShortfall(recipe, foods);
+    expect(row.comparable).toBe(true);
+    expect(row.reason).toBe('short');
+    expect(row.needed).toBeCloseTo(16, 3);
+  });
+
+  it('keeps cups vs lb as a verify row', () => {
+    const recipe = recipeWith(buildIngredient({ id: 'i', name: 'Flour', quantity: 2, unit: 'cup' }));
+    const foods = [buildFood({ id: 'f', name: 'Flour', quantity: 5, unit: 'lb' })];
+    const [row] = computeRecipeShortfall(recipe, foods);
+    expect(row.comparable).toBe(false);
+    expect(row.reason).toBe('unit_mismatch');
+  });
+
+  it("'to taste' becomes verify, not a guessed 1", () => {
+    const recipe = recipeWith(
+      buildIngredient({ id: 'i', name: 'Salt', quantity: null, unit: 'to taste' }),
+    );
+    const [row] = computeRecipeShortfall(recipe, []);
+    expect(row.comparable).toBe(false);
+    expect(row.reason).toBe('unknown_quantity');
+    expect(row.needed).toBe(0);
+  });
+
+  it('a zero quantity is verify too, and pantry stock covers it', () => {
+    const recipe = recipeWith(buildIngredient({ id: 'i', name: 'Pepper', quantity: 0, unit: '' }));
+    expect(computeRecipeShortfall(recipe, [])[0].reason).toBe('unknown_quantity');
+    const foods = [buildFood({ id: 'f', name: 'Pepper', quantity: 1, unit: 'jar' })];
+    expect(computeRecipeShortfall(recipe, foods)).toEqual([]);
+  });
+
+  it('subtracts unchecked list quantities by name', () => {
+    const recipe = recipeWith(
+      buildIngredient({ id: 'i1', name: 'Milk', quantity: 3, unit: 'cup' }),
+      buildIngredient({ id: 'i2', name: 'Eggs', quantity: 6, unit: 'count' }),
+    );
+    const onList = [
+      listItem({ id: 'g1', name: 'milk', quantity: 1, unit: 'cup' }),
+      listItem({ id: 'g2', name: 'Eggs', quantity: 12, unit: 'count' }),
+      listItem({ id: 'g3', name: 'Milk', quantity: 5, unit: 'cup', checked: true }),
+    ];
+    const rows = computeRecipeShortfall(recipe, [], onList);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].ingredient.name).toBe('Milk');
+    expect(rows[0].needed).toBe(2);
+    expect(rows[0].onListQty).toBe(1);
+    expect(countMissingForRecipe(recipe, [], onList)).toBe(1);
   });
 });

@@ -7,13 +7,16 @@
  * can audit.
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Shuffle, X, Zap } from 'lucide-react';
 import { usePlan, useRecipes, useFoods } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useVarietyNudgePref } from '@/hooks/useVarietyNudgePref';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,23 +40,34 @@ interface Props {
   surface?: string;
 }
 
-function tierTone(tier: FatigueTier) {
+/**
+ * Snapshot writes already made this session, keyed
+ * `${householdId}:${computedFor}:${worstTier}`. The effect used to fire on
+ * every recompute of `result` (every plan change, every mount of either
+ * planner layout), each one a getUser round trip, a household lookup and an
+ * upsert. One write per household per day per tier is all the table needs.
+ */
+const writtenSnapshots = new Set<string>();
+
+function tierTone(tier: FatigueTier, t: TFunction) {
   if (tier === 'high')
     return {
-      bg: 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-300/50 dark:border-rose-900/40',
-      icon: 'text-rose-500',
-      badge: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
-      label: 'High repeat',
+      bg: 'bg-destructive/5 border-destructive/30',
+      icon: 'text-destructive',
+      badge: 'bg-destructive/15 text-foreground border-destructive/30',
+      label: t('varietyFatigue.tierHigh'),
     };
   return {
-    bg: 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-300/50 dark:border-amber-900/40',
-    icon: 'text-amber-500',
-    badge: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
-    label: 'Repeating',
+    bg: 'bg-warning/5 border-warning/30',
+    icon: 'text-warning',
+    badge: 'bg-warning/15 text-foreground border-warning/30',
+    label: t('varietyFatigue.tierMedium'),
   };
 }
 
 export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
+  const { t } = useTranslation();
+  const { userId, householdId } = useAuth();
   const { planEntries } = usePlan();
   const { recipes } = useRecipes();
   const { foods } = useFoods();
@@ -79,54 +93,53 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
   }, [planEntries, recipes, foods]);
 
   // Persist the snapshot once per day per household (best-effort).
+  const snapshotKey =
+    householdId && result.worstTier !== 'none'
+      ? `${householdId}:${result.computedFor}:${result.worstTier}`
+      : null;
+  const resultRef = useRef(result);
+  resultRef.current = result;
   useEffect(() => {
-    let cancelled = false;
+    if (!snapshotKey || !householdId || !userId || writtenSnapshots.has(snapshotKey)) return;
+    writtenSnapshots.add(snapshotKey);
+    const snap = resultRef.current;
     (async () => {
       try {
-        if (result.worstTier === 'none') return;
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user || cancelled) return;
-        const { data: member } = await supabase
-          .from('household_members')
-          .select('household_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        const hh = (member as { household_id?: string } | null)?.household_id;
-        if (!hh || cancelled) return;
-        await supabase.from('variety_fatigue_snapshots').upsert(
+        const { error } = await supabase.from('variety_fatigue_snapshots').upsert(
           {
-            household_id: hh,
-            user_id: user.id,
-            computed_for: result.computedFor,
+            household_id: householdId,
+            user_id: userId,
+            computed_for: snap.computedFor,
             window_days: 28,
-            top_recipes: result.recipes.map((r) => ({
+            top_recipes: snap.recipes.map((r) => ({
               recipe_id: r.id,
               recipe_name: r.name,
               repeat_count: r.longWindowCount,
               fatigue_score: r.fatigueScore,
               tier: r.tier,
             })),
-            top_ingredients: result.ingredients.map((i) => ({
+            top_ingredients: snap.ingredients.map((i) => ({
               food_id: i.id,
               food_name: i.name,
               repeat_count: i.longWindowCount,
               fatigue_score: i.fatigueScore,
               tier: i.tier,
             })),
-            worst_tier: result.worstTier,
+            worst_tier: snap.worstTier,
           },
           { onConflict: 'household_id,computed_for' }
         );
+        if (error) {
+          // Let a later mount try again.
+          writtenSnapshots.delete(snapshotKey);
+          logger.warn('variety_fatigue_snapshots upsert failed', error);
+        }
       } catch (err) {
+        writtenSnapshots.delete(snapshotKey);
         logger.warn('variety_fatigue_snapshots upsert failed', err);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [result]);
+  }, [snapshotKey, householdId, userId]);
 
   // Combine top fatigued items (recipes first), filtered by dismissal.
   const visibleItems = useMemo(() => {
@@ -147,7 +160,7 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
   if (!nudgesEnabled || result.worstTier === 'none' || visibleItems.length === 0) return null;
 
   const top = visibleItems[0];
-  const tone = tierTone(top.tier);
+  const tone = tierTone(top.tier, t);
 
   const handleSwitchItUp = () => {
     analytics.trackEvent('variety_fatigue_cta_clicked', {
@@ -182,24 +195,29 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
               {tone.label}
             </Badge>
             <p className="text-sm font-medium">
-              {top.kind === 'recipe' ? top.name : `${top.name} (ingredient)`} - served{' '}
-              {top.shortWindowCount} time{top.shortWindowCount === 1 ? '' : 's'} this week
-              {top.longWindowCount > top.shortWindowCount && `, ${top.longWindowCount} in 4 weeks`}.
+              {t('varietyFatigue.servedThisWeek', {
+                name:
+                  top.kind === 'recipe'
+                    ? top.name
+                    : t('varietyFatigue.ingredientSuffix', { name: top.name }),
+                count: top.shortWindowCount,
+              })}
+              {top.longWindowCount > top.shortWindowCount &&
+                t('varietyFatigue.inFourWeeks', { count: top.longWindowCount })}
+              .
             </p>
           </div>
           {visibleItems.length > 1 && (
             <p className="text-xs text-muted-foreground mt-1">
-              Also repeating:{' '}
-              {visibleItems
-                .slice(1)
-                .map((i) => i.name)
-                .join(', ')}
-              .
+              {t('varietyFatigue.alsoRepeating', {
+                names: visibleItems
+                  .slice(1)
+                  .map((i) => i.name)
+                  .join(', '),
+              })}
             </p>
           )}
-          <p className="text-xs text-muted-foreground mt-1">
-            Time to switch it up? We'll suggest meals everyone will eat.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{t('varietyFatigue.prompt')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -207,16 +225,16 @@ export function VarietyFatigueBanner({ surface = 'unknown' }: Props) {
             variant="default"
             onClick={handleSwitchItUp}
             className="gap-1"
-            aria-label="Find a different meal"
+            aria-label={t('varietyFatigue.switchItUpAria')}
           >
             <Shuffle className="h-4 w-4" aria-hidden="true" />
-            Switch it up
+            {t('varietyFatigue.switchItUp')}
           </Button>
           <Button
             size="icon"
             variant="ghost"
             onClick={handleDismiss}
-            aria-label="Dismiss variety fatigue banner"
+            aria-label={t('varietyFatigue.dismissAria')}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </Button>

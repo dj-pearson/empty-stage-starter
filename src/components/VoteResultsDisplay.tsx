@@ -9,7 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { TrendingUp, TrendingDown, Minus, Users } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Users, Smile, Meh, Frown } from "lucide-react";
 import {
   mealVotesStore,
   summarizeVotes,
@@ -77,43 +77,39 @@ export function VoteResultsDisplay({
 
   /**
    * Both badges name a foreground, because neither background can carry the
-   * default one.
-   *
-   * Badge's base class list includes `text-xs`, and src/styles/mobile-first.css
-   * used to declare a `color` on that selector -- so every Badge in the tree was
-   * being painted dark slate by a font-size utility. US-821 removed that (it was
-   * overriding Tailwind's own text colours), which left these two falling back
-   * to the default variant's white: 1.91:1 on yellow-500 and 2.28:1 on
-   * green-500, against the 4.5:1 that WCAG AA asks for. axe caught the yellow
-   * one on the planner; the green one is the same bug on a score of 80.
-   *
-   * Darkening the text rather than the background keeps the colour these badges
-   * have always been. The `*-950` foregrounds measure about 9:1.
+   * default one (US-821: Badge's default variant paints white text, which
+   * measured under 2.3:1 on the old yellow and green). Warning pairs with its
+   * own dark foreground token. Success does not: --success-foreground is white
+   * on a 45%-lightness green, the same failure, so that badge is a tint of
+   * the token carrying the page foreground instead.
    */
   const getApprovalBadge = (score: number) => {
     if (score >= 80) {
       return (
-        <Badge className="bg-green-500 hover:bg-green-600 text-green-950">
-          <TrendingUp className="h-3 w-3 mr-1" />
+        <Badge className="bg-success/15 hover:bg-success/25 text-foreground">
+          <TrendingUp className="h-3 w-3 mr-1 text-success" aria-hidden="true" />
           {score}% Approved
         </Badge>
       );
     } else if (score >= 50) {
       return (
-        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-yellow-950">
-          <Minus className="h-3 w-3 mr-1" />
+        <Badge className="bg-warning hover:bg-warning/90 text-warning-foreground">
+          <Minus className="h-3 w-3 mr-1" aria-hidden="true" />
           {score}% Mixed
         </Badge>
       );
     } else {
       return (
         <Badge variant="destructive">
-          <TrendingDown className="h-3 w-3 mr-1" />
+          <TrendingDown className="h-3 w-3 mr-1" aria-hidden="true" />
           {score}% Low
         </Badge>
       );
     }
   };
+
+  const voteLabel = (vote: string) =>
+    vote === 'love_it' ? 'Love it!' : vote === 'okay' ? "It's okay" : 'No way';
 
   if (compact) {
     return (
@@ -121,7 +117,7 @@ export function VoteResultsDisplay({
         {/* Vote emojis */}
         <div className="flex -space-x-2">
           {voteSummary.votes.map((vote, index) => (
-            <TooltipProvider key={index}>
+            <TooltipProvider key={vote.kidId || `vote-${index}`}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="w-8 h-8 rounded-full bg-background border-2 border-background flex items-center justify-center text-lg">
@@ -129,7 +125,7 @@ export function VoteResultsDisplay({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{vote.kidName}: {vote.vote === 'love_it' ? 'Love it!' : vote.vote === 'okay' ? "It's okay" : 'No way'}</p>
+                  <p>{vote.kidName}: {voteLabel(vote.vote)}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -161,15 +157,14 @@ export function VoteResultsDisplay({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">😍</span>
+                  <Smile className="h-4 w-4 text-success" aria-hidden="true" />
                   <span>Love It!</span>
                 </div>
                 <span className="font-semibold">{voteSummary.loveItCount}</span>
               </div>
               <Progress
                 value={(voteSummary.loveItCount / voteSummary.totalVotes) * 100}
-                className="h-2 bg-green-100"
-                indicatorClassName="bg-green-500"
+                className="h-2 bg-success/15 [&>div]:bg-success"
               />
             </div>
           )}
@@ -179,15 +174,14 @@ export function VoteResultsDisplay({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🙂</span>
+                  <Meh className="h-4 w-4 text-warning" aria-hidden="true" />
                   <span>It's Okay</span>
                 </div>
                 <span className="font-semibold">{voteSummary.okayCount}</span>
               </div>
               <Progress
                 value={(voteSummary.okayCount / voteSummary.totalVotes) * 100}
-                className="h-2 bg-yellow-100"
-                indicatorClassName="bg-yellow-500"
+                className="h-2 bg-warning/15 [&>div]:bg-warning"
               />
             </div>
           )}
@@ -197,15 +191,14 @@ export function VoteResultsDisplay({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">😭</span>
+                  <Frown className="h-4 w-4 text-destructive" aria-hidden="true" />
                   <span>No Way</span>
                 </div>
                 <span className="font-semibold">{voteSummary.noWayCount}</span>
               </div>
               <Progress
                 value={(voteSummary.noWayCount / voteSummary.totalVotes) * 100}
-                className="h-2 bg-red-100"
-                indicatorClassName="bg-red-500"
+                className="h-2 bg-destructive/15 [&>div]:bg-destructive"
               />
             </div>
           )}
@@ -218,7 +211,7 @@ export function VoteResultsDisplay({
           <h4 className="text-sm font-semibold">Votes by Child</h4>
           {voteSummary.votes.map((vote, index) => (
             <div
-              key={index}
+              key={vote.kidId || `vote-${index}`}
               className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
             >
               <div className="flex items-center gap-2">
@@ -226,7 +219,7 @@ export function VoteResultsDisplay({
                 <span className="text-sm font-medium">{vote.kidName}</span>
               </div>
               <Badge variant="outline" className="text-xs">
-                {vote.vote === 'love_it' ? 'Love it!' : vote.vote === 'okay' ? "It's okay" : 'No way'}
+                {voteLabel(vote.vote)}
               </Badge>
             </div>
           ))}

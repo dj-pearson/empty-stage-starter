@@ -4,7 +4,9 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Food, PlanEntry, NutritionData } from "@/types";
 import { perServingFromCatalog } from "@/lib/catalogNutrition";
-import { Apple, Droplets, Zap } from "lucide-react";
+import { indexNutritionByName } from "@/lib/trustedNutritionCatalog";
+import { Apple, Droplets, Wheat, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 interface DailyMacrosSummaryProps {
@@ -16,7 +18,15 @@ interface DailyMacrosSummaryProps {
   planEntries: PlanEntry[];
   foods: Food[];
   nutritionData: NutritionData[];
+  /**
+   * Optional name -> catalog row index. The week grid renders seven of these
+   * off one catalog, so it builds the Map once and passes it down; without it
+   * each card builds its own.
+   */
+  nutritionByName?: Map<string, NutritionData>;
 }
+
+
 
 // Calculate recommended daily intake based on age and weight
 const calculateRecommendedIntake = (age?: number, weight?: number) => {
@@ -58,7 +68,15 @@ export function DailyMacrosSummary({
   planEntries,
   foods,
   nutritionData,
+  nutritionByName,
 }: DailyMacrosSummaryProps) {
+  const { t } = useTranslation();
+  const nutritionIndex = useMemo(
+    () => nutritionByName ?? indexNutritionByName(nutritionData),
+    [nutritionByName, nutritionData]
+  );
+  const foodById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
+
   const macros = useMemo(() => {
     const dayEntries = planEntries.filter(
       e => e.date === date && e.kid_id === kidId
@@ -71,7 +89,7 @@ export function DailyMacrosSummary({
     let itemsWithData = 0;
 
     dayEntries.forEach(entry => {
-      const food = foods.find(f => f.id === entry.food_id);
+      const food = foodById.get(entry.food_id);
       if (!food) return;
 
       // US-799: the catalog stores PER 100g and this panel adds up a day, so
@@ -83,9 +101,7 @@ export function DailyMacrosSummary({
       // That distinction is the point of the panel. Five unmeasured foods
       // summed as zeroes read "0 calories, 5 items tracked", which looks like
       // an answer; "0 of 5 items have nutrition data" is the truth.
-      const nutrition = nutritionData.find(
-        n => n.name.toLowerCase() === food.name.toLowerCase()
-      );
+      const nutrition = nutritionIndex.get(food.name.toLowerCase());
       const perServing = perServingFromCatalog(nutrition);
 
       if (perServing) {
@@ -105,13 +121,13 @@ export function DailyMacrosSummary({
       totalItems: dayEntries.length,
       itemsWithData,
     };
-  }, [date, kidId, planEntries, foods, nutritionData]);
+  }, [date, kidId, planEntries, foodById, nutritionIndex]);
 
   const recommended = calculateRecommendedIntake(kidAge, kidWeight);
 
-  const getPercentage = (actual: number, target: number) => {
-    return Math.min(Math.round((actual / target) * 100), 100);
-  };
+  /** Unclamped, so a day at 140% can say "over" instead of reading as 100%. */
+  const getPercentage = (actual: number, target: number) =>
+    target > 0 ? Math.round((actual / target) * 100) : 0;
 
   /*
    * US-859: the four bars had no accessible name, so a screen reader announced
@@ -122,108 +138,93 @@ export function DailyMacrosSummary({
    * aria-valuetext as well as the label because the value these bars carry is a
    * PERCENTAGE OF A RECOMMENDATION, and "50%" on its own is the one number a
    * parent cannot act on -- 14 of 28 grams is.
+   *
+   * The colour goes on the indicator, not the track. It used to be a class on
+   * the Progress root, which painted the whole track and left the bar itself
+   * the default primary -- a full-width yellow strip for a day at 10%.
    */
-  const getProgressColor = (percentage: number) => {
-    if (percentage < 50) return "bg-yellow-500";
-    if (percentage < 80) return "bg-blue-500";
-    if (percentage <= 100) return "bg-green-500";
-    return "bg-orange-500";
+  const getIndicatorClass = (percentage: number) => {
+    if (percentage < 50) return "[&>div]:bg-muted-foreground/50";
+    if (percentage < 80) return "[&>div]:bg-primary";
+    if (percentage <= 100) return "[&>div]:bg-success";
+    return "[&>div]:bg-warning";
   };
 
   if (macros.totalItems === 0) {
-    return null;
+    // A quiet cell rather than null: in the week grid each summary sits in a
+    // grid-cols-7 track, and a missing card shifted every later day's
+    // nutrition under the wrong column.
+    return (
+      <div
+        className="w-full min-h-[3rem] rounded-lg border border-dashed border-border/60 bg-muted/20 flex items-center justify-center px-2 text-center text-xs text-muted-foreground"
+        data-testid="daily-macros-empty"
+      >
+        {t("planner.macros.empty", { defaultValue: "No meals planned" })}
+      </div>
+    );
   }
+
+  const rows: {
+    key: keyof typeof MACRO_UNITS;
+    label: string;
+    icon: typeof Zap;
+    actual: number;
+    target: number;
+    unit: string;
+  }[] = [
+    { key: "calories", label: t("planner.macros.calories", { defaultValue: "Calories" }), icon: Zap, actual: macros.calories, target: recommended.calories, unit: " kcal" },
+    { key: "protein", label: t("planner.macros.protein", { defaultValue: "Protein" }), icon: Apple, actual: macros.protein, target: recommended.protein, unit: "g" },
+    { key: "carbs", label: t("planner.macros.carbs", { defaultValue: "Carbs" }), icon: Wheat, actual: macros.carbs, target: recommended.carbs, unit: "g" },
+    { key: "fat", label: t("planner.macros.fat", { defaultValue: "Fat" }), icon: Droplets, actual: macros.fat, target: recommended.fat, unit: "g" },
+  ];
 
   return (
     <Card className="w-full">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium">
-            Daily Nutrition - {kidName}
+            {t("planner.macros.title", { defaultValue: "Daily Nutrition - {{name}}", name: kidName })}
           </CardTitle>
           {macros.itemsWithData < macros.totalItems && (
             <Badge variant="outline" className="text-xs">
-              {macros.itemsWithData}/{macros.totalItems} items tracked
+              {t("planner.macros.tracked", {
+                defaultValue: "{{count}}/{{total}} items tracked",
+                count: macros.itemsWithData,
+                total: macros.totalItems,
+              })}
             </Badge>
           )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Calories */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-yellow-600" />
-              <span className="font-medium">Calories</span>
+        {rows.map(({ key, label, icon: Icon, actual, target, unit }) => {
+          const pct = getPercentage(actual, target);
+          const over = pct > 100;
+          return (
+            <div key={key} className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <span className="font-medium">{label}</span>
+                </div>
+                <span className="text-muted-foreground">
+                  {actual}{unit} / {target}{unit}
+                  {over && (
+                    <span className="ml-1 font-medium text-foreground">
+                      {t("planner.macros.over", { defaultValue: "({{pct}}%, over)", pct })}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <Progress
+                value={Math.min(pct, 100)}
+                className={cn("h-2", getIndicatorClass(pct))}
+                aria-label={label}
+                aria-valuetext={`${actual} of ${target} ${MACRO_UNITS[key]}${over ? `, ${pct}%, over` : ""}`}
+              />
             </div>
-            <span className="text-muted-foreground">
-              {macros.calories} / {recommended.calories} kcal
-            </span>
-          </div>
-          <Progress 
-            value={getPercentage(macros.calories, recommended.calories)} 
-            className={cn("h-2", getProgressColor(getPercentage(macros.calories, recommended.calories)))}
-            aria-label="Calories"
-            aria-valuetext={`${macros.calories} of ${recommended.calories} ${MACRO_UNITS.calories}`}
-          />
-        </div>
-
-        {/* Protein */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <Apple className="h-4 w-4 text-red-600" />
-              <span className="font-medium">Protein</span>
-            </div>
-            <span className="text-muted-foreground">
-              {macros.protein}g / {recommended.protein}g
-            </span>
-          </div>
-          <Progress 
-            value={getPercentage(macros.protein, recommended.protein)} 
-            className={cn("h-2", getProgressColor(getPercentage(macros.protein, recommended.protein)))}
-            aria-label="Protein"
-            aria-valuetext={`${macros.protein} of ${recommended.protein} ${MACRO_UNITS.protein}`}
-          />
-        </div>
-
-        {/* Carbs */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <Droplets className="h-4 w-4 text-blue-600" />
-              <span className="font-medium">Carbs</span>
-            </div>
-            <span className="text-muted-foreground">
-              {macros.carbs}g / {recommended.carbs}g
-            </span>
-          </div>
-          <Progress 
-            value={getPercentage(macros.carbs, recommended.carbs)} 
-            className={cn("h-2", getProgressColor(getPercentage(macros.carbs, recommended.carbs)))}
-            aria-label="Carbs"
-            aria-valuetext={`${macros.carbs} of ${recommended.carbs} ${MACRO_UNITS.carbs}`}
-          />
-        </div>
-
-        {/* Fat */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <Droplets className="h-4 w-4 text-orange-600" />
-              <span className="font-medium">Fat</span>
-            </div>
-            <span className="text-muted-foreground">
-              {macros.fat}g / {recommended.fat}g
-            </span>
-          </div>
-          <Progress 
-            value={getPercentage(macros.fat, recommended.fat)} 
-            className={cn("h-2", getProgressColor(getPercentage(macros.fat, recommended.fat)))}
-            aria-label="Fat"
-            aria-valuetext={`${macros.fat} of ${recommended.fat} ${MACRO_UNITS.fat}`}
-          />
-        </div>
+          );
+        })}
       </CardContent>
     </Card>
   );

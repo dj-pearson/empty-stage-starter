@@ -27,8 +27,6 @@ import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
 import { AisleContributionDialog } from "@/components/AisleContributionDialog";
 import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
 import { ScanReceiptDialog } from "@/components/ScanReceiptDialog";
-import { generateGroceryList } from "@/lib/mealPlanner";
-import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
 import { startOfWeek, endOfWeek, toISODate } from "@/lib/date-utils";
 import {
   ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
@@ -45,7 +43,6 @@ import {
   milestoneMessage,
   groupItems,
   flattenGroupedRows,
-  planRegenerationFromPlan,
   buildFoodByDisplayNameIndex,
   initialExpandedGroups,
   reconcileExpandedGroups,
@@ -56,6 +53,7 @@ import { parseGroceryItemRows } from "@/lib/normalizeEntities";
 import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePlanToGrocery } from "@/hooks/usePlanToGrocery";
 import { normalizeHouseholdId } from "@/lib/householdId";
 
 // Extended type for grocery items with additional database properties
@@ -105,8 +103,7 @@ export default function Grocery() {
   const {
     groceryItems,
     setGroceryItems, addGroceryItem, toggleGroceryItem,
-    updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
-    addGroceryItemsMerged, clearCheckedGroceryItems
+    updateGroceryItem, deleteGroceryItem, clearCheckedGroceryItems
   } = useGrocery();
   const { recipes } = useRecipes();
 
@@ -221,19 +218,6 @@ export default function Grocery() {
     return { from: toISODate(startOfWeek(now)), to: toISODate(endOfWeek(now)) };
   }, []);
 
-  // US-795: mealPlanner.ts has no hook, so it cannot read catalogById itself
-  // -- resolve every food here and pass the map in, keyed by food id, so a
-  // regenerated grocery row shows the same catalog name/category/aisle as
-  // every other linked screen instead of this household's own spelling.
-  const effectiveFoodById = useMemo(() => {
-    const map: Record<string, EffectiveFood> = {};
-    for (const food of foods) {
-      const catalog = food.canonical_id ? catalogById[food.canonical_id] : null;
-      map[food.id] = resolveFood(food, catalog);
-    }
-    return map;
-  }, [foods, catalogById]);
-
   // US-795 fix round: matches a grocery item's name back to a pantry food by
   // either its resolved (catalog) name or its raw household name -- see the
   // doc comment on buildFoodByDisplayNameIndex in src/lib/groceryData.ts for
@@ -250,61 +234,75 @@ export default function Grocery() {
     [foodByDisplayName]
   );
 
-  // US-713: sync from the meal plan, persisted.
-  //
-  // This used to end in setGroceryItems, which is local state only: the list
-  // looked right until a reload, never reached the server, and never reached a
-  // partner's phone. New rows now go through addGroceryItemsMerged (one insert,
-  // stamped with the list, auto_generated and the plan entry that caused them)
-  // and rows the plan no longer calls for go through deleteGroceryItems.
+  // US-713: sync from the meal plan, persisted. The body lives in
+  // usePlanToGrocery now so the planner can push its week through the same
+  // rules; this page keeps its toasts. "replace" retires plan-sync rows the
+  // plan no longer calls for, scoped to this week's entries so a row from
+  // another week is left alone.
   //
   // Quantities here are still one-per-meal counts, not recipe-aware amounts.
   // US-736 replaces the arithmetic; this story makes the path persist.
+  const { push: pushPlanToGrocery } = usePlanToGrocery();
   const handleRegenerateFromPlan = useCallback(() => {
     if (planEntries.length === 0) {
-      toast.info("No meal plan found", { description: "Create a meal plan first to generate a grocery list" });
-      return;
-    }
-    const filteredEntries = isFamilyMode
-      ? planEntries
-      : planEntries.filter(e => e.kid_id === activeKidId);
-
-    // Shop for the week on screen, not for the whole 120-day context window.
-    const generated = generateGroceryList(filteredEntries, foods, effectiveFoodById, shoppingWindow);
-    if (generated.length === 0) {
-      toast.info("Nothing to add", {
-        description: "Every meal planned for this week is already covered by your pantry and list",
+      toast.info(t("grocery.planSync.noPlanTitle", { defaultValue: "No meal plan found" }), {
+        description: t("grocery.planSync.noPlanBody", {
+          defaultValue: "Create a meal plan first to generate a grocery list",
+        }),
       });
       return;
     }
 
-    const plan = planRegenerationFromPlan({
-      existing: groceryItems,
-      generated,
+    const result = pushPlanToGrocery(planEntries, shoppingWindow, {
+      mode: "replace",
+      kidIds: isFamilyMode || !activeKidId ? undefined : [activeKidId],
       selectedListId,
       defaultListId,
     });
 
-    if (plan.retireIds.length > 0) deleteGroceryItems(plan.retireIds);
-    const touched = plan.additions.length > 0
-      ? addGroceryItemsMerged(plan.additions, { defaultListId })
-      : 0;
-
-    if (touched === 0 && plan.retireIds.length === 0) {
-      toast.info("Already up to date", {
-        description: `This week's plan is already on your list (${plan.preservedCount} item${plan.preservedCount === 1 ? '' : 's'} kept)`,
+    if (result.generated === 0) {
+      toast.info(t("grocery.planSync.nothingTitle", { defaultValue: "Nothing to add" }), {
+        description: t("grocery.planSync.nothingBody", {
+          defaultValue: "Every meal planned for this week is already covered by your pantry and list",
+        }),
       });
       return;
     }
 
-    toast.success(`Added ${touched} item${touched === 1 ? '' : 's'} from meal plan`, {
-      description: plan.retireIds.length > 0
-        ? `Removed ${plan.retireIds.length} no longer planned, kept ${plan.preservedCount}`
-        : `Kept ${plan.preservedCount} existing item${plan.preservedCount === 1 ? '' : 's'}`,
-    });
+    if (result.added === 0 && result.retired === 0) {
+      toast.info(t("grocery.planSync.upToDateTitle", { defaultValue: "Already up to date" }), {
+        description: t("grocery.planSync.upToDateBody", {
+          defaultValue: "This week's plan is already on your list ({{count}} item kept)",
+          defaultValue_other: "This week's plan is already on your list ({{count}} items kept)",
+          count: result.kept,
+        }),
+      });
+      return;
+    }
+
+    toast.success(
+      t("grocery.planSync.addedTitle", {
+        defaultValue: "Added {{count}} item from meal plan",
+        defaultValue_other: "Added {{count}} items from meal plan",
+        count: result.added,
+      }),
+      {
+        description: result.retired > 0
+          ? t("grocery.planSync.addedRetiredBody", {
+              defaultValue: "Removed {{retired}} no longer planned, kept {{kept}}",
+              retired: result.retired,
+              kept: result.kept,
+            })
+          : t("grocery.planSync.addedKeptBody", {
+              defaultValue: "Kept {{count}} existing item",
+              defaultValue_other: "Kept {{count}} existing items",
+              count: result.kept,
+            }),
+      },
+    );
   }, [
-    planEntries, isFamilyMode, activeKidId, foods, effectiveFoodById, shoppingWindow, groceryItems,
-    selectedListId, defaultListId, deleteGroceryItems, addGroceryItemsMerged,
+    planEntries, isFamilyMode, activeKidId, shoppingWindow, selectedListId, defaultListId,
+    pushPlanToGrocery, t,
   ]);
 
   const handleToggleItem = useCallback(async (itemId: string) => {

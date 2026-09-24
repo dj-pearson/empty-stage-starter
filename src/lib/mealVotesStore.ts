@@ -36,7 +36,15 @@ export interface MealVoteRow {
   kids?: { id: string; name: string } | null;
 }
 
-/** What a cell is asking about: a plan entry, or a recipe in a date+slot. */
+/**
+ * What a cell is asking about: a plan entry, a recipe in a date+slot, or --
+ * with no entry and no recipe -- every vote cast for a date+slot.
+ *
+ * The date+slot shape is what the planner grid uses. A cell holds several
+ * rows (one per ingredient, one per kid in family view), so keying on
+ * "the first row's id" missed votes cast against the recipe, and keying on the
+ * first row's recipe missed the rest of the cell.
+ */
 export interface VoteKey {
   planEntryId?: string;
   recipeId?: string;
@@ -44,9 +52,15 @@ export interface VoteKey {
   mealSlot?: string;
 }
 
+/** A cell-wide key: every vote for this date and slot. */
+export function dateSlotVoteKey(mealDate: string, mealSlot: string): VoteKey {
+  return { mealDate, mealSlot };
+}
+
 /** Stable string for a key, so listeners can be grouped and rows matched. */
 export function voteKeyId(key: VoteKey): string {
   if (key.planEntryId) return `entry:${key.planEntryId}`;
+  if (!key.recipeId && key.mealDate && key.mealSlot) return `slot:${key.mealDate}|${key.mealSlot}`;
   return `recipe:${key.recipeId ?? ''}|${key.mealDate ?? ''}|${key.mealSlot ?? ''}`;
 }
 
@@ -59,6 +73,9 @@ export function rowMatchesKey(row: MealVoteRow, key: VoteKey): boolean {
       row.meal_date === key.mealDate &&
       row.meal_slot === key.mealSlot
     );
+  }
+  if (!key.recipeId && key.mealDate && key.mealSlot) {
+    return row.meal_date === key.mealDate && row.meal_slot === key.mealSlot;
   }
   // A key with neither shape matches nothing. The old code answered it with an
   // unfiltered query, which returned every vote in the household.
@@ -143,24 +160,18 @@ export const supabaseVotesBackend: VotesBackend = {
   async fetch(keys) {
     const entryIds = [...new Set(keys.map((k) => k.planEntryId).filter((v): v is string => !!v))];
     const dates = [...new Set(
-      keys.filter((k) => !k.planEntryId && k.recipeId && k.mealDate).map((k) => k.mealDate as string)
+      keys.filter((k) => !k.planEntryId && k.mealDate && k.mealSlot).map((k) => k.mealDate as string)
     )];
 
-    const queries: Promise<{ data: unknown; error: unknown }>[] = [];
+    const queries: PromiseLike<{ data: unknown; error: unknown }>[] = [];
     if (entryIds.length > 0) {
-      queries.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from('meal_votes').select(SELECT).in('plan_entry_id', entryIds)
-      );
+      queries.push(supabase.from('meal_votes').select(SELECT).in('plan_entry_id', entryIds));
     }
     if (dates.length > 0) {
       // Narrowed by date rather than by the full recipe+slot triple: the rows
       // are grouped client-side anyway, and one query per triple is the problem
       // this module exists to remove.
-      queries.push(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from('meal_votes').select(SELECT).in('meal_date', dates)
-      );
+      queries.push(supabase.from('meal_votes').select(SELECT).in('meal_date', dates));
     }
     if (queries.length === 0) return [];
 

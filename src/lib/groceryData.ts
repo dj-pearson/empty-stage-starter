@@ -316,8 +316,19 @@ export function planRegenerationFromPlan(args: {
   selectedListId: string | null;
   /** US-714: the list that owns rows with a null grocery_list_id. */
   defaultListId?: string | null;
+  /**
+   * The plan entries the sync covers (one week, possibly one kid). When given,
+   * a stale plan-sync row is retired only if its source_plan_entry_id is in
+   * this set, so syncing next week from the planner cannot delete this week's
+   * rows, and a row with no recorded source is left alone. Omitted, every
+   * stale plan-sync row on the list is a candidate, as before.
+   */
+  windowEntryIds?: Iterable<string>;
 }): RegenerationPlan {
   const { existing, generated, selectedListId, defaultListId } = args;
+  const scope = args.windowEntryIds ? new Set(args.windowEntryIds) : null;
+  const inScope = (item: GroceryItem) =>
+    scope === null || (item.source_plan_entry_id != null && scope.has(item.source_plan_entry_id));
   const key = (name: string) => name.trim().toLowerCase();
 
   const target = selectedListId ?? defaultListId ?? null;
@@ -338,7 +349,7 @@ export function planRegenerationFromPlan(args: {
     (item) => item.auto_generated && !item.checked && isPlanSyncRow(item),
   );
   const retireIds = regenerable
-    .filter((item) => !generatedNames.has(key(item.name)))
+    .filter((item) => !generatedNames.has(key(item.name)) && inScope(item))
     .map((item) => item.id);
   const keptNames = new Set(
     regenerable.filter((item) => generatedNames.has(key(item.name))).map((item) => key(item.name)),

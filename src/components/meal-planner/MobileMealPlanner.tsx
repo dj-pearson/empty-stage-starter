@@ -1,8 +1,9 @@
-import { useState, useCallback, useMemo, memo } from "react";
-import { format, addDays, addWeeks, subWeeks } from "date-fns";
+import { useState, useCallback, useMemo, useEffect, useRef, memo } from "react";
+import { useTranslation } from "react-i18next";
+import { addDays, addWeeks } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Food, Kid, MealSlot, PlanEntry, Recipe } from "@/types";
+import type { SlotTarget } from "@/contexts/PlanContext";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
   Trash2,
   Save,
   BookTemplate,
+  ShoppingCart,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -24,12 +26,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { groupSlot, kidsOnFamilyMeal, type FamilyTarget } from "@/lib/familySlot";
+import { isoDay, todayIndex, weekdayIndex } from "@/lib/mobilePlannerDay";
 import { WeekStrip } from "./WeekStrip";
-import { FamilyMealCard } from "./FamilyMealCard";
-import {
-  MealQuickAddDrawer,
-  MealQuickAddContext,
-} from "./MealQuickAddDrawer";
+import { FamilyMealCard, type MealOutcome } from "./FamilyMealCard";
+import { MealQuickAddDrawer, MealQuickAddContext } from "./MealQuickAddDrawer";
 
 const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "breakfast", label: "Breakfast" },
@@ -40,6 +42,14 @@ const MEAL_SLOTS: { slot: MealSlot; label: string }[] = [
   { slot: "try_bite", label: "Try Bite" },
 ];
 
+const EMPTY: PlanEntry[] = [];
+const PANEL_ID = "planner-day-panel";
+const TAB_PREFIX = "planner-day";
+
+function toSlotTarget(target: FamilyTarget): SlotTarget {
+  return target.kind === "recipe" ? { recipeId: target.id } : { foodId: target.id };
+}
+
 interface MobileMealPlannerProps {
   weekStart: Date;
   planEntries: PlanEntry[];
@@ -48,17 +58,24 @@ interface MobileMealPlannerProps {
   kids: Kid[];
   activeKidId: string | null;
   isGeneratingPlan: boolean;
+  /** Plain add into an empty slot for one kid. */
   onAddEntry: (kidId: string, date: string, slot: MealSlot, foodId: string) => void;
-  onUpdateEntry: (entryId: string, updates: Partial<PlanEntry>) => void;
-  onSelectRecipe: (recipeId: string, date: string, slot: MealSlot, kidId: string) => void;
-  onMarkResult: (entry: PlanEntry, result: "ate" | "tasted" | "refused") => void;
+  /** Kept for callers; every change now goes through onReplaceSlot. */
+  onUpdateEntry?: (entryId: string, updates: Partial<PlanEntry>) => void;
+  /** One call for every kid, so one allergen check and one toast. */
+  onSelectRecipeForKids: (recipeId: string, date: string, slot: MealSlot, kidIds: string[]) => void;
+  onDeleteEntries: (ids: string[]) => void;
+  /** Empty (kid, date, slot) for each kid and put one food or recipe there. */
+  onReplaceSlot: (kidIds: string[], date: string, slot: MealSlot, target: SlotTarget) => void;
+  onPushWeekToGrocery?: () => void;
+  onMarkResult: (entry: PlanEntry, result: MealOutcome) => void;
   onBuildWeek: () => void;
   onAIGenerate: () => void;
   onPreviousWeek: () => void;
   onNextWeek: () => void;
   onThisWeek: () => void;
-  onCopyWeek?: (toDate: string) => void;
-  onClearWeek?: () => void;
+  onCopyWeek?: (toDate: string, kidId?: string) => void;
+  onClearWeek?: (kidId?: string) => void;
   onOpenTemplateGallery?: () => void;
   onSaveTemplate?: () => void;
 }
@@ -72,8 +89,10 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
   activeKidId,
   isGeneratingPlan,
   onAddEntry,
-  onUpdateEntry,
-  onSelectRecipe,
+  onSelectRecipeForKids,
+  onDeleteEntries,
+  onReplaceSlot,
+  onPushWeekToGrocery,
   onMarkResult,
   onBuildWeek,
   onAIGenerate,
@@ -85,23 +104,52 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
   onOpenTemplateGallery,
   onSaveTemplate,
 }: MobileMealPlannerProps) {
-  const [selectedDayIndex, setSelectedDayIndex] = useState(() => {
-    // Default to today if it's within this week, otherwise Monday
-    const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const day = addDays(weekStart, i);
-      if (format(day, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")) {
-        return i;
-      }
-    }
-    return 0;
-  });
+  const { t, i18n } = useTranslation();
+  const reduceMotion = useReducedMotion();
 
+  const [today, setToday] = useState(() => isoDay(new Date()));
+  const [selectedDayIndex, setSelectedDayIndex] = useState(() => Math.max(todayIndex(weekStart), 0));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerContext, setDrawerContext] = useState<MealQuickAddContext | null>(null);
 
   const singleKidMode = activeKidId !== null;
-  const selectedDate = format(addDays(weekStart, selectedDayIndex), "yyyy-MM-dd");
+  const selectedDate = isoDay(addDays(weekStart, selectedDayIndex));
+  const weekStartIso = isoDay(weekStart);
+  const weekEndIso = isoDay(addDays(weekStart, 6));
+  const isCurrentWeek = today >= weekStartIso && today <= weekEndIso;
+
+  // A tab left open overnight wakes up on a new day: move "today" (and the
+  // selection, if it was sitting on the old today) instead of logging
+  // yesterday's dinner against the wrong date.
+  const selectionRef = useRef({ selectedDayIndex, weekStart, today });
+  selectionRef.current = { selectedDayIndex, weekStart, today };
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = new Date();
+      const next = isoDay(now);
+      const cur = selectionRef.current;
+      if (next === cur.today) return;
+      const wasOnToday = isoDay(addDays(cur.weekStart, cur.selectedDayIndex)) === cur.today;
+      setToday(next);
+      const idx = todayIndex(cur.weekStart, now);
+      if (wasOnToday && idx >= 0) setSelectedDayIndex(idx);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  const handleThisWeek = useCallback(() => {
+    onThisWeek();
+    // Weeks all start on the same weekday, so today's index is known before
+    // the parent's new weekStart arrives.
+    setSelectedDayIndex(weekdayIndex(weekStart, new Date()));
+  }, [onThisWeek, weekStart]);
+
+  const handleToday = useCallback(() => {
+    const idx = todayIndex(weekStart);
+    if (idx >= 0) setSelectedDayIndex(idx);
+  }, [weekStart]);
 
   // Swipe between days
   const swipeRef = useSwipeGesture({
@@ -109,7 +157,6 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
       if (selectedDayIndex < 6) {
         setSelectedDayIndex(selectedDayIndex + 1);
       } else {
-        // Go to next week, start on first day
         onNextWeek();
         setSelectedDayIndex(0);
       }
@@ -118,7 +165,6 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
       if (selectedDayIndex > 0) {
         setSelectedDayIndex(selectedDayIndex - 1);
       } else {
-        // Go to previous week, start on last day
         onPreviousWeek();
         setSelectedDayIndex(6);
       }
@@ -127,204 +173,137 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
     preventDefaultTouchmoveEvent: true,
   });
 
-  // Get entries for a specific slot on the selected date
-  const getSlotEntries = useCallback(
-    (slot: MealSlot) => {
-      if (singleKidMode) {
-        return planEntries.filter(
-          (e) =>
-            e.date === selectedDate &&
-            e.meal_slot === slot &&
-            e.kid_id === activeKidId,
-        );
-      }
-      // Family mode - get entries for all kids
-      return planEntries.filter(
-        (e) => e.date === selectedDate && e.meal_slot === slot,
-      );
-    },
-    [planEntries, selectedDate, singleKidMode, activeKidId],
-  );
+  // One pass over the plan for the selected day, one array per slot. An empty
+  // slot gets the same EMPTY array every render so its card's memo() holds.
+  const slotEntries = useMemo(() => {
+    const map = new Map<MealSlot, PlanEntry[]>();
+    for (const e of planEntries) {
+      if (e.date !== selectedDate) continue;
+      if (singleKidMode && e.kid_id !== activeKidId) continue;
+      const list = map.get(e.meal_slot);
+      if (list) list.push(e);
+      else map.set(e.meal_slot, [e]);
+    }
+    return map;
+  }, [planEntries, selectedDate, singleKidMode, activeKidId]);
 
-  // Determine the "family meal" food_id for a given slot
-  const getFamilyFoodId = useCallback(
-    (slot: MealSlot): string | undefined => {
-      const entries = getSlotEntries(slot);
-      if (entries.length === 0) return undefined;
+  const foodById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
+  const recipeById = useMemo(() => new Map(recipes.map((r) => [r.id, r])), [recipes]);
 
-      const counts = new Map<string, number>();
-      const seen = new Set<string>();
-      entries.forEach((e) => {
-        const key = `${e.kid_id}-${e.recipe_id || e.food_id}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        const foodKey = e.recipe_id || e.food_id;
-        counts.set(foodKey, (counts.get(foodKey) || 0) + 1);
-      });
+  // Handlers read the latest plan through refs so they keep one identity and
+  // the cards' memo() is not defeated by a new closure per render.
+  const latest = useRef({ planEntries, slotEntries, kids, singleKidMode, activeKidId });
+  latest.current = { planEntries, slotEntries, kids, singleKidMode, activeKidId };
 
-      let maxKey = "";
-      let maxCount = 0;
-      counts.forEach((count, key) => {
-        if (count > maxCount) {
-          maxCount = count;
-          maxKey = key;
-        }
-      });
+  const rowsFor = useCallback((date: string, slot: MealSlot, kidIds: readonly string[]) => {
+    const set = new Set(kidIds);
+    return latest.current.planEntries.filter(
+      (e) => e.date === date && e.meal_slot === slot && set.has(e.kid_id),
+    );
+  }, []);
 
-      // Return the food_id (not recipe_id) for the family meal
-      const familyEntry = entries.find(
-        (e) => (e.recipe_id || e.food_id) === maxKey,
-      );
-      return familyEntry?.food_id;
-    },
-    [getSlotEntries],
-  );
+  // --- Drawer openers ---
 
-  // --- Drawer handlers ---
+  const handleTapAdd = useCallback((date: string, slot: MealSlot, kidId?: string) => {
+    const { singleKidMode: single, activeKidId: active } = latest.current;
+    setDrawerContext({
+      date,
+      slot,
+      kidId: kidId ?? (single && active ? active : undefined),
+      mode: "add",
+    });
+    setDrawerOpen(true);
+  }, []);
 
-  const handleTapAdd = useCallback(
-    (date: string, slot: MealSlot, kidId?: string) => {
+  const handleTapChangeFamilyMeal = useCallback((date: string, slot: MealSlot) => {
+    const { singleKidMode: single, activeKidId: active, kids: allKids, planEntries: all } = latest.current;
+    if (single && active) {
+      setDrawerContext({ date, slot, kidId: active, mode: "change" });
+    } else {
+      const group = groupSlot(all.filter((e) => e.date === date && e.meal_slot === slot));
+      const ids = allKids.map((k) => k.id);
+      // Change what the family is eating; a kid on a substitute keeps it.
+      const onFamily = kidsOnFamilyMeal(group, ids);
       setDrawerContext({
         date,
         slot,
-        kidId: kidId || (singleKidMode ? activeKidId! : undefined),
-        mode: "add",
-      });
-      setDrawerOpen(true);
-    },
-    [singleKidMode, activeKidId],
-  );
-
-  const handleTapChangeFamilyMeal = useCallback(
-    (date: string, slot: MealSlot) => {
-      setDrawerContext({
-        date,
-        slot,
+        kidId: allKids.length === 1 ? allKids[0].id : undefined,
+        kidIds: onFamily.length > 0 ? onFamily : ids,
+        familyTarget: group.familyTarget ?? undefined,
         mode: "change",
-        // No kidId = update for everyone (or the active kid in single mode)
-        kidId: singleKidMode ? activeKidId! : undefined,
       });
-      setDrawerOpen(true);
-    },
-    [singleKidMode, activeKidId],
-  );
+    }
+    setDrawerOpen(true);
+  }, []);
 
-  const handleTapKidSubstitute = useCallback(
-    (date: string, slot: MealSlot, kidId: string) => {
-      const familyFoodId = getFamilyFoodId(slot);
-      setDrawerContext({
-        date,
-        slot,
-        kidId,
-        familyFoodId,
-        mode: "substitute",
-      });
-      setDrawerOpen(true);
-    },
-    [getFamilyFoodId],
-  );
+  const handleTapKidSubstitute = useCallback((date: string, slot: MealSlot, kidId: string) => {
+    const group = groupSlot(
+      latest.current.planEntries.filter((e) => e.date === date && e.meal_slot === slot),
+    );
+    setDrawerContext({
+      date,
+      slot,
+      kidId,
+      familyTarget: group.familyTarget ?? undefined,
+      mode: "substitute",
+    });
+    setDrawerOpen(true);
+  }, []);
 
-  // When a food is selected in the drawer
+  // --- Drawer results ---
+
   const handleDrawerSelectFood = useCallback(
-    (foodId: string, context: MealQuickAddContext) => {
-      if (context.mode === "change" && !context.kidId) {
-        // Family meal change: update all kids who were eating the old family meal
-        const oldFamilyFoodId = getFamilyFoodId(context.slot);
-        const existingEntries = planEntries.filter(
-          (e) => e.date === context.date && e.meal_slot === context.slot,
-        );
-
-        // Update entries that match the old family food
-        existingEntries.forEach((entry) => {
-          if (
-            !oldFamilyFoodId ||
-            entry.food_id === oldFamilyFoodId
-          ) {
-            onUpdateEntry(entry.id, { food_id: foodId, recipe_id: undefined });
-          }
-        });
-
-        // If no entries exist, add for all kids
-        if (existingEntries.length === 0) {
-          kids.forEach((kid) => {
-            onAddEntry(kid.id, context.date, context.slot, foodId);
-          });
-        }
-      } else if (context.kidId) {
-        // Single kid add/change/substitute
-        const existing = planEntries.find(
-          (e) =>
-            e.date === context.date &&
-            e.meal_slot === context.slot &&
-            e.kid_id === context.kidId,
-        );
-
-        if (existing) {
-          onUpdateEntry(existing.id, { food_id: foodId, recipe_id: undefined });
-        } else {
-          onAddEntry(context.kidId, context.date, context.slot, foodId);
-        }
-      } else {
-        // Add for all kids (new meal, family mode)
-        kids.forEach((kid) => {
-          const existing = planEntries.find(
-            (e) =>
-              e.date === context.date &&
-              e.meal_slot === context.slot &&
-              e.kid_id === kid.id,
-          );
-          if (existing) {
-            onUpdateEntry(existing.id, { food_id: foodId, recipe_id: undefined });
-          } else {
-            onAddEntry(kid.id, context.date, context.slot, foodId);
-          }
-        });
+    (foodId: string, context: MealQuickAddContext, kidIds: string[]) => {
+      if (kidIds.length === 0) return;
+      const existing = rowsFor(context.date, context.slot, kidIds);
+      if (kidIds.length === 1 && existing.length === 0) {
+        onAddEntry(kidIds[0], context.date, context.slot, foodId);
+        return;
       }
+      onReplaceSlot(kidIds, context.date, context.slot, { foodId });
     },
-    [planEntries, kids, onAddEntry, onUpdateEntry, getFamilyFoodId],
+    [rowsFor, onAddEntry, onReplaceSlot],
   );
 
-  // When a recipe is selected in the drawer
   const handleDrawerSelectRecipe = useCallback(
-    (recipeId: string, context: MealQuickAddContext) => {
-      if (context.kidId) {
-        onSelectRecipe(recipeId, context.date, context.slot, context.kidId);
-      } else {
-        // Add recipe for all kids
-        kids.forEach((kid) => {
-          onSelectRecipe(recipeId, context.date, context.slot, kid.id);
-        });
+    (recipeId: string, context: MealQuickAddContext, kidIds: string[]) => {
+      if (kidIds.length === 0) return;
+      if (rowsFor(context.date, context.slot, kidIds).length === 0) {
+        onSelectRecipeForKids(recipeId, context.date, context.slot, kidIds);
+        return;
       }
+      onReplaceSlot(kidIds, context.date, context.slot, { recipeId });
     },
-    [kids, onSelectRecipe],
+    [rowsFor, onSelectRecipeForKids, onReplaceSlot],
   );
 
-  // "Eat with family" - reset a kid's substitute to the family meal
+  // "Eat with family": put the kid back on the family dish, recipe and all.
   const handleEatWithFamily = useCallback(
     (context: MealQuickAddContext) => {
-      if (!context.kidId || !context.familyFoodId) return;
-      const existing = planEntries.find(
-        (e) =>
-          e.date === context.date &&
-          e.meal_slot === context.slot &&
-          e.kid_id === context.kidId,
-      );
-      if (existing) {
-        onUpdateEntry(existing.id, {
-          food_id: context.familyFoodId,
-          recipe_id: undefined,
-        });
-      } else {
-        onAddEntry(context.kidId, context.date, context.slot, context.familyFoodId);
-      }
+      if (!context.kidId || !context.familyTarget) return;
+      onReplaceSlot([context.kidId], context.date, context.slot, toSlotTarget(context.familyTarget));
     },
-    [planEntries, onAddEntry, onUpdateEntry],
+    [onReplaceSlot],
   );
 
-  const selectedDayLabel = useMemo(() => {
-    const date = addDays(weekStart, selectedDayIndex);
-    return format(date, "EEEE, MMM d");
-  }, [weekStart, selectedDayIndex]);
+  const handleDrawerOpenChange = useCallback((open: boolean) => {
+    setDrawerOpen(open);
+    if (!open) setDrawerContext(null);
+  }, []);
+
+  const handlePushWeek = useCallback(() => onPushWeekToGrocery?.(), [onPushWeekToGrocery]);
+
+  const locale = i18n.language || undefined;
+  const dayFmt = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "long", month: "short", day: "numeric" }),
+    [locale],
+  );
+  const shortFmt = useMemo(() => new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }), [locale]);
+  const selectedDayLabel = dayFmt.format(addDays(weekStart, selectedDayIndex));
+  const weekRangeLabel = `${shortFmt.format(weekStart)} - ${shortFmt.format(addDays(weekStart, 6))}`;
+
+  const press = reduceMotion ? "" : "transition-transform active:scale-95";
+  const kidForWeekOps = activeKidId ?? undefined;
 
   return (
     <div className="space-y-4">
@@ -333,161 +312,175 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => {
-            onPreviousWeek();
-            setSelectedDayIndex(0);
-          }}
-          aria-label="Previous week"
-          className="h-9 w-9"
+          onClick={onPreviousWeek}
+          aria-label={t("planner.mobile.previousWeek", { defaultValue: "Previous week" })}
+          className="min-h-11 min-w-11"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
-        <button
-          onClick={onThisWeek}
-          className="text-center active:scale-95 transition-transform"
-        >
-          <p className="text-sm font-bold text-foreground">
-            {format(weekStart, "MMM d")} - {format(addDays(weekStart, 6), "MMM d")}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Tap for this week
-          </p>
-        </button>
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-sm font-bold text-foreground">{weekRangeLabel}</p>
+          {isCurrentWeek ? (
+            <button
+              type="button"
+              onClick={handleToday}
+              className={cn(
+                "min-h-8 rounded-full bg-primary/10 px-3 text-xs font-semibold text-primary hover:bg-primary/15",
+                press,
+              )}
+            >
+              {t("planner.mobile.today", { defaultValue: "Today" })}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleThisWeek}
+              className={cn("min-h-8 rounded-full px-3 text-xs text-muted-foreground hover:bg-muted", press)}
+            >
+              {t("planner.mobile.tapForThisWeek", { defaultValue: "Tap for this week" })}
+            </button>
+          )}
+        </div>
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => {
-            onNextWeek();
-            setSelectedDayIndex(0);
-          }}
-          aria-label="Next week"
-          className="h-9 w-9"
+          onClick={onNextWeek}
+          aria-label={t("planner.mobile.nextWeek", { defaultValue: "Next week" })}
+          className="min-h-11 min-w-11"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-5 w-5" aria-hidden="true" />
         </Button>
       </div>
 
-      {/* Week day strip */}
       <WeekStrip
         weekStart={weekStart}
         selectedDayIndex={selectedDayIndex}
         onSelectDay={setSelectedDayIndex}
         planEntries={planEntries}
         kids={kids}
+        activeKidId={activeKidId}
+        today={today}
+        panelId={PANEL_ID}
+        tabIdPrefix={TAB_PREFIX}
       />
 
       {/* Action buttons */}
       <div className="flex gap-2 px-1">
-        <Button
-          onClick={onAIGenerate}
-          size="sm"
-          className="flex-1 shadow-md"
-          disabled={isGeneratingPlan}
-        >
+        <Button onClick={onAIGenerate} size="sm" className="flex-1 min-h-11" disabled={isGeneratingPlan}>
           {isGeneratingPlan ? (
             <>
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-              Generating...
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden="true" />
+              {t("planner.mobile.generating", { defaultValue: "Generating..." })}
             </>
           ) : (
             <>
-              <Sparkles className="h-4 w-4 mr-1.5" />
-              AI Plan
+              <Sparkles className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              {t("planner.mobile.aiPlan", { defaultValue: "AI Plan" })}
             </>
           )}
         </Button>
-        <Button
-          onClick={onBuildWeek}
-          variant="outline"
-          size="sm"
-          className="flex-1"
-        >
-          <RefreshCw className="h-4 w-4 mr-1.5" />
-          Quick Build
+        <Button onClick={onBuildWeek} variant="outline" size="sm" className="flex-1 min-h-11">
+          <RefreshCw className="h-4 w-4 mr-1.5" aria-hidden="true" />
+          {t("planner.mobile.quickBuild", { defaultValue: "Quick Build" })}
         </Button>
+        {onPushWeekToGrocery && (
+          <Button
+            onClick={handlePushWeek}
+            variant="outline"
+            size="sm"
+            className="flex-1 min-h-11"
+            aria-label={t("planner.mobile.shopThisWeek", { defaultValue: "Shop this week" })}
+          >
+            <ShoppingCart className="h-4 w-4 mr-1.5" aria-hidden="true" />
+            {t("planner.mobile.shop", { defaultValue: "Shop" })}
+          </Button>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="More options">
-              <MoreHorizontal className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="icon"
+              className="min-h-11 min-w-11 shrink-0"
+              aria-label={t("planner.mobile.moreOptions", { defaultValue: "More options" })}
+            >
+              <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {onOpenTemplateGallery && (
               <DropdownMenuItem onClick={onOpenTemplateGallery}>
-                <BookTemplate className="h-4 w-4 mr-2" />
-                Use Template
+                <BookTemplate className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("planner.mobile.useTemplate", { defaultValue: "Use Template" })}
               </DropdownMenuItem>
             )}
             {onSaveTemplate && (
               <DropdownMenuItem onClick={onSaveTemplate}>
-                <Save className="h-4 w-4 mr-2" />
-                Save as Template
+                <Save className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("planner.mobile.saveTemplate", { defaultValue: "Save as Template" })}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             {onCopyWeek && (
-              <DropdownMenuItem
-                onClick={() =>
-                  onCopyWeek(format(addWeeks(weekStart, 1), "yyyy-MM-dd"))
-                }
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Copy to Next Week
+              <DropdownMenuItem onClick={() => onCopyWeek(isoDay(addWeeks(weekStart, 1)), kidForWeekOps)}>
+                <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("planner.mobile.copyNextWeek", { defaultValue: "Copy to Next Week" })}
               </DropdownMenuItem>
             )}
             {onClearWeek && (
-              <DropdownMenuItem onClick={onClearWeek} className="text-destructive">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Clear Week
+              <DropdownMenuItem onClick={() => onClearWeek(kidForWeekOps)} className="text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("planner.mobile.clearWeek", { defaultValue: "Clear Week" })}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      {/* Selected day label */}
       <div className="px-1">
         <h2 className="text-lg font-bold text-foreground">{selectedDayLabel}</h2>
       </div>
 
       {/* Meal cards - swipeable area */}
-      <div ref={swipeRef} className="space-y-3 px-1 pb-24">
-        {MEAL_SLOTS.map(({ slot, label }) => {
-          const entries = getSlotEntries(slot);
-          return (
-            <FamilyMealCard
-              key={slot}
-              slot={slot}
-              label={label}
-              date={selectedDate}
-              entries={entries}
-              kids={kids}
-              foods={foods}
-              recipes={recipes}
-              singleKidMode={singleKidMode}
-              activeKidId={activeKidId}
-              onTapAdd={handleTapAdd}
-              onTapChangeFamilyMeal={handleTapChangeFamilyMeal}
-              onTapKidSubstitute={handleTapKidSubstitute}
-              onMarkResult={onMarkResult}
-            />
-          );
-        })}
+      <div
+        ref={swipeRef}
+        id={PANEL_ID}
+        role="tabpanel"
+        aria-labelledby={`${TAB_PREFIX}-${selectedDayIndex}`}
+        className="space-y-3 px-1 pb-24"
+      >
+        {MEAL_SLOTS.map(({ slot, label }) => (
+          <FamilyMealCard
+            key={slot}
+            slot={slot}
+            label={t(`planner.mobile.slot.${slot}`, { defaultValue: label })}
+            date={selectedDate}
+            today={today}
+            entries={slotEntries.get(slot) ?? EMPTY}
+            kids={kids}
+            foodById={foodById}
+            recipeById={recipeById}
+            singleKidMode={singleKidMode}
+            activeKidId={activeKidId}
+            onTapAdd={handleTapAdd}
+            onTapChangeFamilyMeal={handleTapChangeFamilyMeal}
+            onTapKidSubstitute={handleTapKidSubstitute}
+            onMarkResult={onMarkResult}
+            onDeleteEntries={onDeleteEntries}
+            onNeedToBuy={onPushWeekToGrocery ? handlePushWeek : undefined}
+          />
+        ))}
       </div>
 
-      {/* Quick-add drawer */}
       <MealQuickAddDrawer
         open={drawerOpen}
-        onOpenChange={(open) => {
-          setDrawerOpen(open);
-          if (!open) setDrawerContext(null);
-        }}
+        onOpenChange={handleDrawerOpenChange}
         context={drawerContext}
         foods={foods}
         recipes={recipes}
         kids={kids}
+        planEntries={planEntries}
         onSelectFood={handleDrawerSelectFood}
-        onSelectRecipe={handleDrawerSelectRecipe}
+        onSelectRecipeForKids={handleDrawerSelectRecipe}
         onEatWithFamily={handleEatWithFamily}
       />
     </div>

@@ -16,7 +16,7 @@ import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_S
 import { fetchAllRows, ROW_CEILING } from "@/lib/fetchAllRows";
 import { toISODate, addIsoDays } from "@/lib/date-utils";
 import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
-import { PlanProvider, usePlan } from "./PlanContext";
+import { PlanProvider, usePlan, type CopyWeekResult, type PlanDeleteResult } from "./PlanContext";
 import { GroceryProvider, useGrocery } from "./GroceryContext";
 import { InventoryProvider, useInventory, parseMovementRows, parseStockRows, MOVEMENT_WINDOW_DAYS, MOVEMENT_LIMIT } from "./InventoryContext";
 import { toast } from "sonner";
@@ -74,8 +74,8 @@ interface AppContextType {
   addFoods: (foods: Omit<Food, "id">[]) => Promise<boolean>;
   updateFoods: (updates: { id: string; updates: Partial<Food> }[]) => Promise<void>;
   deleteFoods: (ids: string[]) => Promise<void>;
-  copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<void>;
-  deleteWeekPlan: (weekStart: string, kidId: string) => Promise<void>;
+  copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<CopyWeekResult>;
+  deleteWeekPlan: (weekStart: string, kidId: string) => Promise<PlanDeleteResult>;
   refreshFoods?: () => Promise<void>;
   refreshRecipes?: () => Promise<void>;
   refreshKids?: () => Promise<void>;

@@ -8,6 +8,34 @@ import {
   OFFLINE_QUEUED_MESSAGE,
 } from "@/lib/networkFailure";
 
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = "23505";
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === UNIQUE_VIOLATION
+  );
+}
+
+/**
+ * Pick the toast text for a failed write. A 23505 means the row is already
+ * there (a double tap, or a second device got in first), which is a different
+ * thing to tell a parent from "couldn't save", so a caller can name it with
+ * `uniqueViolationMessage`. Every other code keeps the existing message.
+ */
+function failureToast(
+  error: unknown,
+  options: { toastMessage?: string; uniqueViolationMessage?: string },
+  fallback: string,
+): string {
+  if (options.uniqueViolationMessage && isUniqueViolation(error)) {
+    return options.uniqueViolationMessage;
+  }
+  return writeFailureMessage(error, options.toastMessage ?? fallback);
+}
+
 /**
  * US-320: optimistic state mutation with server-error rollback.
  *
@@ -55,6 +83,8 @@ export async function runOptimisticMutation<T extends { id: string }>(
      * and says pending instead of lost.
      */
     offlineQueue?: (error: unknown) => Promise<boolean>;
+    /** Toast text used instead of toastMessage when the error is a 23505. */
+    uniqueViolationMessage?: string;
   },
 ): Promise<{ error: unknown } | { error: null }> {
   let snapshot: T[] = [];
@@ -89,17 +119,25 @@ export async function runOptimisticMutation<T extends { id: string }>(
   // optimistic diff against the CURRENT state (which may include concurrent
   // realtime inserts/edits/deletes), keyed by id and guarded by reference
   // equality so a row a realtime event has since replaced is left untouched.
-  if (captured) {
-    setState((current) => rollbackOptimistic(current, snapshot, optimisticResult));
-  }
+  //
+  // Always queued, and `captured` is read INSIDE the updater: React only runs
+  // the optimistic updater eagerly when the fiber has no pending work, so
+  // right after another write (an insert followed by a delete, or a test's
+  // act() scope) it can still be waiting for the next render when the server
+  // answers. Updaters run in order, so by the time this one runs the
+  // optimistic one has, and there is a snapshot to restore. Guarding with an
+  // outer `if (captured)` skipped the rollback in exactly that case.
+  setState((current) =>
+    captured ? rollbackOptimistic(current, snapshot, optimisticResult) : current,
+  );
 
   const handled = options.onError?.(error) === true;
   if (authOutcome === "not-auth-error" && !handled) {
     toast.error(
-      writeFailureMessage(
+      failureToast(
         error,
-        options.toastMessage ??
-          "Couldn't save your change — it's been reverted. Please try again.",
+        options,
+        "Couldn't save your change — it's been reverted. Please try again.",
       ),
     );
   }
@@ -190,6 +228,8 @@ export async function runOptimisticInsert<T extends { id: string }>(
     logLabel: string;
     toastMessage?: string;
     onError?: (error: unknown) => boolean;
+    /** Toast text used instead of toastMessage when the error is a 23505. */
+    uniqueViolationMessage?: string;
   },
 ): Promise<{ error: unknown } | { error: null }> {
   if (optimisticRows.length === 0) return { error: null };
@@ -239,10 +279,10 @@ export async function runOptimisticInsert<T extends { id: string }>(
   const handled = options.onError?.(error) === true;
   if (authOutcome === "not-auth-error" && !handled) {
     toast.error(
-      writeFailureMessage(
+      failureToast(
         error,
-        options.toastMessage ??
-          "Couldn't save that — it's been removed. Please try again.",
+        options,
+        "Couldn't save that — it's been removed. Please try again.",
       ),
     );
   }

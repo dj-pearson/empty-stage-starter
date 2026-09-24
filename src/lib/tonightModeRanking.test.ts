@@ -4,6 +4,8 @@ import {
   topSuggestions,
   evaluateKidFit,
   computeVarietyScore,
+  recentRecipeServings,
+  fatigueByRecipe,
   type KidContext,
   type PantryFood,
   type RecipeContext,
@@ -313,5 +315,33 @@ describe('topSuggestions', () => {
     );
     expect(out.find((r) => r.recipeId === 'bad')).toBeUndefined();
     expect(out).toHaveLength(2);
+  });
+});
+
+describe('recentRecipeServings / fatigueByRecipe', () => {
+  const row = (over: Partial<{ kid_id: string; date: string; meal_slot: string; recipe_id: string | null }>) => ({
+    kid_id: 'k1',
+    date: '2026-09-20',
+    meal_slot: 'dinner',
+    recipe_id: 'r1',
+    ...over,
+  });
+
+  it('counts one 5-ingredient recipe scheduled once as 1', () => {
+    const rows = Array.from({ length: 5 }, () => row({}));
+    expect(recentRecipeServings(rows, 'k1', '2026-09-24')).toHaveLength(1);
+    expect(fatigueByRecipe(rows, 'k1', '2026-09-24').get('r1')?.count).toBe(1);
+  });
+
+  it('excludes future dates', () => {
+    const rows = [row({ date: '2026-09-25' }), row({ date: '2026-09-30', meal_slot: 'lunch' })];
+    expect(recentRecipeServings(rows, 'k1', '2026-09-24')).toHaveLength(0);
+    expect(fatigueByRecipe(rows, 'k1', '2026-09-24').size).toBe(0);
+  });
+
+  it('ignores another kid and rows outside the lookback', () => {
+    const rows = [row({ kid_id: 'k2' }), row({ date: '2026-08-01' }), row({ date: '2026-09-24' })];
+    const recent = recentRecipeServings(rows, 'k1', '2026-09-24');
+    expect(recent).toEqual([{ recipeId: 'r1', daysAgo: 0 }]);
   });
 });

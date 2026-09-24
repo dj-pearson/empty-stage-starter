@@ -72,7 +72,8 @@ export interface PlanEntry {
   amount_eaten?: AmountEaten | null;
   notes?: string;
   food_attempt_id?: string;
-  recipe_id?: string;
+  /** Nullable column: a plain food row carries null, a recipe row its id. */
+  recipe_id?: string | null;
   is_primary_dish?: boolean;
 }
 

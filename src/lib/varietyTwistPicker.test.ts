@@ -317,3 +317,37 @@ describe('pickTwistCandidates', () => {
     expect(result).toHaveLength(0);
   });
 });
+
+describe('pickTwistCandidates with a kid', () => {
+  it('never returns a recipe with one of the kid\'s allergens', () => {
+    const peanut = { ...makeFood('f-pb', 'Peanut butter', 'protein'), allergens: ['Peanuts'] } as Food;
+    const rice = makeFood('f-rice', 'Rice', 'carb');
+    const original = makeRecipe({ id: 'r1', name: 'Rice bowl', food_ids: ['f-rice'], category: 'protein', is_favorite: false });
+    const satay = makeRecipe({ id: 'r2', name: 'Satay', food_ids: ['f-rice', 'f-pb'], category: 'protein', is_favorite: true });
+    const fried = makeRecipe({ id: 'r3', name: 'Fried rice', food_ids: ['f-rice'], category: 'protein' });
+    const result = pickTwistCandidates({
+      original,
+      allRecipes: [original, satay, fried],
+      foodById: foodMap(peanut, rice),
+      fatigueScoreFor: fatigueFn(),
+      kid: { allergens: ['peanut'], disliked_foods: [] },
+    });
+    expect(result.map((c) => c.recipe.id)).not.toContain('r2');
+    expect(result.map((c) => c.recipe.id)).toContain('r3');
+  });
+
+  it('keeps a disliked recipe but says why', () => {
+    const peas = makeFood('f-peas', 'Peas', 'vegetable');
+    const original = makeRecipe({ id: 'r1', name: 'Pasta', food_ids: [], category: 'protein' });
+    const risotto = makeRecipe({ id: 'r2', name: 'Pea risotto', food_ids: ['f-peas'], category: 'protein' });
+    const result = pickTwistCandidates({
+      original,
+      allRecipes: [original, risotto],
+      foodById: foodMap(peas),
+      fatigueScoreFor: fatigueFn(),
+      kid: { allergens: [], disliked_foods: ['peas'] },
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].reasons).toContain('Has a dislike: Peas');
+  });
+});

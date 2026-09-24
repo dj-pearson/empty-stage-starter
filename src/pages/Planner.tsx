@@ -1,9 +1,35 @@
-import { useState, useCallback } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  lazy,
+  Suspense,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
+import { Link, useSearchParams } from "react-router-dom";
+import { z } from "zod";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { toInsertablePlanEntry, type SlotTarget } from "@/contexts/PlanContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FoodSelectorDialog } from "@/components/FoodSelectorDialog";
 import { MobileMealPlanner } from "@/components/meal-planner/MobileMealPlanner";
 import { buildWeekPlan } from "@/lib/mealPlanner";
@@ -14,62 +40,191 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  ShoppingCart,
+  Copy,
+  LayoutTemplate,
 } from "lucide-react";
 import { toast } from "sonner";
-import { MealSlot, PlanEntry } from "@/types";
+import type { Food, Kid, MealSlot, PlanEntry } from "@/types";
 import { MissingIngredientsDialog } from "@/components/MissingIngredientsDialog";
 import { computeRecipeShortfall, type Shortfall } from "@/lib/recipeShortfall";
 import { supabase } from "@/integrations/supabase/client";
-import { parsePlanEntryRows } from "@/lib/normalizeEntities";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
-
-// Shape of a single day in the ai-meal-plan edge-function response.
-interface AiMealPlanDay {
-  date: string;
-  meals: Record<string, string | null>;
-}
-import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
+import { format, startOfWeek, addWeeks, subWeeks, addDays, isSameDay } from "date-fns";
 import { calculateAge } from "@/lib/utils";
+import { addIsoDays, parseIsoDate, PLANNER_WEEK_STARTS_ON } from "@/lib/date-utils";
+import { isAllergenSafeFor, matchingAllergen } from "@/lib/allergens";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { usePlanToGrocery, type PlanToGroceryWindow } from "@/hooks/usePlanToGrocery";
 import { logger } from "@/lib/logger";
-import { lazy, Suspense } from "react";
 import { VarietyFatigueBanner } from "@/components/VarietyFatigueBanner";
 
 // US-541: lazy-load the GSAP planner so gsap + gsap/Draggable are code-split
 // into their own chunk instead of statically bloating the Planner bundle.
-const GSAPCalendarMealPlanner = lazy(() => import("@/components/GSAPCalendarMealPlanner").then(m => ({ default: m.GSAPCalendarMealPlanner })));
-const SaveMealPlanTemplateDialog = lazy(() => import("@/components/SaveMealPlanTemplateDialog").then(m => ({ default: m.SaveMealPlanTemplateDialog })));
-const MealPlanTemplateGallery = lazy(() => import("@/components/MealPlanTemplateGallery").then(m => ({ default: m.MealPlanTemplateGallery })));
+const GSAPCalendarMealPlanner = lazy(() =>
+  import("@/components/GSAPCalendarMealPlanner").then((m) => ({ default: m.GSAPCalendarMealPlanner })),
+);
+const PlannerTemplatesController = lazy(() =>
+  import("@/components/meal-planner/PlannerTemplatesController").then((m) => ({
+    default: m.PlannerTemplatesController,
+  })),
+);
+
+const MEAL_SLOTS: readonly MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack2", "try_bite"];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+type BusyOp = "build" | "ai" | "clear" | "copy";
+type MealOutcome = "ate" | "tasted" | "refused";
+
+/**
+ * The ai-meal-plan reply, validated at the boundary. The function maps model
+ * output back to food ids; a slot the model named something unknown for is
+ * simply absent, and anything else malformed is refused rather than written.
+ */
+const aiPlanSchema = z.object({
+  plan: z.array(
+    z.object({
+      date: z.string(),
+      meals: z.record(z.string().nullable().optional()),
+    }),
+  ),
+});
+
+/** Only what supabase/functions/ai-meal-plan/index.ts reads from each object. */
+function aiKidPayload(kid: Kid) {
+  return {
+    id: kid.id,
+    name: kid.name,
+    age: calculateAge(kid.date_of_birth) ?? kid.age,
+    allergens: kid.allergens ?? [],
+    favorite_foods: kid.favorite_foods ?? [],
+  };
+}
+
+function aiFoodPayload(f: Food) {
+  return {
+    id: f.id,
+    name: f.name,
+    category: f.category,
+    quantity: f.quantity ?? null,
+    unit: f.unit ?? null,
+    is_safe: f.is_safe,
+    is_try_bite: f.is_try_bite,
+    allergens: f.allergens ?? [],
+  };
+}
+
+function inWeek(date: string, weekStart: string): boolean {
+  const d = date.slice(0, 10);
+  return d >= weekStart && d <= addIsoDays(weekStart, 6);
+}
+
+function parseWeekParam(value: string | null): Date | null {
+  if (!value || !ISO_DATE.test(value)) return null;
+  const d = parseIsoDate(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+type RangeFormatter = Intl.DateTimeFormat & { formatRange?: (a: Date, b: Date) => string };
+
+interface ConfirmRequest {
+  title: string;
+  body: ReactNode;
+  confirmLabel: string;
+  /** Allergen prompts make Cancel the default and the write the secondary choice. */
+  cautious?: boolean;
+  resolve: (ok: boolean) => void;
+}
+
+interface KidChooserRequest {
+  op: "build" | "ai";
+  selected: string[];
+}
+
+/**
+ * The household's default grocery list, so rows added from the planner land
+ * where the Grocery page will show them (US-714).
+ */
+function useDefaultGroceryListId(): string | null {
+  const { userId } = useAuth();
+  const [id, setId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("grocery_lists")
+          .select("id, is_default")
+          .eq("is_archived", false)
+          .order("is_default", { ascending: false })
+          .limit(1);
+        const first = (data as Array<{ id: string }> | null)?.[0];
+        if (!cancelled) setId(first?.id ?? null);
+      } catch (error) {
+        logger.warn("Default grocery list lookup failed", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+  return id;
+}
 
 export default function Planner() {
-  const { t } = useTranslation();
-  const {
-    foods,
-    updateFood,
-  } = useFoods();
-  const {
-    kids,
-    activeKidId,
-    setActiveKid,
-  } = useKids();
+  const { t, i18n } = useTranslation();
+  const { foods, updateFood } = useFoods();
+  const { kids, activeKidId, setActiveKid } = useKids();
   const { recipes } = useRecipes();
   const {
     planEntries,
-    setPlanEntries,
     updatePlanEntry,
     addPlanEntry,
+    addPlanEntries,
     copyWeekPlan,
     deleteWeekPlan,
-    addPlanEntries,
+    deletePlanEntries,
+    movePlanEntries,
+    replaceSlot,
+    replaceWeekPlan,
+    scheduleRecipe,
   } = usePlan();
-  const { addGroceryItemsMerged } = useGrocery();
+  const { addGroceryItemsMerged, deleteGroceryItems } = useGrocery();
+  const planToGrocery = usePlanToGrocery();
+  const defaultListId = useDefaultGroceryListId();
 
   const isMobile = useMediaQuery("(max-width: 1023px)");
 
-  const [currentWeekStart, setCurrentWeekStart] = useState(
-    startOfWeek(new Date(), { weekStartsOn: 0 })
+  // --- Week in view, persisted in ?week=YYYY-MM-DD -------------------------
+  const [searchParams, setSearchParams] = useSearchParams();
+  const weekParam = searchParams.get("week");
+  const currentWeekStart = useMemo(
+    () => startOfWeek(parseWeekParam(weekParam) ?? new Date(), { weekStartsOn: PLANNER_WEEK_STARTS_ON }),
+    [weekParam],
   );
-  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const weekStartIso = format(currentWeekStart, "yyyy-MM-dd");
+  const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: PLANNER_WEEK_STARTS_ON });
+  const isThisWeek = isSameDay(currentWeekStart, thisWeekStart);
+
+  const setCurrentWeekStart = useCallback(
+    (d: Date) => {
+      const iso = format(startOfWeek(d, { weekStartsOn: PLANNER_WEEK_STARTS_ON }), "yyyy-MM-dd");
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("week", iso);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const [busyOp, setBusyOp] = useState<BusyOp | null>(null);
+  const busyRef = useRef<BusyOp | null>(null);
+  const [status, setStatus] = useState("");
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showTemplateGallery, setShowTemplateGallery] = useState(false);
   const [foodSelectorOpen, setFoodSelectorOpen] = useState(false);
@@ -78,10 +233,10 @@ export default function Planner() {
     slot: MealSlot;
     kidId: string;
   } | null>(null);
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [kidChooser, setKidChooser] = useState<KidChooserRequest | null>(null);
 
-  // US-284: missing-ingredient prompt state. `pendingRecipe` holds the
-  // recipe that triggered the dialog so we can pass its name to the UI
-  // and stamp `source_recipe_id` on the bulk-inserted grocery rows.
+  // US-284: missing-ingredient prompt state.
   const [missingDialogOpen, setMissingDialogOpen] = useState(false);
   const [missingShortfalls, setMissingShortfalls] = useState<Shortfall[]>([]);
   const [pendingRecipeForMissing, setPendingRecipeForMissing] = useState<
@@ -89,499 +244,901 @@ export default function Planner() {
   >(null);
 
   const activeKid = kids.find((k) => k.id === activeKidId);
+  // A stale activeKidId (a deleted child, another household's id left in
+  // storage) is family mode, never a crash on activeKid!.
+  const familyMode = activeKidId === null || !activeKid;
+
+  useEffect(() => {
+    if (activeKidId && kids.length > 0 && !kids.some((k) => k.id === activeKidId)) {
+      setActiveKid(null);
+    }
+  }, [activeKidId, kids, setActiveKid]);
+
+  // Handlers handed to the grids read these, so they can stay stable across
+  // every plan change instead of re-rendering both grids on each keystroke.
+  const planEntriesRef = useRef(planEntries);
+  planEntriesRef.current = planEntries;
+  const foodsRef = useRef(foods);
+  foodsRef.current = foods;
+  const kidsRef = useRef(kids);
+  kidsRef.current = kids;
+  const recipesRef = useRef(recipes);
+  recipesRef.current = recipes;
+  const activeKidRef = useRef(activeKid);
+  activeKidRef.current = activeKid;
+
+  // --- Formatting helpers --------------------------------------------------
+  const lang = i18n.language || "en";
+  const dayName = useCallback(
+    (iso: string) => new Intl.DateTimeFormat(lang, { weekday: "long" }).format(parseIsoDate(iso)),
+    [lang],
+  );
+  const slotName = useCallback((slot: MealSlot) => t(`planner.slots.${slot}`), [t]);
+  const formatRange = useCallback(
+    (startIso: string) => {
+      const fmt = new Intl.DateTimeFormat(lang, { month: "short", day: "numeric" }) as RangeFormatter;
+      const a = parseIsoDate(startIso);
+      const b = addDays(a, 6);
+      return fmt.formatRange ? fmt.formatRange(a, b) : `${fmt.format(a)} - ${fmt.format(b)}`;
+    },
+    [lang],
+  );
+  const listNames = useCallback(
+    (names: string[]) => {
+      const ListFormat = (Intl as unknown as {
+        ListFormat?: new (l: string, o: { type: string }) => { format: (x: string[]) => string };
+      }).ListFormat;
+      return ListFormat ? new ListFormat(lang, { type: "conjunction" }).format(names) : names.join(", ");
+    },
+    [lang],
+  );
+  const foodName = useCallback((id: string) => foodsRef.current.find((f) => f.id === id)?.name ?? "", []);
+  const kidName = useCallback((id: string) => kidsRef.current.find((k) => k.id === id)?.name ?? "", []);
+
+  /** Announce an action result to screen readers (and only results). */
+  const announce = useCallback((msg: string) => setStatus(msg), []);
+
+  // --- Confirm plumbing ----------------------------------------------------
+  const askConfirm = useCallback(
+    (req: Omit<ConfirmRequest, "resolve">) =>
+      new Promise<boolean>((resolve) => setConfirmRequest({ ...req, resolve })),
+    [],
+  );
+  const settleConfirm = useCallback((ok: boolean) => {
+    setConfirmRequest((cur) => {
+      cur?.resolve(ok);
+      return null;
+    });
+  }, []);
 
   /**
-   * US-284: after a recipe is scheduled into the planner, compute the
-   * shortfall against current pantry. If anything is missing AND the
-   * recipe carries structured ingredients (US-281), open the bulk-add
-   * dialog. Silent no-op when the recipe has no structured ingredients
-   * (legacy data) or has no shortfall.
+   * Allergen guard. Every path that puts a food on a child's plan comes through
+   * here. A match asks first, with Cancel as the default; nothing is written
+   * unless the parent picks "Add anyway".
    */
-  const openMissingIngredientsForRecipe = useCallback((recipeId: string) => {
-    const recipe = recipes.find((r) => r.id === recipeId);
-    if (!recipe) return;
-    const ings = recipe.recipe_ingredients ?? [];
-    if (ings.length === 0) return;
-
-    const shortfalls = computeRecipeShortfall(recipe, foods);
-    if (shortfalls.length === 0) {
-      toast.success("You have everything for this recipe");
-      return;
-    }
-    setPendingRecipeForMissing({ id: recipe.id, name: recipe.name });
-    setMissingShortfalls(shortfalls);
-    setMissingDialogOpen(true);
-  }, [recipes, foods]);
-
-  /**
-   * Bulk-add the user's selected shortfalls. Each row goes in as a
-   * grocery_items insert with `added_via='recipe'` and `source_recipe_id`
-   * pointing at the source recipe so US-262's auto-check on mark-made
-   * and the planned-meal flag (US-290) can later resolve them.
-   * Dedupes against existing pending grocery items by lowercased name —
-   * a second recipe asking for the same thing won't double-add.
-   */
-  const handleConfirmMissingIngredients = useCallback((selected: Shortfall[]) => {
-    if (!pendingRecipeForMissing || selected.length === 0) return;
-    // Stack rather than skip: a second recipe asking for "ground beef" now
-    // bumps the existing line's quantity (unit-aware) instead of being dropped.
-    const touched = addGroceryItemsMerged(
-      selected.map((s) => ({
-        name: s.ingredient.name.trim(),
-        quantity: s.needed > 0 ? s.needed : 1,
-        unit: s.neededUnit ?? s.ingredient.unit ?? "",
-        category: s.matchedFood?.category ?? "snack",
-        added_via: "recipe",
-        source_recipe_id: pendingRecipeForMissing.id,
-      }))
-    );
-    if (touched > 0) {
-      toast.success(`Added ${touched} item${touched === 1 ? "" : "s"} to grocery`);
-    }
-  }, [addGroceryItemsMerged, pendingRecipeForMissing]);
-
-  // --- Shared handlers (used by both mobile and desktop) ---
-
-  const checkStockIssues = () => {
-    const outOfStock = foods.filter(
-      (f) => f.is_safe && (f.quantity || 0) === 0
-    );
-    const lowStock = foods.filter(
-      (f) => f.is_safe && (f.quantity || 0) > 0 && (f.quantity || 0) <= 2
-    );
-
-    if (outOfStock.length > 0 || lowStock.length > 0) {
-      let message = "";
-      if (outOfStock.length > 0) {
-        message += `Out of stock: ${outOfStock
-          .slice(0, 3)
-          .map((f) => f.name)
-          .join(", ")}${
-          outOfStock.length > 3 ? ` and ${outOfStock.length - 3} more` : ""
-        }. `;
-      }
-      if (lowStock.length > 0) {
-        message += `Low stock: ${lowStock
-          .slice(0, 3)
-          .map((f) => `${f.name} (${f.quantity})`)
-          .join(", ")}${
-          lowStock.length > 3 ? ` and ${lowStock.length - 3} more` : ""
-        }.`;
-      }
-      toast.warning("Stock Issues Detected", { description: message });
-    }
-  };
-
-  const handleBuildWeek = () => {
-    if (!activeKid) {
-      toast.error("Please select a child first");
-      return;
-    }
-
-    checkStockIssues();
-
-    try {
-      // US-715: build the week IN VIEW, and persist it. This used to build from
-      // today and hand the result to setPlanEntries, which is local state only:
-      // the plan was gone on reload, never reached another device, and the
-      // wholesale replace wiped every other kid and every other week.
-      const weekStart = format(currentWeekStart, "yyyy-MM-dd");
-      const newPlan = buildWeekPlan(
-        activeKid,
-        foods,
-        planEntries,
-        currentWeekStart
-      );
-
-      // Replace only this kid's entries for this week; other kids and other
-      // weeks are untouched.
-      void (async () => {
-        try {
-          await deleteWeekPlan(weekStart, activeKid.id);
-          await addPlanEntries(newPlan);
-          toast.success(`Week plan generated for ${activeKid.name}!`, {
-            description: "Meal plan ready with daily try bites",
-          });
-        } catch (error) {
-          logger.error("Error saving built week plan:", error);
-          toast.error("Failed to save the generated plan. Please try again.");
+  const guardAllergen = useCallback(
+    async (targetKids: Kid[], foodIds: string[]): Promise<boolean> => {
+      const lines: string[] = [];
+      for (const kid of targetKids) {
+        for (const id of new Set(foodIds)) {
+          const food = foodsRef.current.find((f) => f.id === id);
+          if (!food || isAllergenSafeFor(kid, food)) continue;
+          const allergen = matchingAllergen(kid.allergens, food.allergens);
+          if (allergen) lines.push(t("planner.confirm.allergenLine", { food: food.name, allergen, name: kid.name }));
         }
-      })();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to build plan"
-      );
-    }
-  };
+      }
+      if (lines.length === 0) return true;
+      return askConfirm({
+        title: t("planner.confirm.allergenTitle"),
+        body: (
+          <span className="block space-y-1">
+            {lines.map((l) => (
+              <span key={l} className="block">{l}</span>
+            ))}
+          </span>
+        ),
+        confirmLabel: t("planner.actions.addAnyway"),
+        cautious: true,
+      });
+    },
+    [askConfirm, t],
+  );
 
-  const handleAIMealPlan = async (days: number = 7) => {
-    if (!activeKid) {
-      toast.error("Please select a child first");
-      return;
-    }
+  const kidsById = useCallback(
+    (ids: string[]) => ids.map((id) => kidsRef.current.find((k) => k.id === id)).filter((k): k is Kid => !!k),
+    [],
+  );
 
-    setIsGeneratingPlan(true);
+  // --- Busy guard ----------------------------------------------------------
+  const runBusy = useCallback(async (op: BusyOp, fn: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = op;
+    setBusyOp(op);
     try {
+      await fn();
+    } finally {
+      busyRef.current = null;
+      setBusyOp(null);
+    }
+  }, []);
+  const busy = busyOp !== null;
+
+  // --- Grocery bridge (C5) -------------------------------------------------
+  const weekWindow = useMemo(() => ({ from: weekStartIso, to: addIsoDays(weekStartIso, 6) }), [weekStartIso]);
+  const weekEntries = useMemo(
+    () =>
+      planEntries.filter(
+        (e) => inWeek(e.date, weekStartIso) && (familyMode || e.kid_id === activeKid?.id),
+      ),
+    [planEntries, weekStartIso, familyMode, activeKid?.id],
+  );
+  const { preview: previewGrocery, push: pushGrocery } = planToGrocery;
+  const groceryPreview = useMemo(
+    () => previewGrocery(weekEntries, weekWindow),
+    [previewGrocery, weekEntries, weekWindow],
+  );
+  const toAddCount = groceryPreview.toAdd;
+
+  const pushEntriesToGrocery = useCallback(
+    async (entries: PlanEntry[], window: PlanToGroceryWindow) => {
+      const res = await pushGrocery(entries, window, { mode: "additive" });
+      if (res.added > 0) {
+        const msg = t("planner.toasts.pushedToList", { count: res.added });
+        announce(msg);
+        toast.success(msg, {
+          action: {
+            label: t("planner.actions.undo"),
+            onClick: () => deleteGroceryItems(res.insertedIds),
+          },
+        });
+      } else {
+        toast.info(t("planner.toasts.listAlreadyCovered"));
+      }
+    },
+    [pushGrocery, deleteGroceryItems, announce, t],
+  );
+
+  const handlePushWeekToGrocery = useCallback(() => {
+    void pushEntriesToGrocery(weekEntries, weekWindow);
+  }, [pushEntriesToGrocery, weekEntries, weekWindow]);
+
+  // --- Missing ingredients (US-284) ----------------------------------------
+  const openMissingIngredientsForRecipe = useCallback(
+    (recipeId: string) => {
+      const recipe = recipesRef.current.find((r) => r.id === recipeId);
+      if (!recipe) return;
+      if ((recipe.recipe_ingredients ?? []).length === 0) return;
+      const shortfalls = computeRecipeShortfall(recipe, foodsRef.current);
+      if (shortfalls.length === 0) {
+        toast.success(t("planner.toasts.haveEverything"));
+        return;
+      }
+      setPendingRecipeForMissing({ id: recipe.id, name: recipe.name });
+      setMissingShortfalls(shortfalls);
+      setMissingDialogOpen(true);
+    },
+    [t],
+  );
+
+  const handleConfirmMissingIngredients = useCallback(
+    (selected: Shortfall[]) => {
+      if (!pendingRecipeForMissing || selected.length === 0) return;
+      // Stack rather than skip: a second recipe asking for "ground beef" bumps
+      // the existing line's quantity (unit-aware) instead of being dropped.
+      const touched = addGroceryItemsMerged(
+        selected.map((s) => ({
+          name: s.ingredient.name.trim(),
+          quantity: s.needed > 0 ? s.needed : 1,
+          unit: s.neededUnit ?? s.ingredient.unit ?? "",
+          category: s.matchedFood?.category,
+          added_via: "recipe",
+          source_recipe_id: pendingRecipeForMissing.id,
+        })),
+        { defaultListId },
+      );
+      if (touched > 0) toast.success(t("planner.toasts.groceryAdded", { count: touched }));
+    },
+    [addGroceryItemsMerged, pendingRecipeForMissing, defaultListId, t],
+  );
+
+  const handleMissingOpenChange = useCallback((open: boolean) => {
+    setMissingDialogOpen(open);
+    if (!open) {
+      setPendingRecipeForMissing(null);
+      setMissingShortfalls([]);
+    }
+  }, []);
+
+  // --- Undo helpers ---------------------------------------------------------
+  const restoreRows = useCallback(
+    async (removed: PlanEntry[], insertedIds: string[]) => {
+      if (insertedIds.length > 0) {
+        const del = await deletePlanEntries(insertedIds);
+        if (del.error) return;
+      }
+      // Re-added with result, notes and amount_eaten as they were.
+      const { error } = await addPlanEntries(removed.map(toInsertablePlanEntry));
+      if (!error) {
+        const msg = t("planner.toasts.undone");
+        announce(msg);
+        toast.success(msg);
+      }
+    },
+    [deletePlanEntries, addPlanEntries, announce, t],
+  );
+
+  // --- Destructive confirms -------------------------------------------------
+  const weekCounts = useCallback((kidIds: string[], weekStart: string) => {
+    const rows = planEntriesRef.current.filter((e) => kidIds.includes(e.kid_id) && inWeek(e.date, weekStart));
+    return { count: rows.length, logged: rows.filter((e) => e.result != null).length };
+  }, []);
+
+  /** Skipped when the week is empty; otherwise names what is about to go. */
+  const confirmReplaceWeek = useCallback(
+    async (kidIds: string[], kind: "replace" | "clear" = "replace") => {
+      const { count, logged } = weekCounts(kidIds, weekStartIso);
+      if (count === 0) return true;
+      const name = listNames(kidsById(kidIds).map((k) => k.name));
+      return askConfirm({
+        title: t(kind === "clear" ? "planner.confirm.clearTitle" : "planner.confirm.replaceTitle"),
+        body: (
+          <>
+            {t(kind === "clear" ? "planner.confirm.clearBody" : "planner.confirm.replaceBody", { count, name })}
+            {logged > 0 && <> {t("planner.confirm.loggedSuffix", { count: logged })}</>}
+          </>
+        ),
+        confirmLabel: t(kind === "clear" ? "planner.actions.clear" : "planner.actions.replace"),
+      });
+    },
+    [weekCounts, weekStartIso, listNames, kidsById, askConfirm, t],
+  );
+
+  const resolveTargetKids = useCallback(
+    (kidId: unknown): string[] => {
+      if (typeof kidId === "string" && kidId) return [kidId];
+      const active = activeKidRef.current;
+      if (active) return [active.id];
+      return kidsRef.current.map((k) => k.id);
+    },
+    [],
+  );
+
+  // --- Generation -----------------------------------------------------------
+  /** Summarise a per-kid replace, with Undo and the grocery follow-up. */
+  const reportWeekReplace = useCallback(
+    (
+      kind: "build" | "ai",
+      okKids: string[],
+      failedKids: string[],
+      removed: PlanEntry[],
+      insertedIds: string[],
+    ) => {
+      if (okKids.length === 0) return;
+      const names = listNames(okKids.map(kidName));
+      const range = formatRange(weekStartIso);
+      const msg =
+        failedKids.length > 0
+          ? t("planner.toasts.weekPartial", { ok: names, failed: listNames(failedKids.map(kidName)) })
+          : t(kind === "ai" ? "planner.toasts.weekGenerated" : "planner.toasts.weekBuilt", { names, range });
+      announce(msg);
+
+      const window = { from: weekStartIso, to: addIsoDays(weekStartIso, 6) };
+      const after = planEntriesRef.current.filter(
+        (e) => okKids.includes(e.kid_id) && inWeek(e.date, weekStartIso),
+      );
+      const n = previewGrocery(after, window).toAdd;
+      const undo = {
+        label: t("planner.actions.undo"),
+        onClick: () => void restoreRows(removed, insertedIds),
+      };
+      if (n > 0) {
+        toast.success(msg, {
+          action: {
+            label: t("planner.actions.addItemsToList", { count: n }),
+            onClick: () => void pushEntriesToGrocery(
+              planEntriesRef.current.filter((e) => okKids.includes(e.kid_id) && inWeek(e.date, weekStartIso)),
+              window,
+            ),
+          },
+          cancel: undo,
+        });
+      } else {
+        toast.success(msg, { action: undo });
+      }
+    },
+    [listNames, kidName, formatRange, weekStartIso, announce, previewGrocery, restoreRows, pushEntriesToGrocery, t],
+  );
+
+  const runBuildWeek = useCallback(
+    async (kidIds: string[]) => {
+      const targets = kidsById(kidIds);
+      if (targets.length === 0) {
+        toast.error(t("planner.toasts.selectChild"));
+        return;
+      }
+      if (!(await confirmReplaceWeek(kidIds))) return;
+      await runBusy("build", async () => {
+        const ok: string[] = [];
+        const failed: string[] = [];
+        const removed: PlanEntry[] = [];
+        const inserted: string[] = [];
+        for (const kid of targets) {
+          let plan: Omit<PlanEntry, "id">[];
+          try {
+            // US-715: build the week IN VIEW and persist it.
+            plan = buildWeekPlan(kid, foodsRef.current, planEntriesRef.current, currentWeekStart);
+          } catch (error) {
+            failed.push(kid.id);
+            toast.error(error instanceof Error ? error.message : t("planner.errors.generic"));
+            continue;
+          }
+          const res = await replaceWeekPlan(weekStartIso, kid.id, plan);
+          if (res.error) {
+            failed.push(kid.id);
+            continue;
+          }
+          ok.push(kid.id);
+          removed.push(...res.removed);
+          inserted.push(...res.insertedIds);
+        }
+        reportWeekReplace("build", ok, failed, removed, inserted);
+      });
+    },
+    [kidsById, confirmReplaceWeek, runBusy, replaceWeekPlan, weekStartIso, currentWeekStart, reportWeekReplace, t],
+  );
+
+  /** One kid's AI week: fetch, validate, keep only what fits the week. */
+  const fetchAiWeek = useCallback(
+    async (kid: Kid): Promise<Omit<PlanEntry, "id">[] | "unavailable" | "bad"> => {
       const { data, error } = await invokeEdgeFunction("ai-meal-plan", {
         body: {
-          kid: activeKid,
-          foods,
-          recipes,
-          days,
-          // US-715: generate for the week on screen. The function used to start
-          // from its own new Date(), so paging to next week and generating
-          // produced this week's dates.
-          startDate: format(currentWeekStart, "yyyy-MM-dd"),
+          kid: aiKidPayload(kid),
+          foods: foodsRef.current.map(aiFoodPayload),
+          recipes: recipesRef.current.map((r) => ({ name: r.name, food_ids: r.food_ids })),
+          days: 7,
+          // US-715: generate for the week on screen.
+          startDate: weekStartIso,
         },
       });
+      if (error || !data || (typeof data === "object" && data !== null && "error" in data && data.error)) {
+        logger.error("[AI Meal Plan] unavailable", { hasError: !!error, hasData: !!data });
+        return "unavailable";
+      }
+      const parsed = aiPlanSchema.safeParse(data);
+      if (!parsed.success) {
+        logger.error("[AI Meal Plan] invalid shape", { issues: parsed.error.issues.length });
+        return "bad";
+      }
+      const known = new Set(foodsRef.current.map((f) => f.id));
+      const entries: Omit<PlanEntry, "id">[] = [];
+      for (const day of parsed.data.plan) {
+        if (!ISO_DATE.test(day.date) || !inWeek(day.date, weekStartIso)) continue;
+        for (const [slot, foodId] of Object.entries(day.meals)) {
+          if (!foodId || !(MEAL_SLOTS as readonly string[]).includes(slot) || !known.has(foodId)) continue;
+          entries.push({ kid_id: kid.id, date: day.date, meal_slot: slot as MealSlot, food_id: foodId, result: null });
+        }
+      }
+      logger.info("[AI Meal Plan] response", { days: parsed.data.plan.length, kept: entries.length });
+      return entries.length > 0 ? entries : "bad";
+    },
+    [weekStartIso],
+  );
 
-      logger.info('[AI Meal Plan] response:', { data, error });
-
-      if (error) {
-        logger.error('[AI Meal Plan] Edge function error:', error);
-        toast.error(`AI meal plan failed: ${error.message || JSON.stringify(error)}`);
+  const runAiWeek = useCallback(
+    async (kidIds: string[]) => {
+      const targets = kidsById(kidIds);
+      if (targets.length === 0) {
+        toast.error(t("planner.toasts.selectChild"));
         return;
       }
-
-      if (!data) {
-        toast.error('Edge function returned no data — is ai-meal-plan deployed?');
-        return;
-      }
-
-      if (data.error) {
-        logger.error('[AI Meal Plan] Function error:', data);
-        toast.error(`${data.error}${data.details ? ` (${data.details})` : ''}`);
-        return;
-      }
-
-      if (!data.plan) {
-        toast.error('Invalid meal plan response shape');
-        logger.error('[AI Meal Plan] Invalid shape:', data);
-        return;
-      }
-
-      // US-715: no client-invented ids. These used to be
-      // `${kid}-${date}-${slot}` strings handed to setPlanEntries, so nothing
-      // was inserted and a generated week did not survive a reload.
-      const newEntries: Omit<PlanEntry, "id">[] = [];
-      (data.plan as AiMealPlanDay[]).forEach((day) => {
-        Object.entries(day.meals).forEach(([slot, foodId]) => {
-          if (foodId) {
-            newEntries.push({
-              kid_id: activeKid.id,
-              date: day.date,
-              meal_slot: slot as MealSlot,
-              food_id: foodId as string,
-              result: null,
-            });
+      if (!(await confirmReplaceWeek(kidIds))) return;
+      await runBusy("ai", async () => {
+        const ok: string[] = [];
+        const failed: string[] = [];
+        const removed: PlanEntry[] = [];
+        const inserted: string[] = [];
+        let problem: "unavailable" | "bad" | null = null;
+        for (const kid of targets) {
+          let next: Awaited<ReturnType<typeof fetchAiWeek>>;
+          try {
+            next = await fetchAiWeek(kid);
+          } catch (error) {
+            logger.error("[AI Meal Plan] request failed", error instanceof Error ? error.message : "unknown");
+            next = "unavailable";
           }
+          if (typeof next === "string") {
+            // Nothing valid came back: the week is left exactly as it was.
+            problem = problem ?? next;
+            failed.push(kid.id);
+            continue;
+          }
+          const res = await replaceWeekPlan(weekStartIso, kid.id, next);
+          if (res.error) {
+            failed.push(kid.id);
+            continue;
+          }
+          ok.push(kid.id);
+          removed.push(...res.removed);
+          inserted.push(...res.insertedIds);
+        }
+        if (problem) {
+          toast.error(t(problem === "bad" ? "planner.errors.aiBadResponse" : "planner.errors.aiUnavailable"));
+        }
+        reportWeekReplace("ai", ok, failed, removed, inserted);
+      });
+    },
+    [kidsById, confirmReplaceWeek, runBusy, fetchAiWeek, replaceWeekPlan, weekStartIso, reportWeekReplace, t],
+  );
+
+  const handleBuildWeek = useCallback(() => {
+    if (busyRef.current) return;
+    const active = activeKidRef.current;
+    if (!active) {
+      setKidChooser({ op: "build", selected: kidsRef.current.map((k) => k.id) });
+      return;
+    }
+    void runBuildWeek([active.id]);
+  }, [runBuildWeek]);
+
+  const handleAIMealPlan = useCallback(() => {
+    if (busyRef.current) return;
+    const active = activeKidRef.current;
+    if (!active) {
+      setKidChooser({ op: "ai", selected: kidsRef.current.map((k) => k.id) });
+      return;
+    }
+    void runAiWeek([active.id]);
+  }, [runAiWeek]);
+
+  const confirmKidChooser = useCallback(() => {
+    const req = kidChooser;
+    setKidChooser(null);
+    if (!req || req.selected.length === 0) return;
+    void (req.op === "ai" ? runAiWeek(req.selected) : runBuildWeek(req.selected));
+  }, [kidChooser, runAiWeek, runBuildWeek]);
+
+  // --- Week ops -------------------------------------------------------------
+  const handleClearWeek = useCallback(
+    async (kidId?: unknown) => {
+      if (busyRef.current) return;
+      const kidIds = resolveTargetKids(kidId);
+      const { count } = weekCounts(kidIds, weekStartIso);
+      if (count === 0) {
+        toast.info(t("planner.toasts.nothingToClear"));
+        return;
+      }
+      if (!(await confirmReplaceWeek(kidIds, "clear"))) return;
+      await runBusy("clear", async () => {
+        const removed: PlanEntry[] = [];
+        for (const id of kidIds) {
+          const res = await deleteWeekPlan(weekStartIso, id);
+          if (!res.error) removed.push(...res.removed);
+        }
+        if (removed.length === 0) return;
+        const msg = t("planner.toasts.weekCleared", { count: removed.length, range: formatRange(weekStartIso) });
+        announce(msg);
+        toast.success(msg, {
+          action: { label: t("planner.actions.undo"), onClick: () => void restoreRows(removed, []) },
         });
       });
+    },
+    [resolveTargetKids, weekCounts, weekStartIso, confirmReplaceWeek, runBusy, deleteWeekPlan, formatRange, announce, restoreRows, t],
+  );
 
-      await deleteWeekPlan(format(currentWeekStart, "yyyy-MM-dd"), activeKid.id);
-      await addPlanEntries(newEntries);
-      toast.success(`AI generated ${days}-day meal plan!`, {
-        description: "Review and adjust as needed",
+  const copyWeekInto = useCallback(
+    async (fromIso: string, toIso: string, kidIds: string[], navigateAfter: boolean) => {
+      const source = planEntriesRef.current.filter((e) => kidIds.includes(e.kid_id) && inWeek(e.date, fromIso));
+      if (source.length === 0) {
+        toast.info(t("planner.toasts.nothingToCopy"));
+        return;
+      }
+      const dest = weekCounts(kidIds, toIso);
+      if (dest.count > 0) {
+        const ok = await askConfirm({
+          title: t("planner.confirm.copyTitle"),
+          body: t("planner.confirm.copyBody", {
+            count: dest.count,
+            range: formatRange(toIso),
+            name: listNames(kidsById(kidIds).map((k) => k.name)),
+          }),
+          confirmLabel: t("planner.actions.copy"),
+        });
+        if (!ok) return;
+      }
+      await runBusy("copy", async () => {
+        let copied = 0;
+        let skipped = 0;
+        let failed = false;
+        const insertedIds: string[] = [];
+        for (const id of kidIds) {
+          const res = await copyWeekPlan(fromIso, toIso, id);
+          if (res.error) {
+            failed = true;
+            continue;
+          }
+          copied += res.copied;
+          skipped += res.skipped;
+          insertedIds.push(...res.insertedIds);
+        }
+        if (failed && insertedIds.length === 0) return;
+        if (navigateAfter && !failed) setCurrentWeekStart(parseIsoDate(toIso));
+        const msg = t("planner.toasts.weekCopied", { count: copied, range: formatRange(toIso) });
+        announce(msg);
+        toast.success(msg, {
+          description: skipped > 0 ? t("planner.toasts.copySkipped", { count: skipped }) : undefined,
+          action:
+            insertedIds.length > 0
+              ? { label: t("planner.actions.undo"), onClick: () => void deletePlanEntries(insertedIds) }
+              : undefined,
+        });
       });
-    } catch (error) {
-      logger.error("Error generating AI meal plan:", error);
-      toast.error("Failed to generate AI meal plan. Please try again.");
-    } finally {
-      setIsGeneratingPlan(false);
-    }
-  };
+    },
+    [weekCounts, askConfirm, formatRange, listNames, kidsById, runBusy, copyWeekPlan, setCurrentWeekStart, announce, deletePlanEntries, t],
+  );
 
-  const handleUpdateEntry = useCallback((entryId: string, updates: Partial<PlanEntry>) => {
-    updatePlanEntry(entryId, updates);
-  }, [updatePlanEntry]);
+  const handleCopyWeek = useCallback(
+    (toDate: string, kidId?: unknown) => {
+      if (busyRef.current || !ISO_DATE.test(toDate)) return;
+      void copyWeekInto(weekStartIso, toDate, resolveTargetKids(kidId), true);
+    },
+    [copyWeekInto, weekStartIso, resolveTargetKids],
+  );
 
-  // Desktop handler (original signature)
-  const handleAddEntry = useCallback((date: string, slot: MealSlot, foodId: string) => {
-    if (!activeKid) return;
-    addPlanEntry({
-      kid_id: activeKid.id,
-      date,
-      meal_slot: slot,
-      food_id: foodId,
-      result: null,
-    });
-  }, [activeKid, addPlanEntry]);
+  const lastWeekIso = addIsoDays(weekStartIso, -7);
+  const handleCopyLastWeek = useCallback(() => {
+    const active = activeKidRef.current;
+    if (busyRef.current || !active) return;
+    void copyWeekInto(lastWeekIso, weekStartIso, [active.id], false);
+  }, [copyWeekInto, lastWeekIso, weekStartIso]);
+
+  // --- Entry ops (C2 / C3) --------------------------------------------------
+  const describeEntries = useCallback(
+    (entries: PlanEntry[]) => {
+      const first = entries[0];
+      const recipe = first?.recipe_id ? recipesRef.current.find((r) => r.id === first.recipe_id) : undefined;
+      const sameRecipe = recipe && entries.every((e) => e.recipe_id === recipe.id);
+      return sameRecipe ? recipe.name : listNames(entries.map((e) => foodName(e.food_id)).filter(Boolean));
+    },
+    [listNames, foodName],
+  );
+
+  const handleDeleteEntries = useCallback(
+    async (ids: string[]) => {
+      const entries = planEntriesRef.current.filter((e) => ids.includes(e.id));
+      const { error, removed } = await deletePlanEntries(ids);
+      if (error || entries.length === 0) return;
+      const msg = t("planner.toasts.removed", {
+        food: describeEntries(entries),
+        day: dayName(entries[0].date),
+        slot: slotName(entries[0].meal_slot),
+      });
+      announce(msg);
+      toast.success(msg, {
+        action: { label: t("planner.actions.undo"), onClick: () => void restoreRows(removed, []) },
+      });
+    },
+    [deletePlanEntries, describeEntries, dayName, slotName, announce, restoreRows, t],
+  );
+
+  const handleMoveEntries = useCallback(
+    async (ids: string[], date: string, slot: MealSlot) => {
+      const entries = planEntriesRef.current.filter((e) => ids.includes(e.id));
+      if (entries.length === 0) return;
+      const { error } = await movePlanEntries(ids, { date, meal_slot: slot });
+      if (error) return;
+      // Group by where each came from, so Undo puts every row back.
+      const origins = new Map<string, { date: string; meal_slot: MealSlot; ids: string[] }>();
+      for (const e of entries) {
+        const k = `${e.date}|${e.meal_slot}`;
+        const o = origins.get(k) ?? { date: e.date, meal_slot: e.meal_slot, ids: [] };
+        o.ids.push(e.id);
+        origins.set(k, o);
+      }
+      const msg = t("planner.toasts.moved", { food: describeEntries(entries), day: dayName(date), slot: slotName(slot) });
+      announce(msg);
+      toast.success(msg, {
+        action: {
+          label: t("planner.actions.undo"),
+          onClick: () => {
+            for (const o of origins.values()) void movePlanEntries(o.ids, { date: o.date, meal_slot: o.meal_slot });
+          },
+        },
+      });
+    },
+    [movePlanEntries, describeEntries, dayName, slotName, announce, t],
+  );
+
+  const handleSelectRecipeForKids = useCallback(
+    async (recipeId: string, date: string, slot: MealSlot, kidIds: string[]) => {
+      const recipe = recipesRef.current.find((r) => r.id === recipeId);
+      if (!recipe || recipe.food_ids.length === 0) return;
+      const targets = kidsById(kidIds);
+      if (targets.length === 0) return;
+      if (!(await guardAllergen(targets, recipe.food_ids))) return;
+
+      const res = await scheduleRecipe(recipe.id, date, slot, targets.map((k) => k.id));
+      const s = res.succeeded.length;
+      const f = res.failed.length;
+      if (s === 0) {
+        toast.error(t("planner.toasts.recipeFailed", { name: recipe.name }));
+        return;
+      }
+      const msg =
+        f > 0
+          ? t("planner.toasts.recipePartial", {
+              name: recipe.name,
+              succeeded: listNames(res.succeeded.map(kidName)),
+              failed: listNames(res.failed.map(kidName)),
+            })
+          : t("planner.toasts.recipeScheduled", { name: recipe.name, count: s });
+      announce(msg);
+      if (f > 0) toast.warning(msg);
+      else toast.success(msg);
+      // US-284: one prompt for the recipe, not one per child.
+      openMissingIngredientsForRecipe(recipe.id);
+    },
+    [kidsById, guardAllergen, scheduleRecipe, listNames, kidName, announce, openMissingIngredientsForRecipe, t],
+  );
+
+  const handleReplaceSlot = useCallback(
+    async (kidIds: string[], date: string, slot: MealSlot, target: SlotTarget) => {
+      const targets = kidsById(kidIds);
+      if (targets.length === 0) return;
+      const foodIds =
+        "foodId" in target
+          ? [target.foodId]
+          : recipesRef.current.find((r) => r.id === target.recipeId)?.food_ids ?? [];
+      if (!(await guardAllergen(targets, foodIds))) return;
+      const { error } = await replaceSlot(targets.map((k) => k.id), date, slot, target);
+      if (error) return;
+      const msg = t("planner.toasts.slotReplaced", { day: dayName(date), slot: slotName(slot) });
+      announce(msg);
+      toast.success(msg);
+      if ("recipeId" in target) openMissingIngredientsForRecipe(target.recipeId);
+    },
+    [kidsById, guardAllergen, replaceSlot, dayName, slotName, announce, openMissingIngredientsForRecipe, t],
+  );
+
+  const handleReplaceRecipeInSlot = useCallback(
+    async (kidId: string, date: string, slot: MealSlot, oldRecipeId: string, newRecipeId: string) => {
+      const recipe = recipesRef.current.find((r) => r.id === newRecipeId);
+      const targets = kidsById([kidId]);
+      if (!recipe || targets.length === 0) return;
+      if (!(await guardAllergen(targets, recipe.food_ids))) return;
+      const old = planEntriesRef.current.filter(
+        (e) => e.kid_id === kidId && e.date === date && e.meal_slot === slot && e.recipe_id === oldRecipeId,
+      );
+      const del = await deletePlanEntries(old.map((e) => e.id));
+      if (del.error) return;
+      const res = await scheduleRecipe(newRecipeId, date, slot, [kidId]);
+      if (res.succeeded.length === 0) {
+        // Put the old dish back rather than leave the slot empty.
+        if (del.removed.length > 0) await addPlanEntries(del.removed.map(toInsertablePlanEntry));
+        toast.error(t("planner.toasts.recipeFailed", { name: recipe.name }));
+        return;
+      }
+      const msg = t("planner.toasts.recipeReplaced", { name: recipe.name });
+      announce(msg);
+      toast.success(msg);
+      openMissingIngredientsForRecipe(newRecipeId);
+    },
+    [kidsById, guardAllergen, deletePlanEntries, scheduleRecipe, addPlanEntries, announce, openMissingIngredientsForRecipe, t],
+  );
+
+  const handleMarkResult = useCallback(
+    async (entry: PlanEntry, result: MealOutcome, attemptId?: string) => {
+      const current = planEntriesRef.current.find((e) => e.id === entry.id) ?? entry;
+      const previous = current.result;
+      const updates: Partial<PlanEntry> = { result };
+      if (attemptId) updates.food_attempt_id = attemptId;
+
+      const { error } = await updatePlanEntry(entry.id, updates);
+      if (error) return;
+
+      // Deduct once, on the way INTO "ate". Re-tapping "ate" or flipping
+      // tasted -> refused must not eat the pantry a second time.
+      if (result === "ate" && previous !== "ate") {
+        const food = foodsRef.current.find((f) => f.id === entry.food_id);
+        if (food && (food.quantity ?? 0) > 0) {
+          const { error: rpcError } = await supabase.rpc("deduct_food_quantity", {
+            _food_id: entry.food_id,
+            _amount: 1,
+          });
+          if (rpcError) {
+            logger.error("Error deducting quantity:", rpcError);
+            toast.error(t("planner.toasts.inventoryFailed"));
+          } else {
+            const quantity = Math.max(0, (food.quantity ?? 0) - 1);
+            updateFood(entry.food_id, { quantity });
+            if (quantity === 0) {
+              toast.info(t("planner.toasts.outOfStock", { name: food.name }), {
+                action: {
+                  label: t("planner.actions.addToGroceryList"),
+                  onClick: () => {
+                    const n = addGroceryItemsMerged(
+                      [{ name: food.name, quantity: 1, unit: food.unit ?? "", category: food.category, added_via: "planner" }],
+                      { defaultListId },
+                    );
+                    if (n > 0) toast.success(t("planner.toasts.groceryAdded", { count: n }));
+                  },
+                },
+              });
+            }
+          }
+        }
+      }
+
+      if (!attemptId) {
+        const msg = t("planner.toasts.marked", { result: t(`planner.results.${result}`) });
+        announce(msg);
+        toast.success(msg);
+      }
+    },
+    [updatePlanEntry, updateFood, addGroceryItemsMerged, defaultListId, announce, t],
+  );
+
+  const handleUpdateEntry = useCallback(
+    (entryId: string, updates: Partial<PlanEntry>) => {
+      void updatePlanEntry(entryId, updates);
+    },
+    [updatePlanEntry],
+  );
+
+  const addFoodForKid = useCallback(
+    async (kidId: string, date: string, slot: MealSlot, foodId: string) => {
+      const targets = kidsById([kidId]);
+      if (targets.length === 0) {
+        toast.error(t("planner.toasts.childNotFound"));
+        return;
+      }
+      if (!(await guardAllergen(targets, [foodId]))) return;
+      const { error } = await addPlanEntry({ kid_id: kidId, date, meal_slot: slot, food_id: foodId, result: null });
+      if (error) return;
+      const msg = t("planner.toasts.mealAdded", { food: foodName(foodId), day: dayName(date), slot: slotName(slot) });
+      announce(msg);
+      toast.success(msg);
+    },
+    [kidsById, guardAllergen, addPlanEntry, foodName, dayName, slotName, announce, t],
+  );
 
   // Mobile handler (accepts kidId directly)
   const handleMobileAddEntry = useCallback(
     (kidId: string, date: string, slot: MealSlot, foodId: string) => {
-      addPlanEntry({
-        kid_id: kidId,
-        date,
-        meal_slot: slot,
-        food_id: foodId,
-        result: null,
-      });
+      void addFoodForKid(kidId, date, slot, foodId);
     },
-    [addPlanEntry]
+    [addFoodForKid],
   );
 
-  // Mobile recipe scheduling handler
-  const handleMobileSelectRecipe = useCallback(
-    async (recipeId: string, date: string, slot: MealSlot, kidId: string) => {
-      const recipe = recipes.find((r) => r.id === recipeId);
-      if (!recipe || recipe.food_ids.length === 0) return;
+  // Desktop drag handler, one per grid so family mode adds to the right child.
+  const addEntryByKid = useMemo(() => {
+    const map = new Map<string, (date: string, slot: MealSlot, foodId: string) => void>();
+    for (const k of kids) map.set(k.id, (date, slot, foodId) => void addFoodForKid(k.id, date, slot, foodId));
+    return map;
+  }, [kids, addFoodForKid]);
 
-      try {
-        const { error } = await supabase.rpc("schedule_recipe_to_plan", {
-          p_kid_id: kidId,
-          p_recipe_id: recipe.id,
-          p_date: date,
-          p_meal_slot: slot,
-        });
-
-        if (error) throw error;
-
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          const { data: planData } = await supabase
-            .from("plan_entries")
-            .select("*")
-            .order("date", { ascending: true });
-
-          if (planData) {
-            // Fresh server load, which is what setPlanEntries is for (US-715).
-            // eslint-disable-next-line no-restricted-syntax
-            setPlanEntries(parsePlanEntryRows(planData));
-          }
-        }
-
-        toast.success(
-          `${recipe.name} (${recipe.food_ids.length} items) added`
-        );
-
-        // US-284: prompt for missing ingredients on successful schedule.
-        openMissingIngredientsForRecipe(recipe.id);
-      } catch (error) {
-        logger.error("Error scheduling recipe:", error);
-        toast.error("Failed to schedule recipe");
+  const handleOpenFoodSelector = useCallback(
+    (date: string, slot: MealSlot, kidId?: string) => {
+      const targetKidId = kidId || activeKidRef.current?.id;
+      if (!targetKidId) {
+        toast.error(t("planner.toasts.selectChild"));
+        return;
       }
+      setSelectedSlot({ date, slot, kidId: targetKidId });
+      setFoodSelectorOpen(true);
     },
-    [recipes, setPlanEntries, openMissingIngredientsForRecipe]
+    [t],
   );
 
-  const handlePreviousWeek = () => {
-    setCurrentWeekStart(subWeeks(currentWeekStart, 1));
-  };
+  const handleSelectFood = useCallback(
+    (foodId: string) => {
+      if (!selectedSlot) return;
+      void addFoodForKid(selectedSlot.kidId, selectedSlot.date, selectedSlot.slot, foodId);
+    },
+    [selectedSlot, addFoodForKid],
+  );
 
-  const handleNextWeek = () => {
-    setCurrentWeekStart(addWeeks(currentWeekStart, 1));
-  };
+  const handleSelectRecipe = useCallback(
+    (recipeId: string) => {
+      if (!selectedSlot) return;
+      void handleSelectRecipeForKids(recipeId, selectedSlot.date, selectedSlot.slot, [selectedSlot.kidId]);
+    },
+    [selectedSlot, handleSelectRecipeForKids],
+  );
 
-  const handleThisWeek = () => {
-    setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
-  };
+  const handleCopyToChild = useCallback(
+    async (entry: PlanEntry, targetKidId: string) => {
+      const target = kidsById([targetKidId]);
+      if (target.length === 0) return;
+      const source = entry.recipe_id
+        ? planEntriesRef.current.filter(
+            (e) =>
+              e.recipe_id === entry.recipe_id &&
+              e.date === entry.date &&
+              e.meal_slot === entry.meal_slot &&
+              e.kid_id === entry.kid_id,
+          )
+        : [entry];
+      if (!(await guardAllergen(target, source.map((e) => e.food_id)))) return;
 
-  const handleCopyWeek = async (toDate: string) => {
-    if (!activeKidId || !copyWeekPlan) return;
-
-    try {
-      const fromDate = format(currentWeekStart, "yyyy-MM-dd");
-      await copyWeekPlan(fromDate, toDate, activeKidId);
-      toast.success("Week plan copied successfully!");
-      setCurrentWeekStart(addWeeks(currentWeekStart, 1));
-    } catch (error) {
-      logger.error("Error copying week:", error);
-      toast.error("Failed to copy week plan");
-    }
-  };
-
-  const handleClearWeek = async () => {
-    if (!activeKidId || !deleteWeekPlan) return;
-
-    try {
-      const weekStart = format(currentWeekStart, "yyyy-MM-dd");
-      await deleteWeekPlan(weekStart, activeKidId);
-      toast.success("Week plan cleared");
-    } catch (error) {
-      logger.error("Error clearing week:", error);
-      toast.error("Failed to clear week plan");
-    }
-  };
-
-  const handleOpenFoodSelector = (
-    date: string,
-    slot: MealSlot,
-    kidId?: string
-  ) => {
-    const targetKidId = kidId || activeKidId;
-    if (!targetKidId) {
-      toast.error("Please select a child first");
-      return;
-    }
-    setSelectedSlot({ date, slot, kidId: targetKidId });
-    setFoodSelectorOpen(true);
-  };
-
-  const handleSelectFood = (foodId: string) => {
-    if (!selectedSlot) return;
-
-    const targetKid = kids.find((k) => k.id === selectedSlot.kidId);
-    if (!targetKid) {
-      toast.error("Could not find the selected child");
-      return;
-    }
-
-    addPlanEntry({
-      kid_id: selectedSlot.kidId,
-      date: selectedSlot.date,
-      meal_slot: selectedSlot.slot,
-      food_id: foodId,
-      result: null,
-    });
-    toast.success("Meal added to calendar");
-  };
-
-  const handleSelectRecipe = async (recipeId: string) => {
-    if (!selectedSlot) return;
-
-    const targetKid = kids.find((k) => k.id === selectedSlot.kidId);
-    if (!targetKid) {
-      toast.error("Could not find the selected child");
-      return;
-    }
-
-    const recipe = recipes.find((r) => r.id === recipeId);
-    if (!recipe || recipe.food_ids.length === 0) return;
-
-    try {
-      const { error } = await supabase.rpc("schedule_recipe_to_plan", {
-        p_kid_id: selectedSlot.kidId,
-        p_recipe_id: recipe.id,
-        p_date: selectedSlot.date,
-        p_meal_slot: selectedSlot.slot,
-      });
-
-      if (error) throw error;
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data: planData } = await supabase
-          .from("plan_entries")
-          .select("*")
-          .order("date", { ascending: true });
-
-        if (planData) {
-          // Fresh server load, which is what setPlanEntries is for (US-715).
-          // eslint-disable-next-line no-restricted-syntax
-          setPlanEntries(parsePlanEntryRows(planData));
-        }
-      }
-
-      toast.success(
-        `${recipe.name} (${recipe.food_ids.length} items) added to calendar`
+      const taken = new Set(
+        planEntriesRef.current
+          .filter((e) => e.kid_id === targetKidId && e.date === entry.date && e.meal_slot === entry.meal_slot)
+          .map((e) => e.food_id),
       );
-
-      // US-284: prompt for missing ingredients on successful schedule.
-      openMissingIngredientsForRecipe(recipe.id);
-    } catch (error) {
-      logger.error("Error scheduling recipe:", error);
-      toast.error("Failed to schedule recipe");
-    }
-  };
-
-  const handleMarkResult = useCallback(async (
-    entry: PlanEntry,
-    result: "ate" | "tasted" | "refused",
-    attemptId?: string
-  ) => {
-    const updates: Partial<PlanEntry> = { result };
-    if (attemptId) {
-      updates.food_attempt_id = attemptId;
-    }
-
-    updatePlanEntry(entry.id, updates);
-
-    if (result === "ate") {
-      const food = foods.find((f) => f.id === entry.food_id);
-      if (food && (food.quantity ?? 0) > 0) {
-        try {
-          const { error } = await supabase.rpc("deduct_food_quantity", {
-            _food_id: entry.food_id,
-            _amount: 1,
-          });
-
-          if (error) throw error;
-
-          updateFood(entry.food_id, {
-            ...food,
-            quantity: Math.max(0, (food.quantity || 0) - 1),
-          });
-
-          if ((food.quantity || 0) <= 1) {
-            toast.info(`${food.name} is now out of stock!`, {
-              description: "Add it to your grocery list",
-            });
-          }
-        } catch (error) {
-          logger.error("Error deducting quantity:", error);
-          toast.error("Failed to update inventory");
-        }
-      }
-    }
-
-    if (!attemptId) {
-      toast.success(`Marked as ${result}`);
-    }
-  }, [foods, updatePlanEntry, updateFood]);
-
-  const handleCopyToChild = async (
-    entry: PlanEntry,
-    targetKidId: string
-  ) => {
-    if (entry.recipe_id) {
-      const recipeEntries = planEntries.filter(
-        (e) =>
-          e.recipe_id === entry.recipe_id &&
-          e.date === entry.date &&
-          e.meal_slot === entry.meal_slot &&
-          e.kid_id === entry.kid_id
-      );
-
-      for (const recipeEntry of recipeEntries) {
-        await addPlanEntry({
+      const batch = source
+        .filter((e) => !taken.has(e.food_id))
+        .map((e) => ({
           kid_id: targetKidId,
-          date: recipeEntry.date,
-          meal_slot: recipeEntry.meal_slot,
-          food_id: recipeEntry.food_id,
-          recipe_id: recipeEntry.recipe_id,
-          is_primary_dish: recipeEntry.is_primary_dish,
+          date: e.date,
+          meal_slot: e.meal_slot,
+          food_id: e.food_id,
+          recipe_id: e.recipe_id ?? null,
+          is_primary_dish: e.is_primary_dish ?? false,
           result: null,
-        });
+        }));
+      const name = target[0].name;
+      if (batch.length === 0) {
+        toast.info(t("planner.toasts.alreadyPlanned", { name }));
+        return;
       }
+      const { error } = await addPlanEntries(batch);
+      if (error) return;
+      const msg = t("planner.toasts.copiedToChild", { name });
+      announce(msg);
+      toast.success(msg);
+    },
+    [kidsById, guardAllergen, addPlanEntries, announce, t],
+  );
 
-      const targetKid = kids.find((k) => k.id === targetKidId);
-      toast.success(`Recipe copied to ${targetKid?.name}'s plan`);
-    } else {
-      await addPlanEntry({
-        kid_id: targetKidId,
-        date: entry.date,
-        meal_slot: entry.meal_slot,
-        food_id: entry.food_id,
-        result: null,
-      });
+  // --- Navigation -------------------------------------------------------------
+  const handlePreviousWeek = useCallback(
+    () => setCurrentWeekStart(subWeeks(currentWeekStart, 1)),
+    [setCurrentWeekStart, currentWeekStart],
+  );
+  const handleNextWeek = useCallback(
+    () => setCurrentWeekStart(addWeeks(currentWeekStart, 1)),
+    [setCurrentWeekStart, currentWeekStart],
+  );
+  const handleThisWeek = useCallback(() => setCurrentWeekStart(new Date()), [setCurrentWeekStart]);
+  const handleTemplateApplied = useCallback(
+    (startDate: string) => {
+      if (ISO_DATE.test(startDate)) setCurrentWeekStart(parseIsoDate(startDate));
+    },
+    [setCurrentWeekStart],
+  );
+  // The controller holds the picked template between the gallery closing and
+  // the apply dialog opening, so once mounted it stays mounted.
+  const [templatesMounted, setTemplatesMounted] = useState(false);
+  const openSaveTemplate = useCallback(() => {
+    setTemplatesMounted(true);
+    setShowSaveTemplate(true);
+  }, []);
+  const openTemplateGallery = useCallback(() => {
+    setTemplatesMounted(true);
+    setShowTemplateGallery(true);
+  }, []);
 
-      const targetKid = kids.find((k) => k.id === targetKidId);
-      toast.success(`Meal copied to ${targetKid?.name}'s plan`);
-    }
-  };
+  // --- Derived view state -------------------------------------------------------
+  const weekRange = formatRange(weekStartIso);
+  const activeWeekCount = activeKid
+    ? planEntries.filter((e) => e.kid_id === activeKid.id && inWeek(e.date, weekStartIso)).length
+    : 0;
+  const lastWeekCount = activeKid
+    ? planEntries.filter((e) => e.kid_id === activeKid.id && inWeek(e.date, lastWeekIso)).length
+    : 0;
 
-  // --- No children empty state ---
   const plannerHelmet = (
     <Helmet>
-      <title>Meal Planner - EatPal</title>
-      <meta name="description" content="Plan weekly meals for your family with AI-powered suggestions and templates" />
+      <title>{t("planner.metaTitle")}</title>
+      <meta name="description" content={t("planner.metaDescription")} />
       <meta name="robots" content="noindex" />
     </Helmet>
+  );
+
+  const statusNode = (
+    <div role="status" aria-live="polite" className="sr-only">
+      {status}
+    </div>
   );
 
   if (kids.length === 0) {
@@ -592,12 +1149,13 @@ export default function Planner() {
           <Card className="p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Calendar className="h-8 w-8 text-primary" />
+                <Calendar className="h-8 w-8 text-primary" aria-hidden="true" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">No Children Added</h3>
-              <p className="text-muted-foreground mb-6">
-                Please add a child to start planning meals
-              </p>
+              <h1 className="text-xl font-semibold mb-2">{t("planner.empty.noKidsTitle")}</h1>
+              <p className="text-muted-foreground mb-6">{t("planner.empty.noKidsBody")}</p>
+              <Button asChild>
+                <Link to="/dashboard/kids">{t("planner.empty.noKidsCta")}</Link>
+              </Button>
             </div>
           </Card>
         </div>
@@ -605,242 +1163,52 @@ export default function Planner() {
     );
   }
 
-  // --- Mobile layout ---
-  if (isMobile) {
-    return (
-      <div className="min-h-screen pb-20 bg-background">
-        {plannerHelmet}
-        <div className="px-3 pt-4 pb-2">
-          <VarietyFatigueBanner surface="planner-mobile" />
-          {/* Compact mobile header */}
-          <div className="flex items-center justify-between mb-1">
-            <h1 className="text-xl font-bold text-foreground">
-              {t('planner.titleMobile')}
-            </h1>
-            {activeKid && (
-              <span className="text-sm font-medium text-primary">
-                {activeKid.name}
-              </span>
-            )}
-          </div>
+  const addWeekToListButton = (
+    <Button
+      variant="outline"
+      size={isMobile ? "sm" : "lg"}
+      onClick={handlePushWeekToGrocery}
+      disabled={toAddCount === 0}
+      className="min-h-[44px]"
+    >
+      <ShoppingCart className="h-4 w-4 mr-2" aria-hidden="true" />
+      {toAddCount > 0
+        ? t("planner.actions.addWeekToList", { count: toAddCount })
+        : t("planner.actions.addWeekToListNone")}
+    </Button>
+  );
 
-          <div aria-live="polite">
-            <MobileMealPlanner
-              weekStart={currentWeekStart}
-              planEntries={planEntries}
-              foods={foods}
-              recipes={recipes}
-              kids={kids}
-              activeKidId={activeKidId}
-              isGeneratingPlan={isGeneratingPlan}
-              onAddEntry={handleMobileAddEntry}
-              onUpdateEntry={handleUpdateEntry}
-              onSelectRecipe={handleMobileSelectRecipe}
-              onMarkResult={handleMarkResult}
-              onBuildWeek={handleBuildWeek}
-              onAIGenerate={() => handleAIMealPlan(7)}
-              onPreviousWeek={handlePreviousWeek}
-              onNextWeek={handleNextWeek}
-              onThisWeek={handleThisWeek}
-              onCopyWeek={handleCopyWeek}
-              onClearWeek={handleClearWeek}
-              onSaveTemplate={() => setShowSaveTemplate(true)}
-              onOpenTemplateGallery={() => setShowTemplateGallery(true)}
-            />
-          </div>
-        </div>
-
-        <Suspense fallback={null}>
-          {showSaveTemplate && (
-            <SaveMealPlanTemplateDialog
-              open={showSaveTemplate}
-              onOpenChange={setShowSaveTemplate}
-              weekStart={format(currentWeekStart, "yyyy-MM-dd")}
-              kidId={activeKidId}
-            />
+  const emptyWeekPanel =
+    activeKid && activeWeekCount === 0 ? (
+      <Card className="p-6 mb-4">
+        <h2 className="text-lg font-semibold mb-1">{t("planner.empty.weekTitle", { name: activeKid.name })}</h2>
+        <p className="text-sm text-muted-foreground mb-4">{t("planner.empty.weekBody")}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleBuildWeek} disabled={busy} className="min-h-[44px]">
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            {t("planner.actions.quickBuild")}
+          </Button>
+          <Button variant="outline" onClick={handleAIMealPlan} disabled={busy} className="min-h-[44px]">
+            <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
+            {t("planner.actions.generateWithAi")}
+          </Button>
+          {lastWeekCount > 0 && (
+            <Button variant="outline" onClick={handleCopyLastWeek} disabled={busy} className="min-h-[44px]">
+              <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
+              {t("planner.actions.copyLastWeek", { count: lastWeekCount })}
+            </Button>
           )}
-          {showTemplateGallery && (
-            <MealPlanTemplateGallery
-              open={showTemplateGallery}
-              onOpenChange={setShowTemplateGallery}
-              onApply={() => {
-                setShowTemplateGallery(false);
-                toast.success("Template applied to planner");
-              }}
-            />
-          )}
-        </Suspense>
-      </div>
-    );
-  }
-
-  // --- Desktop layout (existing) ---
-  return (
-    <div className="min-h-screen pb-20 md:pt-20 bg-background">
-      {plannerHelmet}
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <VarietyFatigueBanner surface="planner-desktop" />
-        {/* Header */}
-        <div className="flex flex-col gap-4 mb-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">
-                {t('planner.title')}
-                {activeKid && (
-                  <span className="text-primary"> - {activeKid.name}</span>
-                )}
-              </h1>
-              <p className="text-muted-foreground">
-                {t('planner.subtitle')}
-              </p>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                onClick={() => handleAIMealPlan(7)}
-                size="lg"
-                className="shadow-lg"
-                disabled={!activeKid || isGeneratingPlan}
-              >
-                {isGeneratingPlan ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-2" />
-                    AI Generate Week
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleBuildWeek}
-                variant="outline"
-                size="lg"
-                disabled={!activeKid}
-              >
-                <RefreshCw className="h-5 w-5 mr-2" />
-                Quick Build
-              </Button>
-              {/* US-719: the page-level Save Template and Templates buttons
-                  are gone. The grid toolbar carries working copies; these two
-                  opened dialogs wired to state the page never read back. */}
-            </div>
-          </div>
-
-          {/* Week Navigation */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handlePreviousWeek}
-                  aria-label="Previous week"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="text-center min-w-[200px]">
-                  <div className="font-semibold">
-                    Week of {format(currentWeekStart, "MMM d, yyyy")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {format(currentWeekStart, "MMM d")} -{" "}
-                    {format(addWeeks(currentWeekStart, 1), "MMM d")}
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleNextWeek}
-                  aria-label="Next week"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <Button
-                variant="outline"
-                onClick={handleThisWeek}
-                className="min-h-[44px]"
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                This Week
-              </Button>
-            </div>
-          </Card>
+          <Button variant="outline" onClick={openTemplateGallery} disabled={busy} className="min-h-[44px]">
+            <LayoutTemplate className="h-4 w-4 mr-2" aria-hidden="true" />
+            {t("planner.actions.useTemplate")}
+          </Button>
         </div>
+      </Card>
+    ) : null;
 
-        {activeKidId === null ? (
-          // Family Mode - Show all children
-          <div className="space-y-6" aria-live="polite">
-            {kids.map((kid) => {
-              const kidAge = calculateAge(kid.date_of_birth);
-              return (
-                <div key={kid.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold">{kid.name}'s Plan</h2>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setActiveKid(kid.id)}
-                    >
-                      View Details
-                    </Button>
-                  </div>
-                  <Suspense fallback={<div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-                    <GSAPCalendarMealPlanner
-                      weekStart={currentWeekStart}
-                      planEntries={planEntries}
-                      foods={foods}
-                      recipes={recipes}
-                      kids={kids}
-                      kidId={kid.id}
-                      kidName={kid.name}
-                      kidAge={kidAge !== null ? kidAge : undefined}
-                      kidWeight={
-                        kid.weight_kg ? Number(kid.weight_kg) : undefined
-                      }
-                      onUpdateEntry={handleUpdateEntry}
-                      onAddEntry={handleAddEntry}
-                      onOpenFoodSelector={handleOpenFoodSelector}
-                      onCopyToChild={handleCopyToChild}
-                      onCopyWeek={handleCopyWeek}
-                      onClearWeek={handleClearWeek}
-                      onOpenMissingForRecipe={openMissingIngredientsForRecipe}
-                    />
-                  </Suspense>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          // Single child mode
-          <div aria-live="polite">
-            <Suspense fallback={<div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-              <GSAPCalendarMealPlanner
-                weekStart={currentWeekStart}
-                planEntries={planEntries}
-                foods={foods}
-                recipes={recipes}
-                kids={kids}
-                kidId={activeKidId}
-                kidName={activeKid!.name}
-                kidAge={activeKid!.age}
-                kidWeight={
-                  activeKid!.weight_kg ? Number(activeKid!.weight_kg) : undefined
-                }
-                onUpdateEntry={handleUpdateEntry}
-                onAddEntry={handleAddEntry}
-                onOpenFoodSelector={handleOpenFoodSelector}
-                onCopyToChild={handleCopyToChild}
-                onCopyWeek={handleCopyWeek}
-                onClearWeek={handleClearWeek}
-                onOpenMissingForRecipe={openMissingIngredientsForRecipe}
-              />
-            </Suspense>
-          </div>
-        )}
-
+  const overlays = (
+    <>
+      {foodSelectorOpen && (
         <FoodSelectorDialog
           open={foodSelectorOpen}
           onOpenChange={setFoodSelectorOpen}
@@ -851,46 +1219,276 @@ export default function Planner() {
           onSelectFood={handleSelectFood}
           onSelectRecipe={handleSelectRecipe}
         />
+      )}
 
-        {/* US-719: SwapMealDialog and DetailedTrackingDialog were rendered
-            here but unreachable -- nothing ever set selectedEntry or
-            trackingEntry, so neither could open. Removed rather than left as
-            decoration; US-725 wires the real cell menu. */}
+      {/* US-284: missing-ingredient prompt after a recipe is added to a slot */}
+      {pendingRecipeForMissing && (
+        <MissingIngredientsDialog
+          open={missingDialogOpen}
+          onOpenChange={handleMissingOpenChange}
+          recipeName={pendingRecipeForMissing.name}
+          shortfalls={missingShortfalls}
+          onConfirm={handleConfirmMissingIngredients}
+        />
+      )}
 
-        {/* US-284: missing-ingredient prompt after a recipe is added to a slot */}
-        {pendingRecipeForMissing && (
-          <MissingIngredientsDialog
-            open={missingDialogOpen}
-            onOpenChange={(open) => {
-              setMissingDialogOpen(open);
-              if (!open) setPendingRecipeForMissing(null);
-            }}
-            recipeName={pendingRecipeForMissing.name}
-            shortfalls={missingShortfalls}
-            onConfirm={handleConfirmMissingIngredients}
+      <Suspense fallback={null}>
+        {templatesMounted && (
+          <PlannerTemplatesController
+            kids={kids}
+            activeKidId={activeKid ? activeKid.id : null}
+            weekStart={currentWeekStart}
+            saveOpen={showSaveTemplate}
+            onSaveOpenChange={setShowSaveTemplate}
+            galleryOpen={showTemplateGallery}
+            onGalleryOpenChange={setShowTemplateGallery}
+            onApplied={handleTemplateApplied}
           />
         )}
+      </Suspense>
 
-        <Suspense fallback={null}>
-          {showSaveTemplate && (
-            <SaveMealPlanTemplateDialog
-              open={showSaveTemplate}
-              onOpenChange={setShowSaveTemplate}
-              weekStart={format(currentWeekStart, "yyyy-MM-dd")}
-              kidId={activeKidId}
+      <AlertDialog open={confirmRequest !== null} onOpenChange={(open) => !open && settleConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmRequest?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmRequest?.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => settleConfirm(false)}>
+              {t("planner.actions.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => settleConfirm(true)}
+              className={confirmRequest?.cautious ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" : undefined}
+            >
+              {confirmRequest?.confirmLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={kidChooser !== null} onOpenChange={(open) => !open && setKidChooser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("planner.confirm.chooseKidsTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("planner.confirm.chooseKidsBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            {kids.map((k) => {
+              const checked = kidChooser?.selected.includes(k.id) ?? false;
+              return (
+                <div key={k.id} className="flex items-center gap-3">
+                  <Checkbox
+                    id={`planner-kid-${k.id}`}
+                    checked={checked}
+                    onCheckedChange={(v) =>
+                      setKidChooser((cur) =>
+                        cur
+                          ? {
+                              ...cur,
+                              selected: v === true
+                                ? [...new Set([...cur.selected, k.id])]
+                                : cur.selected.filter((id) => id !== k.id),
+                            }
+                          : cur,
+                      )
+                    }
+                  />
+                  <Label htmlFor={`planner-kid-${k.id}`}>{k.name}</Label>
+                </div>
+              );
+            })}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("planner.actions.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmKidChooser} disabled={(kidChooser?.selected.length ?? 0) === 0}>
+              {kidChooser?.op === "ai" ? t("planner.actions.generate") : t("planner.actions.build")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+
+  // --- Mobile layout ---
+  if (isMobile) {
+    return (
+      <div className="min-h-screen pb-20 bg-background">
+        {plannerHelmet}
+        {statusNode}
+        <div className="px-3 pt-4 pb-2">
+          <VarietyFatigueBanner surface="planner-mobile" />
+          <div className="flex items-center justify-between mb-1 gap-2">
+            <h1 className="text-xl font-bold text-foreground">{t("planner.titleMobile")}</h1>
+            {activeKid && <span className="text-sm font-medium text-primary">{activeKid.name}</span>}
+          </div>
+          <div className="mb-2">{addWeekToListButton}</div>
+          {emptyWeekPanel}
+
+          <div aria-busy={busy}>
+            <MobileMealPlanner
+              weekStart={currentWeekStart}
+              planEntries={planEntries}
+              foods={foods}
+              recipes={recipes}
+              kids={kids}
+              activeKidId={activeKid ? activeKid.id : null}
+              isGeneratingPlan={busy}
+              onAddEntry={handleMobileAddEntry}
+              onUpdateEntry={handleUpdateEntry}
+              onSelectRecipeForKids={handleSelectRecipeForKids}
+              onDeleteEntries={handleDeleteEntries}
+              onReplaceSlot={handleReplaceSlot}
+              onPushWeekToGrocery={handlePushWeekToGrocery}
+              onMarkResult={handleMarkResult}
+              onBuildWeek={handleBuildWeek}
+              onAIGenerate={handleAIMealPlan}
+              onPreviousWeek={handlePreviousWeek}
+              onNextWeek={handleNextWeek}
+              onThisWeek={handleThisWeek}
+              onCopyWeek={handleCopyWeek}
+              onClearWeek={handleClearWeek}
+              onSaveTemplate={openSaveTemplate}
+              onOpenTemplateGallery={openTemplateGallery}
             />
+          </div>
+        </div>
+        {overlays}
+      </div>
+    );
+  }
+
+  const gridFallback = (
+    <div className="py-8 flex justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+    </div>
+  );
+
+  const renderGrid = (kid: Kid) => {
+    const age = calculateAge(kid.date_of_birth) ?? kid.age;
+    return (
+      <Suspense fallback={gridFallback}>
+        <GSAPCalendarMealPlanner
+          weekStart={currentWeekStart}
+          planEntries={planEntries}
+          foods={foods}
+          recipes={recipes}
+          kids={kids}
+          kidId={kid.id}
+          kidName={kid.name}
+          kidAge={age ?? undefined}
+          kidWeight={kid.weight_kg ? Number(kid.weight_kg) : undefined}
+          onUpdateEntry={handleUpdateEntry}
+          onAddEntry={addEntryByKid.get(kid.id)}
+          onOpenFoodSelector={handleOpenFoodSelector}
+          onCopyToChild={handleCopyToChild}
+          onCopyWeek={handleCopyWeek}
+          onClearWeek={handleClearWeek}
+          onOpenMissingForRecipe={openMissingIngredientsForRecipe}
+          onDeleteEntries={handleDeleteEntries}
+          onMarkResult={handleMarkResult}
+          onMoveEntries={handleMoveEntries}
+          onPushWeekToGrocery={handlePushWeekToGrocery}
+          onReplaceRecipeInSlot={handleReplaceRecipeInSlot}
+          onOpenSaveTemplate={openSaveTemplate}
+          onOpenTemplateGallery={openTemplateGallery}
+        />
+      </Suspense>
+    );
+  };
+
+  // --- Desktop layout ---
+  return (
+    <div className="min-h-screen pb-20 bg-background">
+      {plannerHelmet}
+      {statusNode}
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <VarietyFatigueBanner surface="planner-desktop" />
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">
+                {t("planner.title")}
+                {activeKid && <span className="text-primary"> - {activeKid.name}</span>}
+              </h1>
+              <p className="text-muted-foreground">{t("planner.subtitle")}</p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={handleAIMealPlan} size="lg" disabled={busy}>
+                {busyOp === "ai" ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" aria-hidden="true" />
+                    {t("planner.actions.generating")}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-2" aria-hidden="true" />
+                    {t("planner.actions.aiGenerate")}
+                  </>
+                )}
+              </Button>
+              <Button onClick={handleBuildWeek} variant="outline" size="lg" disabled={busy}>
+                {busyOp === "build" ? (
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" aria-hidden="true" />
+                ) : (
+                  <RefreshCw className="h-5 w-5 mr-2" aria-hidden="true" />
+                )}
+                {t("planner.actions.quickBuild")}
+              </Button>
+              {addWeekToListButton}
+            </div>
+          </div>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" onClick={handlePreviousWeek} aria-label={t("planner.week.previous")}>
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                <div className="text-center min-w-[200px]">
+                  <div className="font-semibold flex items-center justify-center gap-2">
+                    {weekRange}
+                    {isThisWeek && <Badge variant="secondary">{t("planner.week.thisWeekBadge")}</Badge>}
+                  </div>
+                </div>
+                <Button variant="outline" size="icon" onClick={handleNextWeek} aria-label={t("planner.week.next")}>
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
+              {!isThisWeek && (
+                <Button variant="outline" onClick={handleThisWeek} className="min-h-[44px]">
+                  <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("planner.week.thisWeek")}
+                </Button>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div aria-busy={busy}>
+          {familyMode ? (
+            <div className="space-y-6">
+              {kids.map((kid) => (
+                <div key={kid.id} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold">{t("planner.familyPlanHeading", { name: kid.name })}</h2>
+                    <Button variant="outline" size="sm" onClick={() => setActiveKid(kid.id)}>
+                      {t("planner.viewDetails")}
+                    </Button>
+                  </div>
+                  {renderGrid(kid)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {emptyWeekPanel}
+              {renderGrid(activeKid)}
+            </>
           )}
-          {showTemplateGallery && (
-            <MealPlanTemplateGallery
-              open={showTemplateGallery}
-              onOpenChange={setShowTemplateGallery}
-              onApply={() => {
-                setShowTemplateGallery(false);
-                toast.success("Template applied to planner");
-              }}
-            />
-          )}
-        </Suspense>
+        </div>
+
+        {overlays}
       </div>
     </div>
   );

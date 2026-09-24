@@ -25,6 +25,16 @@
  */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/**
+ * The weekday the meal planner's week begins on, in date-fns terms (0 = Sunday).
+ *
+ * The planner grid, the week navigation and startOfWeek() below all start on
+ * Sunday. ApplyTemplateDialog used to snap to Monday (weekStartsOn: 1), so a
+ * template applied "to this week" landed one day to the right of the grid the
+ * parent was looking at. Every planner surface reads this one constant.
+ */
+export const PLANNER_WEEK_STARTS_ON = 0 as const;
+
 export function toDate(date: Date | string | number): Date {
   if (typeof date === 'string') {
     const m = DATE_ONLY.exec(date);

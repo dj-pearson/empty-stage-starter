@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  planRegenerationFromPlan,
+  MEAL_PLAN_SYNC,
   categoryLabel,
   filterItemsByList,
   splitByChecked,
@@ -246,5 +248,45 @@ describe('reconcileExpandedGroups is identity-stable', () => {
     const first = reconcileExpandedGroups(new Set(['Gone']), ['Produce', 'Dairy'], true);
     const second = reconcileExpandedGroups(first, ['Produce', 'Dairy'], true);
     expect(second).toBe(first);
+  });
+});
+
+describe('planRegenerationFromPlan window scope', () => {
+  const syncRow = (id: string, name: string, source: string | undefined): GroceryItem => ({
+    id,
+    name,
+    quantity: 1,
+    unit: 'servings',
+    checked: false,
+    category: 'protein',
+    auto_generated: true,
+    added_via: MEAL_PLAN_SYNC,
+    source_plan_entry_id: source,
+  }) as GroceryItem;
+
+  const existing = [
+    syncRow('this-week', 'Chicken', 'e-this-week'),
+    syncRow('next-week-stale', 'Rice', 'e-next-week'),
+    syncRow('no-source', 'Beans', undefined),
+  ];
+
+  it('retires only stale rows whose source entry is in the synced window', () => {
+    const plan = planRegenerationFromPlan({
+      existing,
+      generated: [{ name: 'Pasta', quantity: 1, source_plan_entry_id: 'e-next-week-2' }],
+      selectedListId: null,
+      windowEntryIds: ['e-next-week', 'e-next-week-2'],
+    });
+    expect(plan.retireIds).toEqual(['next-week-stale']);
+    expect(plan.additions.map((a) => a.name)).toEqual(['Pasta']);
+  });
+
+  it('with no window keeps the old behaviour and retires every stale sync row', () => {
+    const plan = planRegenerationFromPlan({
+      existing,
+      generated: [{ name: 'Pasta', quantity: 1 }],
+      selectedListId: null,
+    });
+    expect(plan.retireIds.sort()).toEqual(['next-week-stale', 'no-source', 'this-week']);
   });
 });

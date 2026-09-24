@@ -3,8 +3,33 @@ import { isAllergenSafeFor } from "./allergens";
 import { resolveFood, type EffectiveFood } from "./effectiveFood";
 import { generateId } from "./utils";
 import { toISODate, addIsoDays } from "./date-utils";
+import { acceptanceWeight, buildResultIndex, getKidFoodFit, type ResultIndex } from "./kidFit";
 
 const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack2"];
+const MAIN_MEALS: ReadonlySet<MealSlot> = new Set(["breakfast", "lunch", "dinner"]);
+const SNACK_SLOTS: ReadonlySet<MealSlot> = new Set(["snack1", "snack2"]);
+/** A food may appear in a slot once in any run of this many days. */
+const REPEAT_WINDOW_DAYS = 3;
+
+type QuickBuildKid = Pick<Kid, "id" | "allergens"> &
+  Partial<Pick<Kid, "disliked_foods" | "always_eats_foods">>;
+
+/** Weighted random pick; weights must be positive. */
+function weightedPick<T>(items: readonly T[], weight: (item: T) => number, random: () => number): T {
+  let total = 0;
+  const weights = items.map((item) => {
+    const w = Math.max(0, weight(item));
+    total += w;
+    return w;
+  });
+  if (total <= 0) return items[Math.floor(random() * items.length)];
+  let r = random() * total;
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i];
+    if (r < 0) return items[i];
+  }
+  return items[items.length - 1];
+}
 
 /**
  * Build a week of meals for one kid.
@@ -13,30 +38,63 @@ const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack1", "snack
  * used to invent were never real -- the caller replaced local state with them
  * and nothing was ever inserted, so the plan was gone on reload and never
  * reached another device. The server assigns ids now, via addPlanEntries.
+ *
+ * Choosing, per kid:
+ *   - Allergens and this kid's disliked_foods are never placed.
+ *   - Main meals are anchored on a food the kid always eats or a safe food;
+ *     always-eats foods get double weight.
+ *   - Picks are weighted by this kid's own acceptance (ate > tasted > untried
+ *     > refused). Other kids' history is ignored.
+ *   - No food twice in the same slot within three days, counting both this
+ *     kid's recent history and the picks made earlier in this build, and the
+ *     two snacks on a day are different foods.
+ *
+ * Pure: `random` defaults to Math.random and can be injected for tests.
  */
 export function buildWeekPlan(
-  kid: Pick<Kid, "id" | "allergens">,
+  kid: QuickBuildKid,
   foods: Food[],
   history: PlanEntry[],
-  startDate: Date = new Date()
+  startDate: Date = new Date(),
+  random: () => number = Math.random,
 ): Omit<PlanEntry, "id">[] {
   const kidId = kid.id;
   const plan: Omit<PlanEntry, "id">[] = [];
   const days = 7;
+
   // `is_safe` is a household flag, so a food one sibling eats safely can carry
-  // this child's allergen. Quick Build used to pick from every safe food with
-  // no allergen check at all; it now drops anything this child reacts to
+  // this child's allergen. Quick Build drops anything this child reacts to
   // before choosing, and says so when that leaves nothing to choose from.
   const servable = foods.filter(f => isAllergenSafeFor(kid, f));
-  const safeFoods = servable.filter(f => f.is_safe);
-  const tryBites = servable.filter(f => f.is_try_bite);
   const allergenExcluded = servable.length < foods.length;
 
-  if (safeFoods.length === 0) {
+  const fitKid = {
+    id: kid.id,
+    allergens: kid.allergens,
+    disliked_foods: kid.disliked_foods,
+    always_eats_foods: kid.always_eats_foods,
+  };
+  const kidHistory = history
+    .filter((p) => p.kid_id === kidId)
+    .slice()
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const results: ResultIndex = buildResultIndex(kidHistory, kidId);
+  const fitOf = new Map(servable.map((f) => [f.id, getKidFoodFit(fitKid, f, results)]));
+
+  const liked = servable.filter((f) => !fitOf.get(f.id)?.disliked);
+  const dislikeExcluded = liked.length < servable.length;
+  const alwaysEats = (f: Food) => Boolean(fitOf.get(f.id)?.alwaysEats);
+  const anchors = liked.filter((f) => f.is_safe || alwaysEats(f));
+  const safeFoods = liked.filter((f) => f.is_safe);
+  const tryBites = liked.filter((f) => f.is_try_bite);
+
+  if (anchors.length === 0) {
     throw new Error(
       allergenExcluded
         ? "Every safe food contains one of this child's allergens. Add a safe food without them first."
-        : "Please add some safe foods first!"
+        : dislikeExcluded
+          ? "Every safe food is on this child's dislike list. Add a safe food they like first."
+          : "Please add some safe foods first!"
     );
   }
 
@@ -44,35 +102,66 @@ export function buildWeekPlan(
     throw new Error(
       allergenExcluded
         ? "Every try bite food contains one of this child's allergens. Add a try bite without them first."
-        : "Please add some try bite foods first!"
+        : dislikeExcluded
+          ? "Every try bite food is on this child's dislike list. Add a different try bite first."
+          : "Please add some try bite foods first!"
     );
   }
-
-  const today = startDate;
 
   // US-818: step the ISO key, not a Date. setDate + toISOString shifted the
   // whole generated week for anyone west of Greenwich, and stepping a Date
   // across a DST boundary repeats or skips a calendar day.
-  const startKey = toISODate(today);
+  const startKey = toISODate(startDate);
+
+  // slot -> date -> food ids placed there, seeded from this kid's history so
+  // the first days of the week respect what was served just before it.
+  const placed = new Map<MealSlot, Map<string, Set<string>>>();
+  const place = (slot: MealSlot, date: string, foodId: string) => {
+    let byDate = placed.get(slot);
+    if (!byDate) placed.set(slot, (byDate = new Map()));
+    let ids = byDate.get(date);
+    if (!ids) byDate.set(date, (ids = new Set()));
+    ids.add(foodId);
+  };
+  const earliestRelevant = addIsoDays(startKey, -(REPEAT_WINDOW_DAYS - 1));
+  for (const p of kidHistory) {
+    const d = String(p.date).slice(0, 10);
+    if (d >= earliestRelevant && d < startKey && p.food_id) place(p.meal_slot, d, p.food_id);
+  }
+  const usedRecently = (slot: MealSlot, date: string): Set<string> => {
+    const out = new Set<string>();
+    const byDate = placed.get(slot);
+    if (!byDate) return out;
+    for (let back = 1; back < REPEAT_WINDOW_DAYS; back++) {
+      for (const id of byDate.get(addIsoDays(date, -back)) ?? []) out.add(id);
+    }
+    return out;
+  };
+
+  const weightOf = (f: Food) =>
+    acceptanceWeight(results.get(f.id)) * (alwaysEats(f) ? 2 : 1);
 
   for (let d = 0; d < days; d++) {
     const dateStr = addIsoDays(startKey, d);
+    const snacksToday = new Set<string>();
 
-    // Regular meal slots
-    MEAL_SLOTS.forEach(slot => {
-      // Get recent foods for this slot (last 3 days)
-      const recentFoods = history
-        .filter(p => p.meal_slot === slot)
-        .slice(-3)
-        .map(p => p.food_id);
-
-      // Get available foods (not used recently)
-      const available = safeFoods.filter(f => !recentFoods.includes(f.id));
-      
-      // Pick a food
-      const pick = available.length > 0 
-        ? available[Math.floor(Math.random() * available.length)]
-        : safeFoods[Math.floor(Math.random() * safeFoods.length)];
+    for (const slot of MEAL_SLOTS) {
+      const pool = MAIN_MEALS.has(slot) ? anchors : safeFoods.length > 0 ? safeFoods : anchors;
+      const recent = usedRecently(slot, dateStr);
+      const fresh = pool.filter(
+        (f) => !recent.has(f.id) && !(SNACK_SLOTS.has(slot) && snacksToday.has(f.id)),
+      );
+      // Relax the snack rule before the repeat rule, and only when the pantry
+      // is too small to honour both.
+      const candidates =
+        fresh.length > 0
+          ? fresh
+          : pool.filter((f) => !recent.has(f.id)).length > 0
+            ? pool.filter((f) => !recent.has(f.id))
+            : pool;
+      const pick = weightedPick(candidates, weightOf, random);
+      place(slot, dateStr, pick.id);
+      if (SNACK_SLOTS.has(slot)) snacksToday.add(pick.id);
 
       plan.push({
         kid_id: kidId,
@@ -81,10 +170,11 @@ export function buildWeekPlan(
         food_id: pick.id,
         result: null,
       });
-    });
+    }
 
-    // Try bite slot
+    // Try bite slot: rotate through the list so every try bite gets a turn.
     const tryBite = tryBites[d % tryBites.length];
+    place("try_bite", dateStr, tryBite.id);
     plan.push({
       kid_id: kidId,
       date: dateStr,
@@ -159,13 +249,29 @@ export function generateGroceryList(
       )
     : planEntries;
 
+  // One family dinner is one purchase. A recipe scheduled for three kids
+  // writes one plan row per kid per food (schedule_recipe_to_plan), and
+  // counting each of them tripled the shopping for a single pot. Recipe rows
+  // collapse on (recipe, date, slot, food); plain food rows still count per
+  // kid, since three kids each having an apple is three apples.
+  const seenRecipeRows = new Set<string>();
+  const counted = entries.filter((entry) => {
+    if (!entry.recipe_id) return true;
+    const k = `${entry.recipe_id}|${typeof entry.date === "string" ? dateKey(entry.date) : ""}|${entry.meal_slot}|${entry.food_id}`;
+    if (seenRecipeRows.has(k)) return false;
+    seenRecipeRows.add(k);
+    return true;
+  });
+
+  const foodById = new Map(foods.map((f) => [f.id, f]));
+
   const foodCount: Record<
     string,
     { food: Food; count: number; inStock: number; sourcePlanEntryId?: string; firstDate?: string }
   > = {};
 
-  entries.forEach(entry => {
-    const food = foods.find(f => f.id === entry.food_id);
+  counted.forEach(entry => {
+    const food = foodById.get(entry.food_id);
     if (food) {
       const existing = foodCount[food.id];
       if (existing) {
