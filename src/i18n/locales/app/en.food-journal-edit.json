@@ -1,0 +1,17 @@
+{
+  "foodJournal": {
+    "editor": {
+      "resultLabel": "How did it go?",
+      "notLogged": "Not logged",
+      "amountNotForRefused": "No amount for a refusal.",
+      "logResultFirst": "Pick a result to record how much.",
+      "saveFailed": "That didn't save. Your changes are still here; try again.",
+      "offline": "You're offline. Reconnect to save.",
+      "changedElsewhere": "Someone else changed this note while you were editing.",
+      "useTheirs": "Use theirs",
+      "keepMine": "Keep mine",
+      "description": "Correct the result, how much was eaten, or the note everyone in your household sees.",
+      "charCount": "{{count}} / {{max}}"
+    }
+  }
+}

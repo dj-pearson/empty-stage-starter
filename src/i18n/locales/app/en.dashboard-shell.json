@@ -88,7 +88,10 @@
     "whichMeal": "Which meal?",
     "noteLabel": "Add a note? (optional)",
     "notePlaceholder": "Any notes about this meal?",
-    "saveFailed": "That didn't save. Your note is still here; try again."
+    "saveFailed": "That didn't save. Your note is still here; try again.",
+    "undoFailed": "Couldn't undo that. Check the meal in the planner.",
+    "existingNote": "Already noted",
+    "quickNotes": "Quick notes"
   },
   "support": {
     "open": "Help & support",

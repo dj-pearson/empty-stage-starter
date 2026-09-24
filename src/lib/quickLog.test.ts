@@ -6,6 +6,8 @@ import {
   performQuickLog,
   buildQuickLogMeals,
   slotForTime,
+  mergeNote,
+  buildUndoPatch,
   type QuickLogEntry,
 } from './quickLog';
 import type { PlanEntry } from '@/types';
@@ -97,7 +99,11 @@ describe('performQuickLog', () => {
     });
 
     expect(save).toHaveBeenCalledWith('a', { result: 'ate', notes: undefined });
-    expect(outcome).toEqual({ status: 'saved', entry: meal('a') });
+    expect(outcome).toEqual({
+      status: 'saved',
+      entry: meal('a'),
+      patch: { result: 'ate', notes: undefined },
+    });
   });
 
   it('keeps the note already on the entry when none was typed', async () => {
@@ -107,7 +113,9 @@ describe('performQuickLog', () => {
     expect(save).toHaveBeenCalledWith('a', { result: 'tasted', notes: 'ate half' });
   });
 
-  it('writes the typed note over the old one', async () => {
+  it('adds a typed note to the shared one rather than wiping it', async () => {
+    // plan_entries.notes is the household's note. Quick-logging "too tired"
+    // used to replace a parent's earlier "rash on cheek?" outright.
     const save = vi.fn(ok);
     await performQuickLog({
       meals: [meal('a', 'ate half')],
@@ -116,7 +124,59 @@ describe('performQuickLog', () => {
       save,
     });
 
+    expect(save).toHaveBeenCalledWith('a', { result: 'refused', notes: 'ate half\ntoo tired' });
+  });
+
+  it('does not write a note twice when the entry already says it', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({
+      meals: [meal('a', 'Loved it!')],
+      result: 'ate',
+      notes: '  loved   IT! ',
+      save,
+    });
+
+    expect(save).toHaveBeenCalledWith('a', { result: 'ate', notes: 'Loved it!' });
+  });
+
+  it('overwrites the note in replace mode', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({
+      meals: [meal('a', 'ate half')],
+      result: 'refused',
+      notes: 'too tired',
+      noteMode: 'replace',
+      save,
+    });
+
     expect(save).toHaveBeenCalledWith('a', { result: 'refused', notes: 'too tired' });
+  });
+
+  it('clears the amount when the caller passes null', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({
+      meals: [{ ...meal('a'), amount_eaten: 'some' }],
+      result: 'ate',
+      amount: null,
+      save,
+    });
+
+    expect(save).toHaveBeenCalledWith('a', { result: 'ate', notes: undefined, amount_eaten: null });
+  });
+
+  it('hands back the exact patch it sent', async () => {
+    const save = vi.fn(ok);
+    const outcome = await performQuickLog({
+      meals: [{ ...meal('a', 'ate half'), amount_eaten: 'some' }],
+      result: 'refused',
+      notes: 'too tired',
+      save,
+    });
+
+    expect(outcome.status).toBe('saved');
+    if (outcome.status !== 'saved') return;
+    expect(outcome.patch).toBe((save.mock.calls[0] as unknown[])[1]);
+    expect(outcome.patch).toEqual({ result: 'refused', notes: 'ate half\ntoo tired', amount_eaten: null });
   });
 
   it('saves how much was eaten when one was picked', async () => {
@@ -190,6 +250,52 @@ describe('performQuickLog', () => {
     });
 
     expect(outcome.status).toBe('failed');
+  });
+});
+
+describe('mergeNote', () => {
+  it('keeps the existing note when nothing was typed', () => {
+    expect(mergeNote('rash on cheek?', undefined)).toBe('rash on cheek?');
+    expect(mergeNote('rash on cheek?', '   ')).toBe('rash on cheek?');
+    expect(mergeNote(null, undefined)).toBeUndefined();
+  });
+
+  it('uses the typed note when there was none', () => {
+    expect(mergeNote('', ' too tired ')).toBe('too tired');
+    expect(mergeNote(null, 'too tired')).toBe('too tired');
+  });
+
+  it('joins a different note on a new line', () => {
+    expect(mergeNote(' rash on cheek? ', 'too tired')).toBe('rash on cheek?\ntoo tired');
+  });
+
+  it('skips a note already on one of the lines', () => {
+    expect(mergeNote('rash on cheek?\nToo tired', 'too  tired')).toBe('rash on cheek?\nToo tired');
+  });
+});
+
+describe('buildUndoPatch', () => {
+  const before = { result: null, notes: 'rash on cheek?', amount_eaten: 'some' as const };
+
+  it('restores only the keys the log touched', () => {
+    expect(buildUndoPatch(before, { result: 'ate' })).toEqual({ result: null });
+    expect(buildUndoPatch(before, { result: 'ate', notes: 'x', amount_eaten: null })).toEqual({
+      result: null,
+      notes: 'rash on cheek?',
+      amount_eaten: 'some',
+    });
+  });
+
+  it('puts back null, never an empty string, for an entry that had no note', () => {
+    expect(buildUndoPatch({ ...before, notes: undefined }, { notes: 'x' })).toEqual({ notes: null });
+    expect(buildUndoPatch({ ...before, notes: null }, { notes: 'x' })).toEqual({ notes: null });
+    expect(buildUndoPatch({ ...before, notes: '' }, { notes: 'x' })).toEqual({ notes: null });
+  });
+
+  it('turns an unrecorded amount into null', () => {
+    expect(buildUndoPatch({ ...before, amount_eaten: undefined }, { amount_eaten: 'a_lot' })).toEqual({
+      amount_eaten: null,
+    });
   });
 });
 

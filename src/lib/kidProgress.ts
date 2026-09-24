@@ -41,6 +41,15 @@ export interface KidAttemptRow {
 /** Days in the window, today included. */
 export const PROGRESS_WINDOW_DAYS = 7;
 
+/**
+ * First local day of a window of `windowDays` days ending on `todayIso`.
+ * A window under one day is read as one day (today only).
+ */
+export function windowStartIso(todayIso: string, windowDays: number = PROGRESS_WINDOW_DAYS): string {
+  const days = Number.isFinite(windowDays) ? Math.max(1, Math.floor(windowDays)) : PROGRESS_WINDOW_DAYS;
+  return addIsoDays(todayIso, -(days - 1));
+}
+
 type PlanEntryLike = Pick<PlanEntry, 'kid_id' | 'date' | 'result'>;
 
 function emptySummary(): KidProgressSummary {
@@ -100,8 +109,9 @@ function finish(acc: Accumulator): KidProgressSummary {
 }
 
 /**
- * Summarize one child's last seven local days (today and the six before it).
- * Future entries and entries with no recorded result are not counted.
+ * Summarize one child's last `windowDays` local days (default seven: today and
+ * the six before it). Future entries and entries with no recorded result are
+ * not counted.
  */
 export function summarizeKidWeek(
   planEntries: readonly PlanEntryLike[],
@@ -110,8 +120,9 @@ export function summarizeKidWeek(
   ladderRows?: readonly KidLadderRow[],
   attempts?: readonly KidAttemptRow[],
   foodNames?: ReadonlyMap<string, string>,
+  windowDays: number = PROGRESS_WINDOW_DAYS,
 ): KidProgressSummary {
-  const start = addIsoDays(todayIso, -(PROGRESS_WINDOW_DAYS - 1));
+  const start = windowStartIso(todayIso, windowDays);
   const acc: Accumulator = { summary: emptySummary(), triedFoods: new Set() };
   for (const entry of planEntries) {
     if (entry.kid_id !== kidId || entry.result == null) continue;
@@ -140,8 +151,9 @@ export function buildProgressByKid(
   ladderRows?: readonly KidLadderRow[],
   attempts?: readonly KidAttemptRow[],
   foodNames?: ReadonlyMap<string, string>,
+  windowDays: number = PROGRESS_WINDOW_DAYS,
 ): Map<string, KidProgressSummary> {
-  const start = addIsoDays(todayIso, -(PROGRESS_WINDOW_DAYS - 1));
+  const start = windowStartIso(todayIso, windowDays);
   const accs = new Map<string, Accumulator>();
   for (const kid of kids) accs.set(kid.id, { summary: emptySummary(), triedFoods: new Set() });
 

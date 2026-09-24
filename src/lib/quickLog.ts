@@ -1,5 +1,5 @@
 import type { AmountEaten, Food, Kid, MealResult, MealSlot, PlanEntry, Recipe } from '@/types';
-import { amountForResult } from '@/lib/foodJournal';
+import { amountForResult, normalizeNoteKey } from '@/lib/foodJournal';
 import { entryKey, groupSlot } from '@/lib/familySlot';
 
 /** One of today's planned meals, for the picker. */
@@ -52,7 +52,7 @@ export interface QuickLogEntry extends QuickLogMeal {
 export type QuickLogOutcome =
   | { status: 'nothing-planned' }
   | { status: 'unknown-meal'; mealId: string }
-  | { status: 'saved'; entry: QuickLogEntry }
+  | { status: 'saved'; entry: QuickLogEntry; patch: QuickLogPatch }
   | { status: 'failed'; entry: QuickLogEntry; error: unknown };
 
 /**
@@ -66,6 +66,77 @@ export function selectQuickLogEntry<T extends QuickLogMeal>(
   mealId?: string
 ): T | undefined {
   return mealId ? meals.find((meal) => meal.id === mealId) : meals[0];
+}
+
+/** The exact object performQuickLog hands to `save`. */
+export interface QuickLogPatch {
+  result: QuickLogResult;
+  notes?: string;
+  amount_eaten?: AmountEaten | null;
+}
+
+/**
+ * How a typed note meets the one already on the entry.
+ *
+ * `append` is the quick log: plan_entries.notes is shared with the household,
+ * so a nanny's "Too tired" must not erase the "Allergic rash on cheek?" a
+ * parent wrote at lunch. `replace` is the journal editor, where the parent is
+ * looking at the whole note and editing it as text.
+ */
+export type QuickLogNoteMode = 'append' | 'replace';
+
+/**
+ * The note to write when `incoming` is added to `existing`.
+ *
+ * Nothing typed keeps what was there. A note the entry already carries (as the
+ * whole note or as one of its lines, ignoring case and spacing) is not written
+ * twice, so tapping "Loved it!" on a re-log does not stack copies of it.
+ */
+export function mergeNote(
+  existing: string | null | undefined,
+  incoming: string | undefined
+): string | undefined {
+  const kept = existing ?? undefined;
+  const added = incoming?.trim();
+  if (!added) return kept;
+  const current = kept?.trim();
+  if (!current) return added;
+  const key = normalizeNoteKey(added);
+  const already =
+    normalizeNoteKey(current) === key ||
+    current.split('\n').some((line) => normalizeNoteKey(line) === key);
+  return already ? kept : `${current}\n${added}`;
+}
+
+/** What an entry held before a write, enough to put it back. */
+export interface QuickLogUndoSnapshot {
+  result: MealResult;
+  notes?: string | null;
+  amount_eaten?: AmountEaten | null;
+}
+
+export interface QuickLogUndoPatch {
+  result?: MealResult;
+  notes?: string | null;
+  amount_eaten?: AmountEaten | null;
+}
+
+/**
+ * The write that undoes `patch`: only the keys it touched, each restored from
+ * `before`. A key the log never sent is left alone, so undoing a result does
+ * not also clobber a note another caregiver added in the meantime. An entry
+ * that had no note gets null back, never '' (an empty string reads as "a note
+ * was written" to anything that checks for one).
+ */
+export function buildUndoPatch(
+  before: QuickLogUndoSnapshot,
+  patch: Record<string, unknown>
+): QuickLogUndoPatch {
+  const undo: QuickLogUndoPatch = {};
+  if ('result' in patch) undo.result = before.result ?? null;
+  if ('notes' in patch) undo.notes = before.notes ? before.notes : null;
+  if ('amount_eaten' in patch) undo.amount_eaten = before.amount_eaten ?? null;
+  return undo;
 }
 
 /**
@@ -86,14 +157,16 @@ export async function performQuickLog<T extends QuickLogEntry>(options: {
   result: QuickLogResult;
   notes?: string;
   mealId?: string;
-  /** "A lot", "some" or "nibbles", when the user picked one. */
-  amount?: AmountEaten;
-  save: (
-    entryId: string,
-    patch: { result: QuickLogResult; notes?: string; amount_eaten?: AmountEaten | null }
-  ) => PromiseLike<{ error: unknown }> | { error: unknown };
+  /**
+   * "A lot", "some" or "nibbles", when the user picked one. Undefined keeps
+   * what the entry had; null clears it (the journal editor's deselect).
+   */
+  amount?: AmountEaten | null;
+  /** Defaults to 'append'; see QuickLogNoteMode. */
+  noteMode?: QuickLogNoteMode;
+  save: (entryId: string, patch: QuickLogPatch) => PromiseLike<{ error: unknown }> | { error: unknown };
 }): Promise<QuickLogOutcome> {
-  const { meals, result, notes, mealId, amount, save } = options;
+  const { meals, result, notes, mealId, amount, noteMode = 'append', save } = options;
   const entry = selectQuickLogEntry(meals, mealId);
 
   if (!entry) {
@@ -102,17 +175,20 @@ export async function performQuickLog<T extends QuickLogEntry>(options: {
 
   try {
     // No note typed is the user not writing one, so keep whatever the entry
-    // already carried rather than blanking it.
-    const patch: { result: QuickLogResult; notes?: string; amount_eaten?: AmountEaten | null } = {
+    // already carried rather than blanking it. A typed note is added to the
+    // shared one, unless the caller is editing the whole note.
+    const patch: QuickLogPatch = {
       result,
-      notes: notes ?? entry.notes,
+      notes:
+        noteMode === 'replace' ? notes ?? entry.notes : mergeNote(entry.notes, notes),
     };
     // Only touch the amount when there is something to say about it: a new
-    // pick, or a refusal clearing one recorded earlier.
-    const amountEaten = amountForResult(result, amount, entry.amount_eaten);
+    // pick, a cleared one, or a refusal clearing one recorded earlier.
+    const amountEaten =
+      amount === null ? null : amountForResult(result, amount, entry.amount_eaten);
     if (amountEaten !== (entry.amount_eaten ?? null)) patch.amount_eaten = amountEaten;
     const { error } = await save(entry.id, patch);
-    return error ? { status: 'failed', entry, error } : { status: 'saved', entry };
+    return error ? { status: 'failed', entry, error } : { status: 'saved', entry, patch };
   } catch (error) {
     return { status: 'failed', entry, error };
   }

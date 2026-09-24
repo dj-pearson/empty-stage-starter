@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { buildProgressByKid, summarizeKidWeek, type KidLadderRow, type KidAttemptRow } from './kidProgress';
+import { buildProgressByKid, summarizeKidWeek, windowStartIso, type KidLadderRow, type KidAttemptRow } from './kidProgress';
 import type { PlanEntry } from '@/types';
 
 const TODAY = '2026-09-24';
@@ -107,5 +107,26 @@ describe('buildProgressByKid', () => {
       expect(map.get(kid.id)).toEqual(summarizeKidWeek(entries, kid.id, TODAY, ladder, []));
     }
     expect(map.get('k3')).toMatchObject({ offered: 0, mastered: 0, activeLadder: [] });
+  });
+});
+
+describe('windowDays', () => {
+  const tenDaysBack = entry('2026-09-14', 'tasted');
+
+  it('counts an entry ten days back in a 14-day window', () => {
+    expect(summarizeKidWeek([tenDaysBack], 'k1', TODAY, [], [], undefined, 14)).toMatchObject({ tasted: 1, offered: 1 });
+    expect(buildProgressByKid([{ id: 'k1' }], [tenDaysBack], TODAY, [], [], undefined, 14).get('k1')).toMatchObject({
+      tasted: 1,
+    });
+  });
+
+  it('leaves it out under the default seven days', () => {
+    expect(summarizeKidWeek([tenDaysBack], 'k1', TODAY).offered).toBe(0);
+    expect(buildProgressByKid([{ id: 'k1' }], [tenDaysBack], TODAY).get('k1')?.offered).toBe(0);
+  });
+
+  it('starts a 14-day window thirteen days back', () => {
+    expect(windowStartIso(TODAY, 14)).toBe('2026-09-11');
+    expect(windowStartIso(TODAY)).toBe('2026-09-18');
   });
 });

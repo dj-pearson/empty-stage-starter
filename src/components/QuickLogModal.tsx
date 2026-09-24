@@ -16,12 +16,16 @@ import { cn } from '@/lib/utils';
 import {
   quickLogNeedsMealChoice,
   resolveQuickLogMealId,
-  type QuickLogMeal,
+  type QuickLogEntry,
 } from '@/lib/quickLog';
+import { TOGGLE_CHIP_CLASS, TOGGLE_CHIP_SMALL_CLASS, toggleChipState } from '@/lib/toggleChip';
 import { AMOUNT_EATEN_VALUES } from '@/lib/foodJournal';
 import type { AmountEaten } from '@/types';
 
 type MealResult = 'ate' | 'tasted' | 'refused';
+
+/** plan_entries.notes as the textarea caps it. */
+const NOTE_MAX = 500;
 
 interface QuickLogModalProps {
   open: boolean;
@@ -39,8 +43,11 @@ interface QuickLogModalProps {
    * the modal anyway against a handler that toasted "Meal logged!" and wrote
    * nothing at all. Asking which meal is the difference between logging and
    * pretending to.
+   *
+   * A meal's `notes` is the household's shared note. It is shown read-only
+   * above the textarea, because what is typed here is added to it.
    */
-  meals?: ReadonlyArray<QuickLogMeal>;
+  meals?: ReadonlyArray<QuickLogEntry>;
   /** The meal the picker opens on, e.g. tonight's dinner. */
   defaultMealId?: string;
   /**
@@ -72,6 +79,10 @@ export function QuickLogModal({
 }: QuickLogModalProps) {
   const { t } = useTranslation();
   const notesId = useId();
+  const mealGroupId = useId();
+  const amountGroupId = useId();
+  const quickNotesId = useId();
+  const existingNoteId = useId();
   const [notes, setNotes] = useState('');
   const [amount, setAmount] = useState<AmountEaten | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
@@ -108,7 +119,26 @@ export function QuickLogModal({
   const needsMealChoice = quickLogNeedsMealChoice(meals);
   const resolvedMealId = resolveQuickLogMealId(meals, selectedMealId);
   const awaitingMealChoice = needsMealChoice && !selectedMealId;
-  const selectedLabel = meals?.find((m) => m.id === resolvedMealId)?.label;
+  const selectedMeal = meals?.find((m) => m.id === resolvedMealId);
+  const selectedLabel = selectedMeal?.label;
+  const existingNote = selectedMeal?.notes?.trim();
+
+  // A quick note is added to what was typed, not swapped in for it, and a
+  // second tap takes it back out. The cap matches the textarea's.
+  const toggleQuickNote = (note: string) =>
+    setNotes((cur) => {
+      if (cur.includes(note)) {
+        return cur
+          .replace(note, '')
+          .replace(/(\.\s*){2,}/g, '. ')
+          .replace(/\s{2,}/g, ' ')
+          .replace(/^[.\s]+|[.\s]+$/g, '');
+      }
+      const typed = cur.trim();
+      if (!typed) return note.slice(0, NOTE_MAX);
+      const sep = /[.!?]$/.test(typed) ? ' ' : '. ';
+      return `${typed}${sep}${note}`.slice(0, NOTE_MAX);
+    });
 
   const handleResultClick = async (result: MealResult) => {
     if (awaitingMealChoice) return;
@@ -205,10 +235,10 @@ export function QuickLogModal({
 
         {/* Which meal (US-812). Only when the caller could not say. */}
         {needsMealChoice && (
-          <fieldset className="space-y-2 pt-2">
-            <legend className="text-sm font-medium">
+          <div role="group" aria-labelledby={mealGroupId} className="space-y-2 pt-2">
+            <p id={mealGroupId} className="text-sm font-medium">
               {t('quickLog.whichMeal', { defaultValue: 'Which meal?' })}
-            </legend>
+            </p>
             <div className="flex flex-wrap gap-2">
               {meals?.map((meal) => (
                 <button
@@ -216,24 +246,21 @@ export function QuickLogModal({
                   type="button"
                   onClick={() => setSelectedMealId(meal.id)}
                   aria-pressed={selectedMealId === meal.id}
-                  className={cn(
-                    'rounded-full px-3 py-1.5 text-sm transition-colors',
-                    selectedMealId === meal.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary hover:bg-secondary/80'
-                  )}
+                  className={cn(TOGGLE_CHIP_CLASS, toggleChipState(selectedMealId === meal.id))}
                 >
                   {meal.label}
                 </button>
               ))}
             </div>
-          </fieldset>
+          </div>
         )}
 
         {/* How much (optional). Picked before the result, because tapping a
             result saves and closes. */}
-        <fieldset className="space-y-2 pt-2">
-          <legend className="text-sm font-medium">{t('foodJournal.amountQuestion')}</legend>
+        <div role="group" aria-labelledby={amountGroupId} className="space-y-2 pt-2">
+          <p id={amountGroupId} className="text-sm font-medium">
+            {t('foodJournal.amountQuestion')}
+          </p>
           <div className="grid grid-cols-3 gap-2">
             {AMOUNT_EATEN_VALUES.map((value) => (
               <button
@@ -242,18 +269,13 @@ export function QuickLogModal({
                 onClick={() => setAmount((current) => (current === value ? undefined : value))}
                 aria-pressed={amount === value}
                 disabled={isLoading}
-                className={cn(
-                  'rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  amount === value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary hover:bg-secondary/80'
-                )}
+                className={cn(TOGGLE_CHIP_CLASS, toggleChipState(amount === value))}
               >
                 {t(`foodJournal.amount.${value}`)}
               </button>
             ))}
           </div>
-        </fieldset>
+        </div>
 
         {/* The note sits above the results: tapping a result saves, so a note
             typed below one would be typed after the fact. */}
@@ -262,18 +284,37 @@ export function QuickLogModal({
             {t('quickLog.noteLabel', { defaultValue: 'Add a note? (optional)' })}
           </label>
 
-          <div className="flex flex-wrap gap-2">
+          <span id={quickNotesId} className="sr-only">
+            {t('quickLog.quickNotes', { defaultValue: 'Quick notes' })}
+          </span>
+          <div role="group" aria-labelledby={quickNotesId} className="flex flex-wrap gap-2">
             {quickNotes.map((note) => (
               <button
                 key={note}
-                onClick={() => setNotes(note)}
-                className="text-xs px-2 py-1 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
                 type="button"
+                onClick={() => toggleQuickNote(note)}
+                aria-pressed={notes.includes(note)}
+                disabled={isLoading}
+                className={cn(TOGGLE_CHIP_SMALL_CLASS, toggleChipState(notes.includes(note)))}
               >
                 {note}
               </button>
             ))}
           </div>
+
+          {existingNote && (
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                {t('quickLog.existingNote', { defaultValue: 'Already noted' })}
+              </p>
+              <p
+                id={existingNoteId}
+                className="whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-sm text-foreground"
+              >
+                {existingNote}
+              </p>
+            </div>
+          )}
 
           <Textarea
             id={notesId}
@@ -282,7 +323,8 @@ export function QuickLogModal({
             onChange={(e) => setNotes(e.target.value)}
             className="resize-none"
             rows={2}
-            maxLength={500}
+            maxLength={NOTE_MAX}
+            aria-describedby={existingNote ? existingNoteId : undefined}
           />
         </div>
 

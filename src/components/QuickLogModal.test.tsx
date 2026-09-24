@@ -217,3 +217,53 @@ describe('the title', () => {
     expect(ateButton()).toHaveAccessibleName('Ate it!');
   });
 });
+
+describe('quick-note chips', () => {
+  const notesBox = () => screen.getByLabelText(/Add a note/);
+
+  it('add to what was typed instead of replacing it', async () => {
+    const { user } = setup({ meals: [meals[0]] });
+
+    await user.type(notesBox(), 'left the peas');
+    await user.click(screen.getByRole('button', { name: 'Asked for more' }));
+
+    expect(notesBox()).toHaveValue('left the peas. Asked for more');
+  });
+
+  it('come back out on a second tap', async () => {
+    const { user } = setup({ meals: [meals[0]] });
+    const chip = screen.getByRole('button', { name: 'Asked for more' });
+
+    await user.type(notesBox(), 'left the peas');
+    await user.click(chip);
+    await user.click(chip);
+
+    expect(notesBox()).toHaveValue('left the peas');
+  });
+
+  it('say whether they are in the note', async () => {
+    const { user } = setup({ meals: [meals[0]] });
+    const chip = screen.getByRole('button', { name: 'Too tired' });
+
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+    await user.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('group', { name: 'Quick notes' })).toContainElement(chip);
+  });
+});
+
+describe('a meal that already has a note', () => {
+  it('shows the shared note read-only, so the parent sees what is being added to', () => {
+    setup({ meals: [{ ...meals[0], notes: 'rash on cheek?' }] });
+
+    expect(screen.getByText('Already noted')).toBeInTheDocument();
+    expect(screen.getByText('rash on cheek?')).toBeInTheDocument();
+    // Not copied into the box: what is typed is added to it, not edited.
+    expect(screen.getByLabelText(/Add a note/)).toHaveValue('');
+  });
+
+  it('shows nothing extra for a meal with no note', () => {
+    setup({ meals: [meals[0]] });
+    expect(screen.queryByText('Already noted')).not.toBeInTheDocument();
+  });
+});

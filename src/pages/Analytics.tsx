@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
-import { useFoods, useKids, usePlan } from "@/contexts/AppContext";
+import { useFoods, useKids, usePlan, useRecipes } from "@/contexts/AppContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -21,6 +21,7 @@ export default function Analytics() {
   const { foods } = useFoods();
   const { activeKidId, kids, setActiveKidId } = useKids();
   const { planEntries } = usePlan();
+  const { recipes } = useRecipes();
   const activeKid = kids.find(k => k.id === activeKidId);
   const isFamilyMode = !activeKidId;
 
@@ -334,7 +335,7 @@ export default function Analytics() {
 
         {/* Result History */}
         <div className="mt-6">
-          <ResultHistoryCard entries={kidEntries} foods={foods} />
+          <ResultHistoryCard entries={kidEntries} foods={foods} recipes={recipes} />
         </div>
 
         {/* Smart Insights */}

@@ -298,3 +298,11 @@ slot, single quick-log path) added 8.4 kB of route chunks after deleting
 four unreachable components; the entry went from 315.4 to 315.2 kB.
 Measured total 2590.0 kB, exactly at the old ceiling, so it moves by the
 growth plus room for per-build variation (the injected release id).
+
+## 2026-09-24: `totalJs` 2600000 -> 2615000 (Food Journal)
+
+The journal became a logging and reporting screen: still-to-log card,
+per-row exposure/first-try/allergen chips, per-kid patterns and a share
+report. FoodJournal route chunk 3.6 -> 12.6 kB, plus 3.9 kB of shared
+helpers; +13.5 kB total. Eager closure and preload unchanged. Measured
+total 2603.3 kB.

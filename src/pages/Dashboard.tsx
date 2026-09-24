@@ -17,6 +17,7 @@ import { QuickActionsFab } from "@/components/QuickActionsFab";
 import { QuickLogModal } from "@/components/QuickLogModal";
 import {
   buildQuickLogMeals,
+  buildUndoPatch,
   performQuickLog,
   type QuickLogPlanMeal,
   type QuickLogResult,
@@ -42,7 +43,7 @@ import {
 import { cn } from "@/lib/utils";
 import { userFacingError } from "@/lib/networkFailure";
 import { SHORTCUTS } from "@/lib/dashboardShortcuts";
-import type { AmountEaten, MealSlot } from "@/types";
+import type { AmountEaten, MealSlot, PlanEntry } from "@/types";
 import { useNavEntitlements } from "@/hooks/useNavEntitlements";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -246,18 +247,34 @@ const Dashboard = () => {
 
     switch (outcome.status) {
       case "saved": {
-        const undo = before
-          ? {
-              label: t("quickLog.undo", { defaultValue: "Undo" }),
-              onClick: () => {
-                void updatePlanEntry(before.id, {
-                  result: before.result,
-                  notes: before.notes ?? "",
-                  amount_eaten: before.amount_eaten ?? null,
-                });
-              },
-            }
-          : undefined;
+        // Undo puts back only what the log wrote, from the row as it was, and
+        // says so when it did not land: a silent failed undo leaves the parent
+        // believing a wrong result is gone.
+        const undoPatch = before ? buildUndoPatch(before, { ...outcome.patch }) : undefined;
+        const undo =
+          before && undoPatch
+            ? {
+                label: t("quickLog.undo", { defaultValue: "Undo" }),
+                onClick: async () => {
+                  let failed: unknown = null;
+                  try {
+                    // notes may be null here (no note before), which the
+                    // column takes; PlanEntry types it as string | undefined.
+                    const res = await updatePlanEntry(before.id, undoPatch as Partial<PlanEntry>);
+                    failed = res?.error ?? null;
+                  } catch (error) {
+                    failed = error;
+                  }
+                  if (failed) {
+                    toast.error(
+                      t("quickLog.undoFailed", {
+                        defaultValue: "Couldn't undo that. Check the meal in the planner.",
+                      })
+                    );
+                  }
+                },
+              }
+            : undefined;
         toast.success(
           t("quickLog.logged", {
             defaultValue: "Logged: {{result}}",

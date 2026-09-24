@@ -1,0 +1,9 @@
+{
+  "foodJournal": {
+    "history": {
+      "title": "Recent meal history",
+      "empty": "No logged meals yet. Mark meals in the Planner to see them here.",
+      "retry": "Retry"
+    }
+  }
+}
