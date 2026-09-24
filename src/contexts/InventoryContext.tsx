@@ -38,6 +38,7 @@ import { foldMovements, balanceOf, type LedgerState } from "@/lib/inventoryLedge
 import type { ComparableItem, StockRow } from "@/lib/stockComparison";
 import {
   buildCorrectionMovement,
+  correctionBaseline,
   buildWasteMovement,
   buildAdjustmentMovement,
   partitionMovements,
@@ -74,9 +75,22 @@ export const LEDGER_READS_FLAG = "kitchen_loop_ledger_reads";
  * foods.quantity. One flag would force them on together and there would be
  * nothing to compare against.
  *
- * It also has to exist at all. These migrations are applied nowhere yet, so an
- * unconditional insert would fail on every pantry edit for every user, and the
- * only thing that would achieve is a Sentry full of the same error.
+ * It also has to exist at all: an unconditional insert against a database
+ * without the kitchen-loop migrations would fail on every pantry edit.
+ *
+ * 5a turned it on. 20260928000005 writes the feature_flags row enabled at
+ * 100%, and the default below is true, but the SERVER stays authoritative:
+ * useFeatureFlag takes evaluate_feature_flag's answer whenever it gets one, and
+ * a missing or disabled row reads as false. The default only covers the first
+ * render before that answer and a client that cannot reach the server at all.
+ * Kill switch:
+ *
+ *   UPDATE feature_flags SET enabled = false WHERE key = 'kitchen_loop_ledger_writes';
+ *
+ * after which the web writes foods.quantity directly again and the US-668
+ * trigger records it. What this file cannot know is which database it is
+ * talking to; whether a given environment has the ledger migrations is a fact
+ * about that environment, checked there, not something to assert here.
  */
 export const LEDGER_WRITES_FLAG = "kitchen_loop_ledger_writes";
 
@@ -331,7 +345,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const { userId, householdId } = useAuth();
   const ledgerReadsEnabled = useFeatureFlag(LEDGER_READS_FLAG, false);
-  const ledgerWritesEnabled = useFeatureFlag(LEDGER_WRITES_FLAG, false);
+  const ledgerWritesEnabled = useFeatureFlag(LEDGER_WRITES_FLAG, true);
 
   // Realtime. Two channels rather than one, so a household switch tears down
   // and rebuilds each independently and the channel names stay diagnosable.
@@ -434,31 +448,6 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [ledgerWritesEnabled, userId, householdId],
-  );
-
-  const recordPantryCorrection = useCallback(
-    async (
-      item: MovementItem & { quantity?: number | null },
-      newQuantity: number,
-    ): Promise<RecordResult> => {
-      if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
-      const draft = buildCorrectionMovement({
-        id: generateId(),
-        householdId: householdId ?? "",
-        userId: userId ?? "",
-        item,
-        currentQuantity: typeof item?.quantity === "number" ? item.quantity : 0,
-        newQuantity,
-      });
-      if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
-      const result = await appendMovements([draft]);
-      return {
-        recorded: result.ok && result.attempted > 0,
-        count: result.ok ? result.attempted : 0,
-        reason: result.ok ? null : "the append failed",
-      };
-    },
-    [ledgerWritesEnabled, householdId, userId, appendMovements],
   );
 
   const recordRestock = useCallback(
@@ -662,6 +651,31 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       return fromCanonical(row.on_hand_canonical + pending, row.canonical_unit, item.unit, item);
     },
     [stockByItem, pendingCanonicalByItem],
+  );
+
+  const recordPantryCorrection = useCallback(
+    async (
+      item: MovementItem & { quantity?: number | null },
+      newQuantity: number,
+    ): Promise<RecordResult> => {
+      if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
+      const draft = buildCorrectionMovement({
+        id: generateId(),
+        householdId: householdId ?? "",
+        userId: userId ?? "",
+        item,
+        currentQuantity: correctionBaseline(item, ledgerQuantityOf),
+        newQuantity,
+      });
+      if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
+      const result = await appendMovements([draft]);
+      return {
+        recorded: result.ok && result.attempted > 0,
+        count: result.ok ? result.attempted : 0,
+        reason: result.ok ? null : "the append failed",
+      };
+    },
+    [ledgerWritesEnabled, householdId, userId, appendMovements, ledgerQuantityOf],
   );
 
   const pantryQuantityOf = useCallback(

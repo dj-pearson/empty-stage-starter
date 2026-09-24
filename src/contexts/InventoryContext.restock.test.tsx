@@ -197,6 +197,8 @@ describe('recordRestock', () => {
   });
 
   it('attempts nothing when ledger writes are off', async () => {
+    // 5a: off is the kill switch now, not the default.
+    writeFlag('kitchen_loop_ledger_writes', false);
     const inventory = await mountInventory();
     expect(inventory().ledgerWritesEnabled).toBe(false);
 

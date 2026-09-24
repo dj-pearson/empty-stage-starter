@@ -26,6 +26,7 @@
 
 import { toCanonicalInItemUnit, isUnknown, type CanonicalUnit, type CanonicalItemFacts } from '@/lib/canonicalUnits';
 import type { Food } from '@/types';
+import type { ComparableItem } from '@/lib/stockComparison';
 
 /** Matches the `reason` CHECK on inventory_movements. */
 export type MovementReason = 'purchase' | 'cook' | 'waste' | 'expire' | 'correction' | 'initial';
@@ -213,6 +214,29 @@ export function buildCorrectionMovement(
     displayUnit: input.item?.unit,
     reason: 'correction',
   });
+}
+
+/**
+ * What a pantry correction is measured FROM (5a).
+ *
+ * A correction records the change, `newQuantity - current`, and the ledger
+ * adds that change to the balance. So `current` has to be the balance: using
+ * foods.quantity only works while the two agree, and the insert bug fixed in
+ * 20260928000003 was exactly a case where they did not (5 in foods.quantity,
+ * no balance at all, so "4 -> 3" landed as -1). The balance comes from
+ * item_stock plus this client's unconfirmed appends, in the item's display
+ * unit; foods.quantity is the fallback only when there is no stock row or it
+ * cannot be expressed in that unit. It also stops the INTEGER foods.quantity
+ * column's rounding (1500 g reads back as 2 kg) from swallowing an edit.
+ */
+export function correctionBaseline(
+  item: ComparableItem,
+  ledgerQuantityOf: (item: ComparableItem) => number | null,
+): number {
+  const fromLedger = item ? ledgerQuantityOf(item) : null;
+  if (typeof fromLedger === 'number' && Number.isFinite(fromLedger)) return fromLedger;
+  const legacy = item?.quantity;
+  return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : 0;
 }
 
 /** The grocery-row fields a purchase reads. Widened from `GroceryItem`, whose
