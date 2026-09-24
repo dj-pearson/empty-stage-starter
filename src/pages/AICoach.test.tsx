@@ -75,7 +75,11 @@ describe("AICoach page", () => {
     checkFeatureLimit.mockResolvedValue({ allowed: false, limit: 5, current: 5 });
     renderPage();
     expect(await screen.findByText("exhausted:true")).toBeInTheDocument();
-    expect(screen.getByTestId("ai-coach-usage")).toHaveTextContent("No questions left today");
+    // The line reads FeatureGate's state after onStateChange lifts it to the
+    // page, one render after the coach itself sees it: wait, don't sample.
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-coach-usage")).toHaveTextContent("No questions left today"),
+    );
   });
 
   it("a server refusal mid-session flips the line to none with the upgrade link", async () => {
@@ -84,7 +88,11 @@ describe("AICoach page", () => {
     expect(await screen.findByText("1 of 10 question left today")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "server-402" }));
     expect(await screen.findByText("exhausted:true")).toBeInTheDocument();
-    expect(screen.getByTestId("ai-coach-usage")).toHaveTextContent("No questions left today");
+    // The line reads FeatureGate's state after onStateChange lifts it to the
+    // page, one render after the coach itself sees it: wait, don't sample.
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-coach-usage")).toHaveTextContent("No questions left today"),
+    );
     expect(screen.getByRole("link", { name: "See plans" })).toHaveAttribute("href", "/pricing");
   });
 
