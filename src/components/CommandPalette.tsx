@@ -16,26 +16,23 @@ import {
   UtensilsCrossed,
   BookOpen,
   Calendar,
-  Sparkles,
   BarChart3,
   ShoppingCart,
   Apple,
   Bot,
-  Settings,
   HelpCircle,
   Plus,
   Search,
   Moon,
   Sun,
-  LogOut,
-  FileText,
-  Tag,
   Clock,
-  Accessibility,
   Trophy,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useTranslation } from "react-i18next";
+import { SETTINGS_SECTIONS, settingsHref } from "@/lib/settingsSections";
+import "@/i18n/appLocale";
 
 interface Command {
   id: string;
@@ -52,6 +49,7 @@ export function CommandPalette() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { setTheme, theme } = useTheme();
   const { foods } = useFoods();
   const { recipes } = useRecipes();
@@ -89,6 +87,36 @@ export function CommandPalette() {
     }, 300);
     return () => clearTimeout(debounceRef.current);
   }, [searchQuery]);
+
+  const settingsCommands: Command[] = useMemo(() => {
+    const words = (keys: string[]) => keys.flatMap((key) => t(key).split(/\s+/)).filter(Boolean);
+    const settingsWord = t("settings.title", { defaultValue: "Settings" });
+    return SETTINGS_SECTIONS.flatMap((section) => {
+      const title = t(section.titleKey);
+      const go = (href: string) => () => {
+        navigate(href);
+        setOpen(false);
+      };
+      return [
+        {
+          id: `settings-${section.key}`,
+          label: `${settingsWord}: ${title}`,
+          icon: section.icon,
+          action: go(settingsHref(section.key)),
+          keywords: ["settings", "preferences", ...words(section.keywords)],
+          group: "settings" as const,
+        },
+        ...(section.controls ?? []).map((control) => ({
+          id: `settings-${section.key}-${control.id}`,
+          label: t(control.labelKey),
+          icon: section.icon,
+          action: go(settingsHref(section.key, control.id)),
+          keywords: [title, ...words(control.keywords)],
+          group: "settings" as const,
+        })),
+      ];
+    });
+  }, [navigate, t]);
 
   const commands: Command[] = useMemo(
     () => [
@@ -285,28 +313,10 @@ export function CommandPalette() {
         keywords: ["appearance", "mode"],
         group: "settings",
       },
-      {
-        id: "settings-account",
-        label: "Account Settings",
-        icon: Settings,
-        action: () => {
-          navigate("/dashboard/settings");
-          setOpen(false);
-        },
-        keywords: ["preferences", "profile"],
-        group: "settings",
-      },
-      {
-        id: "settings-accessibility",
-        label: "Accessibility Settings",
-        icon: Accessibility,
-        action: () => {
-          navigate("/dashboard/accessibility-settings");
-          setOpen(false);
-        },
-        keywords: ["a11y", "contrast", "motion", "font", "screen reader", "keyboard", "wcag", "ada"],
-        group: "settings",
-      },
+      // One entry per Settings section and per registered control, from
+      // the hub's own registry, so the palette cannot point at a section the
+      // hub no longer has. Each only navigates; none flips a setting.
+      ...settingsCommands,
 
       // Help
       {
@@ -332,7 +342,7 @@ export function CommandPalette() {
         group: "help",
       },
     ],
-    [navigate, setTheme]
+    [navigate, setTheme, settingsCommands]
   );
 
   // Filter commands based on theme

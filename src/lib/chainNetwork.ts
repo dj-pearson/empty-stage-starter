@@ -23,6 +23,7 @@ import { matchingFoodAllergen } from '@/lib/allergens';
 import { isAllergyUnknown } from '@/lib/kidFit';
 import type { Food, Kid } from '@/types';
 import { deterministicUuid, isUuid, normalizeChainFoodName } from './chainNetworkKeys';
+import { isShareChainOptedIn } from './shareChainPref';
 
 export { deterministicUuid, isUuid, normalizeChainFoodName } from './chainNetworkKeys';
 
@@ -355,23 +356,14 @@ interface FoodAttemptForContribution {
 }
 
 /**
- * Single source of truth for the "Share my food-chain outcomes anonymously"
- * preference key. Mirrors `usePickyWinSharePref`. Default behaviour: ON.
- * The pref is read lazily so server-render / native paths without
- * localStorage get the default-ON behaviour and the existing aggregate
- * keeps growing.
+ * "Share my food-chain outcomes anonymously" (US-296). Read from the
+ * shareChainPref store, which holds the server row
+ * (picky_win_preferences.share_chain_outcomes). Fails closed: until that row
+ * has loaded for the signed-in user, nothing is contributed, whatever the
+ * device cache says.
  */
-const SHARE_PREF_KEY = 'eatpal.share_chain_outcomes';
-
 function isShareOptedIn(): boolean {
-  try {
-    if (typeof localStorage === 'undefined') return true;
-    const raw = localStorage.getItem(SHARE_PREF_KEY);
-    if (raw === null) return true; // default ON
-    return raw === 'true';
-  } catch {
-    return true;
-  }
+  return isShareChainOptedIn();
 }
 
 /**

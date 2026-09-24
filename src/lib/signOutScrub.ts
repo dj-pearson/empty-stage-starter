@@ -34,6 +34,12 @@ export const SCRUBBED_KEYS: readonly string[] = [
   'eatpal_recent_searches',
   'eatpal.auto_restock_added_today',
   'eatpal.auto_restock_blocklist',
+  // Settings pass B: the three meal-insight toggles. They are this account's
+  // choices, not the device's; a shared tablet must not hand the next parent
+  // the previous one's auto-restock or nudge settings.
+  'eatpal.nudge_variety',
+  'eatpal.auto_restock_enabled',
+  'eatpal.auto_restock_lead_days',
   'eatpal_onboarding_completed',
   'eatpal_onboarding_dismissed',
   'onboarding-dismissed',
@@ -84,6 +90,9 @@ export const SCRUBBED_SESSION_KEYS: readonly string[] = [
   'returnTo',
   'share-target-pending',
   'bind-email-banner-dismissed',
+  // BindEmailFlow keeps its step here so a re-render mid-flow does not send
+  // the user back to step one. It names the step of another person's flow.
+  'bind-email-flow-step',
 ];
 
 /**
@@ -233,4 +242,28 @@ export function scrubOnSignOut(
   for (const key of local) storage.removeItem(key);
   for (const key of session) sessionStorageAdapter.removeItem(key);
   return [...local, ...session];
+}
+
+/**
+ * Everything scrubOnSignOut removes, plus the keys sign-out deliberately keeps
+ * for a returning user: once the account is deleted there is no returning
+ * user. Only keys under a KEPT_PREFIXES family that carry this user id are
+ * removed (the offline write queue, the per-user dismissals), so another
+ * account on the same browser keeps its own. Never throws.
+ */
+export function scrubDeletedAccount(
+  userId: string,
+  storage: ScrubStorage = browserScrubStorage('local'),
+  sessionStorageAdapter: ScrubStorage = browserScrubStorage('session')
+): string[] {
+  const removed = scrubOnSignOut(storage, sessionStorageAdapter);
+  if (!userId) return removed;
+  const prefixes = Object.keys(KEPT_PREFIXES);
+  for (const key of storage.keys()) {
+    if (!key.includes(userId)) continue;
+    if (!prefixes.some((prefix) => key.startsWith(prefix))) continue;
+    storage.removeItem(key);
+    removed.push(key);
+  }
+  return removed;
 }

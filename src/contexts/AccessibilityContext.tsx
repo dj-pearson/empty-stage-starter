@@ -1,7 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getStorage } from '@/lib/platform';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import {
+  AccessibilityContext,
+  useOptionalAccessibility,
+  type AccessibilityPreferences,
+  type AnnouncePriority,
+} from './accessibilityContextCore';
+
+export type { AccessibilityPreferences } from './accessibilityContextCore';
+export { useOptionalAccessibility };
 
 /**
  * Accessibility Preferences Context
@@ -17,52 +26,6 @@ import { logger } from '@/lib/logger';
  * - Screen reader optimization mode
  * - Keyboard navigation enhancements
  */
-
-export interface AccessibilityPreferences {
-  // Motion and Animation
-  reducedMotion: boolean; // Reduce or disable animations
-
-  // Visual
-  highContrast: boolean; // Enhanced color contrast
-  largeText: boolean; // Larger font sizes
-  fontSize: 'default' | 'large' | 'x-large'; // Granular font size control
-
-  // Screen Reader
-  screenReaderMode: boolean; // Optimize for screen readers
-  announcePageChanges: boolean; // Announce route changes
-  verboseDescriptions: boolean; // More detailed ARIA descriptions
-
-  // Keyboard
-  enhancedFocus: boolean; // More visible focus indicators
-  keyboardShortcuts: boolean; // Enable keyboard shortcuts
-
-  // Timing
-  extendedTimeouts: boolean; // Longer timeouts for interactions
-  disableAutoplay: boolean; // Disable auto-playing media
-
-  // Cognitive
-  simplifiedUI: boolean; // Reduce visual complexity
-  dyslexiaFont: boolean; // Use dyslexia-friendly font
-}
-
-interface AccessibilityContextType {
-  preferences: AccessibilityPreferences;
-  updatePreference: <K extends keyof AccessibilityPreferences>(
-    key: K,
-    value: AccessibilityPreferences[K]
-  ) => void;
-  updatePreferences: (updates: Partial<AccessibilityPreferences>) => void;
-  resetPreferences: () => void;
-  isLoading: boolean;
-
-  // Screen reader announcements
-  announce: (message: string, priority?: 'polite' | 'assertive') => void;
-
-  // Utility functions
-  shouldReduceMotion: () => boolean;
-  shouldUseHighContrast: () => boolean;
-  getFontSizeClass: () => string;
-}
 
 const STORAGE_KEY = 'accessibility-preferences';
 
@@ -82,7 +45,74 @@ const DEFAULT_PREFERENCES: AccessibilityPreferences = {
   dyslexiaFont: false,
 };
 
-const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
+const FONT_SIZES: ReadonlyArray<AccessibilityPreferences['fontSize']> = ['default', 'large', 'x-large'];
+
+/**
+ * One shape for fontSize/largeText, whoever wrote the row.
+ *
+ * An older client (and the old quick widget) turned on `largeText` and left
+ * `fontSize` at 'default'; the stylesheet treated that as large. So on read,
+ * largeText with a default fontSize means 'large'. On write, largeText is
+ * derived from fontSize, so an older client reading the row sees a value that
+ * agrees with the size actually shown.
+ */
+function normalizePreferences(prefs: AccessibilityPreferences): AccessibilityPreferences {
+  const size = FONT_SIZES.includes(prefs.fontSize) ? prefs.fontSize : 'default';
+  const fontSize = size === 'default' && prefs.largeText === true ? 'large' : size;
+  const largeText = fontSize !== 'default';
+  if (fontSize === prefs.fontSize && largeText === prefs.largeText) return prefs;
+  return { ...prefs, fontSize, largeText };
+}
+
+/**
+ * Apply a partial update. A caller that sets only `largeText` (an older build
+ * of a component, or a stored row) moves fontSize with it; otherwise fontSize
+ * wins and largeText follows.
+ */
+function applyUpdates(
+  prev: AccessibilityPreferences,
+  updates: Partial<AccessibilityPreferences>
+): AccessibilityPreferences {
+  const next = { ...prev, ...updates };
+  if (updates.largeText !== undefined && updates.fontSize === undefined) {
+    next.fontSize = updates.largeText ? (prev.fontSize === 'default' ? 'large' : prev.fontSize) : 'default';
+  }
+  if (updates.fontSize !== undefined) next.largeText = updates.fontSize !== 'default';
+  return normalizePreferences(next);
+}
+
+const mediaMatches = (query: string): boolean =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches;
+
+/** What the operating system asks for. Only ever turns things on. */
+function detectSystemPreferences(): Partial<AccessibilityPreferences> {
+  const updates: Partial<AccessibilityPreferences> = {};
+  if (mediaMatches('(prefers-reduced-motion: reduce)')) updates.reducedMotion = true;
+  // prefers-contrast, or forced colors (Windows High Contrast Mode).
+  if (mediaMatches('(prefers-contrast: high)') || mediaMatches('(forced-colors: active)')) {
+    updates.highContrast = true;
+  }
+  return updates;
+}
+
+/** Preference -> class on <html>. The stylesheet (index.css) does the rest. */
+const PREFERENCE_CLASSES: ReadonlyArray<[keyof AccessibilityPreferences, string]> = [
+  ['reducedMotion', 'reduce-motion'],
+  ['highContrast', 'high-contrast'],
+  ['simplifiedUI', 'simplified-ui'],
+  ['verboseDescriptions', 'verbose-descriptions'],
+  ['enhancedFocus', 'enhanced-focus'],
+  ['dyslexiaFont', 'dyslexia-font'],
+  ['screenReaderMode', 'screen-reader-optimized'],
+];
+
+const nextFrame = (fn: () => void) => {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(fn);
+  } else {
+    setTimeout(fn, 16);
+  }
+};
 
 export function AccessibilityProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<AccessibilityPreferences>(DEFAULT_PREFERENCES);
@@ -102,27 +132,6 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
 
   // Detect system preferences on mount
   useEffect(() => {
-    const detectSystemPreferences = () => {
-      const updates: Partial<AccessibilityPreferences> = {};
-
-      // Detect reduced motion preference
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        updates.reducedMotion = true;
-      }
-
-      // Detect high contrast preference
-      if (window.matchMedia('(prefers-contrast: high)').matches) {
-        updates.highContrast = true;
-      }
-
-      // Detect forced colors (Windows High Contrast Mode)
-      if (window.matchMedia('(forced-colors: active)').matches) {
-        updates.highContrast = true;
-      }
-
-      return updates;
-    };
-
     const systemPrefs = detectSystemPreferences();
     setPreferences(prev => ({ ...prev, ...systemPrefs }));
   }, []);
@@ -183,9 +192,9 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
         const stored = await storage.getItem(STORAGE_KEY);
 
         if (stored) {
-          const parsed = JSON.parse(stored);
+          const parsed: Partial<AccessibilityPreferences> = JSON.parse(stored);
           setPreferences(prev => {
-            const merged = { ...prev, ...parsed };
+            const merged = normalizePreferences({ ...prev, ...parsed });
             // Writing a ref inside the updater: deterministic, so running it
             // twice (StrictMode) produces the same value.
             rememberPersisted(merged);
@@ -225,7 +234,10 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
 
           if (data && !error) {
             setPreferences(prev => {
-              const merged = { ...prev, ...data.preferences };
+              const merged = normalizePreferences({
+                ...prev,
+                ...(data.preferences as Partial<AccessibilityPreferences>),
+              });
               rememberPersisted(merged);
               return merged;
             });
@@ -296,97 +308,57 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
   // Apply CSS classes based on preferences
   useEffect(() => {
     const root = document.documentElement;
-
-    // Reduced motion
-    if (preferences.reducedMotion) {
-      root.classList.add('reduce-motion');
-    } else {
-      root.classList.remove('reduce-motion');
+    for (const [key, className] of PREFERENCE_CLASSES) {
+      root.classList.toggle(className, preferences[key] === true);
     }
-
-    // High contrast
-    if (preferences.highContrast) {
-      root.classList.add('high-contrast');
-    } else {
-      root.classList.remove('high-contrast');
-    }
-
-    // Font size. `largeText` is a quick boolean shortcut to the "large" size;
-    // the granular `fontSize` control wins when it is set above default.
-    const effectiveFontSize =
-      preferences.fontSize === 'default' && preferences.largeText ? 'large' : preferences.fontSize;
-    root.classList.remove('text-size-default', 'text-size-large', 'text-size-x-large');
-    root.classList.add(`text-size-${effectiveFontSize}`);
-
-    // Simplified UI — reduces visual complexity (hides decorative elements,
-    // flattens shadows/gradients) via CSS in index.css.
-    if (preferences.simplifiedUI) {
-      root.classList.add('simplified-ui');
-    } else {
-      root.classList.remove('simplified-ui');
-    }
-
-    // Verbose descriptions — class hook that reveals supplementary helper text
-    // marked with [data-a11y-verbose] (see index.css).
-    if (preferences.verboseDescriptions) {
-      root.classList.add('verbose-descriptions');
-    } else {
-      root.classList.remove('verbose-descriptions');
-    }
-
-    // Enhanced focus
-    if (preferences.enhancedFocus) {
-      root.classList.add('enhanced-focus');
-    } else {
-      root.classList.remove('enhanced-focus');
-    }
-
-    // Dyslexia font
-    if (preferences.dyslexiaFont) {
-      root.classList.add('dyslexia-font');
-    } else {
-      root.classList.remove('dyslexia-font');
-    }
-
-    // Screen reader mode
-    if (preferences.screenReaderMode) {
-      root.classList.add('screen-reader-optimized');
-    } else {
-      root.classList.remove('screen-reader-optimized');
+    // fontSize is normalized, so a legacy largeText row already reads 'large'.
+    for (const size of FONT_SIZES) {
+      root.classList.toggle(`text-size-${size}`, preferences.fontSize === size);
     }
   }, [preferences]);
+
+  // Read by resetPreferences, which must hand back what it replaced.
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
 
   const updatePreference = useCallback(<K extends keyof AccessibilityPreferences>(
     key: K,
     value: AccessibilityPreferences[K]
   ) => {
-    setPreferences(prev => ({ ...prev, [key]: value }));
+    const update: Partial<AccessibilityPreferences> = {};
+    update[key] = value;
+    setPreferences(prev => applyUpdates(prev, update));
   }, []);
 
   const updatePreferences = useCallback((updates: Partial<AccessibilityPreferences>) => {
-    setPreferences(prev => ({ ...prev, ...updates }));
+    setPreferences(prev => applyUpdates(prev, updates));
   }, []);
 
   const resetPreferences = useCallback(() => {
-    setPreferences(DEFAULT_PREFERENCES);
+    const previous = preferencesRef.current;
+    // Defaults, but not over the operating system: someone whose OS asks for
+    // reduced motion should not get animation back from a reset.
+    setPreferences(normalizePreferences({ ...DEFAULT_PREFERENCES, ...detectSystemPreferences() }));
+    return previous;
   }, []);
 
-  const announce = useCallback((message: string, priority: 'polite' | 'assertive' = 'polite') => {
-    const announcement = document.createElement('div');
-    announcement.setAttribute('role', priority === 'assertive' ? 'alert' : 'status');
-    announcement.setAttribute('aria-live', priority);
-    announcement.setAttribute('aria-atomic', 'true');
-    announcement.className = 'sr-only';
-    announcement.textContent = message;
+  /*
+   * Two live regions that stay mounted for the provider's lifetime. A region
+   * created at the moment of the message is often missed: screen readers watch
+   * regions that exist, and a node added with its text already in place is not
+   * a change to one. Clearing first and writing on the next frame also makes a
+   * repeated message ("Saved", "Saved") a change, so it is spoken again.
+   */
+  const politeRef = useRef<HTMLDivElement>(null);
+  const assertiveRef = useRef<HTMLDivElement>(null);
 
-    document.body.appendChild(announcement);
-
-    // Remove after announcement
-    setTimeout(() => {
-      if (document.body.contains(announcement)) {
-        document.body.removeChild(announcement);
-      }
-    }, 1000);
+  const announce = useCallback((message: string, priority: AnnouncePriority = 'polite') => {
+    const region = priority === 'assertive' ? assertiveRef.current : politeRef.current;
+    if (!region) return;
+    region.textContent = '';
+    nextFrame(() => {
+      region.textContent = message;
+    });
   }, []);
 
   const shouldReduceMotion = useCallback(() => {
@@ -408,21 +380,52 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     }
   }, [preferences.fontSize]);
 
+  const value = useMemo(
+    () => ({
+      preferences,
+      updatePreference,
+      updatePreferences,
+      resetPreferences,
+      isLoading,
+      syncsToAccount: userId !== null,
+      announce,
+      shouldReduceMotion,
+      shouldUseHighContrast,
+      getFontSizeClass,
+    }),
+    [
+      preferences,
+      updatePreference,
+      updatePreferences,
+      resetPreferences,
+      isLoading,
+      userId,
+      announce,
+      shouldReduceMotion,
+      shouldUseHighContrast,
+      getFontSizeClass,
+    ]
+  );
+
   return (
-    <AccessibilityContext.Provider
-      value={{
-        preferences,
-        updatePreference,
-        updatePreferences,
-        resetPreferences,
-        isLoading,
-        announce,
-        shouldReduceMotion,
-        shouldUseHighContrast,
-        getFontSizeClass,
-      }}
-    >
+    <AccessibilityContext.Provider value={value}>
       {children}
+      <div
+        ref={politeRef}
+        id="a11y-live-polite"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      />
+      <div
+        ref={assertiveRef}
+        id="a11y-live-assertive"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+        className="sr-only"
+      />
     </AccessibilityContext.Provider>
   );
 }

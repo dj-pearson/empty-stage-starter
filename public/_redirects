@@ -43,6 +43,9 @@
 # List: DASHBOARD_REDIRECTS in src/lib/routeAliases.ts (the test pins both).
 /dashboard/analytics /dashboard/progress?section=numbers 301
 /dashboard/analytics/ /dashboard/progress?section=numbers 301
+# The accessibility page became a section of the Settings hub.
+/dashboard/accessibility-settings /dashboard/settings?section=accessibility 301
+/dashboard/accessibility-settings/ /dashboard/settings?section=accessibility 301
 
 # Handle trailing slashes consistently. The alias forms go straight to the
 # canonical target rather than chaining through a second 301.

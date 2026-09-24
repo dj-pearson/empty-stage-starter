@@ -86,7 +86,7 @@ const REASONS: Record<string, string> = {
 
   // --- download filenames: a stamp, not a key anything is looked up by
   'src/pages/Grocery.tsx': 'CSV and AnyList export filenames, stamps rather than keys.',
-  'src/pages/dashboard/AccountSettings.tsx': 'Data-export filename, a stamp rather than a key.',
+  'src/lib/accountExport.ts': 'Data-export filename stamp and exported_at timestamp; nothing reads them back as a key.',
   'src/components/LadderReportDialog.tsx': 'Report range for a printed PDF, and its filename.',
   'src/components/admin/agents/AuditTab.tsx': 'Audit CSV export filename, a stamp rather than a key.',
   'src/lib/budgetCalculator/pdfGenerator.ts': 'PDF download filename stamp; nothing reads it back.',

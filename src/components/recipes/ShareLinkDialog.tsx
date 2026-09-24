@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRecipeShareLink } from "@/hooks/useRecipeShareLink";
 import { analytics } from "@/lib/analytics";
+import { copyTextToClipboard } from "@/lib/recipeShareLinks";
 import type { Recipe } from "@/types";
 import "@/i18n/appLocale";
 
@@ -22,18 +23,6 @@ interface ShareLinkDialogProps {
   recipe: Pick<Recipe, "id" | "name">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // fall through
-  }
-  return false;
 }
 
 /** Make, copy and revoke a recipe's public link. */
@@ -44,7 +33,7 @@ export function ShareLinkDialog({ recipe, open, onOpenChange }: ShareLinkDialogP
   const { link, status, busy, ensure, revoke } = useRecipeShareLink(recipe.id, householdId, open);
 
   const copy = async (url: string) => {
-    if (await copyText(url)) {
+    if (await copyTextToClipboard(url)) {
       toast.success(t("recipes.shareLink.copied", { defaultValue: "Link copied" }));
     } else {
       toast(t("recipes.shareLink.copyManually", { defaultValue: "Copy this link:" }), { description: url });

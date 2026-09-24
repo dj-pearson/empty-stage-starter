@@ -145,9 +145,9 @@ describe('US-769: billing is reachable', () => {
     expect(billing?.requires).toBeUndefined();
   });
 
-  it('is linked from the Subscription tab', async () => {
+  it('is linked from the Plan section of the Settings hub', async () => {
     const fs = await import('fs');
-    const settings = fs.readFileSync('src/pages/dashboard/AccountSettings.tsx', 'utf8');
+    const settings = fs.readFileSync('src/components/settings/sections/PlanSection.tsx', 'utf8');
     expect(settings).toContain('/dashboard/billing');
   });
 

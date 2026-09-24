@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
 import { getPageSEO } from "@/lib/seo-config";
 import { resetConsent } from "@/lib/consent";
+import { settingsHref } from "@/lib/settingsSections";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DRAFT — COMPLIANCE AUDIT 2026-07. The GDPR, California (CCPA/CPRA), children's
@@ -259,7 +260,10 @@ const PrivacyPolicy = () => {
             </ul>
             <p className="text-muted-foreground leading-relaxed mt-4">
               You can exercise most of these rights directly in the app: go to{" "}
-              <strong>Account Settings</strong> to export your data as a file or to permanently delete your account and
+              <Link to={settingsHref("data")} className="font-semibold text-primary underline-offset-4 hover:underline">
+                Settings &gt; Your data
+              </Link>{" "}
+              to export your data as a file or to permanently delete your account and
               all associated data. You can also manage email preferences from your account. For any other request, or if
               you need help, contact us at Support@TryEatPal.com and we will respond within the timeframe required by
               applicable law. We will not discriminate against you for exercising these rights.
@@ -332,7 +336,11 @@ const PrivacyPolicy = () => {
               <strong>We do not sell your personal information, and we do not share it for cross-context behavioral
               advertising.</strong> Because we do not sell or share personal information, no "Do Not Sell or Share My
               Personal Information" opt-out is required; if that ever changes, we will provide one. You may exercise your
-              California rights in the app (Account Settings) or by contacting Support@TryEatPal.com, and you may use an
+              California rights in the app (
+              <Link to={settingsHref("data")} className="text-primary underline-offset-4 hover:underline">
+                Settings &gt; Your data
+              </Link>
+              ) or by contacting Support@TryEatPal.com, and you may use an
               authorized agent to submit a request on your behalf.
             </p>
           </section>

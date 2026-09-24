@@ -87,7 +87,6 @@ const Billing = lazy(() => import('./pages/dashboard/Billing'));
 const Household = lazy(() => import('./pages/dashboard/Household'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const AccountSettings = lazy(() => import('./pages/dashboard/AccountSettings'));
-const AccessibilitySettingsPage = lazy(() => import('./pages/dashboard/AccessibilitySettings'));
 const ApiDocs = lazy(() => import('./pages/ApiDocs'));
 const ShareTarget = lazy(() => import('./pages/ShareTarget'));
 const SharedRecipe = lazy(() => import('./pages/SharedRecipe'));
@@ -129,7 +128,7 @@ function DeferredComponents() {
     // Defer loading until after initial render and idle time
     const timeoutId = setTimeout(() => {
       if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(() => setShouldLoad(true), { timeout: 2000 });
+        window.requestIdleCallback(() => setShouldLoad(true), { timeout: 2000 });
       } else {
         setShouldLoad(true);
       }
@@ -163,6 +162,16 @@ function ReducedMotionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Toasts stay up for 12s instead of 4s when "extended timeouts" is on (WCAG
+ * 2.2.1), which is the first thing that preference actually changes. Lives
+ * under AccessibilityProvider so it can read the preference.
+ */
+function AccessibleToaster() {
+  const { preferences } = useAccessibility();
+  return <Sonner duration={preferences.extendedTimeouts ? 12000 : 4000} />;
+}
+
 const App = () => (
   <ErrorBoundary>
     <I18nextProvider i18n={i18n}>
@@ -173,7 +182,7 @@ const App = () => (
             <ReducedMotionProvider>
             <TooltipProvider>
               <AppProvider>
-                <Sonner />
+                <AccessibleToaster />
                 <BrowserRouter>
                   <SkipToContent />
                   <RouteAnnouncer />
@@ -637,14 +646,6 @@ const App = () => (
                           element={
                             <RouteErrorBoundary>
                               <AccountSettings />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                        <Route
-                          path="accessibility-settings"
-                          element={
-                            <RouteErrorBoundary>
-                              <AccessibilitySettingsPage />
                             </RouteErrorBoundary>
                           }
                         />

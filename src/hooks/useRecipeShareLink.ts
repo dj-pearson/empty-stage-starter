@@ -8,12 +8,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import { buildRecipeShareUrl, revokeRecipeShare } from "@/lib/recipeShareLinks";
 
-/** The page a share token opens. */
-export function buildRecipeShareUrl(token: string, origin?: string): string {
-  const base = origin ?? (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base}/r/${encodeURIComponent(token)}`;
-}
+export { buildRecipeShareUrl };
 
 export interface RecipeShareLink {
   id: string;
@@ -99,11 +96,7 @@ export function useRecipeShareLink(recipeId: string | null, householdId: string 
     if (!link) return true;
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from("recipe_shares")
-        .update({ revoked_at: new Date().toISOString() })
-        .eq("id", link.id);
-      if (error) throw error;
+      await revokeRecipeShare(link.id);
       setLink(null);
       return true;
     } catch (error) {

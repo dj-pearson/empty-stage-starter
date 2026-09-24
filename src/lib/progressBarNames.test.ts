@@ -61,7 +61,6 @@ const KNOWN_UNNAMED: Record<string, number> = {
   'src/components/subscription/UsageMeter.tsx': 1,
   'src/pages/Onboarding.tsx': 1,
   'src/pages/PickyEaterQuiz.tsx': 1,
-  'src/pages/dashboard/AccountSettings.tsx': 1,
   'src/pages/dashboard/Billing.tsx': 1,
 };
 

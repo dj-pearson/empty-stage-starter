@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import i18n from "@/i18n";
+import "@/i18n/appLocale";
 
 export interface EmailSubscriptions {
   welcome_emails: boolean;
@@ -22,36 +24,82 @@ export interface EmailLog {
 }
 
 /**
- * Get email subscription preferences for current user
+ * The column defaults of automation_email_subscriptions
+ * (20251010233000_email_automation.sql). A user with no row gets exactly these
+ * from the email jobs, so the screen shows them rather than an error.
  */
-export async function getEmailSubscriptions(): Promise<EmailSubscriptions | null> {
+export const DEFAULT_EMAIL_SUBSCRIPTIONS: Readonly<EmailSubscriptions> = Object.freeze({
+  welcome_emails: true,
+  milestone_emails: true,
+  weekly_summary: true,
+  tips_and_advice: true,
+  marketing_emails: false,
+});
+
+const SUBSCRIPTION_KEYS: ReadonlyArray<keyof EmailSubscriptions> = [
+  "welcome_emails",
+  "milestone_emails",
+  "weekly_summary",
+  "tips_and_advice",
+  "marketing_emails",
+];
+
+export type EmailSubscriptionsResult =
+  | { status: "ok"; prefs: EmailSubscriptions; unsubscribedAt: string | null }
+  | { status: "missing"; prefs: EmailSubscriptions; unsubscribedAt: null }
+  | { status: "error" };
+
+/**
+ * The current user's email preferences.
+ *
+ * "missing" is not a failure: the row is created on first save, and until
+ * then the column defaults are what the email jobs apply. A null column is
+ * read as its default for the same reason.
+ */
+export async function getEmailSubscriptions(): Promise<EmailSubscriptionsResult> {
   try {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return null;
+    if (!user) return { status: "error" };
 
     const { data, error } = await supabase
       .from("automation_email_subscriptions")
-      .select("welcome_emails, milestone_emails, weekly_summary, tips_and_advice, marketing_emails")
+      .select(
+        "welcome_emails, milestone_emails, weekly_summary, tips_and_advice, marketing_emails, unsubscribed_at"
+      )
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (error) {
       logger.error("Failed to fetch email subscriptions:", error);
-      return null;
+      return { status: "error" };
     }
 
-    return data as EmailSubscriptions;
+    if (!data) {
+      return { status: "missing", prefs: { ...DEFAULT_EMAIL_SUBSCRIPTIONS }, unsubscribedAt: null };
+    }
+
+    const prefs = { ...DEFAULT_EMAIL_SUBSCRIPTIONS };
+    for (const key of SUBSCRIPTION_KEYS) {
+      const value = data[key];
+      if (typeof value === "boolean") prefs[key] = value;
+    }
+    return { status: "ok", prefs, unsubscribedAt: data.unsubscribed_at ?? null };
   } catch (error) {
     logger.error("Failed to fetch email subscriptions:", error);
-    return null;
+    return { status: "error" };
   }
 }
 
 /**
- * Update email subscription preferences
+ * Save email preferences. Upserts on user_id (unique), so the first save
+ * creates the row. Switching any category on also clears unsubscribed_at: a
+ * footer "unsubscribe from all" is undone by choosing to receive something.
+ *
+ * Silent on success (the switch already shows the new state); a failure
+ * raises an error toast and returns false so the caller can revert.
  */
 export async function updateEmailSubscriptions(
   subscriptions: Partial<EmailSubscriptions>
@@ -62,31 +110,42 @@ export async function updateEmailSubscriptions(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      toast.error("Please sign in to update email preferences");
+      toast.error(
+        i18n.t("settings.prefs.email.signInToUpdate", {
+          defaultValue: "Please sign in to update email preferences",
+        })
+      );
       return false;
     }
 
-    const { error } = await supabase
-      .from("automation_email_subscriptions")
-      .upsert({
+    const turningOn = SUBSCRIPTION_KEYS.some((key) => subscriptions[key] === true);
+    const { error } = await supabase.from("automation_email_subscriptions").upsert(
+      {
         user_id: user.id,
         ...subscriptions,
-      })
-      .eq("user_id", user.id);
+        ...(turningOn ? { unsubscribed_at: null } : {}),
+      },
+      { onConflict: "user_id" }
+    );
 
     if (error) {
       logger.error("Failed to update email subscriptions:", error);
-      toast.error("Failed to update email preferences", {
-        description: error.message,
-      });
+      toast.error(
+        i18n.t("settings.prefs.email.saveFailed", {
+          defaultValue: "Couldn't save your email choice. Please try again.",
+        })
+      );
       return false;
     }
 
-    toast.success("Email preferences updated");
     return true;
   } catch (error) {
     logger.error("Failed to update email subscriptions:", error);
-    toast.error("Failed to update email preferences");
+    toast.error(
+      i18n.t("settings.prefs.email.saveFailed", {
+        defaultValue: "Couldn't save your email choice. Please try again.",
+      })
+    );
     return false;
   }
 }
@@ -152,83 +211,48 @@ export async function getEmailHistory(limit: number = 20): Promise<EmailLog[]> {
   }
 }
 
-/**
- * Manually queue a test email (for development/testing)
- */
-export async function sendTestEmail(): Promise<boolean> {
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+export type EmailStatusIcon = "CheckCircle2" | "Clock" | "AlertCircle" | "MinusCircle" | "HelpCircle";
 
-    if (!user) {
-      toast.error("Please sign in to send test email");
-      return false;
-    }
-
-    toast.info("Sending test email...");
-
-    const { error } = await supabase.rpc("queue_email", {
-      p_user_id: user.id,
-      p_template_key: "welcome",
-      p_to_email: user.email,
-      p_template_variables: {
-        user_name: "Test User",
-        app_url: window.location.origin,
-      },
-      p_priority: 10,
-    });
-
-    if (error) {
-      logger.error("Failed to send test email:", error);
-      toast.error("Failed to send test email", {
-        description: error.message,
-      });
-      return false;
-    }
-
-    toast.success("Test email queued", {
-      description: "Check your inbox in a few minutes",
-    });
-    return true;
-  } catch (error) {
-    logger.error("Failed to send test email:", error);
-    toast.error("Failed to send test email");
-    return false;
-  }
+export interface EmailStatusDisplay {
+  /** i18n key under settings.prefs.email.status. */
+  labelKey: string;
+  defaultLabel: string;
+  variant: "default" | "secondary" | "destructive" | "outline";
+  /** A lucide-react icon name; the component maps it to the icon. */
+  icon: EmailStatusIcon;
 }
 
 /**
- * Format email status with icon
+ * How an email's delivery status is shown: a Badge variant and a lucide icon,
+ * never a raw color class or a text glyph.
  */
-export function formatEmailStatus(status: string): {
-  label: string;
-  icon: string;
-  color: string;
-} {
+export function formatEmailStatus(status: string): EmailStatusDisplay {
   switch (status) {
     case "sent":
-      return { label: "Sent", icon: "✓", color: "text-green-600" };
+      return { labelKey: "settings.prefs.email.status.sent", defaultLabel: "Sent", variant: "secondary", icon: "CheckCircle2" };
     case "pending":
-      return { label: "Pending", icon: "○", color: "text-yellow-600" };
+      return { labelKey: "settings.prefs.email.status.pending", defaultLabel: "Queued", variant: "outline", icon: "Clock" };
     case "failed":
-      return { label: "Failed", icon: "✗", color: "text-red-600" };
+      return { labelKey: "settings.prefs.email.status.failed", defaultLabel: "Not delivered", variant: "destructive", icon: "AlertCircle" };
     case "cancelled":
-      return { label: "Cancelled", icon: "−", color: "text-gray-600" };
+      return { labelKey: "settings.prefs.email.status.cancelled", defaultLabel: "Cancelled", variant: "outline", icon: "MinusCircle" };
     default:
-      return { label: status, icon: "?", color: "text-gray-600" };
+      return { labelKey: "settings.prefs.email.status.unknown", defaultLabel: "Unknown", variant: "outline", icon: "HelpCircle" };
   }
 }
 
-/**
- * Get human-readable template name
- */
+/** Human-readable name for an email template key, in the current language. */
 export function formatTemplateName(templateKey: string): string {
-  const names: Record<string, string> = {
-    welcome: "Welcome Email",
-    milestone_achieved: "Milestone Achievement",
-    weekly_summary: "Weekly Summary",
-    tips_and_advice: "Tips & Advice",
-  };
-  return names[templateKey] || templateKey;
+  switch (templateKey) {
+    case "welcome":
+      return i18n.t("settings.prefs.email.templates.welcome", { defaultValue: "Welcome email" });
+    case "milestone_achieved":
+      return i18n.t("settings.prefs.email.templates.milestone", { defaultValue: "Milestone" });
+    case "weekly_summary":
+      return i18n.t("settings.prefs.email.templates.weeklySummary", { defaultValue: "Weekly summary" });
+    case "tips_and_advice":
+      return i18n.t("settings.prefs.email.templates.tips", { defaultValue: "Tips and advice" });
+    default:
+      return i18n.t("settings.prefs.email.templates.other", { defaultValue: "EatPal email" });
+  }
 }

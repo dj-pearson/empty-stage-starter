@@ -36,6 +36,15 @@ describe('the nav registry is internally consistent', () => {
     expect(routes).toEqual([...new Set(routes)]);
   });
 
+  it('has one Settings entry and no separate Accessibility page', () => {
+    // Accessibility is ?section=accessibility of the hub; its old route is a
+    // redirect (DASHBOARD_REDIRECTS), which renders no path="..." literal and
+    // so is neither an orphan nor a nav destination.
+    const settings = NAV_ITEMS.filter((item) => item.to.startsWith('/dashboard/settings'));
+    expect(settings.map((item) => [item.to, item.label])).toEqual([['/dashboard/settings', 'Settings']]);
+    expect(NAV_ITEMS.map((item) => item.to)).not.toContain('/dashboard/accessibility-settings');
+  });
+
   it('has no duplicate labels', () => {
     // Two entries reading "Account Settings" is what the hamburger shipped.
     const labels = NAV_ITEMS.map((item) => item.label);

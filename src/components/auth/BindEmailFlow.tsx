@@ -3,46 +3,135 @@
 //   2. enter the code        -> bind-email-verify edge fn (rewrites auth.users.email)
 //   3. set a password        -> supabase.auth.updateUser({ password })
 //
-// In `password-only` mode we skip directly to step 3 (Apple users whose
-// email was already real but who never set a password).
+// Modes:
+//   full           all three steps (relay address, no password)
+//   password-only  step 3 alone (real email already, never set a password)
+//   email-only     steps 1-2 alone (relay address, password already set)
+//
+// Settings pass B: the password rule is PasswordSchema (12+ with complexity),
+// the same one signup and reset enforce; the step survives a re-render in
+// sessionStorage; and onComplete fires when the user presses Done, so the
+// "All set" screen is actually seen.
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { Button } from "@/components/ui/button";
-import { LoadingButton } from "@/components/ui/loading-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { toast } from "sonner";
-import { Mail, Lock, ArrowLeft, ShieldCheck } from "lucide-react";
+import { Mail, Lock, ArrowLeft, ShieldCheck, Loader2 } from "lucide-react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { userFacingError } from "@/lib/networkFailure";
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
+import {
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_RULES_PROPS,
+  isPasswordValid,
+} from "@/lib/passwordRules";
+import "@/i18n/appLocale";
 
 type Step = "email" | "code" | "password" | "done";
+export type BindEmailFlowMode = "full" | "password-only" | "email-only";
 
 interface BindEmailFlowProps {
   initialEmail?: string;
-  mode?: "full" | "password-only";
+  mode?: BindEmailFlowMode;
+  /** Called when the user presses Done on the final step. */
   onComplete?: () => void;
+  /** Called once a code is verified and the session carries the new email. */
+  onEmailBound?: (email: string) => void;
   onCancel?: () => void;
 }
 
 const RESEND_SECONDS = 60;
+/** Scrubbed on sign-out by signOutScrub.ts (SCRUBBED_SESSION_KEYS). */
+const STEP_STORAGE_KEY = "bind-email-flow-step";
 
-export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, onCancel }: BindEmailFlowProps) {
-  const [step, setStep] = useState<Step>(mode === "password-only" ? "password" : "email");
-  const [email, setEmail] = useState(initialEmail);
+interface SavedStep {
+  mode: BindEmailFlowMode;
+  step: Step;
+  email: string;
+}
+
+const STEPS: readonly Step[] = ["email", "code", "password", "done"];
+
+function firstStep(mode: BindEmailFlowMode): Step {
+  return mode === "password-only" ? "password" : "email";
+}
+
+function readSavedStep(mode: BindEmailFlowMode): SavedStep | null {
+  try {
+    const raw = sessionStorage.getItem(STEP_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const { mode: m, step, email } = parsed as Record<string, unknown>;
+    if (m !== mode || typeof step !== "string" || typeof email !== "string") return null;
+    if (!(STEPS as readonly string[]).includes(step)) return null;
+    // A saved password step in email-only mode would be a step this mode skips.
+    if (mode === "email-only" && step === "password") return null;
+    return { mode, step: step as Step, email };
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedStep(saved: SavedStep | null): void {
+  try {
+    if (saved === null) sessionStorage.removeItem(STEP_STORAGE_KEY);
+    else sessionStorage.setItem(STEP_STORAGE_KEY, JSON.stringify(saved));
+  } catch {
+    /* private mode: the flow still works, it just does not survive a reload */
+  }
+}
+
+/** GoTrue's error code, when the error carries one. */
+function authErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+export function BindEmailFlow({
+  initialEmail = "",
+  mode = "full",
+  onComplete,
+  onEmailBound,
+  onCancel,
+}: BindEmailFlowProps) {
+  const { t } = useTranslation();
+  const [saved] = useState(() => readSavedStep(mode));
+  const [step, setStep] = useState<Step>(saved?.step ?? firstStep(mode));
+  const [email, setEmail] = useState(saved?.email || initialEmail);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [boundEmail, setBoundEmail] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion();
+  // LoadingButton's spinner ignores reduced motion and its prop is isLoading,
+  // not the loading this file passed (so it never disabled): a plain Button.
+  const spinner = loading ? (
+    <Loader2
+      className={reducedMotion ? "mr-2 h-4 w-4" : "mr-2 h-4 w-4 animate-spin"}
+      aria-hidden="true"
+    />
+  ) : null;
+
+  useEffect(() => {
+    writeSavedStep({ mode, step, email });
+  }, [mode, step, email]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
   }, [resendCooldown]);
 
   const requestCode = async (targetEmail: string, isResend = false) => {
@@ -54,12 +143,16 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
     setLoading(false);
 
     if (error || !data?.ok) {
-      toast.error(userFacingError(error, "Could not send code"));
+      toast.error(
+        userFacingError(error, t("auth.bind.sendFailed", { defaultValue: "Could not send code" }))
+      );
       return false;
     }
     setResendCooldown(RESEND_SECONDS);
     if (!isResend) setStep("code");
-    toast.success(`Code sent to ${targetEmail}`);
+    toast.success(
+      t("auth.bind.codeSent", { defaultValue: "Code sent to {{email}}", email: targetEmail })
+    );
     return true;
   };
 
@@ -67,7 +160,7 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
     e.preventDefault();
     const trimmed = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      toast.error("Enter a valid email");
+      toast.error(t("auth.bind.invalidEmail", { defaultValue: "Enter a valid email" }));
       return;
     }
     setEmail(trimmed);
@@ -82,7 +175,7 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (code.length !== 6) {
-      toast.error("Enter the 6-digit code");
+      toast.error(t("auth.bind.codeIncomplete", { defaultValue: "Enter the 6-digit code" }));
       return;
     }
     setLoading(true);
@@ -90,38 +183,85 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
       "bind-email-verify",
       { body: { code } }
     );
-    setLoading(false);
 
     if (error || !data?.ok) {
-      toast.error(userFacingError(error, "Invalid code"));
+      setLoading(false);
+      toast.error(
+        userFacingError(error, t("auth.bind.invalidCode", { defaultValue: "Invalid code" }))
+      );
       setCode("");
       return;
     }
+    // The server rewrote auth.users.email; the session in hand still carries
+    // the relay address until it is refreshed, and so would every screen
+    // reading it. A failed refresh is not fatal: the next token refresh
+    // picks it up.
+    try {
+      await supabase.auth.refreshSession();
+    } catch {
+      /* see above */
+    }
+    setLoading(false);
     setBoundEmail(data.email);
-    toast.success("Email verified", { description: `${data.email} is now your account email.` });
-    setStep("password");
+    onEmailBound?.(data.email);
+    toast.success(t("auth.bind.emailVerified", { defaultValue: "Email verified" }), {
+      description: t("auth.bind.emailVerifiedDescription", {
+        defaultValue: "{{email}} is now your account email.",
+        email: data.email,
+      }),
+    });
+    setStep(mode === "email-only" ? "done" : "password");
   };
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (!isPasswordValid(password)) {
+      setPasswordError(
+        t("auth.bind.passwordWeak", {
+          defaultValue: "Your password doesn't meet every rule in the list yet.",
+        })
+      );
       return;
     }
     if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
+      setPasswordError(t("auth.bind.passwordMismatch", { defaultValue: "Passwords do not match" }));
       return;
     }
+    setPasswordError(null);
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
 
     if (error) {
-      toast.error(userFacingError(error, "Could not update your email. Please try again."));
+      const code = authErrorCode(error);
+      const message =
+        code === "weak_password"
+          ? t("auth.bind.passwordRejectedWeak", {
+              defaultValue: "That password was rejected as too easy to guess. Try a longer one.",
+            })
+          : code === "same_password"
+            ? t("auth.bind.passwordSame", {
+                defaultValue: "That is already your password. Choose a different one.",
+              })
+            : userFacingError(
+                error,
+                t("auth.bind.passwordFailed", {
+                  defaultValue: "Could not set your password. Please try again.",
+                })
+              );
+      setPasswordError(message);
       return;
     }
-    toast.success("Password set", { description: "You can now sign in with email and password." });
+    toast.success(t("auth.bind.passwordSet", { defaultValue: "Password set" }), {
+      description: t("auth.bind.passwordSetDescription", {
+        defaultValue: "You can now sign in with email and password.",
+      }),
+    });
     setStep("done");
+  };
+
+  const handleDone = () => {
+    writeSavedStep(null);
     onComplete?.();
   };
 
@@ -129,34 +269,48 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
     return (
       <form onSubmit={handleSubmitEmail} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="bind-email">Real email address</Label>
+          <Label htmlFor="bind-email">
+            {t("auth.bind.emailLabel", { defaultValue: "Real email address" })}
+          </Label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Mail
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              aria-hidden="true"
+            />
             <Input
               id="bind-email"
               type="email"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t("auth.bind.emailPlaceholder", { defaultValue: "you@example.com" })}
               className="pl-9"
+              aria-describedby="bind-email-hint"
               required
-              autoFocus
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            We'll send a 6-digit code to confirm this address. After that you can set a password and sign in either with Apple or your email.
+          <p id="bind-email-hint" className="text-xs text-muted-foreground">
+            {mode === "email-only"
+              ? t("auth.bind.emailHintEmailOnly", {
+                  defaultValue:
+                    "We'll send a 6-digit code to confirm this address. Your password stays the same.",
+                })
+              : t("auth.bind.emailHint", {
+                  defaultValue:
+                    "We'll send a 6-digit code to confirm this address. After that you can set a password and sign in either with Apple or your email.",
+                })}
           </p>
         </div>
         <div className="flex gap-2">
           {onCancel && (
             <Button type="button" variant="ghost" onClick={onCancel}>
-              Cancel
+              {t("auth.bind.cancel", { defaultValue: "Cancel" })}
             </Button>
           )}
-          <LoadingButton type="submit" loading={loading} className="flex-1">
-            Send verification code
-          </LoadingButton>
+          <Button type="submit" disabled={loading} className="flex-1" aria-busy={loading || undefined}>
+            {spinner}
+            {t("auth.bind.sendCode", { defaultValue: "Send verification code" })}
+          </Button>
         </div>
       </form>
     );
@@ -165,12 +319,21 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
   if (step === "code") {
     return (
       <form onSubmit={handleVerifyCode} className="space-y-4">
-        <div className="space-y-2">
-          <Label>Enter the 6-digit code we sent to</Label>
-          <p className="text-sm font-medium">{email}</p>
+        <div className="space-y-1">
+          <Label htmlFor="bind-code">
+            {t("auth.bind.codeLabel", { defaultValue: "Enter the 6-digit code we sent to" })}
+          </Label>
+          <p className="text-sm font-medium break-all">{email}</p>
         </div>
         <div className="flex justify-center py-2">
-          <InputOTP maxLength={6} value={code} onChange={setCode}>
+          <InputOTP
+            id="bind-code"
+            maxLength={6}
+            value={code}
+            onChange={setCode}
+            autoComplete="one-time-code"
+            aria-label={t("auth.bind.codeAriaLabel", { defaultValue: "6-digit verification code" })}
+          >
             <InputOTPGroup>
               <InputOTPSlot index={0} />
               <InputOTPSlot index={1} />
@@ -186,9 +349,13 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
             type="button"
             variant="link"
             className="h-auto p-0"
-            onClick={() => { setStep("email"); setCode(""); }}
+            onClick={() => {
+              setStep("email");
+              setCode("");
+            }}
           >
-            <ArrowLeft className="h-3 w-3 mr-1" /> Use different email
+            <ArrowLeft className="h-3 w-3 mr-1" aria-hidden="true" />
+            {t("auth.bind.useDifferentEmail", { defaultValue: "Use different email" })}
           </Button>
           <Button
             type="button"
@@ -197,76 +364,119 @@ export function BindEmailFlow({ initialEmail = "", mode = "full", onComplete, on
             disabled={resendCooldown > 0 || loading}
             onClick={handleResend}
           >
-            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+            {resendCooldown > 0
+              ? t("auth.bind.resendIn", {
+                  defaultValue: "Resend in {{seconds}}s",
+                  seconds: resendCooldown,
+                })
+              : t("auth.bind.resend", { defaultValue: "Resend code" })}
           </Button>
         </div>
-        <LoadingButton type="submit" loading={loading} disabled={code.length !== 6} className="w-full">
-          Verify code
-        </LoadingButton>
+        <Button
+          type="submit"
+          disabled={loading || code.length !== 6}
+          className="w-full"
+          aria-busy={loading || undefined}
+        >
+          {spinner}
+          {t("auth.bind.verifyCode", { defaultValue: "Verify code" })}
+        </Button>
       </form>
     );
   }
 
   if (step === "password") {
     return (
-      <form onSubmit={handleSetPassword} className="space-y-4">
+      <form onSubmit={handleSetPassword} className="space-y-4" noValidate>
         {boundEmail && (
-          <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md text-sm">
-            <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-green-900 dark:text-green-100">Email confirmed</p>
-              <p className="text-green-700 dark:text-green-300">{boundEmail}</p>
-            </div>
-          </div>
+          <Alert>
+            <ShieldCheck className="h-4 w-4 text-success" aria-hidden="true" />
+            <AlertTitle>
+              {t("auth.bind.emailConfirmed", { defaultValue: "Email confirmed" })}
+            </AlertTitle>
+            <AlertDescription className="break-all">{boundEmail}</AlertDescription>
+          </Alert>
         )}
         <div className="space-y-2">
-          <Label htmlFor="bind-password">Set a password</Label>
+          <Label htmlFor="bind-password">
+            {t("auth.bind.passwordLabel", { defaultValue: "Set a password" })}
+          </Label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Lock
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              aria-hidden="true"
+            />
             <Input
               id="bind-password"
               type="password"
               autoComplete="new-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setPasswordError(null);
+              }}
               className="pl-9"
-              minLength={8}
+              minLength={PASSWORD_MIN_LENGTH}
+              {...PASSWORD_RULES_PROPS}
+              aria-describedby="bind-password-rules"
+              aria-invalid={passwordError !== null || undefined}
               required
-              autoFocus
             />
           </div>
+          <PasswordRequirements id="bind-password-rules" value={password} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="bind-password-confirm">Confirm password</Label>
+          <Label htmlFor="bind-password-confirm">
+            {t("auth.bind.confirmLabel", { defaultValue: "Confirm password" })}
+          </Label>
           <Input
             id="bind-password-confirm"
             type="password"
             autoComplete="new-password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repeat password"
-            minLength={8}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              setPasswordError(null);
+            }}
+            minLength={PASSWORD_MIN_LENGTH}
             required
           />
         </div>
-        <p className="text-xs text-muted-foreground">
-          Once set, you can sign in with email + password or continue using Apple — both will work.
+        <p role="alert" className="text-sm text-destructive empty:hidden">
+          {passwordError ?? ""}
         </p>
-        <LoadingButton type="submit" loading={loading} className="w-full">
-          Set password
-        </LoadingButton>
+        <p className="text-xs text-muted-foreground">
+          {t("auth.bind.bothWork", {
+            defaultValue:
+              "Once set, you can sign in with email and password or keep using Apple. Both will work.",
+          })}
+        </p>
+        <Button type="submit" disabled={loading} className="w-full" aria-busy={loading || undefined}>
+          {spinner}
+          {t("auth.bind.setPassword", { defaultValue: "Set password" })}
+        </Button>
       </form>
     );
   }
 
   return (
     <div className="space-y-3 text-center py-4">
-      <ShieldCheck className="h-10 w-10 text-green-600 mx-auto" />
-      <h3 className="font-semibold">All set</h3>
+      <ShieldCheck className="h-10 w-10 text-success mx-auto" aria-hidden="true" />
+      <h3 className="font-semibold">{t("auth.bind.allSet", { defaultValue: "All set" })}</h3>
       <p className="text-sm text-muted-foreground">
-        Your account email and password are now bound. Sign in with Apple or email/password.
+        {mode === "email-only"
+          ? t("auth.bind.allSetEmailOnly", {
+              defaultValue:
+                "Your account email is updated. Sign in with Apple or with this email and your password.",
+            })
+          : t("auth.bind.allSetBody", {
+              defaultValue:
+                "Your account email and password are set. Sign in with Apple or with email and password.",
+            })}
       </p>
+      <Button type="button" onClick={handleDone}>
+        {t("auth.bind.done", { defaultValue: "Done" })}
+      </Button>
     </div>
   );
 }

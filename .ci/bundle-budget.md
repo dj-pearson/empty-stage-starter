@@ -380,3 +380,12 @@ added about 10 kB gz after its duplicated defaultValue strings were
 removed; measured total 2754.8 kB, 0.2 kB under the old ceiling, which
 per-build variation (the injected release id) could cross. Eager
 unchanged at 316.1 kB.
+
+## 2026-09-24: `totalJs` 2770000 -> 2805000 (Settings hub)
+
+Owner-approved raise for route-only growth. The 5-tab AccountSettings
+monolith and the separate accessibility page became one sectioned hub
+(profile, sign-in, privacy, notifications, planner, accessibility, plan,
+data) with per-section components, a household-aware delete dialog, a
+per-table export manifest and a quick-comfort row. Eager unchanged.
+Measured total 2793.0 kB.

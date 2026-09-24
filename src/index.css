@@ -795,15 +795,20 @@ All colors MUST be HSL.
 /* =================================================================
    SIMPLIFIED UI (reduce visual complexity)
    ================================================================= */
-.simplified-ui .decorative,
-.simplified-ui [data-decorative="true"] {
-  display: none !important;
+/* A flatter look: shadows and gradients go, nothing is hidden. The old rule
+   set background-image: none on every element, which also removed photos,
+   icons and checkmarks drawn as background images. Only gradient utilities
+   are flattened now. */
+.simplified-ui [class*="shadow"] {
+  /* Tailwind composes shadow-* and ring-* into one box-shadow; zeroing only
+     the shadow part keeps focus rings, which are not decoration. */
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-shadow-colored: 0 0 #0000 !important;
+  --tw-drop-shadow: drop-shadow(0 0 #0000) !important;
 }
 
-.simplified-ui * {
-  box-shadow: none !important;
+.simplified-ui [class*="bg-gradient"] {
   background-image: none !important;
-  text-shadow: none !important;
 }
 
 /* =================================================================
@@ -836,28 +841,32 @@ All colors MUST be HSL.
 /* =================================================================
    DYSLEXIA-FRIENDLY FONT
    ================================================================= */
+/* Font and spacing for text, not for code or icons: code, kbd and pre keep
+   their monospace so columns still line up, and svg keeps its metrics. Line
+   height is set on text blocks only; putting it on every element stretched
+   buttons, badges and inputs out of shape. */
 .dyslexia-font,
-.dyslexia-font * {
+.dyslexia-font *:not(code):not(kbd):not(pre):not(svg):not(svg *) {
   font-family: "OpenDyslexic", "Comic Sans MS", "Arial", sans-serif !important;
   letter-spacing: 0.05em !important;
   word-spacing: 0.1em !important;
+}
+
+.dyslexia-font body,
+.dyslexia-font p,
+.dyslexia-font li,
+.dyslexia-font label,
+.dyslexia-font dd {
   line-height: 1.8 !important;
 }
 
 /* =================================================================
-   SCREEN READER OPTIMIZED MODE
+   SCREEN READER MODE
+   No CSS. This used to hide every [aria-hidden="true"] element, which is
+   every icon, and aria-hidden already keeps those from a screen reader, so
+   the rule only blanked the screen for sighted users. The preference now
+   moves focus to the page heading on navigation (RouteAnnouncer).
    ================================================================= */
-.screen-reader-optimized {
-  /* Ensure all decorative elements are hidden */
-}
-
-.screen-reader-optimized [aria-hidden="true"] {
-  display: none !important;
-}
-
-.screen-reader-optimized .decorative {
-  display: none !important;
-}
 
 /* =================================================================
    SKIP LINK STYLES

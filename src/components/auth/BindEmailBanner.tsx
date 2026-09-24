@@ -1,6 +1,6 @@
 // Dashboard banner that nudges Apple-relay (or password-less Apple) users
 // to bind a real email + set a password. Dismissable per session; the user
-// can always finish the flow from Account Settings.
+// can always finish the flow from Settings > Sign-in and security.
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useBindStatus } from "@/hooks/useBindStatus";
 import { BindEmailFlow } from "@/components/auth/BindEmailFlow";
 import { Mail, X } from "lucide-react";
+import { settingsHref } from "@/lib/settingsSections";
 
 const DISMISS_KEY = "bind-email-banner-dismissed";
 
@@ -75,9 +76,9 @@ export function BindEmailBanner() {
           <Button
             variant="link"
             className="text-xs h-auto p-0 self-end"
-            onClick={() => { setOpen(false); navigate("/dashboard/settings"); }}
+            onClick={() => { setOpen(false); navigate(settingsHref("signin")); }}
           >
-            Manage in Account Settings
+            Manage in Settings
           </Button>
         </DialogContent>
       </Dialog>

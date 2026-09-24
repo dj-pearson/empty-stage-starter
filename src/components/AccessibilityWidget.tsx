@@ -1,13 +1,49 @@
-import { useState, useCallback, useRef } from 'react';
+import '@/i18n/appLocale';
+import { useState, useCallback, useRef, useId } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Accessibility, X, Settings, Eye, Type, MousePointer, Volume2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Accessibility, X, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { useAccessibility } from '@/contexts/AccessibilityContext';
+import { useAccessibility, type AccessibilityPreferences } from '@/contexts/AccessibilityContext';
 import { useFocusTrap } from '@/components/SkipToContent';
+import { A11yTextSizeToggle } from '@/components/settings/A11yTextSizeToggle';
+import { settingsHref } from '@/lib/settingsSections';
 import { cn } from '@/lib/utils';
+
+type BooleanKey = {
+  [K in keyof AccessibilityPreferences]: AccessibilityPreferences[K] extends boolean ? K : never;
+}[keyof AccessibilityPreferences];
+
+interface QuickSwitch {
+  key: BooleanKey;
+  id: string;
+  /** i18n key under settings.a11y, and its English default. */
+  labelKey: string;
+  label: string;
+}
+
+const SEEING: ReadonlyArray<QuickSwitch> = [
+  { key: 'highContrast', id: 'a11y-high-contrast', labelKey: 'highContrast', label: 'High contrast' },
+  { key: 'dyslexiaFont', id: 'a11y-dyslexia-font', labelKey: 'dyslexiaFont', label: 'Easier-to-read font' },
+];
+
+const MOTION: ReadonlyArray<QuickSwitch> = [
+  { key: 'reducedMotion', id: 'a11y-reduced-motion', labelKey: 'reducedMotion', label: 'Reduce motion' },
+];
+
+const KEYBOARD: ReadonlyArray<QuickSwitch> = [
+  { key: 'enhancedFocus', id: 'a11y-enhanced-focus', labelKey: 'enhancedFocus', label: 'Clearer focus outlines' },
+  { key: 'keyboardShortcuts', id: 'a11y-keyboard-shortcuts', labelKey: 'keyboardShortcuts', label: 'Single-key shortcuts' },
+  {
+    key: 'screenReaderMode',
+    id: 'a11y-screen-reader',
+    labelKey: 'screenReaderMode',
+    label: 'Move focus to the page heading on navigation',
+  },
+];
 
 /**
  * Floating Accessibility Widget
@@ -18,16 +54,19 @@ import { cn } from '@/lib/utils';
  *
  * Features:
  * - Floating button always visible (bottom-left, avoids conflict with FAB)
- * - Quick toggles for most-used settings
- * - Link to full accessibility settings page
+ * - Quick toggles for most-used settings, and the same A / A+ / A++ text
+ *   size control the settings page uses
+ * - Link to the Accessibility section of the settings hub
  * - Keyboard accessible (Escape to close, Tab navigation)
  * - Screen reader announcements for state changes
  */
 export function AccessibilityWidget() {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const { preferences, updatePreference, announce } = useAccessibility();
   const navigate = useNavigate();
   const location = useLocation();
+  const sizeLabelId = useId();
 
   // Focus management: trap focus within the panel while open, and restore focus
   // to the trigger button on close (WCAG 2.4.3 Focus Order).
@@ -35,42 +74,80 @@ export function AccessibilityWidget() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   useFocusTrap(panelRef, isOpen);
 
+  const openedText = t('settings.a11y.widget.opened', { defaultValue: 'Accessibility settings panel opened' });
+  const closedText = t('settings.a11y.widget.closed', { defaultValue: 'Accessibility settings panel closed' });
+
   const togglePanel = useCallback(() => {
-    setIsOpen(prev => {
+    setIsOpen((prev) => {
       const next = !prev;
-      announce(next ? 'Accessibility settings panel opened' : 'Accessibility settings panel closed', 'polite');
+      announce(next ? openedText : closedText, 'polite');
       return next;
     });
-  }, [announce]);
+  }, [announce, openedText, closedText]);
 
   const handleClose = useCallback(() => {
     setIsOpen(false);
-    announce('Accessibility settings panel closed', 'polite');
+    announce(closedText, 'polite');
     // Return focus to the trigger so keyboard users aren't dropped at the top.
     triggerRef.current?.focus();
-  }, [announce]);
+  }, [announce, closedText]);
 
-  const handleToggle = useCallback((key: keyof typeof preferences, label: string) => {
-    const newValue = !preferences[key];
-    updatePreference(key, newValue as never);
-    announce(`${label} ${newValue ? 'enabled' : 'disabled'}`, 'polite');
-  }, [preferences, updatePreference, announce]);
+  const handleToggle = useCallback(
+    (key: BooleanKey, checked: boolean, label: string) => {
+      updatePreference(key, checked);
+      announce(
+        t('settings.a11y.announce.toggled', {
+          defaultValue: '{{label}} {{state}}',
+          label,
+          state: checked
+            ? t('settings.a11y.state.on', { defaultValue: 'on' })
+            : t('settings.a11y.state.off', { defaultValue: 'off' }),
+        }),
+        'polite'
+      );
+    },
+    [updatePreference, announce, t]
+  );
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      handleClose();
-    }
-  }, [handleClose]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    },
+    [handleClose]
+  );
 
   const goToFullSettings = useCallback(() => {
     handleClose();
-    // Navigate to dashboard settings if authenticated, otherwise to public accessibility page
+    // Inside the app, the settings hub's Accessibility section. On public
+    // pages there may be no session, so the public statement page instead.
     if (location.pathname.startsWith('/dashboard')) {
-      navigate('/dashboard/accessibility-settings');
+      navigate(settingsHref('accessibility'));
     } else {
       navigate('/accessibility');
     }
   }, [navigate, location.pathname, handleClose]);
+
+  const closeLabel = t('settings.a11y.widget.close', { defaultValue: 'Close accessibility settings' });
+
+  const renderSwitch = (item: QuickSwitch) => {
+    const label = t(`settings.a11y.${item.labelKey}.label`, { defaultValue: item.label });
+    return (
+      <div key={item.key} className="flex min-h-11 items-center justify-between gap-3">
+        <Label htmlFor={item.id} className="cursor-pointer text-sm leading-snug">
+          {label}
+        </Label>
+        <Switch
+          id={item.id}
+          checked={preferences[item.key]}
+          onCheckedChange={(checked) => handleToggle(item.key, checked, label)}
+        />
+      </div>
+    );
+  };
+
+  const groupHeading = (text: string) => <h3 className="mb-2 text-sm font-medium">{text}</h3>;
 
   return (
     <>
@@ -87,7 +164,7 @@ export function AccessibilityWidget() {
           'transition-transform active:scale-95',
           isOpen && 'ring-2 ring-ring ring-offset-2'
         )}
-        aria-label={isOpen ? 'Close accessibility settings' : 'Open accessibility settings'}
+        aria-label={isOpen ? closeLabel : t('settings.a11y.widget.open', { defaultValue: 'Open accessibility settings' })}
         aria-expanded={isOpen}
         aria-controls="accessibility-widget-panel"
       >
@@ -99,7 +176,7 @@ export function AccessibilityWidget() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-50 bg-black/20"
+            className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm"
             onClick={handleClose}
             aria-hidden="true"
           />
@@ -109,13 +186,13 @@ export function AccessibilityWidget() {
             ref={panelRef}
             id="accessibility-widget-panel"
             role="dialog"
-            aria-label="Quick accessibility settings"
+            aria-label={t('settings.a11y.widget.dialogLabel', { defaultValue: 'Quick accessibility settings' })}
             aria-modal="true"
             onKeyDown={handleKeyDown}
             className={cn(
               'fixed bottom-36 left-4 z-50 md:bottom-20',
               'w-[calc(100vw-2rem)] max-w-sm',
-              'bg-card border border-border rounded-xl shadow-xl',
+              'bg-card border border-border rounded-xl',
               'overflow-hidden'
             )}
           >
@@ -123,138 +200,50 @@ export function AccessibilityWidget() {
             <div className="flex items-center justify-between p-4 border-b">
               <div className="flex items-center gap-2">
                 <Accessibility className="h-5 w-5 text-primary" aria-hidden="true" />
-                <h2 className="font-semibold text-base">Accessibility</h2>
+                <h2 className="font-semibold text-base">
+                  {t('settings.a11y.widget.title', { defaultValue: 'Accessibility' })}
+                </h2>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                aria-label="Close accessibility settings"
-                className="h-8 w-8"
-              >
+              <Button variant="ghost" size="icon" onClick={handleClose} aria-label={closeLabel} className="h-11 w-11">
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
 
             {/* Quick Settings */}
             <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-              {/* Visual Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Eye className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Visual</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="a11y-high-contrast" className="text-sm cursor-pointer">
-                      High Contrast
-                    </Label>
-                    <Switch
-                      id="a11y-high-contrast"
-                      checked={preferences.highContrast}
-                      onCheckedChange={() => handleToggle('highContrast', 'High contrast')}
-                    />
+              <section>
+                {groupHeading(t('settings.a11y.widget.seeing', { defaultValue: 'Seeing and reading' }))}
+                <div className="space-y-2">
+                  <div className="space-y-2">
+                    <span id={sizeLabelId} className="text-sm">
+                      {t('settings.a11y.textSize.label', { defaultValue: 'Text size' })}
+                    </span>
+                    <A11yTextSizeToggle id="a11y-font-size" labelledBy={sizeLabelId} />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="a11y-large-text" className="text-sm cursor-pointer">
-                      Large Text
-                    </Label>
-                    <Switch
-                      id="a11y-large-text"
-                      checked={preferences.largeText}
-                      onCheckedChange={() => handleToggle('largeText', 'Large text')}
-                    />
-                  </div>
+                  {SEEING.map(renderSwitch)}
                 </div>
-              </div>
+              </section>
 
               <Separator />
 
-              {/* Motion Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <MousePointer className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Motion</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="a11y-reduced-motion" className="text-sm cursor-pointer">
-                      Reduce Motion
-                    </Label>
-                    <Switch
-                      id="a11y-reduced-motion"
-                      checked={preferences.reducedMotion}
-                      onCheckedChange={() => handleToggle('reducedMotion', 'Reduced motion')}
-                    />
-                  </div>
-                </div>
-              </div>
+              <section>
+                {groupHeading(t('settings.a11y.widget.motion', { defaultValue: 'Motion' }))}
+                <div className="space-y-2">{MOTION.map(renderSwitch)}</div>
+              </section>
 
               <Separator />
 
-              {/* Keyboard & Focus Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Type className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Keyboard & Focus</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="a11y-enhanced-focus" className="text-sm cursor-pointer">
-                      Enhanced Focus Indicators
-                    </Label>
-                    <Switch
-                      id="a11y-enhanced-focus"
-                      checked={preferences.enhancedFocus}
-                      onCheckedChange={() => handleToggle('enhancedFocus', 'Enhanced focus indicators')}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="a11y-keyboard-shortcuts" className="text-sm cursor-pointer">
-                      Keyboard Shortcuts
-                    </Label>
-                    <Switch
-                      id="a11y-keyboard-shortcuts"
-                      checked={preferences.keyboardShortcuts}
-                      onCheckedChange={() => handleToggle('keyboardShortcuts', 'Keyboard shortcuts')}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Screen Reader Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Volume2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Screen Reader</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="a11y-screen-reader" className="text-sm cursor-pointer">
-                      Screen Reader Mode
-                    </Label>
-                    <Switch
-                      id="a11y-screen-reader"
-                      checked={preferences.screenReaderMode}
-                      onCheckedChange={() => handleToggle('screenReaderMode', 'Screen reader mode')}
-                    />
-                  </div>
-                </div>
-              </div>
+              <section>
+                {groupHeading(t('settings.a11y.widget.keyboard', { defaultValue: 'Keyboard and focus' }))}
+                <div className="space-y-2">{KEYBOARD.map(renderSwitch)}</div>
+              </section>
             </div>
 
             {/* Footer */}
             <div className="p-4 border-t bg-muted/50">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={goToFullSettings}
-              >
+              <Button variant="outline" size="sm" className="w-full min-h-11" onClick={goToFullSettings}>
                 <Settings className="h-4 w-4 mr-2" aria-hidden="true" />
-                All Accessibility Settings
+                {t('settings.a11y.widget.all', { defaultValue: 'All accessibility settings' })}
               </Button>
             </div>
           </div>

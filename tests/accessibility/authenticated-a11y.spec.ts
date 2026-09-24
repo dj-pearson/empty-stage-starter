@@ -37,6 +37,32 @@ const AUTHENTICATED_ROUTES = [
 ] as const;
 
 /**
+ * Every Settings hub section, at a phone and a desktop width. The hub mounts
+ * only the active section, so scanning /dashboard/settings alone would only
+ * ever see Profile (desktop) or the index (phone). A section missing from the
+ * baseline file is held at zero. Mirrors SETTINGS_SECTION_KEYS.
+ */
+const SETTINGS_SECTION_KEYS = [
+  'profile',
+  'signin',
+  'privacy',
+  'notifications',
+  'planner',
+  'accessibility',
+  'plan',
+  'data',
+] as const;
+const SETTINGS_VIEWPORTS = [
+  ['phone', { width: 390, height: 844 }],
+  ['desktop', { width: 1280, height: 800 }],
+] as const;
+const SETTINGS_SECTION_ROUTES = SETTINGS_VIEWPORTS.flatMap(([label, viewport]) =>
+  SETTINGS_SECTION_KEYS.map(
+    (key) => [`/dashboard/settings?section=${key}`, `settings-${key}-${label}`, viewport] as const
+  )
+);
+
+/**
  * Known violation counts, per route, as measured on the day this landed.
  *
  * A budget rather than zero, for the same reason the lint and typecheck gates
@@ -50,9 +76,16 @@ const AUTHENTICATED_ROUTES = [
  */
 const BASELINE_PATH = 'tests/accessibility/authenticated-baseline.json';
 
+type Viewport = { width: number; height: number };
+const SCANS: ReadonlyArray<readonly [string, string, Viewport | null]> = [
+  ...AUTHENTICATED_ROUTES.map(([route, name]) => [route, name, null] as const),
+  ...SETTINGS_SECTION_ROUTES,
+];
+
 test.describe('Accessibility - authenticated pages', () => {
-  for (const [route, name] of AUTHENTICATED_ROUTES) {
+  for (const [route, name, viewport] of SCANS) {
     test(`${name} has no new serious or critical violations`, async ({ page, context }) => {
+      if (viewport) await page.setViewportSize(viewport);
       await signIn(context);
       await page.goto(route);
 

@@ -21,9 +21,23 @@
  * animation on the page keeps running. That cell exists; this file is what
  * keeps it existing.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createElement, type ReactNode } from 'react';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { AccessibilityProvider, useAccessibility } from '@/contexts/AccessibilityContext';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn(async () => ({ data: { session: null } })),
+      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+    },
+    from: vi.fn(),
+  },
+}));
 
 const ROOT = process.cwd();
 const read = (...parts: string[]) => readFileSync(join(ROOT, ...parts), 'utf8');
@@ -130,8 +144,10 @@ describe('US-839: CSS is gated for both switches', () => {
   });
 
   it('AccessibilityContext is what puts that class on the document', () => {
-    expect(context).toMatch(/classList\.add\('reduce-motion'\)/);
-    expect(context).toMatch(/classList\.remove\('reduce-motion'\)/);
+    // The class is toggled from a preference -> class table, so the pair must
+    // appear together and the table must be what drives classList.toggle.
+    expect(context).toMatch(/\['reducedMotion', 'reduce-motion'\]/);
+    expect(context).toMatch(/classList\.toggle\(className, preferences\[key\] === true\)/);
   });
 });
 
@@ -174,5 +190,32 @@ describe('US-839: the instrument', () => {
       [...stripCssComments(read(sheet)).matchAll(/animation:[^;]*\binfinite\b/g)].map((m) => m[0])
     );
     expect(infinite.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('useReducedMotion honors the in-app toggle, not only the OS', () => {
+  const wrapper = ({ children }: { children: ReactNode }) => createElement(AccessibilityProvider, null, children);
+
+  it('returns true when the OS says no but the provider says reduce', async () => {
+    // setup.ts stubs matchMedia to matches: false for every query.
+    expect(window.matchMedia('(prefers-reduced-motion: reduce)').matches).toBe(false);
+
+    const { result } = renderHook(
+      () => ({ reduce: useReducedMotion(), a11y: useAccessibility() }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.a11y.isLoading).toBe(false));
+    expect(result.current.reduce).toBe(false);
+
+    act(() => result.current.a11y.updatePreference('reducedMotion', true));
+    expect(result.current.reduce).toBe(true);
+
+    act(() => result.current.a11y.updatePreference('reducedMotion', false));
+    expect(result.current.reduce).toBe(false);
+  });
+
+  it('does not throw outside the provider, and falls back to the OS answer', () => {
+    const { result } = renderHook(() => useReducedMotion());
+    expect(result.current).toBe(false);
   });
 });

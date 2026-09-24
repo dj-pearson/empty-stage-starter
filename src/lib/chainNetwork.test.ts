@@ -1,8 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const rpc = vi.fn();
+const shareChainRows = vi.hoisted(() => new Map<string, boolean>());
 vi.mock('@/integrations/supabase/client', () => ({
-  supabase: { rpc: (...args: unknown[]) => rpc(...args) },
+  supabase: {
+    rpc: (...args: unknown[]) => rpc(...args),
+    // picky_win_preferences (shareChainPref), plus the two lookups a
+    // contribution makes: which foods bridge to the target, and their names.
+    from: (table: string) => ({
+      select: () => ({
+        eq: (_col: string, value: string) => {
+          if (table === 'food_chain_suggestions') {
+            return Promise.resolve({ data: [{ source_food_id: 'src1' }], error: null });
+          }
+          return {
+            maybeSingle: async () => ({
+              data: shareChainRows.has(value) ? { share_chain_outcomes: shareChainRows.get(value) } : null,
+              error: null,
+            }),
+          };
+        },
+        in: async () => ({ data: [{ id: 'src1', name: 'Crackers' }], error: null }),
+      }),
+    }),
+  },
 }));
 
 import {
@@ -15,8 +36,10 @@ import {
   filterNetworkTargetsForKid,
   mergeNetworkTargetsByFood,
   wilsonLowerBound,
+  recordContributionsFromAttempt,
   type ChainNetworkTarget,
 } from './chainNetwork';
+import { adoptShareChainUser, loadShareChainPref, resetShareChainPrefForTests } from './shareChainPref';
 import type { Food } from '@/types';
 
 function target(over: Partial<ChainNetworkTarget> & { targetFoodKey: string }): ChainNetworkTarget {
@@ -285,5 +308,37 @@ describe('fetchTopChainNetworkTargets', () => {
     const again = await fetchTopChainNetworkTargets('pasta', 'high', 25);
     expect(again.ok).toBe(true);
     expect(rpc).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('recordContributionsFromAttempt opt-in', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    resetShareChainPrefForTests();
+    localStorage.clear();
+  });
+
+  const attempt = { id: 'a1', food_id: 'f1', outcome: 'success', kid_id: null };
+
+  it('contributes nothing while the preference has not loaded', async () => {
+    localStorage.setItem('eatpal.share_chain_outcomes', JSON.stringify({ u: 'u1', v: true }));
+    adoptShareChainUser('u1');
+    expect(await recordContributionsFromAttempt(attempt, { pickinessLevel: null, foodName: 'Toast' })).toBe(0);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('contributes nothing when the loaded value is false', async () => {
+    shareChainRows.set('u1', false);
+    await loadShareChainPref('u1');
+    expect(await recordContributionsFromAttempt(attempt, { pickinessLevel: null, foodName: 'Toast' })).toBe(0);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('contributes once the server says yes (instrument check)', async () => {
+    rpc.mockResolvedValue({ data: true, error: null });
+    shareChainRows.set('u1', true);
+    await loadShareChainPref('u1');
+    await recordContributionsFromAttempt(attempt, { pickinessLevel: null, foodName: 'Toast' });
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

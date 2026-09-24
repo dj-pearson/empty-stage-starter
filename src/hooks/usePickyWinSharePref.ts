@@ -1,34 +1,66 @@
-import { useCallback } from 'react';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/contexts/AuthContext';
 import { analytics } from '@/lib/analytics';
+import {
+  adoptShareChainUser,
+  getShareChainState,
+  loadShareChainPref,
+  setShareChainPref,
+  subscribeShareChain,
+} from '@/lib/shareChainPref';
+import '@/i18n/appLocale';
 
 /**
- * US-296: "Share my food-chain outcomes anonymously" user preference.
+ * US-296: "Share my food-chain outcomes anonymously", bound to React.
  *
- * Default ON per AC — most users benefit from the aggregate community
- * wins, and the share is anonymous (server scrubs identifiers). Users
- * who explicitly opt out via the toggle in Account → Notifications stop
- * contributing to the aggregate but can still SEE other families' wins
- * if the `picky_win_network` feature flag is on.
+ * The value lives in picky_win_preferences (see src/lib/shareChainPref.ts);
+ * this hook adopts the signed-in user, loads their row once, and saves on
+ * toggle. `enabled` paints from the device cache until `loaded`; nothing is
+ * contributed before then (chainNetwork checks the store, not this value).
  *
- * Persisted client-side; cross-device sync lands when the typed
- * `user_preferences.share_chain_outcomes` column is exposed.
+ * Public shape kept for LadderOverview and FoodLadderBoard: { enabled,
+ * setEnabled }, plus { pending, loaded } for the Settings switch.
  */
-const SHARE_KEY = 'eatpal.share_chain_outcomes';
-
 export function usePickyWinSharePref(): {
   enabled: boolean;
   setEnabled: (next: boolean) => void;
+  pending: boolean;
+  loaded: boolean;
 } {
-  const [enabled, setStored] = useLocalStorage<boolean>(SHARE_KEY, true);
+  const { t } = useTranslation();
+  const { userId } = useAuth();
+  const state = useSyncExternalStore(subscribeShareChain, getShareChainState, getShareChainState);
+
+  useEffect(() => {
+    adoptShareChainUser(userId);
+    if (userId) void loadShareChainPref(userId);
+  }, [userId]);
 
   const setEnabled = useCallback(
     (next: boolean) => {
-      setStored(next);
-      analytics.trackEvent('picky_win_outcome_shared', { enabled: next });
+      if (!userId) return;
+      void setShareChainPref(userId, next).then(({ error }) => {
+        if (error) {
+          toast.error(
+            t('settings.prefs.privacy.winNetwork.saveFailed', {
+              defaultValue: "Couldn't save your sharing choice. Nothing changed.",
+            })
+          );
+          return;
+        }
+        analytics.trackEvent('picky_win_share_toggled', { enabled: next });
+      });
     },
-    [setStored]
+    [userId, t]
   );
 
-  return { enabled, setEnabled };
+  const mine = state.userId !== null && state.userId === userId;
+  return {
+    enabled: state.value,
+    setEnabled,
+    pending: state.pending,
+    loaded: mine && state.loaded,
+  };
 }

@@ -26,8 +26,10 @@ import {
   keysToScrub,
   sessionKeysToScrub,
   scrubOnSignOut,
+  scrubDeletedAccount,
   type ScrubStorage,
 } from './signOutScrub';
+import { webQueueKey } from './webSyncQueue';
 
 const SRC = join(process.cwd(), 'src');
 
@@ -310,5 +312,66 @@ describe('US-835: keysToScrub', () => {
     } finally {
       Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: original });
     }
+  });
+});
+
+function memoryStorage(initial: Record<string, string>): ScrubStorage & { backing: Record<string, string> } {
+  const backing = { ...initial };
+  return {
+    backing,
+    keys: () => Object.keys(backing),
+    removeItem: (k) => {
+      delete backing[k];
+    },
+  };
+}
+
+describe('settings pass B: per-account preferences and the bind-email step', () => {
+  it('scrubs the variety-nudge and auto-restock choices on sign-out', () => {
+    const keys = ['eatpal.nudge_variety', 'eatpal.auto_restock_enabled', 'eatpal.auto_restock_lead_days'];
+    expect(keysToScrub([...keys, 'eatpal_cookie_consent']).sort()).toEqual(keys.sort());
+  });
+
+  it('still scrubs the Win Network share choice', () => {
+    expect(keysToScrub(['eatpal.share_chain_outcomes'])).toEqual(['eatpal.share_chain_outcomes']);
+  });
+
+  it('scrubs the bind-email flow step from sessionStorage', () => {
+    expect(sessionKeysToScrub(['bind-email-flow-step'])).toEqual(['bind-email-flow-step']);
+  });
+});
+
+describe('settings pass B: scrubDeletedAccount', () => {
+  it("removes the deleted user's kept keys, including the offline queue, and leaves another user's", () => {
+    const local = memoryStorage({
+      [webQueueKey('user-a')]: '[]',
+      [webQueueKey('user-b')]: '[]',
+      'varietyFatigue.dismissedFor.user-a': 'true',
+      'varietyFatigue.dismissedFor.user-b': 'true',
+      'eatpal:billing-upsell-dismissed:user-a': 'true',
+      eatpal_recent_searches: '["x"]',
+      eatpal_cookie_consent: 'yes',
+      'eatpal.nudge_variety': 'false',
+    });
+    const session = memoryStorage({ 'bind-email-flow-step': '{}', 'route-error-chunk-reload-at': '0' });
+
+    const removed = scrubDeletedAccount('user-a', local, session);
+
+    expect(Object.keys(local.backing).sort()).toEqual(
+      [
+        webQueueKey('user-b'),
+        'varietyFatigue.dismissedFor.user-b',
+        'eatpal_cookie_consent',
+      ].sort()
+    );
+    expect(removed).toContain(webQueueKey('user-a'));
+    expect(removed).toContain('eatpal.nudge_variety');
+    expect(Object.keys(session.backing)).toEqual(['route-error-chunk-reload-at']);
+  });
+
+  it('does not touch a key that merely contains the id outside a kept family', () => {
+    const local = memoryStorage({ 'unrelated.user-a': '1' });
+    scrubDeletedAccount('user-a', local, memoryStorage({}));
+    expect(Object.keys(local.backing)).toEqual(['unrelated.user-a']);
   });
 });

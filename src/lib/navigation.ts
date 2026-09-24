@@ -1,5 +1,4 @@
 import {
-  Accessibility,
   BookOpen,
   Bot,
   Calendar,
@@ -114,9 +113,10 @@ export const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   // task you do once, but it has to be SOMEWHERE: inviting the other parent
   // was previously reachable only from a dialog and the /join landing page.
   { to: "/dashboard/household", label: "Household", icon: UsersRound, group: "account" },
-  { to: "/dashboard/settings", label: "Account Settings", icon: Settings, group: "account" },
+  // One Settings hub; Accessibility is its ?section=accessibility and no
+  // longer a page of its own (the old URL redirects, see routeAliases.ts).
+  { to: "/dashboard/settings", label: "Settings", icon: Settings, group: "account" },
   { to: "/dashboard/billing", label: "Billing", icon: CreditCard, group: "account" },
-  { to: "/dashboard/accessibility-settings", label: "Accessibility", icon: Accessibility, group: "account" },
 
   // Gated.
   {

@@ -142,6 +142,24 @@ describe('retired dashboard routes', () => {
     expect(appSource).toContain('DASHBOARD_REDIRECT_ENTRIES.map');
   });
 
+  it('folds the accessibility page into the Settings hub section', () => {
+    expect(DASHBOARD_REDIRECTS['/dashboard/accessibility-settings']).toBe(
+      '/dashboard/settings?section=accessibility'
+    );
+    expect(redirects).toContain(
+      '/dashboard/accessibility-settings /dashboard/settings?section=accessibility 301'
+    );
+    expect(redirects).toContain(
+      '/dashboard/accessibility-settings/ /dashboard/settings?section=accessibility 301'
+    );
+  });
+
+  it('no longer routes or imports the accessibility settings page', () => {
+    // A hand-written Route would win over the redirect and mount the old page.
+    expect(appSource).not.toContain('path="accessibility-settings"');
+    expect(appSource).not.toContain('pages/dashboard/AccessibilitySettings');
+  });
+
   it('no longer imports the Analytics page', () => {
     expect(appSource).not.toContain('pages/Analytics');
     const files = execSync("find src -name '*.tsx' -o -name '*.ts'", { encoding: 'utf8' })

@@ -1,0 +1,190 @@
+{
+  "settings": {
+    "title": "Settings",
+    "signedInAs": "Signed in as {{email}}",
+    "meta": {
+      "title": "{{section}} - Settings - EatPal",
+      "titleIndex": "Settings - EatPal",
+      "description": "Manage your profile, sign-in, privacy, notifications, planner, accessibility, plan and data."
+    },
+    "quick": {
+      "title": "Quick settings"
+    },
+    "nav": {
+      "label": "Settings sections",
+      "back": "All settings",
+      "loading": "Loading section"
+    },
+    "sections": {
+      "profile": {
+        "title": "Profile",
+        "summary": "Your name and photo",
+        "keywords": "name display avatar photo account me"
+      },
+      "signin": {
+        "title": "Sign-in and security",
+        "summary": "Password, email and devices",
+        "keywords": "password email login sign in security sessions devices apple sign out"
+      },
+      "privacy": {
+        "title": "Privacy and sharing",
+        "summary": "What your household and others can see",
+        "keywords": "privacy share sharing household co-parent links community win network anonymous"
+      },
+      "notifications": {
+        "title": "Notifications",
+        "summary": "Emails and in-app nudges",
+        "keywords": "email notifications reminders alerts nudges digest"
+      },
+      "planner": {
+        "title": "Planner",
+        "summary": "Week start and grocery automation",
+        "keywords": "week start sunday monday calendar meal plan grocery restock units"
+      },
+      "accessibility": {
+        "title": "Accessibility",
+        "summary": "Text size, motion, contrast and reading",
+        "keywords": "a11y text size font larger motion animation contrast dyslexia screen reader keyboard timeouts"
+      },
+      "plan": {
+        "title": "Plan and billing",
+        "summary": "Your subscription and invoices",
+        "keywords": "subscription plan billing premium trial cancel invoice payment upgrade"
+      },
+      "data": {
+        "title": "Your data",
+        "summary": "Export, import or delete your account",
+        "keywords": "export download import csv delete account gdpr data portability"
+      }
+    },
+    "scope": {
+      "you": "Just you",
+      "household": "Whole household",
+      "device": "This device",
+      "mixed": "You and household"
+    },
+    "controls": {
+      "displayName": { "label": "Display name", "keywords": "name" },
+      "password": { "label": "Change password", "keywords": "password reset" },
+      "signOutOthers": { "label": "Sign out other devices", "keywords": "sessions devices logout sign out" },
+      "winNetwork": { "label": "Win Network sharing", "keywords": "community anonymous share outcomes try bites" },
+      "shareLinks": { "label": "Share links", "keywords": "links shared recipes public" },
+      "email": { "label": "Email preferences", "keywords": "email newsletter digest unsubscribe" },
+      "varietyNudges": { "label": "Variety nudges", "keywords": "repeat meals variety" },
+      "weekStart": { "label": "Week starts on", "keywords": "sunday monday week calendar" },
+      "autoRestock": { "label": "Auto-add predicted run-outs", "keywords": "restock grocery pantry" },
+      "textSize": { "label": "Text size", "keywords": "font larger bigger" },
+      "reduceMotion": { "label": "Reduce motion", "keywords": "animation motion" },
+      "contrast": { "label": "High contrast", "keywords": "contrast colors" },
+      "dyslexiaFont": { "label": "Dyslexia-friendly font", "keywords": "dyslexia font reading" },
+      "screenReader": { "label": "Screen reader mode", "keywords": "voiceover talkback screen reader" },
+      "extendedTimeouts": { "label": "Longer message timeouts", "keywords": "timeouts toasts time" },
+      "exportData": { "label": "Export my data", "keywords": "download export gdpr" },
+      "importData": { "label": "Import from CSV", "keywords": "import csv upload" },
+      "deleteAccount": { "label": "Delete account", "keywords": "delete remove close account" }
+    },
+    "search": {
+      "label": "Search settings",
+      "placeholder": "Search settings",
+      "empty": "No settings match \"{{query}}\".",
+      "results_one": "{{count}} match",
+      "results_other": "{{count}} matches"
+    },
+    "summary": {
+      "textSize": {
+        "default": "Standard text",
+        "large": "Large text",
+        "x-large": "Extra large text"
+      },
+      "weekStart": {
+        "monday": "Weeks start Monday",
+        "sunday": "Weeks start Sunday"
+      }
+    },
+    "a11yResources": {
+      "statement": "Accessibility statement",
+      "vpat": "VPAT",
+      "contact": "Trouble using EatPal? Email accessibility@tryeatpal.com"
+    },
+    "plan": {
+      "billingLink": "Billing and invoices",
+      "loadingTitle": "Subscription",
+      "free": {
+        "title": "Free plan",
+        "description": "You're on the free plan.",
+        "pitchTitle": "Unlock Premium",
+        "pitch": "Upgrade for AI meal suggestions, unlimited pantry items, deeper insights and more.",
+        "cta": "View plans and pricing"
+      },
+      "planName": "{{name}} plan",
+      "complementary": "Complimentary",
+      "cycle": {
+        "yearly": "Billed yearly",
+        "monthly": "Billed monthly"
+      },
+      "refresh": "Refresh subscription status",
+      "status": {
+        "free": "Free",
+        "active": "Active",
+        "trial": "Trial",
+        "pastDue": "Past due",
+        "paused": "Paused"
+      },
+      "period": {
+        "label": "Billing period",
+        "remaining_one": "{{count}} day left",
+        "remaining_other": "{{count}} days left"
+      },
+      "canceling": {
+        "title": "Subscription ending",
+        "body": "Your plan ends on {{date}}. You keep access until then.",
+        "reactivate": "Keep my subscription"
+      },
+      "pastDue": {
+        "title": "Payment failed",
+        "body": "Your last payment didn't go through. Update your card to keep premium features.",
+        "action": "Update payment method"
+      },
+      "paused": {
+        "title": "Subscription paused",
+        "body": "Your subscription is paused. Contact support to resume it."
+      },
+      "nextBilling": "Next billing date",
+      "ending": "Subscription ending",
+      "billingCycle": "Billing cycle",
+      "cycleShort": {
+        "yearly": "Yearly",
+        "monthly": "Monthly"
+      },
+      "manage": {
+        "title": "Manage subscription",
+        "description": "Change plan, update your card or cancel.",
+        "changeTitle": "Change plan",
+        "changeBody": "Upgrade or switch to a different plan.",
+        "changeCta": "View plans",
+        "portalTitle": "Billing portal",
+        "portalBody": "Payment methods, invoices and billing details.",
+        "portalCta": "Open portal",
+        "cancelTitle": "Cancel subscription",
+        "cancelBody": "You keep access until the end of this billing period.",
+        "cancelCta": "Cancel plan"
+      },
+      "cancelDialog": {
+        "title": "Cancel your subscription?",
+        "body": "Your {{plan}} plan stays active until {{date}}, then your account moves to the free plan. Your kids, foods and plans are kept.",
+        "keep": "Keep subscription",
+        "confirm": "Yes, cancel"
+      },
+      "trial": {
+        "title": "Free trial active",
+        "body": "Your trial ends on {{date}}. Add a payment method to keep premium after that."
+      },
+      "unknownDate": "Not set",
+      "portal": {
+        "failed": "Couldn't open the billing portal.",
+        "unavailable": "The billing portal isn't available right now.",
+        "subscribeFirst": "Subscribe to a plan first to use the billing portal."
+      }
+    }
+  }
+}

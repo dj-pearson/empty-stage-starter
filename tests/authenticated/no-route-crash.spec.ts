@@ -61,6 +61,19 @@ test.describe('signed-in routes render without throwing', () => {
     expect(ROUTES).toContain('/dashboard/pantry');
   });
 
+  test('/dashboard/accessibility-settings lands on the Accessibility section of Settings', async ({
+    page,
+    context,
+  }) => {
+    // Retired page, kept as a redirect for bookmarks (DASHBOARD_REDIRECTS).
+    await signIn(context);
+    await page.goto('/dashboard/accessibility-settings', { waitUntil: 'networkidle' });
+    const url = new URL(page.url());
+    expect(url.pathname).toBe('/dashboard/settings');
+    expect(url.searchParams.get('section')).toBe('accessibility');
+    await expect(page.locator('#settings-accessibility')).toBeVisible();
+  });
+
   for (const route of ROUTES) {
     test(`${route} does not throw`, async ({ page, context }) => {
       await signIn(context);
