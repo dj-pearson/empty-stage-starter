@@ -1455,11 +1455,16 @@ export default function Grocery() {
             {visibleActive.length > 0 ? (
               useVirtualGrocery ? (
                 <section
-                  aria-label={t("grocery.list.label", { defaultValue: "Shopping list" })}
+                  aria-labelledby="grocery-list-heading"
                   id="grocery-list-items"
                   ref={listRef}
                   className="mb-4 rounded-xl border border-border overflow-hidden"
                 >
+                  {/* The aisle headings are h3s; this h2 sits between them and
+                      the page's h1 so the outline does not skip a level. */}
+                  <h2 id="grocery-list-heading" className="sr-only">
+                    {t("grocery.list.label", { defaultValue: "Shopping list" })}
+                  </h2>
                   <div style={{ height: `${groceryVirtualizer.getTotalSize()}px`, position: "relative" }}>
                     {groceryVirtualizer.getVirtualItems().map((virtualRow) => {
                       const row = flattenedRows[virtualRow.index];
@@ -1495,10 +1500,10 @@ export default function Grocery() {
                   </div>
                 </section>
               ) : (
-                <section
-                  aria-label={t("grocery.list.label", { defaultValue: "Shopping list" })}
-                  className="mb-4 space-y-3"
-                >
+                <section aria-labelledby="grocery-list-heading" className="mb-4 space-y-3">
+                  <h2 id="grocery-list-heading" className="sr-only">
+                    {t("grocery.list.label", { defaultValue: "Shopping list" })}
+                  </h2>
                   {groupOrder.map((group) => {
                     const items = activeItemsByGroup[group] ?? [];
                     if (items.length === 0) return null;
