@@ -622,6 +622,25 @@ jobs:
       - name: Deno food similarity household scope
         run: deno test supabase/functions/_shared/foodSimilarityScope.test.ts
 
+      # create-checkout's server-side double-billing guard: an active or
+      # trialing Stripe subscription, an unexpired App Store one, or a comp
+      # per effective_plan_id is refused 409 already_subscribed; a failed
+      # lookup refuses 503. Pure, no network, no DB.
+      - name: Deno checkout entitlement guard
+        run: deno test supabase/functions/_shared/checkoutEntitlement.test.ts
+
+      # manage-payment-methods: detach and set-default act only on a card
+      # attached to the caller's own Stripe customer, and a transient Stripe
+      # error never recreates the customer or writes status 'inactive'.
+      - name: Deno payment method ownership
+        run: deno test supabase/functions/_shared/paymentMethodOwnership.test.ts
+
+      # generate-invoice: every interpolated value is HTML-escaped (stored
+      # XSS through profiles.full_name), one id-based invoice number, and a
+      # payment with no subscription still renders. Pure, no network.
+      - name: Deno invoice rendering
+        run: deno test supabase/functions/_shared/invoice.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           # US-760: pinned, not `latest`. Both Supabase jobs run the same

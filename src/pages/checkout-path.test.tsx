@@ -334,6 +334,84 @@ describe("Pricing never opens a second checkout for an entitled account", () => 
   });
 });
 
+describe("Pricing honours create-checkout's own double-billing refusal", () => {
+  /**
+   * The page's pre-check reads Free (a stale tab, or an App Store purchase on
+   * the phone a minute ago) and create-checkout answers 409 already_subscribed.
+   * The parent must be told where the plan lives, and nothing may redirect.
+   */
+  /** Click CTAs until one reaches create-checkout; toasts from earlier ones are cleared. */
+  async function clickFirstCheckoutCta() {
+    const { toast } = await import("sonner");
+    const total = await ctaCount();
+    for (let i = 0; i < total; i++) {
+      vi.mocked(toast.info).mockClear();
+      vi.mocked(toast.error).mockClear();
+      navigate.mockClear();
+      const calls = await clickCta(i, "monthly");
+      if (calls.some(([fn]) => fn === "create-checkout")) return;
+    }
+    throw new Error("no CTA reached create-checkout");
+  }
+
+  function refusal(status: number, body: Record<string, unknown>) {
+    return Object.assign(new Error(`Edge Function 'create-checkout' failed: ${String(body.error)}`), {
+      status,
+      code: body.code,
+      body,
+    });
+  }
+
+  it("a 409 from an App Store purchase made elsewhere points at Apple and stays on the page", async () => {
+    invokeEdgeFunction.mockImplementation(async (fn: string) =>
+      fn === "create-checkout"
+        ? {
+            data: null,
+            error: refusal(409, {
+              error: "You already have an active subscription",
+              code: "already_subscribed",
+              source: "appStore",
+            }),
+          }
+        : { data: null, error: null }
+    );
+    const { toast } = await import("sonner");
+
+    await clickFirstCheckoutCta();
+    await waitFor(() => expect(vi.mocked(toast.info)).toHaveBeenCalled());
+    expect(String(vi.mocked(toast.info).mock.calls.at(-1)?.[0])).toMatch(/App Store/);
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalled();
+    expect(window.location.href).toBe("");
+  });
+
+  it("a 409 with no source names the plan and routes to Billing", async () => {
+    invokeEdgeFunction.mockImplementation(async (fn: string) =>
+      fn === "create-checkout"
+        ? { data: null, error: refusal(409, { error: "You already have an active subscription", code: "already_subscribed" }) }
+        : { data: null, error: null }
+    );
+    const { toast } = await import("sonner");
+
+    await clickFirstCheckoutCta();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/dashboard/billing"));
+    expect(String(vi.mocked(toast.info).mock.calls.at(-1)?.[0])).toMatch(/already have an active plan/i);
+    expect(window.location.href).toBe("");
+  });
+
+  it("a 503 entitlement_unverified says nothing was charged", async () => {
+    invokeEdgeFunction.mockImplementation(async (fn: string) =>
+      fn === "create-checkout"
+        ? { data: null, error: refusal(503, { error: "Could not verify your current plan", code: "entitlement_unverified" }) }
+        : { data: null, error: null }
+    );
+    const { toast } = await import("sonner");
+
+    await clickFirstCheckoutCta();
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
+    expect(String(vi.mocked(toast.error).mock.calls.at(-1)?.[0])).toMatch(/nothing was charged/i);
+  });
+});
+
 describe("CheckoutSuccess records the paid conversion", () => {
   it("fires trackPaidConversion once the subscription row appears", async () => {
     searchParams = new URLSearchParams("session_id=cs_test_123");
