@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,17 +16,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHousehold } from "@/hooks/useHousehold";
+import { useBindStatus } from "@/hooks/useBindStatus";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAccountExport } from "@/hooks/useAccountExport";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
-import { memberDisplayName } from "@/components/household/householdMemberLabel";
+import { memberDisplayName, roleKey } from "@/components/household/householdMemberLabel";
 import { exportSummaryText, joinList } from "@/components/settings/exportSummaryText";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import {
   confirmWordMatches,
+  DELETE_ACCOUNT_CLIENT_HEADERS,
+  deleteRefusalKind,
   meaningfulDeleteFailures,
   needsStripeCancel,
+  successorLabel,
+  type DeleteAccountPreflight,
+  type DeleteAccountPreflightResponse,
   type DeleteAccountResponse,
+  type PreflightHousehold,
 } from "@/lib/accountDeletion";
 import { scrubDeletedAccount } from "@/lib/signOutScrub";
 import { logger } from "@/lib/logger";
@@ -37,30 +44,45 @@ interface DeleteAccountDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type Phase = "idle" | "cancelling" | "deleting" | "incomplete" | "finishing";
+type Phase = "idle" | "reauth" | "verifying" | "deleting" | "incomplete" | "finishing";
+
+type PreflightState =
+  | { status: "loading" }
+  | { status: "ready"; data: DeleteAccountPreflight }
+  | { status: "error" };
 
 const SUPPORT_EMAIL = "support@tryeatpal.com";
 
+/** GoTrue's error code and HTTP status, when the error carries them. */
+function authErrorFacts(error: unknown): { code?: string; status?: number } {
+  if (typeof error !== "object" || error === null) return {};
+  const { code, status } = error as { code?: unknown; status?: unknown };
+  return {
+    code: typeof code === "string" ? code : undefined,
+    status: typeof status === "number" ? status : undefined,
+  };
+}
+
 /**
- * Delete account, with the consequences said out loud (settings pass B).
+ * Delete account, with the consequences said out loud.
  *
- * What changed from the AlertDialog on the old Security tab:
  *  - Controlled, and it cannot be closed while a delete is in flight; closing
  *    resets it, so reopening never shows a half-typed confirmation.
  *  - Confirmation is a typed word, not the account email. An Apple-relay user
  *    does not know their relay address and could not delete their account.
- *  - A co-parent is named. The server deletes every row this user created
- *    (child profiles, foods, recipes, plan entries) by user_id, and there is
- *    no transfer yet, so the other parent loses those too. The old dialog
- *    listed "Children's profiles" as if they were only yours.
- *  - Progress and errors stay in the dialog (aria-live) instead of a toast
- *    fired after AlertDialogAction had already closed it.
+ *  - What happens to the family is asked of the server, not guessed. On open
+ *    the dialog calls delete-account with { mode: 'preflight' }, which dry-runs
+ *    the household hand-over (owner decision 1a): in a shared household what
+ *    this parent added moves to the longest-standing remaining member, so the
+ *    panel says "Mia and Leo stay with Sam"; a sole member is told everything
+ *    goes.
+ *  - A web delete needs a sign-in from the last ten minutes, so the last step
+ *    signs in again: the password for a password account, an emailed code
+ *    otherwise (Apple and Google accounts).
+ *  - The server cancels a live Stripe subscription itself, before it deletes.
+ *    The dialog no longer calls manage-subscription.
  *  - partialFailures from the edge function is read. A deletion that left
  *    data behind says so and gives the support address.
- *
- * Server-side household-aware deletion (transfer instead of cascade) and a
- * recent-auth requirement are deferred; this dialog is the honest client for
- * what the server does today.
  */
 export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogProps) {
   const { t, i18n } = useTranslation();
@@ -68,6 +90,7 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
   const reducedMotion = useReducedMotion();
   const { userId: authUserId } = useAuth();
   const household = useHousehold();
+  const bindStatus = useBindStatus();
   const { subscription } = useSubscription();
   const exporter = useAccountExport();
   const [typed, setTyped] = useState("");
@@ -75,21 +98,66 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
   const [error, setError] = useState<string | null>(null);
   const [showExportResult, setShowExportResult] = useState(false);
   const [deletedUid, setDeletedUid] = useState<string | null>(null);
+  const [preflight, setPreflight] = useState<PreflightState>({ status: "loading" });
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
   const confirmId = useId();
   const statusId = useId();
+  const passwordId = useId();
+  const codeId = useId();
 
   const confirmWord = t("settings.account.delete.confirmWord", { defaultValue: "DELETE" });
-  const busy = phase === "cancelling" || phase === "deleting" || phase === "finishing";
+  const busy = phase === "verifying" || phase === "deleting" || phase === "finishing";
   const matches = confirmWordMatches(typed, confirmWord, locale);
-  // The consequence panel depends on the roster; don't allow a delete before
-  // the parent has had the chance to read it.
-  const rosterPending = household.loading;
+  // The consequence panel depends on the preflight and the roster; don't
+  // allow a delete before the parent has had the chance to read it.
+  const consequencesPending = preflight.status === "loading" || household.loading;
+  const email = bindStatus.user?.email ?? "";
+  const usesPassword = bindStatus.hasPassword;
 
-  const others = household.loading ? [] : household.members.filter((m) => !m.isSelf);
-  const otherNames = joinList(
-    others.map((m) => memberDisplayName(m, t)),
-    locale
-  );
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setPreflight({ status: "loading" });
+    void (async () => {
+      const { data, error: preflightError } = await invokeEdgeFunction<DeleteAccountPreflightResponse>(
+        "delete-account",
+        { body: { mode: "preflight" }, headers: { ...DELETE_ACCOUNT_CLIENT_HEADERS } }
+      );
+      if (cancelled) return;
+      if (preflightError || !data?.preflight) {
+        logger.warn("Delete-account preflight failed:", preflightError);
+        setPreflight({ status: "error" });
+        return;
+      }
+      setPreflight({ status: "ready", data: data.preflight });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  /** Who a household is left with, named the way the roster names them. */
+  const successorName = (h: PreflightHousehold): string => {
+    const named = successorLabel(h, (userId) => {
+      const member = household.members.find((m) => m.user_id === userId);
+      return member ? memberDisplayName(member, t) : null;
+    });
+    if (named) return named;
+    switch (roleKey(h.successorRole ?? "")) {
+      case "parent":
+        return t("settings.account.deleteFlow.fallbackName.parent");
+      case "guardian":
+        return t("settings.account.deleteFlow.fallbackName.guardian");
+      default:
+        return t("settings.account.deleteFlow.fallbackName.other");
+    }
+  };
+
+  const shared = preflight.status === "ready" ? preflight.data.households : [];
+  const soleMember = preflight.status === "ready" && preflight.data.soleMember;
 
   const billable = needsStripeCancel(
     subscription
@@ -107,6 +175,10 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
     setPhase("idle");
     setError(null);
     setShowExportResult(false);
+    setPassword("");
+    setCode("");
+    setCodeSent(false);
+    setSendingCode(false);
   };
 
   /** The account is gone server-side: clear this device and leave. */
@@ -137,46 +209,62 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
     onOpenChange(false);
   };
 
-  const onDelete = async () => {
-    if (!matches || busy || rosterPending) return;
+  /** Step one is the typed word; step two, signing in again, follows. */
+  const onDelete = () => {
+    if (!matches || busy || consequencesPending) return;
     setError(null);
+    setPhase("reauth");
+  };
+
+  const sendCode = async () => {
+    if (!email || sendingCode) return;
+    setSendingCode(true);
+    setError(null);
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    });
+    setSendingCode(false);
+    if (otpError) {
+      setError(t("settings.account.deleteFlow.codeSendFailed"));
+      return;
+    }
+    setCodeSent(true);
+  };
+
+  const runDelete = async () => {
     let uid = authUserId;
     if (!uid) {
       const { data } = await supabase.auth.getUser();
       uid = data.user?.id ?? null;
     }
 
-    if (billable) {
-      setPhase("cancelling");
-      const { error: cancelError } = await invokeEdgeFunction("manage-subscription", {
-        body: { action: "cancel" },
-      });
-      if (cancelError) {
-        setPhase("idle");
-        setError(
-          t("settings.account.delete.cancelFailed", {
-            defaultValue:
-              "We couldn't cancel your subscription, so nothing was deleted. Cancel it under Plan and billing, or email {{email}}, then try again.",
-            email: SUPPORT_EMAIL,
-          })
-        );
-        return;
-      }
-    }
-
     setPhase("deleting");
     const { data, error: deleteError } = await invokeEdgeFunction<DeleteAccountResponse>(
       "delete-account",
-      { body: {} }
+      { body: {}, headers: { ...DELETE_ACCOUNT_CLIENT_HEADERS } }
     );
     if (deleteError) {
+      const kind = deleteRefusalKind(deleteError);
+      if (kind === "reauth") {
+        setPhase("reauth");
+        setPassword("");
+        setCode("");
+        setCodeSent(false);
+        setError(t("settings.account.deleteFlow.reauthExpired"));
+        return;
+      }
       setPhase("idle");
       setError(
-        t("settings.account.delete.failed", {
-          defaultValue:
-            "Your account wasn't deleted. Try again, or email {{email}} and we'll do it for you.",
-          email: SUPPORT_EMAIL,
-        })
+        kind === "stripe"
+          ? t("settings.account.deleteFlow.stripeFailed", { email: SUPPORT_EMAIL })
+          : kind === "transfer"
+            ? t("settings.account.deleteFlow.transferFailed", { email: SUPPORT_EMAIL })
+            : t("settings.account.delete.failed", {
+                defaultValue:
+                  "Your account wasn't deleted. Try again, or email {{email}} and we'll do it for you.",
+                email: SUPPORT_EMAIL,
+              })
       );
       return;
     }
@@ -191,14 +279,52 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
     await finish(uid);
   };
 
+  /** Sign in again, then delete. */
+  const onReauthAndDelete = async () => {
+    if (busy || !email) return;
+    setError(null);
+    setPhase("verifying");
+    if (usesPassword) {
+      const { error: reauthError } = await supabase.auth.signInWithPassword({ email, password });
+      if (reauthError) {
+        const { code: errCode, status } = authErrorFacts(reauthError);
+        setPhase("reauth");
+        setError(
+          errCode === "invalid_credentials" || (errCode === undefined && status === 400)
+            ? t("settings.account.deleteFlow.passwordWrong")
+            : t("settings.account.delete.failed", {
+                defaultValue:
+                  "Your account wasn't deleted. Try again, or email {{email}} and we'll do it for you.",
+                email: SUPPORT_EMAIL,
+              })
+        );
+        return;
+      }
+    } else {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: code.trim(),
+        type: "email",
+      });
+      if (verifyError) {
+        setPhase("reauth");
+        setError(t("settings.account.deleteFlow.codeWrong"));
+        return;
+      }
+    }
+    await runDelete();
+  };
+
   const statusText =
-    phase === "cancelling"
-      ? t("settings.account.delete.cancelling", { defaultValue: "Cancelling your subscription..." })
+    phase === "verifying"
+      ? t("settings.account.deleteFlow.verifying")
       : phase === "deleting"
         ? t("settings.account.delete.deleting", { defaultValue: "Deleting your account..." })
         : phase === "finishing"
           ? t("settings.account.delete.finishing", { defaultValue: "Signing you out..." })
-          : "";
+          : preflight.status === "loading"
+            ? t("settings.account.deleteFlow.checking")
+            : "";
 
   const spinner = (
     <Loader2
@@ -206,6 +332,10 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
       aria-hidden="true"
     />
   );
+
+  const inReauth = phase === "reauth" || phase === "verifying" || phase === "deleting" || phase === "finishing";
+  const reauthReady =
+    email.length > 0 && (usesPassword ? password.length > 0 : codeSent && code.trim().length >= 6);
 
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
@@ -238,6 +368,101 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
               </Button>
             </AlertDialogFooter>
           </>
+        ) : inReauth ? (
+          <>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("settings.account.deleteFlow.reauthTitle")}</AlertDialogTitle>
+              <AlertDialogDescription>{t("settings.account.deleteFlow.reauthBody")}</AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <form
+              className="space-y-4 text-sm"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (reauthReady) void onReauthAndDelete();
+              }}
+            >
+              {!email ? (
+                <p>{t("settings.account.deleteFlow.noEmail", { email: SUPPORT_EMAIL })}</p>
+              ) : usesPassword ? (
+                <div className="space-y-2">
+                  <Label htmlFor={passwordId}>
+                    {t("settings.account.deleteFlow.passwordLabel", { email })}
+                  </Label>
+                  <Input
+                    id={passwordId}
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    disabled={busy}
+                    aria-describedby={statusId}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={sendingCode || busy}
+                      aria-busy={sendingCode || undefined}
+                      onClick={() => void sendCode()}
+                    >
+                      {sendingCode && spinner}
+                      {sendingCode
+                        ? t("settings.account.deleteFlow.sendingCode")
+                        : codeSent
+                          ? t("settings.account.deleteFlow.resendCode")
+                          : t("settings.account.deleteFlow.sendCode")}
+                    </Button>
+                    {codeSent && (
+                      <p className="text-muted-foreground">
+                        {t("settings.account.deleteFlow.codeSent", { email })}
+                      </p>
+                    )}
+                  </div>
+                  {codeSent && (
+                    <>
+                      <Label htmlFor={codeId}>{t("settings.account.deleteFlow.codeLabel")}</Label>
+                      <Input
+                        id={codeId}
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        disabled={busy}
+                        aria-describedby={statusId}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+
+              <p id={statusId} aria-live="polite" className="min-h-5 text-sm">
+                {error ? <span className="text-destructive">{error}</span> : statusText}
+              </p>
+
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>
+                  {t("settings.account.delete.keep", { defaultValue: "Keep my account" })}
+                </AlertDialogCancel>
+                <Button
+                  id="delete-account-confirm"
+                  type="submit"
+                  variant="destructive"
+                  disabled={!reauthReady || busy}
+                  aria-busy={busy || undefined}
+                >
+                  {busy && spinner}
+                  {busy
+                    ? t("settings.account.delete.deletingShort", { defaultValue: "Deleting..." })
+                    : t("settings.account.deleteFlow.confirmDelete")}
+                </Button>
+              </AlertDialogFooter>
+            </form>
+          </>
         ) : (
           <>
             <AlertDialogHeader>
@@ -253,16 +478,53 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
             </AlertDialogHeader>
 
             <div className="space-y-4 text-sm">
+              {shared.map((h) => {
+                const name = successorName(h);
+                return (
+                  <div key={h.householdId} className="space-y-1 rounded-lg bg-muted p-3" role="note">
+                    <p className="font-medium">
+                      {h.kidNames.length > 0
+                        ? t("settings.account.deleteFlow.staysTitle", {
+                            kids: joinList(h.kidNames, locale),
+                            name,
+                          })
+                        : t("settings.account.deleteFlow.staysTitleNoKids", { name })}
+                    </p>
+                    <p>
+                      {t("settings.account.deleteFlow.staysBody", {
+                        name,
+                        household:
+                          h.householdName ||
+                          t("settings.account.delete.yourHousehold", { defaultValue: "your household" }),
+                      })}
+                    </p>
+                  </div>
+                );
+              })}
+
+              {soleMember && (
+                <div className="space-y-1 rounded-lg border border-destructive/40 p-3" role="note">
+                  <p className="font-medium text-destructive">{t("settings.account.deleteFlow.soleTitle")}</p>
+                  <p>{t("settings.account.deleteFlow.soleBody")}</p>
+                </div>
+              )}
+
+              {preflight.status === "error" && <p role="note">{t("settings.account.deleteFlow.checkFailed")}</p>}
+
               <div className="space-y-2 rounded-lg bg-muted p-3">
                 <p className="font-medium">
                   {t("settings.account.delete.removedTitle", { defaultValue: "What gets deleted" })}
                 </p>
                 <ul className="list-disc space-y-1 pl-5">
-                  <li>
-                    {t("settings.account.delete.removedCreated", {
-                      defaultValue: "Child profiles, foods, recipes and meal plans you created",
-                    })}
-                  </li>
+                  {shared.length > 0 ? (
+                    <li>{t("settings.account.deleteFlow.removedPersonal")}</li>
+                  ) : (
+                    <li>
+                      {t("settings.account.delete.removedCreated", {
+                        defaultValue: "Child profiles, foods, recipes and meal plans you created",
+                      })}
+                    </li>
+                  )}
                   <li>
                     {t("settings.account.delete.removedHistory", {
                       defaultValue: "Grocery lists, food history and photos you uploaded",
@@ -276,35 +538,10 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
                 </ul>
               </div>
 
-              {others.length > 0 && (
-                <div className="space-y-1 rounded-lg border border-destructive/40 p-3" role="note">
-                  <p className="font-medium text-destructive">
-                    {t("settings.account.delete.householdTitle", {
-                      defaultValue: "{{names}} will lose these too",
-                      names: otherNames,
-                    })}
-                  </p>
-                  <p>
-                    {t("settings.account.delete.householdBody", {
-                      defaultValue:
-                        "You share {{household}} with {{names}}. Child profiles, foods, recipes and plan entries you created are removed for them as well, and they can't be transferred to another member yet. Anything they created stays.",
-                      names: otherNames,
-                      household:
-                        household.householdName ||
-                        t("settings.account.delete.yourHousehold", { defaultValue: "your household" }),
-                    })}
-                  </p>
-                </div>
-              )}
-
               {subscription && subscription.status !== "canceled" && (
                 <p>
                   {billable
-                    ? t("settings.account.delete.billingCancel", {
-                        defaultValue:
-                          "Your {{plan}} subscription is cancelled first, so you aren't charged again.",
-                        plan: subscription.plan_name,
-                      })
+                    ? t("settings.account.deleteFlow.billingCancel", { plan: subscription.plan_name })
                     : subscription.is_complementary
                       ? t("settings.account.delete.billingComplimentary", {
                           defaultValue: "Your complimentary plan ends with the account. Nothing is billed.",
@@ -372,14 +609,10 @@ export function DeleteAccountDialog({ open, onOpenChange }: DeleteAccountDialogP
                 id="delete-account-confirm"
                 type="button"
                 variant="destructive"
-                onClick={() => void onDelete()}
-                disabled={!matches || busy || rosterPending}
-                aria-busy={busy || undefined}
+                onClick={onDelete}
+                disabled={!matches || busy || consequencesPending}
               >
-                {busy && spinner}
-                {busy
-                  ? t("settings.account.delete.deletingShort", { defaultValue: "Deleting..." })
-                  : t("settings.account.delete.confirm", { defaultValue: "Delete my account" })}
+                {t("settings.account.delete.confirm", { defaultValue: "Delete my account" })}
               </Button>
             </AlertDialogFooter>
           </>

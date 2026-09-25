@@ -602,6 +602,19 @@ jobs:
       - name: Deno AI Coach limit gate
         run: deno test supabase/functions/_shared/aiCoachGate.test.ts
 
+      # Owner decision 1a (2026-09-25): delete-account asks a web caller for a
+      # sign-in within the last ten minutes (amr timestamp, not the refreshed
+      # iat); shipped iOS builds, which send no X-Client-Info, keep the
+      # valid-JWT rule. Pure, no network.
+      - name: Deno recent-auth gate
+        run: deno test supabase/functions/_shared/requireRecentAuth.test.ts
+
+      # delete-account's pure parts: iOS's `{}` body is still a delete, the
+      # server cancels only a live, billed Stripe subscription (not App Store,
+      # not complimentary), and the preflight summary is reshaped safely.
+      - name: Deno account deletion helpers
+        run: deno test supabase/functions/_shared/accountDeletion.test.ts
+
       # calculate-food-similarity read every household's foods and every kid by
       # id through the service role. The household now comes from the verified
       # user: anon is 401, a foreign kid is 403, a foreign source food is 404,
