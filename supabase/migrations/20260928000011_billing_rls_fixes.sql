@@ -127,27 +127,41 @@ COMMENT ON FUNCTION public.guard_professional_custom_domain_write() IS
 
 REVOKE ALL ON FUNCTION public.guard_professional_custom_domain_write() FROM PUBLIC, anon, authenticated;
 
-DROP TRIGGER IF EXISTS guard_professional_custom_domain_write ON public.professional_custom_domains;
-CREATE TRIGGER guard_professional_custom_domain_write
-  BEFORE INSERT OR UPDATE ON public.professional_custom_domains
-  FOR EACH ROW
-  EXECUTE FUNCTION public.guard_professional_custom_domain_write();
+-- Some databases never got 20251111000000, so neither table exists there.
+-- Same guard as 20260903000001: skip what has nothing to act on.
+DO $custom_domains$
+BEGIN
+  IF to_regclass('public.professional_custom_domains') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS guard_professional_custom_domain_write ON public.professional_custom_domains;
+    CREATE TRIGGER guard_professional_custom_domain_write
+      BEFORE INSERT OR UPDATE ON public.professional_custom_domains
+      FOR EACH ROW
+      EXECUTE FUNCTION public.guard_professional_custom_domain_write();
 
--- Every non-default verification value came from a browser (item 1).
-UPDATE public.professional_custom_domains
-   SET status = 'pending',
-       verified_at = NULL,
-       ssl_certificate_status = 'pending',
-       ssl_expires_at = NULL
- WHERE status IS DISTINCT FROM 'pending'
-    OR verified_at IS NOT NULL
-    OR ssl_certificate_status IS DISTINCT FROM 'pending'
-    OR ssl_expires_at IS NOT NULL;
+    -- Every non-default verification value came from a browser (item 1).
+    UPDATE public.professional_custom_domains
+       SET status = 'pending',
+           verified_at = NULL,
+           ssl_certificate_status = 'pending',
+           ssl_expires_at = NULL
+     WHERE status IS DISTINCT FROM 'pending'
+        OR verified_at IS NOT NULL
+        OR ssl_certificate_status IS DISTINCT FROM 'pending'
+        OR ssl_expires_at IS NOT NULL;
+  END IF;
+END
+$custom_domains$;
 
 -- 2 --- professional_brand_settings: no public read -----------------------------
 
-DROP POLICY IF EXISTS "Public can view brand settings for verified domains"
-  ON public.professional_brand_settings;
+DO $brand_settings$
+BEGIN
+  IF to_regclass('public.professional_brand_settings') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "Public can view brand settings for verified domains"
+      ON public.professional_brand_settings;
+  END IF;
+END
+$brand_settings$;
 
 -- 3 --- complimentary subscription lookups answer for the caller only ----------
 

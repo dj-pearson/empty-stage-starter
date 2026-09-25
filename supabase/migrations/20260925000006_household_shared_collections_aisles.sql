@@ -33,6 +33,17 @@
 --
 -- Both are TO authenticated; service_role bypasses RLS.
 
+-- Columns the policies below reference. food_aisle_mappings was first created
+-- by 20251014000000 as (store_layout_id, food_name, aisle_id); the user_id,
+-- food_id and store_aisle_id columns come from ADD COLUMN IF NOT EXISTS lines
+-- that were added to 20251014000001 after databases had already recorded it
+-- as applied, so those databases never got them. Nullable, no default:
+-- additive, and old clients never send them.
+ALTER TABLE public.food_aisle_mappings ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
+ALTER TABLE public.food_aisle_mappings ADD COLUMN IF NOT EXISTS food_id UUID REFERENCES public.foods(id) ON DELETE CASCADE;
+ALTER TABLE public.food_aisle_mappings ADD COLUMN IF NOT EXISTS store_aisle_id UUID REFERENCES public.store_aisles(id) ON DELETE CASCADE;
+ALTER TABLE public.store_layouts ADD COLUMN IF NOT EXISTS user_id UUID;
+
 -- recipe_collection_items ----------------------------------------------------
 -- Through the owning collection's household.
 DROP POLICY IF EXISTS "Household members can view collection items" ON public.recipe_collection_items;
