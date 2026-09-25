@@ -21,6 +21,9 @@
  * Says nothing about ownership.
  */
 export function isValidDomain(domain: string): boolean {
-  const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*(\.[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*)*\.[a-zA-Z]{2,}$/;
-  return domainRegex.test(domain);
+  // One label: 1-63 characters, letters, digits and inner hyphens. The old
+  // pattern wrote a label as [a-z0-9-]*[a-z0-9]*, two overlapping stars that
+  // backtrack exponentially on a long run of labels that then fails to match.
+  const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
+  return domain.length <= 253 && domainRegex.test(domain);
 }
