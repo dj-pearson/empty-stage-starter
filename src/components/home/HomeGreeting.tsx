@@ -77,7 +77,9 @@ export function HomeGreeting() {
   return (
     <div className="flex min-h-14 flex-col justify-center text-left">
       {settled ? (
-        <h1 className="text-xl font-semibold leading-tight text-foreground">{greeting}</h1>
+        // A <p>, not a heading: Home renders the page's one h1 ("EatPal home",
+        // sr-only) ahead of this, and a second h1 here split the outline.
+        <p className="text-xl font-semibold leading-tight text-foreground">{greeting}</p>
       ) : (
         <div className="h-7" aria-hidden="true" />
       )}
