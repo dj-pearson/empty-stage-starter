@@ -7,6 +7,35 @@
  * - Form inputs minimum 48px height
  */
 
+/*
+  How this file may style things.
+
+  main.tsx imports this file AFTER index.css, so every rule here lands later
+  in the bundle than every Tailwind utility and wins any tie. Three kinds of
+  rule broke layouts that way, and none of them may come back:
+
+  - Attribute SUBSTRING selectors (`[class*="back"]`, `[class*="card"]`,
+    `[class*="logo"]`). In a Tailwind tree a substring matches colour tokens,
+    not components: "back" hit every `bg-background` and every shadcn Button
+    (`ring-offset-background`) and re-padded them 12px 20px, which made each
+    grocery row 86px instead of 62px. Opt in with a real class instead
+    (`.back-button`, `.logo`).
+  - Bare element rules that add box spacing (`section { padding }`, `h1-h4`
+    and `p { margin-bottom }`, `label { margin-bottom }`). Tailwind code is
+    written against preflight's zero margins; a default margin here stacks on
+    top of every `gap-*` and `space-y-*`. `section` padded Sonner's empty
+    toast container to 64px and pushed every dashboard page down on phones.
+  - Element-plus-attribute selectors (`input[type="text"]`, `[role="dialog"]`),
+    whose (0,1,1)/(0,1,0) specificity ties or beats a utility. Those are
+    wrapped in `:where()`, which has zero specificity, so any class wins.
+
+  `:where()` loses to preflight as well as to utilities, so a property
+  preflight resets (margin and font-size on headings, padding on inputs) is
+  simply gone under it. Those declarations were deleted rather than wrapped,
+  so nothing here pretends to apply when it does not.
+  src/lib/utilityHijack.test.ts pins all of this.
+*/
+
 /* ==========================================================================
    Touch Targets - Minimum 44x44px
    ========================================================================== */
@@ -28,7 +57,14 @@
    Form Elements
    ========================================================================== */
 
-/* All form inputs */
+/*
+  Form inputs. The font-size keeps its old specificity on purpose: iOS Safari
+  zooms the page when a focused field is under 16px, so this one declaration
+  is meant to beat `text-sm`. The min-heights are defaults in :where(), so a
+  `min-h-*` class wins. The old `padding: 12px 16px` is gone: at (0,1,1) it
+  beat `pl-9`, which is the room a search field leaves for its icon, and
+  shadcn's Input sets its own padding anyway.
+*/
 input[type="text"],
 input[type="email"],
 input[type="password"],
@@ -39,40 +75,51 @@ input[type="number"],
 input[type="date"],
 select,
 textarea {
-  min-height: 48px;
-  padding: 12px 16px;
   font-size: 16px; /* Prevents zoom on iOS */
-  line-height: 1.5;
 }
 
-/* Textarea */
-textarea {
-  min-height: 120px;
-  padding: 12px 16px;
-}
-
-/* Select dropdowns */
-select {
+:where(
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="search"],
+    input[type="number"],
+    input[type="date"],
+    select
+  ) {
   min-height: 48px;
-  padding: 12px 16px;
+}
+
+:where(textarea) {
+  min-height: 120px;
+}
+
+:where(select) {
   background-position: right 12px center;
 }
 
-/* Checkboxes and radio buttons */
-input[type="checkbox"],
-input[type="radio"] {
+/*
+  Checkboxes and radios. The 10px margin went (preflight zeroes it, and at
+  (0,1,1) it used to beat `sr-only`'s -1px, so visually hidden native
+  checkboxes took up room). The 44px touch floor for coarse pointers is in
+  index.css.
+*/
+:where(input[type="checkbox"], input[type="radio"]) {
   min-width: 24px;
   min-height: 24px;
-  margin: 10px; /* Add margin for easier tapping */
 }
 
-/* Labels */
+/*
+  Labels. No colour (it defeated a parent's `text-muted-foreground`, same bug
+  as US-817) and no bottom margin (it stacked on `space-y-2` in every form
+  field and pushed checkbox labels off centre in `items-center` rows).
+*/
 label {
   display: block;
-  margin-bottom: 8px;
   font-weight: 500;
   font-size: 14px;
-  color: hsl(var(--foreground));
 }
 
 /* Form groups */
@@ -97,12 +144,16 @@ body {
   color: hsl(var(--foreground));
 }
 
-/* Paragraphs */
+/*
+  Paragraphs: the 16px floor stays. The colour went for the same reason as on
+  labels (body already sets --foreground, so on a plain surface it did
+  nothing, and on a tinted one it overrode the parent's colour utility). The
+  16px bottom margin went because preflight's zero is what every `p` in src/
+  was written against.
+*/
 p {
   font-size: 16px;
   line-height: 1.6;
-  color: hsl(var(--foreground));
-  margin-bottom: 16px;
 }
 
 /* Small text (captions, helper text) - minimum 14px */
@@ -134,18 +185,12 @@ small,
   line-height: 1.5;
 }
 
-/* Links - follow design system tokens */
+/*
+  Links - follow design system tokens. `a:hover` and `a:visited` repeated the
+  same values at (0,1,1), which beat `text-primary` on a visited or hovered
+  link and turned it back to foreground; they are gone.
+*/
 a {
-  color: hsl(var(--foreground));
-  text-decoration: none;
-}
-
-a:hover {
-  color: hsl(var(--foreground));
-  text-decoration: none;
-}
-
-a:visited {
   color: hsl(var(--foreground));
   text-decoration: none;
 }
@@ -166,9 +211,12 @@ nav a,
   color: hsl(var(--foreground));
 }
 
-nav a:hover,
-.nav-link:hover {
-  color: hsl(var(--foreground));
+/*
+  Hover: :where() so a nav link's own `opacity-*` class still wins. The colour
+  it used to set is `nav a`'s colour anyway, and at (0,1,2) it beat
+  `text-primary` on every hovered nav link.
+*/
+:where(nav a:hover, .nav-link:hover) {
   opacity: 0.85;
 }
 
@@ -194,31 +242,32 @@ nav a:hover,
   color: hsl(var(--muted-foreground)) !important;
 }
 
-/* Headings */
+/*
+  Headings. Sizes and weight stay as defaults for a heading with no size class
+  (any `text-*` class beats an element selector). The bottom margins went:
+  24/20/16/12px under every h1-h4 stacked on the `gap-*` and `space-y-*` the
+  surrounding code already spaces them with. The colour went for the same
+  reason as on `p`.
+*/
 h1, h2, h3, h4, h5, h6 {
-  color: hsl(var(--foreground));
   line-height: 1.3;
   font-weight: 700;
 }
 
 h1 {
   font-size: 32px;
-  margin-bottom: 24px;
 }
 
 h2 {
   font-size: 28px;
-  margin-bottom: 20px;
 }
 
 h3 {
   font-size: 24px;
-  margin-bottom: 16px;
 }
 
 h4 {
   font-size: 20px;
-  margin-bottom: 12px;
 }
 
 /* ==========================================================================
@@ -226,10 +275,11 @@ h4 {
    ========================================================================== */
 
 @media (max-width: 768px) {
-  /* Increase padding for touch-friendly spacing */
-  .container {
-    padding: 16px;
-  }
+  /*
+    The `.container` gutter moved to index.css's components layer. Declared
+    here it was `padding: 16px` on all four sides, later than every utility,
+    so it also replaced the `py-4 md:py-8` written next to it.
+  */
 
   /* Stack elements vertically */
   .mobile-stack {
@@ -239,31 +289,23 @@ h4 {
   }
 
   /*
-    Card spacing, scoped to content (US-869).
-
-    `[class*="card"]` is an attribute SUBSTRING match, so in a Tailwind tree it
-    hits every element carrying the card colour token -- `bg-card`,
-    `text-card-foreground` -- and not only cards. Dashboard's two fixed <nav>
-    bars carry `bg-card`, so both were rendering 20px taller than the space the
-    shell reserves for them: the header measured 97px against `main`'s pt-14
-    (56px), and the bottom tab bar 101px against pb-20 (80px). The top and
-    bottom of every dashboard screen sat behind chrome.
-
-    Scoped to `main` rather than narrowed, because the substring is doing real
-    work: measured across 8 routes at 390px, every element it matches is either
-    a shadcn Card inside `main` (23 on the landing page, 20 on the pantry) or
-    one of those two navs. There is no class that separates a Card from the nav
-    -- both are just `bg-card` -- but "content, not chrome" separates them
-    exactly, and it leaves the padding on every card that had it.
+    Card spacing is opt-in. `main [class*="card"]` (US-869 had
+    already moved it off the dashboard navs) still matched every `bg-card`
+    and `text-card-foreground` inside main at (0,1,1), so it beat `p-3` on a
+    list row and doubled the inset of every shadcn Card, whose header and
+    content already carry p-6. A phone card now has the same 24px inset as
+    the desktop one.
   */
-  main .card,
-  main [class*="card"] {
+  main .card {
     padding: 20px;
     margin-bottom: 16px;
   }
 
-  /* Section padding */
-  section,
+  /*
+    `.section` only. A bare `section` rule padded every <section> 32px 16px,
+    including Sonner's empty `<section aria-label="Notifications">`, which
+    became a 64px block at the top of #root on every phone screen.
+  */
   .section {
     padding: 32px 16px;
   }
@@ -276,8 +318,8 @@ h4 {
     padding: 12px;
   }
 
-  /* Increase touch target spacing */
-  nav ul li {
+  /* Increase touch target spacing, unless the list sets its own. */
+  :where(nav ul li) {
     margin: 8px 0;
   }
 
@@ -345,16 +387,14 @@ img {
   display: block;
 }
 
-/* Logo sizing */
-.logo,
-[class*="logo"] {
+/* Logo sizing (opt in with .logo; no class in src/ contains "logo" today) */
+.logo {
   max-width: 150px;
   height: auto;
 }
 
 @media (max-width: 768px) {
-  .logo,
-  [class*="logo"] {
+  .logo {
     max-width: 120px;
   }
 }
@@ -377,9 +417,14 @@ img {
   color: #2563eb;
 }
 
-/* Back buttons */
-.back-button,
-[class*="back"] {
+/*
+  Back buttons: opt in with .back-button. The `[class*="back"]` half of this
+  rule matched `bg-background`, `ring-offset-background` (every shadcn Button),
+  `backdrop-blur` and anything named feedback, and re-padded all of them.
+  The app's real back buttons are shadcn Buttons, whose size variants are
+  already h-11 (sm) or h-12, so none of them needed it for their 44px.
+*/
+.back-button {
   min-height: 44px;
   padding: 12px 20px;
 }
@@ -417,17 +462,15 @@ img {
    automatically resolve to the correct values in .dark mode.
    ========================================================================== */
 
-/* Form elements in dark mode need explicit background overrides */
-.dark input,
-.dark select,
-.dark textarea {
+/*
+  Form elements in dark mode: a default for an unstyled field only. At
+  (0,1,1) this beat `bg-transparent`, `bg-background` and `border-destructive`
+  on every dark-mode input. Text colour is inherited from body (preflight sets
+  `color: inherit` on inputs), and `.dark label` went with the light one.
+*/
+:where(.dark input, .dark select, .dark textarea) {
   background-color: hsl(var(--card));
   border-color: hsl(var(--border));
-  color: hsl(var(--foreground));
-}
-
-.dark label {
-  color: hsl(var(--foreground));
 }
 
 /* ==========================================================================
@@ -471,18 +514,12 @@ img {
   margin: -12px;
 }
 
-/* Screen reader only (for accessibility) */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
+/*
+  `.sr-only` lived here as a copy of Tailwind's own. Being later in the bundle
+  it beat `sm:not-sr-only` and `md:not-sr-only`, so the labels those four call
+  sites reveal on wider screens (PantryCaptureMenu, PlanSyncBanner,
+  AchievementBadge) stayed hidden on desktop. Tailwind's is the only one now.
+*/
 
 /* ==========================================================================
    Safe Area Insets (for notched devices)
@@ -508,14 +545,7 @@ img {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Common safe area patterns */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-.pt-safe {
-  padding-top: env(safe-area-inset-top);
-}
+/* `.pb-safe` / `.pt-safe` are defined once, in index.css's utilities layer. */
 
 /* ==========================================================================
    Touch Feedback & Interactions
@@ -674,8 +704,12 @@ html {
 
 /* Full-screen mobile modals */
 @media (max-width: 768px) {
+  /*
+    `[role="dialog"]` is a default only: at (0,1,0) it beat `rounded-t-2xl`
+    and `max-h-[85vh]` on every sheet and dialog on a phone.
+  */
   .modal-mobile-fullscreen,
-  [role="dialog"] {
+  :where([role="dialog"]) {
     max-width: 100vw;
     max-height: 100vh;
     border-radius: 0;

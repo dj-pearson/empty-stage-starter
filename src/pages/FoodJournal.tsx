@@ -506,7 +506,7 @@ export default function FoodJournal() {
         <meta name="description" content={t("foodJournal.metaDescription")} />
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="min-h-screen bg-background pb-20 md:pt-20 print:min-h-0 print:p-0">
+      <div className="min-h-screen bg-background pb-20 md:pt-6 print:min-h-0 print:p-0">
         <div className="container mx-auto max-w-3xl px-4 py-6 md:py-8">
           <header className="mb-4 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

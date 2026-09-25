@@ -1138,13 +1138,8 @@ export default function Grocery() {
     );
   };
 
-  // The max-md: classes below undo styles/mobile-first.css on phones, which
-  // loads after Tailwind: `[class*="back"]` matches `bg-background` and pads
-  // the element 12px (so the `!` is needed to beat it), `section` gets 32px
-  // of padding and h1/h3 carry 24px/16px bottom margins. Together they put
-  // about 100px of blank space above the first grocery row at 390px.
   return (
-    <div className="min-h-screen pb-24 md:pb-8 md:pt-20 bg-background max-md:!pt-0">
+    <div className="min-h-screen pb-24 md:pb-8 md:pt-6 bg-background">
       <Helmet>
         <title>Grocery List - EatPal</title>
         <meta name="description" content="Manage your grocery shopping list with smart suggestions and store organization" />
@@ -1163,7 +1158,7 @@ export default function Grocery() {
             <ShoppingCart className="h-5 w-5 text-primary" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <h1 className={cn("font-bold tracking-tight max-md:mb-0", hasItems ? "text-lg md:text-2xl" : "text-2xl")}>
+            <h1 className={cn("font-bold tracking-tight", hasItems ? "text-lg md:text-2xl" : "text-2xl")}>
               {t("grocery.title")}
             </h1>
             <p className={cn("text-sm text-muted-foreground", hasItems && "hidden md:block")}>
@@ -1193,7 +1188,7 @@ export default function Grocery() {
         <div
           role="toolbar"
           aria-label={t("grocery.toolbar.label", { defaultValue: "Grocery list tools" })}
-          className="sticky top-14 z-30 -mx-4 mb-2 flex items-center gap-2 bg-background px-4 py-1 max-md:!py-1 border-b border-border md:relative md:z-auto md:top-auto md:mx-0 md:px-0 print:hidden"
+          className="sticky top-14 z-30 -mx-4 mb-2 flex items-center gap-2 bg-background px-4 py-1 border-b border-border md:relative md:z-auto md:top-auto md:mx-0 md:px-0 print:hidden"
         >
           <div className="min-w-0 flex-1">
             {userId ? (
@@ -1492,7 +1487,7 @@ export default function Grocery() {
                   aria-labelledby="grocery-list-heading"
                   id="grocery-list-items"
                   ref={listRef}
-                  className="mb-4 rounded-xl border border-border overflow-hidden p-0"
+                  className="mb-4 rounded-xl border border-border overflow-hidden"
                 >
                   {/* The aisle headings are h3s; this h2 sits between them and
                       the page's h1 so the outline does not skip a level. */}
@@ -1534,7 +1529,7 @@ export default function Grocery() {
                   </div>
                 </section>
               ) : (
-                <section aria-labelledby="grocery-list-heading" className="mb-4 space-y-3 p-0">
+                <section aria-labelledby="grocery-list-heading" className="mb-4 space-y-3">
                   <h2 id="grocery-list-heading" className="sr-only">
                     {t("grocery.list.label", { defaultValue: "Shopping list" })}
                   </h2>
