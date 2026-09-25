@@ -93,12 +93,27 @@ BEGIN
   RAISE NOTICE '4. token length = %  EXPECTED 64', char_length(share_token);
   ASSERT char_length(share_token) = 64, 'token was not minted by the database';
 
-  -- 4b. A token sent by the client is ignored.
-  INSERT INTO public.recipe_shares (recipe_id, household_id, token)
-    VALUES (rec_legacy, hh_owner, repeat('b', 64))
-    RETURNING token INTO legacy_tok;
-  RAISE NOTICE '4b. client token kept = %  EXPECTED false', legacy_tok = repeat('b', 64);
-  ASSERT legacy_tok <> repeat('b', 64), 'a client chose its own token';
+  -- 4b. A token sent by the client never lands. On Supabase the column grant
+  --     refuses the INSERT outright (authenticated may set recipe_id and
+  --     household_id only); where a blanket GRANT ALL sits on top, as in the
+  --     local harness, the BEFORE INSERT trigger overwrites it. Either is a
+  --     pass; a row carrying the client's token is not.
+  legacy_tok := NULL;
+  BEGIN
+    INSERT INTO public.recipe_shares (recipe_id, household_id, token)
+      VALUES (rec_legacy, hh_owner, repeat('b', 64))
+      RETURNING token INTO legacy_tok;
+  EXCEPTION WHEN insufficient_privilege THEN
+    legacy_tok := NULL;
+  END;
+  RAISE NOTICE '4b. client token kept = %  EXPECTED false', legacy_tok IS NOT DISTINCT FROM repeat('b', 64);
+  ASSERT legacy_tok IS DISTINCT FROM repeat('b', 64), 'a client chose its own token';
+  IF legacy_tok IS NULL THEN
+    -- Refused by the grant: share the legacy recipe the way the app does.
+    INSERT INTO public.recipe_shares (recipe_id, household_id) VALUES (rec_legacy, hh_owner)
+      RETURNING token INTO legacy_tok;
+  END IF;
+  ASSERT char_length(legacy_tok) = 64, 'the legacy recipe link was not minted by the database';
 
   -- 4c. A link cannot be repointed at another recipe.
   refused := false;
@@ -110,9 +125,14 @@ BEGIN
   RAISE NOTICE '4c. repoint refused = %  EXPECTED true', refused;
   ASSERT refused, 'a share link was repointed at another recipe';
 
-  -- 4d. No DELETE policy: a link is revoked, not erased.
-  DELETE FROM public.recipe_shares WHERE token = legacy_tok;
-  GET DIAGNOSTICS seen = ROW_COUNT;
+  -- 4d. No DELETE grant and no DELETE policy: a link is revoked, not erased.
+  --     Supabase refuses on the grant; under a blanket grant RLS leaves 0 rows.
+  BEGIN
+    DELETE FROM public.recipe_shares WHERE token = legacy_tok;
+    GET DIAGNOSTICS seen = ROW_COUNT;
+  EXCEPTION WHEN insufficient_privilege THEN
+    seen := 0;
+  END;
   RAISE NOTICE '4d. deleted rows = %  EXPECTED 0', seen;
   ASSERT seen = 0, 'a household member deleted a share row';
 
