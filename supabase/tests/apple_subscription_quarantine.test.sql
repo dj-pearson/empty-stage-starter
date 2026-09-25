@@ -132,7 +132,15 @@ DECLARE
 BEGIN
   PERFORM set_config('request.jwt.claim.sub', (SELECT v FROM aq_ids WHERE k = 'forever')::text, true);
   SET LOCAL ROLE authenticated;
-  SELECT count(*) INTO seen FROM public.apple_subscriptions_quarantine;
+  -- Two acceptable refusals. On real Supabase the migration's REVOKE holds,
+  -- so the read is refused outright (42501). The local harness grants every
+  -- table to the API roles after migrating, so there the read gets through
+  -- to RLS, which has no policy and returns nothing. Either way: no rows.
+  BEGIN
+    SELECT count(*) INTO seen FROM public.apple_subscriptions_quarantine;
+  EXCEPTION WHEN insufficient_privilege THEN
+    seen := 0;
+  END;
   RESET ROLE;
   ASSERT seen = 0, format('authenticated saw %s quarantine rows', seen);
   RAISE NOTICE 'assertion 6 ok (quarantine unreadable by a client)';
