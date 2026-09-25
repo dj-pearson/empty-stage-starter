@@ -1,3 +1,6 @@
+// @vitest-environment node
+// WebCrypto here must get Node's own typed arrays; jsdom's Uint8Array is a
+// different realm and Node 20's subtle.sign rejects it (CI runs Node 20).
 // Vitest mirror for what a verified App Store transaction may write, so the
 // decision runs in CI without Deno.
 // Deno twin: supabase/functions/_shared/appStoreTransaction.test.ts

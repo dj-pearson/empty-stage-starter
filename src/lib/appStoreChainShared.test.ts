@@ -1,3 +1,6 @@
+// @vitest-environment node
+// WebCrypto here must get Node's own typed arrays; jsdom's Uint8Array is a
+// different realm and Node 20's subtle.sign rejects it (CI runs Node 20).
 // Vitest mirror for the full Apple JWS chain verification, so it runs in CI
 // without Deno. Deno twin: supabase/functions/_shared/appStoreChain.test.ts
 // Chains are generated at run time with WebCrypto (appStoreChain.testkit.ts).
