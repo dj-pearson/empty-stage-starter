@@ -58,7 +58,6 @@ const KNOWN_UNNAMED: Record<string, number> = {
   'src/components/admin/pseo/PseoAdminDashboard.tsx': 1,
   'src/components/admin/seo/SeoContentTab.tsx': 4,
   'src/components/admin/seo/SeoKeywordsTab.tsx': 1,
-  'src/pages/Onboarding.tsx': 1,
   'src/pages/PickyEaterQuiz.tsx': 1,
 };
 
