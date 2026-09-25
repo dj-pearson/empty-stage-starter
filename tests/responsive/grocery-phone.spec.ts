@@ -84,8 +84,18 @@ test.describe('Grocery list at phone width', () => {
       const bad: string[] = [];
       const selector = 'button, a[role="button"], input[type="checkbox"], [role="checkbox"]';
       for (const el of Array.from(document.querySelectorAll(selector))) {
-        const r = el.getBoundingClientRect();
+        let r = el.getBoundingClientRect();
         if (r.width === 0 && r.height === 0) continue; // not rendered
+        // A stretched button: its ::after is absolutely positioned over the
+        // nearest positioned ancestor, and that box is what a finger hits.
+        // GroceryRow's item name is one (a 24px line of text whose ::after
+        // covers the 44px row body). getBoundingClientRect never includes a
+        // pseudo-element, so measure the box the ::after fills instead.
+        const after = getComputedStyle(el, '::after');
+        const host = (el as HTMLElement).offsetParent;
+        if (after.position === 'absolute' && after.content !== 'none' && host) {
+          r = host.getBoundingClientRect();
+        }
         if (r.width < floor || r.height < floor) {
           const label = (el.textContent || '').trim() || el.getAttribute('aria-label') || '(unnamed)';
           bad.push(`${label.slice(0, 30)} ${Math.round(r.width)}x${Math.round(r.height)}`);
@@ -329,7 +339,7 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
       const picker = document.querySelector(sel)!;
       let bar = picker.parentElement as HTMLElement;
       while (bar && getComputedStyle(bar).position !== 'sticky') bar = bar.parentElement as HTMLElement;
-      const nav = document.querySelector('nav[aria-label="Mobile header navigation"]')!;
+      const nav = document.querySelector('header:has(~ main#main-content)')!;
       return Math.round(bar.getBoundingClientRect().top - nav.getBoundingClientRect().bottom);
     }, PICKER);
 
@@ -351,7 +361,7 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
       const picker = document.querySelector(sel)!;
       let bar = picker.parentElement as HTMLElement;
       while (bar && getComputedStyle(bar).position !== 'sticky') bar = bar.parentElement as HTMLElement;
-      const nav = document.querySelector('nav[aria-label="Mobile header navigation"]')!;
+      const nav = document.querySelector('header:has(~ main#main-content)')!;
       return (bar.getBoundingClientRect().height + nav.getBoundingClientRect().height) / window.innerHeight;
     }, PICKER);
 
@@ -401,7 +411,9 @@ test.describe('The grocery list picker and add bar stay put while scrolling', ()
         .map((el) => el.getAttribute('aria-label') ?? el.tagName);
     });
 
-    expect(fixedAtTop).toEqual(['Mobile header navigation']);
+    // The shell's header is a plain <header> (no links, so not a nav) and
+    // carries no label, so it reads back as its tag.
+    expect(fixedAtTop).toEqual(['HEADER']);
   });
 });
 
@@ -463,7 +475,9 @@ test.describe('Grocery list fits the first phone screen', () => {
     await page.goto('/dashboard/grocery');
     await page.waitForLoadState('networkidle');
 
-    const name = page.getByRole('button', { name: 'Whole milk', exact: true }).first();
+    // Bananas, not Whole milk: on a phone only the first aisle starts open,
+    // and Produce is first.
+    const name = page.getByRole('button', { name: 'Bananas', exact: true }).first();
     const box = (await name.boundingBox())!;
     expect(box.width, `the name box is ${Math.round(box.width)}px wide`).toBeGreaterThanOrEqual(150);
   });

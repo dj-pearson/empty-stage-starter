@@ -31,6 +31,12 @@ const ROUTES = [
   '/dashboard/settings',
 ];
 
+/**
+ * The phone shell's bottom tab bar. Labelled "Primary" since the shell was
+ * rebuilt; the header above it holds no links and is a plain <header>.
+ */
+const PHONE_TAB_BAR = 'nav[aria-label="Primary"]';
+
 const VIEWPORTS = {
   desktop: { width: 1280, height: 900 },
   phone: devices['iPhone 12'].viewport,
@@ -85,7 +91,7 @@ test.describe('each shell still brings its own chrome', () => {
     await signIn(context);
     await page.goto('/dashboard');
     await page.locator('[role="main"]').first().waitFor({ state: 'visible' });
-    await expect(page.locator('nav[aria-label="Primary mobile navigation"]')).toHaveCount(0);
+    await expect(page.locator(PHONE_TAB_BAR)).toHaveCount(0);
     // A one-shell change that renders the wrong shell would still pass the
     // counts above.
     await expect(page.locator('[data-sidebar]').first()).toBeAttached();
@@ -96,7 +102,7 @@ test.describe('each shell still brings its own chrome', () => {
     await signIn(context);
     await page.goto('/dashboard');
     await page.locator('[role="main"]').first().waitFor({ state: 'visible' });
-    await expect(page.locator('nav[aria-label="Primary mobile navigation"]')).toHaveCount(1);
+    await expect(page.locator(PHONE_TAB_BAR)).toHaveCount(1);
     await expect(page.locator('[data-sidebar]')).toHaveCount(0);
   });
 });

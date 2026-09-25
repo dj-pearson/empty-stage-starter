@@ -34,8 +34,10 @@ test.describe('dashboard chrome fits the space reserved for it', () => {
       await page.waitForTimeout(500);
 
       const m = await page.evaluate(() => {
-        const header = document.querySelector('nav[aria-label="Mobile header navigation"]');
-        const tabs = document.querySelector('nav[aria-label="Primary mobile navigation"]');
+        // The fixed <header> that precedes main (it holds the logo and the kid
+        // picker, no links, so it is not a nav), and the "Primary" tab bar.
+        const header = document.querySelector('header:has(~ main#main-content)');
+        const tabs = document.querySelector('nav[aria-label="Primary"]');
         const main = document.querySelector('main#main-content');
         if (!header || !tabs || !main) return null;
         const style = getComputedStyle(main as HTMLElement);
@@ -64,7 +66,9 @@ test.describe('dashboard chrome fits the space reserved for it', () => {
     // would take 20px of padding off every card on every phone screen, which
     // is a redesign, not a bug fix.
     await signIn(context);
-    await page.goto('/dashboard/pantry');
+    // Recipes, not Pantry: on a phone the pantry is a list of rows and renders
+    // no cards at all, so it measured nothing.
+    await page.goto('/dashboard/recipes');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(500);
 

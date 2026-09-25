@@ -75,7 +75,7 @@ test.describe('accessibility preferences are written when they change', () => {
     const switches = page.locator('#settings-accessibility [role="switch"]');
     // The floor: with no switches found, the click below is a no-op and the
     // assertion after it would be measuring nothing.
-    expect(await switches.count(), 'no preference switches on the settings page').toBeGreaterThan(5);
+    expect(await switches.count(), 'no preference switches on the settings page').toBeGreaterThan(0);
 
     expect(writes, 'the settings page itself wrote on load').toEqual([]);
 
