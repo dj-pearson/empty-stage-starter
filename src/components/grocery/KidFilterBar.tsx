@@ -85,7 +85,7 @@ export const KidFilterBar = memo(function KidFilterBar({
                   name: selected.name,
                 })}
           </span>
-          <Button variant="outline" size="sm" className="h-9 gap-1" onClick={() => onChange(null)}>
+          <Button variant="outline" size="sm" className="h-11 gap-1 md:h-9" onClick={() => onChange(null)}>
             <X className="h-3.5 w-3.5" aria-hidden="true" />
             {t("grocery.kidFilter.showAll", { defaultValue: "Show all items" })}
           </Button>

@@ -68,14 +68,14 @@ export const GroceryGroupHeader = memo(function GroceryGroupHeader({
 
   if (!collapsible) {
     return (
-      <h3 className="flex min-h-11 items-center gap-2 px-4 text-sm font-semibold text-foreground">
+      <h3 className="flex min-h-11 items-center gap-2 px-4 text-sm font-semibold text-foreground max-md:mb-0">
         {body}
       </h3>
     );
   }
 
   return (
-    <h3 className="text-sm font-semibold text-foreground">
+    <h3 className="text-sm font-semibold text-foreground max-md:mb-0">
       <button
         type="button"
         aria-expanded={expanded}
