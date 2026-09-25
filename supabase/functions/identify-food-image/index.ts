@@ -2,6 +2,7 @@ import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { PublicError, publicMessage } from '../_shared/errors.ts';
+import { parseFoodIdentification } from '../_shared/aiSuggestionParsers.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -83,9 +84,13 @@ export default async (req: Request) => {
       throw new PublicError('No response from AI');
     }
 
-    // Parse the JSON response from AI (strip ```json fences if present)
-    const cleanContent = content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '');
-    const foodData = JSON.parse(cleanContent);
+    // Tolerates fences and prose around the object; null when there is no
+    // object with a name. The raw reply is logged, never returned.
+    const foodData = parseFoodIdentification(content);
+    if (!foodData) {
+      console.error('identify-food-image: unusable AI reply:', content.slice(0, 500));
+      throw new Error('Unparseable AI response');
+    }
 
     console.log('Food identified:', foodData);
 

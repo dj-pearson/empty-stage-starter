@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   matchPantryFoodIds,
   parseFoodChains,
+  parseFoodIdentification,
   parseFoodSuggestions,
   parsePantryRecipeSuggestions,
 } from '../../supabase/functions/_shared/aiSuggestionParsers';
@@ -112,5 +113,76 @@ describe('matchPantryFoodIds', () => {
       { id: 'f4' },
     ];
     expect(matchPantryFoodIds(['pasta', 'CHEDDAR', 'milk', 'bread'], pantry)).toEqual(['f1', 'f2']);
+  });
+});
+
+describe('parseFoodIdentification', () => {
+  const object = {
+    name: 'Apple',
+    variety: 'Gala',
+    varietyOptions: ['Gala', 'Fuji', 3],
+    category: 'Fruit',
+    confidence: 92,
+    description: 'Two red apples',
+    servingSize: '1 medium',
+    quantity: 2,
+    servingSizeOptions: ['1 small', '1 medium', '1 large'],
+  };
+  const expected = {
+    name: 'Apple',
+    variety: 'Gala',
+    varietyOptions: ['Gala', 'Fuji'],
+    category: 'fruit',
+    confidence: 92,
+    description: 'Two red apples',
+    servingSize: '1 medium',
+    quantity: 2,
+    servingSizeOptions: ['1 small', '1 medium', '1 large'],
+  };
+
+  it('reads a bare object and normalizes category and list entries', () => {
+    expect(parseFoodIdentification(JSON.stringify(object))).toEqual(expected);
+  });
+
+  // The bug: the handler stripped fences and JSON.parse'd the whole string,
+  // so a sentence before or after the object threw.
+  it('reads the object out of prose, with or without a fence', () => {
+    const json = JSON.stringify(object);
+    expect(parseFoodIdentification(`Here is what I see:\n${json}\nHope that helps.`)).toEqual(expected);
+    expect(parseFoodIdentification(`Sure!\n\`\`\`json\n${json}\n\`\`\`\nLet me know.`)).toEqual(expected);
+  });
+
+  it('fills defaults for missing or malformed fields', () => {
+    expect(
+      parseFoodIdentification('{"name": " Carrot ", "category": "root veg", "confidence": "0.8", "quantity": 0}'),
+    ).toEqual({
+      name: 'Carrot',
+      variety: '',
+      varietyOptions: [],
+      category: 'snack',
+      confidence: 80,
+      description: '',
+      servingSize: '',
+      quantity: 1,
+      servingSizeOptions: [],
+    });
+  });
+
+  it('clamps confidence to 0-100 and rounds quantity', () => {
+    const got = parseFoodIdentification('{"name": "Egg", "confidence": 140, "quantity": "3.4"}');
+    expect(got?.confidence).toBe(100);
+    expect(got?.quantity).toBe(3);
+    expect(parseFoodIdentification('{"name": "Egg", "confidence": "85%"}')?.confidence).toBe(85);
+  });
+
+  it('reads a single object the model wrapped in an array', () => {
+    expect(parseFoodIdentification('[{"name": "Apple", "category": "fruit"}]')?.name).toBe('Apple');
+  });
+
+  it('returns null when there is no object with a name', () => {
+    expect(parseFoodIdentification("I can't tell what this is.")).toBeNull();
+    expect(parseFoodIdentification('{"category": "fruit"}')).toBeNull();
+    expect(parseFoodIdentification('')).toBeNull();
+    expect(parseFoodIdentification(undefined)).toBeNull();
   });
 });

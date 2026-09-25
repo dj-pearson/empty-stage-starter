@@ -1,7 +1,9 @@
 /**
  * Response parsing for three AI features whose handlers never got model output:
  * suggest-foods, calculate-food-similarity (food chains) and
- * suggest-recipes-from-pantry.
+ * suggest-recipes-from-pantry. identify-food-image's parser lives here too:
+ * that handler did get output, but JSON.parse'd the whole reply after
+ * stripping fences, so any prose around the object failed the request.
  *
  * Each one called AIServiceV2.generateContent(prompt, { systemPrompt, taskType })
  * and treated the result as a string. generateContent takes an AIRequest
@@ -148,4 +150,67 @@ export function matchPantryFoodIds(
     if (food && typeof food.id === 'string') ids.push(food.id);
   }
   return ids;
+}
+
+// ------------------------------------------------------------ identify-food-image
+
+export interface FoodIdentification {
+  name: string;
+  variety: string;
+  varietyOptions: string[];
+  category: FoodSuggestionCategory;
+  confidence: number;
+  description: string;
+  servingSize: string;
+  quantity: number;
+  servingSizeOptions: string[];
+}
+
+/** A finite number from a number or a numeric string ("85", "85%"), else null. */
+function numberFrom(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const n = Number.parseFloat(value.replace('%', '').trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * The prompt asks for one object: { name, variety, varietyOptions, category,
+ * confidence, description, servingSize, quantity, servingSizeOptions }.
+ * ImageFoodCapture renders every field and Pantry writes name, category,
+ * quantity and servingSize to the foods table, so each is normalized here:
+ * category outside the six becomes "snack", confidence is clamped to a whole
+ * 0-100 (a 0-1 fraction is scaled up), quantity is a whole number of at least
+ * 1. Null when there is no object with a name, which the handler answers with
+ * its generic 500 instead of a bare JSON.parse failure.
+ */
+export function parseFoodIdentification(content: unknown): FoodIdentification | null {
+  const obj = extractJsonObject(content);
+  if (!obj) return null;
+  const name = text(obj.name);
+  if (!name) return null;
+
+  const category = text(obj.category).toLowerCase();
+
+  let confidence = numberFrom(obj.confidence) ?? 0;
+  if (confidence > 0 && confidence < 1) confidence *= 100;
+  confidence = Math.round(Math.min(100, Math.max(0, confidence)));
+
+  const quantity = Math.max(1, Math.round(numberFrom(obj.quantity) ?? 1));
+
+  return {
+    name,
+    variety: text(obj.variety),
+    varietyOptions: textList(obj.varietyOptions),
+    category: (FOOD_SUGGESTION_CATEGORIES as readonly string[]).includes(category)
+      ? (category as FoodSuggestionCategory)
+      : 'snack',
+    confidence,
+    description: text(obj.description),
+    servingSize: text(obj.servingSize),
+    quantity,
+    servingSizeOptions: textList(obj.servingSizeOptions),
+  };
 }
