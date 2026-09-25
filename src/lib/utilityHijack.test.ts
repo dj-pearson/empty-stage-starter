@@ -333,7 +333,9 @@ describe('global link, focus and contrast rules yield to Tailwind and the tokens
     // `button:focus`, `a:focus-visible`, `:focus-visible`, `*:focus`: an
     // element, the universal selector or nothing in front of the pseudo-class,
     // outside :where(). Class-scoped rules (.skip-link:focus) are opt-in.
-    const elementFocus = /^(\*|[a-z][a-z0-9]*|\[[^\]]+\])*:focus(-visible)?(:not\([^)]*\))*$/;
+    // At most one element name, then attribute selectors: each piece can match
+    // only one way, so the pattern cannot backtrack exponentially (CodeQL).
+    const elementFocus = /^(?:\*|[a-z][a-z0-9]*)?(?:\[[^\]]+\])*:focus(?:-visible)?(?::not\([^)]*\))*$/;
     for (const file of ALL_GLOBAL_STYLESHEETS) {
       const drawing = rules(read(file)).filter(
         ({ selector, body }) =>
