@@ -1258,6 +1258,7 @@ export default function Pantry() {
               <Receipt className="h-5 w-5" aria-hidden="true" />
             </Button>
             <PantryCaptureMenu
+              onAddDetails={openAddDialog}
               onPhoto={openPhoto}
               onImportCsv={openCsv}
               onAiIdeas={handleGetSuggestions}

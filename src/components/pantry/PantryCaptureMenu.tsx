@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
-import { Camera, FileSpreadsheet, MoreHorizontal, Sparkles, Sprout } from "lucide-react";
+import { Camera, FileSpreadsheet, MoreHorizontal, PencilLine, Sparkles, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +26,12 @@ import "@/i18n/appLocale";
  * these callbacks.
  */
 export interface PantryCaptureMenuProps {
+  /**
+   * The full add form: catalog search, allergens, stock. Quick-add covers the
+   * everyday case, but without this a pantry with food in it had no way to
+   * reach the form for a new food (only the empty state opened it).
+   */
+  onAddDetails: () => void;
   onPhoto: () => void;
   onImportCsv: () => void;
   onAiIdeas: () => void;
@@ -33,7 +39,7 @@ export interface PantryCaptureMenuProps {
   onStarter?: () => void;
 }
 
-function PantryCaptureMenuImpl({ onPhoto, onImportCsv, onAiIdeas, onStarter }: PantryCaptureMenuProps) {
+function PantryCaptureMenuImpl({ onAddDetails, onPhoto, onImportCsv, onAiIdeas, onStarter }: PantryCaptureMenuProps) {
   const { t } = useTranslation();
   const select = (fn: () => void) => () => {
     haptic.light();
@@ -54,6 +60,10 @@ function PantryCaptureMenuImpl({ onPhoto, onImportCsv, onAiIdeas, onStarter }: P
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuItem className="min-h-11 gap-2" onSelect={select(onAddDetails)}>
+          <PencilLine className="h-4 w-4" aria-hidden="true" />
+          {t("pantry.capture.addDetails", "Add a food with details")}
+        </DropdownMenuItem>
         <DropdownMenuItem className="min-h-11 gap-2" onSelect={select(onPhoto)}>
           <Camera className="h-4 w-4" aria-hidden="true" />
           {t("pantry.capture.photo", "Identify from a photo")}

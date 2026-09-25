@@ -56,6 +56,7 @@
       "update": "Update"
     },
     "capture": {
+      "addDetails": "Add a food with details",
       "aiIdeas": "Food ideas for my kids",
       "importCsv": "Import a CSV file",
       "more": "More ways to add",
