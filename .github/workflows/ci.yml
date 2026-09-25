@@ -383,7 +383,7 @@ jobs:
         run: |
           node scripts/dev/fake-postgrest.mjs &
           sleep 2
-          npx playwright test --project=chromium tests/accessibility/authenticated-a11y.spec.ts
+          npx playwright test --project=chromium tests/accessibility/authenticated-a11y.spec.ts tests/accessibility/global-css.spec.ts
         env:
           E2E_TARGET: dist
           E2E_DIST: dist-e2e
