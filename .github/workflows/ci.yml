@@ -641,6 +641,26 @@ jobs:
       - name: Deno invoice rendering
         run: deno test supabase/functions/_shared/invoice.test.ts
 
+      # Owner decision "a" (2026-09-25), forged App Store entitlement: the full
+      # Apple JWS chain check verify-app-store-transaction relies on. A forged
+      # chain (own leaf and intermediate, real root appended) is refused, as are
+      # missing marker OIDs, a wrong pin and an unset pin. Chains are generated
+      # at run time with WebCrypto; nothing signed is committed. No network.
+      - name: Deno App Store chain verification
+        run: deno test supabase/functions/_shared/appStoreChain.test.ts
+
+      # What a verified transaction may write: every column from the signed
+      # payload, bound to the caller; 409 when it belongs to another account;
+      # a replayed older JWS cannot revive a revoked row. Pure, no network.
+      - name: Deno App Store transaction decision
+        run: deno test supabase/functions/_shared/appStoreTransaction.test.ts
+
+      # app-store-notifications' verification, moved to _shared unchanged, and
+      # the chainVerified flag that gates creating a row from appAccountToken.
+      # --allow-net resolves the jose import; the tests reach no service.
+      - name: Deno App Store notification verification
+        run: deno test --allow-env --allow-net supabase/functions/_shared/appStoreJws.test.ts
+
       - uses: supabase/setup-cli@v1
         with:
           # US-760: pinned, not `latest`. Both Supabase jobs run the same
