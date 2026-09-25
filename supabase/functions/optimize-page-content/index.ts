@@ -3,6 +3,7 @@ import { requireAdmin } from '../_shared/require-admin.ts';
 import { meterAdminRequest, rejectNonPost } from '../_shared/ai-gate.ts';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { fetchRecipePage } from '../_shared/url-validator.ts';
+import { extractTextContent } from '../_shared/htmlText.ts';
 import { PublicError, publicMessage, publicStatus } from '../_shared/errors.ts';
 import { parseModelJsonObject, parsePageOptimizationRequest } from '../_shared/seoContentRequest.ts';
 
@@ -11,32 +12,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
-function extractTextContent(html: string): string {
-  let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
-  text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-
-  const mainMatch = text.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
-  const articleMatch = text.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
-
-  if (mainMatch) {
-    text = mainMatch[1];
-  } else if (articleMatch) {
-    text = articleMatch[1];
-  }
-
-  text = text.replace(/<[^>]+>/g, " ");
-  text = text
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
-  text = text.replace(/\s+/g, " ").trim();
-  return text;
-}
 
 function extractElements(html: string, tag: string): string[] {
   const regex = new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`, "gi");
