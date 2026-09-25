@@ -188,11 +188,12 @@ small,
 /*
   Links - follow design system tokens. `a:hover` and `a:visited` repeated the
   same values at (0,1,1), which beat `text-primary` on a visited or hovered
-  link and turned it back to foreground; they are gone.
+  link and turned it back to foreground; they are gone. No text-decoration
+  here: index.css owns the underline default at (0,0,1), and this rule, at
+  the same specificity and later in the bundle, would strip every text link.
 */
 a {
   color: hsl(var(--foreground));
-  text-decoration: none;
 }
 
 /* ==========================================================================
@@ -335,23 +336,20 @@ h4 {
    Accessibility Enhancements
    ========================================================================== */
 
-/* Focus states */
-button:focus,
-a:focus,
-input:focus,
-select:focus,
-textarea:focus {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
+/*
+  Focus states: none here. `button:focus, a:focus, input:focus, ...` drew
+  `2px solid #2563eb` at (0,1,1), after the utilities, so it beat
+  `outline-none` and painted a hardcoded blue over the orange --ring token.
+  The keyboard-only indicator is `:where(:focus-visible)` in index.css.
+*/
 
 /* Skip to content link */
 .skip-to-content {
   position: absolute;
   top: -40px;
   left: 0;
-  background: #2563eb;
-  color: white;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   padding: 12px;
   text-decoration: none;
   z-index: 100;
@@ -361,21 +359,13 @@ textarea:focus {
   top: 0;
 }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  body {
-    color: #000000;
-  }
-
-  a {
-    text-decoration: none;
-  }
-
-  button,
-  .btn {
-    border: 2px solid currentColor;
-  }
-}
+/*
+  High contrast: see `@media (prefers-contrast: more)` in index.css, which
+  moves tokens instead of painting colours. The block that was here queried
+  `prefers-contrast: high`, which no current browser matches; had it run, it
+  set `body { color: #000 }` (black on the dark theme's navy), removed link
+  underlines, and boxed every button in a 2px border.
+*/
 
 /* ==========================================================================
    Responsive Images
@@ -414,7 +404,7 @@ img {
   padding: 12px 16px;
   display: inline-block;
   font-size: 14px;
-  color: #2563eb;
+  color: hsl(var(--primary));
 }
 
 /*

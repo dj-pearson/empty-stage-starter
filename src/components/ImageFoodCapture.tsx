@@ -358,7 +358,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                   type="button"
                   onClick={capturePhoto}
                   aria-label={t("pantry.photo.tapToCapture", "Tap to capture")}
-                  className="absolute inset-0 z-10 bg-transparent focus:outline-none"
+                  className="absolute inset-0 z-10 bg-transparent focus:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ring"
                 />
                 <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-background/60 text-foreground/80 text-xs">
                   {t("pantry.photo.tapHint", "Tap the video or press Capture")}

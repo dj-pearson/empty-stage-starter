@@ -2,6 +2,7 @@ import { withStandingLimits } from "../_shared/safety.ts";
 import { AIServiceV2 } from "../_shared/ai-service-v2.ts";
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { publicMessage } from '../_shared/errors.ts';
+import { extractJsonObject } from '../_shared/modelJson.ts';
 
 
 const corsHeaders = {
@@ -100,15 +101,10 @@ Format your response as JSON with these exact fields:
       );
     }
 
-    // Try to parse as JSON
-    let recipe;
-    try {
-      // Try to extract JSON from markdown code blocks if present
-      const jsonMatch = recipeText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                       recipeText.match(/```\s*([\s\S]*?)\s*```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : recipeText;
-      recipe = JSON.parse(jsonStr);
-    } catch (e) {
+    // Tolerates fences and prose around the object. Without one, the reply
+    // is served as a plain-text recipe, as before.
+    let recipe = extractJsonObject(recipeText);
+    if (!recipe) {
       console.log('Failed to parse as JSON, using text response');
       recipe = {
         name: 'AI Generated Recipe',

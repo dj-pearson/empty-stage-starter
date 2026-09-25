@@ -96,7 +96,7 @@ export function RichTextEditor({
       attributes: {
         class: cn(
           'prose prose-sm dark:prose-invert max-w-none',
-          'min-h-[300px] p-4 focus:outline-none',
+          'min-h-[300px] p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
           'prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg',
           'prose-p:my-2 prose-ul:my-2 prose-ol:my-2',
           'prose-li:my-0',

@@ -729,6 +729,46 @@ All colors MUST be HSL.
 /* =================================================================
    HIGH CONTRAST MODE
    ================================================================= */
+/*
+  The OS asks for more contrast. Text colour is untouched here: body already
+  paints hsl(var(--foreground)), which is the theme's darkest or lightest
+  text. What moves is the secondary text, the hairlines and the ring, each
+  toward the foreground of its own theme:
+
+    light  --muted-foreground  5.9:1 -> 9.6:1 on --background
+           --border / --input  1.2:1 -> 4.8:1
+           --ring              2.7:1 -> 4.7:1 (the default orange is under
+                               the 3:1 a focus indicator needs)
+    dark   --muted-foreground  9.4:1 -> 12.3:1
+           --border / --input  1.6:1 -> 5.8:1
+
+  The query is `more`, the current keyword. The file used `high`, from an
+  old draft, which no shipping browser matches, so the block never ran; that
+  hid a `body { color: #000 }` in styles/mobile-first.css (black text on the
+  dark theme's navy) and a 2px !important border on every link and button
+  here, since preflight gives every element a solid border style.
+
+  It sits above .high-contrast so the in-app toggle, which sets its own
+  palette, still wins over the OS preference. Every property set on :root
+  is set again on .dark, dark ring included: this :root lands after the base
+  layer's .dark at the same specificity and would otherwise win in dark mode.
+*/
+@media (prefers-contrast: more) {
+  :root {
+    --muted-foreground: 215 25% 27%;
+    --border: 214 20% 45%;
+    --input: 214 20% 45%;
+    --ring: 24 95% 38%;
+  }
+
+  .dark {
+    --muted-foreground: 215 20% 85%;
+    --border: 217 20% 60%;
+    --input: 217 20% 60%;
+    --ring: 24 95% 60%;
+  }
+}
+
 .high-contrast {
   --background: 0 0% 100%;
   --foreground: 0 0% 0%;
@@ -752,25 +792,6 @@ All colors MUST be HSL.
   --muted: 0 0% 20%;
   --muted-foreground: 0 0% 85%;
   --border: 0 0% 100%;
-}
-
-/* System high contrast / forced colors */
-@media (prefers-contrast: high) {
-  :root {
-    --border: 0 0% 0%;
-  }
-
-  .dark {
-    --border: 0 0% 100%;
-  }
-
-  button,
-  a,
-  input,
-  select,
-  textarea {
-    border-width: 2px !important;
-  }
 }
 
 @media (forced-colors: active) {
@@ -1007,13 +1028,52 @@ table[role="grid"] [aria-selected="true"] {
 /* =================================================================
    LINK STYLES FOR ACCESSIBILITY
    ================================================================= */
-/* Ensure links are distinguishable (not just by color) */
-a:not([class*="button"]):not([role="button"]) {
-  text-decoration: underline;
+/*
+  Links in running text are underlined (WCAG 1.4.1: colour alone can't mark
+  them). This used to be `a:not([class*="button"]):not([role="button"])`, which
+  sits at (0,2,1) after the utilities and so beat `no-underline` and
+  `hover:no-underline`, and underlined every header, footer and logo link and
+  every `<Button asChild>` rendered as an <a>. The substring half matched by
+  accident: the sidebar's links went plain only because `peer/menu-button`
+  contains "button".
+
+  Now it is `a:where(...)`, (0,0,1): enough to beat preflight's
+  `a { text-decoration: inherit }`, which a bare :where() loses to, and
+  below any class, so `no-underline` and `hover:no-underline` win. It
+  skips links in site chrome (nav, header, footer), where position already
+  says "link", and links laid out as boxes (flex, grid, block), which are
+  buttons, cards and menu rows rather than words in a sentence; `inline-flex`
+  is in shadcn's buttonVariants. A text link in one of those places that
+  wants a line opts in with `underline`.
+*/
+a:where(
+    :not(
+        [role="button"],
+        .flex,
+        .inline-flex,
+        .grid,
+        .inline-grid,
+        .block,
+        .inline-block,
+        :is(nav, header, footer) a
+      )
+  ) {
+  text-decoration-line: underline;
   text-underline-offset: 2px;
 }
 
-a:not([class*="button"]):not([role="button"]):hover {
+a:where(
+    :not(
+        [role="button"],
+        .flex,
+        .inline-flex,
+        .grid,
+        .inline-grid,
+        .block,
+        .inline-block,
+        :is(nav, header, footer) a
+      ):hover
+  ) {
   text-decoration-thickness: 2px;
 }
 
@@ -1036,7 +1096,16 @@ a[target="_blank"][aria-label]::after {
   outline: none;
 }
 
-:focus-visible {
+/*
+  The one global keyboard focus indicator. Zero specificity, so a component
+  that draws its own (shadcn's `focus-visible:outline-none focus-visible:ring-2
+  focus-visible:ring-ring`) or opts out with `outline-none` keeps what it
+  asked for. The bare `:focus-visible` here, and styles/mobile-first.css's
+  `button:focus, a:focus, input:focus { outline: 2px solid #2563eb }`, both
+  landed after the utilities and beat `outline-none`; the second also drew a
+  hardcoded blue on the orange ring token in both themes.
+*/
+:where(:focus-visible) {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }

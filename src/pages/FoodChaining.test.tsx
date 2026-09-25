@@ -206,9 +206,13 @@ describe("FoodChaining page", () => {
   it("never fires exposure_ladder_viewed, and fires ladder_link_shown once", async () => {
     renderPage();
     await screen.findByRole("link", { name: /ladder/ });
-    const names = h.trackEvent.mock.calls.map((c) => c[0]);
-    expect(names).not.toContain("exposure_ladder_viewed");
-    expect(names.filter((n) => n === "ladder_link_shown")).toHaveLength(1);
+    // ladder_link_shown fires from a passive effect after the link commits, so
+    // on a loaded CI runner findByRole can resolve before it has run. Wait for
+    // the event, then check it fired only once.
+    const names = () => h.trackEvent.mock.calls.map((c) => c[0]);
+    await waitFor(() => expect(names()).toContain("ladder_link_shown"));
+    expect(names()).not.toContain("exposure_ladder_viewed");
+    expect(names().filter((n) => n === "ladder_link_shown")).toHaveLength(1);
     await waitFor(() =>
       expect(h.trackEvent).toHaveBeenCalledWith("picky_win_tab_opened", { surface: "food_chaining" }),
     );
