@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -55,6 +55,10 @@ beforeEach(() => {
 });
 
 describe('AchievementsView', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('dates an earned badge from earned_at, not today', async () => {
     readResult = { data: [{ badge_id: 'firstTryBite', earned_at: '2026-03-02T18:00:00Z' }], error: null };
     renderView();
@@ -78,6 +82,11 @@ describe('AchievementsView', () => {
   });
 
   it('names every progress bar, and a full streak reads as ready to sync', async () => {
+    // Pinned to a Wednesday. Seven days of try-bites ending on a Friday,
+    // Saturday or Sunday also fill Perfect Week (5 this Monday-first week),
+    // and a second "ready to sync" line made getByText throw on those days.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-23T12:00:00'));
     const today = toISODate(new Date());
     planEntries = Array.from({ length: 7 }, (_, i) => ({
       id: `e${i}`,
