@@ -3,7 +3,9 @@ import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { withStandingLimits } from '../_shared/safety.ts';
 
 import { gateAiRequest } from '../_shared/ai-gate.ts';
-import { PublicError, publicMessage } from '../_shared/errors.ts';
+import { publicMessage } from '../_shared/errors.ts';
+import { buildChatRequest } from '../_shared/modelJson.ts';
+import { parseFoodSuggestions, type FoodSuggestion } from '../_shared/aiSuggestionParsers.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -89,26 +91,17 @@ Respond in JSON format with an array called "suggestions".`;
     console.log('Calling AI service with prompt');
     
     const systemPrompt = 'You are a helpful assistant that suggests new foods for picky eaters. Always respond with valid JSON.';
-    const content = await aiService.generateContent(prompt, {
-      systemPrompt: withStandingLimits(systemPrompt),
-      taskType: 'lightweight', // Fast response for food suggestions
-    });
-    
-    console.log('AI response:', content);
-    
-    // Parse the JSON response
-    let suggestions;
-    try {
-      // Try to extract JSON from the response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        suggestions = parsed.suggestions || [];
-      } else {
-        throw new PublicError('No JSON found in response');
-      }
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', parseError);
+    // generateContent takes { messages } plus the task type and resolves to
+    // { content, model, usage }; it used to get (prompt, { systemPrompt,
+    // taskType }), which threw on every call.
+    const response = await aiService.generateContent(
+      buildChatRequest(withStandingLimits(systemPrompt), prompt),
+      'lightweight', // Fast response for food suggestions
+    );
+
+    let suggestions: FoodSuggestion[] | null = parseFoodSuggestions(response?.content);
+    if (!suggestions) {
+      console.error('suggest-foods: AI reply had no usable suggestions; serving defaults');
       // Fallback to default suggestions
       suggestions = [
         { name: 'Turkey Slices', category: 'protein', reason: 'Similar to other mild proteins' },

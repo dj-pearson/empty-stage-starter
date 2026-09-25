@@ -1,8 +1,9 @@
 /**
  * Prompt building and response parsing for analyze-support-ticket.
  *
- * Pure: no Deno globals, no network, no imports, so it runs under Deno in the
- * function and under Vitest in src/lib/ticketAnalysis.test.ts.
+ * Pure: no Deno globals, no network, and only the pure modelJson.ts import, so
+ * it runs under Deno in the function and under Vitest in
+ * src/lib/ticketAnalysis.test.ts.
  *
  * The function used to call AIServiceV2.generateContent(prompt, { systemPrompt,
  * taskType, temperature }) and JSON.parse the result. generateContent takes an
@@ -12,6 +13,7 @@
  * retry backoff. buildTicketAnalysisRequest returns the real request shape and
  * parseTicketAnalysis reads AIResponse.content.
  */
+import { extractJsonObject } from './modelJson.ts';
 
 export type TicketSentiment = 'positive' | 'neutral' | 'negative' | 'frustrated';
 
@@ -116,21 +118,6 @@ export function buildTicketAnalysisRequest(
     ],
     temperature: 0.3,
   };
-}
-
-/** The first JSON object in the model's text, tolerating ```json fences and prose around it. */
-function extractJsonObject(text: string): Row | null {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const body = fenced ? fenced[1] : text;
-  const start = body.indexOf('{');
-  const end = body.lastIndexOf('}');
-  if (start === -1 || end <= start) return null;
-  try {
-    const parsed: unknown = JSON.parse(body.slice(start, end + 1));
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Row) : null;
-  } catch {
-    return null;
-  }
 }
 
 function num(value: unknown, fallback: number, min: number, max: number): number {
