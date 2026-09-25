@@ -113,9 +113,10 @@ test.describe('Accessibility - authenticated pages', () => {
       // page background.
       await settleAnimations(page);
 
-      // Fail loudly rather than scanning the login screen and calling it clean.
+      // Fail loudly rather than scanning the login screen, or the onboarding
+      // wizard a first-run account is sent to, and calling it this page.
       expect(new URL(page.url()).pathname, `${name} redirected to ${page.url()}`).not.toMatch(
-        /^\/auth/
+        /^\/(auth|onboarding)(\/|$)/
       );
 
       const results = await new AxeBuilder({ page })

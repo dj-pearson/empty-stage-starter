@@ -252,7 +252,7 @@ function isoDay(offset) {
 
 const PLAN_ENTRIES = [
   [0, 'breakfast', 0, 0, 'ate'],
-  [0, 'lunch', 0, 2, 'tried'],
+  [0, 'lunch', 0, 2, 'tasted'],
   [0, 'dinner', 0, 6, null],
   [1, 'breakfast', 0, 4, null],
   [1, 'dinner', 1, 2, null],
@@ -459,6 +459,27 @@ createServer((req, res) => {
   if (url.pathname === '/rest/v1/rpc/ensure_user_household') {
     res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
     return res.end(JSON.stringify(HOUSEHOLD_ID));
+  }
+
+  // The test parent has finished onboarding. Dashboard reads
+  // profiles.onboarding_completed on mount and sends anyone without a profile
+  // row to /onboarding (a missing row means "never set up"). With nothing here,
+  // every authenticated check was redirected there and scanned the onboarding
+  // wizard under the name of the page it asked for.
+  if (url.pathname === '/rest/v1/profiles') {
+    if (req.method !== 'GET') {
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' });
+      return res.end('[]');
+    }
+    return sendRows(res, req, [
+      {
+        id: TEST_USER_ID_LITERAL,
+        full_name: 'E2E Parent',
+        onboarding_completed: true,
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
   }
 
   if (url.pathname === '/rest/v1/households') {
