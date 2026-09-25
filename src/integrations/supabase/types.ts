@@ -1394,6 +1394,51 @@ export type Database = {
         }
         Relationships: []
       }
+      apple_subscriptions_quarantine: {
+        Row: {
+          created_at: string | null
+          environment: string | null
+          expires_at: string | null
+          id: string
+          original_transaction_id: string
+          product_id: string | null
+          quarantined_at: string
+          reason: string
+          status: string
+          store_transaction_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          environment?: string | null
+          expires_at?: string | null
+          id: string
+          original_transaction_id: string
+          product_id?: string | null
+          quarantined_at?: string
+          reason: string
+          status: string
+          store_transaction_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          environment?: string | null
+          expires_at?: string | null
+          id?: string
+          original_transaction_id?: string
+          product_id?: string | null
+          quarantined_at?: string
+          reason?: string
+          status?: string
+          store_transaction_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       auth_rate_limits: {
         Row: {
           action: string
@@ -19718,6 +19763,7 @@ export type Database = {
       populate_title_bank: { Args: { titles_json: Json }; Returns: number }
       prune_auth_rate_limits: { Args: never; Returns: number }
       publish_scheduled_post: { Args: { p_post_id: string }; Returns: boolean }
+      quarantine_suspect_apple_subscriptions: { Args: never; Returns: number }
       queue_email: {
         Args: {
           p_delay_minutes?: number
