@@ -263,7 +263,12 @@ export default async (req: Request) => {
               }
             }
             if (!alreadyGone) {
-              cancelError = err instanceof Error ? err.message : String(err);
+              // The Stripe error (and its stack) stays in the function log. The
+              // caller gets the subscription and Stripe's error code, which is
+              // enough to retry or look it up, and nothing from inside the SDK.
+              console.error("delete-account: Stripe cancel failed", subscriptionId, err);
+              cancelError = `Stripe did not cancel ${subscriptionId}` +
+                (typeof code === "string" && /^[a-z_]{1,64}$/.test(code) ? ` (${code})` : "");
               break;
             }
           }
