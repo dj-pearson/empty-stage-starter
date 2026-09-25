@@ -189,7 +189,16 @@ describe("Home", () => {
   });
 
   it("says all caught up when there is nothing to do", () => {
-    renderHome();
-    expect(screen.getByText("All caught up")).toBeInTheDocument();
+    // Today's tasks depend on the clock (what is due by now), so pin it to
+    // midday of TODAY: the real clock made this fail in the small hours.
+    const [y, m, d] = TODAY.split("-").map(Number);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(y, m - 1, d, 12, 0, 0));
+    try {
+      renderHome();
+      expect(screen.getByText("All caught up")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
