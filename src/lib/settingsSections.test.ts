@@ -111,7 +111,7 @@ describe('the retired accessibility page', () => {
     const files = execSync("find src -name '*.tsx' -o -name '*.ts'", { encoding: 'utf8' })
       .trim()
       .split('\n')
-      .filter((f) => f && !/\.test\.|routeAliases\.ts$/.test(f));
+      .filter((f) => f && !f.includes('.test.') && !f.endsWith('/routeAliases.ts'));
     const offenders = files.filter((f) =>
       readFileSync(path.join(process.cwd(), f), 'utf8').includes('/dashboard/accessibility-settings')
     );
