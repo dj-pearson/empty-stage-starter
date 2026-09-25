@@ -11,10 +11,17 @@
  *
  *   - `fetchTopChainNetworkTargets(...)`: returns aggregated targets that
  *      other families have chained to from a given source food, subject
- *      to a k-anonymity floor (>=5 contributions, enforced server-side).
+ *      to a k-anonymity floor (>=5 distinct households, enforced
+ *      server-side; the aggregate table itself is not client-readable).
  *
- * The server normalizes food names via `normalize_chain_food_name`; the
- * client mirrors that normalization for display purposes only.
+ * Since 20260928000010 the server does not trust the names or outcome sent
+ * here: it resolves the contribution key back to one of the caller's own
+ * attempts or mastered ladder rows (so the key derivations below must stay
+ * in step with `chain_network_key` in SQL), takes the outcome from that row,
+ * and uses the verified catalog name of each food. A food with no catalog
+ * match is not contributed. Target keys therefore come back as normalized
+ * catalog names. The client mirrors `normalize_chain_food_name` for display
+ * purposes only.
  */
 
 import { supabase } from '@/integrations/supabase/client';

@@ -138,6 +138,22 @@ describe('deterministicUuid', () => {
     const u = deterministicUuid('test');
     expect(u).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);
   });
+
+  // The server resolves a contribution key back to the caller's own attempt
+  // or ladder row by recomputing it (public.chain_network_key,
+  // 20260928000010). These are the values supabase/tests/
+  // chain_network_privacy.test.sql asserts for the SQL side; if either
+  // changes, every contribution is silently refused.
+  it('matches the SQL chain_network_key for both key shapes', () => {
+    expect(deterministicUuid('ladder:92800010-0000-0000-0000-0000000000f1')).toBe(
+      '4d00ac82-b306-4bcf-8b40-be91b506c024'
+    );
+    expect(
+      deterministicUuid(
+        '92800010-0000-0000-0000-0000000000a1:92800010-0000-0000-0000-0000000000b1'
+      )
+    ).toBe('6c607b0e-feb1-4211-8ffb-22adf8b117a8');
+  });
 });
 
 describe('filterNetworkTargetsForKid', () => {

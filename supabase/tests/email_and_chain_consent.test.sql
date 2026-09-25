@@ -110,15 +110,20 @@ BEGIN
 END $a5$;
 
 -- 6. Consent, as each kind of caller.
+--    Since 20260928000010 a contribution must reference one of the caller's
+--    own attempts and catalog-mapped foods, and its key is the web client's
+--    deterministicUuid('<attempt>:<source food>') (public.chain_network_key),
+--    so each caller gets a household fixture. See chain_network_privacy.test.sql
+--    for the rest of that contract.
 DO $a6$
 DECLARE
   u_out  uuid := '92800008-0000-0000-0000-0000000000c1';  -- share_chain_outcomes = false
   u_in   uuid := '92800008-0000-0000-0000-0000000000c2';  -- share_chain_outcomes = true
   u_none uuid := '92800008-0000-0000-0000-0000000000c3';  -- no row
-  k_out  uuid := '92800008-0000-0000-0000-00000000c0c1';
-  k_in   uuid := '92800008-0000-0000-0000-00000000c0c2';
-  k_none uuid := '92800008-0000-0000-0000-00000000c0c3';
-  k_anon uuid := '92800008-0000-0000-0000-00000000c0c4';
+  c_src  uuid := '92800008-0000-0000-0000-00000000cc01';
+  c_tgt  uuid := '92800008-0000-0000-0000-00000000cc02';
+  u uuid; h uuid; kid uuid; fs uuid; ft uuid; att uuid;
+  k_out uuid; k_in uuid; k_none uuid; k_anon uuid; k_late uuid;
   ok boolean;
   n int;
   agg int;
@@ -127,6 +132,34 @@ BEGIN
     (u_out, 'chain-out@example.test'), (u_in, 'chain-in@example.test'), (u_none, 'chain-none@example.test');
   INSERT INTO public.picky_win_preferences (user_id, share_chain_outcomes) VALUES
     (u_out, false), (u_in, true);
+  INSERT INTO public.grocery_product_catalog (id, name, name_normalized, kind, verification, source)
+  VALUES (c_src, 'Zz Consent Apple', 'zz consent apple', 'generic', 'verified', 'admin'),
+         (c_tgt, 'Zz Consent Pear',  'zz consent pear',  'generic', 'verified', 'admin');
+
+  -- One kid, one source->target chain and one success attempt per user; the
+  -- key is what the web client would send for that attempt.
+  FOREACH u IN ARRAY ARRAY[u_out, u_in, u_none] LOOP
+    SELECT household_id INTO h FROM public.household_members WHERE user_id = u;
+    kid := gen_random_uuid(); fs := gen_random_uuid(); ft := gen_random_uuid();
+    INSERT INTO public.kids (id, user_id, household_id, name) VALUES (kid, u, h, 'Consent kid');
+    INSERT INTO public.foods (id, user_id, household_id, name, category, canonical_id) VALUES
+      (fs, u, h, 'Apple', 'fruit', c_src), (ft, u, h, 'Pear', 'fruit', c_tgt);
+    INSERT INTO public.food_chain_suggestions (source_food_id, target_food_id) VALUES (fs, ft);
+    att := gen_random_uuid();
+    INSERT INTO public.food_attempts (id, kid_id, food_id, outcome) VALUES (att, kid, ft, 'success');
+    IF u = u_out THEN k_out := public.chain_network_key(att::text || ':' || fs::text);
+    ELSIF u = u_in THEN
+      k_in := public.chain_network_key(att::text || ':' || fs::text);
+      att := gen_random_uuid();
+      INSERT INTO public.food_attempts (id, kid_id, food_id, outcome) VALUES (att, kid, ft, 'success');
+      k_late := public.chain_network_key(att::text || ':' || fs::text);
+    ELSE
+      k_none := public.chain_network_key(att::text || ':' || fs::text);
+      att := gen_random_uuid();
+      INSERT INTO public.food_attempts (id, kid_id, food_id, outcome) VALUES (att, kid, ft, 'success');
+      k_anon := public.chain_network_key(att::text || ':' || fs::text);
+    END IF;
+  END LOOP;
 
   -- Opted out: returns false, no contribution row, no aggregate change.
   SET LOCAL ROLE authenticated;
@@ -166,7 +199,7 @@ BEGIN
   UPDATE public.picky_win_preferences SET share_chain_outcomes = false WHERE user_id = u_in;
   SET LOCAL ROLE authenticated;
   PERFORM set_config('request.jwt.claim.sub', u_in::text, true);
-  ok := public.contribute_chain_network(gen_random_uuid(), 'Zz Consent Apple', 'Zz Consent Pear', 'low', 'success');
+  ok := public.contribute_chain_network(k_late, 'Zz Consent Apple', 'Zz Consent Pear', 'low', 'success');
   RESET ROLE;
   ASSERT ok = false, 'a user who opted out after contributing can still contribute';
 
