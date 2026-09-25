@@ -386,58 +386,66 @@ export function validateOrThrow<T>(schema: z.ZodSchema<T>, data: unknown): T {
 }
 
 /**
- * Comprehensive HTML sanitization to prevent XSS attacks
- * Removes all HTML tags, scripts, and dangerous attributes
+ * Make untrusted text safe to place in HTML, as text or in a quoted attribute.
  *
- * For rich text content, consider using a library like DOMPurify
- * This is a basic sanitizer for simple text inputs
+ * Every HTML-significant character is escaped, so no tag, attribute, comment
+ * or handler can survive, whatever the input spells. This used to escape with
+ * the DOM and then run a list of regexes over the result (script tags, on*=,
+ * javascript:, comments). Those were dead on escaped text, and on their own
+ * they were incomplete: a nested '<scr<script>ipt>' or an unquoted handler got
+ * through. A URL is a different job: use sanitizeURL, which allows http(s) only.
+ *
+ * For rich text that must keep some markup, use DOMPurify instead.
  */
 export function sanitizeHTML(html: string): string {
   if (typeof html !== 'string') return '';
+  return html.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
 
-  // Use DOM API to escape HTML entities
-  const div = document.createElement('div');
-  div.textContent = html;
-  let sanitized = div.innerHTML;
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
 
-  // Additional XSS prevention patterns
-  sanitized = sanitized
-    // Remove any remaining script tags and content
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    // Remove event handlers (onclick, onerror, etc.)
-    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
-    // Remove javascript: protocol
-    .replace(/javascript:/gi, '')
-    // Remove data: protocol (can be used for XSS)
-    .replace(/data:text\/html/gi, '')
-    // Remove vbscript: protocol
-    .replace(/vbscript:/gi, '')
-    // Remove any HTML comments that might contain code
-    .replace(/<!--[\s\S]*?-->/g, '');
-
-  return sanitized;
+/**
+ * Drop every complete "<...>" run from a string, then any angle bracket left.
+ *
+ * An index scan rather than a regex replace: removing a pattern once can join
+ * two halves into a new match ('<scr<script>ipt>'), while this never emits a
+ * '<' or '>' at all, so the result cannot open a tag. A '<' with no closing
+ * '>' is dropped on its own, so "x < 5" keeps its text.
+ */
+function stripTags(input: string): string {
+  let out = '';
+  let i = 0;
+  while (i < input.length) {
+    const ch = input[i];
+    if (ch === '<') {
+      const close = input.indexOf('>', i + 1);
+      i = close === -1 ? i + 1 : close + 1;
+    } else {
+      if (ch !== '>') out += ch;
+      i += 1;
+    }
+  }
+  return out;
 }
 
 /**
- * Sanitize user input for general text fields
- * Prevents XSS, SQL injection patterns, and command injection
+ * Sanitize user input for general plain-text fields.
+ *
+ * The result holds no '<' or '>' (so no element, attribute or event handler
+ * can form in it), no SQL comment or statement separators, and no null bytes,
+ * and is capped at 10,000 characters. It is still text: render it through
+ * React or escapeHtml, and never use it as a URL (that is sanitizeURL's job).
  */
 export function sanitizeInput(input: string): string {
   if (typeof input !== 'string') return '';
 
-  return input
-    .trim()
-    // Remove HTML tags
-    .replace(/<[^>]*>/g, '')
-    // Remove script tags and content
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    // Remove event handlers
-    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-    // Remove dangerous protocols
-    .replace(/javascript:/gi, '')
-    .replace(/data:text\/html/gi, '')
-    .replace(/vbscript:/gi, '')
+  return stripTags(input.trim())
     // Remove SQL injection patterns (basic)
     .replace(/('|(--)|;|\/\*|\*\/|xp_|sp_|exec|execute|select|insert|update|delete|drop|create|alter|union)/gi, (match) => {
       // Only remove if it looks like SQL syntax, not regular words

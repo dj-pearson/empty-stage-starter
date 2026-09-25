@@ -167,20 +167,18 @@ Location: `/src/lib/validations.ts` (459 lines)
 **XSS Prevention:**
 ```typescript
 sanitizeHTML(input)
-- Removes <script> tags
-- Removes event handlers (onclick, onerror, etc.)
-- Removes javascript: protocol
-- Removes data: protocol (except images)
-- Allows safe HTML tags only
+- Escapes & < > " ' so the result is text, never markup
+- For rich text that must keep tags, use DOMPurify (src/lib/sanitize.ts)
+- For URLs, use sanitizeURL (http and https only)
 ```
 
 **SQL Injection Prevention:**
 ```typescript
 sanitizeInput(input)
-- Removes SQL comment sequences (-- /*)
-- Removes UNION and SELECT keywords
-- Escapes special characters
-- Uses parameterized queries (Supabase)
+- Strips tags and any leftover < or >
+- Removes SQL comment sequences (-- /*) and ;
+- Removes null bytes, caps length at 10,000
+- Queries stay parameterized (Supabase); this is not the SQL defence
 ```
 
 **File Upload Safety:**
