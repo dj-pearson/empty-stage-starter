@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import '@/i18n/appLocale';
 import { FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,11 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { RUNG_META, type Rung } from '@/lib/exposureLadder';
-import { buildClinicianLadderReport } from '@/lib/clinicianLadderReport';
+import {
+  buildClinicianLadderReport,
+  fetchAllPages,
+  formatReportTotalsLine,
+} from '@/lib/clinicianLadderReport';
 import { renderClinicianLadderPdf } from '@/lib/clinicianLadderPdf';
 import { downloadBlob } from '@/lib/csvExport';
 
@@ -64,20 +69,25 @@ export function LadderReportDialog({
 
     setBusy(true);
     try {
-      const { data, error } = await supabase
-        .from('food_attempts')
-        .select('food_id, stage, outcome, attempted_at, preparation_method')
-        .eq('kid_id', kidId)
-        .gte('attempted_at', `${from}T00:00:00.000Z`)
-        .lte('attempted_at', `${to}T23:59:59.999Z`);
-
-      if (error) throw error;
+      // Oldest first, id as the tie-break, so offset paging neither repeats
+      // nor skips a row, and the whole range is read however long it is.
+      const data = await fetchAllPages((rangeFrom, rangeTo) =>
+        supabase
+          .from('food_attempts')
+          .select('food_id, stage, outcome, attempted_at, preparation_method')
+          .eq('kid_id', kidId)
+          .gte('attempted_at', `${from}T00:00:00.000Z`)
+          .lte('attempted_at', `${to}T23:59:59.999Z`)
+          .order('attempted_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(rangeFrom, rangeTo)
+      );
 
       const report = buildClinicianLadderReport({
         kidFirstName,
         from,
         to,
-        attempts: (data ?? []).map((row) => ({
+        attempts: data.map((row) => ({
           foodId: row.food_id,
           stage: row.stage,
           outcome: row.outcome,
@@ -104,11 +114,7 @@ export function LadderReportDialog({
         rangeLabel: `${dateFormat.format(new Date(`${from}T12:00:00Z`))} – ${dateFormat.format(
           new Date(`${to}T12:00:00Z`)
         )}`,
-        totalsLine: t('foodLadder.report.totalsLine', {
-          foods: report.totals.foods,
-          attempts: report.totals.attempts,
-          mastered: report.totals.mastered,
-        }),
+        totalsLine: formatReportTotalsLine(report.totals, t),
         currentRungLabel: t('foodLadder.report.currentRung'),
         startedAtLabel: t('foodLadder.report.startedAt'),
         historyLabel: t('foodLadder.report.history'),

@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CopyFallbackDialog } from "@/components/CopyFallbackDialog";
+import { CareTeamReportDialog } from "@/components/foodJournal/CareTeamReportDialog";
 import { EditJournalItemDialog, type EditJournalItemPatch } from "@/components/foodJournal/EditJournalItemDialog";
 import { JournalDayCard } from "@/components/foodJournal/JournalDayCard";
 import { JournalSummary } from "@/components/foodJournal/JournalSummary";
@@ -27,6 +28,7 @@ import { addIsoDays, parseIsoDate, toISODate } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { buildFoodJournal, summarizeJournal, type JournalDay, type JournalItem, type JournalNote } from "@/lib/foodJournal";
 import { buildJournalPatterns, formatJournalDayLabel, formatJournalText } from "@/lib/journalReport";
+import { firstName } from "@/lib/firstName";
 import { buildProgressByKid } from "@/lib/kidProgress";
 import { shareOrCopyText } from "@/lib/shareText";
 import { TOGGLE_CHIP_SMALL_CLASS, toggleChipState } from "@/lib/toggleChip";
@@ -104,6 +106,9 @@ export default function FoodJournal() {
   const [onlyReactions, setOnlyReactions] = useState(false);
   const [editing, setEditing] = useState<JournalItem | null>(null);
   const [fallbackText, setFallbackText] = useState<string | null>(null);
+  // The care-team report, shown in full before it leaves the household.
+  const [reportText, setReportText] = useState<string | null>(null);
+  const [delivering, setDelivering] = useState(false);
 
   // A tab left open overnight must roll over to the new day.
   const [today, setToday] = useState(() => toISODate(new Date()));
@@ -270,9 +275,29 @@ export default function FoodJournal() {
       if (outcome === "copied") toast.success(t("foodJournal.copied"));
       else if (outcome === "shared") toast.success(t("foodJournal.page.shared", { defaultValue: "Shared" }));
       else if (outcome === "failed") setFallbackText(text);
+      return outcome;
     },
     [t]
   );
+
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  const deliverReport = useCallback(
+    async (text: string, preferShare: boolean) => {
+      setDelivering(true);
+      try {
+        const outcome = await deliver(text, preferShare);
+        // A cancelled share sheet leaves the preview open to try again; the
+        // copy-by-hand fallback replaces it rather than stacking on top.
+        if (outcome !== "cancelled") setReportText(null);
+      } finally {
+        setDelivering(false);
+      }
+    },
+    [deliver]
+  );
+  const copyReport = useCallback((text: string) => void deliverReport(text, false), [deliverReport]);
+  const shareReport = useCallback((text: string) => void deliverReport(text, true), [deliverReport]);
 
   const onCopyDay = useCallback(
     (day: JournalDay, label: string) => {
@@ -289,7 +314,14 @@ export default function FoodJournal() {
     [t, slotLabel, kidName, familyMode, authorLabel, deliver]
   );
 
+  /**
+   * The report a parent sends to a feeding therapist or pediatrician. It is a
+   * care-team report: kids by first name, household notes signed with the role
+   * instead of the member's name, so nothing about the household travels
+   * beyond what the parent reads in the preview.
+   */
   const onShareReport = useCallback(() => {
+    const roleLabel = t("foodJournal.careTeam.role", { defaultValue: "Parent" });
     const rangeLine = `${t(`foodJournal.range.${range}`)} (${t("foodJournal.page.reportRange", {
       from: shortDate.format(parseIsoDate(from)),
       to: shortDate.format(parseIsoDate(today)),
@@ -311,6 +343,8 @@ export default function FoodJournal() {
           kidName,
           familyMode: true,
           authorLabel,
+          careTeam: true,
+          roleLabel,
           header: [
             t("foodJournal.page.reportHeader", {
               name: t("foodJournal.page.reportFamily", { defaultValue: "Everyone" }),
@@ -338,8 +372,10 @@ export default function FoodJournal() {
           kidName,
           familyMode: false,
           authorLabel,
+          careTeam: true,
+          roleLabel,
           header: [
-            t("foodJournal.page.reportHeader", { name: kid.name, defaultValue: "Food journal: {{name}}" }),
+            t("foodJournal.page.reportHeader", { name: firstName(kid.name), defaultValue: "Food journal: {{name}}" }),
             rangeLine,
             countsLine(totals?.logged ?? 0, totals?.counts ?? { ate: 0, tasted: 0, refused: 0 }),
           ],
@@ -347,8 +383,8 @@ export default function FoodJournal() {
         })
       );
     }
-    void deliver(sections.join("\n\n\n"), true);
-  }, [t, range, shortDate, from, today, viewKids, allDays, slotLabel, dayLabelText, kidName, authorLabel, summary, patternViews, deliver]);
+    setReportText(sections.join("\n\n\n"));
+  }, [t, range, shortDate, from, today, viewKids, allDays, slotLabel, dayLabelText, kidName, authorLabel, summary, patternViews]);
 
   const onEdit = useCallback((item: JournalItem) => setEditing(item), []);
   const closeEdit = useCallback(() => setEditing(null), []);
@@ -580,6 +616,14 @@ export default function FoodJournal() {
         authorLabel={authorLabel}
         onClose={closeEdit}
         save={saveEdit}
+      />
+      <CareTeamReportDialog
+        text={reportText}
+        onClose={() => setReportText(null)}
+        onCopy={copyReport}
+        onShare={shareReport}
+        canShare={canShare}
+        busy={delivering}
       />
       <CopyFallbackDialog
         text={fallbackText}

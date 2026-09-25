@@ -1,0 +1,95 @@
+{
+  "professional": {
+    "meta": {
+      "title": "Professional settings - EatPal",
+      "description": "Your practice profile and what families can share with you on EatPal."
+    },
+    "page": {
+      "title": "Professional settings",
+      "subtitle": "Your practice profile, and exactly what families can share with you.",
+      "loading": "Loading your professional settings",
+      "loadErrorTitle": "Couldn't load your professional settings",
+      "loadErrorBody": "Nothing has been changed. Check your connection and try again.",
+      "retry": "Try again"
+    },
+    "guard": {
+      "checking": "Checking your plan",
+      "deniedTitle": "Professional settings come with the Professional plan",
+      "deniedBody": "The Professional plan is for feeding therapists, dietitians and other clinicians who work with families on EatPal. It gives you a practice profile for the reports families send you, and a plain statement of what you can and can't see of a family's account.",
+      "deniedNote": "Your current plan doesn't include it. You can compare plans from Billing.",
+      "seePlan": "See your plan",
+      "errorTitle": "Couldn't check your plan",
+      "errorBody": "We couldn't confirm which plan you're on, so these settings stay closed for now.",
+      "retry": "Try again"
+    },
+    "clientAccess": {
+      "title": "Client access",
+      "description": "What families can share with you, and what stays with them.",
+      "howTitle": "How families share with you",
+      "journalTitle": "Food Journal report",
+      "journalBody": "Plain text the parent copies from their Food Journal and sends you by message or email: the days they pick, what was offered at each meal, how much was eaten, and the notes they chose to keep in.",
+      "ladderTitle": "Food ladder summary",
+      "ladderBody": "A PDF the parent downloads from the food ladder: where each food sits on the ladder, the attempts over the dates they choose, and what was refused. The child appears by first name only.",
+      "sentByParent": "The parent decides what to send and when. Nothing reaches you automatically.",
+      "neverTitle": "What you never see",
+      "neverLead": "Each person in a family is told these stay with their own account. Nothing here changes that:",
+      "neverShared": "Nothing on this page opens a family's account, meal plan, grocery list or pantry.",
+      "clientsTitle": "Client list",
+      "clientsEmpty": "No families have shared access with you yet. Families send reports to you from their Food Journal."
+    },
+    "profile": {
+      "title": "Practice profile",
+      "description": "Shown on reports you receive and invites you send.",
+      "detailsTitle": "Practice details",
+      "businessName": "Practice or clinic name",
+      "businessNamePlaceholder": "Little Bites Feeding Therapy",
+      "contactEmail": "Contact email",
+      "contactEmailPlaceholder": "hello@yourpractice.com",
+      "phone": "Phone",
+      "phonePlaceholder": "+1 555 010 0199",
+      "website": "Website",
+      "websitePlaceholder": "https://yourpractice.com",
+      "websiteHint": "Must start with https://",
+      "logoUrl": "Logo URL",
+      "logoUrlPlaceholder": "https://yourpractice.com/logo.png",
+      "logoUrlHint": "A link to an image you host, starting with https://",
+      "tagline": "Tagline",
+      "taglinePlaceholder": "Feeding therapy for kids 0-12",
+      "colorsTitle": "Colors",
+      "colorsHint": "Used on your practice profile. They also tint your own EatPal screens while you're signed in.",
+      "primaryColor": "Primary color",
+      "secondaryColor": "Secondary color",
+      "accentColor": "Accent color",
+      "pickColor": "Pick the {{name}}",
+      "preview": "Preview",
+      "save": "Save practice profile",
+      "saving": "Saving",
+      "saved": "Practice profile saved",
+      "saveFailed": "Couldn't save your practice profile",
+      "saveFailedFallback": "Nothing was saved. Please try again.",
+      "unsaved": "You have unsaved changes.",
+      "fixErrors": "Fix the highlighted fields to save.",
+      "errors": {
+        "email": "Enter an email address like name@example.com.",
+        "color": "Use a six-digit hex color like #2F6ABC.",
+        "https": "Enter a full link starting with https://",
+        "phone": "Use digits, spaces, +, - or brackets, at least 7 characters.",
+        "tooLong": "That's too long.",
+        "invalid": "Check this field."
+      }
+    },
+    "domain": {
+      "title": "Custom domain",
+      "notLive": "Custom domains aren't available yet; this domain isn't live.",
+      "body": "You added {{domain}} earlier. Nothing serves EatPal from it, and you don't need to change any DNS records. You can remove it.",
+      "remove": "Remove",
+      "removing": "Removing",
+      "confirmTitle": "Remove {{domain}}?",
+      "confirmBody": "This only deletes the saved domain name from your account. Nothing else changes.",
+      "cancel": "Cancel",
+      "removed": "Domain removed",
+      "removeFailed": "Couldn't remove that domain",
+      "removeFailedFallback": "Please try again."
+    }
+  }
+}

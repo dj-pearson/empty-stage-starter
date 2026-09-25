@@ -15,6 +15,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LadderReportDialog } from '@/components/LadderReportDialog';
+import { firstName } from '@/lib/firstName';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -400,7 +401,7 @@ export function FoodLadderBoard() {
               kidId={activeKid.id}
               /* First token only: kids.name is free text and some families
                  store a full name there. The report must not carry one. */
-              kidFirstName={activeKid.name.trim().split(/\s+/)[0] || activeKid.name}
+              kidFirstName={firstName(activeKid.name)}
               ladderRows={rows.map((row) => ({
                 foodId: row.foodId,
                 currentRung: row.currentRung,

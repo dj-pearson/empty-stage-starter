@@ -1,42 +1,42 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import "@/i18n/appLocale";
 import { logger } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import type { FeatureLimitResult, FeatureType } from "@/lib/featureLimits";
+import {
+  checkFeatureLimit as checkFeatureLimitRpc,
+  type FeatureLimitResult,
+  type FeatureType,
+} from "@/lib/featureLimits";
+import { useUpgradeNavigator } from "@/hooks/useUpgradeNavigator";
 
 export function useFeatureLimit() {
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { goToUpgrade } = useUpgradeNavigator();
 
+  /**
+   * One limit check for the whole app: src/lib/featureLimits.checkFeatureLimit.
+   * It fails open (the plan-limit triggers in the database are the real gate),
+   * so this only adds the upgrade toast. "Upgrade" goes where the account's
+   * plan is actually managed, never to a second checkout.
+   */
   const checkFeatureLimit = async (
     featureType: FeatureType,
     currentCount?: number
   ): Promise<FeatureLimitResult> => {
     try {
       setLoading(true);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { allowed: false, message: "Please sign in to continue" };
-      }
-
-      const { data, error } = await supabase.rpc("check_feature_limit", {
-        p_user_id: user.id,
-        p_feature_type: featureType,
-        p_current_count: currentCount || 1,
-      });
-
-      if (error) throw error;
-
-      const result = data as unknown as FeatureLimitResult;
+      const result = await checkFeatureLimitRpc(featureType, currentCount || 1);
 
       if (!result.allowed && result.message) {
         toast.error(result.message, {
           action: {
-            label: "Upgrade",
-            onClick: () => navigate("/pricing"),
+            label: t("billing.planData.upgrade.action", { defaultValue: "Upgrade" }),
+            onClick: () => {
+              void goToUpgrade();
+            },
           },
           duration: 5000,
         });
@@ -45,10 +45,7 @@ export function useFeatureLimit() {
       return result;
     } catch (error: unknown) {
       logger.error("Error checking feature limit:", error);
-      return {
-        allowed: true,
-        message: "Unable to verify limit, proceeding with action",
-      };
+      return { allowed: true };
     } finally {
       setLoading(false);
     }

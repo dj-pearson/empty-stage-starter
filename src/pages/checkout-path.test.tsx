@@ -71,6 +71,10 @@ vi.mock("react-router-dom", () => ({
 }));
 
 let subscriptionRow: Record<string, unknown> | null = null;
+/** The caller's own apple_subscriptions rows. */
+let appleRows: Record<string, unknown>[] = [];
+/** What current_user_plan_name() answers (the server's effective plan). */
+let effectivePlanName: string | null = null;
 
 /**
  * A chainable stand-in for the PostgREST builder.
@@ -109,11 +113,14 @@ vi.mock("@/integrations/supabase/client", () => ({
     from: vi.fn().mockImplementation((table: string) => {
       if (table === "subscription_plans") return builder(PLANS);
       if (table === "user_subscriptions") return builder(subscriptionRow);
+      if (table === "apple_subscriptions") return builder(appleRows);
       return builder([]);
     }),
     channel: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis(), subscribe: vi.fn() }),
     removeChannel: vi.fn(),
-    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    rpc: vi.fn().mockImplementation(async (name: string) =>
+      name === "current_user_plan_name" ? { data: effectivePlanName, error: null } : { data: null, error: null }
+    ),
   },
 }));
 
@@ -121,6 +128,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   searchParams = new URLSearchParams();
   subscriptionRow = null;
+  appleRows = [];
+  effectivePlanName = null;
   invokeEdgeFunction.mockResolvedValue({ data: { url: "https://checkout.stripe.com/c/test" }, error: null });
   // jsdom refuses a real navigation assignment; the component sets it on success.
   Object.defineProperty(window, "location", {
@@ -249,6 +258,82 @@ describe("Pricing -> create-checkout", () => {
   });
 });
 
+describe("Pricing never opens a second checkout for an entitled account", () => {
+  /**
+   * Click every upgrade CTA, each in a fresh render, and report what each did.
+   * Resolves once the click has produced a toast or a navigation, the two
+   * things the guard does instead of calling create-checkout.
+   */
+  async function clickEveryUpgradeCta() {
+    const Pricing = (await import("./Pricing")).default;
+    const { toast } = await import("sonner");
+    const n = await ctaCount();
+    for (let i = 0; i < n; i++) {
+      const user = userEvent.setup();
+      const { container, unmount } = renderPricing(Pricing);
+      await waitFor(() =>
+        expect(
+          Array.from(container.querySelectorAll("button")).filter((b) => /upgrade/i.test(b.textContent ?? ""))
+            .length
+        ).toBeGreaterThan(i)
+      );
+      const ctas = Array.from(container.querySelectorAll("button")).filter((b) =>
+        /upgrade/i.test(b.textContent ?? "")
+      );
+      const before = vi.mocked(toast.info).mock.calls.length + navigate.mock.calls.length;
+      await user.click(ctas[i]);
+      await waitFor(() =>
+        expect(vi.mocked(toast.info).mock.calls.length + navigate.mock.calls.length).toBeGreaterThan(before)
+      );
+      unmount();
+    }
+    return n;
+  }
+
+  const createCheckoutCalls = () => invokeEdgeFunction.mock.calls.filter(([fn]) => fn === "create-checkout");
+
+  it("an App Store subscriber is pointed at Apple, not Stripe", async () => {
+    effectivePlanName = "Family Plus";
+    appleRows = [{ id: "a-1", status: "active", expires_at: "2099-01-01T00:00:00Z", product_id: "familyplus.monthly" }];
+
+    const n = await clickEveryUpgradeCta();
+    expect(n).toBeGreaterThan(0);
+    expect(createCheckoutCalls()).toEqual([]);
+
+    const { toast } = await import("sonner");
+    const opts = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as { action?: { onClick: () => void } } | undefined;
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    opts?.action?.onClick();
+    expect(open).toHaveBeenCalledWith("https://apps.apple.com/account/subscriptions", "_blank", "noopener,noreferrer");
+    open.mockRestore();
+  });
+
+  it("a complimentary account gets support copy, not checkout", async () => {
+    effectivePlanName = "Family Plus";
+
+    await clickEveryUpgradeCta();
+    expect(createCheckoutCalls()).toEqual([]);
+    const { toast } = await import("sonner");
+    expect(String(vi.mocked(toast.info).mock.calls.at(-1)?.[0])).toMatch(/complimentary/i);
+  });
+
+  it("an active Stripe subscriber is routed to /dashboard/billing", async () => {
+    effectivePlanName = "Pro";
+    subscriptionRow = {
+      plan_id: "plan-pro",
+      status: "active",
+      stripe_subscription_id: "sub_XXXX",
+      is_complementary: false,
+      subscription_plans: { sort_order: 2 },
+    };
+
+    const n = await clickEveryUpgradeCta();
+    expect(n).toBeGreaterThan(0);
+    expect(createCheckoutCalls()).toEqual([]);
+    expect(navigate).toHaveBeenCalledWith("/dashboard/billing");
+  });
+});
+
 describe("CheckoutSuccess records the paid conversion", () => {
   it("fires trackPaidConversion once the subscription row appears", async () => {
     searchParams = new URLSearchParams("session_id=cs_test_123");
@@ -306,25 +391,55 @@ describe("CheckoutSuccess records the paid conversion", () => {
 });
 
 describe("Billing shows the dunning state", () => {
-  /** useSubscription is mocked per-test so Billing can be put in one state. */
-  async function renderBilling(state: Record<string, unknown>) {
+  /**
+   * Billing reads the plan through usePlanStatus (the server's effective plan
+   * plus the Stripe row), so both hooks are mocked per test to put the page in
+   * one state.
+   */
+  async function renderBilling(sub: { status: string } & Record<string, unknown>, enforcedPlan: string) {
+    const subscription = {
+      user_id: "user-1",
+      plan_name: "Pro",
+      billing_cycle: "monthly",
+      trial_end: null,
+      stripe_customer_id: "cus_XXXX",
+      stripe_subscription_id: "sub_XXXX",
+      is_complementary: false,
+      complementary_subscription_id: null,
+      ...sub,
+    };
+    const status =
+      subscription.status === "past_due"
+        ? { kind: "stripe", planName: enforcedPlan, sub: subscription }
+        : { kind: "stripe", planName: subscription.plan_name, sub: subscription };
+    vi.doMock("@/hooks/usePlanStatus", () => ({
+      usePlanStatus: () => ({
+        status,
+        stats: null,
+        subscription,
+        usageError: null,
+        refreshing: false,
+        refetch: vi.fn(),
+      }),
+    }));
     vi.doMock("@/hooks/useSubscription", () => ({
       useSubscription: () => ({
-        subscription: null,
+        subscription,
         loading: false,
+        refreshing: false,
+        error: null,
         actionLoading: false,
         refetch: vi.fn(),
         upgrade: vi.fn(),
         cancel: vi.fn(),
         reactivate: vi.fn(),
         changeBillingCycle: vi.fn(),
-        isActive: false,
+        isActive: subscription.status === "active",
         isTrialing: false,
-        isPastDue: false,
+        isPastDue: subscription.status === "past_due",
         isCanceled: false,
         isPaused: false,
         willCancelAtPeriodEnd: false,
-        ...state,
       }),
     }));
     vi.resetModules();
@@ -343,34 +458,28 @@ describe("Billing shows the dunning state", () => {
     cancel_at_period_end: false,
     current_period_start: "2026-08-05T00:00:00Z",
     current_period_end: "2026-09-05T00:00:00Z",
-    plan: { name: "Pro", price_monthly: 14.99, features: [] },
-    subscription_plans: { name: "Pro", price_monthly: 14.99, features: [] },
   };
 
   it("tells a past_due customer their payment failed and how to fix it", async () => {
-    const { container } = await renderBilling({ subscription: PAST_DUE_SUB, isPastDue: true });
+    // effective_plan_id ignores a past_due row, so the enforced plan is Free.
+    const { container } = await renderBilling(PAST_DUE_SUB, "Free");
 
     // A failed payment that the billing page does not mention is a silent
     // cancellation waiting to happen: the customer finds out when the product
     // stops working.
-    await waitFor(() => expect(container.textContent).toContain("Payment Failed"));
-    expect(container.textContent).toContain("Past Due");
-    expect(container.textContent).toMatch(/Update your payment method/i);
+    await waitFor(() => expect(container.textContent).toMatch(/payment failed/i));
 
     const fixIt = Array.from(container.querySelectorAll("button")).find((b) =>
-      /update payment method/i.test(b.textContent ?? "")
+      /update (card|payment method)/i.test(b.textContent ?? "")
     );
     expect(fixIt, "no way to fix the failed payment").toBeTruthy();
     expect((fixIt as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("does not show the dunning banner to an active customer", async () => {
-    const { container } = await renderBilling({
-      subscription: { ...PAST_DUE_SUB, status: "active" },
-      isActive: true,
-    });
+    const { container } = await renderBilling({ ...PAST_DUE_SUB, status: "active" }, "Pro");
 
     await waitFor(() => expect(container.textContent).toContain("Active"));
-    expect(container.textContent).not.toContain("Payment Failed");
+    expect(container.textContent).not.toMatch(/payment failed/i);
   });
 });

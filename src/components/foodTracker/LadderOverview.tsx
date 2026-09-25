@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LadderQuickLogControls } from '@/components/LadderQuickLogControls';
 import { LadderReportDialog } from '@/components/LadderReportDialog';
+import { firstName } from '@/lib/firstName';
 import { useFoods, useKids } from '@/contexts/AppContext';
 import { useFoodLadder, type LadderRow } from '@/hooks/useFoodLadder';
 import { usePickyWinSharePref } from '@/hooks/usePickyWinSharePref';
@@ -305,7 +306,7 @@ export function LadderOverview({ kid, logRequestNonce, logFoodId }: LadderOvervi
             kidId={kid.id}
             // First token only: kids.name is free text and some families
             // store a full name there. The report must not carry one.
-            kidFirstName={kid.name.trim().split(/\s+/)[0] || kid.name}
+            kidFirstName={firstName(kid.name)}
             ladderRows={rows.map((row) => ({
               foodId: row.foodId,
               currentRung: row.currentRung,

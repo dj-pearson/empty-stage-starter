@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { NavEntitlements } from "@/lib/navigation";
 import { sharedQuery } from "@/lib/sharedQuery";
-import { adminRoleKey, fetchActiveSubscription } from "@/lib/accountQueries";
+import { adminRoleKey, fetchEffectivePlanName } from "@/lib/accountQueries";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
@@ -40,10 +40,10 @@ export function useNavEntitlements(): NavEntitlements {
        *
        * This hook was mounted by AppSidebar AND by Dashboard, so each of these
        * queries used to go out twice per page load -- and useWhiteLabelTheme
-       * issues the subscription one a third time, byte for byte. Dashboard is
-       * the only caller now; the sharing still covers useWhiteLabelTheme.
+       * issues the plan one a third time. Dashboard is the only caller now;
+       * the sharing still covers useWhiteLabelTheme and RequireProfessional.
        */
-      const [adminData, subscriptionData] = await Promise.all([
+      const [adminData, planName] = await Promise.all([
         sharedQuery(adminRoleKey(userId), async () => {
           const { data } = await supabase
             .from("user_roles")
@@ -53,14 +53,17 @@ export function useNavEntitlements(): NavEntitlements {
             .maybeSingle();
           return data;
         }),
-        fetchActiveSubscription(userId),
+        // The server-effective plan, not the Stripe row: a trialing, App Store
+        // or complimentary Professional has no active Stripe subscription and
+        // used to lose the link. A failed lookup fails closed.
+        fetchEffectivePlanName(userId).catch(() => null),
       ]);
 
       if (cancelled) return;
 
       setEntitlements({
         isAdmin: !!adminData,
-        isProfessional: subscriptionData?.subscription_plans?.name === "Professional",
+        isProfessional: planName === "Professional",
       });
     };
 

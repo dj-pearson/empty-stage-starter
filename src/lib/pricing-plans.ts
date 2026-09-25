@@ -70,7 +70,7 @@ export const PRICING_PLANS: Readonly<Record<string, PricingPlan>> = Object.freez
     name: 'Professional',
     monthly: 99,
     yearly: 950,
-    summary: 'Therapist portal, multi-client management, insurance-compatible documentation',
+    summary: 'Practice profile, family-shared Food Journal and ladder reports',
   },
 });
 

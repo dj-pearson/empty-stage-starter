@@ -389,3 +389,16 @@ monolith and the separate accessibility page became one sectioned hub
 data) with per-section components, a household-aware delete dialog, a
 per-table export manifest and a quick-comfort row. Eager unchanged.
 Measured total 2793.0 kB.
+
+## 2026-09-25: `totalJs` 2805000 -> 2835000 (Billing and Professional Settings)
+
+Owner-approved raise for route-only growth. Billing now reads the plan
+the server enforces (usePlanStatus over get_usage_stats) with
+source-honest cards per Stripe / App Store / complimentary, usage meters
+and an upgrade dialog; Professional Settings became a practice profile
+behind a route guard (+8.7 kB plan cards, +4.1 kB copy, +1.4 kB guard,
++1.7 kB lazy UpgradeDialog). UpgradeDialog is lazy so the page-scoped
+locale bundle stays out of the entry (the entry chunk shrank 8 kB gz).
+vite.config.ts now names a lazy chunk whose facade is a package's
+index.js after the package, so it is no longer summed into the "index"
+(entry) line. Measured total 2824.3 kB.

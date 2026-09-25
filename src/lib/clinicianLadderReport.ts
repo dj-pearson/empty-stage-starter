@@ -20,9 +20,12 @@
  * Rung history is read from `food_attempts.stage` as it was logged, not
  * re-derived through the progression policy: this is a record of what was
  * tried, and a replay would quietly rewrite history if the policy ever
- * changed. Nothing here reads the clock or touches Supabase.
+ * changed. Nothing here reads the clock or touches Supabase; the paging helper
+ * takes the page fetch as a callback.
  */
 
+// Registers the page copy formatReportTotalsLine resolves (appLocaleImports.test.ts).
+import '@/i18n/appLocale';
 import { isRung, type Rung } from './exposureLadder';
 
 /** Outcomes as stored in `food_attempts.outcome`. */
@@ -247,4 +250,59 @@ export function buildClinicianLadderReport(input: ClinicianReportInput): Clinici
       mastered: ladderRows.filter((row) => row.status === 'mastered').length,
     },
   };
+}
+
+/**
+ * PostgREST caps a response at 1000 rows by default, and a busy ladder passes
+ * that inside a 90-day range. An unpaged query came back silently truncated,
+ * so the report under-counted refusals with nothing on the page to say so.
+ */
+export const ATTEMPT_PAGE_SIZE = 1000;
+
+export interface PageResult<T> {
+  data: T[] | null;
+  error: unknown;
+}
+
+/**
+ * Every row of a query, `pageSize` at a time, until a page comes back short.
+ * `fetchPage(from, to)` gets inclusive row offsets, the shape `.range()` takes;
+ * the query it runs must have a stable total order (attempted_at, then id) or
+ * rows can repeat or go missing across page boundaries. Throws the first error.
+ */
+export async function fetchAllPages<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
+  pageSize: number = ATTEMPT_PAGE_SIZE
+): Promise<T[]> {
+  if (!Number.isInteger(pageSize) || pageSize < 1) throw new RangeError('pageSize must be a positive integer');
+  const rows: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await fetchPage(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
+export type ReportTranslate = (key: string, vars?: Record<string, unknown>) => string;
+
+/**
+ * The totals line under the report title, ending with how many logged tries
+ * it was built from, so a report cut short can't pass as the whole record.
+ */
+export function formatReportTotalsLine(
+  totals: ClinicianLadderReport['totals'],
+  t: ReportTranslate
+): string {
+  const line = t('foodLadder.report.totalsLine', {
+    foods: totals.foods,
+    attempts: totals.attempts,
+    mastered: totals.mastered,
+  });
+  const basis = t('foodLadder.report.basedOnTries', {
+    count: totals.attempts,
+    defaultValue: 'Based on {{count}} logged tries',
+  });
+  return `${line} · ${basis}`;
 }

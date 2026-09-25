@@ -1,188 +1,136 @@
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { TrendingUp } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, TrendingUp, Infinity } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { usageState, type UsageKind, type UsageState } from "@/lib/usageState";
 import { cn } from "@/lib/utils";
+import "@/i18n/appLocale";
 
 interface UsageMeterProps {
   title: string;
   description?: string;
   current: number;
   limit: number | null;
-  percentage: number;
-  resetsAt?: string;
-  icon?: React.ReactNode;
+  /** 'count' for standing totals, 'quota' for allowances that reset. */
+  kind?: UsageKind;
+  /** Already formatted, e.g. "Resets at 7:00 PM". */
+  resetLabel?: string;
+  icon?: ReactNode;
   className?: string;
+  /** Where "Upgrade" goes. Without it no upgrade button is shown. */
+  onUpgrade?: () => void;
 }
+
+const INDICATOR: Record<UsageState, string> = {
+  unlimited: "[&>div]:bg-primary",
+  not_included: "[&>div]:bg-muted-foreground",
+  ok: "[&>div]:bg-primary",
+  near: "[&>div]:bg-warning",
+  full: "[&>div]:bg-warning",
+  over: "[&>div]:bg-destructive",
+};
 
 export function UsageMeter({
   title,
   description,
   current,
   limit,
-  percentage,
-  resetsAt,
+  kind = "count",
+  resetLabel,
   icon,
   className,
+  onUpgrade,
 }: UsageMeterProps) {
-  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const state = usageState(current, limit, kind);
+  // A full count limit is not a problem, only a fact; a spent quota is.
+  const indicator = state === "full" && kind === "count" ? "[&>div]:bg-primary" : INDICATOR[state];
 
-  const getColorClass = () => {
-    if (limit === null) return "text-green-600 dark:text-green-400";
-    if (percentage >= 100) return "text-red-600 dark:text-red-400";
-    if (percentage >= 90) return "text-orange-600 dark:text-orange-400";
-    if (percentage >= 75) return "text-yellow-600 dark:text-yellow-400";
-    return "text-green-600 dark:text-green-400";
-  };
+  const badge = (() => {
+    switch (state) {
+      case "unlimited":
+        return <Badge variant="outline">{t("billing.meter.unlimited", { defaultValue: "Unlimited" })}</Badge>;
+      case "not_included":
+        return <Badge variant="secondary">{t("billing.meter.notIncluded", { defaultValue: "Not in your plan" })}</Badge>;
+      case "over":
+        return (
+          <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-foreground">
+            {t("billing.meter.over", { defaultValue: "Over your limit" })}
+          </Badge>
+        );
+      case "full":
+        return (
+          <Badge variant="outline" className="border-warning/40 bg-warning/10 text-foreground">
+            {t("billing.meter.full", { defaultValue: "All used" })}
+          </Badge>
+        );
+      case "near":
+        return (
+          <Badge variant="outline" className="border-warning/40 bg-warning/10 text-foreground">
+            {t("billing.meter.near", { defaultValue: "Getting close" })}
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  })();
 
-  const getProgressColor = () => {
-    if (limit === null) return "bg-green-500";
-    if (percentage >= 100) return "bg-red-500";
-    if (percentage >= 90) return "bg-orange-500";
-    if (percentage >= 75) return "bg-yellow-500";
-    return "bg-green-500";
-  };
+  const ofText =
+    limit === null
+      ? t("billing.meter.ofUnlimited", { defaultValue: "{{current}} of Unlimited", current })
+      : t("billing.meter.of", { defaultValue: "{{current}} of {{limit}}", current, limit });
 
-  const getStatusBadge = () => {
-    if (limit === null) {
-      return (
-        <Badge variant="outline" className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
-          <Infinity className="w-3 h-3 mr-1" />
-          Unlimited
-        </Badge>
-      );
-    }
-    
-    if (percentage >= 100) {
-      return (
-        <Badge variant="destructive">
-          <AlertCircle className="w-3 h-3 mr-1" />
-          Limit Reached
-        </Badge>
-      );
-    }
-    
-    if (percentage >= 90) {
-      return (
-        <Badge variant="outline" className="bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800">
-          Almost Full
-        </Badge>
-      );
-    }
-    
-    if (percentage >= 75) {
-      return (
-        <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
-          Getting Close
-        </Badge>
-      );
-    }
-    
-    return (
-      <Badge variant="outline" className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
-        Available
-      </Badge>
-    );
-  };
-
-  const formatResetTime = () => {
-    if (!resetsAt) return null;
-    
-    const resetDate = new Date(resetsAt);
-    const now = new Date();
-    const diff = resetDate.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    
-    if (days > 0) {
-      return `Resets in ${days} day${days > 1 ? 's' : ''}`;
-    } else if (hours > 0) {
-      return `Resets in ${hours} hour${hours > 1 ? 's' : ''}`;
-    } else {
-      return 'Resets soon';
-    }
-  };
+  const constrained = state === "near" || state === "full" || state === "over";
 
   return (
-    <Card className={cn("", className)}>
+    <Card className={className}>
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            {icon && <div className="text-muted-foreground">{icon}</div>}
+            {icon && (
+              <span className="text-muted-foreground" aria-hidden="true">
+                {icon}
+              </span>
+            )}
             <div>
               <CardTitle className="text-base">{title}</CardTitle>
-              {description && (
-                <CardDescription className="text-sm mt-1">
-                  {description}
-                </CardDescription>
-              )}
+              {description && <CardDescription className="mt-1 text-sm">{description}</CardDescription>}
             </div>
           </div>
-          {getStatusBadge()}
+          {badge}
         </div>
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Usage Count */}
-        <div className="flex items-baseline justify-between">
-          <span className={cn("text-2xl font-bold", getColorClass())}>
-            {current}
-          </span>
-          <span className="text-sm text-muted-foreground">
-            {limit === null ? "∞" : `of ${limit}`}
-          </span>
-        </div>
+        <p className="text-sm tabular-nums">
+          {state === "not_included" ? t("billing.meter.notIncluded", { defaultValue: "Not in your plan" }) : ofText}
+        </p>
 
-        {/* Progress Bar */}
-        {limit !== null && (
-           <div className="space-y-2">
-            <div className={getProgressColor()}>
-              <Progress 
-                value={Math.min(percentage, 100)} 
-                className="h-2"
-              />
-            </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{percentage}% used</span>
-              {resetsAt && <span>{formatResetTime()}</span>}
-            </div>
+        {limit !== null && limit > 0 && (
+          <div className="space-y-2">
+            <Progress
+              value={Math.min(100, (current / limit) * 100)}
+              className={cn("h-2 motion-reduce:[&>div]:transition-none", indicator)}
+              aria-label={title}
+              aria-valuetext={ofText}
+            />
+            {resetLabel && <p className="text-xs text-muted-foreground">{resetLabel}</p>}
           </div>
         )}
 
-        {/* Upgrade CTA */}
-        {percentage >= 75 && limit !== null && (
-          <div className={cn(
-            "flex items-center gap-2 p-3 rounded-lg border mt-3",
-            percentage >= 100 
-              ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800" 
-              : percentage >= 90
-              ? "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800"
-              : "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
-          )}>
-            <AlertCircle className={cn(
-              "w-4 h-4 flex-shrink-0",
-              percentage >= 100 ? "text-red-600" : percentage >= 90 ? "text-orange-600" : "text-yellow-600"
-            )} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">
-                {percentage >= 100 
-                  ? "You've reached your limit" 
-                  : "Approaching your limit"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Upgrade for {limit === null ? "more" : "unlimited"} {title.toLowerCase()}
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => navigate("/pricing")}
-              className="flex-shrink-0"
-            >
-              <TrendingUp className="w-3 h-3 mr-1" />
-              Upgrade
+        {constrained && onUpgrade && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-muted/50 p-3">
+            <p className="min-w-0 flex-1 text-sm font-medium">
+              {state === "near"
+                ? t("billing.meter.approaching", { defaultValue: "Approaching your limit" })
+                : t("billing.meter.reached", { defaultValue: "You've reached your limit" })}
+            </p>
+            <Button size="sm" variant="outline" onClick={onUpgrade} className="shrink-0">
+              <TrendingUp className="mr-1 h-3 w-3" aria-hidden="true" />
+              <span>{t("billing.meter.upgrade", { defaultValue: "Upgrade" })}</span>
             </Button>
           </div>
         )}
@@ -190,4 +138,3 @@ export function UsageMeter({
     </Card>
   );
 }
-

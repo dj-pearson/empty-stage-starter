@@ -7,14 +7,18 @@
  * src/i18n/locales/app/en.household-scope.json.
  *
  * What backs each shared item:
- * - kids (and their care cards), plan, grocery, pantry, recipes: the core
- *   household RLS, which scopes those tables by household_id through
- *   user_belongs_to_household.
+ * - kids (and their care cards and intake answers), plan, grocery, pantry,
+ *   recipes: the core household RLS, which scopes those tables by household_id
+ *   through user_belongs_to_household. The intake columns live on the kids row,
+ *   so every member who can read a kid reads its intake too.
  * - notes: 20260924000000 lets household members read plan_entry_feedback;
  *   writing stays with the author, so each note keeps who wrote it.
  * - collections and aisles: 20260925000006 (household-shared collections and
  *   aisles). Store layouts: 20260925000003 (a family's store is visible to its
  *   household only; seeded chains stay public).
+ * - ladder: food_attempts and kid_achievements are readable by every member of
+ *   the kid's household, so each logged try (refusals and distress included) and
+ *   every rung the food ladder records is shared, not kept by whoever logged it.
  *
  * If a table's scope changes, change this list in the same PR.
  */
@@ -27,6 +31,9 @@ export const SHARED_SCOPE_KEYS = [
   'household.scope.shared.collections',
   'household.scope.shared.aisles',
   'household.scope.shared.notes',
+  // Appended, not inserted: HouseholdScope, Join and PrivacySection render in
+  // this order, and existing keys keep their names.
+  'household.scope.shared.ladder',
 ] as const;
 
 export type SharedScopeKey = (typeof SHARED_SCOPE_KEYS)[number];

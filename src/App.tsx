@@ -83,6 +83,10 @@ const MealPlanGenerator = lazy(() => import('./pages/MealPlanGenerator'));
 const MealPlanGeneratorResults = lazy(() => import('./pages/MealPlanGeneratorResults'));
 const SiblingMealFinder = lazy(() => import('./pages/SiblingMealFinder'));
 const ProfessionalSettings = lazy(() => import('./pages/dashboard/ProfessionalSettings'));
+// Lazy like the page it guards: it renders page-scoped copy (appLocale), which stays out of the entry chunk.
+const RequireProfessional = lazy(() =>
+  import('@/components/professional/RequireProfessional').then((m) => ({ default: m.RequireProfessional }))
+);
 const Billing = lazy(() => import('./pages/dashboard/Billing'));
 const Household = lazy(() => import('./pages/dashboard/Household'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
@@ -621,7 +625,9 @@ const App = () => (
                           path="professional-settings"
                           element={
                             <RouteErrorBoundary>
-                              <ProfessionalSettings />
+                              <RequireProfessional>
+                                <ProfessionalSettings />
+                              </RequireProfessional>
                             </RouteErrorBoundary>
                           }
                         />

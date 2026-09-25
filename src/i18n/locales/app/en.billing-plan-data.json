@@ -1,0 +1,41 @@
+{
+  "billing": {
+    "planData": {
+      "toast": {
+        "compNoChange": "You have complimentary access to a plan. Please contact support to make changes.",
+        "updated": "Subscription updated.",
+        "upgradeFailed": "We couldn't change your plan. Please try again.",
+        "canceled": "Your subscription will end at the close of this billing period.",
+        "cancelFailed": "We couldn't cancel your subscription. Please try again.",
+        "reactivated": "Your subscription will keep renewing.",
+        "reactivateFailed": "We couldn't reactivate your subscription. Please try again.",
+        "cycleChanged": "Billing cycle updated.",
+        "cycleFailed": "We couldn't change your billing cycle. Please try again."
+      },
+      "pricingGuard": {
+        "unverified": "We couldn't confirm your current plan, so nothing was charged. Please try again.",
+        "appStore": "Your plan is billed through the App Store. Change or cancel it in your Apple ID subscriptions so you're never charged twice.",
+        "openApple": "Open Apple subscriptions",
+        "comp": "You have complimentary access from EatPal. Contact support@tryeatpal.com to change your plan.",
+        "stripe": "You already have a subscription. Change your plan from Billing."
+      },
+      "upgrade": {
+        "compSupport": "You have complimentary access from EatPal. Contact support@tryeatpal.com to change your plan.",
+        "action": "Upgrade",
+        "ctaAppStore": "Manage in App Store",
+        "ctaPortal": "Change plan in Billing",
+        "ctaSupport": "Contact support",
+        "ctaPricing": "View Plans",
+        "noteAppStore": "Your plan is billed through the App Store, so plan changes happen in your Apple ID subscriptions.",
+        "noteComp": "You have complimentary access from EatPal. Our support team can change your plan.",
+        "notePortal": "You already have a subscription. Change it from Billing so you're never charged twice.",
+        "title": "Upgrade Required",
+        "notAvailable": "{{feature}} is not available on your current plan.",
+        "unlockBy": "Unlock this feature by upgrading to:",
+        "pro": "Pro Plan - Starting at $14.99/month",
+        "familyPlus": "Family Plus - Starting at $24.99/month",
+        "later": "Maybe Later"
+      }
+    }
+  }
+}

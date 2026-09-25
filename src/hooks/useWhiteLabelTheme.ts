@@ -1,85 +1,100 @@
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { logger } from '@/lib/logger';
-import { fetchActiveSubscription } from '@/lib/accountQueries';
+import { fetchEffectivePlanName } from '@/lib/accountQueries';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface BrandSettings {
-  primary_color: string;
-  secondary_color: string;
-  accent_color: string;
-  business_name?: string;
-  logo_url?: string;
-  favicon_url?: string;
-}
+// Same rule as the table's valid_colors CHECK (and practiceProfileSchema). Kept
+// local so the dashboard shell does not pull zod in for one regex.
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+
+type BrandSettings = Pick<
+  Database['public']['Tables']['professional_brand_settings']['Row'],
+  'primary_color' | 'secondary_color' | 'accent_color' | 'business_name' | 'favicon_url'
+>;
 
 /**
- * Custom hook to apply white-label theme customizations for Professional tier users
- * Fetches brand settings and dynamically applies CSS variables to the root element
+ * Apply a Professional account's practice colors to its own screens.
+ *
+ * The gate is the server-effective plan (current_user_plan_name), shared with
+ * useNavEntitlements through sharedQuery, so a trial, App Store or complimentary
+ * Professional is themed and a lapsed one is not.
+ *
+ * The realtime channel is filtered to the signed-in user's row. Unfiltered, it
+ * delivered every Professional's brand changes to every dashboard and applied
+ * them, so one clinician's save recolored everybody else's app. The handler
+ * re-checks the entitlement too: a plan that lapsed mid-session stops theming.
  */
 export function useWhiteLabelTheme() {
+  const { userId } = useAuth();
+
   useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const isProfessional = async (): Promise<boolean> => {
+      try {
+        return (await fetchEffectivePlanName(userId)) === 'Professional';
+      } catch (error: unknown) {
+        logger.error('useWhiteLabelTheme: plan lookup failed', error);
+        return false;
+      }
+    };
+
+    const apply = (settings: BrandSettings) => {
+      applyThemeColors(settings);
+      applyBusinessName(settings.business_name);
+      applyFavicon(settings.favicon_url);
+    };
+
     const applyCustomTheme = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!(await isProfessional()) || cancelled) return;
 
-        // US-866: the same read useNavEntitlements needs, shared rather than
-        // written out a second time. This was byte-for-byte identical to that
-        // hook's query and went out as a third copy on every dashboard load.
-        const subscriptionData = await fetchActiveSubscription(user.id);
+        const { data: brandSettings, error } = await supabase
+          .from('professional_brand_settings')
+          .select('primary_color, secondary_color, accent_color, business_name, favicon_url')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (error) throw error;
 
-        // Only apply custom theme for Professional users
-        const plans = subscriptionData?.subscription_plans as unknown as { name: string } | null;
-        if (plans?.name !== 'Professional') {
-          return;
-        }
-
-        // Fetch brand settings - table not in generated types yet
-        const { data: brandSettings } = await (supabase
-          .from('professional_brand_settings' as 'user_subscriptions')
-          .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle() as unknown as Promise<{ data: BrandSettings | null; error: unknown }>);
-
-        if (brandSettings) {
-          applyThemeColors(brandSettings);
-          applyBusinessName(brandSettings.business_name);
-          applyFavicon(brandSettings.favicon_url);
-        }
-      } catch (error) {
+        if (brandSettings && !cancelled) apply(brandSettings);
+      } catch (error: unknown) {
         logger.error('Error applying white-label theme:', error);
       }
     };
 
-    applyCustomTheme();
+    void applyCustomTheme();
 
-    // Subscribe to changes in brand settings
     logger.debug('Subscribing to brand_settings_changes');
     const channel = supabase
-      .channel('brand_settings_changes')
+      .channel(`brand_settings_changes:${userId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'professional_brand_settings',
+          filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          if (payload.new && typeof payload.new === 'object') {
-            const newSettings = payload.new as BrandSettings;
-            applyThemeColors(newSettings);
-            applyBusinessName(newSettings.business_name);
-            applyFavicon(newSettings.favicon_url);
-          }
+          const next = payload.new;
+          if (!next || typeof next !== 'object' || !('user_id' in next) || next.user_id !== userId) return;
+          const settings = next as BrandSettings;
+          void isProfessional().then((ok) => {
+            if (ok && !cancelled) apply(settings);
+          });
         }
       )
       .subscribe();
 
     return () => {
+      cancelled = true;
       logger.debug('Unsubscribing from brand_settings_changes');
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userId]);
 }
 
 /**
@@ -133,20 +148,17 @@ function applyThemeColors(brandSettings: BrandSettings) {
   const root = document.documentElement;
 
   try {
-    // Convert hex colors to HSL for Tailwind
-    const primaryHSL = hexToHSL(brandSettings.primary_color);
-    const secondaryHSL = hexToHSL(brandSettings.secondary_color);
-    const accentHSL = hexToHSL(brandSettings.accent_color);
-
-    // Apply to CSS variables
-    root.style.setProperty('--primary', primaryHSL);
-    root.style.setProperty('--secondary', secondaryHSL);
-    root.style.setProperty('--accent', accentHSL);
-
-    // Store the brand colors as data attributes for reference
-    root.setAttribute('data-brand-primary', brandSettings.primary_color);
-    root.setAttribute('data-brand-secondary', brandSettings.secondary_color);
-    root.setAttribute('data-brand-accent', brandSettings.accent_color);
+    const entries: Array<[string, string, string | null]> = [
+      ['--primary', 'data-brand-primary', brandSettings.primary_color],
+      ['--secondary', 'data-brand-secondary', brandSettings.secondary_color],
+      ['--accent', 'data-brand-accent', brandSettings.accent_color],
+    ];
+    for (const [cssVar, attr, hex] of entries) {
+      // The table CHECK already requires this; a null column keeps the app's own token.
+      if (!hex || !HEX_COLOR.test(hex)) continue;
+      root.style.setProperty(cssVar, hexToHSL(hex));
+      root.setAttribute(attr, hex);
+    }
   } catch (error) {
     logger.error('Error applying theme colors:', error);
   }
@@ -155,7 +167,7 @@ function applyThemeColors(brandSettings: BrandSettings) {
 /**
  * Apply business name to the page
  */
-function applyBusinessName(businessName?: string) {
+function applyBusinessName(businessName: string | null) {
   if (businessName) {
     // Store in data attribute for use in UI
     document.documentElement.setAttribute('data-business-name', businessName);
@@ -169,21 +181,35 @@ function applyBusinessName(businessName?: string) {
 }
 
 /**
- * Apply custom favicon if provided
+ * Only a favicon served over https from this project's own Supabase origin
+ * (storage) is accepted. favicon_url is free text the account writes; a
+ * third-party URL would let a Professional account point the tab icon at a tracker.
  */
-function applyFavicon(faviconUrl?: string) {
-  if (faviconUrl) {
-    // Find existing favicon link or create new one
-    let faviconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-
-    if (!faviconLink) {
-      faviconLink = document.createElement('link');
-      faviconLink.rel = 'icon';
-      document.head.appendChild(faviconLink);
-    }
-
-    faviconLink.href = faviconUrl;
+export function isAllowedFaviconUrl(faviconUrl: string | null | undefined): faviconUrl is string {
+  if (!faviconUrl) return false;
+  const base = import.meta.env.VITE_SUPABASE_URL;
+  if (typeof base !== 'string' || !base) return false;
+  try {
+    const url = new URL(faviconUrl);
+    return url.protocol === 'https:' && url.origin === new URL(base).origin;
+  } catch {
+    return false;
   }
+}
+
+/**
+ * Apply custom favicon if provided and allowed
+ */
+function applyFavicon(faviconUrl: string | null) {
+  if (!isAllowedFaviconUrl(faviconUrl)) return;
+
+  let faviconLink = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
+  if (!faviconLink) {
+    faviconLink = document.createElement('link');
+    faviconLink.rel = 'icon';
+    document.head.appendChild(faviconLink);
+  }
+  faviconLink.href = faviconUrl;
 }
 
 /**

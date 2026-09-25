@@ -1,0 +1,185 @@
+{
+  "billing": {
+    "page": {
+      "metaTitle": "Plan and billing - EatPal",
+      "metaDescription": "Your EatPal plan, usage and billing",
+      "title": "Plan and billing",
+      "subtitle": "The plan your account has, what it includes, and how it's billed."
+    },
+    "status": {
+      "loading": "Loading your plan",
+      "heading": "Your plan",
+      "refresh": "Refresh plan details",
+      "error": {
+        "body": "Couldn't load your plan. Nothing about your billing has changed.",
+        "offline": "You're offline. Your plan will show when you're back online.",
+        "retry": "Try again"
+      },
+      "free": {
+        "title": "Free plan",
+        "ended": "Your {{plan}} plan ended on {{date}}.",
+        "endedNoDate": "Your {{plan}} plan has ended.",
+        "body": "You're not being charged. Your kids, foods and plans are all here."
+      },
+      "badge": {
+        "active": "Active",
+        "trialing": "Free trial",
+        "pastDue": "Payment failed",
+        "ending": "Ending",
+        "other": "Needs attention"
+      },
+      "pastDue": {
+        "title": "Payment failed",
+        "body": "Payment failed. Premium features are paused until your card is updated; your kids, foods and plans are kept.",
+        "action": "Update card"
+      },
+      "mismatch": {
+        "title": "Your billing and your plan don't match",
+        "body": "Stripe is billing you for {{billed}}, but your account currently has {{enforced}}. Check the billing portal, or contact support and we will sort it out.",
+        "action": "Open billing portal"
+      },
+      "dual": {
+        "title": "You may be billed twice",
+        "body": "Your {{plan}} plan comes from the App Store, and a card subscription for {{stripePlan}} is also on file with Stripe. Cancel the one you do not want so you are only charged once.",
+        "action": "Open billing portal"
+      },
+      "canceling": {
+        "title": "{{plan}} ends on {{date}}",
+        "titleNoDate": "{{plan}} is set to end",
+        "body": "You keep every feature until then, and you won't be charged again."
+      },
+      "trial": {
+        "ends": "Trial ends {{date}}"
+      },
+      "period": {
+        "label": "This billing period",
+        "daysLeft_one": "{{count}} day left",
+        "daysLeft_other": "{{count}} days left"
+      },
+      "endsOn": "Ends on",
+      "firstCharge": "First charge",
+      "renewsOn": "Renews on",
+      "noDate": "Not set yet",
+      "cycle": {
+        "label": "Billing cycle",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "unknown": "Shown in the billing portal"
+      },
+      "appStore": {
+        "title": "Billed through the App Store",
+        "renewsLabel": "Renews or expires",
+        "noDate": "Shown in your iPhone Settings",
+        "manage": "Manage in iPhone Settings"
+      },
+      "comp": {
+        "title": "Complimentary from EatPal",
+        "until": "Until {{date}}",
+        "noEnd": "No end date"
+      }
+    },
+    "usage": {
+      "title": "Usage this period",
+      "loading": "Loading usage",
+      "error": "We couldn't load your usage",
+      "retry": "Retry",
+      "rows": {
+        "children": "Children in your household",
+        "pantryFoods": "Pantry foods",
+        "aiCoach": "AI coach questions today",
+        "foodTracker": "Food tracker entries this month"
+      },
+      "of": "{{current}} of {{limit}}",
+      "ofUnlimited": "{{current}} of Unlimited",
+      "notIncluded": "Not in {{plan}}. Included in Pro",
+      "overChildren_one": "{{count}} child, your plan allows {{limit}}. Everything you've added stays.",
+      "overChildren_other": "{{count}} children, your plan allows {{limit}}. Everything you've added stays.",
+      "overPantry_one": "{{count}} food, your plan allows {{limit}}. Everything you've added stays.",
+      "overPantry_other": "{{count}} foods, your plan allows {{limit}}. Everything you've added stays.",
+      "fullCount": "You've used every slot on this plan.",
+      "fullQuota": "All used for now",
+      "resetsAt": "Resets at {{time}}",
+      "resetsOn": "Resets {{date}}",
+      "prompt": {
+        "near": "{{name}} is close to your limit.",
+        "full": "{{name}} is at your limit.",
+        "pricing": "See plans with more room",
+        "portal": "Change plan in the billing portal",
+        "appStore": "Change plan in iPhone Settings",
+        "support": "Ask us about more room"
+      }
+    },
+    "inclusions": {
+      "title": "What your plan includes",
+      "unlimited": "Unlimited",
+      "notIncluded": "Not included",
+      "rows": {
+        "children": "Child profiles",
+        "pantry": "Pantry foods",
+        "aiCoach": "AI coach questions a day",
+        "foodTracker": "Food tracker entries a month",
+        "foodChaining": "Food chaining",
+        "mealBuilder": "Meal builder",
+        "nutrition": "Nutrition tracking"
+      }
+    },
+    "manage": {
+      "title": "Manage your plan",
+      "portal": "Open billing portal",
+      "portalHint": "Card, invoices and receipts, on Stripe",
+      "changePlan": "Change plan",
+      "changePlanHint": "Upgrade, downgrade or switch to yearly",
+      "reactivate": "Reactivate",
+      "reactivateBody": "Changed your mind? Keep {{plan}} and nothing else changes.",
+      "cancel": "Cancel plan",
+      "cancelHint": "You keep everything until the end of the period you paid for.",
+      "cancelTrialHint": "Cancel before the trial ends and you won't be charged.",
+      "apple": {
+        "body": "Apple bills this plan, so changes and cancellation happen on your iPhone.",
+        "steps": "Open Settings, tap your name, then Subscriptions, then EatPal."
+      },
+      "comp": {
+        "body": "There's nothing to pay. Questions about your complimentary plan go to our team.",
+        "contact": "Contact support"
+      },
+      "free": {
+        "body": "More children, unlimited pantry and the AI coach come with a paid plan.",
+        "viewPlans": "View plans"
+      }
+    },
+    "cancel": {
+      "title": "Cancel {{plan}}?",
+      "body": "{{plan}} stays active until {{date}}, then you move to Free.",
+      "bodyNoDate": "{{plan}} stays active until the end of this billing period, then you move to Free.",
+      "bodyTrial": "You won't be charged. Your trial ends {{date}}.",
+      "bodyTrialNoDate": "You won't be charged. Your trial ends at the end of this period.",
+      "overChildren_one": "You have {{count}} child profile; Free allows {{limit}}. You can still see them all, but not add more.",
+      "overChildren_other": "You have {{count}} child profiles; Free allows {{limit}}. You can still see them all, but not add more.",
+      "overPantry_one": "You have {{count}} pantry food; Free allows {{limit}}. New foods wait until you are under it.",
+      "overPantry_other": "You have {{count}} pantry foods; Free allows {{limit}}. New foods wait until you are under it.",
+      "aiCoach": "AI coach questions stop.",
+      "kept": "Your kids, foods and history are kept.",
+      "failed": "Couldn't cancel. Your plan hasn't changed; try again.",
+      "keep": "Keep {{plan}}",
+      "confirm": "Cancel plan"
+    },
+    "portal": {
+      "unavailable": "The billing portal isn't available right now. Try again in a minute.",
+      "badUrl": "We couldn't open the billing portal safely. Nothing was changed.",
+      "noCustomer": "There's no card billing on this account yet, so there's nothing to manage in the portal.",
+      "failed": "Couldn't open the billing portal. Nothing about your billing has changed."
+    },
+    "meter": {
+      "unlimited": "Unlimited",
+      "notIncluded": "Not in your plan",
+      "over": "Over your limit",
+      "full": "All used",
+      "near": "Getting close",
+      "of": "{{current}} of {{limit}}",
+      "ofUnlimited": "{{current}} of Unlimited",
+      "approaching": "Approaching your limit",
+      "reached": "You've reached your limit",
+      "upgrade": "Upgrade"
+    }
+  }
+}

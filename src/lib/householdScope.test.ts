@@ -23,7 +23,20 @@ describe('household sharing scope', () => {
       'collections',
       'aisles',
       'notes',
+      'ladder',
     ]);
+  });
+
+  it('tells members the ladder and every try are shared, refusals included', () => {
+    expect(SHARED_SCOPE_KEYS).toContain('household.scope.shared.ladder');
+    const ladder = resolve(enTranslation as Tree, 'household.scope.shared.ladder');
+    expect(ladder).toBe('Food ladder progress and every try, including refusals');
+  });
+
+  it('names intake answers in the kids line, since RLS shares those columns', () => {
+    expect(resolve(enTranslation as Tree, 'household.scope.shared.kids')).toBe(
+      'Kids, their care cards and intake answers',
+    );
   });
 
   it.each([...SHARED_SCOPE_KEYS, ...PRIVATE_SCOPE_KEYS])('%s has English copy', (key) => {

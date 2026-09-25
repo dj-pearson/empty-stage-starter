@@ -90,6 +90,65 @@ describe('formatJournalText', () => {
   });
 });
 
+describe('formatJournalText for the care team', () => {
+  const slotLabel = (slot: MealSlot) => slot.charAt(0).toUpperCase() + slot.slice(1);
+  const day: JournalDay = {
+    date: '2026-09-20',
+    counts: { ate: 1, tasted: 0, refused: 0 },
+    items: [
+      {
+        entryId: 'e1',
+        kidId: 'k1',
+        date: '2026-09-20',
+        mealSlot: 'lunch',
+        foodId: 'f1',
+        recipeId: null,
+        name: 'Crackers',
+        result: 'ate',
+        amountEaten: 'some',
+        notes: [
+          { key: 'n1', text: 'Asked for seconds', source: 'feedback', userId: 'u2', createdAt: '2026-09-20T12:40:00Z' },
+          { key: 'n2', text: 'Ate at the table', source: 'entry' },
+        ],
+        exposureNumber: 3,
+        firstTry: false,
+        allergen: null,
+        components: [],
+      },
+    ],
+  };
+  const base = {
+    t,
+    slotLabel,
+    dayLabel: (d: string) => `Day ${d}`,
+    kidName: () => 'Ava Smith',
+    familyMode: true,
+    authorLabel: () => 'Jordan Lee, 12:40',
+  };
+
+  it('uses the first name and signs household notes with the role', () => {
+    const text = formatJournalText([day], { ...base, careTeam: true, roleLabel: 'Parent' });
+    expect(text).toContain('Ava');
+    expect(text).not.toContain('Smith');
+    expect(text).not.toContain('Jordan');
+    expect(text).toContain('Asked for seconds (Parent)');
+    // An entry note never had a byline and does not gain one.
+    expect(text).toContain('Ate at the table');
+    expect(text).not.toContain('Ate at the table (Parent)');
+  });
+
+  it('falls back to the translated role key when the caller passes none', () => {
+    const text = formatJournalText([day], { ...base, careTeam: true });
+    expect(text).toContain('Asked for seconds (Parent)');
+  });
+
+  it('keeps full names and bylines for the household view', () => {
+    const text = formatJournalText([day], base);
+    expect(text).toContain('Ava Smith');
+    expect(text).toContain('Asked for seconds (Jordan Lee, 12:40)');
+  });
+});
+
 describe('buildJournalPatterns', () => {
   const range = { from: '2026-09-15', to: '2026-09-22' };
   const foodName = (id: string) => foods.find((f) => f.id === id)?.name ?? null;

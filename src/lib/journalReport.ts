@@ -9,6 +9,7 @@
  */
 import '@/i18n/appLocale';
 import { addIsoDays } from '@/lib/date-utils';
+import { firstName } from '@/lib/firstName';
 import { buildResultIndex, type ResultIndex } from '@/lib/kidFit';
 import { summarizeJournal, type JournalDay, type JournalItem, type JournalNote } from '@/lib/foodJournal';
 import type { AmountEaten, MealSlot, PlanEntry } from '@/types';
@@ -232,6 +233,15 @@ export interface FormatJournalTextOptions {
   header?: string[];
   /** Lines from the patterns card, printed after the header. */
   patternLines?: string[];
+  /**
+   * The report leaves the household (a feeding therapist, a pediatrician).
+   * Kid headings carry the first name only, and a household note is signed by
+   * `roleLabel` instead of the member's name and time. Header lines are the
+   * caller's, so the caller passes first names there too.
+   */
+  careTeam?: boolean;
+  /** The byline for a household note in a care-team report, already translated ("Parent"). */
+  roleLabel?: string;
 }
 
 function resultLabel(result: JournalItem['result'], t: Translate): string {
@@ -265,9 +275,16 @@ function amountLabel(amount: AmountEaten, t: Translate): string {
  * so it survives being pasted into SMS, email or a patient portal.
  */
 export function formatJournalText(days: ReadonlyArray<JournalDay>, opts: FormatJournalTextOptions): string {
-  const { t, slotLabel, dayLabel, kidName, familyMode, authorLabel } = opts;
+  const { t, slotLabel, dayLabel, familyMode, careTeam } = opts;
   const out: string[] = [];
   const unknown = () => t('foodJournal.unknownFood', { defaultValue: 'Unknown food' });
+  const kidName = careTeam ? (id: string) => firstName(opts.kidName(id)) : opts.kidName;
+  const role = opts.roleLabel ?? t('foodJournal.careTeam.role', { defaultValue: 'Parent' });
+  // Only household notes (feedback with an author) get a byline; entry notes
+  // and reactions never carried one, and a care-team report must not add one.
+  const authorLabel = careTeam
+    ? (note: JournalNote) => (note.source === 'feedback' && note.userId ? role : null)
+    : opts.authorLabel;
 
   const pushNotes = (notes: JournalNote[], indent: string) => {
     for (const note of notes) {

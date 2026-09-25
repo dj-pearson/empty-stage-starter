@@ -6,6 +6,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { toast } from "sonner";
 import i18n from "@/i18n";
 import "@/i18n/appLocale";
+import { SHARED_SCOPE_KEYS } from "@/lib/householdScope";
 
 /**
  * The household page (US-789, rebuilt for US-840).
@@ -277,7 +278,7 @@ describe("Household page", () => {
 
     const sharedHeading = await screen.findByRole("heading", { name: /shared with everyone here/i });
     const shared = within(sharedHeading.closest("section") as HTMLElement).getAllByRole("listitem");
-    expect(shared).toHaveLength(8);
+    expect(shared).toHaveLength(SHARED_SCOPE_KEYS.length);
     expect(screen.getByText(i18n.t("household.scope.nothingCrosses"))).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /care cards/i })).toHaveAttribute("href", "/dashboard/kids");
   });

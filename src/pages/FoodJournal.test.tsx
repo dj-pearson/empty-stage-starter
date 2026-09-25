@@ -212,17 +212,23 @@ describe('FoodJournal logging', () => {
 });
 
 describe('FoodJournal share report', () => {
-  it('shares through shareOrCopyText and shows the text to copy when that fails', async () => {
+  it('previews the report, sends it through shareOrCopyText, and shows the text to copy when that fails', async () => {
     mocks.shareOrCopyText.mockResolvedValue('failed');
     mocks.planEntries = [entry({ result: 'ate' })];
     renderPage();
     await userEvent.click(screen.getByRole('button', { name: 'Share report' }));
 
+    // The report is previewed first; nothing leaves until the parent says so.
+    expect(mocks.shareOrCopyText).not.toHaveBeenCalled();
+    const preview = await screen.findByRole('dialog');
+    await userEvent.click(within(preview).getByRole('button', { name: 'Copy' }));
+
     expect(mocks.shareOrCopyText).toHaveBeenCalledTimes(1);
     const [text, opts] = mocks.shareOrCopyText.mock.calls[0] as unknown as [string, { preferShare?: boolean }];
     expect(text).toContain('Food journal: Ava');
     expect(text).toContain('Broccoli');
-    expect(opts.preferShare).toBe(true);
+    // jsdom has no share sheet, so the preview offers Copy only.
+    expect(opts.preferShare).toBe(false);
     expect(await screen.findByRole('dialog')).toHaveTextContent('Copy this text');
   });
 });
