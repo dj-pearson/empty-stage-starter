@@ -119,6 +119,7 @@ describe("FeatureGate", () => {
   it("re-checks on window focus while blocked and switches to children when allowed", async () => {
     let now = 1_000_000;
     vi.spyOn(Date, "now").mockImplementation(() => now);
+    const addWindowListener = vi.spyOn(window, "addEventListener");
     checkFeatureLimit.mockResolvedValueOnce({ allowed: false, limit: 0, current: 0 });
     renderGate(
       <FeatureGate feature="ai_coach" label="Coach">
@@ -126,6 +127,11 @@ describe("FeatureGate", () => {
       </FeatureGate>,
     );
     await screen.findByRole("heading", { name: "Coach is locked" });
+    // The focus listener is attached in a passive effect, which React runs in
+    // its own scheduler task after the lock is committed. On a loaded CI runner
+    // that task can land after findByRole resolves, and a focus dispatched
+    // before it reaches no listener at all. Wait for the listener, not the paint.
+    await waitFor(() => expect(addWindowListener).toHaveBeenCalledWith("focus", expect.any(Function)));
 
     // Inside the throttle window: no second RPC.
     act(() => {
