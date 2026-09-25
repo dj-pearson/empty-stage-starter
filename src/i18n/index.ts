@@ -30,8 +30,20 @@ export const DEFAULT_LANGUAGE = DEFAULT_SEO_LOCALE.lang;
 export const SUPPORTED_LANGUAGES = SEO_LOCALES.map((locale) => locale.lang);
 export type SupportedLanguage = string;
 
+/**
+ * Page-scoped copy (planner, recipes, grocery, pantry) is not here: it lives in
+ * locales/app/*.json and is registered by ./appLocale, which each component
+ * that uses it imports. That keeps it out of the entry chunk -- see
+ * .ci/bundle-budget.json -- while still loading before the component renders.
+ */
+export const enTranslation = en;
+
+// A copy, not the module object: i18next's addResourceBundle deep-merges into
+// the stored tree in place, and appLocale's registration would otherwise
+// rewrite the imported en.json for every other importer.
+
 export const resources = {
-  en: { translation: en },
+  en: { translation: structuredClone(enTranslation) },
 } as const;
 
 if (!i18n.isInitialized) {

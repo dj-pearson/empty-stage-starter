@@ -21,11 +21,13 @@ import {
   addDays,
   applyAttemptOutcome,
   deriveLadderFromAttempts,
+  firstFreeDueDate,
   initialLadderState,
   isRung,
   nextRung,
   prevRung,
   rungIndex,
+  type DueDateRow,
   type LadderAttempt,
   type LadderState,
   type Rung,
@@ -317,5 +319,50 @@ describe('deriveLadderFromAttempts', () => {
     expect(deriveLadderFromAttempts(history, { today: TODAY })).toEqual(
       deriveLadderFromAttempts(history, { today: TODAY })
     );
+  });
+});
+
+describe('firstFreeDueDate', () => {
+  const D = '2026-08-03';
+  function due(id: string, over: Partial<DueDateRow> = {}): DueDateRow {
+    return { id, kidId: 'kid-1', status: 'active', nextDueOn: D, ...over };
+  }
+
+  it('returns the wanted date when there is room', () => {
+    expect(firstFreeDueDate([due('a'), due('b')], 'kid-1', D)).toBe(D);
+  });
+
+  it('slides past a full day, and past the next one too when that is full', () => {
+    const full = [due('a'), due('b'), due('c')];
+    expect(firstFreeDueDate(full, 'kid-1', D)).toBe(addDays(D, 1));
+
+    const twoFull = [
+      ...full,
+      due('d', { nextDueOn: addDays(D, 1) }),
+      due('e', { nextDueOn: addDays(D, 1) }),
+      due('f', { nextDueOn: addDays(D, 1) }),
+    ];
+    expect(firstFreeDueDate(twoFull, 'kid-1', D)).toBe(addDays(D, 2));
+  });
+
+  it('does not count the row being written against itself', () => {
+    const rows = [due('a'), due('b'), due('c')];
+    expect(firstFreeDueDate(rows, 'kid-1', D, 'c')).toBe(D);
+  });
+
+  it('ignores rows that are not active, and other children', () => {
+    const rows = [
+      due('a'),
+      due('b', { status: 'paused' }),
+      due('c', { status: 'backed_off' }),
+      due('d', { status: 'mastered' }),
+      due('e', { kidId: 'kid-2' }),
+      due('f', { kidId: 'kid-2' }),
+    ];
+    expect(firstFreeDueDate(rows, 'kid-1', D)).toBe(D);
+  });
+
+  it('honours a custom cap', () => {
+    expect(firstFreeDueDate([due('a')], 'kid-1', D, undefined, 1)).toBe(addDays(D, 1));
   });
 });

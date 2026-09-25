@@ -1,0 +1,80 @@
+{
+  "pantry": {
+    "item": {
+      "category": {
+        "protein": "Protein",
+        "carb": "Carbs",
+        "dairy": "Dairy",
+        "fruit": "Fruit",
+        "vegetable": "Veggies",
+        "snack": "Snacks",
+        "other": "Other"
+      },
+      "edit": "Edit {{name}}",
+      "delete": "Delete {{name}}",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteBody": "This permanently removes {{name}} from your pantry. You can't undo it.",
+      "deleteConfirm": "Delete",
+      "cancel": "Cancel",
+      "zeroTitle": "Quantity reaching zero",
+      "zeroBody": "{{name}} will be at 0. Did you use it up, throw it out, or would you rather remove it from your pantry?",
+      "keepAtZero": "Keep at 0",
+      "threwOut": "Threw it out",
+      "deleteFood": "Delete food",
+      "safe": "Safe",
+      "tryBite": "Try Bite",
+      "tryShort": "Try",
+      "unverified": "Unverified",
+      "unverifiedHint": "Added from a scanned barcode and not yet checked by anyone",
+      "out": "Out",
+      "low": "Low",
+      "decrease": "Decrease {{name}}",
+      "increase": "Increase {{name}}",
+      "adjust": "Adjust {{name}} quantity, now {{quantity}} {{unit}}",
+      "quantityInput": "Quantity of {{name}}",
+      "set": "Set",
+      "qtyFallback": "qty",
+      "daysLeft_one": "about {{count}} day left",
+      "daysLeft_other": "about {{count}} days left",
+      "addToList": "Add {{name}} to grocery list",
+      "addToListShort": "Add to grocery list",
+      "onList": "On list",
+      "onListLabel": "{{name}} is on your list",
+      "allergenWarning": "Contains {{list}}",
+      "sectionOut_one": "{{count}} out",
+      "sectionOut_other": "{{count}} out",
+      "sectionLow_one": "{{count}} low",
+      "sectionLow_other": "{{count}} low"
+    },
+    "strip": {
+      "status": "{{out}} out of stock, {{low}} running low",
+      "allStocked": "All stocked",
+      "allStockedSoonest_one": "All stocked; next to run out: {{name}}, about {{count}} day",
+      "allStockedSoonest_other": "All stocked; next to run out: {{name}}, about {{count}} days",
+      "untracked_one": "{{count}} not counted yet",
+      "untracked_other": "{{count}} not counted yet",
+      "namesAndMore": "{{names}} +{{count}}",
+      "safeLowFor": "{{kid}}'s safe foods low: {{list}}",
+      "safeLow": "Safe foods low: {{list}}",
+      "addThese": "Add these",
+      "out_one": "{{count}} out",
+      "out_other": "{{count}} out",
+      "low_one": "{{count}} low",
+      "low_other": "{{count}} low",
+      "addAll_one": "Add {{count}} to list",
+      "addAll_other": "Add {{count}} to list"
+    },
+    "lens": {
+      "kidsLabel": "Show foods for",
+      "allKids": "All kids",
+      "fitLabel": "Filter by fit",
+      "eats": "Eats it",
+      "trying": "Trying",
+      "avoid": "Avoid"
+    }
+  },
+  "dataSource": {
+    "dataFrom": "Data from",
+    "licensedUnder": "licensed under"
+  }
+}

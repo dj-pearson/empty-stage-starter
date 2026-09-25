@@ -4,8 +4,19 @@ import {
   resolveQuickLogMealId,
   selectQuickLogEntry,
   performQuickLog,
+  buildQuickLogMeals,
+  slotForTime,
+  mergeNote,
+  buildUndoPatch,
   type QuickLogEntry,
 } from './quickLog';
+import type { PlanEntry } from '@/types';
+
+// performQuickLog moves the ladder after a save by default (item 41). The
+// fold itself is pinned in useFoodLadder.planResult.test.ts; here only that
+// it is asked for, and when.
+const ladder = vi.hoisted(() => ({ sync: vi.fn(async (_entryId: string): Promise<unknown> => []) }));
+vi.mock('@/hooks/useFoodLadder', () => ({ syncLadderAfterPlanResult: ladder.sync }));
 
 /**
  * The quick-log path has to know which meal it is logging, and whether the
@@ -94,7 +105,56 @@ describe('performQuickLog', () => {
     });
 
     expect(save).toHaveBeenCalledWith('a', { result: 'ate', notes: undefined });
-    expect(outcome).toEqual({ status: 'saved', entry: meal('a') });
+    expect(outcome).toEqual({
+      status: 'saved',
+      entry: meal('a'),
+      patch: { result: 'ate', notes: undefined },
+      ladderSync: expect.any(Promise),
+    });
+  });
+
+  it("moves the food's ladder rung for the entry it saved", async () => {
+    ladder.sync.mockClear();
+    const outcome = await performQuickLog({ meals: [meal('a'), meal('b')], mealId: 'b', result: 'tasted', save: ok });
+    expect(outcome.status).toBe('saved');
+    if (outcome.status === 'saved') await outcome.ladderSync;
+    expect(ladder.sync).toHaveBeenCalledTimes(1);
+    expect(ladder.sync).toHaveBeenCalledWith('b');
+  });
+
+  it('does not touch the ladder when the save failed', async () => {
+    ladder.sync.mockClear();
+    const outcome = await performQuickLog({
+      meals: [meal('a')],
+      result: 'ate',
+      save: () => ({ error: { message: 'rls' } }),
+    });
+    expect(outcome.status).toBe('failed');
+    await Promise.resolve();
+    expect(ladder.sync).not.toHaveBeenCalled();
+  });
+
+  it('uses an injected ladder sync, and none when passed null', async () => {
+    ladder.sync.mockClear();
+    const injected = vi.fn(async () => undefined);
+    const first = await performQuickLog({ meals: [meal('a')], result: 'ate', save: ok, syncLadder: injected });
+    if (first.status === 'saved') await first.ladderSync;
+    expect(injected).toHaveBeenCalledWith('a');
+
+    const second = await performQuickLog({ meals: [meal('a')], result: 'ate', save: ok, syncLadder: null });
+    expect(second).toEqual({ status: 'saved', entry: meal('a'), patch: { result: 'ate', notes: undefined } });
+    expect(ladder.sync).not.toHaveBeenCalled();
+  });
+
+  it('reports the save as saved even when the ladder sync fails', async () => {
+    const outcome = await performQuickLog({
+      meals: [meal('a')],
+      result: 'refused',
+      save: ok,
+      syncLadder: () => Promise.reject(new Error('offline')),
+    });
+    expect(outcome.status).toBe('saved');
+    if (outcome.status === 'saved') await expect(outcome.ladderSync).resolves.toBeUndefined();
   });
 
   it('keeps the note already on the entry when none was typed', async () => {
@@ -104,7 +164,9 @@ describe('performQuickLog', () => {
     expect(save).toHaveBeenCalledWith('a', { result: 'tasted', notes: 'ate half' });
   });
 
-  it('writes the typed note over the old one', async () => {
+  it('adds a typed note to the shared one rather than wiping it', async () => {
+    // plan_entries.notes is the household's note. Quick-logging "too tired"
+    // used to replace a parent's earlier "rash on cheek?" outright.
     const save = vi.fn(ok);
     await performQuickLog({
       meals: [meal('a', 'ate half')],
@@ -113,7 +175,59 @@ describe('performQuickLog', () => {
       save,
     });
 
+    expect(save).toHaveBeenCalledWith('a', { result: 'refused', notes: 'ate half\ntoo tired' });
+  });
+
+  it('does not write a note twice when the entry already says it', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({
+      meals: [meal('a', 'Loved it!')],
+      result: 'ate',
+      notes: '  loved   IT! ',
+      save,
+    });
+
+    expect(save).toHaveBeenCalledWith('a', { result: 'ate', notes: 'Loved it!' });
+  });
+
+  it('overwrites the note in replace mode', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({
+      meals: [meal('a', 'ate half')],
+      result: 'refused',
+      notes: 'too tired',
+      noteMode: 'replace',
+      save,
+    });
+
     expect(save).toHaveBeenCalledWith('a', { result: 'refused', notes: 'too tired' });
+  });
+
+  it('clears the amount when the caller passes null', async () => {
+    const save = vi.fn(ok);
+    await performQuickLog({
+      meals: [{ ...meal('a'), amount_eaten: 'some' }],
+      result: 'ate',
+      amount: null,
+      save,
+    });
+
+    expect(save).toHaveBeenCalledWith('a', { result: 'ate', notes: undefined, amount_eaten: null });
+  });
+
+  it('hands back the exact patch it sent', async () => {
+    const save = vi.fn(ok);
+    const outcome = await performQuickLog({
+      meals: [{ ...meal('a', 'ate half'), amount_eaten: 'some' }],
+      result: 'refused',
+      notes: 'too tired',
+      save,
+    });
+
+    expect(outcome.status).toBe('saved');
+    if (outcome.status !== 'saved') return;
+    expect(outcome.patch).toBe((save.mock.calls[0] as unknown[])[1]);
+    expect(outcome.patch).toEqual({ result: 'refused', notes: 'ate half\ntoo tired', amount_eaten: null });
   });
 
   it('saves how much was eaten when one was picked', async () => {
@@ -187,5 +301,133 @@ describe('performQuickLog', () => {
     });
 
     expect(outcome.status).toBe('failed');
+  });
+});
+
+describe('mergeNote', () => {
+  it('keeps the existing note when nothing was typed', () => {
+    expect(mergeNote('rash on cheek?', undefined)).toBe('rash on cheek?');
+    expect(mergeNote('rash on cheek?', '   ')).toBe('rash on cheek?');
+    expect(mergeNote(null, undefined)).toBeUndefined();
+  });
+
+  it('uses the typed note when there was none', () => {
+    expect(mergeNote('', ' too tired ')).toBe('too tired');
+    expect(mergeNote(null, 'too tired')).toBe('too tired');
+  });
+
+  it('joins a different note on a new line', () => {
+    expect(mergeNote(' rash on cheek? ', 'too tired')).toBe('rash on cheek?\ntoo tired');
+  });
+
+  it('skips a note already on one of the lines', () => {
+    expect(mergeNote('rash on cheek?\nToo tired', 'too  tired')).toBe('rash on cheek?\nToo tired');
+  });
+});
+
+describe('buildUndoPatch', () => {
+  const before = { result: null, notes: 'rash on cheek?', amount_eaten: 'some' as const };
+
+  it('restores only the keys the log touched', () => {
+    expect(buildUndoPatch(before, { result: 'ate' })).toEqual({ result: null });
+    expect(buildUndoPatch(before, { result: 'ate', notes: 'x', amount_eaten: null })).toEqual({
+      result: null,
+      notes: 'rash on cheek?',
+      amount_eaten: 'some',
+    });
+  });
+
+  it('puts back null, never an empty string, for an entry that had no note', () => {
+    expect(buildUndoPatch({ ...before, notes: undefined }, { notes: 'x' })).toEqual({ notes: null });
+    expect(buildUndoPatch({ ...before, notes: null }, { notes: 'x' })).toEqual({ notes: null });
+    expect(buildUndoPatch({ ...before, notes: '' }, { notes: 'x' })).toEqual({ notes: null });
+  });
+
+  it('turns an unrecorded amount into null', () => {
+    expect(buildUndoPatch({ ...before, amount_eaten: undefined }, { amount_eaten: 'a_lot' })).toEqual({
+      amount_eaten: null,
+    });
+  });
+});
+
+describe('buildQuickLogMeals', () => {
+  const TODAY = '2026-09-24';
+  const kids = [
+    { id: 'k1', name: 'Ada' },
+    { id: 'k2', name: 'Ben' },
+  ];
+  const foods = [
+    { id: 'pasta', name: 'Pasta' },
+    { id: 'cheese', name: 'Cheese' },
+    { id: 'oats', name: 'Oats' },
+    { id: 'peas', name: 'Peas' },
+  ];
+  const recipes = [{ id: 'mac', name: 'Mac and cheese' }];
+  const row = (over: Partial<PlanEntry> & Pick<PlanEntry, 'id' | 'kid_id' | 'meal_slot' | 'food_id'>): PlanEntry => ({
+    date: TODAY,
+    result: null,
+    ...over,
+  });
+  const at = (h: number) => new Date(2026, 8, 24, h, 0, 0);
+
+  const entries: PlanEntry[] = [
+    row({ id: 'a-din-1', kid_id: 'k1', meal_slot: 'dinner', food_id: 'pasta', recipe_id: 'mac', is_primary_dish: false }),
+    row({ id: 'a-din-2', kid_id: 'k1', meal_slot: 'dinner', food_id: 'cheese', recipe_id: 'mac', is_primary_dish: true }),
+    row({ id: 'a-bfast', kid_id: 'k1', meal_slot: 'breakfast', food_id: 'oats' }),
+    row({ id: 'b-din', kid_id: 'k2', meal_slot: 'dinner', food_id: 'peas' }),
+    row({ id: 'b-yday', kid_id: 'k2', meal_slot: 'dinner', food_id: 'peas', date: '2026-09-23' }),
+  ];
+
+  it("lists every kid's entries in Family mode, named by kid", () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, null, TODAY, at(18));
+    expect(meals.map((m) => m.label)).toEqual([
+      'Ada \u00b7 breakfast \u00b7 Oats',
+      'Ada \u00b7 dinner \u00b7 Mac and cheese',
+      'Ben \u00b7 dinner \u00b7 Peas',
+    ]);
+  });
+
+  it('lists only the selected kid, without a name, when one is active', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, 'k2', TODAY, at(18));
+    expect(meals.map((m) => m.label)).toEqual(['dinner \u00b7 Peas']);
+  });
+
+  it('lists a recipe once, on its primary row', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, 'k1', TODAY, at(18));
+    const dinner = meals.filter((m) => m.slot === 'dinner');
+    expect(dinner).toHaveLength(1);
+    expect(dinner[0].id).toBe('a-din-2');
+  });
+
+  it('preselects dinner at 18:00', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, null, TODAY, at(18));
+    const picked = meals.filter((m) => m.preselected);
+    expect(picked).toHaveLength(1);
+    expect(picked[0].slot).toBe('dinner');
+  });
+
+  it('preselects breakfast in the morning', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, null, TODAY, at(7));
+    expect(meals.find((m) => m.preselected)?.id).toBe('a-bfast');
+  });
+
+  it('skips an already-logged row when preselecting', () => {
+    const logged = entries.map((e) => (e.id === 'a-din-2' ? { ...e, result: 'ate' as const } : e));
+    const meals = buildQuickLogMeals(logged, kids, foods, recipes, null, TODAY, at(19));
+    expect(meals.find((m) => m.preselected)?.id).toBe('b-din');
+  });
+
+  it('uses the slot label the caller passes', () => {
+    const meals = buildQuickLogMeals(entries, kids, foods, recipes, 'k2', TODAY, at(18), (s) => s.toUpperCase());
+    expect(meals[0].label).toBe('DINNER \u00b7 Peas');
+  });
+
+  it('gives an empty list for an empty plan', () => {
+    expect(buildQuickLogMeals([], kids, foods, recipes, null, TODAY, at(18))).toEqual([]);
+  });
+
+  it('switches to dinner at 16:00', () => {
+    expect(slotForTime(at(15))).toBe('snack2');
+    expect(slotForTime(at(16))).toBe('dinner');
   });
 });

@@ -17,6 +17,8 @@
  * recipes) and we want decisions to be explainable to a parent in plain text.
  */
 
+import { matchingAllergen, matchingFoodAllergen, worstFoodAllergen, type AllergenSeverity } from './allergens';
+
 export type DietaryRestriction =
   | 'vegetarian'
   | 'vegan'
@@ -39,6 +41,12 @@ export interface SolverKid {
   id: string;
   name: string;
   allergens?: string[] | null;
+  /**
+   * kids.allergen_severity: a severe hit is never split-plated, only excluded.
+   * An allergy with no entry here is treated as severe (owner decision
+   * 2026-09-24).
+   */
+  allergenSeverity?: Partial<Record<string, AllergenSeverity>> | null;
   dietaryRestrictions?: string[] | null;
   dislikedFoods?: string[] | null;
   favoriteFoods?: string[] | null;
@@ -81,13 +89,32 @@ export interface ConstraintViolation {
   reason: string;
   /** 'hard' = excludes the kid (allergen / dietary). 'soft' = penalizes. */
   severity: 'hard' | 'soft';
+  /**
+   * For an allergen violation: the severity decisions use. "severe" when the
+   * parent recorded severe or recorded no severity at all.
+   */
+  allergenSeverity?: AllergenSeverity | null;
+  /** For an allergen violation: false when no severity was recorded and it defaulted to severe. */
+  allergenSeverityRecorded?: boolean;
+  /** For an allergen violation: the kid-side canonical allergen, e.g. "peanut". */
+  allergen?: string;
 }
 
 export interface KidSatisfaction {
   kidId: string;
   kidName: string;
-  /** 0..1 — pre-fairness, pre-swap raw score. */
+  /**
+   * 0..1, fairness-adjusted: after swaps and split-plate accounting, plus the
+   * fairness boost for a kid who has been losing lately. Use it for ranking
+   * only; it is not what the kid thinks of the meal.
+   */
   score: number;
+  /**
+   * 0..1 after swaps and split-plate accounting, before the fairness boost.
+   * Set on every non-excluded result; read `rawScore ?? score` for anything
+   * persisted or shown as "how well this fits the kid".
+   */
+  rawScore?: number;
   hardViolations: ConstraintViolation[];
   softViolations: ConstraintViolation[];
   favoriteHits: string[];
@@ -141,6 +168,21 @@ function lowerSet(values: readonly (string | null | undefined)[] | null | undefi
     }
   }
   return out;
+}
+
+/** An allergen violation decisions treat as severe: recorded severe, or no severity recorded. */
+function isSevereViolation(v: ConstraintViolation): boolean {
+  return v.allergenSeverity === 'severe';
+}
+
+/** Why a recipe was dropped, without calling an unrated allergy the parent's "severe". */
+function excludeReasonFor(perKid: readonly KidSatisfaction[]): string {
+  const severe = perKid.flatMap((k) => k.hardViolations.filter(isSevereViolation));
+  if (severe.some((v) => v.allergenSeverityRecorded !== false)) return 'Severe allergy for a selected kid';
+  if (severe.length > 0) {
+    return 'Allergy with no recorded severity (treated as severe) for a selected kid';
+  }
+  return 'Too many constraint conflicts to resolve';
 }
 
 function clamp01(n: number): number {
@@ -266,11 +308,11 @@ function violatesDietaryRestriction(
   const rule = DIETARY_RULES[restriction.trim().toLowerCase()];
   if (!rule) return { violates: false, reason: '' };
 
-  const allergens = lowerSet(food.allergens);
-  for (const a of rule.excludeAllergens ?? []) {
-    if (allergens.has(a)) {
-      return { violates: true, reason: `${restriction} (contains ${a})` };
-    }
+  // Canonical and family-aware: a dairy-free kid's rule catches a food tagged
+  // "en:milk" or "cheese", which a lowercased exact compare let through.
+  const excluded = matchingAllergen(rule.excludeAllergens ?? [], food.allergens);
+  if (excluded) {
+    return { violates: true, reason: `${restriction} (contains ${excluded})` };
   }
   const nameLower = food.name.toLowerCase();
   for (const kw of rule.excludeNameKeywords ?? []) {
@@ -286,7 +328,6 @@ function violatesDietaryRestriction(
 // ---------------------------------------------------------------------------
 
 export function evaluateKidConstraint(recipe: SolverRecipe, kid: SolverKid): KidSatisfaction {
-  const kidAllergens = lowerSet(kid.allergens);
   const dislikedIds = new Set(kid.dislikedFoods ?? []);
   const dislikedNames = lowerSet(kid.dislikedFoods);
   const favoriteIds = new Set(kid.favoriteFoods ?? []);
@@ -300,20 +341,27 @@ export function evaluateKidConstraint(recipe: SolverRecipe, kid: SolverKid): Kid
   const favoriteHits: string[] = [];
 
   for (const food of recipe.foods) {
-    // Hard: allergen
-    let allergenHit: string | null = null;
-    for (const a of food.allergens ?? []) {
-      if (kidAllergens.has(String(a).trim().toLowerCase())) {
-        allergenHit = String(a);
-        break;
-      }
-    }
-    if (allergenHit) {
+    // Hard: allergen. Canonical, family-aware, and reads the food's name.
+    // Worst hit, not first, so a severe allergen is never hidden behind a mild one.
+    const worstHit = worstFoodAllergen(
+      { allergens: kid.allergens, allergen_severity: kid.allergenSeverity },
+      food,
+    );
+    if (worstHit) {
+      const allergenHit = worstHit.allergen;
+      const level = worstHit.severity;
       hardViolations.push({
         foodId: food.id,
         foodName: food.name,
-        reason: `allergen (${allergenHit})`,
+        reason: !worstHit.recorded
+          ? `allergen (${allergenHit}), severity not recorded, treated as severe`
+          : level === 'severe'
+            ? `severe allergen (${allergenHit})`
+            : `allergen (${allergenHit})`,
         severity: 'hard',
+        allergenSeverity: level,
+        allergenSeverityRecorded: worstHit.recorded,
+        allergen: allergenHit,
       });
       continue; // no need to also flag as dislike etc.
     }
@@ -405,14 +453,14 @@ function findSwap(
   if (!offendingCategory) return null;
 
   const recipeFoodIds = new Set(recipe.foodIds);
+  const kidDislikes = lowerSet(kid.dislikedFoods);
+  const kidDislikeIds = new Set(kid.dislikedFoods ?? []);
 
   for (const candidate of pantry) {
     if (recipeFoodIds.has(candidate.id)) continue;
     if ((candidate.category ?? '').toLowerCase() !== offendingCategory) continue;
 
     // Asking kid must not dislike it
-    const kidDislikes = lowerSet(kid.dislikedFoods);
-    const kidDislikeIds = new Set(kid.dislikedFoods ?? []);
     if (kidDislikes.has(candidate.name.trim().toLowerCase()) || kidDislikeIds.has(candidate.id)) {
       continue;
     }
@@ -420,16 +468,7 @@ function findSwap(
     // Must not violate any group member's hard constraints
     let viable = true;
     for (const other of allKids) {
-      const allergens = lowerSet(other.allergens);
-      const candAllergens = lowerSet(candidate.allergens);
-      let hit = false;
-      for (const a of candAllergens) {
-        if (allergens.has(a)) {
-          hit = true;
-          break;
-        }
-      }
-      if (hit) {
+      if (matchingFoodAllergen(other.allergens, candidate)) {
         viable = false;
         break;
       }
@@ -529,6 +568,13 @@ function planResolution(
     hardViolations: [...k.hardViolations],
     softViolations: [...k.softViolations],
   }));
+
+  // Item 29: "hold the X" is fine for a mild or moderate allergy, but a severe
+  // one is a cross-contact risk from the shared pot, so the recipe is out. An
+  // allergy with no recorded severity counts as severe here (item 3a).
+  if (adjusted.some((ks) => ks.hardViolations.some(isSevereViolation))) {
+    return null;
+  }
 
   for (const ks of adjusted) {
     const totalMods = ks.hardViolations.length + ks.softViolations.length;
@@ -657,7 +703,7 @@ export function solveSiblingMeals(
         swaps: [],
         splitPlates: [],
         excluded: true,
-        excludeReason: 'Too many constraint conflicts to resolve',
+        excludeReason: excludeReasonFor(perKid),
       });
       continue;
     }
@@ -665,6 +711,7 @@ export function solveSiblingMeals(
     // Apply fairness boost to the targeted kid's satisfaction (for ranking only).
     const fairnessAdjusted = plan.adjustedSatisfaction.map((ks) => ({
       ...ks,
+      rawScore: ks.score,
       score: clamp01(ks.score + (fairnessBoosts[ks.kidId] ?? 0)),
     }));
 

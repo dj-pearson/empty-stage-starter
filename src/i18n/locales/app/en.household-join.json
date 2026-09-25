@@ -1,0 +1,32 @@
+{
+  "household": {
+    "join": {
+      "metaTitle": "Join a household - EatPal",
+      "title": "Join a household",
+      "confirm": {
+        "heading": "Join this household?",
+        "codeLabel": "Invite code",
+        "merge": "If you are the only person in your current household, your kids, recipes, meal plan and lists move into this one, and your old household is closed. This can't be undone.",
+        "accept": "Join household",
+        "notNow": "Not now"
+      },
+      "joining": "Joining...",
+      "entry": {
+        "heading": "Enter your invite code",
+        "body": "Type the 6-character code from the text you were sent.",
+        "label": "Invite code",
+        "submit": "Continue"
+      },
+      "success": {
+        "heading": "You're in",
+        "sharedIntro": "Everyone here now shares:",
+        "cta": "See your household"
+      },
+      "error": {
+        "heading": "Couldn't join",
+        "tryAnother": "Try another code",
+        "dashboard": "Go to dashboard"
+      }
+    }
+  }
+}

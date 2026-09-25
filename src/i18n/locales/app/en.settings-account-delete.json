@@ -1,0 +1,39 @@
+{
+  "settings": {
+    "account": {
+      "deleteFlow": {
+        "checking": "Checking what stays with your household...",
+        "checkFailed": "We couldn't check your household just now. If you share one, what you added to it stays with the member who has been there longest.",
+        "staysTitle": "{{kids}} stay with {{name}}",
+        "staysTitleNoKids": "Your household's data stays with {{name}}",
+        "staysBody": "Child profiles, foods, recipes, meal plans and grocery lists you added to {{household}} move to {{name}}, who becomes its owner. Nothing {{name}} added changes.",
+        "soleTitle": "Everything will be deleted",
+        "soleBody": "You're the only member of your household, so its child profiles, foods, recipes, meal plans and grocery lists go with your account.",
+        "removedPersonal": "Your notification, delivery and suggestion preferences",
+        "fallbackName": {
+          "parent": "your co-parent",
+          "guardian": "your household's caregiver",
+          "other": "the other member of your household"
+        },
+        "reauthTitle": "Sign in again to delete",
+        "reauthBody": "Confirm it's you. Your account is deleted as soon as you do.",
+        "passwordLabel": "Password for {{email}}",
+        "passwordWrong": "That password isn't right.",
+        "sendCode": "Email me a code",
+        "sendingCode": "Sending...",
+        "resendCode": "Send a new code",
+        "codeSent": "We sent a 6-digit code to {{email}}.",
+        "codeLabel": "6-digit code",
+        "codeWrong": "That code didn't work. Check it, or send a new one.",
+        "codeSendFailed": "We couldn't send a code. Try again in a minute.",
+        "noEmail": "Your account has no email to confirm with. Email {{email}} and we'll delete it for you.",
+        "confirmDelete": "Confirm and delete",
+        "verifying": "Checking...",
+        "reauthExpired": "That sign-in is more than 10 minutes old. Sign in again to delete.",
+        "stripeFailed": "We couldn't cancel your subscription, so your account wasn't deleted. Try again, or email {{email}}.",
+        "transferFailed": "We couldn't hand your household's data over, so nothing was deleted. Try again, or email {{email}}.",
+        "billingCancel": "Your {{plan}} subscription is cancelled when you delete, so you aren't charged again."
+      }
+    }
+  }
+}

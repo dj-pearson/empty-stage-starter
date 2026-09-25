@@ -4801,6 +4801,160 @@
         "The badge keys themselves do not change, so a device that already holds them recognises what it reads back"
       ],
       "notes": "Split out of US-781 2026-09-18. That story decided badges stay iOS-only -- the two clients keep separate notions of what a child has earned, and the web's achievements are computed rather than stored. This is the part that is wrong under BOTH options and therefore does not wait on that decision: UserDefaults is device-local storage for something a parent will care about a year from now. PLATFORMS.md has the current state of both clients. Left as iOS-platform work because it cannot be built or verified from the web side. || VERIFIED PRD Verify run on head 8e77b01 (2026-09-20): iOS gate / Build & Test, iOS gate / SwiftLint, Web gate (strict), Android gate, Migration Test, Unit Tests, Lint & Typecheck, Types Drift & Edge Functions and Maestro smoke flows all green. kid_badges added additively with RLS deriving through household_members, so both parents see the same badges. supabase/tests/us871_kid_badges.test.sql proves it against a Postgres built from all 248 migrations: partner reads the badge (0 rows before), outsider reads nothing, a duplicate (kid_id, badge_id) raises unique_violation, an UPDATE affects zero rows (no UPDATE policy -- an earn is append-only), deleting the child cascades. The merge is a UNION in BOTH directions, the one deliberate deviation from the load-precedence contract: every account predating the table holds its badges only in UserDefaults, so letting the server win would clear the grid on first launch of the build that added durability. UserDefaults stays as the offline cache with unchanged keys (AC4). Eleven mutations checked, including the silent one -- dropping the server write leaves every pre-existing test passing."
+    },
+    {
+      "id": "US-872",
+      "title": "AI meal plan and template edge functions load and validate data server-side",
+      "description": "As a parent, I want AI-generated plans and applied templates to be built from my household's real data and checked on the server, so that a plan never includes the wrong dates, slots or an allergen.",
+      "acceptanceCriteria": [
+        "ai-meal-plan loads the kid, foods and recipes server-side under RLS instead of trusting the request payload",
+        "Day count is clamped, model-returned dates are overwritten with the requested window, meal slots are validated against the enum, and recipe slots return recipe_id",
+        "The child's name is not sent to the model",
+        "manage-meal-plan-templates replaces a week in one transaction (new SQL function with US-804 grants) and runs a fail-closed allergen check on curated templates",
+        "Template input is Zod-validated; times_used increments through an RPC"
+      ],
+      "priority": 3,
+      "platform": "edge",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later. Client-side Zod validation and a trimmed payload shipped in the Planner rework as the interim."
+    },
+    {
+      "id": "US-873",
+      "title": "Offline write queue for plan entries on web",
+      "description": "As a parent planning or logging without signal, I want my plan edits and meal results kept and sent later, so that nothing I did offline disappears.",
+      "acceptanceCriteria": [
+        "webSyncQueue gains plan-entry ops (insert/update/delete/result) with client-generated ids, following the US-823 contract",
+        "applyPendingOpsToPlanEntries folds queued ops over a server load (CLAUDE.md load-precedence step 6)",
+        "queuedOpCoverage.test.ts and AppContext.precedence.test.tsx cover the new domain"
+      ],
+      "priority": 3,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later. Today only grocery writes are queued on web."
+    },
+    {
+      "id": "US-874",
+      "title": "Offline write queue for pantry (foods) writes on web",
+      "description": "As a parent updating the pantry in a basement kitchen, I want stock changes kept offline and sent later.",
+      "acceptanceCriteria": [
+        "webSyncQueue gains foods ops with client-generated ids and 23505-as-landed replay",
+        "Quick-add shows pending 'Saving milk...' chips that resolve or offer retry",
+        "Load precedence step 6 projection covers foods"
+      ],
+      "priority": 3,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later. Pantry rework left quick-add blocking because foods have no queue."
+    },
+    {
+      "id": "US-875",
+      "title": "Live co-parent activity on the grocery list",
+      "description": "As one of two parents shopping, I want to see 'Mom checked off milk' so we don't double-buy.",
+      "acceptanceCriteria": [
+        "grocery_lists is added to the supabase_realtime publication (additive migration) if it is not already",
+        "A quiet activity line on the Grocery page shows the last few check-offs/additions by other household members, from realtime events already arriving",
+        "No activity is shown for the viewer's own actions"
+      ],
+      "priority": 4,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later."
+    },
+    {
+      "id": "US-876",
+      "title": "Try-bite items on the grocery list suggest a small quantity",
+      "description": "As a parent of a picky eater, I want try-bite foods tagged on the grocery list with a nudge to buy a small amount, so I don't waste food on a first try.",
+      "acceptanceCriteria": [
+        "Rows whose food is a try bite (or last result 'tasted') for a planned kid show a 'try-bite pick' tag",
+        "The owner-approved quantity rule is applied (documented in the story before build)",
+        "Rule is unit-tested in the grocery merge path"
+      ],
+      "priority": 5,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later. Needs the quantity rule decided before build."
+    },
+    {
+      "id": "US-877",
+      "title": "Allergen change history with attribution",
+      "description": "As a co-parent, I want to see who changed a child's allergens and when, so safety data is trustworthy.",
+      "acceptanceCriteria": [
+        "kid_allergen_change_log INSERT policy binds changed_by_user_id to auth.uid() (migration + has_function/policy test)",
+        "Every allergen edit on web writes a log row",
+        "Kid card shows 'Allergies updated by Alex, 2 days ago'"
+      ],
+      "priority": 3,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later. Table exists (US-301); the policy fix is the blocker."
+    },
+    {
+      "id": "US-878",
+      "title": "Translate navigation labels",
+      "description": "As a future non-English user, I want the navigation translated so the app frame matches the content.",
+      "acceptanceCriteria": [
+        "navigation.ts items carry labelKey; AppSidebar, bottom nav and More sheet render t(labelKey)",
+        "About 20 nav.* keys added; nav tests updated",
+        "keyCoverage.test.ts passes"
+      ],
+      "priority": 5,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later."
+    },
+    {
+      "id": "US-879",
+      "title": "Live updates for iPhone meal feedback notes",
+      "description": "As a parent on the web, I want notes my partner adds on iPhone to appear in the Food Journal without a reload.",
+      "acceptanceCriteria": [
+        "plan_entry_feedback is added to the supabase_realtime publication (additive migration)",
+        "Food Journal merges realtime feedback rows by id"
+      ],
+      "priority": 4,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later."
+    },
+    {
+      "id": "US-880",
+      "title": "Care-team reports longer than 30 days",
+      "description": "As a parent preparing for a feeding-therapy visit, I want a 60 or 90 day report.",
+      "acceptanceCriteria": [
+        "Food Journal range offers 60 and 90 days",
+        "Older plan_entries are fetched on demand with paging and merged with the AppContext window without replacing it",
+        "Report text and print view cover the full range"
+      ],
+      "priority": 4,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later."
+    },
+    {
+      "id": "US-881",
+      "title": "Show who wrote each meal note",
+      "description": "As a household with several caregivers, I want each plan-entry note attributed, not only feedback notes.",
+      "acceptanceCriteria": [
+        "Additive nullable column for the note author on plan_entries (or a notes child table), written by web and new iOS builds",
+        "Older iOS builds that don't send it keep working; unattributed notes render without a name",
+        "Food Journal shows author and time on entry notes"
+      ],
+      "priority": 4,
+      "platform": "web",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later. Needs iOS agreement on the write path."
+    },
+    {
+      "id": "US-882",
+      "title": "iOS Food Journal parity with the web builder",
+      "description": "As a parent on iPhone, I want the journal to group recipe dishes, dedupe notes and show exposure counts like the web.",
+      "acceptanceCriteria": [
+        "FoodJournal(View).swift mirrors src/lib/foodJournal.ts: per-dish grouping via the primary row, note dedupe, exposureNumber and firstTry",
+        "A parity test or fixture shared with src/lib/foodJournal.test.ts pins the same outputs"
+      ],
+      "priority": 3,
+      "platform": "ios",
+      "passes": false,
+      "notes": "Deferred from the 2026-09-24 page-excellence pass (branch claude/multi-agent-page-optimization-biefuq); owner parked it for later. The web builder header says the Swift side must mirror it."
     }
   ]
 }

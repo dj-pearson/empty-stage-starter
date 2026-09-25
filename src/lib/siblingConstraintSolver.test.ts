@@ -35,11 +35,14 @@ const kid = (
     disliked?: string[];
     favorites?: string[];
     alwaysEats?: string[];
+    /** Recorded severities. An allergy left out is treated as severe (item 3a). */
+    severity?: SolverKid['allergenSeverity'];
   } = {}
 ): SolverKid => ({
   id,
   name,
   allergens: opts.allergens ?? [],
+  ...(opts.severity ? { allergenSeverity: opts.severity } : {}),
   dietaryRestrictions: opts.dietary ?? [],
   dislikedFoods: opts.disliked ?? [],
   favoriteFoods: opts.favorites ?? [],
@@ -73,7 +76,27 @@ describe('evaluateKidConstraint', () => {
     expect(result.score).toBe(0);
     expect(result.hardViolations).toHaveLength(1);
     expect(result.hardViolations[0].foodName).toBe('Cheddar Cheese');
-    expect(result.hardViolations[0].reason).toContain('dairy');
+    // Canonical name: "dairy" folds onto the picker's "milk".
+    expect(result.hardViolations[0].reason).toContain('milk');
+  });
+
+  it('matches allergens canonically, through families and by food name (item 27/28)', () => {
+    const cashews = food('cashew', 'Roasted Cashews', 'protein', ['en:cashews']);
+    const salmonNoTags = food('salmon', 'Baked Salmon', 'protein');
+    const k = kid('k1', 'Emma', { allergens: ['Tree Nuts', 'fish'] });
+    const result = evaluateKidConstraint(recipe('r1', 'Bowl', [cashews, salmonNoTags, rice]), k);
+    expect(result.hardViolations.map((v) => v.foodId)).toEqual(['cashew', 'salmon']);
+    // An almond allergy is not a tree-nut allergy.
+    const almondKid = kid('k2', 'Jack', { allergens: ['almond'] });
+    expect(evaluateKidConstraint(recipe('r2', 'Nuts', [food('tn', 'Mixed', 'protein', ['tree nuts'])]), almondKid).hardViolations).toHaveLength(0);
+  });
+
+  it('dietary rules match canonically (dairy-free catches en:milk and cheese tags)', () => {
+    const k = kid('k1', 'Emma', { dietary: ['dairy-free'] });
+    const milky = food('m', 'Sauce', 'other', ['en:milk']);
+    const cheesy = food('c', 'Topping', 'other', ['Cheese']);
+    const result = evaluateKidConstraint(recipe('r1', 'Pasta', [milky, cheesy]), k);
+    expect(result.hardViolations).toHaveLength(2);
   });
 
   it('scores 0 on dietary restriction conflict (vegetarian + chicken)', () => {
@@ -182,7 +205,8 @@ describe('solveSiblingMeals - resolution tiers', () => {
       recipes: [r],
       pantry: [], // no swap candidate
       kids: [
-        kid('k1', 'Emma', { allergens: ['dairy'] }), // hard violation on cheese
+        // hard violation on cheese; mild, so holding it back is allowed
+        kid('k1', 'Emma', { allergens: ['dairy'], severity: { dairy: 'mild' } }),
         kid('k2', 'Jack'),
       ],
     });
@@ -190,6 +214,63 @@ describe('solveSiblingMeals - resolution tiers', () => {
     expect(result[0].splitPlates).toHaveLength(1);
     expect(result[0].splitPlates[0].kidName).toBe('Emma');
     expect(result[0].splitPlates[0].modifications[0]).toContain('Hold the Cheddar Cheese');
+  });
+
+  it('never split-plates a severe allergy: the recipe is excluded (item 29)', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const emma: SolverKid = { ...kid('k1', 'Emma', { allergens: ['dairy'] }), allergenSeverity: { dairy: 'severe' } };
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [emma, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(true);
+    expect(result[0].excludeReason).toMatch(/severe/i);
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].allergenSeverity).toBe('severe');
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].reason).toContain('severe allergen');
+    expect(topSiblingSolutions({ recipes: [r], pantry: [], kids: [emma, kid('k2', 'Jack')] })).toHaveLength(0);
+  });
+
+  it('never split-plates an allergy recorded without a severity, and says it was not recorded (item 3a)', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const robin = kid('k1', 'Robin', { allergens: ['dairy'] });
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [robin, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(true);
+    expect(result[0].splitPlates).toHaveLength(0);
+    const v = result[0].perKidSatisfaction[0].hardViolations[0];
+    expect(v.allergenSeverity).toBe('severe');
+    expect(v.allergenSeverityRecorded).toBe(false);
+    expect(v.reason).toContain('severity not recorded, treated as severe');
+    expect(v.reason).not.toContain('severe allergen');
+    expect(result[0].excludeReason).toBe('Allergy with no recorded severity (treated as severe) for a selected kid');
+    expect(topSiblingSolutions({ recipes: [r], pantry: [], kids: [robin, kid('k2', 'Jack')] })).toHaveLength(0);
+  });
+
+  it('names a recorded severe allergy in the exclude reason when an unrated one is also present', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const robin = kid('k1', 'Robin', { allergens: ['dairy'] });
+    const emma = kid('k2', 'Emma', { allergens: ['dairy'], severity: { dairy: 'severe' } });
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [robin, emma] });
+    expect(result[0].excludeReason).toBe('Severe allergy for a selected kid');
+    expect(result[0].perKidSatisfaction[1].hardViolations[0].allergenSeverityRecorded).toBe(true);
+  });
+
+  it('a severe allergen listed after a mild one in the same food still excludes the recipe', () => {
+    const omelette = food('om', 'Cheese omelette', 'protein', ['milk', 'eggs']);
+    const r = recipe('r1', 'Omelette plate', [omelette, rice]);
+    const sam: SolverKid = {
+      ...kid('k1', 'Sam', { allergens: ['milk', 'eggs'] }),
+      allergenSeverity: { milk: 'mild', eggs: 'severe' },
+    };
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [sam, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(true);
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].allergenSeverity).toBe('severe');
+    expect(result[0].perKidSatisfaction[0].hardViolations[0].reason).toContain('egg');
+  });
+
+  it('still split-plates a mild or moderate allergy, naming it in the plate note', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const emma: SolverKid = { ...kid('k1', 'Emma', { allergens: ['milk'] }), allergenSeverity: { Milk: 'moderate' } };
+    const result = solveSiblingMeals({ recipes: [r], pantry: [], kids: [emma, kid('k2', 'Jack')] });
+    expect(result[0].excluded).toBe(false);
+    expect(result[0].resolutionType).toBe('split_plate');
+    expect(result[0].splitPlates[0].modifications[0]).toContain('allergen (milk)');
   });
 
   it('drops the recipe entirely when split-plate would need too many modifications', () => {
@@ -200,6 +281,7 @@ describe('solveSiblingMeals - resolution tiers', () => {
       kids: [
         kid('k1', 'Emma', {
           allergens: ['dairy', 'gluten'],
+          severity: { dairy: 'mild', gluten: 'mild' },
           dietary: ['vegetarian'], // also conflicts on beef
         }),
         kid('k2', 'Jack'),
@@ -216,7 +298,7 @@ describe('solveSiblingMeals - resolution tiers', () => {
     const r3 = recipe('r3', 'Split Needed', [chicken, cheese, rice]);
     const carrot = food('carrot', 'Carrots', 'vegetable');
     const kids = [
-      kid('k1', 'Emma', { allergens: ['dairy'], disliked: ['Broccoli'] }),
+      kid('k1', 'Emma', { allergens: ['dairy'], severity: { dairy: 'mild' }, disliked: ['Broccoli'] }),
       kid('k2', 'Jack'),
     ];
     const result = solveSiblingMeals({
@@ -323,7 +405,11 @@ describe('topSiblingSolutions', () => {
         recipes: [r1, r2, r3],
         pantry: [],
         kids: [
-          kid('k1', 'Emma', { allergens: ['dairy', 'gluten'], dietary: ['vegetarian'] }),
+          kid('k1', 'Emma', {
+            allergens: ['dairy', 'gluten'],
+            severity: { dairy: 'mild', gluten: 'mild' },
+            dietary: ['vegetarian'],
+          }),
           kid('k2', 'Jack'),
         ],
       },
@@ -354,5 +440,46 @@ describe('topSiblingSolutions', () => {
     );
     expect(result[0].recipeId).toBe('r1');
     expect(result[0].satisfactionScore).toBeGreaterThan(result[1].satisfactionScore);
+  });
+});
+
+describe('rawScore (pre-fairness)', () => {
+  it('equals the unboosted score when history boosts a kid', () => {
+    const r = recipe('r1', 'Chicken Cheese Rice', [chicken, cheese, rice]);
+    const history: SolverHistoryEntry[] = [
+      { kidId: 'k1', score: 0.1, daysAgo: 2 },
+      { kidId: 'k2', score: 1.0, daysAgo: 2 },
+    ];
+    const kids = [kid('k1', 'Emma', { allergens: ['dairy'], severity: { dairy: 'mild' } }), kid('k2', 'Jack')];
+    const boosted = solveSiblingMeals({ recipes: [r], pantry: [], kids, history });
+    const plain = solveSiblingMeals({ recipes: [r], pantry: [], kids });
+    const emma = boosted[0].perKidSatisfaction.find((k) => k.kidId === 'k1')!;
+    const emmaPlain = plain[0].perKidSatisfaction.find((k) => k.kidId === 'k1')!;
+    expect(emma.score).toBeGreaterThan(emma.rawScore!);
+    expect(emma.rawScore).toBeCloseTo(0.9);
+    expect(emma.rawScore).toBe(emmaPlain.score);
+    expect(emmaPlain.rawScore).toBe(emmaPlain.score);
+  });
+
+  it('names the allergen on an allergen violation', () => {
+    const r = recipe('r1', 'PB toast', [peanut]);
+    const v = evaluateKidConstraint(r, kid('k1', 'Emma', { allergens: ['peanut'] })).hardViolations[0];
+    expect(v.allergen).toBe('peanut');
+  });
+});
+
+describe('findSwap after hoisting the dislike sets', () => {
+  it('skips candidates the kid dislikes by id or by name and takes the first viable one', () => {
+    const r = recipe('r1', 'Chicken Broccoli', [chicken, broccoli]);
+    const peas = food('peas', 'Peas', 'vegetable');
+    const corn = food('corn', 'Corn', 'vegetable');
+    const carrot = food('carrot', 'Carrots', 'vegetable');
+    const result = solveSiblingMeals({
+      recipes: [r],
+      pantry: [peas, corn, carrot],
+      kids: [kid('k1', 'Emma', { disliked: ['Broccoli', 'peas', 'corn'] }), kid('k2', 'Jack')],
+    });
+    expect(result[0].resolutionType).toBe('with_swaps');
+    expect(result[0].swaps.map((s) => s.swapInFoodId)).toEqual(['carrot']);
   });
 });

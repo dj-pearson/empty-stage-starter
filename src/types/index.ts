@@ -18,12 +18,21 @@ export interface Food {
    * food that hasn't been matched yet — most households, until US-796's
    * matcher runs. */
   canonical_id?: string | null;
+  /** The scanned product barcode, when the food was added by scan. Carried
+   * through by normalizeFoodFromDB's spread; lets a second scan of the same
+   * product stack onto this row instead of duplicating it. */
+  barcode?: string | null;
   allergens?: string[];
   aisle?: string;
   quantity?: number;
   unit?: string;
   servings_per_container?: number;
   package_quantity?: string;
+  /** Last known price per `unit` (foods.price_per_unit), for estimates such as
+   * the waste report. What a specific shop cost lives on the purchase movement. */
+  price_per_unit?: number | null;
+  /** ISO 4217 code for price_per_unit; set together with it or not at all. */
+  currency?: string | null;
   nutrition_info?: {
     calories?: number;
     protein_g?: number;
@@ -41,10 +50,25 @@ export interface Kid {
   age?: number;
   date_of_birth?: string;
   notes?: string;
+  /**
+   * Nullable in the DB. `undefined` here means "not recorded" (unknown), and
+   * `[]` means the parent confirmed no known allergies. normalizeKidFromDB
+   * keeps that distinction; never default one into the other.
+   */
   allergens?: string[];
+  /** Per-allergen severity, keyed by the allergen string in `allergens`. */
+  allergen_severity?: Partial<Record<string, 'mild' | 'moderate' | 'severe'>>;
+  cross_contamination_sensitive?: boolean;
   profile_picture_url?: string;
   favorite_foods?: string[];
+  /**
+   * Intake answers, saved to kids since item 25 (20260925000004). The web
+   * writes pickiness_level as one of PICKINESS_LEVELS (computed from the
+   * eating-behavior answers); iOS builds may have written their own labels.
+   */
   pickiness_level?: string;
+  texture_sensitivity_level?: string;
+  preferred_preparations?: string[];
   profile_completed?: boolean;
   profile_last_reviewed?: string;
   texture_preferences?: string[];
@@ -59,6 +83,10 @@ export interface Kid {
   always_eats_foods?: string[];
   weight_kg?: number;
   height_cm?: number;
+  gender?: string;
+  nutrition_concerns?: string[];
+  behavioral_notes?: string;
+  household_id?: string;
 }
 
 export interface PlanEntry {
@@ -72,7 +100,8 @@ export interface PlanEntry {
   amount_eaten?: AmountEaten | null;
   notes?: string;
   food_attempt_id?: string;
-  recipe_id?: string;
+  /** Nullable column: a plain food row carries null, a recipe row its id. */
+  recipe_id?: string | null;
   is_primary_dish?: boolean;
 }
 
@@ -88,7 +117,7 @@ export interface GroceryItem {
   // Phase 1 additions
   grocery_list_id?: string;
   photo_url?: string;
-  notes?: string;
+  notes?: string | null;
   brand_preference?: string;
   barcode?: string;
   source_recipe_id?: string;
@@ -100,6 +129,12 @@ export interface GroceryItem {
   created_at?: string;
   restock_reason?: string;
   auto_generated?: boolean;
+  /** Item 16: set when a receipt credited this row's stock; checkout skips it. */
+  pantry_credited_at?: string | null;
+  /** Item 22: what one `unit` cost, entered at checkout; checkout records it on the purchase. */
+  price_per_unit?: number | null;
+  /** ISO 4217 code for price_per_unit; together or not at all. */
+  currency?: string | null;
 }
 
 export interface Recipe {

@@ -562,7 +562,7 @@ export const CalendarMealPlanner = memo(function CalendarMealPlanner({
             {kids.length > 0 && (
               <VoteResultsDisplay
                 planEntryId={planEntryId}
-                recipeId={recipeId}
+                recipeId={recipeId ?? undefined}
                 mealDate={date}
                 mealSlot={slot}
                 kids={kids}

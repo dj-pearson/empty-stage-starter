@@ -1,349 +1,287 @@
-import { useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
-import { AchievementBadge, type Achievement } from './AchievementBadge';
-import { Trophy, Lock, Star, TrendingUp } from 'lucide-react';
-import { format } from 'date-fns';
+/**
+ * One child's milestones and badges, for the Progress page.
+ *
+ * Earned badges come from kid_badges and nowhere else. iOS evaluates the
+ * criteria and writes the earn with its real date; this view reads it back,
+ * so a badge earned in March reads as March on every device. The web used to
+ * keep its own nine-badge catalog computed from the plan cache and stamp every
+ * unlock with today's date, which is what this replaced (PLATFORMS.md).
+ *
+ * Locked tiles show a bar only where the web can count what the phone counts
+ * (badgeHints.ts): the streak badges through the shared streak rule, and
+ * perfectWeek from this week's results. Everything else shows no bar rather
+ * than a number read off a 30-day window.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { usePlan } from '@/contexts/AppContext';
+import { useKidBadges } from '@/hooks/useKidBadges';
+import { AchievementBadge } from './AchievementBadge';
+import { BADGE_CATALOG, BADGE_COUNT, type BadgeDefinition } from '@/lib/badgeCatalog';
+import { lockedBadgeHint, type BadgeHint } from '@/lib/badgeHints';
+import { buildMilestoneTimeline, groupByMonth } from '@/lib/milestoneTimeline';
+import { toISODate } from '@/lib/date-utils';
+import type { KidLadderRow } from '@/lib/kidProgress';
+import type { Food, Kid } from '@/types';
 import { currentStreak } from "@/lib/streakRules";
+import '@/i18n/appLocale';
 
-export function AchievementsView() {
+interface AchievementsViewProps {
+  kid: Kid;
+  /** The household's ladder rows; narrowed to `kid` here. */
+  ladderRows: readonly KidLadderRow[];
+  foodsById: ReadonlyMap<string, Food>;
+}
+
+/** Milestones shown before "Show all". */
+const TIMELINE_PREVIEW = 5;
+
+function safeFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  try {
+    return new Intl.DateTimeFormat(locale, options);
+  } catch {
+    return new Intl.DateTimeFormat(undefined, options);
+  }
+}
+
+export function AchievementsView({ kid, ladderRows, foodsById }: AchievementsViewProps) {
+  const { t, i18n } = useTranslation();
   const { planEntries } = usePlan();
-  const { foods } = useFoods();
-  const { activeKidId, kids } = useKids();
-  const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+  const badges = useKidBadges(kid.id);
+  const [expanded, setExpanded] = useState(false);
 
-  const activeKid = kids.find(k => k.id === activeKidId);
+  const todayIso = toISODate(new Date());
+  const lang = i18n.language || 'en';
+  const dayFormat = useMemo(() => safeFormatter(lang, { dateStyle: 'medium' }), [lang]);
+  const monthFormat = useMemo(() => safeFormatter(lang, { month: 'long', year: 'numeric' }), [lang]);
 
-  // Calculate achievement progress based on actual data
-  const achievements = useMemo((): Achievement[] => {
-    const kidEntries = planEntries.filter(e => e.kid_id === activeKidId);
-    const tryBiteEntries = kidEntries.filter(e => e.meal_slot === 'try_bite');
-    const successfulTryBites = tryBiteEntries.filter(
-      e => e.result === 'ate' || e.result === 'tasted'
-    );
+  // Rows still belonging to the previous child are never drawn under this one.
+  const current = badges.rowsKidId === kid.id;
+  const rows = useMemo(() => (current ? badges.rows : []), [current, badges.rows]);
 
-    // US-781: the shared rule, not a fourth copy.
-    //
-    // This one was missed when the story counted three: it filtered to
-    // entries WITH a result, unlike ProgressDashboard, but still never read
-    // what the result was -- so a week of refusals unlocked a streak badge
-    // here while the phone showed nothing. The badges a parent sees on the
-    // web are computed from this number.
-    const streak = activeKidId ? currentStreak(kidEntries, activeKidId) : 0;
+  const kidLadder = useMemo(() => ladderRows.filter((r) => r.kid_id === kid.id), [ladderRows, kid.id]);
+  const safeCount = useMemo(
+    () => new Set(kidLadder.filter((r) => r.status === 'mastered').map((r) => r.food_id)).size,
+    [kidLadder],
+  );
 
-    // Count consecutive successful try bites
-    let consecutiveSuccessful = 0;
-    let maxConsecutive = 0;
-    for (const entry of tryBiteEntries) {
-      if (entry.result === 'ate' || entry.result === 'tasted') {
-        consecutiveSuccessful++;
-        maxConsecutive = Math.max(maxConsecutive, consecutiveSuccessful);
-      } else {
-        consecutiveSuccessful = 0;
+  const timeline = useMemo(() => buildMilestoneTimeline(rows, kidLadder, foodsById), [rows, kidLadder, foodsById]);
+
+  const formatEarned = (iso: string): string => {
+    const ms = Date.parse(iso);
+    return Number.isNaN(ms) ? '' : dayFormat.format(ms);
+  };
+
+  const monthLabel = (month: string): string => {
+    const [y, m] = month.split('-').map(Number);
+    const firstOfMonth = new Date(y, (m ?? 1) - 1, 1);
+    return monthFormat.format(firstOfMonth);
+  };
+
+  // Earned first, newest first; then locked in catalog order.
+  const { earned, locked } = useMemo(() => {
+    const earnedAt = new Map<string, string>();
+    for (const row of rows) if (!earnedAt.has(row.badge_id)) earnedAt.set(row.badge_id, row.earned_at);
+    const earnedList = BADGE_CATALOG.filter((b) => earnedAt.has(b.id))
+      .map((b) => ({ badge: b, earnedAt: earnedAt.get(b.id) ?? '' }))
+      .sort((a, b) => Date.parse(b.earnedAt) - Date.parse(a.earnedAt) || (a.badge.id < b.badge.id ? -1 : 1));
+    return { earned: earnedList, locked: BADGE_CATALOG.filter((b) => !earnedAt.has(b.id)) };
+  }, [rows]);
+
+  // US-781: one streak rule. The streak badges' hints are this number.
+  const streak = useMemo(() => currentStreak(planEntries, kid.id, { todayKey: todayIso }), [planEntries, kid.id, todayIso]);
+
+  const hints = useMemo(() => {
+    const out = new Map<string, BadgeHint>();
+    for (const badge of locked) {
+      const hint =
+        badge.id === 'fiveDayStreak' || badge.id === 'tenDayStreak'
+          ? { progress: streak, total: badge.target }
+          : lockedBadgeHint(badge.id, badge.target, planEntries, kid.id, todayIso);
+      if (hint) out.set(badge.id, hint);
+    }
+    return out;
+  }, [locked, streak, planEntries, kid.id, todayIso]);
+
+  const nearest: BadgeDefinition = useMemo(() => {
+    let best: BadgeDefinition | undefined;
+    let bestRatio = -1;
+    for (const badge of locked) {
+      const hint = hints.get(badge.id);
+      if (!hint || hint.total <= 0) continue;
+      const ratio = Math.min(hint.progress, hint.total) / hint.total;
+      if (ratio > bestRatio) {
+        best = badge;
+        bestRatio = ratio;
       }
     }
+    return best ?? locked[0] ?? BADGE_CATALOG[0];
+  }, [locked, hints]);
 
-    // Food diversity by category
-    const safeFoods = foods.filter(f => f.is_safe);
-    const categories = new Set(safeFoods.map(f => f.category).filter(Boolean));
-
-    // Track first achievements
-    const hasFirstTryBite = tryBiteEntries.length > 0;
-    const firstTryBiteDate = hasFirstTryBite
-      ? format(new Date(tryBiteEntries[0].date), 'MMM d, yyyy')
-      : undefined;
-
-    return [
-      {
-        id: 'first-bite',
-        title: 'First Bite',
-        description: 'Logged your first try bite',
-        icon: 'star',
-        unlocked: hasFirstTryBite,
-        unlockedDate: firstTryBiteDate,
-        rarity: 'common',
-      },
-      {
-        id: 'week-streak',
-        title: 'Week Warrior',
-        description: '7 days of consistent meal logging',
-        icon: 'flame',
-        unlocked: streak >= 7,
-        progress: streak,
-        total: 7,
-        unlockedDate:
-          streak >= 7 ? format(new Date(), 'MMM d, yyyy') : undefined,
-        rarity: 'rare',
-      },
-      {
-        id: 'bullseye',
-        title: 'Bullseye',
-        description: '5 successful try bites in a row',
-        icon: 'target',
-        unlocked: maxConsecutive >= 5,
-        progress: maxConsecutive,
-        total: 5,
-        unlockedDate:
-          maxConsecutive >= 5 ? format(new Date(), 'MMM d, yyyy') : undefined,
-        rarity: 'epic',
-      },
-      {
-        id: 'food-explorer',
-        title: 'Food Explorer',
-        description: 'Try 25 new foods',
-        icon: 'trophy',
-        unlocked: tryBiteEntries.length >= 25,
-        progress: tryBiteEntries.length,
-        total: 25,
-        unlockedDate:
-          tryBiteEntries.length >= 25 ? format(new Date(), 'MMM d, yyyy') : undefined,
-        rarity: 'epic',
-      },
-      {
-        id: 'rainbow-eater',
-        title: 'Rainbow Eater',
-        description: 'Have foods from 6+ categories',
-        icon: 'sparkles',
-        unlocked: categories.size >= 6,
-        progress: categories.size,
-        total: 6,
-        unlockedDate:
-          categories.size >= 6 ? format(new Date(), 'MMM d, yyyy') : undefined,
-        rarity: 'legendary',
-      },
-      {
-        id: 'progress-pro',
-        title: 'Progress Pro',
-        description: '30 days of tracking',
-        icon: 'trending',
-        unlocked: streak >= 30,
-        progress: streak,
-        total: 30,
-        unlockedDate:
-          streak >= 30 ? format(new Date(), 'MMM d, yyyy') : undefined,
-        rarity: 'rare',
-      },
-      {
-        id: 'pantry-pro',
-        title: 'Pantry Pro',
-        description: '50+ foods in pantry',
-        icon: 'award',
-        unlocked: foods.length >= 50,
-        progress: foods.length,
-        total: 50,
-        unlockedDate:
-          foods.length >= 50 ? format(new Date(), 'MMM d, yyyy') : undefined,
-        rarity: 'rare',
-      },
-      {
-        id: 'consistency-champion',
-        title: 'Consistency Champion',
-        description: '30 day logging streak',
-        icon: 'flame',
-        unlocked: streak >= 30,
-        progress: streak,
-        total: 30,
-        unlockedDate:
-          streak >= 30 ? format(new Date(), 'MMM d, yyyy') : undefined,
-        rarity: 'legendary',
-      },
-      {
-        id: 'try-bite-master',
-        title: 'Try Bite Master',
-        description: '50 successful try bites',
-        icon: 'trophy',
-        unlocked: successfulTryBites.length >= 50,
-        progress: successfulTryBites.length,
-        total: 50,
-        unlockedDate:
-          successfulTryBites.length >= 50
-            ? format(new Date(), 'MMM d, yyyy')
-            : undefined,
-        rarity: 'legendary',
-      },
-    ];
-  }, [planEntries, foods, activeKidId]);
-
-  const filteredAchievements = useMemo(() => {
-    if (filter === 'unlocked') {
-      return achievements.filter(a => a.unlocked);
-    } else if (filter === 'locked') {
-      return achievements.filter(a => !a.unlocked);
+  // One toast per failed read, not one per render.
+  const toastedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!badges.error) {
+      toastedFor.current = null;
+      return;
     }
-    return achievements;
-  }, [achievements, filter]);
+    if (toastedFor.current === kid.id) return;
+    toastedFor.current = kid.id;
+    toast.error(t('progressBadges.error.toast', { name: kid.name, defaultValue: "Couldn't load {{name}}'s badges" }));
+  }, [badges.error, kid.id, kid.name, t]);
 
-  const stats = useMemo(() => {
-    const unlocked = achievements.filter(a => a.unlocked).length;
-    const total = achievements.length;
-    const percentage = Math.round((unlocked / total) * 100);
-
-    const byRarity = achievements.reduce(
-      (acc, a) => {
-        if (a.unlocked) {
-          acc[a.rarity || 'common']++;
-        }
-        return acc;
-      },
-      { common: 0, rare: 0, epic: 0, legendary: 0 }
-    );
-
-    return {
-      unlocked,
-      total,
-      percentage,
-      byRarity,
-    };
-  }, [achievements]);
-
-  if (!activeKid) {
-    return (
-      <Card className="p-12 text-center">
-        <h3 className="text-xl font-semibold mb-2">No Child Selected</h3>
-        <p className="text-muted-foreground">
-          Please select a child to view achievements
-        </p>
-      </Card>
-    );
-  }
+  const loadingFirst = !current && (badges.loading || !badges.error);
+  const failedFirst = !current && badges.error && !badges.loading;
+  const shown = expanded ? timeline : timeline.slice(0, TIMELINE_PREVIEW);
+  const headingId = `badges-${kid.id}-heading`;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
-          <Trophy className="h-7 w-7 text-primary" />
-          {activeKid.name}'s Achievements
-        </h2>
-        <p className="text-muted-foreground">
-          Track milestones and celebrate progress!
-        </p>
+    <div className="space-y-5" aria-labelledby={headingId} role="group">
+      <div className="space-y-1">
+        <h3 id={headingId} className="text-base font-semibold">
+          {t('progressBadges.heading', { name: kid.name, defaultValue: '{{name}}: milestones' })}
+        </h3>
+        {current && (
+          <p className="text-sm text-foreground">
+            {t('progressBadges.summary', {
+              earned: earned.length,
+              total: BADGE_COUNT,
+              defaultValue: '{{earned}} of {{total}} badges earned',
+            })}
+            {'. '}
+            {t('progressBadges.safeCount', {
+              count: safeCount,
+              defaultValue: '{{count}} foods reached safe',
+            })}
+          </p>
+        )}
       </div>
 
-      {/* Progress Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Achievement Progress</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm font-medium">Overall Progress</span>
-              <span className="text-sm text-muted-foreground">
-                {stats.unlocked} / {stats.total} unlocked
-              </span>
-            </div>
-            <Progress value={stats.percentage} className="h-3" />
-          </div>
+      {badges.error && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3 text-sm">
+          <span>{t('progressBadges.error.inline', { defaultValue: "Couldn't load badges." })}</span>
+          <Button type="button" size="sm" variant="outline" onClick={badges.retry} className="min-h-11">
+            {t('progressBadges.error.retry', { defaultValue: 'Retry' })}
+          </Button>
+        </div>
+      )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="text-center p-3 rounded-lg bg-muted">
-              <div className="text-lg font-bold">{stats.byRarity.common}</div>
-              <div className="text-xs text-muted-foreground">Common</div>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {stats.byRarity.rare}
-              </div>
-              <div className="text-xs text-muted-foreground">Rare</div>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                {stats.byRarity.epic}
-              </div>
-              <div className="text-xs text-muted-foreground">Epic</div>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
-              <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
-                {stats.byRarity.legendary}
-              </div>
-              <div className="text-xs text-muted-foreground">Legendary</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Filter Tabs */}
-      <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="all">
-            All ({achievements.length})
-          </TabsTrigger>
-          <TabsTrigger value="unlocked">
-            Unlocked ({stats.unlocked})
-          </TabsTrigger>
-          <TabsTrigger value="locked">
-            Locked ({achievements.length - stats.unlocked})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={filter} className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredAchievements.map((achievement) => (
-              <AchievementBadge
-                key={achievement.id}
-                achievement={achievement}
-                size="md"
-                showProgress={true}
-              />
-            ))}
-          </div>
-
-          {filteredAchievements.length === 0 && (
-            <Card className="p-12 text-center border-dashed">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                <Lock className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">
-                {filter === 'unlocked' ? 'No Achievements Yet' : 'All Unlocked!'}
-              </h3>
-              <p className="text-muted-foreground">
-                {filter === 'unlocked'
-                  ? 'Keep tracking meals to unlock your first achievement!'
-                  : 'Congratulations on unlocking all achievements!'}
-              </p>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Recent Unlocks */}
-      {stats.unlocked > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-yellow-500" />
-              Recently Unlocked
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {achievements
-                .filter(a => a.unlocked)
-                .slice(0, 3)
-                .map((achievement) => (
-                  <div
-                    key={achievement.id}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Trophy className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold">{achievement.title}</h4>
-                      <p className="text-xs text-muted-foreground">
-                        {achievement.unlockedDate}
-                      </p>
-                    </div>
-                    <Badge variant="outline">{achievement.rarity}</Badge>
-                  </div>
+      {current && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold">{t('progressBadges.timeline.title', { defaultValue: 'Milestones' })}</h4>
+          {timeline.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t('progressBadges.timeline.none', {
+                defaultValue:
+                  'Nothing here yet. Foods that reach safe on the ladder and badges from the iPhone app land here with their dates.',
+              })}
+            </p>
+          ) : (
+            <>
+              <ol className="space-y-3">
+                {groupByMonth(shown).map((group) => (
+                  <li key={group.month}>
+                    <h5 className="text-xs font-semibold text-muted-foreground">{monthLabel(group.month)}</h5>
+                    <ol className="mt-1 space-y-1">
+                      {group.items.map((item) =>
+                        item.kind === 'badge' ? (
+                          <li key={`badge:${item.id}`} className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                            <span>
+                              {t('progressBadges.timeline.badgeItem', {
+                                title: t(`${item.labelKey}.title`),
+                                defaultValue: 'Earned {{title}}',
+                              })}
+                            </span>
+                            <time dateTime={item.dateIso} className="text-xs text-muted-foreground">
+                              {formatEarned(item.dateIso)}
+                            </time>
+                          </li>
+                        ) : (
+                          <li key={`safe:${item.id}`} className="text-sm">
+                            <Link
+                              to="/dashboard/food-tracker"
+                              className="inline-flex min-h-11 items-center rounded-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-0"
+                            >
+                              {t('progressBadges.timeline.safeItem', {
+                                food: item.foodName,
+                                defaultValue: '{{food}} reached safe',
+                              })}
+                            </Link>
+                          </li>
+                        ),
+                      )}
+                    </ol>
+                  </li>
                 ))}
+              </ol>
+              {timeline.length > TIMELINE_PREVIEW && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-11 px-2"
+                  aria-expanded={expanded}
+                  onClick={() => setExpanded((v) => !v)}
+                >
+                  {expanded
+                    ? t('progressBadges.timeline.showFewer', { defaultValue: 'Show fewer' })
+                    : t('progressBadges.timeline.showAll', { count: timeline.length, defaultValue: 'Show all {{count}}' })}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {current && earned.length === 0 && !badges.error && (
+        <div className="space-y-2 rounded-lg border border-dashed border-border p-4">
+          <p className="text-sm font-semibold">{t('progressBadges.empty.title', { defaultValue: 'No badges yet' })}</p>
+          <p className="text-sm text-foreground">
+            {t('progressBadges.empty.body', {
+              name: kid.name,
+              badge: t(`${nearest.i18nKey}.title`),
+              defaultValue: 'Badges are earned in the iPhone app from what you log. Closest for {{name}}: {{badge}}.',
+            })}
+          </p>
+          <Button asChild size="sm" className="min-h-11">
+            <Link to="/dashboard/food-tracker">{t('progressBadges.empty.cta', { defaultValue: 'Offer a try-bite' })}</Link>
+          </Button>
+        </div>
+      )}
+
+      {!failedFirst && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold">{t('progressBadges.grid.title', { defaultValue: 'Badges' })}</h4>
+          {loadingFirst ? (
+            <div aria-busy="true">
+              <p className="sr-only">{t('progressBadges.loading', { defaultValue: 'Loading badges' })}</p>
+              <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {BADGE_CATALOG.map((b) => (
+                  <li key={b.id}>
+                    <Skeleton className="h-28 rounded-xl" />
+                  </li>
+                ))}
+              </ul>
             </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-busy={badges.loading || undefined}>
+              {earned.map(({ badge, earnedAt }) => (
+                <li key={badge.id}>
+                  <AchievementBadge badge={badge} earned earnedLabel={formatEarned(earnedAt)} />
+                </li>
+              ))}
+              {locked.map((badge) => (
+                <li key={badge.id}>
+                  <AchievementBadge badge={badge} earned={false} hint={hints.get(badge.id) ?? null} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

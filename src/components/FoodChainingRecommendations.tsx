@@ -1,513 +1,822 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, TrendingUp, CheckCircle, ChevronRight, Info, Plus, Calendar } from "lucide-react";
-import { logger } from "@/lib/logger";
-import { toast } from "sonner";
-import { useKids, useFoods } from "@/contexts/AppContext";
+/**
+ * Food chaining: the next small step from a food this child already eats.
+ *
+ * The page hands in one resolved child (`key={kid.id}`), so nothing here reads
+ * the globally active kid. Everything a tap writes is captured from the
+ * candidate it was computed for, never from whoever is selected at tap time.
+ *
+ * Where suggestions come from:
+ *   - A pure client scorer (scoreChainCandidates) over the household pantry,
+ *     plus ONE household-scoped food_properties read. It renders before the
+ *     network answers, and still renders when the network fails.
+ *   - get_food_chain_suggestions, merged in when it answers. Its cache table is
+ *     SELECT-only under RLS, so this component never tries to fill it.
+ *
+ * Every candidate from either source goes through selectHandoffCandidates
+ * with foodsById, which reads the food's name as well as its tags: an
+ * untagged "Peanut butter crackers" is still a peanut food. An allergy with no
+ * recorded severity is dropped like a severe one.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { WinNetworkPanel } from "@/components/WinNetworkPanel";
+  CalendarPlus,
+  ChevronRight,
+  Layers,
+  Palette,
+  Shapes,
+  Soup,
+  Tag,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react';
+import '@/i18n/appLocale';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { WinNetworkPanel } from '@/components/WinNetworkPanel';
+import { useFoods } from '@/contexts/AppContext';
+import { usePlan } from '@/contexts/PlanContext';
+import { useFoodLadder, type LadderRow, type StartFoodResult } from '@/hooks/useFoodLadder';
+import { useChainAnchors } from '@/hooks/useChainAnchors';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { supabase } from '@/integrations/supabase/client';
+import type { ChainAnchor } from '@/lib/chainAnchors';
+import {
+  closenessLevel,
+  mergeRpcSuggestions,
+  normalizeReason,
+  scoreChainCandidates,
+  type FoodPropsLite,
+  type ReasonKey,
+  type ScoredChainSuggestion,
+} from '@/lib/chainSimilarity';
+import { getKidFoodFit, isAllergyUnknown, type ResultIndex } from '@/lib/kidFit';
+import { kidSafeFoodIds } from '@/lib/kidProgress';
+import {
+  DEFAULT_HANDOFF_LIMIT,
+  selectHandoffCandidates,
+  type MasteryCandidate,
+} from '@/lib/ladderMastery';
+import { logger } from '@/lib/logger';
+import { manualAddPrompt } from '@/lib/planAllergenGuard';
+import { cn } from '@/lib/utils';
+import type { Food, Kid } from '@/types';
 
-interface FoodChainSuggestion {
+const RPC_LIMIT = 10;
+/** One `.in()` over more ids than this is a URL the gateway refuses. */
+const PROPS_ID_CAP = 500;
+const BRIDGE_ANCHOR_LIMIT = 3;
+const NO_HISTORY: ResultIndex = new Map();
+const PROPS_COLUMNS =
+  'food_id, texture_primary, texture_secondary, flavor_profile, color_primary, color_secondary, visual_complexity, food_category';
+
+const REASON_ICONS: Record<ReasonKey, LucideIcon> = {
+  taste: Soup,
+  texture: Layers,
+  color: Palette,
+  shape: Shapes,
+  type: Tag,
+};
+
+const REASON_DEFAULTS: Record<ReasonKey, string> = {
+  taste: 'Similar taste',
+  texture: 'Similar texture',
+  color: 'Similar color',
+  shape: 'Similar shape',
+  type: 'Same kind of food',
+};
+
+const CLOSENESS_DEFAULTS = {
+  small: 'Small step',
+  medium: 'Medium step',
+  big: 'Bigger step',
+} as const;
+
+interface RpcRow {
   food_id: string;
   food_name: string;
-  similarity_score: number;
-  reasons: string[];
+  similarity_score: number | null;
+  reasons: string[] | null;
 }
 
-interface FoodWithSuccess {
-  id: string;
-  name: string;
-  success_rate: number;
-  total_attempts: number;
+interface SuggestionResult {
+  source: string;
+  rpcRows: RpcRow[];
+  props: Map<string, FoodPropsLite>;
 }
 
-export function FoodChainingRecommendations() {
-  const { activeKidId, kids, setActiveKidId } = useKids();
+type ListFormatCtor = new (
+  locale: string,
+  options: { style: 'long'; type: 'conjunction' },
+) => { format: (items: readonly string[]) => string };
+
+interface Selection {
+  kidId: string;
+  foodId: string;
+}
+
+interface FoodChainingRecommendationsProps {
+  kid: Kid;
+  targetFoodId?: string | null;
+}
+
+function localIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function toRpcRows(data: unknown): RpcRow[] {
+  if (!Array.isArray(data)) return [];
+  const out: RpcRow[] = [];
+  for (const raw of data as Array<Partial<RpcRow> | null>) {
+    if (!raw || typeof raw.food_id !== 'string') continue;
+    out.push({
+      food_id: raw.food_id,
+      food_name: typeof raw.food_name === 'string' ? raw.food_name : '',
+      similarity_score: typeof raw.similarity_score === 'number' ? raw.similarity_score : null,
+      reasons: Array.isArray(raw.reasons) ? raw.reasons : null,
+    });
+  }
+  return out;
+}
+
+function toPropsMap(data: unknown): Map<string, FoodPropsLite> {
+  const map = new Map<string, FoodPropsLite>();
+  if (!Array.isArray(data)) return map;
+  for (const raw of data as Array<FoodPropsLite | null>) {
+    if (raw && typeof raw.food_id === 'string') map.set(raw.food_id, raw);
+  }
+  return map;
+}
+
+function reasonKeys(reasons: readonly string[]): ReasonKey[] {
+  const out: ReasonKey[] = [];
+  for (const raw of reasons) {
+    const key = normalizeReason(raw);
+    if (key && !out.includes(key)) out.push(key);
+  }
+  return out.slice(0, 3);
+}
+
+export function FoodChainingRecommendations({ kid, targetFoodId = null }: FoodChainingRecommendationsProps) {
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const reducedMotion = useReducedMotion();
   const { foods, addFood } = useFoods();
-  const [successfulFoods, setSuccessfulFoods] = useState<FoodWithSuccess[]>([]);
-  const [selectedFood, setSelectedFood] = useState<FoodWithSuccess | null>(null);
-  const [chainSuggestions, setChainSuggestions] = useState<FoodChainSuggestion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-  const activeKid = kids.find(k => k.id === activeKidId);
+  const { planEntries, addPlanEntry, deletePlanEntry } = usePlan();
+  const { rows, loading: ladderLoading, startFood, removeFromLadder } = useFoodLadder(kid.id);
+  const { status, anchors, retry } = useChainAnchors(kid, rows, ladderLoading);
+
+  const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f] as const)), [foods]);
+  const foodsRef = useRef(foods);
+  foodsRef.current = foods;
+
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const selectedAnchor: ChainAnchor | null = useMemo(() => {
+    if (selection && selection.kidId === kid.id) {
+      const match = anchors.find((a) => a.foodId === selection.foodId);
+      if (match) return match;
+    }
+    return anchors[0] ?? null;
+  }, [anchors, selection, kid.id]);
+  const anchorId = selectedAnchor?.foodId ?? null;
+  const anchorFood = anchorId ? foodsById.get(anchorId) ?? null : null;
+
+  const [bridgeDismissed, setBridgeDismissed] = useState(false);
+  const bridgeTarget = !bridgeDismissed && targetFoodId ? foodsById.get(targetFoodId) ?? null : null;
+
+  // ---------------------------------------------------------------------------
+  // Suggestions: client score now, RPC and properties merged when they land.
+  // ---------------------------------------------------------------------------
+  const requestKey = anchorId ? `${kid.id}|${anchorId}` : null;
+  const pantryIds = useMemo(() => foods.map((f) => f.id).slice(0, PROPS_ID_CAP), [foods]);
+  const pantryKey = pantryIds.join(',');
+  const pantryIdsRef = useRef(pantryIds);
+  pantryIdsRef.current = pantryIds;
+  const [result, setResult] = useState<SuggestionResult | null>(null);
 
   useEffect(() => {
-    // US-829: switching child re-runs this, and nothing stopped an earlier
-    // child's query from resolving last. This panel is explicitly per-child, so
-    // a stale win showed one sibling's successful foods under the other's name.
-    let superseded = false;
-
-    const loadSuccessfulFoods = async () => {
-      if (!activeKidId) {
-        setSuccessfulFoods([]);
-        setLoading(false);
-        return;
+    if (!requestKey || !anchorId) return;
+    let cancelled = false;
+    const ids = pantryIdsRef.current;
+    (async () => {
+      const [rpcOutcome, propsOutcome] = await Promise.allSettled([
+        supabase.rpc('get_food_chain_suggestions', { source_food: anchorId, limit_count: RPC_LIMIT }),
+        ids.length > 0
+          ? supabase.from('food_properties').select(PROPS_COLUMNS).in('food_id', ids)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      let rpcRows: RpcRow[] = [];
+      if (rpcOutcome.status === 'fulfilled' && !rpcOutcome.value.error) {
+        rpcRows = toRpcRows(rpcOutcome.value.data);
+      } else {
+        logger.warn('Chain suggestions RPC unavailable; showing client scores only');
       }
-      
-      try {
-        setLoading(true);
-
-        // Get foods with at least one successful or partial attempt
-        const { data: attempts, error } = await supabase
-          .from("food_attempts")
-          .select(`
-            food_id,
-            outcome,
-            foods (
-              id,
-              name
-            )
-          `)
-          .eq("kid_id", activeKidId)
-          .in("outcome", ["success", "partial"]);
-
-        if (error) throw error;
-
-        // Group by food and calculate success rate
-        const foodStats: Map<string, { id: string; name: string; successes: number; total: number }> = new Map();
-
-        attempts?.forEach((attempt: any) => {
-          const foodId = attempt.food_id;
-          const foodName = attempt.foods?.name || "Unknown";
-
-          if (!foodStats.has(foodId)) {
-            foodStats.set(foodId, {
-              id: foodId,
-              name: foodName,
-              successes: 0,
-              total: 0,
-            });
-          }
-
-          const stats = foodStats.get(foodId)!;
-          stats.total += 1;
-          if (attempt.outcome === "success") {
-            stats.successes += 1;
-          }
-        });
-
-        // Convert to array and calculate success rate
-        const foodArray: FoodWithSuccess[] = Array.from(foodStats.values())
-          .map((stats) => ({
-            id: stats.id,
-            name: stats.name,
-            success_rate: (stats.successes / stats.total) * 100,
-            total_attempts: stats.total,
-          }))
-          .filter((f) => f.success_rate >= 50) // Only show foods with 50%+ success
-          .sort((a, b) => b.success_rate - a.success_rate);
-
-        if (superseded) return;
-        setSuccessfulFoods(foodArray);
-
-        // Auto-select first food if available
-        if (foodArray.length > 0 && !selectedFood) {
-          handleSelectFood(foodArray[0]);
-        }
-        } catch (error: unknown) {
-          if (superseded) return;
-          logger.error("Error loading successful foods:", error);
-          toast.error("Failed to load food success data");
-      } finally {
-        if (!superseded) setLoading(false);
+      let props = new Map<string, FoodPropsLite>();
+      if (propsOutcome.status === 'fulfilled' && !propsOutcome.value.error) {
+        props = toPropsMap(propsOutcome.value.data);
+      } else {
+        logger.warn('Food properties unavailable; scoring on names and categories');
       }
-    };
-
-    if (activeKidId || kids.length > 0) {
-      loadSuccessfulFoods();
-    }
+      if (!cancelled) setResult({ source: requestKey, rpcRows, props });
+    })();
     return () => {
-      superseded = true;
+      cancelled = true;
     };
-  }, [activeKidId, kids, selectedFood]);
+  }, [requestKey, anchorId, pantryKey]);
 
-  const handleSelectFood = async (food: FoodWithSuccess) => {
-    setSelectedFood(food);
-    await loadChainSuggestions(food.id);
-  };
+  const current = result && result.source === requestKey ? result : null;
+  const suggestionsPending = requestKey !== null && current === null;
+  /** Properties do not depend on the anchor, so bridge mode may use whichever answer came back. */
+  const anyProps = useMemo(() => result?.props ?? new Map<string, FoodPropsLite>(), [result]);
 
-  const loadChainSuggestions = async (sourceFoodId: string) => {
-    try {
-      setLoading(true);
+  const merged: ScoredChainSuggestion[] = useMemo(() => {
+    if (!anchorFood) return [];
+    const client = scoreChainCandidates(anchorFood, foods, current?.props ?? new Map());
+    return mergeRpcSuggestions(client, current?.rpcRows ?? []);
+  }, [anchorFood, foods, current]);
 
-      // Call the get_food_chain_suggestions function
-      const { data, error } = await supabase.rpc("get_food_chain_suggestions", {
-        source_food: sourceFoodId,
-        limit_count: 10,
-      });
+  const ladderFoodIds = useMemo(() => rows.map((r) => r.foodId), [rows]);
 
-      if (error) throw error;
+  const safeIds = useMemo(
+    () =>
+      kidSafeFoodIds(
+        kid,
+        rows.map((r) => ({ kid_id: r.kidId, food_id: r.foodId, status: r.status, current_rung: r.currentRung })),
+        foodsById,
+      ),
+    [kid, rows, foodsById],
+  );
 
-      setChainSuggestions(data || []);
+  const allergensByFoodId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const f of foods) if (Array.isArray(f.allergens)) map.set(f.id, f.allergens);
+    return map;
+  }, [foods]);
 
-      // If no suggestions exist, try to generate them
-      if (!data || data.length === 0) {
-        await generateChainSuggestions(sourceFoodId);
+  const candidates: MasteryCandidate[] = useMemo(() => {
+    if (!anchorId) return [];
+    const prefiltered = merged.filter((s) => {
+      if (safeIds.has(s.foodId)) return false;
+      const food = foodsById.get(s.foodId);
+      if (food) {
+        const fit = getKidFoodFit(kid, food, NO_HISTORY);
+        if (fit.disliked || fit.allergen) return false;
       }
-    } catch (error: unknown) {
-      logger.error("Error loading chain suggestions:", error);
-      toast.error("Failed to load recommendations");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return true;
+    });
+    return selectHandoffCandidates(prefiltered, {
+      masteredFoodId: anchorId,
+      ladderFoodIds,
+      kidAllergens: kid.allergens ?? [],
+      allergensByFoodId,
+      foodsById,
+      kidId: kid.id,
+      limit: DEFAULT_HANDOFF_LIMIT,
+    });
+  }, [anchorId, merged, safeIds, foodsById, kid, ladderFoodIds, allergensByFoodId]);
 
-  const generateChainSuggestions = async (sourceFoodId: string) => {
-    try {
-      // Get properties of source food
-      const { data: sourceProps, error: sourceError } = await supabase
-        .from("food_properties")
-        .select("*")
-        .eq("food_id", sourceFoodId)
-        .single();
+  // ---------------------------------------------------------------------------
+  // Actions
+  // ---------------------------------------------------------------------------
+  const [busyFoodId, setBusyFoodId] = useState<string | null>(null);
+  const busyRef = useRef(false);
 
-      if (sourceError || !sourceProps) {
-        toast.info("No recommendations available yet. Try this food a few more times!");
+  const openLadder = useCallback(
+    (foodId: string) => navigate(`/dashboard/food-tracker?food=${encodeURIComponent(foodId)}`),
+    [navigate],
+  );
+
+  const reportStart = useCallback(
+    (outcome: StartFoodResult, foodId: string, name: string) => {
+      if (outcome.ok) {
+        const row: LadderRow = outcome.row;
+        toast.success(t('foodChaining.toast.started', { name, defaultValue: '{{name}} is on the ladder' }), {
+          action: {
+            label: t('foodChaining.actions.undo', { defaultValue: 'Undo' }),
+            onClick: () => {
+              void removeFromLadder(row);
+            },
+          },
+          cancel: {
+            label: t('foodChaining.actions.openLadder', { defaultValue: 'Open ladder' }),
+            onClick: () => openLadder(foodId),
+          },
+        });
         return;
       }
+      if (outcome.reason === 'duplicate') {
+        toast.info(
+          t('foodChaining.toast.alreadyOnLadder', { name, defaultValue: '{{name}} is already on the ladder' }),
+          {
+            action: {
+              label: t('foodChaining.actions.openLadder', { defaultValue: 'Open ladder' }),
+              onClick: () => openLadder(foodId),
+            },
+          },
+        );
+      } else if (outcome.reason === 'cap') {
+        toast.error(
+          t('foodChaining.toast.cap', {
+            defaultValue: 'The ladder is full for now. Finish or pause a food first.',
+          }),
+        );
+      } else {
+        toast.error(t('foodChaining.toast.error', { defaultValue: "That didn't save. Please try again." }));
+      }
+    },
+    [t, removeFromLadder, openLadder],
+  );
 
-      // Find similar foods based on properties
-      const { data: similarFoods, error: similarError } = await supabase
-        .from("food_properties")
-        .select("food_id, foods(id, name)")
-        .neq("food_id", sourceFoodId);
+  const runExclusive = useCallback(async (foodId: string, work: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusyFoodId(foodId);
+    try {
+      await work();
+    } catch (err) {
+      logger.error('Food chaining action failed:', err);
+      toast.error(t('foodChaining.toast.error', { defaultValue: "That didn't save. Please try again." }));
+    } finally {
+      busyRef.current = false;
+      setBusyFoodId(null);
+    }
+  }, [t]);
 
-      if (similarError) throw similarError;
+  const handleStart = useCallback(
+    (c: MasteryCandidate) =>
+      runExclusive(c.foodId, async () => {
+        const kidId = c.kidId ?? kid.id;
+        const outcome = await startFood(c.foodId, { pairedSafeFoodId: c.anchorFoodId, kidId });
+        reportStart(outcome, c.foodId, c.foodName);
+      }),
+    [runExclusive, startFood, reportStart, kid.id],
+  );
 
-      type NewSuggestion = {
-        source_food_id: string;
-        target_food_id: string;
-        similarity_score: number;
-        chain_reason: string[];
-        recommended_order: number;
-      };
-
-      const suggestions: NewSuggestion[] = [];
-
-      for (const food of similarFoods || []) {
-        const { data: score } = await supabase.rpc("calculate_food_similarity", {
-          food1_id: sourceFoodId,
-          food2_id: food.food_id,
-        });
-
-        if (score && score > 30) {
-          // Only suggest if similarity > 30%
-          const reasons: string[] = [];
-          const { data: targetProps } = await supabase
-            .from("food_properties")
-            .select("*")
-            .eq("food_id", food.food_id)
-            .single();
-
-          if (targetProps) {
-            if (sourceProps.texture_primary === targetProps.texture_primary) {
-              reasons.push("similar_texture");
-            }
-            if (sourceProps.food_category === targetProps.food_category) {
-              reasons.push("same_category");
-            }
-            if (
-              sourceProps.flavor_profile &&
-              targetProps.flavor_profile &&
-              sourceProps.flavor_profile.some((f: string) => targetProps.flavor_profile.includes(f))
-            ) {
-              reasons.push("similar_flavor");
-            }
-          }
-
-          suggestions.push({
-            source_food_id: sourceFoodId,
-            target_food_id: food.food_id,
-            similarity_score: score,
-            chain_reason: reasons,
-            recommended_order: suggestions.length + 1,
-          });
+  const handleAddToPlan = useCallback(
+    (c: MasteryCandidate) =>
+      runExclusive(c.foodId, async () => {
+        const kidId = c.kidId ?? kid.id;
+        if (manualAddPrompt([kid], [c.foodId], foodsById) !== null) {
+          toast.error(
+            t('foodChaining.toast.allergenRefused', {
+              name: c.foodName,
+              kid: kid.name,
+              defaultValue: "{{name}} conflicts with {{kid}}'s allergies, so it wasn't added.",
+            }),
+          );
+          return;
         }
-      }
+        const now = new Date();
+        const today = localIsoDate(now);
+        const hasTryBiteToday = planEntries.some(
+          (e) => e.kid_id === kidId && e.date === today && e.meal_slot === 'try_bite',
+        );
+        const date = hasTryBiteToday
+          ? localIsoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
+          : today;
+        const added = await addPlanEntry({
+          kid_id: kidId,
+          food_id: c.foodId,
+          date,
+          meal_slot: 'try_bite',
+          result: null,
+        });
+        if (added.error) return;
+        const insertedId = added.insertedIds[0];
+        toast.success(
+          hasTryBiteToday
+            ? t('foodChaining.toast.plannedTomorrow', {
+                name: c.foodName,
+                defaultValue: "{{name}} is tomorrow's try bite",
+              })
+            : t('foodChaining.toast.plannedToday', { name: c.foodName, defaultValue: "{{name}} is today's try bite" }),
+          insertedId
+            ? {
+                action: {
+                  label: t('foodChaining.actions.undo', { defaultValue: 'Undo' }),
+                  onClick: () => {
+                    void deletePlanEntry(insertedId);
+                  },
+                },
+              }
+            : undefined,
+        );
+      }),
+    [runExclusive, kid, foodsById, planEntries, addPlanEntry, deletePlanEntry, t],
+  );
 
-      // Save suggestions to database
-      if (suggestions.length > 0) {
-        const { error: insertError } = await supabase
-          .from("food_chain_suggestions")
-          .insert(suggestions);
+  const handleBridgeStart = useCallback(
+    (target: Food, anchor: ChainAnchor) =>
+      runExclusive(target.id, async () => {
+        const outcome = await startFood(target.id, { pairedSafeFoodId: anchor.foodId, kidId: kid.id });
+        reportStart(outcome, target.id, target.name);
+      }),
+    [runExclusive, startFood, reportStart, kid.id],
+  );
 
-        if (insertError) throw insertError;
+  // Win Network: the same single ladder instance starts its picks.
+  const onWinStartFood = useCallback(
+    (foodId: string, kidId: string, pairedSafeFoodId: string | null) =>
+      startFood(foodId, { pairedSafeFoodId, kidId }),
+    [startFood],
+  );
 
-        // Reload suggestions
-        await loadChainSuggestions(sourceFoodId);
-        toast.success("Generated recommendations!");
-      }
-    } catch (error: unknown) {
-      logger.error("Error generating suggestions:", error);
-    }
-  };
-
-  const handleAddToPantry = async (suggestion: FoodChainSuggestion) => {
-    // Check if food already exists
-    const existingFood = foods.find((f) => f.id === suggestion.food_id);
-
-    if (existingFood) {
-      toast.info(`${suggestion.food_name} is already in your pantry!`);
-      return;
-    }
-
-    // Add as a try bite to pantry
-    const added = await addFood({
-      name: suggestion.food_name,
-      category: "snack", // Default category
-      is_safe: false,
-      is_try_bite: true,
-      quantity: 0,
-    });
-
-    if (added) {
-      toast.success(`${suggestion.food_name} added to pantry as Try Bite!`, {
-        description: "Add it to your grocery list to purchase"
+  const anchorCategory = anchorFood?.category ?? 'snack';
+  const onWinCreateFood = useCallback(
+    async (name: string): Promise<Food | null> => {
+      const wanted = name.trim().toLowerCase();
+      const before = new Set(foodsRef.current.map((f) => f.id));
+      const ok = await addFood({
+        name: name.trim(),
+        category: anchorCategory,
+        is_safe: false,
+        is_try_bite: true,
+        quantity: 0,
       });
+      if (!ok) return null;
+      // addFood resolves with a boolean; the row reaches us through state.
+      for (let i = 0; i < 20; i += 1) {
+        const created = foodsRef.current.find(
+          (f) => !before.has(f.id) && f.name.trim().toLowerCase() === wanted,
+        );
+        if (created) return created;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return null;
+    },
+    [addFood, anchorCategory],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Render helpers
+  // ---------------------------------------------------------------------------
+  const transition = reducedMotion ? '' : 'transition-colors';
+
+  const anchorHint = (a: ChainAnchor): string => {
+    switch (a.source) {
+      case 'always':
+        return t('foodChaining.anchors.always', { defaultValue: 'always eats' });
+      case 'mastered':
+        return t('foodChaining.anchors.mastered', { defaultValue: 'mastered' });
+      case 'reliable':
+        return t('foodChaining.anchors.reliable', {
+          count: a.tries ?? 0,
+          ate: a.ate ?? 0,
+          tries: a.tries ?? 0,
+          defaultValue: 'ate {{ate}} of {{tries}}',
+        });
+      case 'climbing':
+        return t('foodChaining.anchors.climbing', { defaultValue: 'climbing' });
+      case 'household':
+      default:
+        return t('foodChaining.anchors.household', { defaultValue: 'household safe food' });
     }
-    // If blocked, the upgrade modal handles messaging.
   };
 
-  const getReasonBadge = (reason: string) => {
-    const badges: Record<string, { label: string; color: string }> = {
-      similar_texture: { label: "Similar Texture", color: "bg-blue-500" },
-      same_category: { label: "Same Type", color: "bg-green-500" },
-      similar_flavor: { label: "Similar Flavor", color: "bg-purple-500" },
-    };
+  const allergyList = useMemo(() => {
+    const list = (kid.allergens ?? []).filter((a) => typeof a === 'string' && a.trim());
+    if (list.length === 0) return '';
+    // Intl.ListFormat is ES2021; the app's lib target predates it.
+    const ListFormat = (Intl as unknown as { ListFormat?: ListFormatCtor }).ListFormat;
+    if (!ListFormat) return list.join(', ');
+    try {
+      return new ListFormat(i18n.language || 'en', { style: 'long', type: 'conjunction' }).format(list);
+    } catch {
+      return list.join(', ');
+    }
+  }, [kid.allergens, i18n.language]);
 
-    const badge = badges[reason] || { label: reason, color: "bg-gray-500" };
+  const allergyNotice = isAllergyUnknown(kid) ? (
+    <p className="text-sm text-muted-foreground">
+      {t('foodChaining.allergiesUnknown', {
+        name: kid.name,
+        defaultValue: "{{name}}'s allergies aren't recorded yet, so suggestions can't be checked against them.",
+      })}{' '}
+      <Link to="/dashboard/kids" className="font-medium text-primary underline underline-offset-4">
+        {t('foodChaining.addAllergies', { defaultValue: 'Add allergies' })}
+      </Link>
+    </p>
+  ) : allergyList ? (
+    <p className="text-sm text-muted-foreground">
+      {t('foodChaining.checkedAgainst', {
+        name: kid.name,
+        list: allergyList,
+        defaultValue: "Checked against {{name}}'s allergies ({{list}})",
+      })}
+    </p>
+  ) : null;
+
+  const renderReasons = (reasons: readonly string[]) => {
+    const keys = reasonKeys(reasons);
+    if (keys.length === 0) return null;
     return (
-      <Badge key={reason} className={`${badge.color} text-white text-xs`}>
-        {badge.label}
-      </Badge>
+      <ul className="flex flex-wrap gap-1.5" aria-label={t('foodChaining.reasonsLabel', { defaultValue: 'Why it is close' })}>
+        {keys.map((key) => {
+          const Icon = REASON_ICONS[key];
+          return (
+            <li key={key}>
+              <Badge variant="secondary" className="gap-1 font-normal">
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                {t(`foodChaining.reason.${key}`, { defaultValue: REASON_DEFAULTS[key] })}
+              </Badge>
+            </li>
+          );
+        })}
+      </ul>
     );
   };
 
-  if (!activeKidId) {
+  const closenessLabel = (score: number) => {
+    const level = closenessLevel(score);
+    return t(`foodChaining.closeness.${level}`, { defaultValue: CLOSENESS_DEFAULTS[level] });
+  };
+
+  // ---------------------------------------------------------------------------
+  // States
+  // ---------------------------------------------------------------------------
+  if (status === 'loading' && anchors.length === 0) {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center text-muted-foreground">
-            <Info className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>Please select a child to see food recommendations</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4" aria-busy="true">
+        <div className="flex gap-2 overflow-hidden">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-11 w-32 shrink-0 rounded-full" />
+          ))}
+        </div>
+        <div className="divide-y rounded-xl border">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-2 p-4">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56" />
+            </div>
+          ))}
+        </div>
+      </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Food Chaining Recommendations
-          </CardTitle>
-          <CardDescription>
-            Based on foods your child loves, we suggest similar foods they might be ready to try
-          </CardDescription>
-        </CardHeader>
-      </Card>
-
-      <div className="grid md:grid-cols-3 gap-6">
-        {/* Left: Successful Foods */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-safe-food" />
-              Successful Foods
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Foods with 50%+ success rate
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading && successfulFoods.length === 0 ? (
-              <div className="text-center text-sm text-muted-foreground py-8">
-                Loading...
-              </div>
-            ) : successfulFoods.length === 0 ? (
-              <div className="text-center text-sm text-muted-foreground py-8">
-                <p className="mb-2">No successful food attempts yet!</p>
-                <p className="text-xs">
-                  Track some food attempts in the Success Tracker to get personalized
-                  recommendations.
-                </p>
-              </div>
-            ) : (
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="space-y-2">
-                  {successfulFoods.map((food) => (
-                    <button
-                      key={food.id}
-                      onClick={() => handleSelectFood(food)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all ${
-                        selectedFood?.id === food.id
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50 hover:bg-muted"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-medium text-sm">{food.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {Math.round(food.success_rate)}%
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {food.total_attempts} {food.total_attempts === 1 ? "attempt" : "attempts"}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Right: Chain Suggestions */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-accent" />
-              Recommended Next Foods
-            </CardTitle>
-            <CardDescription className="text-xs">
-              {selectedFood
-                ? `Based on success with ${selectedFood.name}`
-                : "Select a food to see recommendations"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!selectedFood ? (
-              <div className="text-center text-sm text-muted-foreground py-12">
-                <ChevronRight className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Select a successful food to see recommendations</p>
-              </div>
-            ) : loading ? (
-              <div className="text-center text-sm text-muted-foreground py-12">
-                Generating recommendations...
-              </div>
-            ) : chainSuggestions.length === 0 ? (
-              <div className="text-center text-sm text-muted-foreground py-12">
-                <p className="mb-2">No recommendations available yet.</p>
-                <p className="text-xs">
-                  Food properties are being analyzed. Try again in a moment!
-                </p>
-                <Button
-                  onClick={() => loadChainSuggestions(selectedFood.id)}
-                  variant="outline"
-                  size="sm"
-                  className="mt-4"
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate Recommendations
-                </Button>
-              </div>
-            ) : (
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="space-y-3">
-                  {chainSuggestions.map((suggestion, index) => (
-                    <Card
-                      key={suggestion.food_id}
-                      className="hover:shadow-md transition-shadow"
-                    >
-                      <CardContent className="pt-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="outline" className="text-xs">
-                                #{index + 1}
-                              </Badge>
-                              <h4 className="font-semibold">{suggestion.food_name}</h4>
-                            </div>
-                            <div className="flex flex-wrap gap-1 mb-3">
-                              {suggestion.reasons?.map((reason) => getReasonBadge(reason))}
-                            </div>
-                          </div>
-                          <div className="text-right ml-4">
-                            <div className="text-2xl font-bold text-primary">
-                              {Math.round(suggestion.similarity_score)}%
-                            </div>
-                            <p className="text-xs text-muted-foreground">Match</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => handleAddToPantry(suggestion)}
-                            size="sm"
-                            variant="default"
-                            className="flex-1"
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add to Pantry
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Cross-user anonymized network wins (US-296) */}
-      <WinNetworkPanel
-        sourceFoodName={selectedFood?.name ?? null}
-        pickinessLevel={activeKid?.pickiness_level ?? null}
-        limit={5}
-      />
-
-      {/* Info Dialog */}
-      <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>How Food Chaining Works</DialogTitle>
-            <DialogDescription>
-              <div className="space-y-4 mt-4">
-                <p>
-                  Food chaining helps introduce new foods by building on foods your child already
-                  accepts.
-                </p>
-                <div className="space-y-2">
-                  <h4 className="font-semibold">We analyze:</h4>
-                  <ul className="list-disc list-inside text-sm space-y-1 ml-2">
-                    <li>Texture similarity (40% weight)</li>
-                    <li>Food category (30% weight)</li>
-                    <li>Flavor profiles (20% weight)</li>
-                    <li>Temperature preferences (10% weight)</li>
-                  </ul>
-                </div>
-                <p className="text-sm">
-                  <strong>Example:</strong> If your child loves chicken nuggets (crunchy protein),
-                  we might suggest fish sticks, then baked chicken fingers, gradually moving toward
-                  plain baked chicken.
-                </p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-
-      <div className="flex justify-center">
-        <Button variant="ghost" size="sm" onClick={() => setShowDetails(true)}>
-          <Info className="h-4 w-4 mr-2" />
-          How does this work?
+  const statusLine =
+    status === 'error' ? (
+      <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">
+        <span>{t('foodChaining.error', { defaultValue: "Couldn't load the foods this chain starts from." })}</span>
+        <Button variant="outline" size="sm" className="min-h-11" onClick={retry}>
+          {t('foodChaining.retry', { defaultValue: 'Retry' })}
         </Button>
       </div>
+    ) : status === 'offline' ? (
+      <p className="text-sm text-muted-foreground">
+        {t('foodChaining.offline', { defaultValue: "You're offline. Showing what's saved on this device." })}
+      </p>
+    ) : null;
+
+  if (anchors.length === 0) {
+    return (
+      <div className="space-y-3">
+        {statusLine}
+        {status !== 'error' && (
+          <div className="rounded-xl border p-4 text-sm">
+            <p className="text-muted-foreground">
+              {t('foodChaining.empty.noAnchors', {
+                name: kid.name,
+                defaultValue: "A chain starts from a food {{name}} already eats, and there isn't one yet.",
+              })}
+            </p>
+            <Link
+              to="/dashboard/kids"
+              className="mt-2 inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4"
+            >
+              {t('foodChaining.empty.addAlwaysEats', {
+                name: kid.name,
+                defaultValue: 'Add foods {{name}} always eats',
+              })}
+            </Link>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Bridge mode: a specific target food, opened from a deep link.
+  let bridge: ReactElement | null = null;
+  if (bridgeTarget) {
+    const conflict = manualAddPrompt([kid], [bridgeTarget.id], foodsById);
+    const alreadyOnLadder = ladderFoodIds.includes(bridgeTarget.id);
+    const rankedAnchors = conflict
+      ? []
+      : anchors
+          .filter((a) => a.foodId !== bridgeTarget.id)
+          .map((a) => {
+            const food = foodsById.get(a.foodId);
+            const scored = food ? scoreChainCandidates(food, [bridgeTarget], anyProps)[0] : undefined;
+            return { anchor: a, score: scored?.similarityScore ?? 0, reasons: scored?.reasons ?? [] };
+          })
+          .sort((x, y) => y.score - x.score)
+          .slice(0, BRIDGE_ANCHOR_LIMIT);
+    const busy = busyFoodId === bridgeTarget.id;
+
+    bridge = (
+      <section aria-labelledby="food-chaining-bridge" className="space-y-3">
+        <h2 id="food-chaining-bridge" className="text-lg font-semibold">
+          {t('foodChaining.bridge.title', { food: bridgeTarget.name, defaultValue: 'Bridge to {{food}}' })}
+        </h2>
+        {conflict ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t('foodChaining.bridge.allergen', {
+              food: bridgeTarget.name,
+              name: kid.name,
+              defaultValue:
+                "{{food}} conflicts with {{name}}'s allergies. Talk to {{name}}'s pediatrician or allergist before offering it.",
+            })}
+          </p>
+        ) : alreadyOnLadder ? (
+          <p className="text-sm text-muted-foreground">
+            {t('foodChaining.toast.alreadyOnLadder', {
+              name: bridgeTarget.name,
+              defaultValue: '{{name}} is already on the ladder',
+            })}{' '}
+            <Link
+              to={`/dashboard/food-tracker?food=${encodeURIComponent(bridgeTarget.id)}`}
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              {t('foodChaining.actions.openLadder', { defaultValue: 'Open ladder' })}
+            </Link>
+          </p>
+        ) : (
+          <ul className="divide-y rounded-xl border">
+            {rankedAnchors.map(({ anchor, score, reasons }) => (
+              <li key={anchor.foodId} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1.5">
+                  <p className="font-medium">
+                    {t('foodChaining.bridge.startWith', {
+                      food: bridgeTarget.name,
+                      anchor: anchor.name,
+                      defaultValue: 'Start {{food}} with {{anchor}}',
+                    })}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{anchorHint(anchor)}</span>
+                    {score > 0 && renderReasons(reasons)}
+                  </div>
+                </div>
+                <Button
+                  className="min-h-11 w-full sm:w-auto"
+                  disabled={busyFoodId !== null}
+                  aria-busy={busy}
+                  onClick={() => void handleBridgeStart(bridgeTarget, anchor)}
+                >
+                  <TrendingUp className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {t('foodChaining.actions.startOnLadder', { defaultValue: 'Start on ladder' })}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Button variant="ghost" className="min-h-11" onClick={() => setBridgeDismissed(true)}>
+          {t('foodChaining.bridge.showAll', { defaultValue: 'Show all next links' })}
+        </Button>
+      </section>
+    );
+  }
+
+  const chainBusy = status === 'loading' || (suggestionsPending && candidates.length === 0);
+
+  return (
+    <div className="space-y-6">
+      {statusLine}
+      {allergyNotice}
+
+      <div
+        role="group"
+        aria-label={t('foodChaining.anchors.label', { defaultValue: 'Start from a food they already eat' })}
+        className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0"
+      >
+        {anchors.map((a) => {
+          const pressed = a.foodId === anchorId;
+          return (
+            <button
+              key={a.foodId}
+              type="button"
+              aria-pressed={pressed}
+              onClick={() => setSelection({ kidId: kid.id, foodId: a.foodId })}
+              className={cn(
+                'flex min-h-11 shrink-0 snap-start flex-col items-start justify-center rounded-full border px-4 py-1.5 text-left',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                transition,
+                pressed
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background hover:bg-muted',
+              )}
+            >
+              <span className="text-sm font-medium leading-tight">{a.name}</span>
+              <span className={cn('text-xs leading-tight', pressed ? 'text-primary-foreground/80' : 'text-muted-foreground')}>
+                {anchorHint(a)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {bridge ?? (
+        <section aria-live="polite" aria-busy={chainBusy} className="space-y-3">
+          {selectedAnchor && (
+            <ol
+              aria-label={t('foodChaining.chainFor', {
+                food: selectedAnchor.name,
+                defaultValue: 'Next links from {{food}}',
+              })}
+              className="flex flex-col divide-y rounded-xl border md:flex-row md:divide-x md:divide-y-0"
+            >
+              <li className="flex items-center p-4">
+                <span className="inline-flex min-h-11 items-center rounded-full bg-secondary px-4 text-sm font-medium text-secondary-foreground">
+                  {selectedAnchor.name}
+                </span>
+              </li>
+              {candidates.length === 0 && chainBusy ? (
+                <li className="flex-1 space-y-2 p-4">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-56" />
+                </li>
+              ) : candidates.length === 0 ? (
+                <li className="flex-1 p-4 text-sm text-muted-foreground">
+                  {t('foodChaining.empty.noMatches', {
+                    food: selectedAnchor.name,
+                    defaultValue:
+                      'Nothing in your pantry is close enough to {{food}} yet. Add a food that shares its taste or texture and it will show up here.',
+                  })}
+                </li>
+              ) : (
+                candidates.map((c, index) => {
+                  const busy = busyFoodId === c.foodId;
+                  const disabled = busyFoodId !== null;
+                  const hero = index === 0;
+                  return (
+                    <li key={c.foodId} className="flex flex-1 items-start gap-2 p-4">
+                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-baseline gap-x-2">
+                          <p className={cn('font-semibold', hero ? 'text-lg' : 'text-base')}>{c.foodName}</p>
+                          <span className="text-xs text-muted-foreground">{closenessLabel(c.similarityScore)}</span>
+                        </div>
+                        {renderReasons(c.reasons)}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                          <Button
+                            size="sm"
+                            variant={hero ? 'default' : 'outline'}
+                            className="min-h-11 w-full sm:w-auto"
+                            disabled={disabled}
+                            aria-busy={busy}
+                            aria-label={t('foodChaining.actions.startOnLadderFor', {
+                              food: c.foodName,
+                              kid: kid.name,
+                              defaultValue: "Start {{food}} on {{kid}}'s ladder",
+                            })}
+                            onClick={() => void handleStart(c)}
+                          >
+                            <TrendingUp className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {t('foodChaining.actions.startOnLadder', { defaultValue: 'Start on ladder' })}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="min-h-11 w-full sm:w-auto"
+                            disabled={disabled}
+                            aria-busy={busy}
+                            aria-label={t('foodChaining.actions.addToPlanFor', {
+                              food: c.foodName,
+                              kid: kid.name,
+                              defaultValue: "Add {{food}} to {{kid}}'s plan as a try bite",
+                            })}
+                            onClick={() => void handleAddToPlan(c)}
+                          >
+                            <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {t('foodChaining.actions.addToPlan', { defaultValue: 'Add to plan' })}
+                          </Button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })
+              )}
+            </ol>
+          )}
+        </section>
+      )}
+
+      <WinNetworkPanel
+        kid={kid}
+        sourceFoodId={selectedAnchor?.foodId ?? null}
+        sourceFoodName={selectedAnchor?.name ?? null}
+        foods={foods}
+        ladderFoodIds={ladderFoodIds}
+        onStartFood={onWinStartFood}
+        onCreateFood={onWinCreateFood}
+        limit={5}
+      />
     </div>
   );
 }

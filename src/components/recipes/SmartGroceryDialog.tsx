@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,20 +10,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Minus, Plus, CheckCircle2, AlertTriangle, ShoppingCart } from "lucide-react";
+import { Minus, Plus, CheckCircle2, AlertTriangle, ShoppingCart, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { Recipe, Food, GroceryItem } from "@/types";
 import { convert } from "@/lib/unitNormalize";
 import { formatQuantity } from "@/lib/groceryMerge";
-import { useFoods } from "@/contexts/AppContext";
-import { resolveFood } from "@/lib/effectiveFood";
+import { useFoods, useGrocery } from "@/contexts/AppContext";
+import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
+import { clampTargetServings, parseBaseServings } from "@/lib/recipeServings";
 
 interface SmartGroceryDialogProps {
   recipe: Recipe | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   foods: Food[];
-  groceryItems: GroceryItem[];
+  /**
+   * @deprecated Ignored. The dialog reads the list from useGrocery() so it
+   * cannot go stale; kept optional until every caller stops passing it.
+   */
+  groceryItems?: GroceryItem[];
+  /** Servings to open at (e.g. what the detail sheet was scaled to). */
+  initialServings?: number;
   onAddGroceryItems: (items: { name: string; quantity: number; unit: string; category: string; aisle?: string }[]) => void;
 }
 
@@ -35,18 +42,104 @@ interface IngredientStatus {
   unit: string;
   /** On-hand quantity expressed in `unit` when convertible, else raw. */
   inStock: number;
-  /** Quantity to actually buy (needed − on-hand, floored at 0). */
+  /** Quantity to actually buy (needed - on-hand, floored at 0). */
   toBuy: number;
   category: string;
   aisle?: string;
-  status: "in-stock" | "low-stock" | "need-to-buy";
+  /**
+   * check-units: the pantry has it, but in a unit that cannot be converted
+   * to the recipe's (cups vs lb). Not treated as in stock, not pre-checked.
+   */
+  status: "in-stock" | "low-stock" | "need-to-buy" | "check-units";
   alreadyInGrocery: boolean;
 }
 
-/** Parse the recipe's base servings; default to 4 when unset/garbled. */
-function parseBaseServings(servings?: string): number {
-  const n = parseInt(servings ?? "", 10);
-  return Number.isFinite(n) && n > 0 ? n : 4;
+const unitKey = (u: string | null | undefined) => (u ?? "").trim().toLowerCase();
+
+/** Every ingredient's pantry status at `scale` times the recipe's amounts. */
+function analyzeIngredients(
+  recipe: Recipe | null,
+  foods: Food[],
+  groceryItems: readonly GroceryItem[],
+  scale: number,
+  resolve: (food: Food) => EffectiveFood,
+): IngredientStatus[] {
+  if (!recipe) return [];
+
+  type Raw = { key: string; name: string; baseQty: number; unit: string; food?: Food };
+  const raws: Raw[] = [];
+  const byId = new Map(foods.map((f) => [f.id, f]));
+
+  const structured = (recipe.recipe_ingredients ?? [])
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  if (structured.length > 0) {
+    structured.forEach((ing) => {
+      const food = ing.food_id
+        ? byId.get(ing.food_id)
+        : foods.find((f) => f.name.toLowerCase() === ing.name.toLowerCase());
+      raws.push({
+        key: ing.id || ing.name,
+        name: ing.name || food?.name || "Ingredient",
+        baseQty: typeof ing.quantity === "number" && ing.quantity > 0 ? ing.quantity : 1,
+        unit: ing.unit ?? food?.unit ?? "",
+        food,
+      });
+    });
+  } else {
+    recipe.food_ids.forEach((foodId) => {
+      const food = byId.get(foodId);
+      if (!food) return;
+      raws.push({ key: food.id, name: food.name, baseQty: 1, unit: food.unit ?? "", food });
+    });
+  }
+
+  const onList = new Set(groceryItems.filter((gi) => !gi.checked).map((gi) => gi.name.toLowerCase()));
+
+  return raws.map((r): IngredientStatus => {
+    const needed = r.baseQty * scale;
+    const onHandRaw = r.food?.quantity ?? 0;
+    const sameUnit = !r.food || unitKey(r.food.unit) === unitKey(r.unit) || !r.food.unit || !r.unit;
+    // Express on-hand in the ingredient's unit when units are convertible.
+    const converted = sameUnit ? onHandRaw : convert(onHandRaw, r.food?.unit ?? "", r.unit);
+    const unitsClash = converted === null && onHandRaw > 0;
+    const inStock = converted ?? 0;
+    const toBuy = unitsClash ? needed : Math.max(0, Math.round((needed - inStock) * 100) / 100);
+
+    let status: IngredientStatus["status"];
+    if (unitsClash) status = "check-units";
+    else if (inStock >= needed && needed > 0) status = "in-stock";
+    else if (inStock > 0) status = "low-stock";
+    else status = "need-to-buy";
+
+    // US-795: category/aisle come from the resolved (catalog-preferred)
+    // food, not the household row's raw columns, so an ingredient added
+    // from here matches how the same catalog-linked product looks on the
+    // grocery list, planner and pantry.
+    const effective = r.food ? resolve(r.food) : null;
+
+    return {
+      key: r.key,
+      name: r.name,
+      needed: Math.round(needed * 100) / 100,
+      unit: r.unit,
+      inStock: Math.round((unitsClash ? onHandRaw : inStock) * 100) / 100,
+      toBuy,
+      category: effective?.category ?? "snack",
+      aisle: effective?.aisle,
+      status,
+      alreadyInGrocery: onList.has(r.name.toLowerCase()),
+    };
+  });
+}
+
+/** Pre-checked: what needs buying, is comparable, and is not on the list yet. */
+function defaultChecked(statuses: IngredientStatus[]): Set<string> {
+  return new Set(
+    statuses
+      .filter((s) => (s.status === "need-to-buy" || s.status === "low-stock") && !s.alreadyInGrocery)
+      .map((s) => s.key),
+  );
 }
 
 export function SmartGroceryDialog({
@@ -54,103 +147,47 @@ export function SmartGroceryDialog({
   open,
   onOpenChange,
   foods,
-  groceryItems,
+  initialServings,
   onAddGroceryItems,
 }: SmartGroceryDialogProps) {
   const { catalogById } = useFoods();
+  const { groceryItems } = useGrocery();
   const baseServings = parseBaseServings(recipe?.servings);
-  // Target servings the user wants to shop for — starts at the recipe's own.
-  const [targetServings, setTargetServings] = useState(baseServings);
-  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const startServings = clampTargetServings(initialServings ?? baseServings);
+  // Target servings the user wants to shop for.
+  const [targetServings, setTargetServings] = useState(startServings);
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(() => new Set());
 
-  // Reset the target whenever a different recipe opens.
-  useEffect(() => {
-    setTargetServings(parseBaseServings(recipe?.servings));
-  }, [recipe?.id, recipe?.servings]);
+  const resolve = useMemo(
+    () => (food: Food) => resolveFood(food, food.canonical_id ? catalogById[food.canonical_id] : null),
+    [catalogById],
+  );
 
   const scale = baseServings > 0 ? targetServings / baseServings : 1;
 
-  // Analyze ingredients against pantry stock. Prefer structured
-  // recipe_ingredients (US-281: real quantity + unit); fall back to food_ids.
-  const ingredientStatuses = useMemo<IngredientStatus[]>(() => {
-    if (!recipe) return [];
+  const ingredientStatuses = useMemo<IngredientStatus[]>(
+    () => analyzeIngredients(recipe, foods, groceryItems, scale, resolve),
+    [recipe, foods, groceryItems, scale, resolve],
+  );
 
-    type Raw = { key: string; name: string; baseQty: number; unit: string; food?: Food };
-    const raws: Raw[] = [];
-
-    const structured = recipe.recipe_ingredients ?? [];
-    if (structured.length > 0) {
-      structured.forEach((ing) => {
-        const food = ing.food_id
-          ? foods.find((f) => f.id === ing.food_id)
-          : foods.find((f) => f.name.toLowerCase() === ing.name.toLowerCase());
-        raws.push({
-          key: ing.id || ing.name,
-          name: ing.name || food?.name || "Ingredient",
-          baseQty: ing.quantity ?? 1,
-          unit: ing.unit ?? food?.unit ?? "",
-          food,
-        });
-      });
-    } else {
-      recipe.food_ids.forEach((foodId) => {
-        const food = foods.find((f) => f.id === foodId);
-        if (!food) return;
-        raws.push({ key: food.id, name: food.name, baseQty: 1, unit: food.unit ?? "", food });
-      });
-    }
-
-    return raws.map((r): IngredientStatus => {
-      const needed = r.baseQty * scale;
-      const onHandRaw = r.food?.quantity ?? 0;
-      // Express on-hand in the ingredient's unit when units are convertible.
-      const converted =
-        r.food && r.food.unit && r.unit ? convert(onHandRaw, r.food.unit, r.unit) : null;
-      const inStock = converted ?? onHandRaw;
-      const toBuy = Math.max(0, Math.round((needed - inStock) * 100) / 100);
-
-      let status: IngredientStatus["status"];
-      if (inStock >= needed && needed > 0) status = "in-stock";
-      else if (inStock > 0) status = "low-stock";
-      else status = "need-to-buy";
-
-      const alreadyInGrocery = groceryItems.some(
-        (gi) => gi.name.toLowerCase() === r.name.toLowerCase() && !gi.checked
+  // Seed the servings and the checkboxes when the dialog opens or another
+  // recipe loads, and only then. Re-seeding on every recompute (a realtime
+  // grocery event, a pantry edit) wiped whatever the user had unticked.
+  const seedKey = open && recipe ? recipe.id : null;
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (seedKey !== seededFor) {
+    setSeededFor(seedKey);
+    if (seedKey && recipe) {
+      setTargetServings(startServings);
+      setCheckedItems(
+        defaultChecked(analyzeIngredients(recipe, foods, groceryItems, startServings / baseServings, resolve)),
       );
-
-      // US-795: category/aisle come from the resolved (catalog-preferred)
-      // food, not the household row's raw columns, so an ingredient added
-      // from here matches how the same catalog-linked product looks on the
-      // grocery list, planner and pantry.
-      const effective = r.food
-        ? resolveFood(r.food, r.food.canonical_id ? catalogById[r.food.canonical_id] : null)
-        : null;
-
-      return {
-        key: r.key,
-        name: r.name,
-        needed: Math.round(needed * 100) / 100,
-        unit: r.unit,
-        inStock: Math.round(inStock * 100) / 100,
-        toBuy,
-        category: effective?.category ?? "snack",
-        aisle: effective?.aisle,
-        status,
-        alreadyInGrocery,
-      };
-    });
-  }, [recipe, foods, groceryItems, scale, catalogById]);
-
-  // Default-check everything that needs buying and isn't already on the list.
-  useEffect(() => {
-    const needToBuy = ingredientStatuses
-      .filter((s) => s.status !== "in-stock" && !s.alreadyInGrocery)
-      .map((s) => s.key);
-    setCheckedItems(new Set(needToBuy));
-  }, [ingredientStatuses]);
+    }
+  }
 
   const inStock = ingredientStatuses.filter((s) => s.status === "in-stock");
   const lowStock = ingredientStatuses.filter((s) => s.status === "low-stock");
+  const checkUnits = ingredientStatuses.filter((s) => s.status === "check-units");
   const needToBuy = ingredientStatuses.filter((s) => s.status === "need-to-buy");
 
   const checkedCount = checkedItems.size;
@@ -202,6 +239,11 @@ export function SmartGroceryDialog({
           {item.unit ? ` ${item.unit}` : ""}
         </span>
       </span>
+      {item.status === "check-units" && (
+        <Badge variant="outline" className="text-[10px] h-5">
+          check units
+        </Badge>
+      )}
       {item.alreadyInGrocery && (
         <Badge variant="outline" className="text-[10px] h-5">
           in list
@@ -209,6 +251,7 @@ export function SmartGroceryDialog({
       )}
       <span className="text-xs text-muted-foreground tabular-nums">
         have {formatQuantity(item.inStock)}
+        {item.status === "check-units" && item.inStock > 0 ? " (other unit)" : ""}
       </span>
     </label>
   );
@@ -241,9 +284,9 @@ export function SmartGroceryDialog({
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7"
+              className="h-11 w-11"
               aria-label="Fewer servings"
-              onClick={() => setTargetServings((p) => Math.max(1, p - 1))}
+              onClick={() => setTargetServings((p) => clampTargetServings(p - 1))}
             >
               <Minus className="h-3 w-3" />
             </Button>
@@ -251,9 +294,9 @@ export function SmartGroceryDialog({
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7"
+              className="h-11 w-11"
               aria-label="More servings"
-              onClick={() => setTargetServings((p) => Math.min(99, p + 1))}
+              onClick={() => setTargetServings((p) => clampTargetServings(p + 1))}
             >
               <Plus className="h-3 w-3" />
             </Button>
@@ -276,10 +319,21 @@ export function SmartGroceryDialog({
           {lowStock.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" />
                 <span className="text-sm font-medium">Low Stock ({lowStock.length})</span>
               </div>
               <div className="space-y-0.5">{lowStock.map(renderIngredientRow)}</div>
+            </div>
+          )}
+
+          {/* Units that cannot be compared */}
+          {checkUnits.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Ruler className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <span className="text-sm font-medium">Check units ({checkUnits.length})</span>
+              </div>
+              <div className="space-y-0.5">{checkUnits.map(renderIngredientRow)}</div>
             </div>
           )}
 
@@ -287,7 +341,7 @@ export function SmartGroceryDialog({
           {inStock.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <CheckCircle2 className="h-4 w-4 text-safe-food" aria-hidden="true" />
                 <span className="text-sm font-medium">In Stock ({inStock.length})</span>
               </div>
               <div className="space-y-0.5">{inStock.map(renderIngredientRow)}</div>

@@ -17,7 +17,11 @@ vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     rpc: (fn: string, args: Record<string, unknown>) => rpc(fn, args),
     from: (table: string) => from(table),
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }) },
+    // The hook reads the session locally (no getUser network call) and resolves
+    // the household through get_user_household_id, like AuthContext does.
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'u1' } } } }),
+    },
   },
 }));
 vi.mock('@/lib/logger', () => ({
@@ -40,7 +44,7 @@ beforeEach(() => {
   rpc.mockReset();
   from.mockReset();
   const builder: Record<string, unknown> = {};
-  for (const m of ['select', 'eq', 'order', 'delete', 'update', 'insert', 'is']) {
+  for (const m of ['select', 'eq', 'order', 'delete', 'update', 'insert', 'is', 'gt', 'in', 'maybeSingle']) {
     builder[m] = vi.fn(() => builder);
   }
   builder.then = (resolve: (v: { data: unknown[]; error: null }) => unknown) =>

@@ -20,6 +20,7 @@
  */
 
 import type { Rung } from './exposureLadder';
+import { matchingFoodAllergen } from '@/lib/allergens';
 
 export type SchedulerMealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack1' | 'snack2';
 
@@ -114,15 +115,14 @@ function lower(values: string[] | null | undefined): Set<string> {
   return new Set((values ?? []).map((v) => v.toLowerCase().trim()).filter(Boolean));
 }
 
-/** True when a food carries any allergen the child reacts to. */
+/**
+ * True when a food carries any allergen the child reacts to. Goes through
+ * the shared canonical matcher, so "en:peanuts" meets "peanuts" and "dairy"
+ * meets "milk"; an exact lowercase compare let both through. Families and
+ * the food's name count too, so "Almond crackers" is a tree-nut conflict.
+ */
 export function hasAllergenConflict(food: SchedulerFood, kid: SchedulerKid): boolean {
-  const kidAllergens = lower(kid.allergens);
-  if (kidAllergens.size === 0) return false;
-  const foodAllergens = lower(food.allergens);
-  for (const allergen of foodAllergens) {
-    if (kidAllergens.has(allergen)) return true;
-  }
-  return false;
+  return matchingFoodAllergen(kid.allergens, food) !== null;
 }
 
 /** True when the food's primary texture is one the child has told us they dislike. */

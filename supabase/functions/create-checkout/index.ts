@@ -1,6 +1,10 @@
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, securityHeaders } from "../common/headers.ts";
+import {
+  decideCheckoutGate,
+  type EntitlementLookup,
+} from "../_shared/checkoutEntitlement.ts";
 
 /**
  * Create Checkout Edge Function
@@ -23,6 +27,13 @@ import { getCorsHeaders, securityHeaders } from "../common/headers.ts";
  * have over this one -- method checking, a Stripe-not-configured branch, real
  * status codes, and not forwarding upstream Stripe detail to the browser
  * (US-532) -- was ported here before it was deleted.
+ *
+ * Refuses a caller who is already entitled -- a live Stripe subscription, an
+ * active App Store subscription, or a complimentary plan per
+ * effective_plan_id -- with 409 { code: "already_subscribed", source }, so a
+ * second subscription cannot be opened by a stale page or a caller that skips
+ * Pricing.tsx's own check. A failed entitlement lookup answers 503
+ * { code: "entitlement_unverified" }. Rules: _shared/checkoutEntitlement.ts.
  */
 
 const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
@@ -38,6 +49,65 @@ const errMessage = (e: unknown): string =>
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+type SupabaseClientLike = ReturnType<typeof createClient>;
+
+/**
+ * Read what the caller already holds, as the service role (effective_plan_id
+ * is not granted to authenticated). Any read error is a failed lookup, which
+ * the gate refuses rather than guessing "free".
+ */
+async function lookupEntitlement(supabase: SupabaseClientLike, userId: string): Promise<EntitlementLookup> {
+  try {
+    const [stripeRow, appleRows, effective] = await Promise.all([
+      supabase
+        .from("user_subscriptions")
+        .select("status, stripe_subscription_id, is_complementary")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("apple_subscriptions")
+        .select("status, expires_at")
+        .eq("user_id", userId),
+      supabase.rpc("effective_plan_id", { p_user_id: userId }),
+    ]);
+    if (stripeRow.error || appleRows.error || effective.error) {
+      console.error("create-checkout entitlement lookup failed:", stripeRow.error ?? appleRows.error ?? effective.error);
+      return { ok: false };
+    }
+
+    let effectivePlanName: string | null = null;
+    const effectivePlanId = typeof effective.data === "string" ? effective.data : null;
+    if (effectivePlanId) {
+      const { data: planRow, error: planError } = await supabase
+        .from("subscription_plans")
+        .select("name")
+        .eq("id", effectivePlanId)
+        .maybeSingle();
+      if (planError) {
+        console.error("create-checkout effective plan lookup failed:", planError);
+        return { ok: false };
+      }
+      effectivePlanName = (planRow as { name?: string | null } | null)?.name ?? null;
+    }
+
+    return {
+      ok: true,
+      facts: {
+        stripe: (stripeRow.data ?? null) as {
+          status: string | null;
+          stripe_subscription_id: string | null;
+          is_complementary: boolean | null;
+        } | null,
+        apple: (appleRows.data ?? []) as { status: string | null; expires_at: string | null }[],
+        effectivePlanName,
+      },
+    };
+  } catch (error: unknown) {
+    console.error("create-checkout entitlement lookup threw:", error);
+    return { ok: false };
+  }
+}
 
 export default async (req: Request) => {
   // Get secure CORS headers based on request origin
@@ -112,6 +182,20 @@ export default async (req: Request) => {
 
     if (billingCycle !== "monthly" && billingCycle !== "yearly") {
       return fail(400, "invalid_billing_cycle", "Missing required fields");
+    }
+
+    // Server half of the double-billing guard, before anything touches Stripe.
+    const gate = decideCheckoutGate(await lookupEntitlement(supabase, user.id));
+    if (!gate.allow) {
+      console.warn(`create-checkout ${gate.code} for user ${user.id}`);
+      return new Response(
+        JSON.stringify({
+          error: gate.message,
+          code: gate.code,
+          ...("source" in gate ? { source: gate.source } : {}),
+        }),
+        { headers: jsonHeaders, status: gate.status },
+      );
     }
 
     // Get plan details. The price comes from this row, never from the caller.

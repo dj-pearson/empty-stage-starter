@@ -40,13 +40,19 @@ const KNOWN_SKIPS: Record<string, number> = {
   '/dashboard/pantry': 1,
   '/dashboard/recipes': 1,
   '/dashboard/kids': 1,
-  '/dashboard/settings': 1,
+  // The Settings hub wraps every section body in a <section> with a real h2,
+  // so the CardTitle h3s no longer jump from the h1.
+  '/dashboard/settings': 0,
   '/dashboard/insights': 1,
-  '/dashboard/analytics': 1,
+  // Redirects to /dashboard/progress?section=numbers since Analytics was folded
+  // into Progress, so it is measured as Progress: one h1, no skipped levels.
+  '/dashboard/analytics': 0,
   '/dashboard/food-tracker': 1,
   '/dashboard/billing': 1,
   '/dashboard/household': 1,
-  '/dashboard/accessibility-settings': 1,
+  // Redirects to /dashboard/settings?section=accessibility since the page was
+  // folded into the Settings hub, so it is measured as that section.
+  '/dashboard/accessibility-settings': 0,
   '/dashboard/progress': 0,
   '/dashboard/grocery': 0,
   '/dashboard': 0,

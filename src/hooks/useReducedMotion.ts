@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
+import { useOptionalAccessibility } from '@/contexts/accessibilityContextCore';
 
 /**
- * Hook to detect if user prefers reduced motion
- * Respects system accessibility preferences (prefers-reduced-motion)
- * Critical for WCAG 2.1 Level AA compliance
+ * True when motion should be reduced: the OS asks for it
+ * (prefers-reduced-motion), or the user turned on the app's own Reduce motion
+ * toggle. Critical for WCAG 2.1 Level AA compliance.
+ *
+ * The in-app half used to be missing, so the toggle stopped CSS and framer
+ * entrances (both gated elsewhere) while every JS consumer of this hook kept
+ * animating. The context is read without throwing: the prerender pass and
+ * provider-less tests have no AccessibilityProvider, and there the OS answer
+ * is the whole answer.
  */
-export function useReducedMotion() {
+export function useReducedMotion(): boolean {
+  const accessibility = useOptionalAccessibility();
   /**
    * Read synchronously on the FIRST render, not in the effect (US-821).
    *
@@ -51,6 +59,6 @@ export function useReducedMotion() {
     }
   }, []);
   
-  return prefersReducedMotion;
+  return prefersReducedMotion || accessibility?.preferences.reducedMotion === true;
 }
 

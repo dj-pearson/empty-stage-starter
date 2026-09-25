@@ -350,7 +350,9 @@ describe('US-672: pantry corrections and failure handling', () => {
   });
 
   it('writes nothing at all while the flag is off', async () => {
-    // No enableWrites(): this is the shipped state, and the story must be inert.
+    // 5a: the default is on now, so "off" is the kill switch: the server said
+    // false and the cache holds it. The story must be inert.
+    writeFlag('kitchen_loop_ledger_writes', false);
     const inventory = await mountInventory();
     await waitFor(() => expect(inventory().ledgerWritesEnabled).toBe(false));
 

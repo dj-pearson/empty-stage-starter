@@ -38,6 +38,10 @@ import { Footer } from "@/components/Footer";
 import { BreadcrumbNavigation } from "@/components/BreadcrumbNavigation";
 
 import { priceLabel } from "@/lib/pricing-plans";
+import "@/i18n/appLocale";
+import { resolveCheckoutSource } from "@/lib/checkoutSource";
+import { upgradeTargetFor } from "@/lib/planSource";
+import { readCheckoutRefusal, type EntitledSource } from "@/lib/checkoutRefusal";
 // Lazy load the feature comparison table (below the fold)
 const FeatureComparisonTable = lazy(() =>
   import("@/components/pricing/FeatureComparisonTable").then(m => ({ default: m.FeatureComparisonTable }))
@@ -189,6 +193,52 @@ export default function Pricing() {
     }
   };
 
+  /**
+   * Tell an entitled account where its plan is managed instead of opening a
+   * second checkout. Used by the pre-check below and by create-checkout's own
+   * 409, which catches what a stale page's pre-check missed.
+   */
+  const showAlreadyEntitled = (source: EntitledSource | null) => {
+    const target = source ? upgradeTargetFor(source) : null;
+    if (target?.type === "appStore") {
+      toast.info(
+        t("billing.planData.pricingGuard.appStore", {
+          defaultValue:
+            "Your plan is billed through the App Store. Change or cancel it in your Apple ID subscriptions so you're never charged twice.",
+        }),
+        {
+          action: {
+            label: t("billing.planData.pricingGuard.openApple", { defaultValue: "Open Apple subscriptions" }),
+            onClick: () => window.open(target.href, "_blank", "noopener,noreferrer"),
+          },
+          duration: 10000,
+        }
+      );
+    } else if (target?.type === "support") {
+      toast.info(
+        t("billing.planData.pricingGuard.comp", {
+          defaultValue:
+            "You have complimentary access from EatPal. Contact support@tryeatpal.com to change your plan.",
+        }),
+        { duration: 10000 }
+      );
+    } else if (target) {
+      toast.info(
+        t("billing.planData.pricingGuard.stripe", {
+          defaultValue: "You already have a subscription. Change your plan from Billing.",
+        })
+      );
+      navigate("/dashboard/billing");
+    } else {
+      toast.info(
+        t("billing.planData.serverGuard.alreadySubscribed", {
+          defaultValue: "You already have an active plan, so nothing was charged. You can manage it from Billing.",
+        })
+      );
+      navigate("/dashboard/billing");
+    }
+  };
+
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
     if (!user) {
       // Not logged in, redirect to auth
@@ -201,11 +251,34 @@ export default function Pricing() {
       return;
     }
 
+    // Double-billing guard. Ask the server which plan it enforces and who bills
+    // it before anything reaches Stripe: an App Store or complimentary plan is
+    // not managed by Stripe at all, and a paying Stripe customer changes plan
+    // in the portal, not through a second checkout that would bill them twice.
+    setCheckoutPlanId(plan.id);
+    const source = await resolveCheckoutSource(user.id);
+    if (source === "unknown") {
+      toast.error(
+        t("billing.planData.pricingGuard.unverified", {
+          defaultValue: "We couldn't confirm your current plan, so nothing was charged. Please try again.",
+        })
+      );
+      setCheckoutPlanId(null);
+      return;
+    }
+    // A Stripe subscriber choosing Free cancels in the Stripe portal below.
+    if (source !== "free" && !(source === "stripe" && plan.price_monthly === 0)) {
+      setCheckoutPlanId(null);
+      showAlreadyEntitled(source);
+      return;
+    }
+    setCheckoutPlanId(null);
+
     // Handle Free plan (downgrade = cancel subscription via Stripe Portal)
     if (plan.price_monthly === 0) {
       try {
         setCheckoutPlanId(plan.id);
-        const { data, error } = await invokeEdgeFunction("stripe-portal", {
+        const { data, error } = await invokeEdgeFunction<{ url?: string }>("stripe-portal", {
           body: {
             returnUrl: `${window.location.origin}/pricing`,
           },
@@ -231,7 +304,7 @@ export default function Pricing() {
     try {
       setCheckoutPlanId(plan.id);
 
-      const { data, error } = await invokeEdgeFunction("create-checkout", {
+      const { data, error } = await invokeEdgeFunction<{ url?: string }>("create-checkout", {
         body: {
           planId: plan.id,
           billingCycle,
@@ -250,8 +323,18 @@ export default function Pricing() {
       }
     } catch (error: unknown) {
       logger.error("Checkout error:", error);
+      const refusal = readCheckoutRefusal(error);
       const message = error instanceof Error ? error.message : "Unknown error";
-      if (message.includes("price") || message.includes("Price")) {
+      if (refusal?.kind === "alreadySubscribed") {
+        // The server's double-billing guard (409): nothing was charged.
+        showAlreadyEntitled(refusal.source);
+      } else if (refusal?.kind === "unverified") {
+        toast.error(
+          t("billing.planData.pricingGuard.unverified", {
+            defaultValue: "We couldn't confirm your current plan, so nothing was charged. Please try again.",
+          })
+        );
+      } else if (message.includes("price") || message.includes("Price")) {
         toast.error("This plan is not yet configured for checkout. Please contact support.");
       } else if (message.includes("customer") || message.includes("Customer")) {
         toast.error("Account setup issue. Please try again or contact support.");

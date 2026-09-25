@@ -1,7 +1,13 @@
 import Stripe from "https://esm.sh/stripe@14.5.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 import { getCorsHeaders, noCacheHeaders } from "../common/headers.ts";
-import { PublicError, publicMessage } from '../_shared/errors.ts';
+import { PublicError, publicMessage, publicStatus } from '../_shared/errors.ts';
+import {
+  classifyCustomerRetrieve,
+  customerRowWrite,
+  isStripeResourceMissing,
+  paymentMethodBelongsTo,
+} from '../_shared/paymentMethodOwnership.ts';
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2023-10-16",
@@ -10,6 +16,10 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+/** No generated Database types in the Deno tree; name what createClient returns. */
+type SupabaseClientLike = ReturnType<typeof createClient>;
+type ResponseHeaders = Record<string, string>;
 
 /**
  * Payment Methods Management Edge Function
@@ -21,6 +31,11 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
  * - detach: Remove a payment method
  * - set-default: Set a payment method as default
  * - get-portal-url: Get Stripe Customer Portal URL for self-service
+ *
+ * Callers: src/lib/billingPortal.ts (get-portal-url). No shipped iOS build.
+ *
+ * detach and set-default act only on a payment method attached to the
+ * caller's own Stripe customer (see _shared/paymentMethodOwnership.ts).
  */
 export default async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -35,7 +50,7 @@ export default async (req: Request) => {
     // Get user from auth header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new PublicError("No authorization header");
+      throw new PublicError("No authorization header", 401);
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -45,7 +60,7 @@ export default async (req: Request) => {
     } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      throw new PublicError("Unauthorized");
+      throw new PublicError("Unauthorized", 401);
     }
 
     const { action, paymentMethodId } = await req.json();
@@ -53,14 +68,21 @@ export default async (req: Request) => {
     console.log(`Payment method action for user ${user.id}: ${action}`);
 
     // Get user's Stripe customer ID
-    const { data: subscription } = await supabase
+    const { data: subscription, error: subscriptionError } = await supabase
       .from("user_subscriptions")
       .select("stripe_customer_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
+    if (subscriptionError) {
+      // Reading this as "no row" would create a second Stripe customer.
+      throw subscriptionError;
+    }
+    const hasRow = subscription !== null;
+
     // For some actions, we need a customer ID
-    let customerId = subscription?.stripe_customer_id;
+    let customerId: string | null =
+      (subscription as { stripe_customer_id?: string | null } | null)?.stripe_customer_id ?? null;
 
     switch (action) {
       case "list": {
@@ -78,20 +100,20 @@ export default async (req: Request) => {
 
       case "create-setup-intent": {
         // Create or get customer
-        customerId = await ensureCustomer(supabase, stripe, user, customerId);
+        customerId = await ensureCustomer(supabase, user, customerId, hasRow);
         return await handleCreateSetupIntent(customerId, corsHeaders);
       }
 
       case "attach": {
-        if (!paymentMethodId) {
+        if (typeof paymentMethodId !== "string" || !paymentMethodId) {
           throw new PublicError("Missing paymentMethodId");
         }
-        customerId = await ensureCustomer(supabase, stripe, user, customerId);
+        customerId = await ensureCustomer(supabase, user, customerId, hasRow);
         return await handleAttachPaymentMethod(customerId, paymentMethodId, corsHeaders);
       }
 
       case "detach": {
-        if (!paymentMethodId) {
+        if (typeof paymentMethodId !== "string" || !paymentMethodId) {
           throw new PublicError("Missing paymentMethodId");
         }
         if (!customerId) {
@@ -101,7 +123,7 @@ export default async (req: Request) => {
       }
 
       case "set-default": {
-        if (!paymentMethodId) {
+        if (typeof paymentMethodId !== "string" || !paymentMethodId) {
           throw new PublicError("Missing paymentMethodId");
         }
         if (!customerId) {
@@ -118,63 +140,94 @@ export default async (req: Request) => {
       }
 
       default:
-        throw new Error(`Unknown action: ${action}`);
+        throw new PublicError("Unknown action");
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // Detail to the log only; the body is a PublicError's words or generic.
     console.error("Payment method management error:", error);
-    const corsHeaders = getCorsHeaders(req);
-    const message = error instanceof Error ? error.message : String(error);
     return new Response(JSON.stringify({ error: publicMessage(error) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
+      status: publicStatus(error),
     });
   }
 };
 
+/**
+ * The caller's Stripe customer id, creating one only when there is none or
+ * Stripe says the stored one is gone.
+ *
+ * A transient Stripe failure (timeout, 429, 5xx) is an error, not a missing
+ * customer: it used to create a new customer and upsert the row with status
+ * 'inactive', which orphaned a paying parent's subscription on the old
+ * customer and marked the account unpaid.
+ */
 async function ensureCustomer(
-  supabase: any,
-  stripe: Stripe,
-  user: any,
-  existingCustomerId: string | null
+  supabase: SupabaseClientLike,
+  user: { id: string; email?: string | null },
+  existingCustomerId: string | null,
+  hasRow: boolean,
 ): Promise<string> {
   if (existingCustomerId) {
-    // Verify customer exists in Stripe
+    let retrieved: { deleted?: boolean } | null = null;
+    let retrieveError: unknown = undefined;
     try {
-      await stripe.customers.retrieve(existingCustomerId);
-      return existingCustomerId;
-    } catch (error) {
-      console.log("Customer not found in Stripe, creating new one");
+      const found = await stripe.customers.retrieve(existingCustomerId);
+      retrieved = { deleted: "deleted" in found && found.deleted === true };
+    } catch (error: unknown) {
+      retrieveError = error;
     }
+    const verdict = classifyCustomerRetrieve(retrieved, retrieveError);
+    if (verdict === 'use') return existingCustomerId;
+    if (verdict === 'fail') {
+      console.error("Could not verify Stripe customer:", retrieveError);
+      throw new PublicError("Payment provider unavailable. Please try again.", 503);
+    }
+    console.log("Stripe customer missing or deleted, creating a new one");
   }
 
-  // Create a new customer in Stripe
   const customer = await stripe.customers.create({
-    email: user.email,
+    email: user.email ?? undefined,
     metadata: {
       supabase_user_id: user.id,
     },
   });
 
-  // Update or create subscription record with customer ID
-  const { error: upsertError } = await supabase
-    .from("user_subscriptions")
-    .upsert({
-      user_id: user.id,
-      stripe_customer_id: customer.id,
-      status: "inactive",
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'user_id',
-    });
+  const write = customerRowWrite(hasRow, user.id, customer.id, new Date().toISOString());
+  const { error: writeError } = write.kind === 'update'
+    ? await supabase.from("user_subscriptions").update(write.values).eq("user_id", user.id)
+    : await supabase.from("user_subscriptions").upsert(write.values, { onConflict: 'user_id', ignoreDuplicates: true });
 
-  if (upsertError) {
-    console.error("Error upserting subscription record:", upsertError);
+  if (writeError) {
+    console.error("Error recording Stripe customer id:", writeError);
   }
 
   return customer.id;
 }
 
-async function handleListPaymentMethods(customerId: string, corsHeaders: any) {
+/**
+ * Throw unless `paymentMethodId` is attached to `customerId`.
+ *
+ * Not-found and not-yours answer the same 404, so the endpoint cannot be used
+ * to learn whether some other account's pm_ id exists.
+ */
+async function assertOwnPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
+  let pm: Stripe.PaymentMethod;
+  try {
+    pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+  } catch (error: unknown) {
+    if (isStripeResourceMissing(error)) {
+      throw new PublicError("Payment method not found", 404);
+    }
+    console.error("Error retrieving payment method:", error);
+    throw new PublicError("Payment provider unavailable. Please try again.", 503);
+  }
+  if (!paymentMethodBelongsTo(pm, customerId)) {
+    console.warn(`Refused payment method ${paymentMethodId}: not attached to customer ${customerId}`);
+    throw new PublicError("Payment method not found", 404);
+  }
+}
+
+async function handleListPaymentMethods(customerId: string, corsHeaders: ResponseHeaders) {
   try {
     // Get customer to find default payment method
     const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
@@ -207,13 +260,13 @@ async function handleListPaymentMethods(customerId: string, corsHeaders: any) {
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error listing payment methods:", error);
-    throw new Error(`Failed to list payment methods: ${error.message}`);
+    throw new PublicError("Failed to list payment methods", 502);
   }
 }
 
-async function handleCreateSetupIntent(customerId: string, corsHeaders: any) {
+async function handleCreateSetupIntent(customerId: string, corsHeaders: ResponseHeaders) {
   try {
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
@@ -232,16 +285,16 @@ async function handleCreateSetupIntent(customerId: string, corsHeaders: any) {
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating setup intent:", error);
-    throw new Error(`Failed to create setup intent: ${error.message}`);
+    throw new PublicError("Failed to create setup intent", 502);
   }
 }
 
 async function handleAttachPaymentMethod(
   customerId: string,
   paymentMethodId: string,
-  corsHeaders: any
+  corsHeaders: ResponseHeaders
 ) {
   try {
     // Attach the payment method to the customer
@@ -281,17 +334,19 @@ async function handleAttachPaymentMethod(
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error attaching payment method:", error);
-    throw new Error(`Failed to attach payment method: ${error.message}`);
+    throw new PublicError("Failed to attach payment method", 502);
   }
 }
 
 async function handleDetachPaymentMethod(
   customerId: string,
   paymentMethodId: string,
-  corsHeaders: any
+  corsHeaders: ResponseHeaders
 ) {
+  await assertOwnPaymentMethod(customerId, paymentMethodId);
+
   try {
     // Check if this is the default payment method
     const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
@@ -326,17 +381,19 @@ async function handleDetachPaymentMethod(
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error detaching payment method:", error);
-    throw new Error(`Failed to remove payment method: ${error.message}`);
+    throw new PublicError("Failed to remove payment method", 502);
   }
 }
 
 async function handleSetDefaultPaymentMethod(
   customerId: string,
   paymentMethodId: string,
-  corsHeaders: any
+  corsHeaders: ResponseHeaders
 ) {
+  await assertOwnPaymentMethod(customerId, paymentMethodId);
+
   try {
     await stripe.customers.update(customerId, {
       invoice_settings: {
@@ -354,13 +411,13 @@ async function handleSetDefaultPaymentMethod(
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error setting default payment method:", error);
-    throw new Error(`Failed to set default payment method: ${error.message}`);
+    throw new PublicError("Failed to set default payment method", 502);
   }
 }
 
-async function handleGetPortalUrl(customerId: string, corsHeaders: any) {
+async function handleGetPortalUrl(customerId: string, corsHeaders: ResponseHeaders) {
   try {
     const returnUrl = `${Deno.env.get("SITE_URL") || "https://tryeatpal.com"}/dashboard/billing`;
 
@@ -379,8 +436,8 @@ async function handleGetPortalUrl(customerId: string, corsHeaders: any) {
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating portal session:", error);
-    throw new Error(`Failed to create customer portal session: ${error.message}`);
+    throw new PublicError("Failed to create customer portal session", 502);
   }
 }

@@ -1,0 +1,73 @@
+{
+  "insightsVariety": {
+    "balance": {
+      "title": "Variety across food groups",
+      "subtitle": "Different foods {{name}} ate or tasted in the last 4 weeks, by food group.",
+      "counts": "{{accepted}} eaten or tasted of {{offered}} offered",
+      "notOffered": "Not offered in 4 weeks",
+      "empty": "Log how meals went for {{name}} and the food groups fill in here.",
+      "emptyCta": "Open the planner",
+      "otherFootnote_one": "{{count}} logged food has no food group, so it is not counted above.",
+      "otherFootnote_other": "{{count}} logged foods have no food group, so they are not counted above.",
+      "otherCta": "Set groups in the pantry"
+    },
+    "groups": {
+      "protein": "Protein",
+      "carb": "Grains and starches",
+      "dairy": "Dairy",
+      "fruit": "Fruit",
+      "vegetable": "Vegetables"
+    },
+    "easyAdd": {
+      "title": "Room to grow",
+      "groupLine": "{{group}}: nothing eaten or tasted in the last 2 weeks.",
+      "noneKnown": "No {{group}} in your foods yet.",
+      "addFoods": "Add some in the pantry",
+      "inPantry": "In pantry",
+      "onList": "On the list",
+      "addToList": "Add to list",
+      "addToListFor": "Add {{name}} to the grocery list",
+      "added": "{{name}} added to the grocery list",
+      "undo": "Undo",
+      "plan": "Plan one this week"
+    },
+    "repeats": {
+      "title": "On repeat lately",
+      "hint": "Familiar meals help. Swapping one side keeps {{name}}'s week from feeling the same.",
+      "thisWeek": "{{name}}: {{count}}x this week",
+      "fourWeeks": "{{name}}: {{count}}x in 4 weeks",
+      "meals": "Meals",
+      "ingredients": "Ingredients",
+      "cta": "Mix up the week in the planner"
+    },
+    "allergy": {
+      "title": "Allergy check",
+      "listLabel": "{{name}}'s allergies",
+      "chipAria": "{{allergen}}, {{severity}} allergy",
+      "severity": {
+        "mild": "mild",
+        "moderate": "moderate",
+        "severe": "severe"
+      },
+      "crossContact": "Sensitive to cross-contact",
+      "unknown": "Allergies not recorded for {{name}}. Plan checks can't run.",
+      "record": "Record allergies",
+      "none": "No known allergies",
+      "or": "or",
+      "edit": "Edit profile",
+      "clear": "Nothing planned in the next 2 weeks contains {{allergens}}.",
+      "unchecked_one": "{{count}} planned item could not be checked.",
+      "unchecked_other": "{{count}} planned items could not be checked.",
+      "hit": "{{food}} on {{day}} {{slot}} contains {{allergen}}",
+      "fix": "Swap these in the planner",
+      "slots": {
+        "breakfast": "breakfast",
+        "lunch": "lunch",
+        "dinner": "dinner",
+        "snack1": "morning snack",
+        "snack2": "afternoon snack",
+        "tryBite": "try bite"
+      }
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "aiCoach": {
+    "header": {
+      "pickKid": "Pick a child to get advice about them",
+      "switchKid": "Child the coach is helping",
+      "allergiesUnknown": "Allergies not recorded",
+      "allergiesUnknownHint": "Add allergies so the coach can check its answers",
+      "allergens": "Allergens",
+      "noAllergies": "No known allergies",
+      "allergenChip": "{{allergen}}, {{severity}}",
+      "moreAllergens_one": "+{{count}}",
+      "moreAllergens_other": "+{{count}}",
+      "moreAllergensLabel_one": "{{count}} more allergen: {{list}}",
+      "moreAllergensLabel_other": "{{count}} more allergens: {{list}}",
+      "sees": "What the coach sees",
+      "safeCount_one": "{{count}} safe food",
+      "safeCount_other": "{{count}} safe foods",
+      "closeCount_one": "{{count}} close to safe",
+      "closeCount_other": "{{count}} close to safe",
+      "pantryCount_one": "{{count}} pantry fit",
+      "pantryCount_other": "{{count}} pantry fits",
+      "privacy": "Your child's name is never sent"
+    },
+    "severity": {
+      "severe": "severe",
+      "moderate": "moderate",
+      "mild": "mild",
+      "unrecorded": "severity not recorded"
+    },
+    "redFlag": {
+      "emergency": {
+        "title": "If your child is choking, can't breathe or is swelling, call 911 now",
+        "body": "Don't wait for an answer here.",
+        "call": "Call {{number}}"
+      },
+      "crisis": {
+        "title": "You don't have to handle this alone",
+        "body": "Talk to someone now, any time of day.",
+        "call": "Call or text {{number}}"
+      },
+      "clinician": {
+        "title": "This is one for your pediatrician",
+        "body": "Weight loss, not eating for days or vomiting after meals needs a doctor to look at it.",
+        "pediatrician": "Call your pediatrician today.",
+        "call": "Emergency: call {{number}}"
+      },
+      "eating_disorder": {
+        "title": "Ask about a feeding evaluation",
+        "body": "A very short list of foods or real fear of eating can be ARFID. Your pediatrician can refer you to a feeding specialist.",
+        "call": "ANAD helpline: {{number}}"
+      }
+    },
+    "allergenWarning": "This reply mentions {{allergen}}, which your child is allergic to ({{severity}}). Don't serve it.",
+    "allergenUnknownNote": "Allergies aren't recorded for this child, so this reply wasn't checked against them. Check labels before serving.",
+    "actions": {
+      "label": "Quick actions",
+      "tryBite": "Try bite: {{food}}",
+      "ladder": "Add to ladder: {{food}}",
+      "grocery": "Add to grocery: {{food}}",
+      "contains": "Contains {{allergen}} ({{severity}})",
+      "blocked": "Not added: {{food}} contains {{allergen}}.",
+      "addedTryBite": "Added {{food}} as a try bite, {{day}} {{slot}}",
+      "addedLadder": "Added {{food}} to the ladder",
+      "addedGrocery": "Added {{food}} to the grocery list",
+      "tryBiteFailed": "Couldn't add {{food}} to the plan. Try again.",
+      "ladderFailed": "Couldn't add {{food}} to the ladder. Try again.",
+      "groceryFailed": "Couldn't add {{food}} to the grocery list.",
+      "foodGone": "That food is no longer in your list.",
+      "undo": "Undo",
+      "done": "Done: {{label}}",
+      "slot": {
+        "dinner": "dinner",
+        "snack1": "snack"
+      },
+      "confirmSevereTitle": "Severe {{allergen}} allergy",
+      "confirmSevereBody": "{{food}} contains {{allergen}}. Your child has a severe {{allergen}} allergy.",
+      "confirmAllergenTitle": "Allergen check",
+      "confirmAllergenBody": "{{food}} contains {{allergen}}, which your child is allergic to ({{severity}}).",
+      "confirmUnknownTitle": "Allergies not recorded",
+      "confirmUnknown": "This child's allergies aren't recorded, so {{food}} wasn't checked. Make sure it's safe before adding it.",
+      "cancel": "Cancel",
+      "confirmAnyway": "Add it anyway"
+    }
+  }
+}

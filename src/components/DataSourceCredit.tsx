@@ -1,4 +1,6 @@
+import { useTranslation } from "react-i18next";
 import { getDataSourceAttribution } from "@/lib/dataSources";
+import "@/i18n/appLocale";
 
 interface DataSourceCreditProps {
   /** Source string as returned by lookup-barcode. */
@@ -14,12 +16,13 @@ interface DataSourceCreditProps {
  * data is, so this belongs next to the record rather than in a footer.
  */
 export const DataSourceCredit = ({ source, className }: DataSourceCreditProps) => {
+  const { t } = useTranslation();
   const attribution = getDataSourceAttribution(source);
   if (!attribution) return null;
 
   return (
     <p className={className ?? "text-xs text-muted-foreground"}>
-      Data from{" "}
+      {t("dataSource.dataFrom", "Data from")}{" "}
       <a
         href={attribution.url}
         target="_blank"
@@ -30,7 +33,8 @@ export const DataSourceCredit = ({ source, className }: DataSourceCreditProps) =
       </a>
       {attribution.license && attribution.licenseUrl && (
         <>
-          {", licensed under "}
+          {", "}
+          {t("dataSource.licensedUnder", "licensed under")}{" "}
           <a
             href={attribution.licenseUrl}
             target="_blank"

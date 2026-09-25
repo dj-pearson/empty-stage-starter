@@ -1,50 +1,60 @@
-import React, { memo, useState } from "react";
+import { memo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  CalendarPlus,
+  Check,
   ChefHat,
   Clock,
-  Users,
-  AlertTriangle,
-  Package,
+  FolderPlus,
+  Heart,
+  MoreHorizontal,
+  Pencil,
   ShoppingCart,
   Star,
-  Pencil,
   Trash2,
-  FolderPlus,
-  MoreHorizontal,
-  Heart,
+  Truck,
+  Users,
 } from "lucide-react";
-import { Recipe, Food, Kid } from "@/types";
+import type { Recipe } from "@/types";
+import type { ItemFit } from "@/lib/kidFit";
 import { cn } from "@/lib/utils";
-import { RecipeSchemaMarkup } from "@/components/RecipeSchemaMarkup";
+import { KidFitBadges } from "@/components/recipes/KidFitBadges";
+import {
+  DIFFICULTY_TONE,
+  FAVORITE_CLASS,
+  IMAGE_OVERLAY_CLASS,
+  STAR_CLASS,
+  difficultyLabel,
+  formatMinutes,
+  isDifficulty,
+  recipeTotalMinutes,
+} from "@/components/recipes/recipeTone";
+import "@/i18n/appLocale";
+
+const MAX_TAGS = 2;
 
 interface EnhancedRecipeCardProps {
   recipe: Recipe;
-  foods: Food[];
-  kids?: Kid[];
+  /** Per-kid fit from buildRecipeFits / summarizeKidFits. */
+  fit?: ItemFit;
+  /** Ingredients not on hand and not already on the list. */
+  missingCount: number;
   onView?: (recipe: Recipe) => void;
+  onPlan?: (recipe: Recipe) => void;
+  onAddMissing?: (recipe: Recipe) => void;
   onEdit?: (recipe: Recipe) => void;
-  onDelete?: (recipeId: string) => void;
-  onAddToGroceryList?: (recipe: Recipe) => void;
+  /** Called once; the page owns confirmation / Undo. */
+  onDelete?: (recipe: Recipe) => void;
   onAddToCollections?: (recipe: Recipe) => void;
   onOrderIngredients?: (recipe: Recipe) => void;
   className?: string;
@@ -52,294 +62,262 @@ interface EnhancedRecipeCardProps {
 
 export const EnhancedRecipeCard = memo(function EnhancedRecipeCard({
   recipe,
-  foods,
-  kids = [],
+  fit,
+  missingCount,
   onView,
+  onPlan,
+  onAddMissing,
   onEdit,
   onDelete,
-  onAddToGroceryList,
   onAddToCollections,
   onOrderIngredients,
   className,
 }: EnhancedRecipeCardProps) {
-  const recipeFoods = recipe.food_ids
-    .map((id) => foods.find((f) => f.id === id))
-    .filter(Boolean) as Food[];
+  const { t, i18n } = useTranslation();
+  const [imageFailed, setImageFailed] = useState(false);
 
-  const outOfStock = recipeFoods.filter((food) => (food.quantity || 0) === 0);
-  const lowStock = recipeFoods.filter(
-    (food) => (food.quantity || 0) > 0 && (food.quantity || 0) <= 2
+  const totalTime = recipeTotalMinutes(recipe);
+  const difficulty = isDifficulty(recipe.difficulty_level) ? recipe.difficulty_level : null;
+  const rating = recipe.rating != null && recipe.rating > 0 ? recipe.rating : null;
+  const showImage = Boolean(recipe.image_url);
+  const hasMenu = Boolean(onEdit || onAddToCollections || onOrderIngredients || onDelete);
+  const favoriteLabel = t("recipes.card.favorite", { defaultValue: "Favorite" });
+  const ratingLabel = rating
+    ? t("recipes.card.rating", { defaultValue: "Rated {{rating}} of 5", rating: rating.toFixed(1) })
+    : "";
+
+  const difficultyBadge = difficulty && (
+    <Badge variant="outline" className={cn("text-xs font-medium", DIFFICULTY_TONE[difficulty])}>
+      {difficultyLabel(t, difficulty)}
+    </Badge>
   );
-  const hasStockIssues = outOfStock.length > 0 || lowStock.length > 0;
-
-  const allergenStatus = React.useMemo(() => {
-    if (kids.length === 0) return { hasAllergens: false, allergens: [] };
-
-    const allAllergens = new Set<string>();
-    kids.forEach((kid) => {
-      kid.allergens?.forEach((allergen) => allAllergens.add(allergen));
-    });
-
-    const recipeAllergens = recipeFoods
-      .flatMap((food) => food.allergens || [])
-      .filter((allergen) => allAllergens.has(allergen));
-
-    return {
-      hasAllergens: recipeAllergens.length > 0,
-      allergens: [...new Set(recipeAllergens)],
-    };
-  }, [recipeFoods, kids]);
-
-  const totalTime = recipe.total_time_minutes ||
-    (parseInt(recipe.prepTime || "0") + parseInt(recipe.cookTime || "0"));
-
-  const difficultyColor: Record<string, string> = {
-    easy: "text-green-600 bg-green-50 border-green-200",
-    medium: "text-yellow-600 bg-yellow-50 border-yellow-200",
-    hard: "text-red-600 bg-red-50 border-red-200",
-  };
-
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    // Don't trigger view if clicking on action buttons
-    const target = e.target as HTMLElement;
-    if (target.closest('button, [role="menuitem"], [data-no-click]')) return;
-    onView?.(recipe);
-  };
 
   return (
-    <>
-      <RecipeSchemaMarkup recipe={recipe} foods={recipeFoods} />
-
-      <Card
-        className={cn(
-          "hover:shadow-lg transition-all overflow-hidden",
-          onView && "cursor-pointer",
-          className
-        )}
-        onClick={handleCardClick}
-      >
-        {/* Recipe Image */}
-        {recipe.image_url && (
-          <div className="relative w-full h-48 overflow-hidden">
+    <Card
+      className={cn(
+        "relative flex flex-col overflow-hidden motion-safe:transition-shadow hover:shadow-md",
+        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
+        className,
+      )}
+    >
+      {showImage && (
+        <div className="relative aspect-[4/3] max-h-40 w-full overflow-hidden bg-muted md:aspect-auto md:h-48 md:max-h-none">
+          {imageFailed ? (
+            <div className="flex h-full w-full items-center justify-center" aria-hidden="true">
+              <ChefHat className="h-10 w-10 text-muted-foreground" />
+            </div>
+          ) : (
             <img
               src={recipe.image_url}
-              alt={recipe.name}
+              alt=""
               loading="lazy"
               decoding="async"
-              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              onError={() => setImageFailed(true)}
+              className="h-full w-full object-cover"
             />
-            <div className="absolute top-2 right-2 flex gap-2">
-              {recipe.difficulty_level && (
-                <Badge
-                  className={cn("backdrop-blur-sm", difficultyColor[recipe.difficulty_level])}
-                >
-                  {recipe.difficulty_level}
-                </Badge>
+          )}
+          {difficulty && (
+            <span
+              className={cn(
+                "absolute right-2 top-2 rounded-full px-2 py-0.5 text-xs font-medium",
+                IMAGE_OVERLAY_CLASS,
               )}
-            </div>
-            {recipe.rating != null && recipe.rating > 0 && (
-              <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-full">
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium">{recipe.rating.toFixed(1)}</span>
-              </div>
-            )}
-            {recipe.is_favorite && (
-              <div className="absolute top-2 left-2">
-                <Heart className="h-5 w-5 fill-red-500 text-red-500 drop-shadow" />
-              </div>
+            >
+              {difficultyLabel(t, difficulty)}
+            </span>
+          )}
+          {rating && (
+            <span
+              className={cn(
+                "absolute bottom-2 left-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                IMAGE_OVERLAY_CLASS,
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", STAR_CLASS)} aria-hidden="true" />
+              <span className="sr-only">{ratingLabel}</span>
+              <span aria-hidden="true">{rating.toFixed(1)}</span>
+            </span>
+          )}
+          {recipe.is_favorite && (
+            <span className={cn("absolute left-2 top-2 rounded-full p-1", IMAGE_OVERLAY_CLASS)}>
+              <Heart className={cn("h-4 w-4", FAVORITE_CLASS)} role="img" aria-label={favoriteLabel} />
+            </span>
+          )}
+        </div>
+      )}
+
+      <CardHeader className="space-y-2 p-4 pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-start gap-2">
+            {!showImage && <ChefHat className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />}
+            <h3 className="min-w-0 text-base font-semibold leading-snug md:text-lg">
+              <button
+                type="button"
+                onClick={() => onView?.(recipe)}
+                className="line-clamp-2 text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+              >
+                {recipe.name}
+              </button>
+            </h3>
+            {!showImage && recipe.is_favorite && (
+              <Heart
+                className={cn("mt-1 h-4 w-4 shrink-0", FAVORITE_CLASS)}
+                role="img"
+                aria-label={favoriteLabel}
+              />
             )}
           </div>
-        )}
 
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                {!recipe.image_url && <ChefHat className="h-5 w-5 text-primary shrink-0" />}
-                <h3 className="text-lg font-semibold line-clamp-2">{recipe.name}</h3>
-                {!recipe.image_url && recipe.is_favorite && (
-                  <Heart className="h-4 w-4 fill-red-500 text-red-500 shrink-0" />
-                )}
-              </div>
-              {recipe.description && (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {recipe.description}
-                </p>
-              )}
-            </div>
-
-            {/* Three-dot menu for all actions */}
+          {hasMenu && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" data-no-click aria-label="Recipe options">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative z-10 -mr-2 -mt-1 h-11 w-11 shrink-0"
+                  aria-label={t("recipes.card.options", {
+                    defaultValue: "More for {{name}}",
+                    name: recipe.name,
+                  })}
+                >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {onEdit && (
-                  <DropdownMenuItem onClick={() => onEdit(recipe)}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit
-                  </DropdownMenuItem>
-                )}
-                {onAddToGroceryList && (
-                  <DropdownMenuItem onClick={() => onAddToGroceryList(recipe)}>
-                    <ShoppingCart className="h-4 w-4 mr-2" />
-                    Add to Grocery
-                  </DropdownMenuItem>
-                )}
-                {onOrderIngredients && (
-                  <DropdownMenuItem onClick={() => onOrderIngredients(recipe)}>
-                    <ShoppingCart className="h-4 w-4 mr-2" />
-                    Order Ingredients
+                  <DropdownMenuItem onSelect={() => onEdit(recipe)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    {t("recipes.card.edit", { defaultValue: "Edit" })}
                   </DropdownMenuItem>
                 )}
                 {onAddToCollections && (
-                  <DropdownMenuItem onClick={() => onAddToCollections(recipe)}>
-                    <FolderPlus className="h-4 w-4 mr-2" />
-                    Add to Collection
+                  <DropdownMenuItem onSelect={() => onAddToCollections(recipe)}>
+                    <FolderPlus className="mr-2 h-4 w-4" />
+                    {t("recipes.card.addToCollection", { defaultValue: "Add to collection" })}
+                  </DropdownMenuItem>
+                )}
+                {onOrderIngredients && (
+                  <DropdownMenuItem onSelect={() => onOrderIngredients(recipe)}>
+                    <Truck className="mr-2 h-4 w-4" />
+                    {t("recipes.card.order", { defaultValue: "Order ingredients" })}
                   </DropdownMenuItem>
                 )}
                 {onDelete && (
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => setShowDeleteConfirm(true)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
+                  <>
+                    {(onEdit || onAddToCollections || onOrderIngredients) && <DropdownMenuSeparator />}
+                    <DropdownMenuItem className="text-destructive" onSelect={() => onDelete(recipe)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {t("recipes.card.delete", { defaultValue: "Delete" })}
+                    </DropdownMenuItem>
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+        </div>
+
+        <KidFitBadges fit={fit} mode="compact" />
+      </CardHeader>
+
+      <CardContent className="mt-auto space-y-3 p-4 pt-0">
+        {(onPlan || onAddMissing) && (
+          <div className="flex gap-2">
+            {onPlan && (
+              <Button
+                type="button"
+                size="sm"
+                className="relative z-10 min-h-11 flex-1"
+                onClick={() => onPlan(recipe)}
+                aria-label={t("recipes.card.planAria", {
+                  defaultValue: "Plan {{name}}",
+                  name: recipe.name,
+                })}
+              >
+                <CalendarPlus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                {t("recipes.card.plan", { defaultValue: "Plan" })}
+              </Button>
+            )}
+            {onAddMissing && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="relative z-10 min-h-11 flex-1"
+                disabled={missingCount <= 0}
+                onClick={() => onAddMissing(recipe)}
+              >
+                {missingCount > 0 ? (
+                  <>
+                    <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    {t("recipes.card.missing", {
+                      defaultValue: "Missing ({{count}})",
+                      count: missingCount,
+                    })}
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    {t("recipes.card.allOnHand", { defaultValue: "All on hand" })}
+                  </>
+                )}
+              </Button>
+            )}
           </div>
+        )}
 
-          {/* Quick stats */}
-          {(totalTime > 0 || recipe.servings || recipe.times_made) && (
-            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mt-1">
-              {!recipe.image_url && recipe.difficulty_level && (
-                <Badge
-                  variant="outline"
-                  className={cn("text-xs", difficultyColor[recipe.difficulty_level])}
-                >
-                  {recipe.difficulty_level}
-                </Badge>
-              )}
-              {totalTime > 0 && (
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{totalTime} min</span>
-                </div>
-              )}
-              {recipe.servings && (
-                <div className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  <span>{recipe.servings}</span>
-                </div>
-              )}
-              {!recipe.image_url && recipe.rating != null && recipe.rating > 0 && (
-                <div className="flex items-center gap-0.5">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  <span>{recipe.rating.toFixed(1)}</span>
-                </div>
-              )}
-              {recipe.times_made != null && recipe.times_made > 0 && (
-                <div className="flex items-center gap-1">
-                  <ChefHat className="h-4 w-4" />
-                  <span>{recipe.times_made}x</span>
-                </div>
-              )}
-            </div>
-          )}
+        {(totalTime > 0 || recipe.servings || (!showImage && (difficulty || rating)) || (recipe.times_made ?? 0) > 0) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            {!showImage && difficultyBadge}
+            {totalTime > 0 && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                {formatMinutes(totalTime, i18n.language)}
+              </span>
+            )}
+            {recipe.servings && (
+              <span className="flex items-center gap-1">
+                <Users className="h-4 w-4" aria-hidden="true" />
+                {t("recipes.card.servings", {
+                  defaultValue: "Serves {{servings}}",
+                  servings: recipe.servings,
+                })}
+              </span>
+            )}
+            {!showImage && rating && (
+              <span className="flex items-center gap-0.5">
+                <Star className={cn("h-4 w-4", STAR_CLASS)} aria-hidden="true" />
+                <span className="sr-only">{ratingLabel}</span>
+                <span aria-hidden="true">{rating.toFixed(1)}</span>
+              </span>
+            )}
+            {(recipe.times_made ?? 0) > 0 && (
+              <span className="flex items-center gap-1">
+                <ChefHat className="h-4 w-4" aria-hidden="true" />
+                {t("recipes.card.timesMade", {
+                  defaultValue: "Made {{count}}x",
+                  count: recipe.times_made,
+                })}
+              </span>
+            )}
+          </div>
+        )}
 
-          {/* Tags */}
-          {recipe.tags && recipe.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {recipe.tags.slice(0, 3).map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-xs">
-                  {tag}
-                </Badge>
-              ))}
-              {recipe.tags.length > 3 && (
-                <Badge variant="secondary" className="text-xs">
-                  +{recipe.tags.length - 3}
-                </Badge>
-              )}
-            </div>
-          )}
-        </CardHeader>
-
-        <CardContent className="pt-0 space-y-2">
-          {/* Allergen Warning */}
-          {allergenStatus.hasAllergens && (
-            <Alert variant="destructive" className="py-2">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription className="text-xs">
-                Allergens: {allergenStatus.allergens.join(", ")}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Stock Status (compact) */}
-          {hasStockIssues && (
-            <div className="flex items-center gap-1.5 text-xs">
-              <AlertTriangle className={cn("h-3.5 w-3.5", outOfStock.length > 0 ? "text-destructive" : "text-yellow-500")} />
-              {outOfStock.length > 0 && (
-                <span className="text-destructive">
-                  {outOfStock.length} out of stock
-                </span>
-              )}
-              {outOfStock.length > 0 && lowStock.length > 0 && <span className="text-muted-foreground">&middot;</span>}
-              {lowStock.length > 0 && (
-                <span className="text-yellow-600">{lowStock.length} low</span>
-              )}
-            </div>
-          )}
-
-          {/* Ingredients (truncated to 5) */}
+        {recipe.tags && recipe.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {recipeFoods.slice(0, 5).map((food) => {
-              const isOutOfStock = (food.quantity || 0) === 0;
-              return (
-                <Badge
-                  key={food.id}
-                  variant={isOutOfStock ? "destructive" : "outline"}
-                  className="text-xs gap-1"
-                >
-                  {food.name}
-                  {isOutOfStock && <Package className="h-3 w-3" />}
-                </Badge>
-              );
-            })}
-            {recipeFoods.length > 5 && (
-              <Badge variant="outline" className="text-xs">
-                +{recipeFoods.length - 5} more
+            {recipe.tags.slice(0, MAX_TAGS).map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-xs font-normal">
+                {tag}
+              </Badge>
+            ))}
+            {recipe.tags.length > MAX_TAGS && (
+              <Badge variant="secondary" className="text-xs font-normal">
+                +{recipe.tags.length - MAX_TAGS}
               </Badge>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {recipe.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete "{recipe.name}" and all its associated data. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => onDelete?.(recipe.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        )}
+      </CardContent>
+    </Card>
   );
 });

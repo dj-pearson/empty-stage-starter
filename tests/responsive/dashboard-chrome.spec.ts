@@ -34,8 +34,10 @@ test.describe('dashboard chrome fits the space reserved for it', () => {
       await page.waitForTimeout(500);
 
       const m = await page.evaluate(() => {
-        const header = document.querySelector('nav[aria-label="Mobile header navigation"]');
-        const tabs = document.querySelector('nav[aria-label="Primary mobile navigation"]');
+        // The fixed <header> that precedes main (it holds the logo and the kid
+        // picker, no links, so it is not a nav), and the "Primary" tab bar.
+        const header = document.querySelector('header:has(~ main#main-content)');
+        const tabs = document.querySelector('nav[aria-label="Primary"]');
         const main = document.querySelector('main#main-content');
         if (!header || !tabs || !main) return null;
         const style = getComputedStyle(main as HTMLElement);
@@ -63,21 +65,36 @@ test.describe('dashboard chrome fits the space reserved for it', () => {
     // The fix scopes the rule to `main` rather than deleting it. Deleting it
     // would take 20px of padding off every card on every phone screen, which
     // is a redesign, not a bug fix.
+    //
+    // WHICH PAGE, AND WHEN, is what made this flaky. It used to read Recipes
+    // 500ms after networkidle. Against the fake backend Recipes has no recipes,
+    // so at rest it is an empty state with ONE card; for about a second before
+    // that it shows six skeleton cards. The count ("> 3") only passed when the
+    // measurement landed inside the skeleton window, so a pass was measuring
+    // placeholders and a fail was the page telling the truth.
+    //
+    // The planner's day view renders one card per meal slot (Breakfast, Lunch,
+    // Dinner, Snack 1, Snack 2) whether or not anything is planned, so the
+    // count does not depend on fixture data. And the wait is for that settled
+    // state -- the last slot rendered and no skeleton left -- not for a clock.
     await signIn(context);
-    await page.goto('/dashboard/pantry');
+    await page.goto('/dashboard/planner');
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+    await expect(page.locator('main .animate-pulse')).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.locator('main [class*="card"]').filter({ hasText: 'Snack 2' }).first()).toBeVisible();
 
     const padded = await page.evaluate(() => {
       const cards = Array.from(document.querySelectorAll('main [class*="card"]')) as HTMLElement[];
       return {
         count: cards.length,
-        allPadded: cards.every((el) => parseFloat(getComputedStyle(el).paddingTop) >= 20),
+        unpadded: cards
+          .filter((el) => parseFloat(getComputedStyle(el).paddingTop) < 20)
+          .map((el) => (el.textContent || '').trim().slice(0, 30)),
       };
     });
 
     expect(padded.count, 'no cards rendered, so this asserts nothing').toBeGreaterThan(3);
-    expect(padded.allPadded).toBe(true);
+    expect(padded.unpadded, 'cards without the 20px mobile padding').toEqual([]);
   });
 
   test('the chrome is not padded, on either side of the fix', async ({ context, page }) => {

@@ -12,6 +12,8 @@
  * once in this repo's history; a sweep that finds nothing must fail loudly
  * rather than report a clean tree.
  */
+import { draftKey } from '@/components/foodTracker/logDetailDraft';
+import { DRAFT_PREFIX as COACH_DRAFT_PREFIX } from '@/components/aiCoach/ChatComposer';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,8 +26,10 @@ import {
   keysToScrub,
   sessionKeysToScrub,
   scrubOnSignOut,
+  scrubDeletedAccount,
   type ScrubStorage,
 } from './signOutScrub';
+import { webQueueKey } from './webSyncQueue';
 
 const SRC = join(process.cwd(), 'src');
 
@@ -50,6 +54,10 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
   'src/components/SeasonalRecallCard.tsx':
     'dismissKey(year, week, recipeId) under eatpal.seasonal_recall_dismissed -- scrubbed by prefix',
   'src/components/ExitIntentPopup.tsx': 'storageKey is a prop; its default is in KEPT_KEYS',
+  'src/components/VarietyFatigueBanner.tsx':
+    'fatigueDismissKey(userId) under varietyFatigue.dismissedFor. -- kept by prefix, user-scoped',
+  'src/components/SubscriptionStatusBanner.tsx':
+    'dismissKey(userId) under eatpal:billing-upsell-dismissed: -- kept by prefix, user-scoped',
   'src/hooks/useAutoSave.tsx': 'autosave-${key} -- scrubbed by the autosave- prefix',
   'src/hooks/useSmartDefaults.ts':
     'frequency-/recent-/prefs-${key} -- all three scrubbed by prefix',
@@ -59,6 +67,19 @@ const DYNAMIC_KEY_FILES: Readonly<Record<string, string>> = {
   'src/lib/offlineQueue.ts': 'generic queue; webSyncQueue supplies the key',
   'src/lib/signOutScrub.ts': 'this module removes keys it is given; it writes none',
   'src/hooks/useOAuthToken.ts': 'keys itself by provider name; nothing survives the exchange',
+  'src/hooks/useGroceryLists.ts':
+    'listsCacheKey/selectedListCacheKey(userId) -- scrubbed by the grocery:lists: and grocery:selectedList: prefixes',
+  'src/hooks/useStoreLayouts.ts': 'storeLayoutsCacheKey(householdId) -- scrubbed by the grocery:storeLayouts: prefix',
+  'src/components/foodTracker/LogDetailSheet.tsx':
+    'draftKey(kidId, foodId) under eatpal.ladderLogDraft. in sessionStorage -- scrubbed by SCRUBBED_SESSION_PREFIXES',
+  'src/components/grocery/PlaceInAisleChips.tsx':
+    'aislePromptDismissedKey(storeId) -- scrubbed by the grocery.aislePrompt.dismissed. prefix',
+  'src/components/KidMealBuilder.tsx':
+    'draftKey(kidId, date, slot) under mealBuilder:draft: -- scrubbed by prefix',
+  'src/pages/SiblingMealFinder.tsx':
+    'selectionKey(householdId) under siblingMealFinder.selection. -- scrubbed by prefix; controlsOpen is a literal in KEPT_KEYS',
+  'src/components/aiCoach/ChatComposer.tsx':
+    'DRAFT_PREFIX + conversation id (or "draft") -- scrubbed by the aiCoach.draft. prefix',
 };
 
 const STORAGE_CALL =
@@ -213,6 +234,12 @@ describe('US-835: keysToScrub', () => {
       'eatpal.seasonal_recall_dismissed.2026.14.r-3',
       'eatpal-budget-calc-draft',
       'autosave-recipe-draft',
+      'grocery:lists:user-1',
+      'grocery:selectedList:user-1',
+      'grocery:storeLayouts:hh-1',
+      'grocery.aislePrompt.dismissed.store-1',
+      'aiCoach.draft.draft',
+      'aiCoach.draft.conv-1',
     ];
     expect(keysToScrub(present).sort()).toEqual(present.sort());
   });
@@ -234,6 +261,16 @@ describe('US-835: keysToScrub', () => {
     expect(sessionKeysToScrub([...present, 'route-error-chunk-reload-at']).sort()).toEqual(
       present.sort()
     );
+  });
+
+  it('clears an unsent Food Tracker detail-log draft, which holds notes about a child', () => {
+    const draft = draftKey('kid-7', 'food-3');
+    expect(sessionKeysToScrub([draft, 'route-error-chunk-reload-at'])).toEqual([draft]);
+  });
+
+  it('clears an unsent AI Coach question, keyed by the prefix the composer really writes', () => {
+    const keys = [`${COACH_DRAFT_PREFIX}draft`, `${COACH_DRAFT_PREFIX}conv-9`];
+    expect(keysToScrub([...keys, 'eatpal_cookie_consent']).sort()).toEqual(keys.sort());
   });
 
   it('scrubOnSignOut removes exactly those keys from the storage it is given', () => {
@@ -275,5 +312,66 @@ describe('US-835: keysToScrub', () => {
     } finally {
       Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: original });
     }
+  });
+});
+
+function memoryStorage(initial: Record<string, string>): ScrubStorage & { backing: Record<string, string> } {
+  const backing = { ...initial };
+  return {
+    backing,
+    keys: () => Object.keys(backing),
+    removeItem: (k) => {
+      delete backing[k];
+    },
+  };
+}
+
+describe('settings pass B: per-account preferences and the bind-email step', () => {
+  it('scrubs the variety-nudge and auto-restock choices on sign-out', () => {
+    const keys = ['eatpal.nudge_variety', 'eatpal.auto_restock_enabled', 'eatpal.auto_restock_lead_days'];
+    expect(keysToScrub([...keys, 'eatpal_cookie_consent']).sort()).toEqual(keys.sort());
+  });
+
+  it('still scrubs the Win Network share choice', () => {
+    expect(keysToScrub(['eatpal.share_chain_outcomes'])).toEqual(['eatpal.share_chain_outcomes']);
+  });
+
+  it('scrubs the bind-email flow step from sessionStorage', () => {
+    expect(sessionKeysToScrub(['bind-email-flow-step'])).toEqual(['bind-email-flow-step']);
+  });
+});
+
+describe('settings pass B: scrubDeletedAccount', () => {
+  it("removes the deleted user's kept keys, including the offline queue, and leaves another user's", () => {
+    const local = memoryStorage({
+      [webQueueKey('user-a')]: '[]',
+      [webQueueKey('user-b')]: '[]',
+      'varietyFatigue.dismissedFor.user-a': 'true',
+      'varietyFatigue.dismissedFor.user-b': 'true',
+      'eatpal:billing-upsell-dismissed:user-a': 'true',
+      eatpal_recent_searches: '["x"]',
+      eatpal_cookie_consent: 'yes',
+      'eatpal.nudge_variety': 'false',
+    });
+    const session = memoryStorage({ 'bind-email-flow-step': '{}', 'route-error-chunk-reload-at': '0' });
+
+    const removed = scrubDeletedAccount('user-a', local, session);
+
+    expect(Object.keys(local.backing).sort()).toEqual(
+      [
+        webQueueKey('user-b'),
+        'varietyFatigue.dismissedFor.user-b',
+        'eatpal_cookie_consent',
+      ].sort()
+    );
+    expect(removed).toContain(webQueueKey('user-a'));
+    expect(removed).toContain('eatpal.nudge_variety');
+    expect(Object.keys(session.backing)).toEqual(['route-error-chunk-reload-at']);
+  });
+
+  it('does not touch a key that merely contains the id outside a kept family', () => {
+    const local = memoryStorage({ 'unrelated.user-a': '1' });
+    scrubDeletedAccount('user-a', local, memoryStorage({}));
+    expect(Object.keys(local.backing)).toEqual(['unrelated.user-a']);
   });
 });

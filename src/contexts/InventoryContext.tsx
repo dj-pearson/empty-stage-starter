@@ -38,7 +38,7 @@ import { foldMovements, balanceOf, type LedgerState } from "@/lib/inventoryLedge
 import type { ComparableItem, StockRow } from "@/lib/stockComparison";
 import {
   buildCorrectionMovement,
-  buildPurchaseMovement,
+  correctionBaseline,
   buildWasteMovement,
   buildAdjustmentMovement,
   partitionMovements,
@@ -46,8 +46,11 @@ import {
   isSkipped,
   type MovementDraft,
   type MovementItem,
-  type MovementSkipped,
+  type MovementRefType,
+  planPurchaseMovements,
   type PurchasableGroceryItem,
+  type PurchaseSkipped,
+  type ResolveFoodByName,
 } from "@/lib/movementBuilders";
 import { generateId } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
@@ -72,9 +75,22 @@ export const LEDGER_READS_FLAG = "kitchen_loop_ledger_reads";
  * foods.quantity. One flag would force them on together and there would be
  * nothing to compare against.
  *
- * It also has to exist at all. These migrations are applied nowhere yet, so an
- * unconditional insert would fail on every pantry edit for every user, and the
- * only thing that would achieve is a Sentry full of the same error.
+ * It also has to exist at all: an unconditional insert against a database
+ * without the kitchen-loop migrations would fail on every pantry edit.
+ *
+ * 5a turned it on. 20260928000005 writes the feature_flags row enabled at
+ * 100%, and the default below is true, but the SERVER stays authoritative:
+ * useFeatureFlag takes evaluate_feature_flag's answer whenever it gets one, and
+ * a missing or disabled row reads as false. The default only covers the first
+ * render before that answer and a client that cannot reach the server at all.
+ * Kill switch:
+ *
+ *   UPDATE feature_flags SET enabled = false WHERE key = 'kitchen_loop_ledger_writes';
+ *
+ * after which the web writes foods.quantity directly again and the US-668
+ * trigger records it. What this file cannot know is which database it is
+ * talking to; whether a given environment has the ledger migrations is a fact
+ * about that environment, checked there, not something to assert here.
  */
 export const LEDGER_WRITES_FLAG = "kitchen_loop_ledger_writes";
 
@@ -240,11 +256,23 @@ interface InventoryContextType {
   ) => Promise<RecordResult>;
   /** A parent threw something out. */
   recordWaste: (item: MovementItem, quantity: number) => Promise<RecordResult>;
+  /**
+   * A parent topped an item up outside checkout (pantry stepper, photo,
+   * receipt, barcode). Records a signed `purchase` movement in the item's
+   * display unit, or in `opts.unit` when given. `recorded: false` means fall
+   * back to the legacy `foods.quantity` write, same as recordPantryCorrection.
+   */
+  recordRestock: (
+    item: MovementItem,
+    signedQuantity: number,
+    opts?: RestockOptions,
+  ) => Promise<RecordResult>;
   /** Checkout: one purchase movement per checked row. */
   recordPurchases: (
     groceryItems: readonly PurchasableGroceryItem[],
     items: readonly MovementItem[],
-  ) => Promise<RecordResult & { skipped: MovementSkipped[] }>;
+    resolveByName?: ResolveFoodByName,
+  ) => Promise<PurchaseRecordResult>;
   /**
    * Undo a checkout: append a correction that negates each purchase.
    *
@@ -255,6 +283,7 @@ interface InventoryContextType {
   recordPurchaseReversal: (
     groceryItems: readonly PurchasableGroceryItem[],
     items: readonly MovementItem[],
+    resolveByName?: ResolveFoodByName,
   ) => Promise<RecordResult>;
   refreshInventory: () => Promise<void>;
 }
@@ -269,6 +298,15 @@ export interface AppendResult {
   disabled?: boolean;
 }
 
+export interface RestockOptions {
+  unit?: string | null;
+  refType?: MovementRefType | null;
+  refId?: string | null;
+  /** Item 22: what one display unit cost, recorded with its currency or not at all. */
+  unitPrice?: number | null;
+  currency?: string | null;
+}
+
 export interface RecordResult {
   /** True when at least one movement reached the server. */
   recorded: boolean;
@@ -276,6 +314,17 @@ export interface RecordResult {
   count: number;
   /** Why nothing was recorded, when nothing was. */
   reason: string | null;
+}
+
+/**
+ * What checkout learns. `recordedRowIds` names the grocery rows whose purchase
+ * movement reached the server, and is empty when the append failed, so a
+ * caller can credit, clear and describe exactly those rows. Each skipped entry
+ * names its grocery row for the same reason.
+ */
+export interface PurchaseRecordResult extends RecordResult {
+  skipped: PurchaseSkipped[];
+  recordedRowIds: string[];
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -296,7 +345,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const { userId, householdId } = useAuth();
   const ledgerReadsEnabled = useFeatureFlag(LEDGER_READS_FLAG, false);
-  const ledgerWritesEnabled = useFeatureFlag(LEDGER_WRITES_FLAG, false);
+  const ledgerWritesEnabled = useFeatureFlag(LEDGER_WRITES_FLAG, true);
 
   // Realtime. Two channels rather than one, so a household switch tears down
   // and rebuilds each independently and the channel names stay diagnosable.
@@ -401,19 +450,21 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     [ledgerWritesEnabled, userId, householdId],
   );
 
-  const recordPantryCorrection = useCallback(
-    async (
-      item: MovementItem & { quantity?: number | null },
-      newQuantity: number,
-    ): Promise<RecordResult> => {
+  const recordRestock = useCallback(
+    async (item: MovementItem, signedQuantity: number, opts?: RestockOptions): Promise<RecordResult> => {
       if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
-      const draft = buildCorrectionMovement({
+      const draft = buildAdjustmentMovement({
         id: generateId(),
         householdId: householdId ?? "",
         userId: userId ?? "",
         item,
-        currentQuantity: typeof item?.quantity === "number" ? item.quantity : 0,
-        newQuantity,
+        signedQuantity,
+        displayUnit: opts?.unit ?? item?.unit,
+        reason: "purchase",
+        refType: opts?.refType ?? null,
+        refId: opts?.refId ?? null,
+        unitPrice: opts?.unitPrice ?? null,
+        currency: opts?.currency ?? null,
       });
       if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
       const result = await appendMovements([draft]);
@@ -460,31 +511,20 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     async (
       groceryItems: readonly PurchasableGroceryItem[],
       items: readonly MovementItem[],
-    ): Promise<RecordResult & { skipped: MovementSkipped[] }> => {
+      resolveByName?: ResolveFoodByName,
+    ): Promise<PurchaseRecordResult> => {
       if (!ledgerWritesEnabled) {
-        return { recorded: false, count: 0, reason: "ledger writes are off", skipped: [] };
+        return { recorded: false, count: 0, reason: "ledger writes are off", skipped: [], recordedRowIds: [] };
       }
-      const results = (groceryItems ?? []).map((row) => {
-        const itemId = resolveGroceryItemId(row, items);
-        const item = itemId ? items.find((i) => i.id === itemId) : undefined;
-        if (!item) {
-          return {
-            skipped: true as const,
-            reason: `no pantry item matches "${row?.name ?? ""}"`,
-            itemId: null,
-          };
-        }
-        return buildPurchaseMovement({
-          householdId: householdId ?? "",
-          userId: userId ?? "",
-          item,
-          groceryItem: row,
-        });
+      const { movements: drafts, skipped, recordedRowIds } = planPurchaseMovements({
+        groceryItems,
+        items,
+        householdId: householdId ?? "",
+        userId: userId ?? "",
+        resolveByName,
       });
-
-      const { movements: drafts, skipped } = partitionMovements(results);
       if (drafts.length === 0) {
-        return { recorded: false, count: 0, reason: "nothing resolved to a pantry item", skipped };
+        return { recorded: false, count: 0, reason: "nothing resolved to a pantry item", skipped, recordedRowIds: [] };
       }
       const result = await appendMovements(drafts);
       return {
@@ -492,6 +532,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         count: result.ok ? result.attempted : 0,
         reason: result.ok ? null : "the append failed",
         skipped,
+        // A failed append credited nothing, so no row may be treated as bought.
+        recordedRowIds: result.ok ? recordedRowIds : [],
       };
     },
     [ledgerWritesEnabled, householdId, userId, appendMovements],
@@ -501,10 +543,11 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     async (
       groceryItems: readonly PurchasableGroceryItem[],
       items: readonly MovementItem[],
+      resolveByName?: ResolveFoodByName,
     ): Promise<RecordResult> => {
       if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
       const results = (groceryItems ?? []).map((row) => {
-        const itemId = resolveGroceryItemId(row, items);
+        const itemId = resolveGroceryItemId(row, items, resolveByName);
         const item = itemId ? items.find((i) => i.id === itemId) : undefined;
         if (!item) {
           return { skipped: true as const, reason: `no pantry item matches "${row?.name ?? ""}"`, itemId: null };
@@ -610,6 +653,31 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     [stockByItem, pendingCanonicalByItem],
   );
 
+  const recordPantryCorrection = useCallback(
+    async (
+      item: MovementItem & { quantity?: number | null },
+      newQuantity: number,
+    ): Promise<RecordResult> => {
+      if (!ledgerWritesEnabled) return { recorded: false, count: 0, reason: "ledger writes are off" };
+      const draft = buildCorrectionMovement({
+        id: generateId(),
+        householdId: householdId ?? "",
+        userId: userId ?? "",
+        item,
+        currentQuantity: correctionBaseline(item, ledgerQuantityOf),
+        newQuantity,
+      });
+      if (isSkipped(draft)) return { recorded: false, count: 0, reason: draft.reason };
+      const result = await appendMovements([draft]);
+      return {
+        recorded: result.ok && result.attempted > 0,
+        count: result.ok ? result.attempted : 0,
+        reason: result.ok ? null : "the append failed",
+      };
+    },
+    [ledgerWritesEnabled, householdId, userId, appendMovements, ledgerQuantityOf],
+  );
+
   const pantryQuantityOf = useCallback(
     (item: ComparableItem): number => {
       const legacy =
@@ -636,6 +704,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       appendMovements,
       recordPantryCorrection,
       recordWaste,
+      recordRestock,
       recordPurchases,
       recordPurchaseReversal,
       refreshInventory,
@@ -652,6 +721,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       appendMovements,
       recordPantryCorrection,
       recordWaste,
+      recordRestock,
       recordPurchases,
       recordPurchaseReversal,
       refreshInventory,

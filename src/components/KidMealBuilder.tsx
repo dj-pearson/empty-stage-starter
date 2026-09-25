@@ -1,571 +1,955 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+/**
+ * Meal Builder: one meal, for one child, built with that child.
+ *
+ * The plate opens already filled in from the pure selector in
+ * src/lib/plateBuilder.ts: a food this child eats, today's try bite from
+ * their ladder, and a filler for the food group their day is missing, with an
+ * optional bridge food between the first two (food chaining). The parent's
+ * job is what gets offered; every choice here has already been checked
+ * against the child's allergies, and anything held back is listed with why.
+ * The child's job is which one, and "Hand to {name}" makes that easy.
+ *
+ * One tap adds the plate to the plan through PlanContext.addPlanEntries, with
+ * the allergen guard re-run against the current foods first. What this screen
+ * does not do is left to the screens that do it: arbitrary adds live in the
+ * Planner, logging how a try went lives in Food Tracker, and both are linked.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { toast } from 'sonner';
+import { AlertTriangle, CalendarCheck, Hand, History, RotateCw, UserPlus, WifiOff } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Smile,
-  Star,
-  Trophy,
-  Sparkles,
-  Save,
-  Plus,
-  Trash2,
-  Heart,
-  ThumbsUp,
-  ThumbsDown,
-  Share2,
-} from "lucide-react";
-import { toast } from "sonner";
-import { useKids, useFoods } from "@/contexts/AppContext";
-import { cn } from "@/lib/utils";
-import { logger } from "@/lib/logger";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { KidChips, KidPickerGrid } from '@/components/foodTracker/KidChips';
+import { PlateSvg } from '@/components/mealBuilder/PlateSvg';
+import { BridgeChoices, ZoneChoices, groupName, zoneName } from '@/components/mealBuilder/ZoneChoices';
+import { dayLabel } from '@/components/mealBuilder/SlotChip';
+import { useFoods, useKids, usePlan } from '@/contexts/AppContext';
+import { useMealBuilderData, type ChosenPlate } from '@/hooks/useMealBuilderData';
+import { slotLabel } from '@/lib/planSlotLabels';
+import { favouritePlates, planWriteEntries, type HeldBack, type PlateCandidates, type PlateZone } from '@/lib/plateBuilder';
+import { manualAddPrompt, allergenCopyKind } from '@/lib/planAllergenGuard';
+import type { AllergenConflict } from '@/lib/kidFit';
+import { getStorage } from '@/lib/platform';
+import { logger } from '@/lib/logger';
+import { cn } from '@/lib/utils';
+import type { Kid, MealSlot } from '@/types';
+import '@/i18n/appLocale';
 
-interface MealCreation {
-  id: string;
-  creation_name: string;
-  creation_type: string;
-  foods: FoodPlacement[];
-  plate_template: string;
-  times_requested: number;
-  stars_earned: number;
-  kid_approved: boolean;
-  created_at: string;
+export interface MealTarget {
+  date: string;
+  slot: MealSlot;
 }
 
-interface FoodPlacement {
-  food_id: string;
-  food_name: string;
-  position: { x: number; y: number };
-  section: string;
-  size: string;
+/** The child the builder works for: the active one, or the only one. */
+export function resolveBuilderKid(kids: readonly Kid[], activeKidId: string | null): Kid | null {
+  const active = activeKidId ? kids.find((k) => k.id === activeKidId) : undefined;
+  if (active) return active;
+  return kids.length === 1 ? kids[0] : null;
 }
 
-interface Achievement {
-  id: string;
-  achievement_name: string;
-  achievement_description: string;
-  icon_name: string;
-  points_value: number;
+const MEAL_ZONES: readonly PlateZone[] = ['safe', 'tryBite', 'bridge', 'gap'];
+
+/** The chosen food per zone, or the selector's default where nothing valid was chosen. */
+export function effectivePlate(candidates: PlateCandidates | null, chosen: ChosenPlate): ChosenPlate {
+  if (!candidates) return {};
+  const out: ChosenPlate = {};
+  for (const zone of MEAL_ZONES) {
+    const pick = chosen[zone];
+    if (pick && candidates[zone].some((o) => o.food.id === pick)) out[zone] = pick;
+    else if (zone !== 'bridge' && candidates.defaults[zone]) out[zone] = candidates.defaults[zone];
+  }
+  return out;
 }
 
-const PLATE_TEMPLATES = [
-  { id: "standard", name: "Round Plate", emoji: "🍽️", color: "bg-muted" },
-  { id: "divided", name: "Divided Plate", emoji: "🍱", color: "bg-blue-50" },
-  { id: "face", name: "Make a Face", emoji: "😊", color: "bg-yellow-50" },
-  { id: "rainbow", name: "Rainbow", emoji: "🌈", color: "bg-purple-50" },
-];
+export function draftKey(kidId: string, date: string, slot: MealSlot): string {
+  return `mealBuilder:draft:${kidId}|${date}|${slot}`;
+}
 
-const PLATE_SECTIONS = {
-  standard: ["center"],
-  divided: ["protein", "vegetable", "carb", "fruit"],
-  face: ["left_eye", "right_eye", "nose", "mouth", "hair"],
-  rainbow: ["red", "orange", "yellow", "green", "blue", "purple"],
+interface StoredDraft {
+  chosen: ChosenPlate;
+  tryBiteSlot: 'try_bite' | 'same';
+}
+
+function parseDraft(raw: string | null): StoredDraft | null {
+  if (!raw) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== 'object') return null;
+    const record = value as { chosen?: unknown; tryBiteSlot?: unknown };
+    const chosen: ChosenPlate = {};
+    if (record.chosen && typeof record.chosen === 'object') {
+      for (const zone of MEAL_ZONES) {
+        const id = (record.chosen as Record<string, unknown>)[zone];
+        if (typeof id === 'string' && id) chosen[zone] = id;
+      }
+    }
+    return { chosen, tryBiteSlot: record.tryBiteSlot === 'same' ? 'same' : 'try_bite' };
+  } catch {
+    return null;
+  }
+}
+
+const SLOT_SENTENCE_DEFAULTS: Record<MealSlot, string> = {
+  breakfast: 'breakfast',
+  lunch: 'lunch',
+  dinner: 'dinner',
+  snack1: 'morning snack',
+  snack2: 'afternoon snack',
+  try_bite: 'try bite',
 };
 
-export function KidMealBuilder() {
-  const { activeKidId, kids, setActiveKidId } = useKids();
-  const { foods } = useFoods();
-  const [creations, setCreations] = useState<MealCreation[]>([]);
-  const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
-  const [showBuilder, setShowBuilder] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState("standard");
-  const [creationName, setCreationName] = useState("");
-  const [selectedFoods, setSelectedFoods] = useState<FoodPlacement[]>([]);
-  const [loading, setLoading] = useState(false);
+/** The lowercase slot name for use mid-sentence ("already on lunch"). */
+function slotInSentence(t: TFunction, slot: MealSlot): string {
+  return t(`planner.slots.${slot}`, { defaultValue: SLOT_SENTENCE_DEFAULTS[slot] });
+}
 
-  const activeKid = kids.find((k) => k.id === activeKidId);
-  const totalStars = creations.reduce((sum, c) => sum + c.stars_earned, 0);
+const HELD_BACK_DEFAULTS: Record<HeldBack['reason'], string> = {
+  allergen: 'contains {{allergen}}',
+  disliked: "on {{name}}'s dislike list",
+  stalled: 'resting after a few hard tries',
+  paused: 'paused on the ladder',
+  alreadyInSlot: 'already on this meal',
+  alreadyPlannedToday: 'already planned today',
+  unknownFood: 'no longer in your foods',
+};
 
+function heldBackReason(t: TFunction, item: HeldBack, kidName: string): string {
+  if (item.reason === 'allergen') {
+    const allergen = item.allergen ?? '';
+    if (item.copyKind === 'severe') {
+      return t('mealBuilder.heldBack.allergenSevere', {
+        allergen,
+        defaultValue: 'contains {{allergen}}, severe allergy',
+      });
+    }
+    if (item.copyKind === 'severeUnrated') {
+      return t('mealBuilder.heldBack.allergenSevereUnrated', {
+        allergen,
+        defaultValue: 'contains {{allergen}}, allergy severity not recorded',
+      });
+    }
+    return t('mealBuilder.heldBack.allergen', { allergen, defaultValue: HELD_BACK_DEFAULTS.allergen });
+  }
+  return t(`mealBuilder.heldBack.${item.reason}`, { name: kidName, defaultValue: HELD_BACK_DEFAULTS[item.reason] });
+}
+
+// ---------------------------------------------------------------------------
+// Resolution: which child, and the states before there is one
+// ---------------------------------------------------------------------------
+
+function PlateSkeleton({ label }: { label: string }) {
+  return (
+    <div aria-busy="true" className="space-y-4" data-testid="meal-builder-skeleton">
+      <span className="sr-only">{label}</span>
+      <Skeleton className="mx-auto aspect-square w-full max-w-[16rem] rounded-full motion-reduce:animate-none" />
+      <div className="flex gap-2">
+        <Skeleton className="h-11 w-28 rounded-full motion-reduce:animate-none" />
+        <Skeleton className="h-11 w-24 rounded-full motion-reduce:animate-none" />
+        <Skeleton className="h-11 w-20 rounded-full motion-reduce:animate-none" />
+      </div>
+    </div>
+  );
+}
+
+export interface KidMealBuilderProps {
+  date: string;
+  slot: MealSlot;
+  todayIso: string;
+  /** Called when a save or an Undo pins the plate to a meal. */
+  onTargetChange: (next: MealTarget) => void;
+  handMode: boolean;
+  onHandModeChange: (on: boolean) => void;
+}
+
+export function KidMealBuilder(props: KidMealBuilderProps) {
+  const { t } = useTranslation();
+  const { kids, activeKidId, kidsHydrated, kidsLoadError, refreshKids } = useKids();
+  const kid = resolveBuilderKid(kids, activeKidId);
+  const { onHandModeChange } = props;
+
+  const [announcement, setAnnouncement] = useState<{ id: number; text: string }>({ id: 0, text: '' });
+  const announce = useCallback((text: string) => {
+    setAnnouncement((prev) => ({ id: prev.id + 1, text }));
+  }, []);
+
+  // A switch to another child: say so, and move focus to the new plate.
+  const kidId = kid?.id ?? null;
+  const kidName = kid?.name ?? '';
+  // Read during render on purpose: the new plate mounts in the same render
+  // as the switch, and it needs to know then whether to take focus.
+  const lastKidId = useRef<string | null | undefined>(undefined);
+  const switched = lastKidId.current !== undefined && lastKidId.current !== kidId && kidId !== null;
   useEffect(() => {
-    if (activeKidId || kids.length > 0) {
-      loadCreations();
-      loadRecentAchievements();
-    }
-  }, [activeKidId, kids]);
+    const previous = lastKidId.current;
+    lastKidId.current = kidId;
+    if (!kidId || previous === undefined || previous === kidId) return;
+    onHandModeChange(false);
+    announce(t('mealBuilder.switchedTo', { name: kidName, defaultValue: "Building {{name}}'s plate" }));
+    // kidName follows kidId; the announcement is for the switch, not a rename.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kidId]);
 
-  const loadCreations = async () => {
-    if (!activeKidId) return;
-    
-    try {
-      setLoading(true);
+  const liveRegion = (
+    <p aria-live="polite" role="status" className="sr-only" data-testid="meal-builder-live">
+      <span key={announcement.id}>{announcement.text}</span>
+    </p>
+  );
 
-      const { data, error } = await supabase
-        .from("kid_meal_creations")
-        .select("*")
-        .eq("kid_id", activeKidId)
-        .order("created_at", { ascending: false });
+  if (!kidsHydrated) {
+    return <PlateSkeleton label={t('mealBuilder.loadingKids', { defaultValue: 'Loading your children' })} />;
+  }
 
-      if (error) throw error;
-
-      setCreations((data || []).map(creation => ({
-        ...creation,
-        foods: Array.isArray(creation.foods) ? creation.foods as any : []
-      })));
-    } catch (error: unknown) {
-      logger.error("Error loading creations:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadRecentAchievements = async () => {
-    if (!activeKidId) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from("kid_achievements")
-        .select("*")
-        .eq("kid_id", activeKidId)
-        .order("earned_at", { ascending: false })
-        .limit(3);
-
-      if (error) throw error;
-      setRecentAchievements(data || []);
-    } catch (error: unknown) {
-      logger.error("Error loading achievements:", error);
-    }
-  };
-
-  const handleAddFood = (food: any, section: string) => {
-    // Check if food already exists in this section
-    const existingIndex = selectedFoods.findIndex(
-      (f) => f.food_id === food.id && f.section === section
-    );
-
-    if (existingIndex >= 0) {
-      toast.info(`${food.name} is already in this section`);
-      return;
-    }
-
-    const newFood: FoodPlacement = {
-      food_id: food.id,
-      food_name: food.name,
-      position: { x: 50, y: 50 }, // Center of section
-      section,
-      size: "medium",
-    };
-
-    setSelectedFoods([...selectedFoods, newFood]);
-  };
-
-  const handleRemoveFood = (index: number) => {
-    setSelectedFoods(selectedFoods.filter((_, i) => i !== index));
-  };
-
-  const handleSaveCreation = async () => {
-    if (!creationName.trim()) {
-      toast.error("Please give your meal a name!");
-      return;
-    }
-
-    if (selectedFoods.length === 0) {
-      toast.error("Add at least one food to your plate!");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const { error } = await supabase.from("kid_meal_creations").insert([
-        {
-          kid_id: activeKidId,
-          creation_name: creationName,
-          creation_type: selectedTemplate,
-          foods: selectedFoods as any,
-          plate_template: selectedTemplate,
-          kid_approved: true,
-          stars_earned: Math.min(selectedFoods.length, 5), // Earn stars for foods added
-        },
-      ]);
-
-      if (error) throw error;
-
-      toast.success(`🎉 ${creationName} saved! +${Math.min(selectedFoods.length, 5)} stars!`);
-      setShowBuilder(false);
-      resetBuilder();
-      loadCreations();
-      loadRecentAchievements();
-    } catch (error: unknown) {
-      logger.error("Error saving creation:", error);
-      toast.error("Failed to save meal");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRequestMeal = async (creationId: string) => {
-    try {
-      const { error } = await supabase
-        .from("kid_meal_creations")
-        .update({
-          times_requested: creations.find((c) => c.id === creationId)!.times_requested + 1,
-          last_requested_at: new Date().toISOString(),
-        })
-        .eq("id", creationId);
-
-      if (error) throw error;
-
-      toast.success("Added to meal requests! ⭐");
-      loadCreations();
-    } catch (error: unknown) {
-      logger.error("Error requesting meal:", error);
-      toast.error("Failed to request meal");
-    }
-  };
-
-  const handleDeleteCreation = async (creationId: string) => {
-    try {
-      const { error } = await supabase
-        .from("kid_meal_creations")
-        .delete()
-        .eq("id", creationId);
-
-      if (error) throw error;
-
-      toast.success("Meal deleted");
-      loadCreations();
-    } catch (error: unknown) {
-      logger.error("Error deleting creation:", error);
-      toast.error("Failed to delete meal");
-    }
-  };
-
-  const resetBuilder = () => {
-    setCreationName("");
-    setSelectedTemplate("standard");
-    setSelectedFoods([]);
-  };
-
-  const safeFoods = foods.filter((f) => f.is_safe);
-  const sections = PLATE_SECTIONS[selectedTemplate as keyof typeof PLATE_SECTIONS] || ["center"];
-
-  if (!activeKidId) {
+  if (kidsLoadError && kids.length === 0) {
     return (
-      <Card>
-        <CardContent className="pt-6 text-center text-muted-foreground">
-          <Smile className="h-12 w-12 mx-auto mb-2 opacity-50" />
-          <p>Please select a child to start building meals!</p>
-        </CardContent>
-      </Card>
+      <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        <AlertTitle>{t('mealBuilder.kidsError.title', { defaultValue: "Couldn't load your children" })}</AlertTitle>
+        <AlertDescription className="space-y-3">
+          <p>{t('mealBuilder.kidsError.body', { defaultValue: 'Check your connection and try again.' })}</p>
+          <Button type="button" variant="outline" className="min-h-11" onClick={() => void refreshKids()}>
+            <RotateCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t('mealBuilder.kidsError.retry', { defaultValue: 'Retry' })}
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (kids.length === 0) {
+    return (
+      <section aria-labelledby="meal-builder-no-kids" className="rounded-xl border border-border bg-card p-6 text-card-foreground">
+        <h2 id="meal-builder-no-kids" className="text-lg font-semibold">
+          {t('mealBuilder.noKids.title', { defaultValue: 'Add a child to build a plate' })}
+        </h2>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+          {t('mealBuilder.noKids.body', {
+            defaultValue: 'Plates are built from the foods one child knows, so the builder needs a child first.',
+          })}
+        </p>
+        <Button asChild className="mt-4 min-h-11">
+          <Link to="/dashboard/kids">
+            <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t('mealBuilder.noKids.cta', { defaultValue: 'Add a child' })}
+          </Link>
+        </Button>
+      </section>
+    );
+  }
+
+  if (!kid) {
+    return (
+      <>
+        {liveRegion}
+        <KidPickerGrid
+          kids={kids}
+          body={t('mealBuilder.kidPicker.body', { defaultValue: 'Pick who this plate is for.' })}
+        />
+      </>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header - Kid-Friendly */}
-      <Card className="bg-gradient-to-br from-yellow-100 to-orange-100 dark:from-yellow-900 dark:to-orange-900 border-yellow-300">
-        <CardHeader>
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle className="text-2xl flex items-center gap-2">
-                <Smile className="h-6 w-6" />
-                {activeKid?.name}'s Meal Builder
-              </CardTitle>
-              <CardDescription className="text-base">
-                Create fun meals and earn stars! ⭐
-              </CardDescription>
-            </div>
-            <div className="text-right">
-              <div className="flex items-center gap-2">
-                <Star className="h-6 w-6 text-yellow-500 fill-yellow-500" />
-                <span className="text-3xl font-bold">{totalStars}</span>
-              </div>
-              <p className="text-sm text-muted-foreground">Total Stars</p>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
+    <div className="space-y-4">
+      {liveRegion}
+      {!props.handMode ? (
+        <KidChips
+          showFamily={false}
+          ariaLabel={t('mealBuilder.chooseChild', { defaultValue: 'Whose plate?' })}
+        />
+      ) : null}
+      <PlateBuilder key={kid.id} kid={kid} focusOnMount={switched} announce={announce} {...props} />
+    </div>
+  );
+}
 
-      {/* Recent Achievements */}
-      {recentAchievements.length > 0 && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-yellow-500" />
-              Recent Achievements
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4 overflow-x-auto">
-              {recentAchievements.map((achievement) => (
-                <div
-                  key={achievement.id}
-                  className="flex flex-col items-center min-w-[140px] p-4 bg-card rounded-xl border-2 border-yellow-300"
-                >
-                  <div className="text-4xl mb-2">🏆</div>
-                  <p className="text-sm font-bold text-center">{achievement.achievement_name}</p>
-                  <Badge className="mt-2 bg-yellow-500 text-white">
-                    +{achievement.points_value} pts
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+// ---------------------------------------------------------------------------
+// The plate for one child
+// ---------------------------------------------------------------------------
 
-      {/* Actions */}
-      <div className="flex justify-center">
-        <Button
-          onClick={() => setShowBuilder(true)}
-          size="lg"
-          className="text-lg h-16 px-8 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+type ConfirmState =
+  | { kind: 'block'; conflict: AllergenConflict<Kid> }
+  | { kind: 'plain'; conflict: AllergenConflict<Kid> }
+  | { kind: 'unknown' }
+  | null;
+
+interface PostSave {
+  date: string;
+  slot: MealSlot;
+  tryBiteId: string | null;
+}
+
+interface PlateBuilderProps extends KidMealBuilderProps {
+  kid: Kid;
+  focusOnMount: boolean;
+  announce: (text: string) => void;
+}
+
+function PlateBuilder({
+  kid,
+  date,
+  slot,
+  todayIso,
+  onTargetChange,
+  handMode,
+  onHandModeChange,
+  focusOnMount,
+  announce,
+}: PlateBuilderProps) {
+  const { t, i18n } = useTranslation();
+  const { foods } = useFoods();
+  const { planEntries, addPlanEntries, deletePlanEntries } = usePlan();
+
+  const [chosen, setChosen] = useState<ChosenPlate>({});
+  const [tryBiteSlot, setTryBiteSlot] = useState<'try_bite' | 'same'>('try_bite');
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [postSave, setPostSave] = useState<PostSave | null>(null);
+
+  const { status, candidates, reloadLadder, foodsById, kidEntries, online } = useMealBuilderData(
+    kid.id,
+    date,
+    slot,
+    chosen,
+  );
+
+  const plate = useMemo(() => effectivePlate(candidates, chosen), [candidates, chosen]);
+
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (focusOnMount) headingRef.current?.focus();
+    // Mount only: the section is keyed on the child.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Latest values for the save path, which must not act on a stale render.
+  const kidRef = useRef(kid);
+  kidRef.current = kid;
+  const foodsRef = useRef(foods);
+  foodsRef.current = foods;
+  const planRef = useRef(planEntries);
+  planRef.current = planEntries;
+  const plateRef = useRef(plate);
+  plateRef.current = plate;
+  const savingRef = useRef(false);
+
+  const slotText = slotLabel(t, slot);
+  const day = dayLabel(t, date, todayIso, i18n.language);
+  const storageKey = draftKey(kid.id, date, slot);
+
+  // ---- offline draft ----------------------------------------------------
+  const [storedDraft, setStoredDraft] = useState<StoredDraft | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const storage = await getStorage();
+        const raw = await storage.getItem(storageKey);
+        if (!cancelled) setStoredDraft(parseDraft(raw));
+      } catch (err) {
+        logger.warn('Meal Builder draft could not be read:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [storageKey]);
+
+  // Restore once the candidates are known, keeping only choices that are
+  // still on offer: a food could have gained an allergen tag since.
+  useEffect(() => {
+    if (!storedDraft || !candidates) return;
+    // Wait for the ladder, or a stored try bite would be dropped as "not on offer".
+    if (candidates.status.tryBite === 'pending') return;
+    const valid: ChosenPlate = {};
+    for (const zone of MEAL_ZONES) {
+      const id = storedDraft.chosen[zone];
+      if (id && candidates[zone].some((o) => o.food.id === id)) valid[zone] = id;
+    }
+    setStoredDraft(null);
+    if (Object.keys(valid).length === 0) return;
+    setChosen(valid);
+    setTryBiteSlot(storedDraft.tryBiteSlot);
+    announce(t('mealBuilder.offline.restored', { defaultValue: 'Your unsaved plate is back.' }));
+  }, [storedDraft, candidates, announce, t]);
+
+  useEffect(() => {
+    if (online || Object.keys(chosen).length === 0) return;
+    (async () => {
+      try {
+        const storage = await getStorage();
+        await storage.setItem(storageKey, JSON.stringify({ chosen, tryBiteSlot } satisfies StoredDraft));
+      } catch (err) {
+        logger.warn('Meal Builder draft could not be kept:', err);
+      }
+    })();
+  }, [online, chosen, tryBiteSlot, storageKey]);
+
+  const clearDraft = useCallback(async () => {
+    try {
+      const storage = await getStorage();
+      await storage.removeItem(storageKey);
+    } catch (err) {
+      logger.warn('Meal Builder draft could not be cleared:', err);
+    }
+  }, [storageKey]);
+
+  // ---- choosing ---------------------------------------------------------
+  const onSelect = useCallback(
+    (zone: PlateZone, foodId: string) => {
+      setPostSave(null);
+      setChosen((prev) => ({ ...prev, [zone]: foodId }));
+      if (handMode) {
+        const food = foodsRef.current.find((f) => f.id === foodId);
+        announce(
+          t('mealBuilder.kidPicked', {
+            food: food?.name ?? '',
+            zone: zoneName(t, zone),
+            defaultValue: 'Picked {{food}} for the {{zone}}.',
+          }),
+        );
+      }
+    },
+    [announce, handMode, t],
+  );
+
+  const onToggleBridge = useCallback(
+    (foodId: string) => {
+      const on = plateRef.current.bridge !== foodId;
+      setPostSave(null);
+      setChosen((prev) => {
+        const next = { ...prev };
+        if (on) next.bridge = foodId;
+        else delete next.bridge;
+        return next;
+      });
+      if (on && handMode) {
+        const food = foodsRef.current.find((f) => f.id === foodId);
+        announce(
+          t('mealBuilder.kidPicked', {
+            food: food?.name ?? '',
+            zone: zoneName(t, 'bridge'),
+            defaultValue: 'Picked {{food}} for the {{zone}}.',
+          }),
+        );
+      }
+    },
+    [announce, handMode, t],
+  );
+
+  // ---- saving -----------------------------------------------------------
+  const write = useCallback(async () => {
+    if (savingRef.current) return;
+    const currentKid = kidRef.current;
+    const snapshot = plateRef.current;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const { entries, skipped } = planWriteEntries(
+        currentKid.id,
+        date,
+        slot,
+        snapshot,
+        planRef.current,
+        tryBiteSlot,
+      );
+      const byId = new Map(foodsRef.current.map((f) => [f.id, f]));
+      const skippedLines = skipped.map((id) =>
+        t('mealBuilder.skipped', {
+          food: byId.get(id)?.name ?? '',
+          slot: slotInSentence(t, id === snapshot.tryBite && tryBiteSlot === 'try_bite' ? 'try_bite' : slot),
+          defaultValue: '{{food}} was already on {{slot}}',
+        }),
+      );
+      if (entries.length === 0) {
+        announce(
+          t('mealBuilder.nothingNew', {
+            slot: slotInSentence(t, slot),
+            defaultValue: 'Everything on this plate was already on {{slot}}.',
+          }),
+        );
+        return;
+      }
+      const result = await addPlanEntries(entries);
+      if (result.error) {
+        // PlanContext has already shown the failure; the plate stays as it was.
+        announce(t('mealBuilder.notSaved', { defaultValue: 'Not saved. Your plate is still here.' }));
+        return;
+      }
+      const insertedIds = result.insertedIds;
+      const savedTarget = { date, slot };
+      const tryBiteId = snapshot.tryBite ?? null;
+      void clearDraft();
+      setChosen({});
+      setPostSave({ ...savedTarget, tryBiteId });
+      toast.success(
+        t('mealBuilder.saved', { slot: slotText, day, defaultValue: 'Added to {{slot}}, {{day}}' }),
+        {
+          description: skippedLines.length > 0 ? skippedLines.join('. ') : undefined,
+          action: {
+            label: t('planner.actions.undo', { defaultValue: 'Undo' }),
+            onClick: () => {
+              void (async () => {
+                const undo = await deletePlanEntries(insertedIds);
+                if (undo.error) {
+                  toast.error(t('mealBuilder.undoFailed', { defaultValue: "Couldn't undo. Remove it in the Planner." }));
+                  return;
+                }
+                onTargetChange(savedTarget);
+                setPostSave(null);
+                setChosen(snapshot);
+                announce(t('mealBuilder.undone', { defaultValue: 'Taken off the plan. Your plate is back.' }));
+              })();
+            },
+          },
+        },
+      );
+      onTargetChange(savedTarget);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }, [
+    addPlanEntries,
+    announce,
+    clearDraft,
+    date,
+    day,
+    deletePlanEntries,
+    onTargetChange,
+    slot,
+    slotText,
+    t,
+    tryBiteSlot,
+  ]);
+
+  const onSave = useCallback(() => {
+    if (savingRef.current) return;
+    const currentKid = kidRef.current;
+    const snapshot = plateRef.current;
+    const ids = MEAL_ZONES.map((z) => snapshot[z]).filter((id): id is string => Boolean(id));
+    if (ids.length === 0) return;
+    const foodById = new Map(foodsRef.current.map((f) => [f.id, f]));
+    const prompt = manualAddPrompt([currentKid], ids, foodById);
+    if (prompt?.severe && prompt.lead) {
+      setConfirm({ kind: 'block', conflict: prompt.lead });
+      return;
+    }
+    if (prompt && prompt.conflicts.length > 0) {
+      setConfirm({ kind: 'plain', conflict: prompt.conflicts[0] });
+      return;
+    }
+    if (candidates?.allergyState === 'unknown') {
+      setConfirm({ kind: 'unknown' });
+      return;
+    }
+    void write();
+  }, [candidates?.allergyState, write]);
+
+  // ---- derived view -----------------------------------------------------
+  const nameOf = (id: string | undefined) => (id ? (foodsById.get(id)?.name ?? null) : null);
+
+  const recent = useMemo(
+    () => favouritePlates(kidEntries, kid.id, todayIso, kid, foodsById, 6),
+    [kidEntries, kid, todayIso, foodsById],
+  );
+
+  const applyRecentPlate = useCallback(
+    (foodIds: readonly string[]) => {
+      if (!candidates) return;
+      const next: ChosenPlate = {};
+      for (const id of foodIds) {
+        const zone = MEAL_ZONES.find((z) => !next[z] && candidates[z].some((o) => o.food.id === id));
+        if (zone) next[zone] = id;
+      }
+      setPostSave(null);
+      setChosen(next);
+    },
+    [candidates],
+  );
+
+  const selectedCount = MEAL_ZONES.filter((z) => plate[z]).length;
+  const headingId = `meal-builder-plate-${kid.id}`;
+  const gapGroup = candidates?.gapGroup ?? null;
+
+  return (
+    <section key={kid.id} aria-labelledby={headingId} className="space-y-5 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2
+          id={headingId}
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-xl font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Plus className="h-6 w-6 mr-2" />
-          Create New Meal
+          {t('mealBuilder.plateHeading', { name: kid.name, defaultValue: "{{name}}'s plate" })}
+        </h2>
+        <Button
+          type="button"
+          variant={handMode ? 'default' : 'outline'}
+          className="min-h-11"
+          onClick={() => {
+            const next = !handMode;
+            onHandModeChange(next);
+            if (!next) announce(t('mealBuilder.handBack', { defaultValue: 'Back to you.' }));
+          }}
+        >
+          <Hand className="mr-2 h-4 w-4" aria-hidden="true" />
+          {handMode
+            ? t('mealBuilder.hand.done', { defaultValue: 'Done' })
+            : t('mealBuilder.hand.start', { name: kid.name, defaultValue: 'Hand to {{name}}' })}
         </Button>
       </div>
 
-      {/* My Creations */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Heart className="h-5 w-5 text-red-500" />
-            My Favorite Meals
-          </CardTitle>
-          <CardDescription>Meals you've created</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading && creations.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : creations.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Smile className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <p className="text-lg mb-2">No meals created yet!</p>
-              <p>Click "Create New Meal" to get started</p>
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {creations.map((creation) => (
-                <Card key={creation.id} className="hover:shadow-lg transition-all">
-                  <CardContent className="pt-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-lg mb-1">{creation.creation_name}</h3>
-                        <Badge variant="outline" className="mb-2">
-                          {PLATE_TEMPLATES.find((t) => t.id === creation.plate_template)?.emoji}{" "}
-                          {PLATE_TEMPLATES.find((t) => t.id === creation.plate_template)?.name}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                        <span className="font-bold text-xl">{creation.stars_earned}</span>
-                      </div>
-                    </div>
+      {handMode ? (
+        <p className="text-lg font-medium">
+          {t('mealBuilder.hand.banner', { name: kid.name, defaultValue: '{{name}} is choosing. One from each row.' })}
+        </p>
+      ) : null}
 
-                    <div className="space-y-2 mb-4">
-                      <p className="text-sm font-medium">Foods:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {creation.foods.slice(0, 5).map((food, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            {food.food_name}
-                          </Badge>
-                        ))}
-                        {creation.foods.length > 5 && (
-                          <Badge variant="secondary" className="text-xs">
-                            +{creation.foods.length - 5} more
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
+      {candidates?.allergyState === 'unknown' && !handMode ? (
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-foreground" data-testid="allergies-unknown">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>
+            {t('mealBuilder.allergiesUnknown', {
+              name: kid.name,
+              defaultValue: "{{name}}'s allergies aren't recorded, so nothing here was checked against them.",
+            })}
+          </span>
+          <Link
+            to={`/dashboard/kids?kid=${encodeURIComponent(kid.id)}`}
+            className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {t('mealBuilder.allergiesUnknownLink', { defaultValue: 'Record allergies' })}
+          </Link>
+        </p>
+      ) : null}
 
-                    {creation.times_requested > 0 && (
-                      <div className="mb-4">
-                        <Badge className="bg-purple-500 text-white">
-                          Requested {creation.times_requested} {creation.times_requested === 1 ? "time" : "times"}
-                        </Badge>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleRequestMeal(creation.id)}
-                        className="flex-1"
-                      >
-                        <ThumbsUp className="h-4 w-4 mr-1" />
-                        I Want This!
-                      </Button>
-                      <Button
-                        aria-label="Delete this creation"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDeleteCreation(creation.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Meal Builder Dialog */}
-      <Dialog open={showBuilder} onOpenChange={setShowBuilder}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary" />
-              Create Your Meal
-            </DialogTitle>
-            <DialogDescription>
-              Choose a plate and add your favorite foods! Earn stars for being creative!
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* Meal Name */}
-            <div className="space-y-2">
-              <Label className="text-lg">Give your meal a fun name!</Label>
-              <Input
-                value={creationName}
-                onChange={(e) => setCreationName(e.target.value)}
-                placeholder="My Super Awesome Dinner"
-                className="text-lg"
+      {status === 'loading' || !candidates ? (
+        <PlateSkeleton
+          label={t('mealBuilder.plateLoading', { name: kid.name, defaultValue: "Loading {{name}}'s foods" })}
+        />
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-[minmax(0,14rem)_1fr] sm:items-start">
+          <PlateSvg
+            kid={kid}
+            safeName={nameOf(plate.safe)}
+            tryBiteName={nameOf(plate.tryBite)}
+            gapName={nameOf(plate.gap)}
+            bridgeName={nameOf(plate.bridge)}
+            className="mx-auto max-w-[14rem] sm:max-w-none"
+          />
+          <div className="space-y-5">
+            <ZoneChoices
+              zone="safe"
+              headingId={`${headingId}-safe`}
+              title={t('mealBuilder.zones.safe', { defaultValue: 'Safe food' })}
+              hint={handMode ? undefined : t('mealBuilder.zoneHint.safe', { name: kid.name, defaultValue: 'Something {{name}} already eats.' })}
+              options={candidates.safe}
+              status={candidates.status.safe}
+              selectedId={plate.safe}
+              onSelect={onSelect}
+              large={handMode}
+              kidName={kid.name}
+              gapGroup={gapGroup}
+            />
+            {candidates.safe.length > 0 ? (
+              <BridgeChoices
+                headingId={`${headingId}-bridge`}
+                options={candidates.bridge}
+                status={candidates.status.bridge}
+                selectedId={plate.bridge}
+                onToggle={onToggleBridge}
+                large={handMode}
               />
-            </div>
+            ) : null}
+            <ZoneChoices
+              zone="tryBite"
+              headingId={`${headingId}-tryBite`}
+              title={t('mealBuilder.zones.tryBite', { defaultValue: 'Try bite' })}
+              hint={handMode ? undefined : t('mealBuilder.zoneHint.tryBite', { defaultValue: 'A small taste on the side. Touching or smelling it counts.' })}
+              options={candidates.tryBite}
+              status={candidates.status.tryBite}
+              selectedId={plate.tryBite}
+              onSelect={onSelect}
+              large={handMode}
+              kidName={kid.name}
+              gapGroup={gapGroup}
+              onRetry={() => void reloadLadder()}
+            />
+            <ZoneChoices
+              zone="gap"
+              headingId={`${headingId}-gap`}
+              title={
+                gapGroup
+                  ? t('mealBuilder.zones.gapFor', { group: groupName(t, gapGroup), defaultValue: 'Add a {{group}}' })
+                  : t('mealBuilder.zones.gap', { defaultValue: 'Fill a gap' })
+              }
+              hint={
+                gapGroup && !handMode
+                  ? t('mealBuilder.zoneHint.gap', { group: groupName(t, gapGroup), defaultValue: 'Today has no {{group}} yet.' })
+                  : undefined
+              }
+              options={candidates.gap}
+              status={candidates.status.gap}
+              selectedId={plate.gap}
+              onSelect={onSelect}
+              large={handMode}
+              kidName={kid.name}
+              gapGroup={gapGroup}
+            />
+          </div>
+        </div>
+      )}
 
-            {/* Plate Template Selection */}
-            <div className="space-y-2">
-              <Label className="text-lg">Choose your plate:</Label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {PLATE_TEMPLATES.map((template) => (
+      {!handMode && recent.length > 0 && candidates ? (
+        <div className="space-y-2">
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            <History className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            {t('mealBuilder.recent.title', { defaultValue: 'Recent plates' })}
+          </h3>
+          <ul className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+            {recent.map((p) => {
+              const names = p.foodIds.map((id) => foodsById.get(id)?.name ?? '').filter(Boolean).join(', ');
+              return (
+                <li key={p.key} className="shrink-0">
                   <button
-                    key={template.id}
-                    onClick={() => {
-                      setSelectedTemplate(template.id);
-                      setSelectedFoods([]); // Reset foods when changing template
-                    }}
-                    className={cn(
-                      "p-4 rounded-xl border-2 transition-all hover:scale-105",
-                      selectedTemplate === template.id
-                        ? "border-primary bg-primary/10 shadow-lg"
-                        : "border-border hover:border-primary/50"
-                    )}
+                    type="button"
+                    onClick={() => applyRecentPlate(p.foodIds)}
+                    aria-label={t('mealBuilder.recent.use', { foods: names, defaultValue: 'Use this plate: {{foods}}' })}
+                    className="inline-flex min-h-11 max-w-[16rem] items-center rounded-full border border-border bg-background px-4 py-2 text-sm text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
                   >
-                    <div className="text-4xl mb-2">{template.emoji}</div>
-                    <p className="font-semibold text-sm">{template.name}</p>
+                    <span className="truncate">{names}</span>
                   </button>
-                ))}
-              </div>
-            </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
-            {/* Food Selection by Section */}
-            <div className="space-y-4">
-              <Label className="text-lg">Add foods to your plate:</Label>
-              {sections.map((section) => (
-                <Card key={section}>
-                  <CardHeader>
-                    <CardTitle className="text-sm capitalize">
-                      {section.replace("_", " ")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {selectedFoods
-                        .filter((f) => f.section === section)
-                        .map((food, idx) => (
-                          <Badge
-                            key={idx}
-                            className="bg-safe-food text-white flex items-center gap-1"
-                          >
-                            {food.food_name}
-                            <button
-                              onClick={() =>
-                                handleRemoveFood(selectedFoods.indexOf(food))
-                              }
-                              className="ml-1 hover:text-red-300"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                    </div>
-                    <ScrollArea className="h-24">
-                      <div className="flex flex-wrap gap-2">
-                        {safeFoods
-                          .filter(
-                            (f) =>
-                              !selectedFoods.some(
-                                (sf) => sf.food_id === f.id && sf.section === section
-                              )
-                          )
-                          .map((food) => (
-                            <Button
-                              key={food.id}
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAddFood(food, section)}
-                            >
-                              + {food.name}
-                            </Button>
-                          ))}
-                      </div>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
+      {!handMode && candidates && candidates.heldBack.length > 0 ? (
+        <details className="rounded-lg border border-border bg-card px-4 py-2 text-card-foreground">
+          <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
+            {t('mealBuilder.heldBack.summary', { count: candidates.heldBack.length, defaultValue: 'Held back ({{count}})' })}
+          </summary>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t('mealBuilder.heldBack.intro', { name: kid.name, defaultValue: 'Not offered for {{name}}:' })}
+          </p>
+          <ul className="mt-2 space-y-1 pb-2 text-sm">
+            {candidates.heldBack.map((item) => (
+              <li key={`${item.zone}-${item.food.id}-${item.reason}`}>
+                {t('mealBuilder.heldBack.item', {
+                  food: item.food.name,
+                  reason: heldBackReason(t, item, kid.name),
+                  defaultValue: '{{food}}: {{reason}}',
+                })}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
+      {!handMode && postSave ? (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-border bg-card px-4 py-2 text-card-foreground" data-testid="post-save">
+          <Link
+            to={`/dashboard/planner?date=${postSave.date}&slot=${postSave.slot}`}
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            <CalendarCheck className="h-4 w-4" aria-hidden="true" />
+            {t('mealBuilder.postSave.planner', { defaultValue: 'See it on the Planner' })}
+          </Link>
+          {postSave.tryBiteId ? (
+            <Link
+              to={`/dashboard/food-tracker?log=${encodeURIComponent(postSave.tryBiteId)}`}
+              className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t('mealBuilder.postSave.logTryBite', { defaultValue: 'How did the try bite go? Log it' })}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!handMode && candidates ? (
+        <div className="sticky bottom-[calc(theme(spacing.16)+env(safe-area-inset-bottom))] z-20 -mx-4 space-y-2 border-t border-border bg-background px-4 py-3 md:bottom-0 md:mx-0 md:rounded-t-lg">
+          {plate.tryBite ? (
+            <div
+              role="radiogroup"
+              aria-label={t('mealBuilder.tryBitePlacement.label', { defaultValue: 'Where the try bite goes' })}
+              className="flex gap-2"
+            >
+              {(['try_bite', 'same'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={tryBiteSlot === value}
+                  onClick={() => setTryBiteSlot(value)}
+                  className={cn(
+                    'inline-flex min-h-11 items-center rounded-full border px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    tryBiteSlot === value
+                      ? 'border-primary bg-primary/10 font-medium text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {value === 'try_bite'
+                    ? t('mealBuilder.tryBitePlacement.row', { defaultValue: 'Try-bite row' })
+                    : t('mealBuilder.tryBitePlacement.same', { defaultValue: 'Same meal' })}
+                </button>
               ))}
             </div>
-
-            {/* Preview */}
-            {selectedFoods.length > 0 && (
-              <Card className="bg-gradient-to-br from-primary/5 to-accent/5">
-                <CardHeader>
-                  <CardTitle className="text-sm">Your Meal Preview</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm mb-2">
-                    <strong>Foods added:</strong> {selectedFoods.length}
-                  </p>
-                  <p className="text-sm mb-2">
-                    <strong>Stars to earn:</strong>{" "}
-                    <Star className="h-4 w-4 inline text-yellow-500 fill-yellow-500" />{" "}
-                    {Math.min(selectedFoods.length, 5)}
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedFoods.map((food, idx) => (
-                      <Badge key={idx} variant="secondary">
-                        {food.food_name}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          <DialogFooter className="flex gap-2">
+          ) : null}
+          <div className="flex items-center gap-3">
+            <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+              {!online ? (
+                <span className="inline-flex items-start gap-1.5">
+                  <WifiOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  {t('mealBuilder.offline.save', {
+                    defaultValue: "You're offline. This plate is kept on this device; add it when you're back online.",
+                  })}
+                </span>
+              ) : selectedCount > 0 ? (
+                t('mealBuilder.save.summary', {
+                  count: selectedCount,
+                  slot: slotText,
+                  day,
+                  defaultValue: '{{count}} foods for {{slot}}, {{day}}',
+                })
+              ) : (
+                t('mealBuilder.save.nothing', { defaultValue: 'Pick a food first' })
+              )}
+            </p>
             <Button
-              variant="outline"
-              onClick={() => {
-                setShowBuilder(false);
-                resetBuilder();
-              }}
+              type="button"
+              className="min-h-11 shrink-0"
+              disabled={!online || saving || selectedCount === 0}
+              aria-busy={saving}
+              onClick={onSave}
             >
-              Cancel
+              {saving
+                ? t('mealBuilder.save.saving', { defaultValue: 'Adding...' })
+                : t('mealBuilder.save.add', { defaultValue: 'Add to plan' })}
             </Button>
-            <Button onClick={handleSaveCreation} disabled={loading} size="lg">
-              <Save className="h-5 w-5 mr-2" />
-              Save My Meal!
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </div>
+        </div>
+      ) : null}
+
+      <AlertDialog open={confirm !== null} onOpenChange={(open) => (!open ? setConfirm(null) : undefined)}>
+        <AlertDialogContent>
+          {confirm?.kind === 'block' ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t('mealBuilder.confirm.blockTitle', {
+                    food: confirm.conflict.food.name,
+                    name: kid.name,
+                    defaultValue: "{{food}} can't go on {{name}}'s plate",
+                  })}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {allergenCopyKind(confirm.conflict) === 'severeUnrated'
+                    ? t('mealBuilder.confirm.blockSevereUnrated', {
+                        food: confirm.conflict.food.name,
+                        name: kid.name,
+                        allergen: confirm.conflict.allergen,
+                        defaultValue:
+                          "{{food}} contains {{allergen}}. {{name}}'s {{allergen}} allergy has no severity recorded, so it's treated as severe.",
+                      })
+                    : t('mealBuilder.confirm.blockSevere', {
+                        food: confirm.conflict.food.name,
+                        name: kid.name,
+                        allergen: confirm.conflict.allergen,
+                        defaultValue: '{{name}} has a severe {{allergen}} allergy, and {{food}} contains {{allergen}}.',
+                      })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="min-h-11">
+                  {t('mealBuilder.confirm.cancel', { defaultValue: 'Go back' })}
+                </AlertDialogCancel>
+              </AlertDialogFooter>
+            </>
+          ) : confirm?.kind === 'plain' ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t('mealBuilder.confirm.plainTitle', {
+                    food: confirm.conflict.food.name,
+                    allergen: confirm.conflict.allergen,
+                    defaultValue: '{{food}} contains {{allergen}}',
+                  })}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('mealBuilder.confirm.plainBody', {
+                    name: kid.name,
+                    allergen: confirm.conflict.allergen,
+                    severity: confirm.conflict.severity ?? '',
+                    defaultValue: '{{name}} has a {{severity}} {{allergen}} allergy.',
+                  })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="min-h-11">
+                  {t('mealBuilder.confirm.cancel', { defaultValue: 'Go back' })}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  className="min-h-11"
+                  onClick={() => {
+                    setConfirm(null);
+                    void write();
+                  }}
+                >
+                  {t('mealBuilder.confirm.plainAction', { name: kid.name, defaultValue: 'Add it for {{name}} anyway' })}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : confirm?.kind === 'unknown' ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t('mealBuilder.confirm.unknownTitle', {
+                    name: kid.name,
+                    defaultValue: "{{name}}'s allergies aren't recorded",
+                  })}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('mealBuilder.confirm.unknownBody', {
+                    name: kid.name,
+                    defaultValue: "This plate couldn't be checked against {{name}}'s allergies.",
+                  })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="min-h-11">
+                  {t('mealBuilder.confirm.cancel', { defaultValue: 'Go back' })}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  className="min-h-11"
+                  onClick={() => {
+                    setConfirm(null);
+                    void write();
+                  }}
+                >
+                  {t('mealBuilder.confirm.unknownAction', { name: kid.name, defaultValue: 'Add it for {{name}}' })}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : null}
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
   );
 }

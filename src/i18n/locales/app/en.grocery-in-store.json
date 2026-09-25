@@ -1,0 +1,24 @@
+{
+  "grocery": {
+    "inStore": {
+      "open": "In-store mode",
+      "title": "In-store mode",
+      "titleStore": "Shopping at {{store}}",
+      "exit": "Exit",
+      "progressLabel": "{{done}} of {{total}} in the cart",
+      "progress": "{{done}} of {{total}}",
+      "screenOn": "Screen stays on while you shop",
+      "aislePosition": "Aisle {{position}} of {{count}} on this trip",
+      "aisleNumbered": "Aisle {{number}} - {{name}}",
+      "edit": "Edit",
+      "remove": "Remove",
+      "doneTitle": "That's everything",
+      "doneBody": "Every item on this trip is in the cart.",
+      "backToList": "Back to the list",
+      "previous": "Previous aisle",
+      "next": "Next aisle",
+      "left_one": "{{count}} left",
+      "left_other": "{{count}} left"
+    }
+  }
+}

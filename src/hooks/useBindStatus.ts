@@ -9,7 +9,7 @@
 // `current_user_has_password()` is a SECURITY DEFINER SQL function that
 // reads auth.users.encrypted_password without exposing the auth schema.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@/lib/logger";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,12 +33,19 @@ export function useBindStatus(): BindStatus {
   const [user, setUser] = useState<User | null>(null);
   const [hasPassword, setHasPassword] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Settings pass B: loading is the FIRST load only. A background refresh
+  // (after a sign-in or an email change) keeps the values on screen; flipping
+  // loading back to true unmounted the bind panel mid-flow and dropped the
+  // user back on step one.
+  const loadedOnce = useRef(false);
+  const mounted = useRef(true);
 
-  const refresh = async () => {
-    setLoading(true);
+  const refresh = useCallback(async () => {
+    if (!loadedOnce.current && mounted.current) setLoading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
       const u = userData.user ?? null;
+      if (!mounted.current) return;
       setUser(u);
 
       if (!u) {
@@ -50,25 +57,43 @@ export function useBindStatus(): BindStatus {
       // AccountSettings asks the same question, so this RPC went out twice on
       // the settings page.
       try {
-        setHasPassword(await fetchHasPassword());
+        const next = await fetchHasPassword();
+        if (mounted.current) setHasPassword(next);
       } catch (error) {
         logger.warn("current_user_has_password failed:", error);
-        setHasPassword(false);
+        // A failed background check keeps the last answer rather than
+        // claiming the password vanished.
+        if (mounted.current && !loadedOnce.current) setHasPassword(false);
       }
     } finally {
-      setLoading(false);
+      loadedOnce.current = true;
+      if (mounted.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    refresh();
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Re-check whenever the session changes (sign in / token refresh / email update).
-      setUser(session?.user ?? null);
+    mounted.current = true;
+    void refresh();
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      // INITIAL_SESSION duplicates the mount load above, and TOKEN_REFRESHED
+      // changes neither the email nor the password. Only a new sign-in or an
+      // edit to the user (email bound, password set) can change the answer.
+      if (event === "SIGNED_OUT") {
+        if (mounted.current) {
+          setUser(null);
+          setHasPassword(false);
+        }
+        return;
+      }
+      if (event !== "SIGNED_IN" && event !== "USER_UPDATED") return;
+      if (mounted.current) setUser(session?.user ?? null);
       void refresh();
     });
-    return () => data.subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted.current = false;
+      data.subscription.unsubscribe();
+    };
+  }, [refresh]);
 
   const isApple = isAppleAccount(user);
   const isRelayEmail = isAppleRelayEmail(user?.email);

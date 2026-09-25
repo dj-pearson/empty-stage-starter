@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { logger } from "@/lib/logger";
 import {
   Dialog,
@@ -22,24 +22,14 @@ import {
   Sparkles,
   TrendingUp,
   Loader2,
-  AlertCircle
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { useTranslation } from "react-i18next";
+import { listTemplates, type MealPlanTemplate } from "@/lib/mealPlanTemplatesApi";
+import "@/i18n/appLocale";
 
-interface MealPlanTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  season: string | null;
-  is_favorite: boolean;
-  is_admin_template: boolean;
-  is_starter_template: boolean;
-  times_used: number;
-  success_rate: number | null;
-  created_at: string;
-  meal_plan_template_entries: any[];
-}
+export type { MealPlanTemplate } from "@/lib/mealPlanTemplatesApi";
 
 interface MealPlanTemplateGalleryProps {
   open: boolean;
@@ -52,82 +42,53 @@ export function MealPlanTemplateGallery({
   onOpenChange,
   onSelectTemplate,
 }: MealPlanTemplateGalleryProps) {
+  const { t } = useTranslation();
   const [templates, setTemplates] = useState<MealPlanTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState<string>("all");
 
   useEffect(() => {
-    if (open) {
-      loadTemplates();
-    }
-  }, [open]);
-
-  const loadTemplates = async () => {
+    if (!open) return;
+    // Closing the dialog (or reopening it) before the list lands must not let
+    // a stale response overwrite state or toast after the fact.
+    let cancelled = false;
     setIsLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error("You must be logged in");
-        return;
+    void listTemplates().then(({ data, error }) => {
+      if (cancelled) return;
+      if (error || !data) {
+        logger.error("Error loading templates:", error);
+        toast.error(t("planner.templates.gallery.loadFailed", { defaultValue: "Failed to load templates" }));
+      } else {
+        setTemplates(data);
       }
-
-      // Use VITE_FUNCTIONS_URL for self-hosted Supabase edge functions
-      const functionsUrl = import.meta.env.VITE_FUNCTIONS_URL ||
-        (import.meta.env.VITE_SUPABASE_URL?.replace('api.', 'functions.') ?? '');
-      const response = await fetch(
-        `${functionsUrl}/manage-meal-plan-templates`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            action: 'list',
-            templateData: {},
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to load templates');
-      }
-
-      setTemplates(data.templates || []);
-    } catch (error) {
-      logger.error('Error loading templates:', error);
-      toast.error('Failed to load templates');
-    } finally {
       setIsLoading(false);
-    }
-  };
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, t]);
 
-  const filteredTemplates = templates.filter(template => {
-    // Search filter
-    const matchesSearch =
-      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredTemplates = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return templates.filter((template) => {
+      const matchesSearch =
+        !q ||
+        template.name.toLowerCase().includes(q) ||
+        (template.description?.toLowerCase().includes(q) ?? false);
+      if (!matchesSearch) return false;
+      if (selectedTab === "favorites") return template.is_favorite;
+      if (selectedTab === "mine") return !template.is_admin_template;
+      if (selectedTab === "starter") return template.is_starter_template;
+      return true;
+    });
+  }, [templates, searchQuery, selectedTab]);
 
-    if (!matchesSearch) return false;
-
-    // Tab filter
-    if (selectedTab === "favorites") return template.is_favorite;
-    if (selectedTab === "mine") return !template.is_admin_template;
-    if (selectedTab === "starter") return template.is_starter_template;
-    return true; // "all" tab
-  });
-
-  const getSeasonEmoji = (season: string | null) => {
-    switch (season) {
-      case 'spring': return '🌸';
-      case 'summer': return '☀️';
-      case 'fall': return '🍂';
-      case 'winter': return '❄️';
-      default: return '📅';
-    }
+  const seasonLabel = (season: string | null) => {
+    if (!season || season === "year_round") return null;
+    return t(`planner.templates.season.${season}`, {
+      defaultValue: season.charAt(0).toUpperCase() + season.slice(1),
+    });
   };
 
   const getMealCount = (template: MealPlanTemplate) => {
@@ -139,19 +100,23 @@ export function MealPlanTemplateGallery({
       <DialogContent className="sm:max-w-[700px] max-h-[85vh]">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <BookTemplate className="h-5 w-5 text-primary" />
-            <DialogTitle>Meal Plan Templates</DialogTitle>
+            <BookTemplate className="h-5 w-5 text-primary" aria-hidden="true" />
+            <DialogTitle>{t("planner.templates.gallery.title", { defaultValue: "Meal plan templates" })}</DialogTitle>
           </div>
           <DialogDescription>
-            Choose a template to instantly fill your week with proven meal plans
+            {t("planner.templates.gallery.description", {
+              defaultValue: "Pick a template to fill a week with meals that worked before",
+            })}
           </DialogDescription>
         </DialogHeader>
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
-            placeholder="Search templates..."
+            type="search"
+            aria-label={t("planner.templates.gallery.searchLabel", { defaultValue: "Search templates" })}
+            placeholder={t("planner.templates.gallery.searchPlaceholder", { defaultValue: "Search templates..." })}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -161,41 +126,45 @@ export function MealPlanTemplateGallery({
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="all">{t("planner.templates.gallery.tabAll", { defaultValue: "All" })}</TabsTrigger>
             <TabsTrigger value="favorites">
-              <Star className="h-4 w-4 mr-1" />
-              Favorites
+              <Star className="h-4 w-4 mr-1" aria-hidden="true" />
+              {t("planner.templates.gallery.tabFavorites", { defaultValue: "Favorites" })}
             </TabsTrigger>
             <TabsTrigger value="mine">
-              <Users className="h-4 w-4 mr-1" />
-              Mine
+              <Users className="h-4 w-4 mr-1" aria-hidden="true" />
+              {t("planner.templates.gallery.tabMine", { defaultValue: "Mine" })}
             </TabsTrigger>
             <TabsTrigger value="starter">
-              <Sparkles className="h-4 w-4 mr-1" />
-              Starter
+              <Sparkles className="h-4 w-4 mr-1" aria-hidden="true" />
+              {t("planner.templates.gallery.tabStarter", { defaultValue: "Starter" })}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value={selectedTab} className="mt-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <Loader2 className="h-8 w-8 animate-spin text-primary" aria-label={t("planner.templates.gallery.loading", { defaultValue: "Loading templates" })} />
               </div>
             ) : filteredTemplates.length === 0 ? (
               <div className="text-center py-12">
-                <BookTemplate className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+                <BookTemplate className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" aria-hidden="true" />
                 <h3 className="font-semibold text-lg mb-2">
-                  {searchQuery ? "No templates found" : "No templates yet"}
+                  {searchQuery
+                    ? t("planner.templates.gallery.noResults", { defaultValue: "No templates found" })
+                    : t("planner.templates.gallery.empty", { defaultValue: "No templates yet" })}
                 </h3>
                 <p className="text-muted-foreground text-sm mb-4">
                   {searchQuery
-                    ? "Try a different search term"
-                    : "Create your first template by saving a successful week"}
+                    ? t("planner.templates.gallery.noResultsHint", { defaultValue: "Try a different search term" })
+                    : t("planner.templates.gallery.emptyHint", {
+                        defaultValue: "Save a week that went well and it shows up here",
+                      })}
                 </p>
                 {!searchQuery && (
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Go to Planner
+                    <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {t("planner.templates.gallery.backToPlanner", { defaultValue: "Back to planner" })}
                   </Button>
                 )}
               </div>
@@ -204,25 +173,24 @@ export function MealPlanTemplateGallery({
                 <div className="grid gap-3 pr-4">
                   {filteredTemplates.map((template) => (
                     <button
+                      type="button"
                       key={template.id}
                       onClick={() => {
                         onSelectTemplate(template);
                         onOpenChange(false);
                       }}
-                      className="w-full text-left p-4 rounded-lg border hover:border-primary hover:bg-accent transition-all group"
+                      className="w-full text-left p-4 rounded-lg border hover:border-primary hover:bg-accent transition-colors group"
                     >
                       <div className="flex items-start gap-3">
                         {/* Icon */}
                         <div className="mt-1">
-                          {template.is_admin_template ? (
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <ChefHat className="h-5 w-5 text-primary" />
-                            </div>
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-xl">
-                              {getSeasonEmoji(template.season)}
-                            </div>
-                          )}
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            {template.is_admin_template ? (
+                              <ChefHat className="h-5 w-5 text-primary" aria-hidden="true" />
+                            ) : (
+                              <Calendar className="h-5 w-5 text-primary" aria-hidden="true" />
+                            )}
+                          </div>
                         </div>
 
                         {/* Content */}
@@ -232,12 +200,20 @@ export function MealPlanTemplateGallery({
                               {template.name}
                             </h4>
                             {template.is_favorite && (
-                              <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                              <Star
+                                className="h-4 w-4 fill-primary text-primary"
+                                aria-label={t("planner.templates.gallery.favorite", { defaultValue: "Favorite" })}
+                              />
                             )}
                             {template.is_admin_template && (
                               <Badge variant="secondary" className="text-xs">
-                                <Sparkles className="h-3 w-3 mr-1" />
-                                Curated
+                                <Sparkles className="h-3 w-3 mr-1" aria-hidden="true" />
+                                {t("planner.templates.gallery.curated", { defaultValue: "Curated" })}
+                              </Badge>
+                            )}
+                            {seasonLabel(template.season) && (
+                              <Badge variant="outline" className="text-xs">
+                                {seasonLabel(template.season)}
                               </Badge>
                             )}
                           </div>
@@ -251,19 +227,28 @@ export function MealPlanTemplateGallery({
                           {/* Stats */}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {getMealCount(template)} meals
+                              <Calendar className="h-3 w-3" aria-hidden="true" />
+                              {t("planner.templates.gallery.mealCount", {
+                                defaultValue: "{{count}} meals",
+                                count: getMealCount(template),
+                              })}
                             </div>
                             {template.times_used > 0 && (
                               <div className="flex items-center gap-1">
-                                <TrendingUp className="h-3 w-3" />
-                                Used {template.times_used}x
+                                <TrendingUp className="h-3 w-3" aria-hidden="true" />
+                                {t("planner.templates.gallery.timesUsed", {
+                                  defaultValue: "Used {{count}}x",
+                                  count: template.times_used,
+                                })}
                               </div>
                             )}
                             {template.success_rate !== null && template.success_rate > 0 && (
                               <div className="flex items-center gap-1">
                                 <Badge variant="outline" className="text-xs">
-                                  {Math.round(template.success_rate)}% success
+                                  {t("planner.templates.gallery.successRate", {
+                                    defaultValue: "{{pct}}% success",
+                                    pct: Math.round(template.success_rate),
+                                  })}
                                 </Badge>
                               </div>
                             )}
@@ -280,11 +265,12 @@ export function MealPlanTemplateGallery({
 
         {/* Info */}
         {!isLoading && filteredTemplates.length > 0 && (
-          <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
-            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              <strong>Tip:</strong> Templates save you time by instantly populating your
-              calendar with meals that worked well in the past.
+          <div className="flex items-start gap-2 p-3 bg-muted/50 rounded-lg">
+            <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true" />
+            <p className="text-xs text-muted-foreground">
+              {t("planner.templates.gallery.tip", {
+                defaultValue: "You choose the week and the children on the next step. Nothing is added until you apply.",
+              })}
             </p>
           </div>
         )}

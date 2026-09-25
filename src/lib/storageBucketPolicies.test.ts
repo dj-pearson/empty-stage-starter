@@ -193,7 +193,7 @@ describe('storage.objects SELECT policies', () => {
 describe('profile photo object paths', () => {
   // OnboardingDialog.tsx was the second entry until US-770 replaced it with the
   // /onboarding route, which does not upload a photo at all.
-  const UPLOAD_SITES = ['src/components/ManageKidsDialog.tsx'];
+  const UPLOAD_SITES = ['src/components/kids/useKidPhotoUpload.ts'];
 
   it.each(UPLOAD_SITES)('%s builds an unguessable object name', (site) => {
     const source = readFileSync(path.resolve(__dirname, '../..', site), 'utf-8');

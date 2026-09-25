@@ -1,0 +1,24 @@
+{
+  "aiCoach": {
+    "meta": {
+      "title": "AI Feeding Coach - EatPal",
+      "description": "Practical, judgment-free ideas for picky eating, based on your family's safe foods and allergies. Not medical advice."
+    },
+    "title": "AI Feeding Coach",
+    "subtitle": "Ideas for picky eating, built from your child's safe foods and allergies. Not medical advice.",
+    "usage": {
+      "remaining_one": "{{count}} of {{limit}} question left today",
+      "remaining_other": "{{count}} of {{limit}} questions left today",
+      "none": "No questions left today. Your past answers are still here.",
+      "checking": "Checking your plan..."
+    },
+    "limit": {
+      "seePlans": "See plans"
+    }
+  },
+  "featureGate": {
+    "locked": "{{label}} is locked",
+    "notAvailable": "{{label}} is not available on your current plan.",
+    "viewPlans": "View plans"
+  }
+}

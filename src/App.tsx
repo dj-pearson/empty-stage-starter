@@ -8,7 +8,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
 import { AppProvider } from '@/contexts/AppContext';
-import { ROUTE_ALIAS_ENTRIES } from '@/lib/routeAliases';
+import { DASHBOARD_REDIRECT_ENTRIES, ROUTE_ALIAS_ENTRIES } from '@/lib/routeAliases';
 import { AccessibilityProvider, useAccessibility } from '@/contexts/AccessibilityContext';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -46,7 +46,6 @@ const Planner = lazy(() => import('./pages/Planner'));
 const Grocery = lazy(() => import('./pages/Grocery'));
 const Kids = lazy(() => import('./pages/Kids'));
 const InsightsDashboard = lazy(() => import('./pages/InsightsDashboard'));
-const Analytics = lazy(() => import('./pages/Analytics'));
 const FoodJournal = lazy(() => import('./pages/FoodJournal'));
 const Progress = lazy(() => import('./pages/Progress'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -84,13 +83,17 @@ const MealPlanGenerator = lazy(() => import('./pages/MealPlanGenerator'));
 const MealPlanGeneratorResults = lazy(() => import('./pages/MealPlanGeneratorResults'));
 const SiblingMealFinder = lazy(() => import('./pages/SiblingMealFinder'));
 const ProfessionalSettings = lazy(() => import('./pages/dashboard/ProfessionalSettings'));
+// Lazy like the page it guards: it renders page-scoped copy (appLocale), which stays out of the entry chunk.
+const RequireProfessional = lazy(() =>
+  import('@/components/professional/RequireProfessional').then((m) => ({ default: m.RequireProfessional }))
+);
 const Billing = lazy(() => import('./pages/dashboard/Billing'));
 const Household = lazy(() => import('./pages/dashboard/Household'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const AccountSettings = lazy(() => import('./pages/dashboard/AccountSettings'));
-const AccessibilitySettingsPage = lazy(() => import('./pages/dashboard/AccessibilitySettings'));
 const ApiDocs = lazy(() => import('./pages/ApiDocs'));
 const ShareTarget = lazy(() => import('./pages/ShareTarget'));
+const SharedRecipe = lazy(() => import('./pages/SharedRecipe'));
 
 // pSEO programmatic pages
 const PseoPage = lazy(() => import('./pages/pseo/PseoPage'));
@@ -129,7 +132,7 @@ function DeferredComponents() {
     // Defer loading until after initial render and idle time
     const timeoutId = setTimeout(() => {
       if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(() => setShouldLoad(true), { timeout: 2000 });
+        window.requestIdleCallback(() => setShouldLoad(true), { timeout: 2000 });
       } else {
         setShouldLoad(true);
       }
@@ -163,6 +166,16 @@ function ReducedMotionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Toasts stay up for 12s instead of 4s when "extended timeouts" is on (WCAG
+ * 2.2.1), which is the first thing that preference actually changes. Lives
+ * under AccessibilityProvider so it can read the preference.
+ */
+function AccessibleToaster() {
+  const { preferences } = useAccessibility();
+  return <Sonner duration={preferences.extendedTimeouts ? 12000 : 4000} />;
+}
+
 const App = () => (
   <ErrorBoundary>
     <I18nextProvider i18n={i18n}>
@@ -173,7 +186,7 @@ const App = () => (
             <ReducedMotionProvider>
             <TooltipProvider>
               <AppProvider>
-                <Sonner />
+                <AccessibleToaster />
                 <BrowserRouter>
                   <SkipToContent />
                   <RouteAnnouncer />
@@ -219,6 +232,15 @@ const App = () => (
                         element={
                           <RouteErrorBoundary>
                             <CheckoutSuccess />
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      {/* Item 10: a recipe someone shared. Public, noindex, no auth. */}
+                      <Route
+                        path="/r/:token"
+                        element={
+                          <RouteErrorBoundary>
+                            <SharedRecipe />
                           </RouteErrorBoundary>
                         }
                       />
@@ -525,14 +547,16 @@ const App = () => (
                             </RouteErrorBoundary>
                           }
                         />
-                        <Route
-                          path="analytics"
-                          element={
-                            <RouteErrorBoundary>
-                              <Analytics />
-                            </RouteErrorBoundary>
-                          }
-                        />
+                        {/* Retired dashboard routes (Analytics folded into Progress).
+                            Relative to /dashboard; public/_redirects carries the
+                            301 for a cold load. List: src/lib/routeAliases.ts. */}
+                        {DASHBOARD_REDIRECT_ENTRIES.map(([from, to]) => (
+                          <Route
+                            key={from}
+                            path={from.replace(/^\/dashboard\//, '')}
+                            element={<Navigate to={to} replace />}
+                          />
+                        ))}
                         <Route
                           path="food-journal"
                           element={
@@ -601,7 +625,9 @@ const App = () => (
                           path="professional-settings"
                           element={
                             <RouteErrorBoundary>
-                              <ProfessionalSettings />
+                              <RequireProfessional>
+                                <ProfessionalSettings />
+                              </RequireProfessional>
                             </RouteErrorBoundary>
                           }
                         />
@@ -626,14 +652,6 @@ const App = () => (
                           element={
                             <RouteErrorBoundary>
                               <AccountSettings />
-                            </RouteErrorBoundary>
-                          }
-                        />
-                        <Route
-                          path="accessibility-settings"
-                          element={
-                            <RouteErrorBoundary>
-                              <AccessibilitySettingsPage />
                             </RouteErrorBoundary>
                           }
                         />

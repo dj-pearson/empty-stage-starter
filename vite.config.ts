@@ -85,6 +85,12 @@ export default defineConfig(({ mode }) => ({
               return 'vendor-sentry';
             }
             // React Router (separate chunk for route changes)
+            // html5-qrcode is shared by the barcode, receipt and import dialogs.
+            // Unnamed, Rollup names the shared chunk after whichever module it
+            // picks, and "index" collides with the entry's budget line.
+            if (id.includes('html5-qrcode')) {
+              return 'vendor-scanner';
+            }
             if (id.includes('react-router')) {
               return 'vendor-router';
             }
@@ -190,7 +196,19 @@ export default defineConfig(({ mode }) => ({
           }
         },
         // Consistent naming for better caching
-        chunkFileNames: 'assets/js/[name]-[hash].js',
+        // A shared lazy chunk whose facade is some package's index.js is named
+        // "index" by Rollup, and check-bundle-budget.mjs adds every "index"
+        // chunk to the entry's budget line. Name those after the package (or
+        // folder) they come from instead. Renaming only: chunk contents and
+        // preloads are unchanged.
+        chunkFileNames: (chunkInfo) => {
+          if (chunkInfo.name !== 'index') return 'assets/js/[name]-[hash].js';
+          const source = chunkInfo.facadeModuleId ?? chunkInfo.moduleIds[0] ?? '';
+          const pkg = source.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/)?.[1];
+          const dir = source.split('/').slice(-2, -1)[0];
+          const label = (pkg ?? dir ?? 'chunk').replace(/^@/, '').replace(/[^a-zA-Z0-9-]/g, '-');
+          return `assets/js/${label}-[hash].js`;
+        },
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
           if (!assetInfo.name) return 'assets/[name]-[hash][extname]';

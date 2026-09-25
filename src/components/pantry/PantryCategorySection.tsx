@@ -1,4 +1,5 @@
-import { memo } from "react";
+import { memo, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -7,22 +8,49 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Food, FoodCategory } from "@/types";
+import { Food } from "@/types";
 import { FoodCard } from "@/components/FoodCard";
+import type { CatalogEntry } from "@/lib/effectiveFood";
+import type { ItemFit } from "@/lib/kidFit";
+import { computeStockStats } from "@/lib/pantryData";
+import { ingredientMatchKey } from "@/lib/groceryMerge";
 import { PantryListItem } from "./PantryListItem";
-import { CATEGORY_CONFIG, type ViewMode } from "./pantryConstants";
+import {
+  getCategoryConfig,
+  STOCK_TONE,
+  type PantryCategoryKey,
+  type ViewMode,
+} from "./pantryConstants";
+import "@/i18n/appLocale";
 
 interface PantryCategorySectionProps {
-  category: FoodCategory;
+  category: PantryCategoryKey;
   items: Food[];
   isOpen: boolean;
-  onToggle: () => void;
+  /** Receives the category, so the parent can pass one stable callback. */
+  onToggle: (cat: PantryCategoryKey) => void;
   viewMode: ViewMode;
   onEdit: (food: Food) => void;
   onDelete: (id: string) => void;
   onQuantityChange: (id: string, newQuantity: number) => void;
+  /** US-672: the last of it was thrown out. */
+  onWaste?: (id: string, quantity: number) => void;
   onAddToGrocery?: (food: Food) => void;
+  /** Legacy household allergen list; superseded per item by `fitByFoodId`. */
   kidAllergens: string[];
+  /** US-797: the catalog row a food is linked to, for provenance and credit. */
+  getCatalog?: (food: Food) => CatalogEntry | null;
+  /** Per-kid fit, keyed by food id. */
+  fitByFoodId?: Map<string, ItemFit>;
+  /**
+   * What is already on the grocery list. Matched on the food id and on
+   * ingredientMatchKey(food.name), the key the grocery merge stacks on.
+   */
+  onListKeys?: Set<string>;
+  /** Estimated days until each food runs out, keyed by food id. */
+  runsOutInDays?: Map<string, number>;
+  /** Item 21: list rows' "used up" (button and left swipe). */
+  onUsedUp?: (food: Food) => void;
 }
 
 export const PantryCategorySection = memo(function PantryCategorySection({
@@ -34,25 +62,36 @@ export const PantryCategorySection = memo(function PantryCategorySection({
   onEdit,
   onDelete,
   onQuantityChange,
+  onWaste,
   onAddToGrocery,
   kidAllergens,
+  getCatalog,
+  fitByFoodId,
+  onListKeys,
+  runsOutInDays,
+  onUsedUp,
 }: PantryCategorySectionProps) {
-  const config = CATEGORY_CONFIG[category];
+  const { t } = useTranslation();
+  const config = getCategoryConfig(category);
   const Icon = config.icon;
-  const lowStockCount = items.filter(
-    (f) => (f.quantity ?? 0) <= 2
-  ).length;
+  // Same rule as the stats everywhere else: out is <= 0, low is 1..threshold.
+  // A zero-quantity item used to count as "low" here.
+  const { lowStock, outOfStock } = useMemo(() => computeStockStats(items), [items]);
+  const handleOpenChange = useCallback(() => onToggle(category), [onToggle, category]);
 
   if (items.length === 0) return null;
 
+  const isOnList = (food: Food): boolean | undefined =>
+    onListKeys ? onListKeys.has(food.id) || onListKeys.has(ingredientMatchKey(food.name)) : undefined;
+
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle}>
+    <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
       <CollapsibleTrigger asChild>
         <button
           type="button"
           className={cn(
-            "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
-            "hover:shadow-sm active:scale-[0.99]",
+            "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors duration-200",
+            "hover:shadow-sm",
             config.bgLight,
             config.bgDark,
             config.border,
@@ -65,10 +104,10 @@ export const PantryCategorySection = memo(function PantryCategorySection({
               config.dot
             )}
           >
-            <Icon className="h-4 w-4 text-white" />
+            <Icon className={cn("h-4 w-4", config.iconOnDot)} aria-hidden="true" />
           </div>
           <span className={cn("font-semibold text-sm", config.text)}>
-            {config.label}
+            {t(config.labelKey, config.label)}
           </span>
           <Badge
             variant="secondary"
@@ -76,19 +115,36 @@ export const PantryCategorySection = memo(function PantryCategorySection({
           >
             {items.length}
           </Badge>
-          {lowStockCount > 0 && (
+          {outOfStock > 0 && (
             <Badge
               variant="outline"
-              className="text-[10px] px-1.5 py-0 h-[18px] border-amber-400 text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700"
+              className={cn("text-[10px] px-1.5 py-0 h-[18px]", STOCK_TONE.out.chip)}
             >
-              {lowStockCount} low
+              {t("pantry.item.sectionOut", {
+                defaultValue_one: "{{count}} out",
+                defaultValue: "{{count}} out",
+                count: outOfStock,
+              })}
+            </Badge>
+          )}
+          {lowStock > 0 && (
+            <Badge
+              variant="outline"
+              className={cn("text-[10px] px-1.5 py-0 h-[18px]", STOCK_TONE.low.chip)}
+            >
+              {t("pantry.item.sectionLow", {
+                defaultValue_one: "{{count}} low",
+                defaultValue: "{{count}} low",
+                count: lowStock,
+              })}
             </Badge>
           )}
           <ChevronDown
             className={cn(
-              "h-4 w-4 ml-auto transition-transform duration-200 text-muted-foreground",
+              "h-4 w-4 ml-auto transition-transform duration-200 text-muted-foreground motion-reduce:transition-none",
               isOpen && "rotate-180"
             )}
+            aria-hidden="true"
           />
         </button>
       </CollapsibleTrigger>
@@ -103,7 +159,13 @@ export const PantryCategorySection = memo(function PantryCategorySection({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onQuantityChange={onQuantityChange}
+                onWaste={onWaste}
                 kidAllergens={kidAllergens}
+                catalog={getCatalog?.(food) ?? null}
+                fit={fitByFoodId?.get(food.id)}
+                onAddToGrocery={onAddToGrocery}
+                onList={isOnList(food)}
+                runsOutInDays={runsOutInDays?.get(food.id)}
               />
             ))}
           </div>
@@ -116,8 +178,14 @@ export const PantryCategorySection = memo(function PantryCategorySection({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onQuantityChange={onQuantityChange}
+                onWaste={onWaste}
                 onAddToGrocery={onAddToGrocery}
                 kidAllergens={kidAllergens}
+                catalog={getCatalog?.(food) ?? null}
+                fit={fitByFoodId?.get(food.id)}
+                onList={isOnList(food)}
+                runsOutInDays={runsOutInDays?.get(food.id)}
+                onUsedUp={onUsedUp}
               />
             ))}
           </div>

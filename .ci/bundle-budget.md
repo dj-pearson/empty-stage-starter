@@ -264,3 +264,141 @@ every budget from the current build, which lifts chunks that are nowhere near
 their limit — `vendor-react` 63000 → 65000, `totalJs` 2510000 → 2552000 — and
 that is how a ratchet becomes a ceiling. Everything else stays at the number it
 earned.
+
+## 2026-09-24: `totalJs` 2510000 -> 2570000 (page-excellence pass)
+
+The planner, recipes, grocery and pantry reworks added about 124 kB gz of
+route-only code: new dialogs split into their own chunks, the kid-fit and
+plan-to-grocery layers, and their copy. None of it is in the entry. The
+copy first landed in `en.json`, which is eager, and pushed `index` from
+118.7 kB to 138.8 kB; it now lives in `src/i18n/locales/app/*.json` and is
+registered by `src/i18n/appLocale.ts`, which each consuming component
+imports, so it ships in a lazy chunk (17.8 kB gz) and `index` is back to
+about 122 kB. html5-qrcode also lost its chunk name once Pantry shared it,
+and Rollup called the shared chunk `index`, which the checker summed into
+the entry's budget line; `vite.config.ts` now names it `vendor-scanner`.
+
+Measured with a JWT-shaped anon key (the authorized build): total 2437.2 kB
+on main, 2560.7 kB after. Eager closure 311.0 -> 314.4 kB (budget 322000,
+unchanged); `index.html` preload 191.1 kB (budget 198000, unchanged). Only
+`totalJs` moves.
+
+## 2026-09-24: `totalJs` 2570000 -> 2590000 (Kids tab)
+
+The Kids rework rebuilt the intake questionnaire (813 -> 1293 lines, now its
+own lazy chunk, +10.0 kB) and the quick-edit dialog (+3.5 kB), and added
+kids copy to the lazy `appLocale` chunk (+4.1 kB). All route-only; the entry
+grew 0.9 kB and the eager and preload budgets still pass. Measured total
+2581.5 kB against 2560.4 kB before.
+
+## 2026-09-24: `totalJs` 2590000 -> 2600000 (Dashboard home)
+
+The home rebuild (Tonight hero, Today tasks, setup checklist, one insight
+slot, single quick-log path) added 8.4 kB of route chunks after deleting
+four unreachable components; the entry went from 315.4 to 315.2 kB.
+Measured total 2590.0 kB, exactly at the old ceiling, so it moves by the
+growth plus room for per-build variation (the injected release id).
+
+## 2026-09-24: `totalJs` 2600000 -> 2615000 (Food Journal)
+
+The journal became a logging and reporting screen: still-to-log card,
+per-row exposure/first-try/allergen chips, per-kid patterns and a share
+report. FoodJournal route chunk 3.6 -> 12.6 kB, plus 3.9 kB of shared
+helpers; +13.5 kB total. Eager closure and preload unchanged. Measured
+total 2603.3 kB.
+
+## 2026-09-24: `totalJs` 2615000 -> 2630000 (Food Tracker)
+
+The tracker gained the per-food ladder view (behind `exposure_ladder`),
+a one-tap log sheet, a kid-aware food picker and a per-food history
+drill-down, while the legacy flag-off tracker stays as the fallback until
+the flag flips. FoodTracker route chunk 6.6 -> 21.4 kB after dropping
+<Trans> (which pulled html-parse-stringify into this chunk alone). Eager
+closure unchanged. Measured total 2621.2 kB. Retiring the legacy view
+once the flag defaults on should give most of this back.
+
+## 2026-09-24: `totalJs` 2630000 -> 2645000 (Insights)
+
+Insights was rebuilt from a static stats page into five per-kid sections
+(week trend, what's working, next step, variety, allergy check).
+InsightsDashboard route chunk 3.5 -> 12.2 kB, appLocale +1.8 kB, plus
+about 4 kB of chunk-split overhead from shared modules the page now
+reuses. Eager closure unchanged. Measured total 2638.6 kB.
+
+## 2026-09-24: `totalJs` 2645000 -> 2670000 (approved features, wave 1)
+
+Owner-approved: raise the ceiling for route-only feature growth. Wave 1
+added desktop family grid, week-start preference, try-bite strip
+(Planner +5.9), in-store mode (+4.3), receipt apply (+2.6), grocery kid
+filter (+2.1), radio-group for the week-start setting (+2.1), allergen
+families and severity (+1.7), ladder fold (+1.3). Eager closure 315.7 kB
+(budget 322 kB, unchanged). Measured total 2660.3 kB.
+
+## 2026-09-24: `totalJs` 2670000 -> 2695000 (approved features, wave 2)
+
+Owner-approved raise for route-only growth. Wave 2 added the single
+section editor for child profiles (ManageKidsDialog +7.8 kB, with
+ChildIntakeQuestionnaire -10.1 kB removed), Recipes cook log, smart
+collections and import review (+5.7 kB), the waste report (4.1 kB), the
+public shared-recipe page (3.2 kB), the starter sheet (3.2 kB) and their
+copy (+2.7 kB). The drawer (vaul) moved out of Planner into its own
+chunk, net about zero. Eager closure 315.9 kB (budget 322 kB,
+unchanged). Measured total 2685.5 kB.
+
+## 2026-09-24: `totalJs` 2695000 -> 2720000 (AI Coach)
+
+Owner-approved raise for route-only growth. The coach became grounded
+(coachContext), safety-checked (reply allergen scan, red-flag card) and
+actionable (useCoachActions: try bite, ladder, grocery with Undo): AICoach
+route chunk +13.3 kB, shared kidProgress/kidAllergenChips/planAllergenGuard
+chunks, +1.6 kB copy. Eager entry 315.8 kB (budget 322 kB, unchanged).
+Measured total 2708.4 kB.
+
+## 2026-09-24: `totalJs` 2720000 -> 2735000 (Meal Builder)
+
+Owner-approved raise for route-only growth. Meal Builder went from a
+stars toy to a per-kid plate builder: route chunk 4.1 -> 15.4 kB
+(plateBuilder selector, drawn plate, zone choices, slot chip), appLocale
++1.6 kB. Two imports were moved to leaf modules to keep platePlanner and
+useRecipeQuickPlan out of its graph (-2.4 kB). Eager closure unchanged.
+Measured total 2724.0 kB.
+
+## 2026-09-24: `totalJs` 2735000 -> 2755000 (Sibling Meal Finder)
+
+Owner-approved raise for route-only growth. The finder now opens solved
+with a hero pick, per-child plate lines, honest tiers and writes through
+useRecipeQuickPlan: SiblingMealFinder chunk +5.1 kB, TonightCookDialog
++1.7, siblingMealFinder lib +1.7, copy +1.6, useRecipeQuickPlan split
+into a shared chunk (+2.2, Recipes -1.3). Eager unchanged. Measured total
+2744.3 kB.
+
+## 2026-09-24: `totalJs` 2755000 -> 2770000 (Household)
+
+Owner-approved raise for route-only growth. The Household rebuild
+(roster header, sharing contract, phone invites, confirm-before-join)
+added about 10 kB gz after its duplicated defaultValue strings were
+removed; measured total 2754.8 kB, 0.2 kB under the old ceiling, which
+per-build variation (the injected release id) could cross. Eager
+unchanged at 316.1 kB.
+
+## 2026-09-24: `totalJs` 2770000 -> 2805000 (Settings hub)
+
+Owner-approved raise for route-only growth. The 5-tab AccountSettings
+monolith and the separate accessibility page became one sectioned hub
+(profile, sign-in, privacy, notifications, planner, accessibility, plan,
+data) with per-section components, a household-aware delete dialog, a
+per-table export manifest and a quick-comfort row. Eager unchanged.
+Measured total 2793.0 kB.
+
+## 2026-09-25: `totalJs` 2805000 -> 2835000 (Billing and Professional Settings)
+
+Owner-approved raise for route-only growth. Billing now reads the plan
+the server enforces (usePlanStatus over get_usage_stats) with
+source-honest cards per Stripe / App Store / complimentary, usage meters
+and an upgrade dialog; Professional Settings became a practice profile
+behind a route guard (+8.7 kB plan cards, +4.1 kB copy, +1.4 kB guard,
++1.7 kB lazy UpgradeDialog). UpgradeDialog is lazy so the page-scoped
+locale bundle stays out of the entry (the entry chunk shrank 8 kB gz).
+vite.config.ts now names a lazy chunk whose facade is a package's
+index.js after the package, so it is no longer summed into the "index"
+(entry) line. Measured total 2824.3 kB.

@@ -1,0 +1,55 @@
+{
+  "aiCoach": {
+    "composer": {
+      "label": "Message the coach",
+      "placeholder": "Ask about meals, picky eating, new foods...",
+      "send": "Send message",
+      "hint": "Enter to send, Shift+Enter for a new line",
+      "offline": "You're offline. Reconnect to send.",
+      "counter": "{{length}}/{{max}}"
+    },
+    "errors": {
+      "offline": "You're offline. Your question is saved; send it when you're back.",
+      "busy": "The coach is busy right now. Try again in a minute.",
+      "limit": "You've used today's coach questions. Past answers are still here.",
+      "generic": "The coach couldn't answer that. Try again."
+    },
+    "limit": {
+      "reached": "You've used today's coach questions. Your past conversations are still here."
+    },
+    "list": {
+      "title": "Conversations",
+      "new": "Start a new conversation",
+      "history": "Conversation history",
+      "sheetDescription": "Pick a past conversation or start a new one.",
+      "loadError": "Couldn't load your conversations.",
+      "retry": "Try again",
+      "empty": "No conversations yet. Ask your first question.",
+      "deleteNamed": "Delete conversation {{title}}",
+      "archived": "Conversation deleted",
+      "archiveFailed": "Couldn't delete that conversation.",
+      "restoreFailed": "Couldn't restore that conversation.",
+      "undo": "Undo"
+    },
+    "starters": {
+      "title": "What's happening at mealtimes?",
+      "intro": "Tap a question or type your own. Answers use this child's foods, ladder and allergies.",
+      "nextFor": "What next for {{food}}?",
+      "ideasLike": "Ideas like {{food}}",
+      "beige": "Only eats beige food",
+      "vegetables": "Refuses vegetables"
+    },
+    "thread": {
+      "you": "You",
+      "coach": "Coach",
+      "log": "Conversation with the coach",
+      "loading": "Loading conversation...",
+      "loadError": "Couldn't load this conversation.",
+      "notSent": "Not sent",
+      "retry": "Retry",
+      "typing": "The coach is writing a reply",
+      "aboutOtherKid": "This conversation is about {{name}}. Start a new one to ask about someone else.",
+      "kidRemoved": "The child this conversation was about has been removed, so answers here are general."
+    }
+  }
+}

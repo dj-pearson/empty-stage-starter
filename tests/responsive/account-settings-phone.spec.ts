@@ -2,17 +2,14 @@ import { test, expect, devices } from '@playwright/test';
 import { signIn } from '../helpers/auth';
 
 /**
- * Account settings at phone width (US-768).
+ * The Settings hub at phone width.
  *
- * The five tabs were a `grid-cols-5` that fitted a phone by hiding every label
- * below 640px (`hidden sm:inline`), leaving five buttons whose only content was
- * an aria-hidden icon. So each tab had no accessible name at all on a phone --
- * a WCAG 4.1.2 failure -- and the authenticated a11y scan never caught it,
- * because that scan runs at desktop width where the labels are present. A gate
- * that only ever looks at one viewport is not looking at the phone.
- *
- * The fix is a scrollable strip that keeps its labels. This test runs at an
- * iPhone viewport because that is the only width where any of it is true.
+ * At 390px the hub is a grouped list: a Quick row, then one link per section.
+ * Each section opens as its own history entry, so the phone's Back gesture
+ * returns to the list. The five-tab strip this replaced (US-768) shipped
+ * icon-only tabs with no accessible name at this width; the rows below are
+ * held to the same standard, read with toHaveAccessibleName rather than
+ * textContent, which reads through display:none and so passed the broken build.
  *
  * Requires a build against the fake backend:
  *   node scripts/dev/fake-postgrest.mjs &
@@ -21,100 +18,126 @@ import { signIn } from '../helpers/auth';
  *   E2E_TARGET=dist E2E_DIST=dist-e2e npx playwright test tests/responsive/
  */
 
-const TABS = ['Profile', 'Subscription', 'Notifications', 'Security', 'Accessibility'] as const;
+/** Mirrors SETTINGS_SECTION_KEYS in src/lib/settingsSections.ts. */
+const SECTIONS = ['profile', 'signin', 'privacy', 'notifications', 'planner', 'accessibility', 'plan', 'data'] as const;
 
 // Viewport ONLY, not the whole device descriptor. Spreading
 // devices['iPhone 12'] replaces the project's `use`, including the
 // executablePath that playwright.config.ts resolves for this image -- every
-// test then dies at browser launch, before an assertion runs, which looks
-// nothing like a layout failure.
+// test then dies at browser launch, before an assertion runs.
 test.use({ viewport: devices['iPhone 12'].viewport });
 
-test.describe('Account settings at phone width', () => {
-  test.beforeEach(async ({ context, page }) => {
+async function settle(page: import('@playwright/test').Page) {
+  await page.waitForLoadState('networkidle');
+  await page.locator('main, [role="main"]').first().waitFor({ state: 'visible' });
+  await page
+    .locator('.animate-pulse')
+    .first()
+    .waitFor({ state: 'detached', timeout: 10_000 })
+    .catch(() => {
+      // No skeleton on this page, or it never mounted. Either is fine.
+    });
+  await page.waitForTimeout(250);
+  expect(new URL(page.url()).pathname, `redirected to ${page.url()}`).not.toMatch(/^\/auth/);
+}
+
+/**
+ * Ask the BROWSER to pan, rather than comparing scrollWidth to clientWidth:
+ * Chromium folds content of deliberately scrollable strips into scrollWidth
+ * even when nothing can actually be panned to.
+ */
+async function pansSideways(page: import('@playwright/test').Page): Promise<number> {
+  return page.evaluate(() => {
+    const before = window.scrollX;
+    window.scrollTo(9999, window.scrollY);
+    const after = window.scrollX;
+    window.scrollTo(before, window.scrollY);
+    return after;
+  });
+}
+
+test.describe('Settings hub at phone width', () => {
+  test.beforeEach(async ({ context }) => {
     await signIn(context);
+  });
+
+  test('the index lists every section as a named link', async ({ page }) => {
     await page.goto('/dashboard/settings');
-    await page.waitForLoadState('networkidle');
-    // Anchor on the tablist, not on `main`. This route renders two <main>
-    // elements and the first is display:none, so the copied-from-elsewhere
-    // `main` wait times out after 30s without ever reaching an assertion.
-    await page.getByRole('tablist').first().waitFor({ state: 'visible' });
-    await page
-      .locator('.animate-pulse')
-      .first()
-      .waitFor({ state: 'detached', timeout: 10_000 })
-      .catch(() => {
-        // No skeleton on this page, or it never mounted. Either is fine.
-      });
-    expect(new URL(page.url()).pathname, `redirected to ${page.url()}`).not.toMatch(/^\/auth/);
-  });
+    await settle(page);
 
-  test('every tab has an accessible name', async ({ page }) => {
-    // The defect this story exists to fix. An icon-only tab is not something
-    // anybody using a screen reader can choose between.
-    //
-    // toHaveAccessibleName, NOT textContent. The first version of this test
-    // used getByRole('tab', { name }) and allTextContents(), both of which
-    // read text through `display: none` -- so it passed against the broken
-    // build, where the label span was computed display:none at 390px and the
-    // accessible name was empty. A test for a hidden-label bug that reads
-    // hidden labels measures nothing.
-    for (const label of TABS) {
-      const tab = page.getByRole('tab').filter({ hasText: label }).first();
-      await expect(tab).toHaveAccessibleName(new RegExp(label, 'i'));
-      await expect(tab.getByText(label, { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+    for (const key of SECTIONS) {
+      const row = page.locator(`a[data-settings-row="${key}"]`);
+      await expect(row).toBeVisible();
+      await expect(row).toHaveAttribute('href', `/dashboard/settings?section=${key}`);
+      await expect(row).toHaveAccessibleName(/\S/);
+      const box = await row.boundingBox();
+      expect(box?.height ?? 0, `${key} row is under 44px tall`).toBeGreaterThanOrEqual(44);
     }
   });
 
-  test('the page never scrolls horizontally, on any tab', async ({ page }) => {
-    for (const label of TABS) {
-      await page.getByRole('tab').filter({ hasText: label }).first().click();
-      await page.waitForTimeout(250);
+  test('neither the index nor any section pans sideways', async ({ page }) => {
+    await page.goto('/dashboard/settings');
+    await settle(page);
+    expect(await pansSideways(page), 'index pans sideways').toBe(0);
 
-      // Ask the BROWSER to pan, rather than comparing scrollWidth to
-      // clientWidth. On this page documentElement.scrollWidth reads 400 against
-      // a 390 viewport even though no unclipped element exceeds the viewport
-      // and nothing can actually be panned to -- the tab strip is a horizontal
-      // scroller by design and Chromium folds some of its content into that
-      // number. Asserting the metric would have failed a page that is correct,
-      // then been "fixed" by widening a tolerance until it measured nothing.
-      // What a reader cares about is whether the page moves sideways.
-      const scrolled = await page.evaluate(() => {
-        const before = window.scrollX;
-        window.scrollTo(9999, window.scrollY);
-        const after = window.scrollX;
-        window.scrollTo(before, window.scrollY);
-        return after;
-      });
-
-      expect(scrolled, `${label} tab pans sideways to x=${scrolled}`).toBe(0);
+    for (const key of SECTIONS) {
+      await page.goto(`/dashboard/settings?section=${key}`);
+      await settle(page);
+      await expect(page.locator(`#settings-${key}`)).toBeVisible();
+      const scrolled = await pansSideways(page);
+      expect(scrolled, `?section=${key} pans sideways to x=${scrolled}`).toBe(0);
     }
   });
 
-  test('every visible control fits inside the viewport', async ({ page }) => {
-    const viewport = page.viewportSize();
-    expect(viewport).not.toBeNull();
-
-    for (const label of TABS) {
-      await page.getByRole('tab').filter({ hasText: label }).first().click();
-      await page.waitForTimeout(250);
-
-      const overflowing = await page.evaluate((width) => {
+  test('every visible control in a section fits inside the viewport', async ({ page }) => {
+    const width = page.viewportSize()!.width;
+    for (const key of SECTIONS) {
+      await page.goto(`/dashboard/settings?section=${key}`);
+      await settle(page);
+      const overflowing = await page.evaluate((w) => {
         const bad: string[] = [];
-        for (const el of Array.from(document.querySelectorAll('button, a[role="button"]'))) {
+        for (const el of Array.from(document.querySelectorAll('button, a, [role="switch"]'))) {
           const r = el.getBoundingClientRect();
-          if (r.width === 0 && r.height === 0) continue; // not rendered
-          // Inside a deliberately scrollable strip, sitting off-screen is the
-          // point; only complain about controls the PAGE pushes out.
-          if (el.closest('[role="tablist"], [data-radix-scroll-area-viewport]')) continue;
-          if (r.right > width + 1) {
-            bad.push(`${el.textContent?.trim().slice(0, 40)} (right=${Math.round(r.right)})`);
-          }
+          if (r.width === 0 && r.height === 0) continue;
+          if (el.closest('[data-radix-scroll-area-viewport]')) continue;
+          if (r.right > w + 1) bad.push(`${el.textContent?.trim().slice(0, 40)} (right=${Math.round(r.right)})`);
         }
         return bad;
-      }, viewport!.width);
-
-      expect(overflowing, `${label} tab has controls past the right edge`).toEqual([]);
+      }, width);
+      expect(overflowing, `?section=${key} has controls past the right edge`).toEqual([]);
     }
+  });
+
+  test('browser Back returns from a section to the index', async ({ page }) => {
+    await page.goto('/dashboard/settings');
+    await settle(page);
+
+    await page.locator('a[data-settings-row="accessibility"]').click();
+    await expect(page).toHaveURL(/\?section=accessibility$/);
+    await expect(page.locator('#settings-accessibility')).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+    await expect(page.locator('a[data-settings-row="accessibility"]')).toBeVisible();
+  });
+
+  test('the in-page Back link does the same, without stacking history', async ({ page }) => {
+    await page.goto('/dashboard/settings');
+    await settle(page);
+
+    await page.locator('a[data-settings-row="planner"]').click();
+    await expect(page.locator('#settings-planner')).toBeVisible();
+    await page.getByRole('link', { name: 'All settings' }).click();
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+    // Focus goes back to the row the reader left from.
+    await expect(page.locator('a[data-settings-row="planner"]')).toBeFocused();
+  });
+
+  test('an unknown section lands on the index', async ({ page }) => {
+    await page.goto('/dashboard/settings?section=subscription');
+    await settle(page);
+    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+    await expect(page.locator('a[data-settings-row="plan"]')).toBeVisible();
   });
 });

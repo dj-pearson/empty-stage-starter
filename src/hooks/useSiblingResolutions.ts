@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/lib/logger';
 import type { SolverHistoryEntry, SolverResult } from '@/lib/siblingConstraintSolver';
 
@@ -35,40 +36,30 @@ function daysAgoFromIso(iso: string): number {
   return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)));
 }
 
+/** The score history should hold: pre-fairness, so the boost never feeds itself. */
+function persistedScore(ks: { score: number; rawScore?: number }): number {
+  return ks.rawScore ?? ks.score;
+}
+
 export function useSiblingResolutions() {
-  const [householdId, setHouseholdId] = useState<string | null>(null);
+  // The household comes from AuthContext, which resolves it once through the
+  // same RPC every other household query uses. A household_members
+  // maybeSingle() errored (and silently no-op'd) for a user in two households.
+  const { userId, householdId } = useAuth();
   const [history, setHistory] = useState<SolverHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load household + recent history once on mount.
+  // Load recent history, again whenever the household changes.
   useEffect(() => {
+    if (!householdId) {
+      setHistory([]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          if (!cancelled) setLoading(false);
-          return;
-        }
-
-        const { data: member } = await supabase
-          .from('household_members')
-          .select('household_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (cancelled) return;
-        const hh = member?.household_id ?? null;
-        setHouseholdId(hh);
-
-        if (!hh) {
-          setHistory([]);
-          setLoading(false);
-          return;
-        }
-
         const since = new Date();
         since.setDate(since.getDate() - HISTORY_LOOKBACK_DAYS);
 
@@ -77,7 +68,7 @@ export function useSiblingResolutions() {
           .select(
             'id, household_id, recipe_id, resolution_type, satisfaction_score, per_kid_satisfaction, created_at'
           )
-          .eq('household_id', hh)
+          .eq('household_id', householdId)
           .gte('created_at', since.toISOString())
           .order('created_at', { ascending: false })
           .limit(100);
@@ -100,7 +91,7 @@ export function useSiblingResolutions() {
           setHistory(flat);
         }
       } catch (err) {
-        logger.warn('useSiblingResolutions init error', err);
+        logger.warn('useSiblingResolutions load error', err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -108,22 +99,18 @@ export function useSiblingResolutions() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [householdId]);
 
   const recordResolution = useCallback(
     async ({ result, selectedKidIds, planEntryId }: RecordResolutionArgs): Promise<boolean> => {
-      if (!householdId) {
+      if (!householdId || !userId) {
         logger.info('sibling_meal_resolutions: skipping record (no household)');
         return false;
       }
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return false;
 
       const perKidJson = result.perKidSatisfaction.map((ks) => ({
         kid_id: ks.kidId,
-        score: ks.score,
+        score: persistedScore(ks),
         soft_violations: ks.softViolations.map((v) => v.foodName),
         hard_violations: ks.hardViolations.map((v) => v.foodName),
       }));
@@ -145,7 +132,7 @@ export function useSiblingResolutions() {
         .from('sibling_meal_resolutions')
         .insert({
           household_id: householdId,
-          user_id: user.id,
+          user_id: userId,
           kid_ids: selectedKidIds,
           recipe_id: result.recipeId,
           resolution_type: result.resolutionType,
@@ -168,7 +155,7 @@ export function useSiblingResolutions() {
         setHistory((prev) => [
           ...result.perKidSatisfaction.map((ks) => ({
             kidId: ks.kidId,
-            score: ks.score,
+            score: persistedScore(ks),
             daysAgo: 0,
           })),
           ...prev,
@@ -176,7 +163,7 @@ export function useSiblingResolutions() {
       }
       return true;
     },
-    [householdId]
+    [householdId, userId]
   );
 
   return { householdId, history, loading, recordResolution } as const;

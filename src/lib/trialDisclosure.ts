@@ -54,7 +54,7 @@ export function formatTrialDisclosure(terms: TrialTerms): string | null {
   return (
     `Free for ${days} ${dayLabel}, then ${amount} per ${cadence}. ` +
     `We'll email you before the first charge. ` +
-    `Cancel any time from Account Settings and you won't be billed.`
+    `Cancel any time from Settings and you won't be billed.`
   );
 }
 

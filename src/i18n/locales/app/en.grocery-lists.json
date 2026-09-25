@@ -1,0 +1,184 @@
+{
+  "grocery": {
+    "lists": {
+      "common": {
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "deleting": "Deleting..."
+      },
+      "selector": {
+        "label": "Grocery list",
+        "placeholder": "Select a list",
+        "loading": "Loading lists",
+        "loadFailed": "Couldn't load your lists",
+        "retry": "Try again",
+        "retryStale": "Lists may be out of date. Try again",
+        "createFirst": "Create your first list",
+        "defaultTag": "(Default)",
+        "newList": "New list...",
+        "manageLists": "Manage lists..."
+      },
+      "create": {
+        "title": "New grocery list",
+        "description": "Keep a separate list for each store or occasion.",
+        "templates": "Start from",
+        "nameLabel": "List name",
+        "namePlaceholder": "e.g. Weekly groceries, Costco run",
+        "nameRequired": "Give the list a name",
+        "iconLabel": "Icon",
+        "storeLabel": "Store (optional)",
+        "storePlaceholder": "e.g. Costco, Whole Foods, Target",
+        "descriptionLabel": "Notes (optional)",
+        "descriptionPlaceholder": "What is this list for?",
+        "setDefault": "Open this list by default",
+        "creating": "Creating...",
+        "submit": "Create list",
+        "created": "{{name}} created",
+        "failed": "Couldn't create the list. Try again."
+      },
+      "templates": {
+        "weekly": {
+          "name": "Weekly groceries",
+          "description": "Regular weekly shopping"
+        },
+        "bulk": {
+          "name": "Costco run",
+          "description": "Bulk shopping"
+        },
+        "party": {
+          "name": "Party supplies",
+          "description": "For events and parties"
+        },
+        "quick": {
+          "name": "Quick shop",
+          "description": "Quick essentials"
+        }
+      },
+      "icons": {
+        "cart": "Shopping cart",
+        "store": "Store",
+        "package": "Package",
+        "party": "Party",
+        "pizza": "Pizza",
+        "cake": "Cake",
+        "home": "Home",
+        "heart": "Heart"
+      },
+      "manage": {
+        "title": "Manage lists",
+        "description": "Pick the default list, archive old ones, or delete them.",
+        "loadFailed": "Couldn't load your lists",
+        "showActive": "Show active lists",
+        "showArchived": "Show archived",
+        "activeCount_one": "{{count}} active list",
+        "activeCount_other": "{{count}} active lists",
+        "archivedCount_one": "{{count}} archived list",
+        "archivedCount_other": "{{count}} archived lists",
+        "emptyActive": "No lists yet",
+        "emptyArchived": "No archived lists",
+        "defaultBadge": "Default",
+        "openBadge": "Open",
+        "store": "Store: {{name}}",
+        "setDefaultFor": "Make {{name}} the default",
+        "archiveFor": "Archive {{name}}",
+        "restoreFor": "Restore {{name}}",
+        "deleteFor": "Delete {{name}}",
+        "defaultSet": "{{name}} is now the default",
+        "defaultFailed": "Couldn't change the default list",
+        "cannotArchiveActive": "Switch to another list before archiving this one",
+        "cannotDeleteActive": "Switch to another list before deleting this one",
+        "archived": "{{name}} archived",
+        "restored": "{{name}} restored",
+        "archiveFailed": "Couldn't archive the list",
+        "restoreFailed": "Couldn't restore the list",
+        "deleteConfirm": "Delete {{name}}?",
+        "deleteConfirmWithItems_one": "Delete {{name}} and its {{count}} item?",
+        "deleteConfirmWithItems_other": "Delete {{name}} and its {{count}} items?",
+        "deleteWarning": "This can't be undone, on this phone or anyone else's.",
+        "deleted": "{{name}} deleted",
+        "deleteFailed": "Couldn't delete the list"
+      }
+    },
+    "stores": {
+      "picker": {
+        "label": "Store",
+        "typical": "Typical store",
+        "yourStores": "Your stores",
+        "commonChains": "Common chains",
+        "saveFailed": "Couldn't change the store. Try again."
+      },
+      "place": {
+        "label": "Which aisle is it in?",
+        "notHere": "Not here",
+        "numbered": "{{number}} - {{name}}"
+      },
+      "create": {
+        "title": "Add a store",
+        "editTitle": "Edit {{name}}",
+        "description": "Set up its aisles once and the list sorts itself in the order you walk.",
+        "nameLabel": "Store name",
+        "namePlaceholder": "e.g. Kroger on Main St",
+        "nameRequired": "Give the store a name",
+        "addressLabel": "Address (optional)",
+        "addressPlaceholder": "123 Main St, City",
+        "needsHousehold": "Your household is still loading. Try again in a moment.",
+        "saving": "Saving...",
+        "save": "Save",
+        "submit": "Add store",
+        "created": "{{name}} added",
+        "updated": "{{name}} updated",
+        "createFailed": "Couldn't add the store",
+        "updateFailed": "Couldn't save the store"
+      },
+      "manage": {
+        "title": "Stores",
+        "description": "Add the stores you shop at and set their aisle order.",
+        "loadFailed": "Couldn't load your stores",
+        "loading": "Loading stores...",
+        "emptyOwn": "None yet. Add the store you shop at most.",
+        "chainsNote": "Built in. Pick one from the Store menu on your list.",
+        "aisleCount_one": "{{count}} aisle",
+        "aisleCount_other": "{{count}} aisles",
+        "aisles": "Aisles",
+        "aislesFor": "Aisles for {{name}}",
+        "editFor": "Edit {{name}}",
+        "deleteFor": "Delete {{name}}",
+        "create": "Add store",
+        "done": "Done",
+        "deleteConfirm": "Delete {{name}}?",
+        "deleteWarning": "Lists using it switch to the typical store.",
+        "deleteWarningAisles_one": "Its {{count}} aisle goes with it. Lists using it switch to the typical store.",
+        "deleteWarningAisles_other": "Its {{count}} aisles go with it. Lists using it switch to the typical store.",
+        "deleted": "{{name}} deleted",
+        "deleteFailed": "Couldn't delete the store"
+      },
+      "aisles": {
+        "title": "Aisles at {{name}}",
+        "description": "Put them in the order you walk. The list follows it.",
+        "nameLabel": "Aisle name",
+        "namePlaceholder": "Aisle name, e.g. Produce",
+        "numberLabel": "Aisle number",
+        "numberPlaceholder": "No. (optional)",
+        "add": "Add",
+        "loading": "Loading aisles...",
+        "loadFailed": "Couldn't load the aisles",
+        "empty": "No aisles yet. Add them one by one, or start from a typical layout and adjust.",
+        "seedTypical": "Start from a typical store",
+        "seedFailed": "Couldn't add the typical aisles",
+        "addFailed": "Couldn't add the aisle",
+        "moveUp": "Move {{name}} up",
+        "moveDown": "Move {{name}} down",
+        "moveFailed": "Couldn't move the aisle",
+        "rename": "Rename {{name}}",
+        "renameInput": "New name for {{name}}",
+        "saveName": "Save name",
+        "cancelRename": "Cancel rename",
+        "renameFailed": "Couldn't rename the aisle",
+        "delete": "Delete {{name}}",
+        "deleteConfirm": "Delete {{name}}?",
+        "deleteWarning": "Foods filed under it go back to unplaced for this store.",
+        "deleteFailed": "Couldn't delete the aisle"
+      }
+    }
+  }
+}

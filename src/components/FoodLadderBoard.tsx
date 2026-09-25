@@ -12,9 +12,10 @@
  * twice — that decision stays entirely with the parent.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LadderReportDialog } from '@/components/LadderReportDialog';
+import { firstName } from '@/lib/firstName';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -39,15 +41,25 @@ import { cn } from '@/lib/utils';
 import { useFoods, useKids } from '@/contexts/AppContext';
 import { usePickyWinSharePref } from '@/hooks/usePickyWinSharePref';
 import { LadderQuickLogControls } from '@/components/LadderQuickLogControls';
-import { useFoodLadder, todayIsoDate, type LadderRow } from '@/hooks/useFoodLadder';
-import { RUNGS, RUNG_META, rungIndex, type LadderStatus } from '@/lib/exposureLadder';
+import { formatRelativeDay, localIsoDate } from '@/components/foodTracker/ladderDates';
+import { useFoodLadder, type LadderRow } from '@/hooks/useFoodLadder';
+import { RUNGS, RUNG_META, rungIndex } from '@/lib/exposureLadder';
+import { groupLadder, type LadderGroups } from '@/lib/ladderOverview';
+import '@/i18n/appLocale';
 
-/** Display order puts what is moving first and what is finished last. */
-const SECTION_ORDER: LadderStatus[] = ['active', 'backed_off', 'paused', 'mastered'];
+type GroupKey = Exclude<keyof LadderGroups, 'stalledIds'>;
 
-interface RungTrackProps {
+/**
+ * Display order puts what is asked of the child today first and what is
+ * finished last. Each row sits in exactly one group (groupLadder), so a food
+ * due today is never listed a second time under "Working on".
+ */
+const GROUP_ORDER: GroupKey[] = ['dueToday', 'closeToSafe', 'workingOn', 'resting', 'safeNow'];
+
+export interface RungTrackProps {
   rung: LadderRow['currentRung'];
   label: string;
+  className?: string;
 }
 
 /**
@@ -55,21 +67,17 @@ interface RungTrackProps {
  * progress bar would lose which *step* they are on, and the step is the
  * whole point.
  */
-function RungTrack({ rung, label }: RungTrackProps) {
+export function RungTrack({ rung, label, className }: RungTrackProps) {
   const reached = rungIndex(rung);
 
   return (
-    <div
-      className="flex items-center gap-1"
-      role="img"
-      aria-label={label}
-    >
+    <div className={cn('flex items-center gap-1', className)} role="img" aria-label={label}>
       {RUNGS.map((r, i) => (
         <span
           key={r}
           aria-hidden="true"
           className={cn(
-            'h-1.5 w-4 rounded-full transition-colors',
+            'h-1.5 w-4 rounded-full transition-colors motion-reduce:transition-none',
             i <= reached ? 'bg-safe-food' : 'bg-muted'
           )}
         />
@@ -78,26 +86,126 @@ function RungTrack({ rung, label }: RungTrackProps) {
   );
 }
 
-interface LadderListRowProps {
+export interface LadderRowMenuProps {
   row: LadderRow;
   foodName: string;
-  anchorName: string | null;
-  onPause: (row: LadderRow) => void;
-  onResume: (row: LadderRow) => void;
-  onStepDown: (row: LadderRow) => void;
-  onRemove: (row: LadderRow) => void;
+  onPause: (row: LadderRow) => unknown;
+  onResume: (row: LadderRow) => unknown;
+  onStepDown: (row: LadderRow) => unknown;
+  /** Optimistic in useFoodLadder: the row leaves the list before the round trip. */
+  onRemove: (row: LadderRow) => Promise<boolean>;
+  /** useFoodLadder.restoreRow, behind the Undo on the removal toast. */
+  onRestore: (row: LadderRow) => Promise<boolean>;
 }
 
-function LadderListRow({
+/**
+ * The per-row overflow menu. Remove sits apart, under a separator and in the
+ * destructive token, and is undoable for a few seconds rather than guarded by
+ * a confirm dialog: the row comes back with its id and counters intact.
+ */
+export function LadderRowMenu({
   row,
   foodName,
-  anchorName,
   onPause,
   onResume,
   onStepDown,
   onRemove,
-}: LadderListRowProps) {
+  onRestore,
+}: LadderRowMenuProps) {
   const { t } = useTranslation();
+
+  const handleRemove = async () => {
+    const removed = await onRemove(row);
+    if (!removed) {
+      toast.error(
+        t('foodTracker.ladderUi.removeFailed', {
+          defaultValue: "Couldn't remove {{food}} just now. It's still on the ladder.",
+          food: foodName,
+        })
+      );
+      return;
+    }
+    toast(
+      t('foodTracker.ladderUi.removed', {
+        defaultValue: '{{food}} is off the ladder.',
+        food: foodName,
+      }),
+      {
+        duration: 6000,
+        action: {
+          label: t('foodTracker.ladderUi.undo', { defaultValue: 'Undo' }),
+          onClick: () => {
+            void onRestore(row).then((restored) => {
+              if (!restored) {
+                toast.error(
+                  t('foodTracker.ladderUi.restoreFailed', {
+                    defaultValue: "Couldn't put {{food}} back just now.",
+                    food: foodName,
+                  })
+                );
+              }
+            });
+          },
+        },
+      }
+    );
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          aria-label={t('foodLadder.rowActionsLabel', { food: foodName })}
+        >
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {row.status === 'active' ? (
+          <DropdownMenuItem onSelect={() => void onPause(row)}>
+            <Pause className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t('foodLadder.actions.pause')}
+          </DropdownMenuItem>
+        ) : row.status !== 'mastered' ? (
+          <DropdownMenuItem onSelect={() => void onResume(row)}>
+            <Play className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t('foodLadder.actions.resume')}
+          </DropdownMenuItem>
+        ) : null}
+
+        {row.status !== 'mastered' && rungIndex(row.currentRung) > 0 ? (
+          <DropdownMenuItem onSelect={() => void onStepDown(row)}>
+            <ChevronDown className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t('foodLadder.actions.stepDown')}
+          </DropdownMenuItem>
+        ) : null}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onSelect={() => void handleRemove()}
+        >
+          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+          {t('foodLadder.actions.remove')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+interface LadderListRowProps {
+  row: LadderRow;
+  foodName: string;
+  anchorName: string | null;
+  today: string;
+  menu: ReactNode;
+}
+
+function LadderListRow({ row, foodName, anchorName, today, menu }: LadderListRowProps) {
+  const { t, i18n } = useTranslation();
   const meta = RUNG_META[row.currentRung];
   const rungLabel = t(`foodLadder.rungs.${row.currentRung}`, meta.label);
 
@@ -126,7 +234,13 @@ function LadderListRow({
             ? t('foodLadder.servedWith', { food: anchorName })
             : t('foodLadder.noAnchorYet')}
           {row.status === 'active' && row.nextDueOn ? (
-            <span> · {t('foodLadder.nextDue', { date: row.nextDueOn })}</span>
+            <span>
+              {' · '}
+              {t('foodTracker.ladderUi.nextDue', {
+                defaultValue: 'next try {{date}}',
+                date: formatRelativeDay(row.nextDueOn, today, i18n.language),
+              })}
+            </span>
           ) : null}
           {row.status === 'paused' && row.pausedReason === 'two_refusals' ? (
             <span> · {t('foodLadder.restingAfterRefusals')}</span>
@@ -135,42 +249,7 @@ function LadderListRow({
         </p>
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('foodLadder.rowActionsLabel', { food: foodName })}
-          >
-            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {row.status === 'active' ? (
-            <DropdownMenuItem onSelect={() => onPause(row)}>
-              <Pause className="mr-2 h-4 w-4" aria-hidden="true" />
-              {t('foodLadder.actions.pause')}
-            </DropdownMenuItem>
-          ) : row.status !== 'mastered' ? (
-            <DropdownMenuItem onSelect={() => onResume(row)}>
-              <Play className="mr-2 h-4 w-4" aria-hidden="true" />
-              {t('foodLadder.actions.resume')}
-            </DropdownMenuItem>
-          ) : null}
-
-          {row.status !== 'mastered' && rungIndex(row.currentRung) > 0 ? (
-            <DropdownMenuItem onSelect={() => onStepDown(row)}>
-              <ChevronDown className="mr-2 h-4 w-4" aria-hidden="true" />
-              {t('foodLadder.actions.stepDown')}
-            </DropdownMenuItem>
-          ) : null}
-
-          <DropdownMenuItem onSelect={() => onRemove(row)}>
-            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-            {t('foodLadder.actions.remove')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {menu}
     </li>
   );
 }
@@ -183,20 +262,21 @@ export function FoodLadderBoard() {
   const activeKidRecord = kids.find((k) => k.id === activeKidId) ?? null;
   const {
     rows,
-    grouped,
     loading,
-    quickLog,
+    logAttempt,
+    undoLog,
     pause,
     resume,
     pauseAll,
     stepDown,
     removeFromLadder,
+    restoreRow,
     backfillFromHistory,
     scheduleDueExposures,
     masteryCandidates,
     masteredFoodName,
     dismissMastery,
-    addFoodToLadder,
+    startFood,
   } = useFoodLadder(activeKidId, {
     kid: activeKidRecord,
     foods,
@@ -207,17 +287,12 @@ export function FoodLadderBoard() {
   const [scheduling, setScheduling] = useState(false);
   const activeKid = activeKidRecord;
   const foodNameById = useMemo(() => new Map(foods.map((f) => [f.id, f.name])), [foods]);
-
-  /**
-   * What is actually being asked of this child today. Kept separate from the
-   * status sections below: "what do I do at dinner" and "how is this food
-   * going overall" are different questions, and a parent standing in the
-   * kitchen is only asking the first one.
-   */
-  const dueToday = useMemo(() => {
-    const today = todayIsoDate();
-    return grouped.active.filter((row) => row.nextDueOn !== null && row.nextDueOn <= today);
-  }, [grouped.active]);
+  // Read once per render from local calendar parts. The board is no longer
+  // the primary surface (LadderOverview on Food Tracker is), so it does not
+  // track midnight itself.
+  const today = localIsoDate();
+  const groups = useMemo(() => groupLadder(rows, today), [rows, today]);
+  const hasActive = groups.dueToday.length + groups.closeToSafe.length + groups.workingOn.length > 0;
 
   const handleSchedule = async () => {
     if (!activeKid) return;
@@ -295,6 +370,15 @@ export function FoodLadderBoard() {
     );
   }
 
+  const kidName = activeKid?.name ?? '';
+  const groupTitle: Record<GroupKey, string> = {
+    dueToday: t('foodLadder.dueTodayTitle'),
+    closeToSafe: t('foodTracker.ladderUi.groups.closeToSafe', { defaultValue: 'Close to safe' }),
+    workingOn: t('foodLadder.sections.active.title'),
+    resting: t('foodLadder.sections.backed_off.title'),
+    safeNow: t('foodTracker.ladderUi.groups.safeNow', { defaultValue: 'Safe now' }),
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -317,7 +401,7 @@ export function FoodLadderBoard() {
               kidId={activeKid.id}
               /* First token only: kids.name is free text and some families
                  store a full name there. The report must not carry one. */
-              kidFirstName={activeKid.name.trim().split(/\s+/)[0] || activeKid.name}
+              kidFirstName={firstName(activeKid.name)}
               ladderRows={rows.map((row) => ({
                 foodId: row.foodId,
                 currentRung: row.currentRung,
@@ -326,7 +410,7 @@ export function FoodLadderBoard() {
               foodNameById={foodNameById}
             />
           ) : null}
-          {grouped.active.length > 0 ? (
+          {hasActive ? (
             <>
               <Button variant="outline" onClick={handleSchedule} disabled={scheduling}>
                 <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -372,7 +456,11 @@ export function FoodLadderBoard() {
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      if (await addFoodToLadder(candidate.foodId, candidate.anchorFoodId)) {
+                      const started = await startFood(candidate.foodId, {
+                        pairedSafeFoodId: candidate.anchorFoodId,
+                        kidId: candidate.kidId ?? undefined,
+                      });
+                      if (started.ok) {
                         toast.success(
                           t('foodLadder.mastery.started', { food: candidate.foodName })
                         );
@@ -392,80 +480,61 @@ export function FoodLadderBoard() {
         </Card>
       ) : null}
 
-      {dueToday.length > 0 ? (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t('foodLadder.dueTodayTitle')}</CardTitle>
-            <CardDescription>{t('foodLadder.dueTodayBody')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-border">
-              {dueToday.map((row) => {
-                const foodName = foodNameById.get(row.foodId) ?? t('foodLadder.unknownFood');
-                const anchorName = row.pairedSafeFoodId
-                  ? foodNameById.get(row.pairedSafeFoodId) ?? null
-                  : null;
-
-                return (
-                  <li
-                    key={row.id}
-                    className="flex flex-wrap items-start justify-between gap-3 py-4"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <p className="font-medium text-foreground">{foodName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {anchorName
-                          ? t('foodLadder.servedWith', { food: anchorName })
-                          : t('foodLadder.noAnchorYet')}
-                      </p>
-                    </div>
-                    <LadderQuickLogControls
-                      row={row}
-                      foodName={foodName}
-                      mealSlot={row.preferredMealSlot}
-                      onLog={quickLog}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {SECTION_ORDER.map((status) => {
-        const section = grouped[status];
-        if (!section || section.length === 0) return null;
+      {GROUP_ORDER.map((key) => {
+        const section = groups[key];
+        if (section.length === 0) return null;
 
         return (
-          <Card key={status}>
+          <Card key={key}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
-                <CardTitle className="text-base">
-                  {t(`foodLadder.sections.${status}.title`)}
-                </CardTitle>
+                <CardTitle className="text-base">{groupTitle[key]}</CardTitle>
                 <Badge variant="secondary">{section.length}</Badge>
               </div>
-              <CardDescription>{t(`foodLadder.sections.${status}.body`)}</CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="divide-y divide-border">
-                {section.map((row) => (
-                  <LadderListRow
-                    key={row.id}
-                    row={row}
-                    foodName={foodNameById.get(row.foodId) ?? t('foodLadder.unknownFood')}
-                    anchorName={
-                      row.pairedSafeFoodId
-                        ? foodNameById.get(row.pairedSafeFoodId) ?? null
-                        : null
-                    }
-                    onPause={pause}
-                    onResume={resume}
-                    onStepDown={stepDown}
-                    onRemove={removeFromLadder}
-                  />
-                ))}
+                {section.map((row) => {
+                  const foodName = foodNameById.get(row.foodId) ?? t('foodLadder.unknownFood');
+                  const menu = (
+                    <div className="flex flex-col items-end gap-2">
+                      <LadderRowMenu
+                        row={row}
+                        foodName={foodName}
+                        onPause={pause}
+                        onResume={resume}
+                        onStepDown={stepDown}
+                        onRemove={removeFromLadder}
+                        onRestore={restoreRow}
+                      />
+                      {key === 'dueToday' ? (
+                        <LadderQuickLogControls
+                          row={row}
+                          foodName={foodName}
+                          kidName={kidName}
+                          mealSlot={row.preferredMealSlot}
+                          onLog={logAttempt}
+                          onUndo={undoLog}
+                          showRung={false}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                  return (
+                    <LadderListRow
+                      key={row.id}
+                      row={row}
+                      foodName={foodName}
+                      today={today}
+                      anchorName={
+                        row.pairedSafeFoodId
+                          ? foodNameById.get(row.pairedSafeFoodId) ?? null
+                          : null
+                      }
+                      menu={menu}
+                    />
+                  );
+                })}
               </ul>
             </CardContent>
           </Card>

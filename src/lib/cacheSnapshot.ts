@@ -6,6 +6,8 @@ import type { Kid } from "@/types";
  * expo-secure-store), so the write-through cache would otherwise persist
  * allergens, health goals, dietary restrictions, notes, DOB, and photo in
  * plaintext. We keep only what's needed for an offline paint (id/name/age).
+ * Typed against Kid so a renamed field fails the build instead of silently
+ * leaking into the cache.
  */
 export const SENSITIVE_KID_FIELDS = [
   "allergens",
@@ -20,7 +22,16 @@ export const SENSITIVE_KID_FIELDS = [
   "notes",
   "date_of_birth",
   "profile_picture_url",
-] as const;
+  "allergen_severity",
+  "cross_contamination_sensitive",
+  "nutrition_concerns",
+  "behavioral_notes",
+  "gender",
+  "height_cm",
+  "weight_kg",
+  "favorite_foods",
+  "eating_behavior",
+] as const satisfies readonly (keyof Kid)[];
 
 /** Drop sensitive fields from a kid before caching. */
 export function redactKidForCache(kid: Kid): Kid {

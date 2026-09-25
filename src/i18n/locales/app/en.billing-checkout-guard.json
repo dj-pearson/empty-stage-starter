@@ -1,0 +1,9 @@
+{
+  "billing": {
+    "planData": {
+      "serverGuard": {
+        "alreadySubscribed": "You already have an active plan, so nothing was charged. You can manage it from Billing."
+      }
+    }
+  }
+}

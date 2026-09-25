@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeAllergen, matchingAllergen, isAllergenSafeFor } from "./allergens";
+import { normalizeAllergen, canonicalAllergen, matchingAllergen, isAllergenSafeFor } from "./allergens";
 
 describe("normalizeAllergen", () => {
   it.each([
@@ -43,5 +43,27 @@ describe("isAllergenSafeFor", () => {
     expect(isAllergenSafeFor({ allergens: ["milk"] }, { allergens: ["Milk"] })).toBe(false);
     expect(isAllergenSafeFor({ allergens: ["milk"] }, { allergens: ["wheat"] })).toBe(true);
     expect(isAllergenSafeFor({}, { allergens: ["milk"] })).toBe(true);
+  });
+});
+
+describe("synonyms (OpenFoodFacts tags vs kid picker values)", () => {
+  it.each([
+    ["en:sesame-seeds", "sesame"],
+    ["en:soybeans", "soy"],
+    ["en:gluten", "wheat"],
+    ["en:nuts", "tree nuts"],
+    ["en:crustaceans", "shellfish"],
+    ["en:molluscs", "shellfish"],
+    ["en:milk", "milk"],
+    ["Dairy", "milk"],
+    ["lactose", "milk"],
+  ])("food tag %s matches kid value %s", (foodTag, kidValue) => {
+    expect(matchingAllergen([kidValue], [foodTag])).toBe(canonicalAllergen(kidValue));
+    expect(matchingAllergen([foodTag], [kidValue])).not.toBeNull();
+  });
+
+  it("keeps peanut and tree nut apart", () => {
+    expect(matchingAllergen(["peanuts"], ["en:nuts"])).toBeNull();
+    expect(matchingAllergen(["tree nuts"], ["en:peanuts"])).toBeNull();
   });
 });

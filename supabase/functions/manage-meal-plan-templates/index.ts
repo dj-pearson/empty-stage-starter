@@ -1,7 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import {
   buildTemplatePlanRows,
-  dateForOffset,
+  templateEntryDate,
+  templateWeekdayShift,
   groupPlannedWeekIntoTemplateEntries,
   type FoodSafety,
 } from "../_shared/meal-plan-templates.ts";
@@ -383,11 +384,12 @@ async function applyTemplate(
 
   // US-716: replace clears the target week for the selected kids first; merge
   // leaves what is there and lets the upsert settle collisions.
+  const weekdayShift = templateWeekdayShift(template.created_from_week, startDate);
   if (mode === 'replace') {
     const uniqueDates = [
       ...new Set(
         template.meal_plan_template_entries.map((e: { day_of_week: number }) =>
-          dateForOffset(startDate, e.day_of_week)
+          templateEntryDate(startDate, e.day_of_week, weekdayShift)
         )
       ),
     ];
@@ -414,6 +416,7 @@ async function applyTemplate(
     householdId: profile.household_id,
     startDate,
     templateName: template.name,
+    createdFromWeek: template.created_from_week ?? null,
   });
 
   // US-716: upsert on the key added in 20260901000010, so applying the same

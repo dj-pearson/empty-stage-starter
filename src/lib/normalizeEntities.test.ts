@@ -58,3 +58,41 @@ describe("US-536: Zod validation at the data boundary", () => {
     expect(out).toHaveLength(1);
   });
 });
+
+describe("normalizeKidFromDB: allergens and severity", () => {
+  const kid = (extra: Record<string, unknown>) => parseKidRows([{ id: "k1", name: "Sam", ...extra }])[0];
+
+  it("treats a list of blanks as not recorded, not as no allergies", () => {
+    expect(kid({ allergens: [" ", ""] }).allergens).toBeUndefined();
+  });
+
+  it("keeps an explicit empty list as none known", () => {
+    expect(kid({ allergens: [] }).allergens).toEqual([]);
+  });
+
+  it("trims and dedupes case-insensitively", () => {
+    expect(kid({ allergens: ["Peanuts", "peanuts "] }).allergens).toEqual(["Peanuts"]);
+  });
+
+  it("leaves null allergens undefined", () => {
+    const out = kid({ allergens: null });
+    expect(out.allergens).toBeUndefined();
+    expect("allergens" in out).toBe(false);
+  });
+
+  it("keeps only valid severity levels", () => {
+    expect(kid({ allergen_severity: { peanuts: "severe", x: "bogus" } }).allergen_severity).toEqual({
+      peanuts: "severe",
+    });
+  });
+
+  it("drops a null or array allergen_severity", () => {
+    expect("allergen_severity" in kid({ allergen_severity: null })).toBe(false);
+    expect("allergen_severity" in kid({ allergen_severity: ["severe"] })).toBe(false);
+  });
+
+  it("coerces nutrition_concerns like the other array fields", () => {
+    expect("nutrition_concerns" in kid({ nutrition_concerns: null })).toBe(false);
+    expect(kid({ nutrition_concerns: ["iron"] }).nutrition_concerns).toEqual(["iron"]);
+  });
+});

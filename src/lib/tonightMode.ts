@@ -62,12 +62,26 @@ export function shouldShowPanicCta(args: {
   return isWithinPanicWindow(args.now) && !args.todayDinnerPlanned;
 }
 
-export function todayDinnerPlanned(planEntries: PlanEntry[], today: string): boolean {
-  return planEntries.some(
-    (p) =>
-      p.date === today &&
-      String(p.meal_slot ?? '').toLowerCase() === 'dinner',
-  );
+/**
+ * True only when EVERY kid in `kidIds` has a dinner row today. One sibling
+ * planned is not "dinner planned": the other one still needs feeding, so the
+ * panic CTA stays up. With no kids given, any dinner row today counts.
+ */
+export function todayDinnerPlanned(
+  planEntries: readonly PlanEntry[],
+  today: string,
+  kidIds?: readonly string[],
+): boolean {
+  const planned = new Set<string>();
+  let any = false;
+  for (const p of planEntries) {
+    if (String(p.date ?? '').slice(0, 10) !== today) continue;
+    if (String(p.meal_slot ?? '').toLowerCase() !== 'dinner') continue;
+    any = true;
+    planned.add(p.kid_id);
+  }
+  if (!kidIds || kidIds.length === 0) return any;
+  return kidIds.every((id) => planned.has(id));
 }
 
 export function todayIso(date: Date = new Date()): string {
@@ -155,6 +169,7 @@ export function clientFallbackSuggestions(args: {
     id: k.id,
     name: k.name,
     allergens: (k as Kid & { allergens?: string[] }).allergens ?? [],
+    allergenSeverity: k.allergen_severity ?? null,
     dislikedFoods: (k as Kid & { disliked_foods?: string[] }).disliked_foods ?? [],
   }));
 

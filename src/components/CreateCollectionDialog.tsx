@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -13,214 +15,283 @@ import { Label } from "@/components/ui/label";
 import { FormField } from "@/components/ui/form-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { RecipeCollection } from "@/types";
-import { Folder, Star, Heart, Zap, Pizza, Clock, Users, Sparkles, Loader2 } from "lucide-react";
-import { logger } from "@/lib/logger";
+import type { RecipeCollection } from "@/types";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useFormValidation, validationRules } from "@/hooks/useFormValidation";
-
-const COLLECTION_ICONS = [
-  { value: "folder", icon: Folder, label: "Folder" },
-  { value: "star", icon: Star, label: "Favorites" },
-  { value: "heart", icon: Heart, label: "Love" },
-  { value: "zap", icon: Zap, label: "Quick" },
-  { value: "pizza", icon: Pizza, label: "Pizza" },
-  { value: "clock", icon: Clock, label: "Weeknight" },
-  { value: "users", icon: Users, label: "Family" },
-  { value: "sparkles", icon: Sparkles, label: "Special" },
-];
-
-const COLLECTION_COLORS = [
-  { value: "primary", label: "Blue", class: "text-primary" },
-  { value: "green", label: "Green", class: "text-green-600" },
-  { value: "red", label: "Red", class: "text-red-600" },
-  { value: "yellow", label: "Yellow", class: "text-yellow-600" },
-  { value: "purple", label: "Purple", class: "text-purple-600" },
-  { value: "pink", label: "Pink", class: "text-pink-600" },
-  { value: "orange", label: "Orange", class: "text-orange-600" },
-  { value: "gray", label: "Gray", class: "text-muted-foreground" },
-];
+import {
+  COLLECTION_ICON_OPTIONS,
+  COLLECTION_TONES,
+  COLLECTION_TONE_KEYS,
+  DEFAULT_COLLECTION_COLOR,
+  DEFAULT_COLLECTION_ICON,
+  collectionIcon,
+  collectionTone,
+} from "@/lib/collectionAppearance";
+import type { CollectionInput, CollectionPatch } from "@/hooks/useRecipeCollections";
+import "@/i18n/appLocale";
 
 const COLLECTION_TEMPLATES = [
-  { name: "Weeknight Dinners", icon: "clock", color: "primary", description: "Quick meals for busy evenings" },
-  { name: "Kid Favorites", icon: "heart", color: "pink", description: "Recipes kids love" },
-  { name: "Family Classics", icon: "users", color: "green", description: "Traditional family meals" },
-  { name: "Try New Foods", icon: "sparkles", color: "purple", description: "Adventurous recipes" },
+  { key: "weeknight", name: "Weeknight Dinners", icon: "clock", color: "primary", description: "Quick meals for busy evenings" },
+  { key: "kidFavorites", name: "Kid Favorites", icon: "heart", color: "pink", description: "Recipes kids love" },
+  { key: "familyClassics", name: "Family Classics", icon: "users", color: "green", description: "Traditional family meals" },
+  { key: "tryNew", name: "Try New Foods", icon: "sparkles", color: "purple", description: "Adventurous recipes" },
 ];
 
 interface CreateCollectionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  userId: string;
-  householdId?: string;
   editCollection?: RecipeCollection | null;
+  /** useRecipeCollections().create */
+  onCreate: (input: CollectionInput) => Promise<RecipeCollection | null>;
+  /** useRecipeCollections().update */
+  onUpdate: (id: string, patch: CollectionPatch) => Promise<boolean>;
+  /** Called with the new collection so the page can select it. */
   onCollectionCreated?: (collection: RecipeCollection) => void;
+  onCollectionUpdated?: (collection: RecipeCollection) => void;
+}
+
+interface RadioOption {
+  value: string;
+  label: string;
+  content: ReactNode;
+}
+
+/**
+ * A row of radio buttons with roving focus: Tab lands on the checked one,
+ * arrow keys move and select, as a native radio group does.
+ */
+function RadioRow({
+  label,
+  options,
+  value,
+  onChange,
+  optionClassName,
+}: {
+  label: string;
+  options: RadioOption[];
+  value: string;
+  onChange: (value: string) => void;
+  optionClassName?: (checked: boolean) => string;
+}) {
+  const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const current = Math.max(0, options.findIndex((o) => o.value === value));
+
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const delta =
+      e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    let next = -1;
+    if (delta !== 0) next = (current + delta + options.length) % options.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = options.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    onChange(options[next].value);
+    refs.current[next]?.focus();
+  };
+
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((option, i) => {
+        const checked = option.value === value;
+        return (
+          <button
+            key={option.value}
+            ref={(el) => {
+              refs.current[i] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            aria-label={option.label}
+            title={option.label}
+            tabIndex={i === current ? 0 : -1}
+            onClick={() => onChange(option.value)}
+            onKeyDown={onKeyDown}
+            className={cn(
+              "inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-md border px-2 text-sm",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              checked ? "border-primary bg-primary/10 font-medium" : "border-border bg-background hover:bg-muted",
+              optionClassName?.(checked),
+            )}
+          >
+            {option.content}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export function CreateCollectionDialog({
   open,
   onOpenChange,
-  userId,
-  householdId,
   editCollection,
+  onCreate,
+  onUpdate,
   onCollectionCreated,
+  onCollectionUpdated,
 }: CreateCollectionDialogProps) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    icon: "folder",
-    color: "primary",
+    icon: DEFAULT_COLLECTION_ICON,
+    color: DEFAULT_COLLECTION_COLOR,
     is_default: false,
   });
   const [saving, setSaving] = useState(false);
 
-  // Form validation
   const { errors, validate, clearError, clearErrors } = useFormValidation({
-    name: validationRules.required("Collection name"),
+    name: validationRules.required(t("recipes.collections.nameLabel", { defaultValue: "Collection name" })),
   });
 
   useEffect(() => {
-    if (open) {
-      if (editCollection) {
-        setFormData({
-          name: editCollection.name,
-          description: editCollection.description || "",
-          icon: editCollection.icon || "folder",
-          color: editCollection.color || "primary",
-          is_default: editCollection.is_default,
-        });
-      } else {
-        setFormData({
-          name: "",
-          description: "",
-          icon: "folder",
-          color: "primary",
-          is_default: false,
-        });
-      }
-      clearErrors();
+    if (!open) return;
+    if (editCollection) {
+      setFormData({
+        name: editCollection.name,
+        description: editCollection.description || "",
+        icon: editCollection.icon || DEFAULT_COLLECTION_ICON,
+        color: editCollection.color || DEFAULT_COLLECTION_COLOR,
+        is_default: editCollection.is_default,
+      });
+    } else {
+      setFormData({
+        name: "",
+        description: "",
+        icon: DEFAULT_COLLECTION_ICON,
+        color: DEFAULT_COLLECTION_COLOR,
+        is_default: false,
+      });
     }
+    clearErrors();
   }, [editCollection, open, clearErrors]);
 
-  const handleTemplateSelect = (template: typeof COLLECTION_TEMPLATES[0]) => {
-    setFormData({
-      ...formData,
-      name: template.name,
-      description: template.description,
+  const handleTemplateSelect = (template: (typeof COLLECTION_TEMPLATES)[number]) => {
+    setFormData((prev) => ({
+      ...prev,
+      name: t(`recipes.collections.templates.${template.key}.name`, { defaultValue: template.name }),
+      description: t(`recipes.collections.templates.${template.key}.description`, {
+        defaultValue: template.description,
+      }),
       icon: template.icon,
       color: template.color,
-    });
+    }));
+    clearError("name");
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate(formData)) return;
 
-    // Validate form
-    if (!validate(formData)) {
-      return;
-    }
+    const input: CollectionInput = {
+      name: formData.name.trim(),
+      description: formData.description.trim() || null,
+      icon: formData.icon,
+      color: formData.color,
+      is_default: formData.is_default,
+    };
 
     setSaving(true);
     try {
       if (editCollection) {
-        // Update existing collection
-        const { data, error } = await supabase
-          .from('recipe_collections')
-          .update({
-            name: formData.name.trim(),
-            description: formData.description.trim() || null,
-            icon: formData.icon,
-            color: formData.color,
-            is_default: formData.is_default,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editCollection.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        toast.success(`Collection "${formData.name}" updated!`);
-        if (onCollectionCreated && data) {
-          onCollectionCreated(data as unknown as RecipeCollection);
-        }
+        const ok = await onUpdate(editCollection.id, input);
+        if (!ok) return;
+        toast.success(t("recipes.collections.updated", { defaultValue: "Saved \"{{name}}\"", name: input.name }));
+        onCollectionUpdated?.({
+          ...editCollection,
+          name: input.name,
+          description: input.description ?? undefined,
+          icon: input.icon,
+          color: input.color,
+          is_default: Boolean(input.is_default),
+        });
       } else {
-        // Create new collection
-        const { data, error } = await supabase
-          .from('recipe_collections')
-          .insert([
-            {
-              user_id: userId,
-              household_id: householdId,
-              name: formData.name.trim(),
-              description: formData.description.trim() || null,
-              icon: formData.icon,
-              color: formData.color,
-              is_default: formData.is_default,
-              sort_order: 0,
-            },
-          ])
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        toast.success(`Collection "${formData.name}" created!`);
-        if (onCollectionCreated && data) {
-          onCollectionCreated(data as unknown as RecipeCollection);
-        }
+        const created = await onCreate(input);
+        if (!created) return;
+        toast.success(t("recipes.collections.created", { defaultValue: "Created \"{{name}}\"", name: created.name }));
+        onCollectionCreated?.(created);
       }
-
       onOpenChange(false);
-    } catch (error) {
-      logger.error('Error saving collection:', error);
-      toast.error(editCollection ? "Failed to update collection. Please try again." : "Failed to create collection. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
-  const selectedIcon = COLLECTION_ICONS.find(i => i.value === formData.icon);
-  const IconComponent = selectedIcon?.icon || Folder;
+  const tone = collectionTone(formData.color);
+  const PreviewIcon = collectionIcon(formData.icon);
+
+  const iconOptions: RadioOption[] = COLLECTION_ICON_OPTIONS.map((option) => {
+    const Icon = option.icon;
+    return {
+      value: option.value,
+      label: t(`recipes.collections.icon.${option.labelKey}`, { defaultValue: option.label }),
+      content: <Icon className={cn("h-5 w-5", tone.text)} aria-hidden="true" />,
+    };
+  });
+
+  const colorOptions: RadioOption[] = COLLECTION_TONE_KEYS.map((key) => {
+    const option = COLLECTION_TONES[key];
+    const label = t(`recipes.collections.color.${key}`, { defaultValue: option.label });
+    return {
+      value: key,
+      label,
+      content: (
+        <>
+          <PreviewIcon className={cn("h-4 w-4", option.text)} aria-hidden="true" />
+          <span>{label}</span>
+        </>
+      ),
+    };
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {editCollection ? "Edit Collection" : "Create Recipe Collection"}
+            {editCollection
+              ? t("recipes.collections.editTitle", { defaultValue: "Edit collection" })
+              : t("recipes.collections.createTitle", { defaultValue: "New collection" })}
           </DialogTitle>
           <DialogDescription>
-            Organize your recipes into collections for easy access.
+            {t("recipes.collections.createDescription", {
+              defaultValue: "Group recipes so the right one is a tap away.",
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSave} className="space-y-4">
-          {/* Quick Templates (only for new collections) */}
           {!editCollection && (
             <div className="space-y-2">
-              <Label>Quick Templates</Label>
+              <Label>{t("recipes.collections.templatesLabel", { defaultValue: "Start from" })}</Label>
               <div className="grid grid-cols-2 gap-2">
                 {COLLECTION_TEMPLATES.map((template) => {
-                  const TemplateIcon = COLLECTION_ICONS.find(i => i.value === template.icon)?.icon || Folder;
-                  const colorClass = COLLECTION_COLORS.find(c => c.value === template.color)?.class || "text-primary";
-
+                  const TemplateIcon = collectionIcon(template.icon);
                   return (
                     <Button
-                      key={template.name}
+                      key={template.key}
                       type="button"
                       variant="outline"
                       onClick={() => handleTemplateSelect(template)}
-                      className="justify-start h-auto py-3"
+                      className="h-auto min-h-11 justify-start py-3"
                     >
-                      <TemplateIcon className={`h-5 w-5 mr-2 ${colorClass}`} />
-                      <div className="text-left">
-                        <div className="text-sm font-medium">{template.name}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-1">
-                          {template.description}
-                        </div>
-                      </div>
+                      <TemplateIcon
+                        className={cn("mr-2 h-5 w-5 shrink-0", collectionTone(template.color).text)}
+                        aria-hidden="true"
+                      />
+                      <span className="text-left">
+                        <span className="block text-sm font-medium">
+                          {t(`recipes.collections.templates.${template.key}.name`, { defaultValue: template.name })}
+                        </span>
+                        <span className="line-clamp-1 block text-xs text-muted-foreground">
+                          {t(`recipes.collections.templates.${template.key}.description`, {
+                            defaultValue: template.description,
+                          })}
+                        </span>
+                      </span>
                     </Button>
                   );
                 })}
@@ -228,120 +299,94 @@ export function CreateCollectionDialog({
             </div>
           )}
 
-          {/* Name */}
-          <FormField label="Collection Name" htmlFor="name" error={errors.name} required>
+          <FormField
+            label={t("recipes.collections.nameLabel", { defaultValue: "Collection name" })}
+            htmlFor="collection-name"
+            error={errors.name}
+            required
+          >
             <Input
-              id="name"
+              id="collection-name"
               value={formData.name}
               onChange={(e) => {
-                setFormData({ ...formData, name: e.target.value });
-                if (errors.name && e.target.value.trim()) {
-                  clearError("name");
-                }
+                const value = e.target.value;
+                setFormData((prev) => ({ ...prev, name: value }));
+                if (errors.name && value.trim()) clearError("name");
               }}
-              placeholder="e.g., Weeknight Dinners, Kid Favorites"
+              placeholder={t("recipes.collections.namePlaceholder", {
+                defaultValue: "e.g. Weeknight Dinners, Kid Favorites",
+              })}
               className={errors.name ? "border-destructive" : ""}
               aria-invalid={!!errors.name}
-              aria-describedby={errors.name ? "name-error" : undefined}
+              aria-describedby={errors.name ? "collection-name-error" : undefined}
               autoFocus
             />
           </FormField>
 
-          {/* Icon Selection */}
           <div className="space-y-2">
-            <Label>Icon</Label>
-            <div className="flex flex-wrap gap-2">
-              {COLLECTION_ICONS.map((iconOption) => {
-                const Icon = iconOption.icon;
-                const colorClass = COLLECTION_COLORS.find(c => c.value === formData.color)?.class || "text-primary";
-                
-                return (
-                  <Button
-                    key={iconOption.value}
-                    type="button"
-                    variant={formData.icon === iconOption.value ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFormData({ ...formData, icon: iconOption.value })}
-                    className="h-12 w-12"
-                    title={iconOption.label}
-                  >
-                    <Icon className={formData.icon === iconOption.value ? "" : colorClass} />
-                  </Button>
-                );
-              })}
-            </div>
+            <Label>{t("recipes.collections.iconLabel", { defaultValue: "Icon" })}</Label>
+            <RadioRow
+              label={t("recipes.collections.iconLabel", { defaultValue: "Icon" })}
+              options={iconOptions}
+              value={formData.icon}
+              onChange={(icon) => setFormData((prev) => ({ ...prev, icon }))}
+            />
           </div>
 
-          {/* Color Selection */}
           <div className="space-y-2">
-            <Label>Color</Label>
-            <div className="flex flex-wrap gap-2">
-              {COLLECTION_COLORS.map((colorOption) => (
-                <Button
-                  key={colorOption.value}
-                  type="button"
-                  variant={formData.color === colorOption.value ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFormData({ ...formData, color: colorOption.value })}
-                  className="h-10"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-4 h-4 rounded-full ${colorOption.class}`}>
-                      <IconComponent className="w-full h-full" />
-                    </div>
-                    <span>{colorOption.label}</span>
-                  </div>
-                </Button>
-              ))}
-            </div>
+            <Label>{t("recipes.collections.colorLabel", { defaultValue: "Color" })}</Label>
+            <RadioRow
+              label={t("recipes.collections.colorLabel", { defaultValue: "Color" })}
+              options={colorOptions}
+              value={formData.color}
+              onChange={(color) => setFormData((prev) => ({ ...prev, color }))}
+              optionClassName={() => "px-3"}
+            />
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Description (optional)</Label>
+            <Label htmlFor="collection-description">
+              {t("recipes.collections.descriptionLabel", { defaultValue: "Description (optional)" })}
+            </Label>
             <Textarea
-              id="description"
+              id="collection-description"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="What kind of recipes go in this collection?"
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData((prev) => ({ ...prev, description: value }));
+              }}
+              placeholder={t("recipes.collections.descriptionPlaceholder", {
+                defaultValue: "What kind of recipes go in this collection?",
+              })}
               rows={2}
             />
           </div>
 
-          {/* Default Collection */}
           <div className="flex items-center space-x-2">
             <Checkbox
-              id="is_default"
+              id="collection-is-default"
               checked={formData.is_default}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, is_default: checked as boolean })
-              }
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_default: checked === true }))}
             />
-            <label
-              htmlFor="is_default"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Set as default collection
+            <label htmlFor="collection-is-default" className="text-sm font-medium leading-none">
+              {t("recipes.collections.setDefault", { defaultValue: "Set as default collection" })}
             </label>
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={saving}
-            >
-              Cancel
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              {t("recipes.collections.cancel", { defaultValue: "Cancel" })}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {editCollection ? "Updating..." : "Creating..."}
+                  <Loader2 className="mr-2 h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+                  {t("recipes.collections.saving", { defaultValue: "Saving..." })}
                 </>
+              ) : editCollection ? (
+                t("recipes.collections.update", { defaultValue: "Save" })
               ) : (
-                editCollection ? "Update" : "Create Collection"
+                t("recipes.collections.createCta", { defaultValue: "Create collection" })
               )}
             </Button>
           </DialogFooter>
@@ -350,4 +395,3 @@ export function CreateCollectionDialog({
     </Dialog>
   );
 }
-

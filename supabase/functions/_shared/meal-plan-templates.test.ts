@@ -46,6 +46,21 @@ Deno.test('unsafeReason matches a dietary restriction', () => {
   assertStringIncludes(reason!, 'dairy');
 });
 
+// An exact lowercase compare let every one of these through.
+Deno.test('unsafeReason matches allergen spellings through the canonical matcher', () => {
+  const kid = { id: 'k', allergens: ['peanuts', 'tree nuts', 'milk'], dietary_restrictions: [] };
+  assertStringIncludes(unsafeReason(kid, 'a', foods([['a', ['Peanut']]]))!, 'contains peanut');
+  assertStringIncludes(unsafeReason(kid, 'b', foods([['b', ['en:tree-nuts']]]))!, 'en:tree-nuts');
+  assertStringIncludes(unsafeReason(kid, 'c', foods([['c', ['dairy']]]))!, 'contains dairy');
+  assertEquals(unsafeReason(kid, 'd', foods([['d', ['sesame']]])), null);
+});
+
+Deno.test('unsafeReason matches a restriction through the canonical matcher', () => {
+  const kid = { id: 'k', allergens: [], dietary_restrictions: ['dairy', 'gluten'] };
+  assertStringIncludes(unsafeReason(kid, 'a', foods([['a', ['en:milk']]]))!, 'restricted: en:milk');
+  assertStringIncludes(unsafeReason(kid, 'b', foods([['b', ['Wheat']]]))!, 'restricted: wheat');
+});
+
 Deno.test('unsafeReason passes a food the kid does not react to', () => {
   assertEquals(unsafeReason(KIDS[0], 'rice', foods([['rice', []]])), null);
 });
@@ -249,4 +264,26 @@ Deno.test('a saved week round-trips back into the same meals', () => {
   assertEquals(rows.map((r) => r.food_id), ['pasta', 'peas']);
   assertEquals(rows[0].is_primary_dish, true);
   assert(rows.every((r) => r.date === '2026-09-07'));
+});
+
+// --- families, names and weekday realignment ---------------------------------
+
+Deno.test('unsafeReason catches a tree-nut family member and an untagged name', () => {
+  const kid = { id: 'k', allergens: ['tree nuts'], dietary_restrictions: [] };
+  assertEquals(unsafeReason(kid, 'a', new Map([['a', { name: 'Mix', allergens: ['almonds'] }]])), 'contains almonds');
+  assertEquals(unsafeReason(kid, 'b', new Map([['b', { name: 'Almond butter', allergens: [] }]])), 'contains tree nut');
+});
+
+Deno.test('a Sunday-start template applied to a Monday week keeps each weekday', () => {
+  const { rows } = buildTemplatePlanRows({
+    templateEntries: [{ day_of_week: 0, meal_slot: 'dinner', food_ids: ['rice'] }],
+    kids: [{ id: 'k', allergens: [], dietary_restrictions: [] }],
+    foodsById: foods([['rice', []]]),
+    userId: 'u',
+    householdId: 'h',
+    startDate: START,
+    templateName: 'T',
+    createdFromWeek: '2026-08-30',
+  });
+  assertEquals(rows.map((r) => r.date), ['2026-09-13']);
 });

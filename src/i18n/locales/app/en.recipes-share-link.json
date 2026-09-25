@@ -1,0 +1,42 @@
+{
+  "recipes": {
+    "shareLink": {
+      "copied": "Link copied",
+      "copy": "Copy link",
+      "copyManually": "Copy this link:",
+      "create": "Create and copy link",
+      "createFailed": "Couldn't make a link. Please try again.",
+      "description": "Anyone with the link sees {{name}}: the photo, ingredients and steps. Never your kids, allergies or notes.",
+      "label": "Public link",
+      "loadFailed": "Couldn't check this recipe's link. Try again when you're online.",
+      "loading": "Checking for a link",
+      "menu": "Share link",
+      "revoke": "Turn off link",
+      "revokeFailed": "Couldn't turn the link off. Please try again.",
+      "revoked": "Link turned off. It no longer opens the recipe.",
+      "title": "Share a link"
+    }
+  },
+  "sharedRecipe": {
+    "cook": "Cook {{count}} min",
+    "cta": "Create a free account",
+    "ctaBody": "Save recipes like this one, see which of your kids can eat them, and turn the week's plan into a grocery list.",
+    "ctaTitle": "Plan meals your picky eater will actually try",
+    "errorBody": "Check your connection and try again.",
+    "errorTitle": "Couldn't load this recipe",
+    "home": "Go to EatPal",
+    "ingredients": "Ingredients",
+    "loading": "Loading the recipe",
+    "metaTitle": "{{name}} - EatPal",
+    "metaTitleFallback": "A shared recipe - EatPal",
+    "missingBody": "The person who shared it may have turned the link off. Ask them for a new one.",
+    "missingTitle": "This link isn't active",
+    "noIngredients": "No ingredients listed.",
+    "noSteps": "No steps written down.",
+    "prep": "Prep {{count}} min",
+    "servings": "Serves {{servings}}",
+    "signUpShort": "Sign up free",
+    "steps": "Steps",
+    "total": "{{count}} min total"
+  }
+}

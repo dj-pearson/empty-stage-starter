@@ -5,7 +5,7 @@ import React from 'react';
 // --- Supabase mock -------------------------------------------------------
 const mockRpc = vi.fn();
 const mockInsert = vi.fn();
-const mockChannel = vi.fn(() => ({ on: () => ({ subscribe: () => ({}) }) }));
+const mockChannel = vi.fn((..._a: unknown[]) => ({ on: () => ({ subscribe: () => ({}) }) }));
 const mockRemoveChannel = vi.fn();
 
 vi.mock('@/integrations/supabase/client', () => ({
@@ -35,6 +35,7 @@ vi.mock('@/lib/logger', () => ({
 
 import { GroceryProvider, useGrocery } from './GroceryContext';
 import type { GroceryItem } from '@/types';
+import { pendingWebOps } from '@/lib/webSyncQueue';
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <GroceryProvider>{children}</GroceryProvider>;
@@ -109,5 +110,93 @@ describe('addGroceryItemsMerged — batched writes (US-334)', () => {
       expect(beef?.quantity).toBe(2);
     });
     expect(result.current.groceryItems).toHaveLength(1);
+  });
+});
+
+describe('mergeGroceryItems', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockRpc.mockResolvedValue({ error: null });
+    mockInsert.mockReturnValue({
+      select: () => Promise.resolve({ data: [], error: null }),
+    });
+  });
+
+  it('two merges in one tick stack onto one row instead of inserting twice', async () => {
+    const { result } = renderHook(() => useGrocery(), { wrapper });
+
+    let first!: ReturnType<typeof result.current.mergeGroceryItems>;
+    let second!: ReturnType<typeof result.current.mergeGroceryItems>;
+    act(() => {
+      // Two recipes pushed from one handler, before either has rendered.
+      first = result.current.mergeGroceryItems([{ name: 'milk', quantity: 1, unit: 'gal' }]);
+      second = result.current.mergeGroceryItems([{ name: 'milk', quantity: 1, unit: 'gal' }]);
+    });
+
+    await waitFor(() => expect(mockRpc).toHaveBeenCalledTimes(1));
+    expect(result.current.groceryItems).toHaveLength(1);
+    expect(result.current.groceryItems[0].quantity).toBe(2);
+    expect(first.insertedIds).toHaveLength(1);
+    expect(second.insertedIds).toEqual([]);
+    expect(second.bumps).toEqual([
+      { id: first.insertedIds[0], prev: { quantity: 1, unit: 'gal', name: 'milk' } },
+    ]);
+    // The bump waited for the insert it depends on.
+    expect(mockInsert.mock.invocationCallOrder[0]).toBeLessThan(mockRpc.mock.invocationCallOrder[0]);
+  });
+
+  it('reports inserted ids and bumps synchronously, with what each bumped row held', () => {
+    const { result } = renderHook(() => useGrocery(), { wrapper });
+    act(() => {
+      result.current.setGroceryItemsState([
+        existing({ id: 'a', name: 'ground beef', quantity: 1, unit: 'lb' }),
+      ]);
+    });
+
+    let out!: ReturnType<typeof result.current.mergeGroceryItems>;
+    act(() => {
+      out = result.current.mergeGroceryItems([
+        { name: 'ground beef', quantity: 2, unit: 'lb' },
+        { name: 'apples', quantity: 3, unit: '' },
+      ]);
+    });
+
+    expect(out.touched).toBe(2);
+    expect(out.bumps).toEqual([{ id: 'a', prev: { quantity: 1, unit: 'lb', name: 'ground beef' } }]);
+    expect(out.insertedIds).toHaveLength(1);
+    // The id the caller got is the id of the row on screen.
+    const apples = result.current.groceryItems.find((i) => i.name === 'apples');
+    expect(apples?.id).toBe(out.insertedIds[0]);
+    // addGroceryItemsMerged still answers with a count.
+    let touched = -1;
+    act(() => {
+      touched = result.current.addGroceryItemsMerged([{ name: 'pears', quantity: 1, unit: '' }]);
+    });
+    expect(touched).toBe(1);
+  });
+
+  it('keeps an offline bump on screen and queues it, rather than rolling it back', async () => {
+    mockRpc.mockResolvedValue({ error: { message: 'TypeError: Failed to fetch' } });
+    const { result } = renderHook(() => useGrocery(), { wrapper });
+    act(() => {
+      result.current.setGroceryItemsState([
+        existing({ id: 'a', name: 'ground beef', quantity: 1, unit: 'lb' }),
+      ]);
+    });
+
+    act(() => {
+      result.current.mergeGroceryItems([{ name: 'ground beef', quantity: 1, unit: 'lb' }]);
+    });
+
+    await waitFor(async () => {
+      const ops = await pendingWebOps('u1');
+      expect(ops).toHaveLength(1);
+    });
+    const ops = await pendingWebOps('u1');
+    expect(ops[0].kind).toBe('grocery.update');
+    // Absolute values, so a replay that lands twice lands on the same number.
+    expect(ops[0].payload).toEqual({ id: 'a', updates: { quantity: 2, unit: 'lb', name: 'ground beef' } });
+    expect(result.current.groceryItems.find((i) => i.id === 'a')?.quantity).toBe(2);
   });
 });

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { GripVertical, Plus, X, FileText } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, X, FileText } from "lucide-react";
+import "@/i18n/appLocale";
 
 interface InstructionStepBuilderProps {
   steps: string[];
@@ -21,6 +23,7 @@ export function InstructionStepBuilder({
   steps,
   onChange,
 }: InstructionStepBuilderProps) {
+  const { t } = useTranslation();
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importText, setImportText] = useState("");
 
@@ -64,118 +67,116 @@ export function InstructionStepBuilder({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium">Instructions</label>
+        <span className="text-sm font-medium">
+          {t("recipes.builder.instructions", { defaultValue: "Instructions" })}
+        </span>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 text-xs gap-1"
+          className="h-11 sm:h-8 text-xs gap-1"
           onClick={() => setImportDialogOpen(true)}
         >
-          <FileText className="h-3 w-3" />
-          Import from text
+          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("recipes.builder.importSteps", { defaultValue: "Import from text" })}
         </Button>
       </div>
 
-      {steps.map((step, index) => (
-        <div key={index} className="flex gap-2 items-start group">
-          {/* Drag + step number */}
-          <div className="flex items-center gap-1 pt-2 shrink-0">
-            <button
-              aria-label="Drag to reorder this step"
-              type="button"
-              className="cursor-grab text-muted-foreground/50 hover:text-muted-foreground"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                // Simple up/down since full drag-and-drop requires @dnd-kit
-                // which may not be installed
-              }}
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
-            <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-medium text-primary">
-              {index + 1}
-            </span>
-          </div>
+      <ol className="space-y-2">
+        {steps.map((step, index) => {
+          const n = index + 1;
+          return (
+            <li key={index} className="flex gap-1.5 items-center">
+              <span
+                className="w-6 h-6 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary"
+                aria-hidden="true"
+              >
+                {n}
+              </span>
 
-          <Input
-            value={step}
-            onChange={(e) => updateStep(index, e.target.value)}
-            placeholder={`Step ${index + 1}...`}
-            className="flex-1 text-sm"
-          />
+              <Input
+                value={step}
+                onChange={(e) => updateStep(index, e.target.value)}
+                placeholder={t("recipes.builder.stepPlaceholder", { defaultValue: "Step {{n}}...", n })}
+                aria-label={t("recipes.builder.stepLabel", { defaultValue: "Step {{n}}", n })}
+                className="flex-1 min-w-0 h-11 sm:h-10 text-sm"
+              />
 
-          {/* Move up/down */}
-          <div className="flex flex-col opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground text-xs px-1"
-              onClick={() => moveStep(index, index - 1)}
-              disabled={index === 0}
-              aria-label="Move step up"
-            >
-              ▲
-            </button>
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground text-xs px-1"
-              onClick={() => moveStep(index, index + 1)}
-              disabled={index === steps.length - 1}
-              aria-label="Move step down"
-            >
-              ▼
-            </button>
-          </div>
+              {/* Reorder: always visible, full-size targets, no fake drag grip. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={() => moveStep(index, index - 1)}
+                disabled={index === 0}
+                aria-label={t("recipes.builder.moveStepUp", { defaultValue: "Move step {{n}} up", n })}
+              >
+                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={() => moveStep(index, index + 1)}
+                disabled={index === steps.length - 1}
+                aria-label={t("recipes.builder.moveStepDown", { defaultValue: "Move step {{n}} down", n })}
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </Button>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
-            onClick={() => removeStep(index)}
-            aria-label="Remove step"
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={() => removeStep(index)}
+                aria-label={t("recipes.builder.removeStep", { defaultValue: "Remove step {{n}}", n })}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </li>
+          );
+        })}
+      </ol>
 
       <Button
         type="button"
         variant="outline"
         size="sm"
         onClick={addStep}
-        className="gap-1.5 w-full"
+        className="gap-1.5 w-full h-11 sm:h-9"
       >
-        <Plus className="h-3.5 w-3.5" />
-        Add Step
+        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+        {t("recipes.builder.addStep", { defaultValue: "Add Step" })}
       </Button>
 
       {/* Import from text dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Import Instructions</DialogTitle>
-            <DialogDescription className="sr-only">Build recipe instructions step by step</DialogDescription>
+            <DialogTitle>{t("recipes.builder.importStepsTitle", { defaultValue: "Import Instructions" })}</DialogTitle>
+            <DialogDescription>
+              {t("recipes.builder.importStepsHint", {
+                defaultValue: "Paste your recipe instructions. Each line or numbered step will become a separate step.",
+              })}
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Paste your recipe instructions. Each line or numbered step will
-            become a separate step.
-          </p>
           <Textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            placeholder={`1. Preheat oven to 350°F\n2. Mix dry ingredients\n3. Add wet ingredients...`}
+            aria-label={t("recipes.builder.importStepsLabel", { defaultValue: "Instructions to import" })}
+            placeholder={`1. Preheat oven to 350\u00B0F\n2. Mix dry ingredients\n3. Add wet ingredients...`}
             rows={8}
           />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setImportDialogOpen(false)}
-            >
-              Cancel
+            <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)}>
+              {t("common.cancel", { defaultValue: "Cancel" })}
             </Button>
-            <Button onClick={handleImport}>Import Steps</Button>
+            <Button type="button" onClick={handleImport}>
+              {t("recipes.builder.importStepsConfirm", { defaultValue: "Import Steps" })}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

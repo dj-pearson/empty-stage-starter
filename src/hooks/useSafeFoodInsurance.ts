@@ -20,7 +20,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { scoreSafeFoodRisk, type SafeFoodObservation, type SafeFoodRisk } from '@/lib/safeFoodRisk';
+import { addIsoDays } from '@/lib/date-utils';
+import {
+  BASELINE_WINDOW_DAYS,
+  RECENT_WINDOW_DAYS,
+  scoreSafeFoodRisk,
+  type SafeFoodObservation,
+  type SafeFoodRisk,
+} from '@/lib/safeFoodRisk';
 import {
   pruneDismissals,
   recordDismissal,
@@ -31,6 +38,19 @@ import {
 import { selectHandoffCandidates, type ChainSuggestion } from '@/lib/ladderMastery';
 
 const DISMISS_KEY = 'safeFoodInsurance.dismissals';
+
+/** Days of attempts the score can read: the recent plus the baseline window. */
+export const ATTEMPT_LOOKBACK_DAYS = RECENT_WINDOW_DAYS + BASELINE_WINDOW_DAYS;
+
+/**
+ * Local midnight of `today` minus ATTEMPT_LOOKBACK_DAYS, as an instant for the
+ * attempted_at filter. Anything older falls outside both scoring windows, so
+ * reading it only costs bandwidth.
+ */
+export function attemptsSinceInstant(today: string): string {
+  const [y, m, d] = addIsoDays(today, -ATTEMPT_LOOKBACK_DAYS).split('-').map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1).toISOString();
+}
 
 export interface SafeFoodInsuranceFood {
   id: string;
@@ -54,6 +74,11 @@ interface UseSafeFoodInsuranceArgs {
   ladderFoodIds?: string[];
   /** ISO 'YYYY-MM-DD' treated as today. */
   today: string;
+  /**
+   * Skip the per-food get_food_chain_suggestions lookups. For read-only views
+   * (Insights) that list slipping foods but never offer a backup.
+   */
+  skipBackups?: boolean;
 }
 
 export interface SafeFoodBackupTarget {
@@ -64,6 +89,8 @@ export interface SafeFoodBackupTarget {
 
 export interface UseSafeFoodInsuranceResult {
   alerts: SafeFoodAlert[];
+  /** Every scored safe food, worst first, before dismissals and the alert cap. */
+  rows: SafeFoodRisk[];
   /** Backup chain target per at-risk food id, when one could be found. */
   backupByFood: Map<string, SafeFoodBackupTarget>;
   dismiss: (risk: SafeFoodRisk) => void;
@@ -77,6 +104,7 @@ export function useSafeFoodInsurance({
   kidAllergens,
   ladderFoodIds,
   today,
+  skipBackups = false,
 }: UseSafeFoodInsuranceArgs): UseSafeFoodInsuranceResult {
   const [attempts, setAttempts] = useState<SafeFoodObservation[]>([]);
   const [backupByFood, setBackupByFood] = useState<Map<string, SafeFoodBackupTarget>>(new Map());
@@ -98,7 +126,8 @@ export function useSafeFoodInsurance({
         const { data, error } = await supabase
           .from('food_attempts')
           .select('food_id, outcome, attempted_at')
-          .eq('kid_id', kidId);
+          .eq('kid_id', kidId)
+          .gte('attempted_at', attemptsSinceInstant(today));
         if (error) throw error;
         if (cancelled) return;
 
@@ -123,7 +152,7 @@ export function useSafeFoodInsurance({
     return () => {
       cancelled = true;
     };
-  }, [kidId]);
+  }, [kidId, today]);
 
   const rows = useMemo(() => {
     if (!kidId || foods.length === 0) return [];
@@ -154,7 +183,7 @@ export function useSafeFoodInsurance({
   );
 
   // One suggestion lookup per flagged food, and only for flagged foods.
-  const alertFoodKey = alerts.map((a) => a.risk.foodId).join(',');
+  const alertFoodKey = skipBackups ? '' : alerts.map((a) => a.risk.foodId).join(',');
   useEffect(() => {
     const foodIds = alertFoodKey ? alertFoodKey.split(',') : [];
     if (foodIds.length === 0) {
@@ -167,6 +196,8 @@ export function useSafeFoodInsurance({
     (async () => {
       const found = new Map<string, SafeFoodBackupTarget>();
       const allergensByFoodId = new Map(foods.map((f) => [f.id, f.allergens ?? []]));
+      // Name-aware check: an untagged "Peanut butter crackers" is still caught.
+      const foodsById = new Map(foods.map((f) => [f.id, f]));
 
       for (const foodId of foodIds) {
         try {
@@ -195,8 +226,9 @@ export function useSafeFoodInsurance({
           const [best] = selectHandoffCandidates(suggestions, {
             masteredFoodId: foodId,
             ladderFoodIds: ladderFoodIds ?? [],
-            kidAllergens: (kidAllergens ?? []).map((a) => a.toLowerCase()),
+            kidAllergens: kidAllergens ?? [],
             allergensByFoodId,
+            foodsById,
             limit: 1,
           });
 
@@ -233,5 +265,5 @@ export function useSafeFoodInsurance({
     [setDismissals]
   );
 
-  return { alerts, backupByFood, dismiss, loading };
+  return { alerts, rows, backupByFood, dismiss, loading };
 }

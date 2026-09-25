@@ -84,6 +84,17 @@ export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): 
           setCachedFlag(flagKey, result);
           return;
         }
+
+        // The query answered and there is no row we can see. RLS only shows
+        // enabled rows, so this is either a disabled flag or a missing one,
+        // and evaluate_feature_flag says false for both. Falling back to
+        // defaultValue here would let a default-on flag ignore its kill switch
+        // whenever the RPC is down.
+        if (!queryError) {
+          setIsEnabled(false);
+          setCachedFlag(flagKey, false);
+          return;
+        }
       } catch {
         // Table may not exist, fall through
       }

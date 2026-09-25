@@ -23,9 +23,12 @@
  *   +0.2 for sharing a primary protein food
  *   +0.4 if the candidate is favorited OR has rating >= 4
  *   -∞ when candidate fatigue >= 0.2 (hard filter, never returned)
+ *   -∞ when any of the candidate's foods carries one of `kid`'s allergens
+ *   -0.3 per food the kid dislikes (soft; surfaced as a reason, still returned)
  */
 
-import type { Food, Recipe } from '@/types';
+import type { Food, Kid, Recipe } from '@/types';
+import { isAllergenSafeFor } from '@/lib/allergens';
 
 export interface FatigueLookup {
   /** Returns 0..1 fatigue score for a recipeId, or 0 if not fatigued. */
@@ -92,6 +95,45 @@ export interface PickTwistInputs {
   /** Returns the fatigue score for a given recipeId. Pass a closure
    *  over the parent's fatigueByRecipeId map. */
   fatigueScoreFor: FatigueLookup;
+  /**
+   * The child the swapped meal is for. When given, a candidate with ANY food
+   * that fails isAllergenSafeFor is never returned: the sheet used to offer
+   * a peanut satay to a peanut-allergic kid because nothing here knew who
+   * was eating. Disliked foods are a soft signal (a reason chip and a small
+   * penalty), since a dislike is something parents deliberately work on.
+   */
+  kid?: Pick<Kid, 'allergens' | 'disliked_foods'> | null;
+}
+
+/** Disliked foods in a recipe, matched by food id or by name. */
+function dislikedFoodNames(
+  recipe: Recipe,
+  foodById: Map<string, Food>,
+  kid: Pick<Kid, 'disliked_foods'>,
+): string[] {
+  const disliked = new Set((kid.disliked_foods ?? []).map((d) => d.trim().toLowerCase()));
+  if (disliked.size === 0) return [];
+  const out: string[] = [];
+  for (const fid of recipe.food_ids ?? []) {
+    const f = foodById.get(fid);
+    if (!f) continue;
+    if (disliked.has(fid.toLowerCase()) || disliked.has(f.name.trim().toLowerCase())) out.push(f.name);
+  }
+  return out;
+}
+
+/** True when every known food in the recipe is allergen-safe for the kid. */
+function recipeIsAllergenSafe(
+  recipe: Recipe,
+  foodById: Map<string, Food>,
+  kid: Pick<Kid, 'allergens'>,
+): boolean {
+  if (!kid.allergens || kid.allergens.length === 0) return true;
+  for (const fid of recipe.food_ids ?? []) {
+    const f = foodById.get(fid);
+    if (f && !isAllergenSafeFor(kid, f)) return false;
+  }
+  return true;
 }
 
 /**
@@ -110,7 +152,7 @@ export function pickTwistCandidates(
   const maxFatigue = opts.maxCandidateFatigue ?? DEFAULTS.maxCandidateFatigue;
   const sigma = opts.prepTimeSigmaMinutes ?? DEFAULTS.prepTimeSigmaMinutes;
 
-  const { original, allRecipes, foodById, fatigueScoreFor } = inputs;
+  const { original, allRecipes, foodById, fatigueScoreFor, kid } = inputs;
   const originalPrep = parsePrepMinutes(original);
   const originalCategory = original.category;
   const originalTags = new Set((original.tags ?? []).map((t) => t.toLowerCase()));
@@ -125,6 +167,8 @@ export function pickTwistCandidates(
     // Skip variants of the original (e.g. its own hidden-veggies
     // descendant) — they read as same-recipe to the user.
     if (candidate.parent_recipe_id === original.id) continue;
+    // Hard filter: never offer a meal the child is allergic to.
+    if (kid && !recipeIsAllergenSafe(candidate, foodById, kid)) continue;
 
     let score = 1; // base point for "different recipe but exists"
     const reasons: string[] = [];
@@ -178,8 +222,19 @@ export function pickTwistCandidates(
     }
 
     // Drop candidates that only earned the base point — they're not
-    // meaningfully similar and would make the sheet look random.
+    // meaningfully similar and would make the sheet look random. Checked
+    // before the dislike penalty so a dislike demotes rather than hides.
     if (score <= 1) continue;
+
+    if (kid) {
+      const disliked = dislikedFoodNames(candidate, foodById, kid);
+      if (disliked.length > 0) {
+        score -= 0.3 * disliked.length;
+        reasons.push(
+          disliked.length === 1 ? `Has a dislike: ${disliked[0]}` : `${disliked.length} disliked foods`
+        );
+      }
+    }
 
     scored.push({
       recipe: candidate,

@@ -547,6 +547,12 @@ jobs:
       - name: Deno meal-plan template transforms
         run: deno test supabase/functions/_shared/meal-plan-templates.test.ts
 
+      # tonight-mode: household scope filter (no body-supplied household) and
+      # allergen matching through canonical names, so "peanuts" on a kid
+      # excludes a food tagged "Peanut". Pure, no network, no DB.
+      - name: Deno tonight-mode scope and allergens
+        run: deno test supabase/functions/_shared/tonight-mode.test.ts
+
       # US-783: these payloads carry child PII. The OpenAI request must send
       # store:false, and the Anthropic one must NOT carry an invented
       # retention field -- the Messages API has no per-request equivalent, so
@@ -587,6 +593,73 @@ jobs:
       # parent gets the add-it-yourself path. Pure, no network.
       - name: Deno barcode provider shapes
         run: deno test supabase/functions/_shared/barcodeProviderShape.test.ts
+
+      # Owner decision 1a: the AI Coach daily limit on the server. Web over the
+      # limit is refused (402) and a failed check fails closed (503); shipped
+      # iOS builds are metered but not refused until the feature_flags row
+      # ai_coach_limit_enforce_legacy is enabled; usage is incremented once,
+      # after a reply, never on a failed turn. Pure, no network, no DB.
+      - name: Deno AI Coach limit gate
+        run: deno test supabase/functions/_shared/aiCoachGate.test.ts
+
+      # Owner decision 1a (2026-09-25): delete-account asks a web caller for a
+      # sign-in within the last ten minutes (amr timestamp, not the refreshed
+      # iat); shipped iOS builds, which send no X-Client-Info, keep the
+      # valid-JWT rule. Pure, no network.
+      - name: Deno recent-auth gate
+        run: deno test supabase/functions/_shared/requireRecentAuth.test.ts
+
+      # delete-account's pure parts: iOS's `{}` body is still a delete, the
+      # server cancels only a live, billed Stripe subscription (not App Store,
+      # not complimentary), and the preflight summary is reshaped safely.
+      - name: Deno account deletion helpers
+        run: deno test supabase/functions/_shared/accountDeletion.test.ts
+
+      # calculate-food-similarity read every household's foods and every kid by
+      # id through the service role. The household now comes from the verified
+      # user: anon is 401, a foreign kid is 403, a foreign source food is 404,
+      # a body-supplied household id is ignored. Pure, no network, no DB.
+      - name: Deno food similarity household scope
+        run: deno test supabase/functions/_shared/foodSimilarityScope.test.ts
+
+      # create-checkout's server-side double-billing guard: an active or
+      # trialing Stripe subscription, an unexpired App Store one, or a comp
+      # per effective_plan_id is refused 409 already_subscribed; a failed
+      # lookup refuses 503. Pure, no network, no DB.
+      - name: Deno checkout entitlement guard
+        run: deno test supabase/functions/_shared/checkoutEntitlement.test.ts
+
+      # manage-payment-methods: detach and set-default act only on a card
+      # attached to the caller's own Stripe customer, and a transient Stripe
+      # error never recreates the customer or writes status 'inactive'.
+      - name: Deno payment method ownership
+        run: deno test supabase/functions/_shared/paymentMethodOwnership.test.ts
+
+      # generate-invoice: every interpolated value is HTML-escaped (stored
+      # XSS through profiles.full_name), one id-based invoice number, and a
+      # payment with no subscription still renders. Pure, no network.
+      - name: Deno invoice rendering
+        run: deno test supabase/functions/_shared/invoice.test.ts
+
+      # Owner decision "a" (2026-09-25), forged App Store entitlement: the full
+      # Apple JWS chain check verify-app-store-transaction relies on. A forged
+      # chain (own leaf and intermediate, real root appended) is refused, as are
+      # missing marker OIDs, a wrong pin and an unset pin. Chains are generated
+      # at run time with WebCrypto; nothing signed is committed. No network.
+      - name: Deno App Store chain verification
+        run: deno test supabase/functions/_shared/appStoreChain.test.ts
+
+      # What a verified transaction may write: every column from the signed
+      # payload, bound to the caller; 409 when it belongs to another account;
+      # a replayed older JWS cannot revive a revoked row. Pure, no network.
+      - name: Deno App Store transaction decision
+        run: deno test supabase/functions/_shared/appStoreTransaction.test.ts
+
+      # app-store-notifications' verification, moved to _shared unchanged, and
+      # the chainVerified flag that gates creating a row from appAccountToken.
+      # --allow-net resolves the jose import; the tests reach no service.
+      - name: Deno App Store notification verification
+        run: deno test --allow-env --allow-net supabase/functions/_shared/appStoreJws.test.ts
 
       - uses: supabase/setup-cli@v1
         with:

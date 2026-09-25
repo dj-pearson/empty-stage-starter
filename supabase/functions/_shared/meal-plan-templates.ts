@@ -5,6 +5,7 @@
  * tested without a database or a deployed function: building plan_entries rows
  * from a template, and folding a planned week back into template entries.
  */
+import { matchingAllergen, matchingFoodAllergen } from './allergens.ts';
 
 export interface TemplateEntry {
   day_of_week: number;
@@ -56,9 +57,6 @@ export interface BuildResult {
   skipped: SkippedFood[];
 }
 
-const lower = (values: string[] | null | undefined): string[] =>
-  (values ?? []).map((v) => String(v).toLowerCase());
-
 /** The date `dayOffset` days after `startDate`, as a YYYY-MM-DD key. */
 export function dateForOffset(startDate: string, dayOffset: number): string {
   const d = new Date(`${startDate}T00:00:00Z`);
@@ -66,11 +64,49 @@ export function dateForOffset(startDate: string, dayOffset: number): string {
   return d.toISOString().split('T')[0];
 }
 
+
+function utcWeekday(dateKey: string): number | null {
+  const d = new Date(`${dateKey}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d.getUTCDay();
+}
+
+/**
+ * Days to add to each template offset so a meal keeps its weekday.
+ *
+ * meal_plan_template_entries.day_of_week is an offset from the week the
+ * template was saved from (meal_plan_templates.created_from_week). A template
+ * saved from a Sunday-start week and applied to a Monday-start week would
+ * otherwise land every meal one weekday late. 0 when the template records no
+ * source week (system and seeded templates) or the weekdays already agree.
+ */
+export function templateWeekdayShift(
+  createdFromWeek: string | null | undefined,
+  startDate: string,
+): number {
+  if (!createdFromWeek) return 0;
+  const from = utcWeekday(String(createdFromWeek).slice(0, 10));
+  const to = utcWeekday(startDate);
+  if (from === null || to === null) return 0;
+  return (from - to + 7) % 7;
+}
+
+/** The date a template entry lands on in the target week, weekday kept. */
+export function templateEntryDate(startDate: string, dayOfWeek: number, shift = 0): string {
+  const inWeek = dayOfWeek >= 0 && dayOfWeek <= 6;
+  const offset = shift && inWeek ? (dayOfWeek + shift) % 7 : dayOfWeek;
+  return dateForOffset(startDate, offset);
+}
+
 /**
  * Why a food is unsafe for a kid, or null when it is fine.
  *
  * This is the check the handler had carried as a `// TODO: Check allergens`
  * comment since it was written, while the dialog offered per-child selection.
+ *
+ * Both comparisons go through canonicalAllergen (./allergens.ts), not an exact
+ * lowercase compare: "Peanuts" against a kid's "peanut", "en:milk" against a
+ * "dairy" restriction, or "tree_nuts" against "tree nuts" used to pass. The
+ * reason names the food's own spelling so the parent recognises it.
  */
 export function unsafeReason(
   kid: KidSafety,
@@ -80,14 +116,19 @@ export function unsafeReason(
   const food = foodsById.get(foodId);
   if (!food) return null;
 
-  const foodAllergens = lower(food.allergens);
-  const kidAllergens = lower(kid.allergens);
-  const hit = foodAllergens.find((a) => kidAllergens.includes(a));
-  if (hit) return `contains ${hit}`;
+  // The shared matcher: canonical spellings, families ("almonds" is a tree
+  // nut) and the food's name ("Almond butter" with no tags).
+  const key = matchingFoodAllergen(kid.allergens, food);
+  if (key) {
+    const tag = (food.allergens ?? []).find((a) => matchingAllergen([key], [a]) !== null);
+    return `contains ${String(tag ?? key).toLowerCase()}`;
+  }
 
-  const restrictions = lower(kid.dietary_restrictions);
-  const restricted = foodAllergens.find((a) => restrictions.includes(a));
-  if (restricted) return `restricted: ${restricted}`;
+  const restrictedKey = matchingAllergen(kid.dietary_restrictions, food.allergens);
+  if (restrictedKey) {
+    const tag = (food.allergens ?? []).find((a) => matchingAllergen([restrictedKey], [a]) !== null);
+    return `restricted: ${String(tag ?? restrictedKey).toLowerCase()}`;
+  }
 
   return null;
 }
@@ -112,15 +153,18 @@ export function buildTemplatePlanRows(args: {
   householdId: string | null;
   startDate: string;
   templateName: string;
+  /** meal_plan_templates.created_from_week, so each meal keeps its weekday. */
+  createdFromWeek?: string | null;
 }): BuildResult {
   const { templateEntries, kids, foodsById, userId, householdId, startDate, templateName } = args;
+  const shift = templateWeekdayShift(args.createdFromWeek, startDate);
 
   const rows: PlanRow[] = [];
   const recipeOnly: RecipeOnlySchedule[] = [];
   const skipped: SkippedFood[] = [];
 
   for (const entry of templateEntries) {
-    const date = dateForOffset(startDate, entry.day_of_week);
+    const date = templateEntryDate(startDate, entry.day_of_week, shift);
 
     for (const kid of kids) {
       const foodIds = entry.food_ids ?? [];

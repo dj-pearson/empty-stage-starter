@@ -1,6 +1,4 @@
 import {
-  Accessibility,
-  BarChart3,
   BookOpen,
   Bot,
   Calendar,
@@ -52,6 +50,24 @@ export type NavGroup = "main" | "tools" | "insights" | "account";
 /** Entitlement an item is gated behind. Undefined means everyone sees it. */
 export type NavRequirement = "admin" | "professional";
 
+/**
+ * Which live status an item carries (item 33). The item only names the badge;
+ * the number comes from useNavBadges, computed once in the Dashboard shell from
+ * contexts that are already loaded, and every renderer reads the same answer.
+ *
+ *  - groceryLeft: unchecked items on the default grocery list.
+ *  - dinnerUnplanned: a dot while today has no dinner planned.
+ *  - unloggedMeals: today's meals whose hour has passed with no result logged.
+ *  - ladderDue: ladder foods due to be offered today.
+ */
+export type NavBadgeKey = "groceryLeft" | "dinnerUnplanned" | "unloggedMeals" | "ladderDue";
+
+/** A badge as rendered: a number, or a dot that says "look here" without one. */
+export type NavBadgeValue = { kind: "count"; count: number } | { kind: "dot" };
+
+/** Current badge values. A key that is absent shows nothing. */
+export type NavBadges = Partial<Record<NavBadgeKey, NavBadgeValue>>;
+
 export interface NavItem {
   to: string;
   label: string;
@@ -65,19 +81,21 @@ export interface NavItem {
    */
   primary?: true;
   requires?: NavRequirement;
+  /** The live status shown next to this item, if any. */
+  badge?: NavBadgeKey;
 }
 
 export const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   // Main. The four `primary` entries are the mobile bottom bar, in bar order.
-  { to: "/dashboard", label: "Home", icon: Home, group: "main", primary: true },
-  { to: "/dashboard/planner", label: "Planner", icon: Calendar, group: "main", primary: true },
+  { to: "/dashboard", label: "Home", icon: Home, group: "main", primary: true, badge: "unloggedMeals" },
+  { to: "/dashboard/planner", label: "Planner", icon: Calendar, group: "main", primary: true, badge: "dinnerUnplanned" },
   { to: "/dashboard/pantry", label: "Pantry", icon: Utensils, group: "main", primary: true },
-  { to: "/dashboard/grocery", label: "Grocery", icon: ShoppingCart, group: "main", primary: true },
+  { to: "/dashboard/grocery", label: "Grocery", icon: ShoppingCart, group: "main", primary: true, badge: "groceryLeft" },
   { to: "/dashboard/recipes", label: "Recipes", icon: ChefHat, group: "main" },
   { to: "/dashboard/kids", label: "Kids", icon: Users, group: "main" },
 
   // Tools.
-  { to: "/dashboard/food-tracker", label: "Food Tracker", icon: Target, group: "tools" },
+  { to: "/dashboard/food-tracker", label: "Food Tracker", icon: Target, group: "tools", badge: "ladderDue" },
   { to: "/dashboard/ai-coach", label: "AI Coach", icon: Bot, group: "tools" },
   { to: "/dashboard/meal-builder", label: "Meal Builder", icon: Sparkles, group: "tools" },
   { to: "/dashboard/food-chaining", label: "Food Chaining", icon: TrendingUp, group: "tools" },
@@ -89,16 +107,16 @@ export const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   // the household to read.
   { to: "/dashboard/food-journal", label: "Food Journal", icon: BookOpen, group: "insights" },
   { to: "/dashboard/insights", label: "Insights", icon: LineChart, group: "insights" },
-  { to: "/dashboard/analytics", label: "Analytics", icon: BarChart3, group: "insights" },
   { to: "/dashboard/progress", label: "Progress", icon: Trophy, group: "insights" },
 
   // Account. Household is here rather than under Main because it is a setup
   // task you do once, but it has to be SOMEWHERE: inviting the other parent
   // was previously reachable only from a dialog and the /join landing page.
   { to: "/dashboard/household", label: "Household", icon: UsersRound, group: "account" },
-  { to: "/dashboard/settings", label: "Account Settings", icon: Settings, group: "account" },
+  // One Settings hub; Accessibility is its ?section=accessibility and no
+  // longer a page of its own (the old URL redirects, see routeAliases.ts).
+  { to: "/dashboard/settings", label: "Settings", icon: Settings, group: "account" },
   { to: "/dashboard/billing", label: "Billing", icon: CreditCard, group: "account" },
-  { to: "/dashboard/accessibility-settings", label: "Accessibility", icon: Accessibility, group: "account" },
 
   // Gated.
   {
@@ -181,4 +199,14 @@ export function secondaryNavItemsInGroup(
  */
 export function isIndexRoute(to: string): boolean {
   return to === "/dashboard";
+}
+
+/** The badge value for one item, or undefined when it has none right now. */
+export function navBadgeFor(item: Pick<NavItem, "badge">, badges: NavBadges | undefined): NavBadgeValue | undefined {
+  if (!item.badge || !badges) return undefined;
+  const value = badges[item.badge];
+  if (!value) return undefined;
+  // A zero count is "nothing to do", not a badge reading 0.
+  if (value.kind === "count" && !(value.count > 0)) return undefined;
+  return value;
 }

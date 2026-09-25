@@ -1,0 +1,10 @@
+{
+  "foodTracker": {
+    "ladderUi": {
+      "logLink": {
+        "title": "How did {{food}} go?",
+        "close": "Close"
+      }
+    }
+  }
+}

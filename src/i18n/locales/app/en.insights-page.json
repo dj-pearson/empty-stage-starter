@@ -1,0 +1,42 @@
+{
+  "insightsPage": {
+    "meta": {
+      "title": "Insights - EatPal",
+      "description": "How each child's eating is going over the last four weeks: what is working, where variety is thin, and what to try next."
+    },
+    "header": {
+      "titleKid": "{{name}}'s insights",
+      "titleFamily": "Family insights",
+      "subtitle": "The last four weeks, from what you logged."
+    },
+    "scope": {
+      "chooseChild": "Show insights for"
+    },
+    "states": {
+      "loading": "Loading insights",
+      "loadErrorTitle": "Couldn't load your children",
+      "loadErrorBody": "Check your connection and try again.",
+      "retry": "Retry",
+      "stale": "Couldn't refresh just now, so this may be out of date.",
+      "offline": "Offline: showing what this device last saw.",
+      "emptyTitle": "No children yet",
+      "emptyBody": "Add a child and log a few meals. Insights build from what you record.",
+      "addChild": "Add child"
+    },
+    "links": {
+      "label": "More detail",
+      "tracker": "Food Tracker",
+      "journal": "Food Journal",
+      "planner": "Planner",
+      "profile": "{{name}}'s profile",
+      "kidsDay": "Day by day on Kids"
+    },
+    "review": {
+      "due": "{{name}}'s profile was last reviewed {{date}}. Check it is still current.",
+      "action": "Review {{name}}'s profile"
+    },
+    "family": {
+      "rowLabel": "Open {{name}}'s insights"
+    }
+  }
+}

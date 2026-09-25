@@ -52,6 +52,7 @@ describe('buildGroceryRow', () => {
       source_recipe_id: 'recipe-1',
       source_plan_entry_id: 'entry-1',
       auto_generated: true,
+      pantry_credited_at: '2026-09-26T10:00:00.000Z',
     };
 
     const row = buildGroceryRow(draft, ctx);
@@ -80,6 +81,7 @@ describe('buildGroceryRow', () => {
       source_recipe_id: 'recipe-1',
       source_plan_entry_id: 'entry-1',
       auto_generated: true,
+      pantry_credited_at: '2026-09-26T10:00:00.000Z',
       user_id: 'user-1',
       household_id: 'house-1',
       checked: false,

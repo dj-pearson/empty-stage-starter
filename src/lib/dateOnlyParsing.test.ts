@@ -82,10 +82,10 @@ describe("every date-utils helper inherits the fix", () => {
   it.each([
     ["formatDate", () => formatDate("2026-03-08", "short")],
     ["startOfDay", () => toISODate(startOfDay("2026-03-08"))],
-    ["startOfWeek", () => toISODate(startOfWeek("2026-03-08"))],
+    ["startOfWeek", () => toISODate(startOfWeek("2026-03-08", 0))],
   ])("%s reads the key as the day it names", (_name, run) => {
     const out = run();
-    // March 8 2026 is a Sunday, so it is also the start of its week.
+    // March 8 2026 is a Sunday, so it is also the start of its Sunday-first week.
     expect(out).toMatch(/3\/8\/26|2026-03-08/);
   });
 

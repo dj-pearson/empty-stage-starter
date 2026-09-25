@@ -1,326 +1,433 @@
-import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { usePlan, useFoods, useKids } from '@/contexts/AppContext';
-import { TrendingUp, TrendingDown, Target, Award, Calendar, Sparkles } from 'lucide-react';
+import { memo, useId, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useFoods } from '@/contexts/AppContext';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import {
+  buildMonthlyTrajectory,
+  firstAttemptIso,
+  kidSafeFoodIds,
+  masteredOnIso,
+  pickTrajectoryHeadline,
+  type KidAttemptRow,
+  type KidLadderRow,
+  type MonthPoint,
+  type TrajectoryHeadline,
+} from '@/lib/kidProgress';
 import { cn } from '@/lib/utils';
-import { parseIsoDate } from "@/lib/date-utils";
-import { currentStreak } from "@/lib/streakRules";
+import type { Food, FoodCategory, Kid } from '@/types';
+import '@/i18n/appLocale';
 
-export function ProgressDashboard() {
-  const { planEntries } = usePlan();
-  const { foods } = useFoods();
-  const { activeKidId, kids } = useKids();
+/**
+ * Progress: what has changed for each child over months.
+ *
+ * Everything here is read from durable server rows (food_attempts since the
+ * first one, and kid_food_ladder), not from the plan cache, which only holds
+ * -30d..+90d. Each child gets one flat card: a computed headline, a months
+ * strip of first tries and foods reached safe, the list of those foods, and
+ * the child's own safe foods by group. "Safe" is per child (kidSafeFoodIds),
+ * never the household is_safe flag, so two siblings see different numbers.
+ *
+ * Deliberately absent: this-week rates, streaks and try-bite tallies. Kids,
+ * Insights and the Food Tracker already answer those, and the old version of
+ * this file compared a child against an invented average of 50.
+ */
+export interface ProgressTrajectoryProps {
+  kids: readonly Kid[];
+  ladderRows: readonly KidLadderRow[];
+  attempts: readonly KidAttemptRow[];
+  loading: boolean;
+  error: boolean;
+  /** A read stopped at the row ceiling; rendered the same way as an error. */
+  truncated?: boolean;
+  todayIso: string;
+  /** Scope the page to one child (family view only). */
+  onSelectKid?: (kidId: string) => void;
+}
 
-  const activeKid = kids.find(k => k.id === activeKidId);
+const CATEGORIES: readonly FoodCategory[] = ['protein', 'carb', 'dairy', 'fruit', 'vegetable', 'snack'];
 
-  // Calculate statistics
-  const stats = useMemo(() => {
-    const kidEntries = planEntries.filter(p => p.kid_id === activeKidId);
+/** How many reached-safe foods are listed before "and N more". */
+const REACHED_LIMIT = 8;
 
-    // This week's stats
-    const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
-    weekStart.setHours(0, 0, 0, 0);
+/** 'YYYY-MM' as a local Date on the 1st, so formatting never shifts the month. */
+function monthDate(month: string): Date {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(y, (m ?? 1) - 1, 1);
+}
 
-    const thisWeekEntries = kidEntries.filter(entry => {
-      const entryDate = parseIsoDate(entry.date);
-      return entryDate >= weekStart;
-    });
+function formatMonth(month: string, locale: string, withYear = false): string {
+  try {
+    return new Intl.DateTimeFormat(locale, withYear ? { month: 'short', year: 'numeric' } : { month: 'short' }).format(
+      monthDate(month),
+    );
+  } catch {
+    return month;
+  }
+}
 
-    const totalMeals = thisWeekEntries.length;
-    const ateMeals = thisWeekEntries.filter(e => e.result === 'ate').length;
-    const tastedMeals = thisWeekEntries.filter(e => e.result === 'tasted').length;
-    const refusedMeals = thisWeekEntries.filter(e => e.result === 'refused').length;
+function formatMonthLong(month: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, { month: 'long' }).format(monthDate(month));
+  } catch {
+    return month;
+  }
+}
 
-    const successRate = totalMeals > 0 ? Math.round(((ateMeals + tastedMeals * 0.5) / totalMeals) * 100) : 0;
+function safePart(t: TFunction, count: number): string {
+  return t('progressTrajectory.headline.safe', {
+    count,
+    defaultValue_one: '{{count}} food reached safe',
+    defaultValue: '{{count}} foods reached safe',
+  });
+}
 
-    // Try bites this month
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thisMonthEntries = kidEntries.filter(entry => {
-      const entryDate = parseIsoDate(entry.date);
-      return entryDate >= monthStart && entry.meal_slot === 'try_bite';
-    });
+function triesPart(t: TFunction, count: number): string {
+  return t('progressTrajectory.headline.tries', {
+    count,
+    defaultValue_one: '{{count}} first try',
+    defaultValue: '{{count}} first tries',
+  });
+}
 
-    const tryBitesAttempted = thisMonthEntries.length;
-    const tryBitesSuccessful = thisMonthEntries.filter(e => e.result === 'ate' || e.result === 'tasted').length;
-
-    // New foods accepted (try bites that became safe foods)
-    const tryBiteFoods = foods.filter(f => f.is_try_bite);
-    const safeFoods = foods.filter(f => f.is_safe);
-
-    // Food diversity
-    const foodsByCategory: { [key: string]: number } = {};
-    safeFoods.forEach(food => {
-      if (food.category) {
-        foodsByCategory[food.category] = (foodsByCategory[food.category] || 0) + 1;
+function trajectoryHeadlineText(t: TFunction, headline: TrajectoryHeadline, locale: string): string {
+  switch (headline.kind) {
+    case 'notEnough':
+      return t('progressTrajectory.headline.notEnough', {
+        defaultValue: 'Trends appear after your first month of logging.',
+      });
+    case 'steady':
+      return t('progressTrajectory.headline.steady', {
+        count: headline.params.exposures,
+        month: formatMonthLong(headline.params.sinceMonth, locale),
+        defaultValue_one: 'Since {{month}}: {{count}} try logged, no new foods yet.',
+        defaultValue: 'Since {{month}}: {{count}} tries logged, no new foods yet.',
+      });
+    case 'progress': {
+      const { safe, firstTries, sinceMonth } = headline.params;
+      const month = formatMonthLong(sinceMonth, locale);
+      if (safe > 0 && firstTries > 0) {
+        return t('progressTrajectory.headline.progressBoth', {
+          month,
+          safe: safePart(t, safe),
+          tries: triesPart(t, firstTries),
+          defaultValue: 'Since {{month}}: {{safe}}, {{tries}}.',
+        });
       }
-    });
+      if (safe > 0) {
+        return t('progressTrajectory.headline.progressSafe', {
+          month,
+          safe: safePart(t, safe),
+          defaultValue: 'Since {{month}}: {{safe}}.',
+        });
+      }
+      return t('progressTrajectory.headline.progressTries', {
+        month,
+        tries: triesPart(t, firstTries),
+        defaultValue: 'Since {{month}}: {{tries}}.',
+      });
+    }
+  }
+}
 
-    // US-781: one rule, shared with Home.tsx and matching the phone.
-    //
-    // This block counted any day that had an ENTRY, never reading `result`, so
-    // a week of pure refusals showed a seven-day streak here and a broken one
-    // on the phone. See src/lib/streakRules.ts for the rule and the decision.
-    const streak = activeKidId ? currentStreak(kidEntries, activeKidId) : 0;
+interface MonthStripProps {
+  points: readonly MonthPoint[];
+  name: string;
+}
 
-    return {
-      thisWeek: {
-        total: totalMeals,
-        ate: ateMeals,
-        tasted: tastedMeals,
-        refused: refusedMeals,
-        successRate,
-      },
-      tryBites: {
-        attempted: tryBitesAttempted,
-        successful: tryBitesSuccessful,
-        successRate: tryBitesAttempted > 0 ? Math.round((tryBitesSuccessful / tryBitesAttempted) * 100) : 0,
-      },
-      foods: {
-        safe: safeFoods.length,
-        tryBite: tryBiteFoods.length,
-        byCategory: foodsByCategory,
-      },
-      streak,
-    };
-  }, [planEntries, foods, activeKidId]);
-
-  // Determine trend
-  const getTrend = (current: number, previous: number = 50) => {
-    if (current > previous) return 'up';
-    if (current < previous) return 'down';
-    return 'same';
-  };
-
-  const trend = getTrend(stats.thisWeek.successRate, 50);
+const MonthStrip = memo(function MonthStrip({ points, name }: MonthStripProps) {
+  const { t, i18n } = useTranslation();
+  const reduce = useReducedMotion();
+  const locale = i18n.language || 'en';
+  const max = Math.max(1, ...points.map((p) => Math.max(p.firstTries, p.graduations)));
+  const barMotion = !reduce && 'motion-safe:transition-[height] motion-safe:duration-300';
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Progress Overview</h2>
-        {activeKid && (
-          <p className="text-muted-foreground">
-            Tracking {activeKid.name}'s journey
-          </p>
-        )}
+    <div
+      role="group"
+      aria-label={t('progressTrajectory.strip.label', {
+        name,
+        defaultValue: 'First tries and foods reached safe per month for {{name}}',
+      })}
+      className="mt-4"
+    >
+      <div className="flex gap-4 text-xs text-muted-foreground" aria-hidden="true">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-try-bite" />
+          {t('progressTrajectory.strip.legendTries', { defaultValue: 'First tries' })}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-safe-food" />
+          {t('progressTrajectory.strip.legendSafe', { defaultValue: 'Reached safe' })}
+        </span>
       </div>
-
-      {/* Hero Stat - Success Rate */}
-      <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-        <CardContent className="pt-6">
-          <div className="flex flex-col items-center text-center">
-            <div className="relative inline-flex items-center justify-center w-32 h-32 mb-4">
-              <svg className="w-32 h-32 transform -rotate-90">
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="transparent"
-                  className="text-muted"
-                />
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="transparent"
-                  strokeDasharray={`${2 * Math.PI * 56}`}
-                  strokeDashoffset={`${2 * Math.PI * 56 * (1 - stats.thisWeek.successRate / 100)}`}
-                  className="text-primary transition-all duration-1000"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-4xl font-bold text-primary">{stats.thisWeek.successRate}%</div>
-              </div>
-            </div>
-
-            <h3 className="text-lg font-semibold mb-1">Meal Success Rate</h3>
-            <p className="text-sm text-muted-foreground mb-3">This week</p>
-
-            {/* Trend indicator */}
-            <div className="flex items-center gap-2">
-              {trend === 'up' && (
-                <Badge className="bg-green-500 hover:bg-green-600">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  Better than average!
-                </Badge>
-              )}
-              {trend === 'down' && (
-                <Badge variant="secondary">
-                  <TrendingDown className="h-3 w-3 mr-1" />
-                  Keep going!
-                </Badge>
-              )}
-              {trend === 'same' && (
-                <Badge variant="outline">
-                  On track
-                </Badge>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              Try Bites
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {stats.tryBites.attempted}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">This month</p>
-            {stats.tryBites.attempted > 0 && (
-              <Progress value={stats.tryBites.successRate} className="mt-2 h-1.5" />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
-              Success Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {stats.tryBites.successRate}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Try bites</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Streak
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-              {stats.streak}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Days in a row</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-              <Award className="h-4 w-4" />
-              Safe Foods
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {stats.foods.safe}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Total foods</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* This Week Breakdown */}
-      <Card>
-        <CardHeader>
-          <CardTitle>This Week's Meals</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Ate */}
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                Ate
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {stats.thisWeek.ate} meals
-              </span>
-            </div>
-            <Progress
-              value={stats.thisWeek.total > 0 ? (stats.thisWeek.ate / stats.thisWeek.total) * 100 : 0}
-              className="h-2"
-            />
-          </div>
-
-          {/* Tasted */}
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
-                Tasted
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {stats.thisWeek.tasted} meals
-              </span>
-            </div>
-            <Progress
-              value={stats.thisWeek.total > 0 ? (stats.thisWeek.tasted / stats.thisWeek.total) * 100 : 0}
-              className="h-2"
-            />
-          </div>
-
-          {/* Refused */}
-          <div>
-            <div className="flex justify-between mb-2">
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-orange-500"></span>
-                Refused
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {stats.thisWeek.refused} meals
-              </span>
-            </div>
-            <Progress
-              value={stats.thisWeek.total > 0 ? (stats.thisWeek.refused / stats.thisWeek.total) * 100 : 0}
-              className="h-2"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Food Diversity */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Food Diversity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {Object.entries(stats.foods.byCategory).map(([category, count]) => (
-              <div
-                key={category}
-                className="p-3 rounded-lg bg-muted/50 border"
-              >
-                <div className="text-lg font-bold">{count}</div>
-                <div className="text-xs text-muted-foreground capitalize">
-                  {category}
+      <ol className="mt-2 flex gap-2">
+        {points.map((p) => {
+          const label = t('progressTrajectory.strip.month', {
+            month: formatMonthLong(p.month, locale),
+            tries: t('progressTrajectory.strip.triesPart', {
+              count: p.firstTries,
+              defaultValue_one: '{{count}} first try',
+              defaultValue: '{{count}} first tries',
+            }),
+            safe: t('progressTrajectory.strip.safePart', {
+              count: p.graduations,
+              defaultValue_one: '{{count}} food reached safe',
+              defaultValue: '{{count}} foods reached safe',
+            }),
+            logged: t('progressTrajectory.strip.loggedPart', {
+              count: p.loggedExposures,
+              defaultValue_one: '{{count}} try logged',
+              defaultValue: '{{count}} tries logged',
+            }),
+            defaultValue: '{{month}}: {{tries}}, {{safe}}, {{logged}}',
+          });
+          return (
+            <li key={p.month} className="min-w-0 flex-1">
+              <div role="img" aria-label={label} data-testid="trajectory-month">
+                <div className="flex h-20 items-end gap-1 rounded-md bg-muted px-1 pb-1">
+                  {[
+                    { value: p.firstTries, tone: 'bg-try-bite' },
+                    { value: p.graduations, tone: 'bg-safe-food' },
+                  ].map((bar, i) => (
+                    <div key={i} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end">
+                      <span className="text-[11px] font-medium tabular-nums leading-4 text-foreground">{bar.value}</span>
+                      <div
+                        style={{ height: `${bar.value === 0 ? 0 : Math.max(8, Math.round((bar.value / max) * 75))}%` }}
+                        className={cn('w-full rounded-sm', bar.tone, barMotion)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1 truncate text-center text-xs text-muted-foreground">
+                  {formatMonth(p.month, locale)}
                 </div>
               </div>
-            ))}
-          </div>
-
-          {Object.keys(stats.foods.byCategory).length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Add foods to your pantry to see category breakdown
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
+});
+
+interface KidModel {
+  kid: Kid;
+  headline: TrajectoryHeadline;
+  trajectory: MonthPoint[];
 }
+
+interface KidCardProps {
+  model: KidModel;
+  ladderRows: readonly KidLadderRow[];
+  foodsById: ReadonlyMap<string, Food>;
+  todayIso: string;
+  showSelect: boolean;
+  onSelectKid?: (kidId: string) => void;
+}
+
+const KidCard = memo(function KidCard({ model, ladderRows, foodsById, todayIso, showSelect, onSelectKid }: KidCardProps) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language || 'en';
+  const { kid, headline, trajectory } = model;
+  const titleId = useId();
+
+  const reached = useMemo(() => {
+    const thisYear = todayIso.slice(0, 4);
+    return ladderRows
+      .filter((row) => row.kid_id === kid.id && row.status === 'mastered' && foodsById.has(row.food_id))
+      .map((row) => {
+        const day = masteredOnIso(row);
+        return {
+          foodId: row.food_id,
+          name: foodsById.get(row.food_id)?.name ?? '',
+          day,
+          month: day ? formatMonth(day.slice(0, 7), locale, day.slice(0, 4) !== thisYear) : null,
+        };
+      })
+      .sort((a, b) => (b.day ?? '').localeCompare(a.day ?? '') || a.name.localeCompare(b.name));
+  }, [ladderRows, kid.id, foodsById, locale, todayIso]);
+
+  const variety = useMemo(() => {
+    const counts = new Map<FoodCategory, number>();
+    for (const id of kidSafeFoodIds(kid, ladderRows, foodsById)) {
+      const category = foodsById.get(id)?.category;
+      if (category) counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+    return CATEGORIES.map((category) => ({ category, count: counts.get(category) ?? 0 }));
+  }, [kid, ladderRows, foodsById]);
+
+  const notEnough = headline.kind === 'notEnough';
+  const shown = reached.slice(0, REACHED_LIMIT);
+  const hidden = reached.length - shown.length;
+
+  return (
+    <article aria-labelledby={titleId} className="rounded-xl border bg-card p-4 text-card-foreground" data-testid="trajectory-card">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 id={titleId} className="text-base font-semibold">
+          {kid.name}
+        </h3>
+        {showSelect && onSelectKid && (
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => onSelectKid(kid.id)}>
+            {t('progressTrajectory.showOnly', { name: kid.name, defaultValue: 'Show only {{name}}' })}
+          </Button>
+        )}
+      </div>
+      <p className="mt-1 text-base" data-testid="trajectory-headline">
+        {trajectoryHeadlineText(t, headline, locale)}
+      </p>
+
+      {notEnough ? (
+        <Link to="/dashboard/insights" className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline">
+          {t('progressTrajectory.headline.notEnoughLink', { defaultValue: 'See this week on Insights' })}
+        </Link>
+      ) : (
+        trajectory.length > 0 && <MonthStrip points={trajectory} name={kid.name} />
+      )}
+
+      {(!notEnough || reached.length > 0) && (
+        <div className="mt-5">
+          <h4 className="text-sm font-semibold">
+            {t('progressTrajectory.reached.title', { defaultValue: 'Reached safe' })}
+          </h4>
+          {reached.length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('progressTrajectory.reached.none', {
+                defaultValue: 'No ladder foods have reached safe yet. The Food Tracker shows what to offer next.',
+              })}{' '}
+              <Link to="/dashboard/food-tracker" className="font-medium text-primary underline-offset-4 hover:underline">
+                {t('progressTrajectory.reached.trackerLink', { defaultValue: 'Open Food Tracker' })}
+              </Link>
+            </p>
+          ) : (
+            <ul className="mt-2 divide-y text-sm">
+              {shown.map((item) => (
+                <li key={item.foodId} className="flex items-baseline justify-between gap-3 py-1.5">
+                  <span className="min-w-0 truncate">{item.name}</span>
+                  {item.month && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {t('progressTrajectory.reached.by', { month: item.month, defaultValue: 'by {{month}}' })}
+                    </span>
+                  )}
+                </li>
+              ))}
+              {hidden > 0 && (
+                <li className="py-1.5 text-xs text-muted-foreground">
+                  {t('progressTrajectory.reached.more', {
+                    count: hidden,
+                    defaultValue_one: 'and {{count}} more',
+                    defaultValue: 'and {{count}} more',
+                  })}
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="mt-5">
+        <h4 className="text-sm font-semibold">
+          {t('progressTrajectory.variety.title', { defaultValue: 'Safe foods by group' })}
+        </h4>
+        <p className="text-xs text-muted-foreground">
+          {t('progressTrajectory.variety.hint', {
+            name: kid.name,
+            defaultValue: 'Foods {{name}} has mastered or always eats, without allergens or dislikes.',
+          })}
+        </p>
+        <dl className="mt-2 grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
+          {variety.map(({ category, count }) => (
+            <div key={category} className="min-w-0">
+              <dt className="truncate text-xs text-muted-foreground">
+                {t(`progressTrajectory.variety.category.${category}`, { defaultValue: category })}
+              </dt>
+              <dd className={cn('tabular-nums', count === 0 ? 'text-muted-foreground' : 'font-semibold')}>
+                {count === 0 ? t('progressTrajectory.variety.none', { defaultValue: 'None yet' }) : count}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </article>
+  );
+});
+
+export function ProgressTrajectory({
+  kids,
+  ladderRows,
+  attempts,
+  loading,
+  error,
+  truncated = false,
+  todayIso,
+  onSelectKid,
+}: ProgressTrajectoryProps) {
+  const { t } = useTranslation();
+  const { foods } = useFoods();
+  const titleId = useId();
+
+  const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods]);
+
+  // One pass per kid over the durable rows; recomputed only when one of these
+  // four identities changes, not on every context re-render.
+  const models = useMemo<KidModel[]>(
+    () =>
+      kids.map((kid) => {
+        const trajectory = buildMonthlyTrajectory(attempts, ladderRows, kid.id, todayIso);
+        const headline = pickTrajectoryHeadline(trajectory, firstAttemptIso(attempts, kid.id, todayIso), todayIso);
+        return { kid, trajectory, headline };
+      }),
+    [attempts, ladderRows, kids, todayIso],
+  );
+
+  if (kids.length === 0) return null;
+
+  return (
+    <section aria-labelledby={titleId} className="space-y-3">
+      <h2 id={titleId} className="text-lg font-semibold">
+        {t('progressTrajectory.title', { defaultValue: "What's changed over the months" })}
+      </h2>
+      {loading ? (
+        <div aria-busy="true" data-testid="trajectory-loading" className="space-y-4">
+          {kids.map((kid) => (
+            <div key={kid.id} className="rounded-xl border bg-card p-4">
+              <Skeleton className="h-5 w-1/3" />
+              <Skeleton className="mt-2 h-5 w-3/4" />
+              <Skeleton className="mt-4 h-24 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          {(error || truncated) && (
+            <p className="text-sm text-muted-foreground" data-testid="trajectory-partial">
+              {t('progressTrajectory.partial', {
+                defaultValue: "Some history couldn't load, so these numbers may be low.",
+              })}
+            </p>
+          )}
+          <div className="space-y-4">
+            {models.map((model) => (
+              <KidCard
+                key={model.kid.id}
+                model={model}
+                ladderRows={ladderRows}
+                foodsById={foodsById}
+                todayIso={todayIso}
+                showSelect={kids.length > 1}
+                onSelectKid={onSelectKid}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** The old name, kept so existing imports keep working. */
+export const ProgressDashboard = ProgressTrajectory;
+export default ProgressTrajectory;

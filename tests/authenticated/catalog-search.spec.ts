@@ -29,14 +29,20 @@ import { signIn } from '../helpers/auth';
  */
 
 /** The dialog's own search box. The exact string is AddFoodDialog's. */
-const SEARCH_PLACEHOLDER = 'Type at least 2 characters...';
+const SEARCH_PLACEHOLDER = 'Type at least 2 letters...';
 
+/**
+ * The pantry's header is a quick-add bar now; the full form, which is where
+ * the catalog search lives, opens from "More ways to add". The fixture pantry
+ * has food in it, so the empty state's own button is not on screen.
+ */
 async function openAddFood(page: import('@playwright/test').Page) {
   await page.goto('/dashboard/pantry');
   await page.waitForLoadState('networkidle');
-  await page.getByRole('button', { name: /^Add Food$/i }).first().click();
+  await page.getByTestId('pantry-capture-menu').click();
+  await page.getByRole('menuitem', { name: /Add a food with details/i }).click();
 
-  const dialog = page.getByRole('dialog', { name: /Add New Food/i });
+  const dialog = page.getByRole('dialog', { name: /Add a food/i });
   await expect(dialog).toBeVisible({ timeout: 10_000 });
   return dialog;
 }

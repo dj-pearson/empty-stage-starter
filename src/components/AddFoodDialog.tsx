@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -25,31 +26,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, Minus, Plus, X } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { isTrustedForTotals } from "@/lib/catalogNutrition";
+import { NEW_FOOD_SAFETY, safetyFromFlags, type SafetyChoice } from "@/lib/foodSafetyChoice";
+import { isCurrencyCode, localeCurrency, parsePriceInput, viewerLocale } from "@/lib/money";
+import "@/i18n/appLocale";
 
 interface AddFoodDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (food: Omit<Food, "id">) => void;
+  /**
+   * Resolves to whether the save landed. The dialog closes and resets only
+   * when it did; on `false` it stays open with everything the parent typed,
+   * and the caller says why (plan limit, offline, a server error). A caller
+   * that returns nothing is treated as success, as before.
+   */
+  onSave: (food: Omit<Food, "id">) => Promise<boolean | void> | boolean | void;
   editFood?: Food | null;
 }
 
-const categories: { value: FoodCategory; label: string }[] = [
-  { value: "protein", label: "Protein" },
-  { value: "carb", label: "Carb" },
-  { value: "dairy", label: "Dairy" },
-  { value: "fruit", label: "Fruit" },
-  { value: "vegetable", label: "Vegetable" },
-  { value: "snack", label: "Snack" },
-];
+const CATEGORY_VALUES: FoodCategory[] = ["protein", "carb", "dairy", "fruit", "vegetable", "snack"];
+const UNIT_VALUES = ["servings", "packages", "count", "oz", "lbs", "cups", "tbsp"] as const;
+const QUICK_QUANTITIES = [1, 2, 3, 5, 10];
 
 /**
  * A row from the canonical catalog (US-799). This dialog reads no nutrition
@@ -70,12 +74,16 @@ type NutritionItem = {
   verification?: string | null;
 };
 
+const roundQty = (n: number) => Math.round(n * 100) / 100;
+
 export function AddFoodDialog({
   open,
   onOpenChange,
   onSave,
   editFood,
 }: AddFoodDialogProps) {
+  const { t } = useTranslation();
+  const nameRequiredMsg = t("pantry.addDialog.nameRequired", "Food name is required");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<NutritionItem[]>([]);
@@ -84,17 +92,27 @@ export function AddFoodDialog({
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<FoodCategory>("protein");
-  const [isSafe, setIsSafe] = useState(true);
-  const [isTryBite, setIsTryBite] = useState(false);
+  const [safety, setSafety] = useState<SafetyChoice>(NEW_FOOD_SAFETY);
   const [aisle, setAisle] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  // Text, not a number: "0.5" has to survive being typed as "0." first.
+  const [quantityText, setQuantityText] = useState("1");
   const [unit, setUnit] = useState("servings");
   const [servingsPerContainer, setServingsPerContainer] = useState<number | undefined>();
   const [packageQuantity, setPackageQuantity] = useState("");
+  const [allergens, setAllergens] = useState<string[]>([]);
+  const [canonicalId, setCanonicalId] = useState<string | null>(null);
+  // Item 22: last known price per unit, optional. Text for the same reason as quantity.
+  const [priceText, setPriceText] = useState("");
+  const [currency, setCurrency] = useState(() => localeCurrency(viewerLocale()));
 
   // Validation state
   const [nameError, setNameError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  const price = parsePriceInput(priceText);
+  const priceInvalid = priceText.trim() !== "" && price === null;
+  const parsedQuantity = Number.parseFloat(quantityText);
+  const quantity = Number.isFinite(parsedQuantity) && parsedQuantity >= 0 ? roundQty(parsedQuantity) : null;
 
   // Search nutrition database as user types
   useEffect(() => {
@@ -151,13 +169,16 @@ export function AddFoodDialog({
     if (editFood) {
       setName(editFood.name);
       setCategory(editFood.category);
-      setIsSafe(editFood.is_safe);
-      setIsTryBite(editFood.is_try_bite);
+      setSafety(safetyFromFlags(editFood.is_safe, editFood.is_try_bite));
       setAisle(editFood.aisle || "");
-      setQuantity(editFood.quantity || 0);
+      setQuantityText(String(editFood.quantity ?? 0));
       setUnit(editFood.unit || "servings");
       setServingsPerContainer(editFood.servings_per_container);
       setPackageQuantity(editFood.package_quantity || "");
+      setAllergens(editFood.allergens ?? []);
+      setCanonicalId(editFood.canonical_id ?? null);
+      setPriceText(typeof editFood.price_per_unit === "number" ? String(editFood.price_per_unit) : "");
+      setCurrency(isCurrencyCode(editFood.currency) ? editFood.currency : localeCurrency(viewerLocale()));
       setShowConfirmation(false);
       setSelectedNutrition(null);
       setSearchQuery("");
@@ -169,17 +190,22 @@ export function AddFoodDialog({
   const resetForm = () => {
     setName("");
     setCategory("protein");
-    setIsSafe(true); // Default to Safe Foods
-    setIsTryBite(false);
+    // US-803: a new food is not safe until the parent says so.
+    setSafety(NEW_FOOD_SAFETY);
     setAisle("");
-    setQuantity(1);
+    setQuantityText("1");
     setUnit("servings");
     setServingsPerContainer(undefined);
     setPackageQuantity("");
+    setAllergens([]);
+    setCanonicalId(null);
+    setPriceText("");
+    setCurrency(localeCurrency(viewerLocale()));
     setShowConfirmation(false);
     setSelectedNutrition(null);
     setSearchQuery("");
     setSearchResults([]);
+    setNameError("");
   };
 
   const handleSelectNutrition = (item: NutritionItem) => {
@@ -188,6 +214,11 @@ export function AddFoodDialog({
     setCategory(mapCategoryToFoodCategory(item.default_category ?? ''));
     setPackageQuantity(item.package_quantity_text || "");
     setServingsPerContainer(item.servings_per_container ?? undefined);
+    // Kept, not just shown: the catalog's allergens are what the kid-fit
+    // badges match against, and canonical_id links the food to the catalog
+    // row (US-795) so the next scan or receipt line stacks onto it.
+    setAllergens((item.allergens ?? []).filter(Boolean));
+    setCanonicalId(item.id);
     setSearchQuery("");
     setSearchResults([]);
     setShowConfirmation(true);
@@ -203,30 +234,48 @@ export function AddFoodDialog({
     return 'snack';
   };
 
+  const stepQuantity = (delta: number) => {
+    const base = quantity ?? 0;
+    setQuantityText(String(roundQty(Math.max(0, base + delta))));
+  };
+
   const handleSave = async () => {
-    // Validate name
     if (!name.trim()) {
-      setNameError("Food name is required");
+      setNameError(nameRequiredMsg);
       return;
     }
+    if (quantity === null || priceInvalid) return;
     setNameError("");
     setIsSaving(true);
 
     try {
-      await onSave({
+      const result = await onSave({
         name: name.trim(),
         category,
-        is_safe: isSafe,
-        is_try_bite: isTryBite,
+        is_safe: safety === "safe",
+        is_try_bite: safety === "try",
         aisle: aisle.trim() || undefined,
         quantity,
         unit,
         servings_per_container: servingsPerContainer,
         package_quantity: packageQuantity || undefined,
+        allergens,
+        canonical_id: canonicalId,
+        // Price and currency together or not at all. A cleared field on an
+        // edit clears the price; a new food with none sends nothing.
+        ...(price !== null
+          ? { price_per_unit: price, currency }
+          : editFood && typeof editFood.price_per_unit === "number"
+            ? { price_per_unit: null, currency: null }
+            : {}),
       });
 
+      if (result === false) return;
       resetForm();
       onOpenChange(false);
+    } catch (err) {
+      // The caller reports its own failures; the form stays as typed.
+      logger.error("AddFoodDialog save failed:", err);
     } finally {
       setIsSaving(false);
     }
@@ -239,22 +288,34 @@ export function AddFoodDialog({
     }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editFood ? "Edit Food" : "Add New Food"}</DialogTitle>
-          <DialogDescription className="sr-only">Add or edit a food item with nutrition details and safety settings</DialogDescription>
+          <DialogTitle>
+            {editFood ? t("pantry.addDialog.editTitle", "Edit food") : t("pantry.addDialog.addTitle", "Add a food")}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {t("pantry.addDialog.description", "Add or edit a food with its stock, allergens and whether your kids eat it")}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           {!editFood && !showConfirmation && (
             <div className="space-y-2">
-              <Label>Search Nutrition Database</Label>
-              <Command className="border rounded-md" shouldFilter={false}>
+              {/* cmdk assigns the input its own id and points aria-labelledby
+                  at the label it renders from `label`, so a Label htmlFor
+                  cannot reach it. The accessible name comes from `label`;
+                  the visible one is for sighted users only. */}
+              <Label aria-hidden="true">{t("pantry.addDialog.searchLabel", "Search the food catalog")}</Label>
+              <Command
+                className="border rounded-md"
+                shouldFilter={false}
+                label={t("pantry.addDialog.searchLabel", "Search the food catalog")}
+              >
                 <CommandInput
-                  placeholder="Type at least 2 characters..."
+                  placeholder={t("pantry.addDialog.searchPlaceholder", "Type at least 2 letters...")}
                   value={searchQuery}
                   onValueChange={setSearchQuery}
                 />
                 <CommandList>
                   {searchQuery.length < 2 && (
-                    <CommandEmpty>Start typing to search…</CommandEmpty>
+                    <CommandEmpty>{t("pantry.addDialog.searchStart", "Start typing to search")}</CommandEmpty>
                   )}
                   {searchQuery.length >= 2 && isSearching && (
                     <div className="flex items-center justify-center p-4">
@@ -262,7 +323,7 @@ export function AddFoodDialog({
                     </div>
                   )}
                   {searchQuery.length >= 2 && !isSearching && searchResults.length === 0 && (
-                    <CommandEmpty>No foods found.</CommandEmpty>
+                    <CommandEmpty>{t("pantry.addDialog.searchNone", "No foods found.")}</CommandEmpty>
                   )}
                   {searchQuery.length >= 2 && !isSearching && searchResults.length > 0 && (
                     <CommandGroup>
@@ -270,15 +331,15 @@ export function AddFoodDialog({
                         <CommandItem
                           key={item.id}
                           onSelect={() => handleSelectNutrition(item)}
-                          className="cursor-pointer"
+                          className="cursor-pointer min-h-11"
                           value={item.name}
                         >
                           <div className="flex-1">
                             <div className="font-medium">{item.name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {item.default_category}
-                              {item.serving_size_text && ` • ${item.serving_size_text}`}
-                              {item.package_quantity_text && ` • ${item.package_quantity_text}`}
+                              {[item.default_category, item.serving_size_text, item.package_quantity_text]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </div>
                           </div>
                         </CommandItem>
@@ -288,7 +349,7 @@ export function AddFoodDialog({
                 </CommandList>
               </Command>
               <p className="text-xs text-muted-foreground">
-                Search our nutrition database or manually enter food details below
+                {t("pantry.addDialog.searchHint", "Pick a match to fill in the details, or type them below.")}
               </p>
             </div>
           )}
@@ -298,24 +359,27 @@ export function AddFoodDialog({
               <CheckCircle2 className="h-4 w-4" />
               <AlertDescription>
                 <div className="space-y-2">
-                  <p className="font-medium">Found in database: {selectedNutrition.name}</p>
+                  <p className="font-medium">
+                    {t("pantry.addDialog.found", { defaultValue: "Found in the catalog: {{name}}", name: selectedNutrition.name })}
+                  </p>
                   {/* The catalog column is package_quantity_text; the old
                       `nutrition` table's was package_quantity, and this line
                       kept the old name, so the Package row never rendered. */}
                   {selectedNutrition.package_quantity_text && (
-                    <p className="text-sm">Package: {selectedNutrition.package_quantity_text}</p>
+                    <p className="text-sm">
+                      {t("pantry.addDialog.package", {
+                        defaultValue: "Package: {{value}}",
+                        value: selectedNutrition.package_quantity_text,
+                      })}
+                    </p>
                   )}
                   {selectedNutrition.servings_per_container && (
-                    <p className="text-sm">Servings per container: {selectedNutrition.servings_per_container}</p>
-                  )}
-                  {selectedNutrition.allergens && selectedNutrition.allergens.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {selectedNutrition.allergens.map(allergen => (
-                        <Badge key={allergen} variant="destructive" className="text-xs">
-                          {allergen}
-                        </Badge>
-                      ))}
-                    </div>
+                    <p className="text-sm">
+                      {t("pantry.addDialog.servingsPer", {
+                        defaultValue: "Servings per container: {{value}}",
+                        value: selectedNutrition.servings_per_container,
+                      })}
+                    </p>
                   )}
                   {/*
                     US-797: a barcode scan promotes itself into the shared
@@ -327,8 +391,10 @@ export function AddFoodDialog({
                   */}
                   {!isTrustedForTotals(selectedNutrition) && (
                     <p className="text-xs">
-                      Added by another household and not checked yet. Confirm the
-                      details against the packet.
+                      {t(
+                        "pantry.addDialog.unverified",
+                        "Added by another household and not checked yet. Confirm the details against the packet."
+                      )}
                     </p>
                   )}
                 </div>
@@ -337,7 +403,7 @@ export function AddFoodDialog({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="name">Food Name *</Label>
+            <Label htmlFor="name">{t("pantry.addDialog.nameLabel", "Food name *")}</Label>
             <Input
               id="name"
               value={name}
@@ -349,10 +415,10 @@ export function AddFoodDialog({
               }}
               onBlur={() => {
                 if (!name.trim()) {
-                  setNameError("Food name is required");
+                  setNameError(nameRequiredMsg);
                 }
               }}
-              placeholder="e.g., Chicken Nuggets"
+              placeholder={t("pantry.addDialog.namePlaceholder", "e.g., Chicken nuggets")}
               className={nameError ? "border-destructive focus-visible:ring-destructive" : ""}
               aria-invalid={!!nameError}
               aria-describedby={nameError ? "name-error" : undefined}
@@ -365,16 +431,44 @@ export function AddFoodDialog({
             )}
           </div>
 
+          {/* US-803: one question, three answers. Nothing is picked for the parent. */}
           <div className="space-y-2">
-            <Label htmlFor="category">Category</Label>
+            <Label id="add-food-safety-label">{t("pantry.addDialog.safetyLabel", "Do your kids eat it?")}</Label>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              value={safety}
+              onValueChange={(v) => {
+                // Radix clears a single group when the pressed item is tapped
+                // again; "Not set" is the explicit way back, so ignore that.
+                if (v === "none" || v === "safe" || v === "try") setSafety(v);
+              }}
+              aria-labelledby="add-food-safety-label"
+              className="grid grid-cols-3 gap-2"
+              data-testid="add-food-safety"
+            >
+              <ToggleGroupItem value="none" className="min-h-11">
+                {t("pantry.addDialog.safetyNone", "Not set")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="safe" className="min-h-11">
+                {t("pantry.addDialog.safetySafe", "Safe food")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="try" className="min-h-11">
+                {t("pantry.addDialog.safetyTry", "Try bite")}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">{t("pantry.addDialog.categoryLabel", "Category")}</Label>
             <Select value={category} onValueChange={(v) => setCategory(v as FoodCategory)}>
               <SelectTrigger id="category">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
-                    {cat.label}
+                {CATEGORY_VALUES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {t(`pantry.addDialog.category.${cat}`, cat)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -382,30 +476,62 @@ export function AddFoodDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="aisle">Grocery Aisle (Optional)</Label>
+            <p id="add-food-allergens-label" className="text-sm font-medium leading-none">
+              {t("pantry.addDialog.allergensLabel", "Allergens")}
+            </p>
+            {allergens.length > 0 ? (
+              <ul aria-labelledby="add-food-allergens-label" className="flex flex-wrap gap-1.5" data-testid="add-food-allergens">
+                {allergens.map((allergen) => (
+                  <li key={allergen}>
+                    <Badge variant="destructive" className="gap-1 pr-1 text-xs">
+                      {allergen}
+                      <button
+                        type="button"
+                        className="-my-1 inline-flex h-6 w-6 items-center justify-center rounded-full hover:bg-destructive-foreground/20"
+                        onClick={() => setAllergens((prev) => prev.filter((a) => a !== allergen))}
+                        aria-label={t("pantry.addDialog.removeAllergen", {
+                          defaultValue: "Remove allergen {{name}}",
+                          name: allergen,
+                        })}
+                      >
+                        <X className="h-3 w-3" aria-hidden="true" />
+                      </button>
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {t("pantry.addDialog.allergensNone", "None recorded")}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="aisle">{t("pantry.addDialog.aisleLabel", "Grocery aisle (optional)")}</Label>
             <Input
               id="aisle"
               value={aisle}
               onChange={(e) => setAisle(e.target.value)}
-              placeholder="e.g., Frozen, Produce, Dairy"
+              placeholder={t("pantry.addDialog.aislePlaceholder", "e.g., Frozen, Produce, Dairy")}
             />
           </div>
 
           {packageQuantity && (
             <div className="space-y-2">
-              <Label htmlFor="package">Package Details</Label>
+              <Label htmlFor="package">{t("pantry.addDialog.packageLabel", "Package details")}</Label>
               <Input
                 id="package"
                 value={packageQuantity}
                 onChange={(e) => setPackageQuantity(e.target.value)}
-                placeholder="e.g., 20 nuggets, 16 oz"
+                placeholder={t("pantry.addDialog.packagePlaceholder", "e.g., 20 nuggets, 16 oz")}
               />
             </div>
           )}
 
           {servingsPerContainer !== undefined && (
             <div className="space-y-2">
-              <Label htmlFor="servings">Servings Per Container</Label>
+              <Label htmlFor="servings">{t("pantry.addDialog.servingsLabel", "Servings per container")}</Label>
               <Input
                 id="servings"
                 type="number"
@@ -416,49 +542,55 @@ export function AddFoodDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity in Stock</Label>
+              <Label htmlFor="quantity">{t("pantry.addDialog.quantityLabel", "Quantity in stock")}</Label>
               <div className="flex gap-2 items-center">
                 <Input
                   id="quantity"
                   type="number"
-                  inputMode="numeric"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  inputMode="decimal"
+                  min="0"
+                  step="0.25"
+                  value={quantityText}
+                  onChange={(e) => setQuantityText(e.target.value)}
+                  aria-invalid={quantity === null}
                   className="flex-1"
                 />
                 <div className="flex gap-1">
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                    className="h-10 w-10 p-0"
+                    size="icon"
+                    onClick={() => stepQuantity(-1)}
+                    disabled={(quantity ?? 0) <= 0}
+                    className="h-11 w-11"
+                    aria-label={t("pantry.addDialog.decrease", "Decrease quantity")}
                   >
-                    −
+                    <Minus className="h-4 w-4" aria-hidden="true" />
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    onClick={() => setQuantity(q => q + 1)}
-                    className="h-10 w-10 p-0"
+                    size="icon"
+                    onClick={() => stepQuantity(1)}
+                    className="h-11 w-11"
+                    aria-label={t("pantry.addDialog.increase", "Increase quantity")}
                   >
-                    +
+                    <Plus className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </div>
               </div>
               <div className="flex gap-1 flex-wrap">
-                {[1, 2, 3, 5, 10].map(num => (
+                {QUICK_QUANTITIES.map(num => (
                   <Button
                     key={num}
                     type="button"
                     variant={quantity === num ? "default" : "secondary"}
                     size="sm"
-                    onClick={() => setQuantity(num)}
-                    className="h-10 px-3 text-xs"
+                    onClick={() => setQuantityText(String(num))}
+                    aria-pressed={quantity === num}
+                    className="h-11 min-w-11 px-3 text-xs"
                   >
                     {num}
                   </Button>
@@ -466,41 +598,62 @@ export function AddFoodDialog({
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="unit">Unit</Label>
+              <Label htmlFor="unit">{t("pantry.addDialog.unitLabel", "Unit")}</Label>
               <Select value={unit} onValueChange={setUnit}>
                 <SelectTrigger id="unit">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="servings">Servings</SelectItem>
-                  <SelectItem value="packages">Packages</SelectItem>
-                  <SelectItem value="count">Count</SelectItem>
-                  <SelectItem value="oz">Ounces</SelectItem>
-                  <SelectItem value="lbs">Pounds</SelectItem>
-                  <SelectItem value="cups">Cups</SelectItem>
-                  <SelectItem value="tbsp">Tablespoons</SelectItem>
+                  {/* A unit the list doesn't know (from a scan or a receipt)
+                      still shows, instead of rendering an empty trigger. */}
+                  {!(UNIT_VALUES as readonly string[]).includes(unit) && unit && (
+                    <SelectItem value={unit}>{unit}</SelectItem>
+                  )}
+                  {UNIT_VALUES.map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {t(`pantry.addDialog.unit.${u}`, u)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="safe">Safe Food</Label>
-            <Switch id="safe" checked={isSafe} onCheckedChange={setIsSafe} />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="try">Try Bite</Label>
-            <Switch id="try" checked={isTryBite} onCheckedChange={setIsTryBite} />
+          <div className="space-y-2">
+            <Label htmlFor="price">
+              {t("pantry.price.label", { defaultValue: "Price per {{unit}} (optional)", unit: t(`pantry.addDialog.unit.${unit}`, unit) })}
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="price"
+                inputMode="decimal"
+                autoComplete="off"
+                value={priceText}
+                onChange={(e) => setPriceText(e.target.value)}
+                aria-invalid={priceInvalid}
+                aria-describedby="price-hint"
+                className="flex-1"
+              />
+              <span className="text-sm text-muted-foreground tabular-nums">{currency}</span>
+            </div>
+            <p id="price-hint" className={priceInvalid ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+              {priceInvalid
+                ? t("pantry.price.invalid", "Enter a price like 3.50, or leave it blank.")
+                : t("pantry.price.hint", "Used to estimate what thrown-out food costs. Leave blank if you don't know.")}
+            </p>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("pantry.addDialog.cancel", "Cancel")}
           </Button>
-          <Button onClick={handleSave} disabled={!name.trim() || isSaving}>
+          <Button onClick={handleSave} disabled={!name.trim() || quantity === null || priceInvalid || isSaving}>
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {isSaving ? "Saving..." : editFood ? "Update" : "Add Food"}
+            {isSaving
+              ? t("pantry.addDialog.saving", "Saving...")
+              : editFood
+                ? t("pantry.addDialog.update", "Update")
+                : t("pantry.addDialog.save", "Add food")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { RefreshCcw, Clock, Sparkles } from 'lucide-react';
 import { analytics } from '@/lib/analytics';
 import { pickTwistCandidates } from '@/lib/varietyTwistPicker';
-import type { Food, Recipe } from '@/types';
+import type { Food, Kid, Recipe } from '@/types';
 
 interface Props {
   open: boolean;
@@ -35,9 +35,12 @@ interface Props {
   foods: Food[];
   /** Reads the precomputed fatigue score map at the parent. */
   fatigueScoreFor: (recipeId: string) => number;
-  /** Caller swaps the plan entry's recipe_id. Receives the chosen
+  /** Caller swaps the recipe in the slot. Receives the chosen
    *  candidate's recipe id. */
   onSwap: (newRecipeId: string) => void;
+  /** The child the meal is for. Candidates carrying one of this kid's
+   *  allergens are never offered; dislikes show as a reason chip. */
+  kid?: Kid | null;
 }
 
 export function TwistMealSheet({
@@ -48,6 +51,7 @@ export function TwistMealSheet({
   foods,
   fatigueScoreFor,
   onSwap,
+  kid,
 }: Props) {
   const foodById = useMemo(
     () => new Map(foods.map((f) => [f.id, f])),
@@ -61,8 +65,9 @@ export function TwistMealSheet({
       allRecipes: recipes,
       foodById,
       fatigueScoreFor,
+      kid: kid ?? null,
     });
-  }, [original, recipes, foodById, fatigueScoreFor]);
+  }, [original, recipes, foodById, fatigueScoreFor, kid]);
 
   // US-298: fire variety_twist_sheet_opened on every open transition.
   // Triggers whether the parent flipped open=true programmatically (the
@@ -90,10 +95,10 @@ export function TwistMealSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <RefreshCcw className="h-5 w-5 text-amber-600" aria-hidden="true" />
+            <RefreshCcw className="h-5 w-5 text-primary" aria-hidden="true" />
             Twist this meal
           </SheetTitle>
           <SheetDescription>

@@ -11,14 +11,28 @@
  *
  *   - `fetchTopChainNetworkTargets(...)`: returns aggregated targets that
  *      other families have chained to from a given source food, subject
- *      to a k-anonymity floor (>=5 contributions, enforced server-side).
+ *      to a k-anonymity floor (>=5 distinct households, enforced
+ *      server-side; the aggregate table itself is not client-readable).
  *
- * The server normalizes food names via `normalize_chain_food_name`; the
- * client mirrors that normalization for display purposes only.
+ * Since 20260928000010 the server does not trust the names or outcome sent
+ * here: it resolves the contribution key back to one of the caller's own
+ * attempts or mastered ladder rows (so the key derivations below must stay
+ * in step with `chain_network_key` in SQL), takes the outcome from that row,
+ * and uses the verified catalog name of each food. A food with no catalog
+ * match is not contributed. Target keys therefore come back as normalized
+ * catalog names. The client mirrors `normalize_chain_food_name` for display
+ * purposes only.
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import { matchingFoodAllergen } from '@/lib/allergens';
+import { isAllergyUnknown } from '@/lib/kidFit';
+import type { Food, Kid } from '@/types';
+import { deterministicUuid, isUuid, normalizeChainFoodName } from './chainNetworkKeys';
+import { isShareChainOptedIn } from './shareChainPref';
+
+export { deterministicUuid, isUuid, normalizeChainFoodName } from './chainNetworkKeys';
 
 export type PickinessBucket = 'low' | 'medium' | 'high' | 'unknown';
 export type ChainOutcome = 'success' | 'partial' | 'refused';
@@ -49,7 +63,8 @@ export interface ContributeArgs {
  */
 export function bucketPickiness(level: string | null | undefined): PickinessBucket {
   if (!level) return 'unknown';
-  const lc = level.toString().trim().toLowerCase();
+  // Stored levels are snake_case ('very_picky'); the phrases below are spaced.
+  const lc = level.toString().trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (lc === '' || lc === 'unknown') return 'unknown';
   if (
     lc === 'low' ||
@@ -91,29 +106,21 @@ export function bucketPickiness(level: string | null | undefined): PickinessBuck
 }
 
 /**
- * Mirror of the server's `normalize_chain_food_name`. Useful when the UI
- * needs to show a normalized key (e.g. for grouping or for "you contributed
- * to this transition" hints).
- */
-export function normalizeChainFoodName(name: string | null | undefined): string {
-  if (!name) return '';
-  let s = name.toLowerCase().trim();
-  s = s.replace(/^the\s+/, '');
-  s = s.replace(/['".,!?()[\]]/g, '');
-  s = s.replace(/\s+/g, ' ');
-  return s;
-}
-
-/**
  * Fire-and-forget contribution. Returns true if the row was newly recorded,
  * false if dedup'd or a soft validation failure (empty source/target etc.).
  * Errors are logged but never thrown - this should never break the user
  * flow that triggered it.
  */
 export async function contributeChainNetworkSuccess(args: ContributeArgs): Promise<boolean> {
+  // p_contribution_key is a UUID column. A readable key like `ladder:<id>`
+  // fails the cast server-side and the contribution is silently lost, so every
+  // non-UUID key is hashed to a stable UUID first (same input, same key).
+  const contributionKey = isUuid(args.contributionKey)
+    ? args.contributionKey
+    : deterministicUuid(args.contributionKey);
   try {
     const { data, error } = await supabase.rpc('contribute_chain_network', {
-      p_contribution_key: args.contributionKey,
+      p_contribution_key: contributionKey,
       p_source_food_name: args.sourceFoodName,
       p_target_food_name: args.targetFoodName,
       p_pickiness_bucket: args.pickinessBucket,
@@ -141,37 +148,203 @@ interface RawTargetRow {
   last_observed_at: string;
 }
 
+export type ChainNetworkFetchResult = { ok: true; rows: ChainNetworkTarget[] } | { ok: false };
+
+/** How long a fetched target list is reused before asking the server again. */
+export const CHAIN_NETWORK_CACHE_TTL_MS = 10 * 60 * 1000;
+
+interface CacheEntry {
+  at: number;
+  result: { ok: true; rows: ChainNetworkTarget[] };
+}
+
+const targetCache = new Map<string, CacheEntry>();
+const inFlight = new Map<string, Promise<ChainNetworkFetchResult>>();
+
+/** Test hook: forget every cached and in-flight fetch. */
+export function clearChainNetworkTargetsCache(): void {
+  targetCache.clear();
+  inFlight.clear();
+}
+
+function mapRawRow(r: RawTargetRow): ChainNetworkTarget {
+  return {
+    targetFoodKey: r.target_food_key,
+    pickinessBucket: r.pickiness_bucket,
+    successCount: r.success_count,
+    partialCount: r.partial_count,
+    refusedCount: r.refused_count,
+    totalCount: r.total_count,
+    successRate: typeof r.success_rate === 'string' ? Number(r.success_rate) : r.success_rate,
+    lastObservedAt: r.last_observed_at,
+  };
+}
+
+/**
+ * Aggregated targets other families chained to from `sourceFoodName`.
+ *
+ * `{ ok: false }` means the read failed, which the UI must not confuse with
+ * "no data yet". Successful reads are cached for ten minutes per
+ * normalized source|bucket|limit, and concurrent calls for the same key
+ * share one request.
+ */
 export async function fetchTopChainNetworkTargets(
   sourceFoodName: string,
   pickinessBucket?: PickinessBucket,
   limit = 5
-): Promise<ChainNetworkTarget[]> {
-  if (!sourceFoodName.trim()) return [];
-  try {
-    const { data, error } = await supabase.rpc('fetch_chain_network_targets', {
-      p_source_food_name: sourceFoodName,
-      p_pickiness_bucket: pickinessBucket ?? null,
-      p_limit: Math.min(25, Math.max(1, limit)),
-    });
-    if (error) {
-      logger.warn('fetch_chain_network_targets failed', error);
-      return [];
+): Promise<ChainNetworkFetchResult> {
+  const source = normalizeChainFoodName(sourceFoodName);
+  if (!source) return { ok: true, rows: [] };
+  const clamped = Math.min(25, Math.max(1, limit));
+  const key = `${source}|${pickinessBucket ?? ''}|${clamped}`;
+
+  const cached = targetCache.get(key);
+  if (cached && Date.now() - cached.at < CHAIN_NETWORK_CACHE_TTL_MS) return cached.result;
+
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+
+  const request = (async (): Promise<ChainNetworkFetchResult> => {
+    try {
+      const { data, error } = await supabase.rpc('fetch_chain_network_targets', {
+        p_source_food_name: sourceFoodName,
+        p_pickiness_bucket: pickinessBucket,
+        p_limit: clamped,
+      });
+      if (error) {
+        logger.warn('fetch_chain_network_targets failed', error);
+        return { ok: false };
+      }
+      const rows = ((data as RawTargetRow[] | null) ?? []).map(mapRawRow);
+      const result = { ok: true as const, rows };
+      targetCache.set(key, { at: Date.now(), result });
+      return result;
+    } catch (err) {
+      logger.warn('fetch_chain_network_targets threw', err);
+      return { ok: false };
+    } finally {
+      inFlight.delete(key);
     }
-    const rows = (data as RawTargetRow[] | null) ?? [];
-    return rows.map((r) => ({
-      targetFoodKey: r.target_food_key,
-      pickinessBucket: r.pickiness_bucket,
-      successCount: r.success_count,
-      partialCount: r.partial_count,
-      refusedCount: r.refused_count,
-      totalCount: r.total_count,
-      successRate: typeof r.success_rate === 'string' ? Number(r.success_rate) : r.success_rate,
-      lastObservedAt: r.last_observed_at,
-    }));
-  } catch (err) {
-    logger.warn('fetch_chain_network_targets threw', err);
-    return [];
+  })();
+  inFlight.set(key, request);
+  return request;
+}
+
+// ---------------------------------------------------------------------------
+// Merge, rank and allergen-filter (pure)
+// ---------------------------------------------------------------------------
+
+/**
+ * Wilson score lower bound (95%) for `success` out of `total`. Ranks 18/20
+ * above 4/5: a high rate on a handful of tries is weaker evidence than a
+ * slightly lower rate on many.
+ */
+export function wilsonLowerBound(success: number, total: number, z = 1.96): number {
+  if (!(total > 0)) return 0;
+  const p = Math.min(1, Math.max(0, success / total));
+  const z2 = z * z;
+  const denom = 1 + z2 / total;
+  const centre = p + z2 / (2 * total);
+  const margin = z * Math.sqrt((p * (1 - p)) / total + z2 / (4 * total * total));
+  return Math.max(0, (centre - margin) / denom);
+}
+
+/**
+ * Fold rows that share a targetFoodKey into one. The server returns the
+ * kid's bucket and the 'unknown' bucket side by side, which would otherwise
+ * show the same food twice. Counts are summed, successRate (0-100) is
+ * recomputed from the sums, and the result is ranked by Wilson lower bound.
+ */
+export function mergeNetworkTargetsByFood(
+  rows: readonly ChainNetworkTarget[],
+  bucket: PickinessBucket
+): ChainNetworkTarget[] {
+  const byKey = new Map<string, ChainNetworkTarget>();
+  for (const r of rows) {
+    const key = normalizeChainFoodName(r.targetFoodKey) || r.targetFoodKey;
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, { ...r, targetFoodKey: key });
+      continue;
+    }
+    byKey.set(key, {
+      targetFoodKey: key,
+      // Report the kid's own bucket when either side carries it.
+      pickinessBucket: r.pickinessBucket === bucket ? bucket : prev.pickinessBucket,
+      successCount: prev.successCount + r.successCount,
+      partialCount: prev.partialCount + r.partialCount,
+      refusedCount: prev.refusedCount + r.refusedCount,
+      totalCount: prev.totalCount + r.totalCount,
+      successRate: 0,
+      lastObservedAt:
+        prev.lastObservedAt > r.lastObservedAt ? prev.lastObservedAt : r.lastObservedAt,
+    });
   }
+  const merged = [...byKey.values()].map((t) => ({
+    ...t,
+    successRate: t.totalCount > 0 ? Math.round((t.successCount / t.totalCount) * 1000) / 10 : 0,
+  }));
+  return merged.sort((a, b) => {
+    const diff =
+      wilsonLowerBound(b.successCount, b.totalCount) -
+      wilsonLowerBound(a.successCount, a.totalCount);
+    if (diff !== 0) return diff;
+    return a.targetFoodKey.localeCompare(b.targetFoodKey);
+  });
+}
+
+export interface NetworkFilterResult {
+  visible: ChainNetworkTarget[];
+  /** Targets removed for this child's allergies (hits and unverifiable names). */
+  hiddenCount: number;
+  /**
+   * The child's allergy list has never been set. Nothing is shown; the UI
+   * should link to the kid profile instead.
+   */
+  allergiesUnknown: boolean;
+}
+
+/**
+ * Allergen floor for other families' wins. A network target is only a name,
+ * so it is resolved to a household food where it can be (tags, families and
+ * name are then all checked); otherwise the name alone is checked. Any hit is
+ * hidden whatever its severity, and for a child with an allergen an
+ * unresolved name is hidden too: unknown is not safe.
+ */
+export function filterNetworkTargetsForKid(
+  targets: readonly ChainNetworkTarget[],
+  kid: Pick<Kid, 'allergens'>,
+  foods: readonly Pick<Food, 'name' | 'allergens'>[]
+): NetworkFilterResult {
+  if (isAllergyUnknown(kid)) {
+    return { visible: [], hiddenCount: 0, allergiesUnknown: true };
+  }
+  const kidAllergens = kid.allergens ?? [];
+  const kidHasAllergens = kidAllergens.some((a) => typeof a === 'string' && a.trim() !== '');
+  const byName = new Map<string, Pick<Food, 'name' | 'allergens'>>();
+  for (const f of foods) {
+    const key = normalizeChainFoodName(f.name);
+    if (key && !byName.has(key)) byName.set(key, f);
+  }
+
+  const visible: ChainNetworkTarget[] = [];
+  let hiddenCount = 0;
+  for (const t of targets) {
+    if (!kidHasAllergens) {
+      visible.push(t);
+      continue;
+    }
+    const food = byName.get(t.targetFoodKey) ?? byName.get(normalizeChainFoodName(t.targetFoodKey));
+    const hit = food
+      ? matchingFoodAllergen(kidAllergens, food)
+      : matchingFoodAllergen(kidAllergens, { name: t.targetFoodKey, allergens: null });
+    if (hit !== null || !food) {
+      hiddenCount++;
+      continue;
+    }
+    visible.push(t);
+  }
+  return { visible, hiddenCount, allergiesUnknown: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -190,23 +363,14 @@ interface FoodAttemptForContribution {
 }
 
 /**
- * Single source of truth for the "Share my food-chain outcomes anonymously"
- * preference key. Mirrors `usePickyWinSharePref`. Default behaviour: ON.
- * The pref is read lazily so server-render / native paths without
- * localStorage get the default-ON behaviour and the existing aggregate
- * keeps growing.
+ * "Share my food-chain outcomes anonymously" (US-296). Read from the
+ * shareChainPref store, which holds the server row
+ * (picky_win_preferences.share_chain_outcomes). Fails closed: until that row
+ * has loaded for the signed-in user, nothing is contributed, whatever the
+ * device cache says.
  */
-const SHARE_PREF_KEY = 'eatpal.share_chain_outcomes';
-
 function isShareOptedIn(): boolean {
-  try {
-    if (typeof localStorage === 'undefined') return true;
-    const raw = localStorage.getItem(SHARE_PREF_KEY);
-    if (raw === null) return true; // default ON
-    return raw === 'true';
-  } catch {
-    return true;
-  }
+  return isShareChainOptedIn();
 }
 
 /**
@@ -217,8 +381,19 @@ function isShareOptedIn(): boolean {
  * Returns the number of contributions accepted. Returns 0 when the user
  * has opted out of sharing (US-296 privacy contract).
  */
+export interface ContributionContext {
+  /**
+   * The kid's pickiness_level when the caller already has the kid record.
+   * Passing it (even as null) skips the kids lookup.
+   */
+  pickinessLevel?: string | null;
+  /** The attempted food's name when known; skips the foods lookup. */
+  foodName?: string;
+}
+
 export async function recordContributionsFromAttempt(
-  attempt: FoodAttemptForContribution
+  attempt: FoodAttemptForContribution,
+  context: ContributionContext = {}
 ): Promise<number> {
   if (!attempt?.id || !attempt?.food_id) return 0;
   if (!isShareOptedIn()) return 0;
@@ -231,9 +406,11 @@ export async function recordContributionsFromAttempt(
   // We only contribute on outcomes that are signal: success/partial.
   if (outcome === null || outcome === 'refused') return 0;
 
-  // Look up pickiness for the kid (best-effort).
+  // Look up pickiness for the kid (best-effort), unless the caller has it.
   let bucket: PickinessBucket = 'unknown';
-  if (attempt.kid_id) {
+  if (context.pickinessLevel !== undefined) {
+    bucket = bucketPickiness(context.pickinessLevel);
+  } else if (attempt.kid_id) {
     const { data: kidRow } = await supabase
       .from('kids')
       .select('pickiness_level')
@@ -243,13 +420,17 @@ export async function recordContributionsFromAttempt(
   }
 
   // Resolve target food name.
-  const { data: targetFoodRow } = await supabase
-    .from('foods')
-    .select('name')
-    .eq('id', attempt.food_id)
-    .maybeSingle();
-  const targetName = (targetFoodRow as { name?: string } | null)?.name;
+  let targetName = context.foodName?.trim() || undefined;
+  if (!targetName) {
+    const { data: targetFoodRow } = await supabase
+      .from('foods')
+      .select('name')
+      .eq('id', attempt.food_id)
+      .maybeSingle();
+    targetName = (targetFoodRow as { name?: string } | null)?.name;
+  }
   if (!targetName) return 0;
+  const target = targetName;
 
   // Find matching chain suggestions where this food was the target.
   const { data: suggestions, error: suggError } = await supabase
@@ -261,7 +442,7 @@ export async function recordContributionsFromAttempt(
     return 0;
   }
   const sourceIds = (suggestions ?? [])
-    .map((s: { source_food_id?: string }) => s.source_food_id)
+    .map((s: { source_food_id?: string | null }) => s.source_food_id)
     .filter((x): x is string => typeof x === 'string');
   if (sourceIds.length === 0) return 0;
 
@@ -272,50 +453,22 @@ export async function recordContributionsFromAttempt(
     if (row?.id && row?.name) nameById.set(row.id, row.name);
   }
 
-  let accepted = 0;
-  for (const sourceId of sourceIds) {
-    const sourceName = nameById.get(sourceId);
-    if (!sourceName) continue;
-    // Combine attempt id with source food id so multiple sources from one
-    // attempt produce stable, distinct contribution keys.
-    const contributionKey = deterministicUuid(`${attempt.id}:${sourceId}`);
-    const ok = await contributeChainNetworkSuccess({
-      contributionKey,
-      sourceFoodName: sourceName,
-      targetFoodName: targetName,
-      pickinessBucket: bucket,
-      outcome,
-    });
-    if (ok) accepted += 1;
-  }
-  return accepted;
-}
-
-/**
- * Build a deterministic v5-ish UUID from a string. We only need stability
- * (so the same input always yields the same UUID), not cryptographic
- * uniqueness; the server's PRIMARY KEY on contribution_key handles dedup.
- */
-export function deterministicUuid(input: string): string {
-  // FNV-1a hash, expanded to 32 hex chars by repeating with a salt.
-  function fnv1a(s: string): number {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 0x01000193) >>> 0;
-    }
-    return h >>> 0;
-  }
-  const a = fnv1a(input).toString(16).padStart(8, '0');
-  const b = fnv1a(input + ':b')
-    .toString(16)
-    .padStart(8, '0');
-  const c = fnv1a(input + ':c')
-    .toString(16)
-    .padStart(8, '0');
-  const d = fnv1a(input + ':d')
-    .toString(16)
-    .padStart(8, '0');
-  // shape into 8-4-4-4-12 with v4-ish bits set
-  return `${a}-${b.slice(0, 4)}-4${b.slice(4, 7)}-8${c.slice(0, 3)}-${c.slice(4)}${d}`;
+  // Each contribution is independent and idempotent on its key, so they run
+  // in parallel rather than one round trip after another.
+  const results = await Promise.all(
+    sourceIds.map((sourceId) => {
+      const sourceName = nameById.get(sourceId);
+      if (!sourceName) return Promise.resolve(false);
+      // Combine attempt id with source food id so multiple sources from one
+      // attempt produce stable, distinct contribution keys.
+      return contributeChainNetworkSuccess({
+        contributionKey: deterministicUuid(`${attempt.id}:${sourceId}`),
+        sourceFoodName: sourceName,
+        targetFoodName: target,
+        pickinessBucket: bucket,
+        outcome,
+      });
+    })
+  );
+  return results.filter(Boolean).length;
 }

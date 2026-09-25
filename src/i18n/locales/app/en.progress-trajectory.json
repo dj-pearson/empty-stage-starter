@@ -1,0 +1,53 @@
+{
+  "progressTrajectory": {
+    "title": "What's changed over the months",
+    "headline": {
+      "progressBoth": "Since {{month}}: {{safe}}, {{tries}}.",
+      "progressSafe": "Since {{month}}: {{safe}}.",
+      "progressTries": "Since {{month}}: {{tries}}.",
+      "safe_one": "{{count}} food reached safe",
+      "safe_other": "{{count}} foods reached safe",
+      "tries_one": "{{count}} first try",
+      "tries_other": "{{count}} first tries",
+      "steady_one": "Since {{month}}: {{count}} try logged, no new foods yet.",
+      "steady_other": "Since {{month}}: {{count}} tries logged, no new foods yet.",
+      "notEnough": "Trends appear after your first month of logging.",
+      "notEnoughLink": "See this week on Insights"
+    },
+    "strip": {
+      "legendTries": "First tries",
+      "legendSafe": "Reached safe",
+      "month": "{{month}}: {{tries}}, {{safe}}, {{logged}}",
+      "triesPart_one": "{{count}} first try",
+      "triesPart_other": "{{count}} first tries",
+      "safePart_one": "{{count}} food reached safe",
+      "safePart_other": "{{count}} foods reached safe",
+      "loggedPart_one": "{{count}} try logged",
+      "loggedPart_other": "{{count}} tries logged",
+      "label": "First tries and foods reached safe per month for {{name}}"
+    },
+    "reached": {
+      "title": "Reached safe",
+      "by": "by {{month}}",
+      "none": "No ladder foods have reached safe yet. The Food Tracker shows what to offer next.",
+      "more_one": "and {{count}} more",
+      "more_other": "and {{count}} more",
+      "trackerLink": "Open Food Tracker"
+    },
+    "variety": {
+      "title": "Safe foods by group",
+      "hint": "Foods {{name}} has mastered or always eats, without allergens or dislikes.",
+      "none": "None yet",
+      "category": {
+        "protein": "Protein",
+        "carb": "Carbs",
+        "dairy": "Dairy",
+        "fruit": "Fruit",
+        "vegetable": "Vegetables",
+        "snack": "Snacks"
+      }
+    },
+    "showOnly": "Show only {{name}}",
+    "partial": "Some history couldn't load, so these numbers may be low."
+  }
+}

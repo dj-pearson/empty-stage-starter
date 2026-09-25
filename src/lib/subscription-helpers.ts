@@ -9,7 +9,7 @@
 export interface SubscriptionData {
   id?: string;
   user_id?: string;
-  plan_id?: string;
+  plan_id?: string | null;
   plan_name: string;
   status: string | null;
   billing_cycle?: string | null;
@@ -282,4 +282,56 @@ export function getComplementarySubscriptionInfo(subscription: SubscriptionData 
     isComplementary: true,
     message: 'You have complimentary access to this plan',
   };
+}
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+function toTime(value: string | Date | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const t = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * A plan date for display ("September 25, 2026"), in the viewer's locale.
+ * Returns null for a missing or unparseable date so the caller can say "no end
+ * date" instead of rendering "Invalid Date".
+ */
+export function formatPlanDate(iso: string | null | undefined, locale?: string): string | null {
+  const t = toTime(iso);
+  if (t === null) return null;
+  try {
+    return new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(t));
+  } catch {
+    // An invalid locale tag throws a RangeError; fall back to the default.
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(new Date(t));
+  }
+}
+
+/**
+ * How far through the billing period `now` is, as 0-100. Null when either end
+ * is missing or the period is empty or inverted, so a progress bar never gets
+ * NaN or Infinity.
+ */
+export function periodProgress(
+  start: string | Date | null | undefined,
+  end: string | Date | null | undefined,
+  now: Date = new Date()
+): number | null {
+  const s = toTime(start);
+  const e = toTime(end);
+  if (s === null || e === null || e <= s) return null;
+  const pct = ((now.getTime() - s) / (e - s)) * 100;
+  return Math.min(100, Math.max(0, pct));
+}
+
+/**
+ * Whole days until `end`, rounded up. Null for no end date; 0 once it has
+ * passed (never negative).
+ */
+export function daysLeft(end: string | Date | null | undefined, now: Date = new Date()): number | null {
+  const e = toTime(end);
+  if (e === null) return null;
+  const days = Math.ceil((e - now.getTime()) / DAY_MS);
+  return days > 0 ? days : 0;
 }

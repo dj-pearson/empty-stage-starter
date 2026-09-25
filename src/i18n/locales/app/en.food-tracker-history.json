@@ -1,0 +1,46 @@
+{
+  "foodTracker": {
+    "history": {
+      "title": "History by food",
+      "subtitle": "Each food over time. Meals by day live in the Journal.",
+      "loading": "Loading history",
+      "loadFailed": "Couldn't load this history. Nothing is lost; try again.",
+      "retry": "Retry",
+      "emptyTitle": "No tries logged yet",
+      "emptyBody": "Each food you log shows up here with how it has gone over time.",
+      "filteredEmpty": "No foods match this filter.",
+      "clearFilter": "Clear filter",
+      "filterLabel": "Filter by last result",
+      "filterAll": "All ({{count}})",
+      "filterSuccess": "Took it ({{count}})",
+      "filterPartial": "Partway ({{count}})",
+      "filterRefused": "Not today ({{count}})",
+      "tries_one": "{{count}} try",
+      "tries_other": "{{count}} tries",
+      "lastResult": "Last result",
+      "reactionLogged": "Reaction logged",
+      "showMore": "Show more",
+      "openFood": "Open {{food}} history",
+      "unknownFood": "Unknown food",
+      "outcome": {
+        "success": "Took it",
+        "partial": "Partway",
+        "refused": "Not today",
+        "tantrum": "Hard time",
+        "unknown": "Not recorded"
+      },
+      "sheet": {
+        "title": "{{food}} over time",
+        "description": "Every try, newest first.",
+        "empty": "No tries logged for this food yet.",
+        "showOlder": "Show older",
+        "reaction": "Reaction",
+        "showAll": "Show all",
+        "showLess": "Show less",
+        "parentNotes": "Notes",
+        "milestone": "Milestone",
+        "stageUnknown": "Step not recorded"
+      }
+    }
+  }
+}

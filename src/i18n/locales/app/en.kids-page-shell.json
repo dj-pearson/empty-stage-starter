@@ -1,0 +1,32 @@
+{
+  "kids": {
+    "meta": {
+      "title": "My Children - EatPal",
+      "description": "Manage child profiles, food preferences, and allergen information"
+    },
+    "findFamilyMeal": "Find a meal everyone will eat",
+    "loadError": {
+      "message": "Couldn't refresh your children. Showing what was saved on this device.",
+      "retry": "Retry"
+    },
+    "household": {
+      "allergensTitle": "Household allergies",
+      "chipLabel": "{{allergen}}: {{names}}",
+      "missingInfo": "Allergy info missing for {{name}}",
+      "noAllergens": "No known allergies in this household"
+    },
+    "empty": {
+      "steps": {
+        "basics": "Their name and birthday",
+        "allergies": "Any allergies, or confirm there are none",
+        "safeFoods": "Five foods they always eat"
+      }
+    },
+    "status": {
+      "added": "{{name}} added",
+      "saved": "{{name}}'s profile saved",
+      "removed": "{{name}} removed"
+    },
+    "skeletonLabel": "Loading your children"
+  }
+}

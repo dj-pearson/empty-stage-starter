@@ -8,9 +8,20 @@ export interface CsvColumn<T> {
   value: (row: T) => unknown;
 }
 
-function escapeCell(value: unknown): string {
+/**
+ * Leading characters a spreadsheet reads as the start of a formula. A grocery
+ * row named "=HYPERLINK(...)" is text the household typed, and opening the
+ * export must not run it (CSV injection). Only strings are guarded: a real
+ * number such as -3 is data and is written as-is.
+ */
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+
+export function escapeCell(value: unknown): string {
   if (value == null) return '';
-  const str = String(value);
+  let str = String(value);
+  if (typeof value === 'string' && FORMULA_LEAD.test(str)) {
+    str = `'${str}`;
+  }
   if (/[",\n\r]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -25,6 +36,17 @@ export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
 }
 
 /**
+ * A filename safe to hand to a download: path separators, the drive-letter
+ * colon and control characters are removed, so a list named "Costco / Sat"
+ * cannot write outside the download folder or fail on Windows.
+ */
+export function sanitizeFilename(name: string): string {
+  // eslint-disable-next-line no-control-regex
+  const cleaned = name.replace(/[/\\:\u0000-\u001f\u007f]/g, '').trim();
+  return cleaned || 'export';
+}
+
+/**
  * Trigger a browser download of `csv` as `filename`. No-op-safe outside a DOM
  * (returns false) so it can be called from non-browser contexts.
  */
@@ -36,10 +58,26 @@ export function downloadCsv(filename: string, csv: string): boolean {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = filename;
+  link.download = sanitizeFilename(filename);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
   return true;
+}
+
+/**
+ * Trigger a browser download of any Blob (a PDF report, say) as `filename`.
+ * Moved here from the retired reportGenerator so the one download helper the
+ * clinician ladder report needs no longer drags that module along.
+ */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

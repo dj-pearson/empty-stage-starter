@@ -1,0 +1,136 @@
+{
+  "foodTracker": {
+    "ladderUi": {
+      "subtitle": "Each food moves one small step at a time. A no simply steps it back to rest.",
+      "startFood": "Start a food",
+      "loading": "Loading the ladder",
+      "backfilling": "Checking past tries to build the ladder...",
+      "undo": "Undo",
+      "undoFailed": "Couldn't undo that just now. The log is still saved.",
+      "logged": "Logged {{food}} for {{kid}}",
+      "logFailed": "That didn't save. Nothing was lost; try again in a moment.",
+      "savedLadderPending": "Saved. {{food}}'s step will update when the connection catches up.",
+      "quickLogAria": "Log {{result}} for {{food}}",
+      "addDetail": "Add detail",
+      "addDetailFor": "Add detail for {{food}}",
+      "announceNext": "{{food}}: {{result}}. Next try {{date}}.",
+      "announceSafe": "{{food}}: {{result}}. {{food}} is a safe food now.",
+      "announceResting": "{{food}}: {{result}}. It will rest for a while.",
+      "nextDue": "next try {{date}}",
+      "contains": "Contains {{allergen}}",
+      "removed": "{{food}} is off the ladder.",
+      "removeFailed": "Couldn't remove {{food}} just now. It's still on the ladder.",
+      "restoreFailed": "Couldn't put {{food}} back just now.",
+      "alwaysEatsAdded": "{{food}} is on {{name}}'s always-eats list.",
+      "alwaysEatsFailed": "Couldn't update {{name}}'s profile just now.",
+      "result": {
+        "accepted": "Took it",
+        "held": "Partway",
+        "refused": "Not today"
+      },
+      "status": {
+        "due_one": "{{count}} to offer today",
+        "due_other": "{{count}} to offer today",
+        "close_one": "{{count}} one step from safe",
+        "close_other": "{{count}} one step from safe",
+        "nothingDue": "Nothing to offer today. Everything else is resting or comes back later."
+      },
+      "chainingSummary": {
+        "due_one": "{{count}} due today",
+        "due_other": "{{count}} due today",
+        "close_one": "{{count}} close to safe",
+        "close_other": "{{count}} close to safe",
+        "none": "See where each food sits on the ladder",
+        "link": "{{summary}}: open Food Tracker"
+      },
+      "groups": {
+        "dueToday": "Due today",
+        "dueTodayBody": "Put it on the plate next to something safe, then one tap to say how it went.",
+        "closeToSafe": "Close to safe",
+        "closeToSafeBody": "A few good tries from joining the regular rotation.",
+        "workingOn": "Working on",
+        "workingOnBody": "These come back around on their own schedule.",
+        "resting": "Resting",
+        "restingBody": "Taking a break is part of the plan. Bring one back whenever you are ready.",
+        "safeNow": "Safe now",
+        "safeNowBody": "Eaten as a full portion. These are part of the rotation now."
+      },
+      "row": {
+        "toSafe_one": "{{count}} more good try to safe",
+        "toSafe_other": "{{count}} more good tries to safe",
+        "safe": "Eaten as a full portion",
+        "stalled": "Stalled: try a smaller step",
+        "backOn": "back {{date}}",
+        "restingUntilYou": "resting until you bring it back",
+        "resume": "Bring {{food}} back",
+        "addToAlwaysEats": "Add to {{name}}'s always-eats"
+      },
+      "error": {
+        "title": "Couldn't load the ladder",
+        "body": "Check your connection and try again. Nothing was lost.",
+        "stale": "What you see may be out of date.",
+        "retry": "Retry"
+      },
+      "empty": {
+        "title": "Pick one food to start with",
+        "body": "Choose a food {{name}} doesn't eat yet. It starts at just looking at it, and one tap after each meal moves it along."
+      },
+      "detail": {
+        "title": "How did {{food}} go?",
+        "description": "Only the result is needed. Everything else is optional.",
+        "resultLabel": "How it went",
+        "hardTime": "Hard time",
+        "hardTimeHint": "Real upset at the table. The food steps back and rests longer.",
+        "reaction": "Any reaction?",
+        "addReaction": "Add \"{{reaction}}\" to the reaction note",
+        "reactionChip": {
+          "gagged": "Gagged",
+          "spatOut": "Spat out",
+          "rash": "Rash",
+          "tummyAche": "Tummy ache"
+        },
+        "moodBefore": "Mood before",
+        "moodAfter": "Mood after",
+        "mood": {
+          "happy": "Happy",
+          "neutral": "Calm",
+          "anxious": "Worried",
+          "resistant": "Resisting"
+        },
+        "amount": "How much",
+        "amounts": {
+          "none": "None",
+          "quarter": "A quarter",
+          "half": "Half",
+          "most": "Most",
+          "all": "All of it"
+        },
+        "note": "Note for yourself",
+        "firstTime": "First time ever",
+        "save": "Save",
+        "saving": "Saving...",
+        "draftKept": "Draft kept"
+      },
+      "picker": {
+        "title": "Start a food for {{name}}",
+        "description": "It starts at the gentlest step: just having it on the table.",
+        "search": "Search foods or allergens",
+        "empty": "No food matches that.",
+        "suggested": "Suggested next",
+        "tryBite": "Try-bite foods",
+        "everything": "Everything else",
+        "onLadder": "On the ladder: {{rung}}",
+        "disliked": "Disliked",
+        "started": "Started {{food}} at the first step",
+        "duplicate": "Already on the ladder",
+        "showIt": "Show it",
+        "capped": "Three foods are already due today; starting it {{date}}",
+        "failed": "Couldn't start {{food}} just now. Try again in a moment.",
+        "confirmTitle": "{{food}} contains {{allergen}}",
+        "confirmBody": "{{name}}'s profile lists {{allergen}}. Only start this if their doctor has said it's OK.",
+        "confirmCancel": "Don't start it",
+        "confirmStart": "Start anyway"
+      }
+    }
+  }
+}

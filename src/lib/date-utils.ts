@@ -25,6 +25,25 @@
  */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/** A week begins on Sunday (0) or Monday (1), in date-fns terms. */
+export type WeekStartsOn = 0 | 1;
+
+/**
+ * The DEFAULT weekday the meal planner's week begins on: Monday (item 3).
+ *
+ * The planner grid, the week navigation, the grocery week window and
+ * ApplyTemplateDialog all snap to the same weekday. Each user can switch to
+ * Sunday (user_preferences key `week_starts_on`, read by useWeekStartsOn);
+ * this constant is what everyone gets until they do, and what code with no
+ * user in scope uses. Plan rows are dated, so changing it only moves the
+ * seven-day window, never a meal.
+ *
+ * ApplyTemplateDialog once snapped to Monday while the grid snapped to
+ * Sunday, and a template applied "to this week" landed a day to the right of
+ * the grid the parent was looking at. Read the preference, not a literal.
+ */
+export const PLANNER_WEEK_STARTS_ON: WeekStartsOn = 1;
+
 export function toDate(date: Date | string | number): Date {
   if (typeof date === 'string') {
     const m = DATE_ONLY.exec(date);
@@ -230,24 +249,28 @@ export function endOfDay(date: Date | string | number): Date {
 }
 
 /**
- * Get start of week (Sunday)
+ * Start of the week containing `date`. The week begins on `weekStartsOn`
+ * (Monday by default, PLANNER_WEEK_STARTS_ON); pass the user's preference.
  */
-export function startOfWeek(date: Date | string | number): Date {
+export function startOfWeek(
+  date: Date | string | number,
+  weekStartsOn: WeekStartsOn = PLANNER_WEEK_STARTS_ON
+): Date {
   const d = toDate(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day;
-  d.setDate(diff);
+  const back = (d.getDay() - weekStartsOn + 7) % 7;
+  d.setDate(d.getDate() - back);
   return startOfDay(d);
 }
 
 /**
- * Get end of week (Saturday)
+ * End of the week containing `date`: six days after startOfWeek.
  */
-export function endOfWeek(date: Date | string | number): Date {
-  const d = toDate(date);
-  const day = d.getDay();
-  const diff = d.getDate() + (6 - day);
-  d.setDate(diff);
+export function endOfWeek(
+  date: Date | string | number,
+  weekStartsOn: WeekStartsOn = PLANNER_WEEK_STARTS_ON
+): Date {
+  const d = startOfWeek(date, weekStartsOn);
+  d.setDate(d.getDate() + 6);
   return endOfDay(d);
 }
 

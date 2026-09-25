@@ -87,6 +87,48 @@ describe('allergen and texture predicates', () => {
     ).toBe(true);
   });
 
+  it('matches synonyms and OpenFoodFacts tags, not just exact strings', () => {
+    expect(
+      hasAllergenConflict(food({ id: 'f', allergens: ['en:peanuts'] }), kid({ allergens: ['peanuts'] }))
+    ).toBe(true);
+    expect(
+      hasAllergenConflict(food({ id: 'f', allergens: ['milk'] }), kid({ allergens: ['dairy'] }))
+    ).toBe(true);
+    expect(
+      hasAllergenConflict(food({ id: 'f', allergens: ['en:soybeans'] }), kid({ allergens: ['peanuts'] }))
+    ).toBe(false);
+  });
+
+  it('matches families and food names one way (items 28)', () => {
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Snack', allergens: ['almonds'] }), kid({ allergens: ['tree nuts'] }))
+    ).toBe(true);
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Almond crackers', allergens: [] }), kid({ allergens: ['tree nuts'] }))
+    ).toBe(true);
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Nutmeg', allergens: ['tree nuts'] }), kid({ allergens: ['almond'] }))
+    ).toBe(false);
+    expect(
+      hasAllergenConflict(food({ id: 'f', name: 'Butternut squash', allergens: [] }), kid({ allergens: ['tree nuts'] }))
+    ).toBe(false);
+  });
+
+  it('never schedules a synonym allergen either', () => {
+    const { scheduled, skipped } = selectDueExposures(
+      [row({ id: 'r1', foodId: 'yogurt' })],
+      ctx({
+        kid: kid({ allergens: ['dairy'] }),
+        foodsById: new Map([
+          ['yogurt', food({ id: 'yogurt', allergens: ['en:milk'] })],
+          ['safe', food({ id: 'safe', isSafe: true })],
+        ]),
+      })
+    );
+    expect(scheduled).toHaveLength(0);
+    expect(skipped[0].reason).toBe('allergen_conflict');
+  });
+
   it('reports no conflict when the child has no allergens listed', () => {
     expect(hasAllergenConflict(food({ id: 'f', allergens: ['dairy'] }), kid())).toBe(false);
   });

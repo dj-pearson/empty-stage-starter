@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -9,260 +9,148 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { supabase } from "@/integrations/supabase/client";
-import { assertUUID } from "@/lib/query-sanitize";
-import { RecipeCollection } from "@/types";
-import { Folder, Edit, Trash2, GripVertical, Star, Heart, Zap, Pizza, Clock, Users, Sparkles } from "lucide-react";
+import type { RecipeCollection } from "@/types";
+import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { logger } from "@/lib/logger";
+import { collectionIcon, collectionTone } from "@/lib/collectionAppearance";
+import "@/i18n/appLocale";
 
-const ICON_MAP: Record<string, any> = {
-  folder: Folder,
-  star: Star,
-  heart: Heart,
-  zap: Zap,
-  pizza: Pizza,
-  clock: Clock,
-  users: Users,
-  sparkles: Sparkles,
-};
-
-const COLOR_CLASS_MAP: Record<string, string> = {
-  primary: "text-primary",
-  green: "text-green-600",
-  red: "text-red-600",
-  yellow: "text-yellow-600",
-  purple: "text-purple-600",
-  pink: "text-pink-600",
-  orange: "text-orange-600",
-  gray: "text-muted-foreground",
-};
+/** What a delete hands back so it can be undone (useRecipeCollections.remove). */
+export interface DeletedCollectionSnapshot {
+  collection: RecipeCollection;
+  recipeIds: string[];
+  undo: () => Promise<boolean> | void;
+}
 
 interface ManageCollectionsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  userId: string;
-  householdId?: string;
-  onEditCollection: (collection: RecipeCollection) => void;
-  recipeCountsByCollection?: Record<string, number>;
+  collections: RecipeCollection[];
+  counts?: Record<string, number>;
+  /**
+   * Delete right away (optimistic). Return the snapshot and the dialog offers
+   * Undo in a toast; return null when the delete failed.
+   */
+  onDelete: (id: string) => Promise<DeletedCollectionSnapshot | null> | void;
+  onEdit: (collection: RecipeCollection) => void;
 }
 
 export function ManageCollectionsDialog({
   open,
   onOpenChange,
-  userId,
-  householdId,
-  onEditCollection,
-  recipeCountsByCollection = {},
+  collections,
+  counts = {},
+  onDelete,
+  onEdit,
 }: ManageCollectionsDialogProps) {
-  const [collections, setCollections] = useState<RecipeCollection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [collectionToDelete, setCollectionToDelete] = useState<RecipeCollection | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const { t } = useTranslation();
 
-  useEffect(() => {
-    if (open) {
-      loadCollections();
-    }
-  }, [open, userId, householdId]);
-
-  const loadCollections = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('recipe_collections')
-        .select('*')
-        .or(`user_id.eq.${assertUUID(userId, 'userId')}${householdId ? `,household_id.eq.${assertUUID(householdId, 'householdId')}` : ''}`)
-        .order('sort_order', { ascending: true })
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-
-      setCollections(data as unknown as RecipeCollection[] || []);
-    } catch (error) {
-      logger.error('Error loading collections:', error);
-      toast.error("Failed to load collections");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!collectionToDelete) return;
-
-    setDeleting(true);
-    try {
-      // First, check if there are any recipes in this collection
-      const { data: items, error: itemsError } = await supabase
-        .from('recipe_collection_items')
-        .select('id')
-        .eq('collection_id', collectionToDelete.id)
-        .limit(1);
-
-      if (itemsError) throw itemsError;
-
-      if (items && items.length > 0) {
-        // Delete all items in the collection first
-        const { error: deleteItemsError } = await supabase
-          .from('recipe_collection_items')
-          .delete()
-          .eq('collection_id', collectionToDelete.id);
-
-        if (deleteItemsError) throw deleteItemsError;
-      }
-
-      // Now delete the collection
-      const { error } = await supabase
-        .from('recipe_collections')
-        .delete()
-        .eq('id', collectionToDelete.id);
-
-      if (error) throw error;
-
-      toast.success(`Collection "${collectionToDelete.name}" deleted`);
-      setCollections(prev => prev.filter(c => c.id !== collectionToDelete.id));
-      setDeleteDialogOpen(false);
-      setCollectionToDelete(null);
-    } catch (error) {
-      logger.error('Error deleting collection:', error);
-      toast.error("Failed to delete collection");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const confirmDelete = (collection: RecipeCollection) => {
-    setCollectionToDelete(collection);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleEdit = (collection: RecipeCollection) => {
-    onEditCollection(collection);
+  const handleDelete = async (collection: RecipeCollection) => {
+    const snapshot = await onDelete(collection.id);
+    if (!snapshot) return;
+    const count = snapshot.recipeIds.length;
+    toast.success(
+      t("recipes.collections.deleted", { defaultValue: "Deleted \"{{name}}\"", name: collection.name }),
+      {
+        description:
+          count > 0
+            ? t("recipes.collections.deletedKept", {
+                defaultValue: "Its {{count}} recipes are still in your library.",
+                defaultValue_one: "Its recipe is still in your library.",
+                count,
+              })
+            : undefined,
+        action: {
+          label: t("recipes.collections.undo", { defaultValue: "Undo" }),
+          onClick: () => {
+            void snapshot.undo();
+          },
+        },
+      },
+    );
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Manage Recipe Collections</DialogTitle>
-            <DialogDescription>
-              Edit or delete your recipe collections. Deleting a collection won't delete the recipes.
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>{t("recipes.collections.manageTitle", { defaultValue: "Manage collections" })}</DialogTitle>
+          <DialogDescription>
+            {t("recipes.collections.manageDescription", {
+              defaultValue: "Rename or delete collections. Deleting one keeps its recipes.",
+            })}
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {loading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Loading collections...
-              </div>
-            ) : collections.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No collections yet. Create one to get started!
-              </div>
-            ) : (
-              collections.map((collection) => {
-                const Icon = collection.icon ? ICON_MAP[collection.icon] || Folder : Folder;
-                const colorClass = collection.color ? COLOR_CLASS_MAP[collection.color] || "text-primary" : "text-primary";
-                const count = recipeCountsByCollection[collection.id] || 0;
-
-                return (
-                  <div
-                    key={collection.id}
-                    className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
-                  >
-                    <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-                    
-                    <Icon className={`h-5 w-5 ${colorClass}`} />
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{collection.name}</span>
-                        {collection.is_default && (
-                          <Badge variant="secondary" className="text-xs">Default</Badge>
-                        )}
-                        {count > 0 && (
-                          <Badge variant="outline" className="text-xs">{count}</Badge>
-                        )}
-                      </div>
-                      {collection.description && (
-                        <p className="text-sm text-muted-foreground truncate">
-                          {collection.description}
-                        </p>
+        {collections.length === 0 ? (
+          <p className="py-8 text-center text-muted-foreground">
+            {t("recipes.collections.empty", { defaultValue: "No collections yet." })}
+          </p>
+        ) : (
+          <ul className="max-h-[400px] space-y-2 overflow-y-auto">
+            {collections.map((collection) => {
+              const Icon = collectionIcon(collection.icon);
+              const tone = collectionTone(collection.color);
+              const count = counts[collection.id] ?? 0;
+              return (
+                <li key={collection.id} className="flex items-center gap-3 rounded-lg border p-3">
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tone.soft}`}>
+                    <Icon className={`h-5 w-5 ${tone.text}`} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{collection.name}</span>
+                      {collection.is_default && (
+                        <Badge variant="secondary" className="text-xs">
+                          {t("recipes.collections.default", { defaultValue: "Default" })}
+                        </Badge>
                       )}
                     </div>
-
-                    <div className="flex items-center gap-1">
-                      <Button
-                        aria-label="Rename this collection"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(collection)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        aria-label="Delete this collection"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => confirmDelete(collection)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {t("recipes.collections.count", {
+                        defaultValue: "{{count}} recipes",
+                        defaultValue_one: "{{count}} recipe",
+                        count,
+                      })}
+                      {collection.description ? ` · ${collection.description}` : ""}
+                    </p>
                   </div>
-                );
-              })
-            )}
-          </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11"
+                      onClick={() => onEdit(collection)}
+                      aria-label={t("recipes.collections.editOne", {
+                        defaultValue: "Edit {{name}}",
+                        name: collection.name,
+                      })}
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 text-destructive hover:text-destructive"
+                      onClick={() => void handleDelete(collection)}
+                      aria-label={t("recipes.collections.deleteOne", {
+                        defaultValue: "Delete {{name}}",
+                        name: collection.name,
+                      })}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-          <DialogFooter>
-            <Button onClick={() => onOpenChange(false)}>Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Collection</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete the collection "{collectionToDelete?.name}"?
-              {recipeCountsByCollection[collectionToDelete?.id || ''] > 0 && (
-                <span className="block mt-2 font-medium">
-                  This collection has {recipeCountsByCollection[collectionToDelete?.id || '']} recipe(s).
-                  The recipes will not be deleted, only removed from this collection.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>{t("recipes.collections.done", { defaultValue: "Done" })}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-

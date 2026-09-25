@@ -30,6 +30,8 @@ import { Recipe, Food } from '@/types';
 import { toast } from 'sonner';
 import { logger } from "@/lib/logger";
 import { escapeHtml } from "@/lib/sanitize";
+import { EmailSchema } from "@/lib/validations";
+import { buildRecipeShareText, recipeIngredientLines, shareRecipe } from "@/lib/recipeShareText";
 
 interface RecipeExportActionsProps {
   recipe: Recipe;
@@ -57,33 +59,12 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
 
-  // Get recipe ingredients
-  const recipeIngredients = recipe.food_ids
-    .map(id => foods.find(f => f.id === id))
-    .filter(Boolean)
-    .map(food => `${food?.quantity || 1} ${food?.unit || ''} ${food?.name}`.trim());
+  // Recipe amounts (structured rows) or the linked foods by name. The old
+  // version printed each food's PANTRY stock as if it were the recipe amount.
+  const recipeIngredients = recipeIngredientLines(recipe, foods);
 
-  // Generate formatted shopping list
-  const generateShoppingList = () => {
-    const lines = [
-      `🛒 Shopping List: ${recipe.name}`,
-      `📋 Makes: ${recipe.servings || '4 servings'}`,
-      recipe.prepTime || recipe.cookTime ? `⏱️ Time: ${recipe.prepTime || ''} prep + ${recipe.cookTime || ''} cook` : '',
-      '',
-      'INGREDIENTS:',
-      '─'.repeat(40),
-      ...recipeIngredients.map((ing, i) => `☐ ${ing}`),
-      '',
-      'INSTRUCTIONS:',
-      '─'.repeat(40),
-      recipe.instructions || 'See full recipe for instructions',
-      '',
-      recipe.tips ? `💡 TIP: ${recipe.tips}` : '',
-      '',
-      `Made with 💚 by TryEatPal.com`,
-    ];
-    return lines.filter(Boolean).join('\n');
-  };
+  // The recipe as plain text: ingredients, steps, tip, source.
+  const generateShoppingList = () => buildRecipeShareText(recipe, foods);
 
   // Generate ingredients-only text
   const generateIngredientsText = () => {
@@ -127,11 +108,20 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
     }
   };
 
-  // Print shopping list
+  // Print through a hidden iframe instead of a popup: window.open with
+  // noopener returns null, so there would be no window to write into.
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.position = 'fixed';
+    frame.style.width = '0';
+    frame.style.height = '0';
+    frame.style.border = '0';
+    document.body.appendChild(frame);
+    const printWindow = frame.contentWindow;
     if (!printWindow) {
-      toast.error('Please allow popups to print');
+      frame.remove();
+      toast.error('Could not open the print dialog');
       return;
     }
 
@@ -184,7 +174,9 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
+    printWindow.focus();
     printWindow.print();
+    setTimeout(() => frame.remove(), 1000);
     
     toast.success('Print dialog opened');
   };
@@ -195,12 +187,21 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
       toast.error('Please enter an email address');
       return;
     }
+    // Validate and encode the address: typed raw into the link, a '?' or '&'
+    // in it would add its own cc/bcc/body parameters to the mail.
+    const address = EmailSchema.safeParse(email.trim());
+    if (!address.success) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
 
     // In production, this would call a backend API
     // For now, we'll use mailto
     const subject = encodeURIComponent(`Recipe: ${recipe.name}`);
     const body = encodeURIComponent(generateShoppingList());
-    const mailtoLink = `mailto:${email}?subject=${subject}&body=${body}`;
+    const at = address.data.lastIndexOf('@');
+    const to = `${encodeURIComponent(address.data.slice(0, at))}@${encodeURIComponent(address.data.slice(at + 1))}`;
+    const mailtoLink = `mailto:${to}?subject=${subject}&body=${body}`;
     
     window.location.href = mailtoLink;
     setShowEmailDialog(false);
@@ -223,7 +224,7 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
     
     // Use SMS protocol (works on most mobile devices)
     const body = encodeURIComponent(
-      `${recipe.name} - Ingredients:\n${recipeIngredients.join(', ')}\n\nFull recipe: tryeatpal.com/recipes/${recipe.id}`
+      `${recipe.name} - Ingredients:\n${recipeIngredients.join(', ')}`
     );
     
     const smsLink = `sms:${cleanNumber}?body=${body}`;
@@ -235,26 +236,13 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
     toast.success('SMS app opened');
   };
 
-  // Native share (if supported)
+  // Native share sheet with the recipe as text; clipboard where there is none.
   const handleNativeShare = async () => {
-    if (!navigator.share) {
-      toast.error('Sharing not supported on this browser');
-      return;
-    }
-
-    try {
-      await navigator.share({
-        title: recipe.name,
-        text: generateIngredientsText(),
-        url: recipe.source_url || window.location.href,
-      });
-      toast.success('Recipe shared!');
-    } catch (error: unknown) {
-      const err = error as any;
-      if (err?.name !== 'AbortError') {
-        logger.error('Error sharing:', error);
-        toast.error('Failed to share recipe');
-      }
+    const outcome = await shareRecipe(recipe, foods);
+    if (outcome === 'copied') toast.success('Recipe copied to clipboard');
+    else if (outcome === 'failed') {
+      logger.error('Error sharing recipe');
+      toast.error('Failed to share recipe');
     }
   };
 
@@ -324,15 +312,11 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
             Download as Text
           </DropdownMenuItem>
           
-          {navigator.share && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleNativeShare}>
-                <Smartphone className="h-4 w-4 mr-2" />
-                Share via...
-              </DropdownMenuItem>
-            </>
-          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleNativeShare}>
+            <Smartphone className="h-4 w-4 mr-2" />
+            Share via...
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

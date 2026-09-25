@@ -1,383 +1,306 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { AlertTriangle, Clock, Sparkles, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Sparkles, Clock, TrendingUp, ArrowRight, Gift, CheckCircle2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFoods, useGrocery, useKids, usePlan } from "@/contexts/AppContext";
 import { SubscriptionManagementDialog } from "./SubscriptionManagementDialog";
+import { getSetupSteps, isSetupComplete } from "@/lib/setupSteps";
+import { getSyncStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
+import { cn } from "@/lib/utils";
 import {
-  shouldShowUpgradePrompt,
-  getSubscriptionCTA,
-  getSubscriptionUrgency,
-  getTrialDaysRemaining,
-  formatSubscriptionStatus,
-  getComplementarySubscriptionInfo,
-  type SubscriptionData,
-} from "@/lib/subscription-helpers";
+  APPLE_SUBSCRIPTIONS_URL,
+  resolveSubscription,
+  type BannerSubscription,
+  type StripeSubscriptionRow,
+} from "@/lib/billingBannerState";
+import "@/i18n/appLocale";
 
-interface SubscriptionStatus {
-  plan_name: string;
-  status: "trialing" | "active" | "canceled" | "past_due" | null;
-  trial_end_date: string | null;
-  current_period_end: string | null;
-  cancel_at_period_end: boolean;
-  plan_id: string;
-  is_complementary: boolean;
-  complementary_subscription_id: string | null;
+const TRIAL_WARNING_DAYS = 3;
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const end = new Date(iso).getTime();
+  if (Number.isNaN(end)) return null;
+  return Math.max(0, Math.ceil((end - Date.now()) / DAY_MS));
 }
 
-/*
- * US-860: these are h2, not h3.
+const dismissKey = (userId: string) => `eatpal:billing-upsell-dismissed:${userId}`;
+
+function readDismissed(userId: string | null): boolean {
+  if (!userId) return false;
+  try {
+    return getSyncStorage().getItem(dismissKey(userId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+type Tone = "warning" | "destructive" | "secondary";
+
+const TONE: Record<Tone, { border: string; icon: string }> = {
+  warning: { border: "border-warning/50", icon: "text-warning" },
+  destructive: { border: "border-destructive/50", icon: "text-destructive" },
+  secondary: { border: "border-border", icon: "text-secondary-foreground" },
+};
+
+interface RowProps {
+  tone: Tone;
+  icon: typeof Clock;
+  title: string;
+  body?: string;
+  children?: ReactNode;
+}
+
+function BannerRow({ tone, icon: Icon, title, body, children }: RowProps) {
+  return (
+    <section
+      aria-labelledby="billing-banner-title"
+      className={cn("flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4", TONE[tone].border)}
+    >
+      <Icon className={cn("h-5 w-5 shrink-0", TONE[tone].icon)} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        {/* US-860: h2 under the page heading. */}
+        <h2 id="billing-banner-title" className="text-sm font-semibold text-foreground">
+          {title}
+        </h2>
+        {body && <p className="text-sm text-muted-foreground">{body}</p>}
+      </div>
+      <div className="flex items-center gap-1">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * The billing row on /dashboard. Quiet by default: an active plan that is not
+ * ending shows nothing. It speaks up for a trial in its last three days, a
+ * plan set to cancel, a failed or canceled payment, and (once setup is done
+ * and until dismissed) a single upgrade line for the free plan.
  *
- * This banner sits above the dashboard's own heading, and its title used to be
- * an h3 -- so the outline of /dashboard opened h3, h1, and anyone jumping by
- * heading met a plan name before the name of the page. The page heading moved
- * to the top of src/pages/Home.tsx in the same change; the banner is a section
- * under it, which is what h2 means.
+ * The plan comes from two reads in parallel: the Stripe row, and
+ * current_user_plan_name(), which also knows about App Store and
+ * complementary plans. Without the second, an Apple subscriber (no Stripe
+ * row) was shown the free upsell.
  */
 export function SubscriptionStatusBanner() {
-  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { t, i18n } = useTranslation();
+  const { userId } = useAuth();
+  const { kids, kidsHydrated } = useKids();
+  const { foods, foodsHydrated } = useFoods();
+  const { planEntries } = usePlan();
+  const { groceryItems, groceryHydrated } = useGrocery();
+
+  const [subscription, setSubscription] = useState<BannerSubscription | null>(null);
   const [showManagement, setShowManagement] = useState(false);
-  const navigate = useNavigate();
+  const [dismissed, setDismissed] = useState(() => readDismissed(userId));
 
   useEffect(() => {
-    loadSubscriptionStatus();
-  }, []);
+    setDismissed(readDismissed(userId));
+  }, [userId]);
 
-  const loadSubscriptionStatus = async () => {
+  const load = useCallback(async () => {
+    if (!userId) {
+      setSubscription(null);
+      return;
+    }
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: userSub } = await supabase
-        .from("user_subscriptions")
-        .select(`
-          status,
-          current_period_end,
-          cancel_at_period_end,
-          trial_end,
-          is_complementary,
-          complementary_subscription_id,
-          plan:subscription_plans(id, name)
-        `)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (userSub && userSub.plan) {
-        const plan = userSub.plan as unknown as { id: string; name: string };
-        const subStatus: SubscriptionStatus = {
-          plan_name: plan.name,
-          status: userSub.status as SubscriptionStatus["status"],
-          trial_end_date: userSub.status === "trialing" ? userSub.current_period_end : userSub.trial_end,
-          current_period_end: userSub.current_period_end,
-          cancel_at_period_end: userSub.cancel_at_period_end ?? false,
-          plan_id: plan.id,
-          is_complementary: userSub.is_complementary ?? false,
-          complementary_subscription_id: userSub.complementary_subscription_id ?? null,
-        };
-
-        setSubscription(subStatus);
-      } else {
-        // Check for complementary subscription
-        const { data: compSub } = await supabase
-          .rpc('get_complementary_subscription', { p_user_id: user.id })
-          .maybeSingle();
-
-        if (compSub) {
-          setSubscription({
-            plan_name: compSub.plan_name,
-            status: 'active',
-            trial_end_date: null,
-            current_period_end: compSub.end_date,
-            cancel_at_period_end: false,
-            plan_id: compSub.plan_id,
-            is_complementary: true,
-            complementary_subscription_id: compSub.id,
-          });
-        } else {
-          // No subscription found - user is on free plan
-          const { data: freePlan } = await supabase
-            .from("subscription_plans")
-            .select("id, name")
-            .eq("price_monthly", 0)
-            .maybeSingle();
-
-          if (freePlan) {
-            setSubscription({
-              plan_name: freePlan.name,
-              status: null,
-              trial_end_date: null,
-              current_period_end: null,
-              cancel_at_period_end: false,
-              plan_id: freePlan.id,
-              is_complementary: false,
-              complementary_subscription_id: null,
-            });
-          }
-        }
-      }
+      const [subResult, planResult] = await Promise.all([
+        supabase
+          .from("user_subscriptions")
+          .select(
+            `
+            status,
+            current_period_end,
+            cancel_at_period_end,
+            trial_end,
+            plan:subscription_plans(id, name)
+          `,
+          )
+          .eq("user_id", userId)
+          .maybeSingle(),
+        supabase.rpc("current_user_plan_name"),
+      ]);
+      if (subResult.error) logger.error("Error loading subscription:", subResult.error);
+      if (planResult.error) logger.error("Error loading plan name:", planResult.error);
+      const row = (subResult.data ?? null) as StripeSubscriptionRow | null;
+      const planName = typeof planResult.data === "string" ? planResult.data : null;
+      setSubscription(resolveSubscription(row, planName));
     } catch (error) {
       logger.error("Error loading subscription:", error);
-    } finally {
-      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const setupDone = useMemo(
+    () =>
+      isSetupComplete(
+        getSetupSteps({
+          kids,
+          foods,
+          planEntries,
+          groceryItems,
+          hydrated: kidsHydrated && foodsHydrated && groceryHydrated,
+        }),
+      ),
+    [kids, foods, planEntries, groceryItems, kidsHydrated, foodsHydrated, groceryHydrated],
+  );
+
+  if (!subscription) return null;
+  const plan = subscription.planName;
+
+  const formatDate = (iso: string | null) => {
+    if (!iso) return "";
+    try {
+      return new Intl.DateTimeFormat(i18n.language, { month: "long", day: "numeric" }).format(new Date(iso));
+    } catch {
+      return new Date(iso).toLocaleDateString();
     }
   };
 
-  if (loading) return null;
+  const manageButton =
+    subscription.source === "app_store" ? (
+      <a
+        href={APPLE_SUBSCRIPTIONS_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
+      >
+        {t("billing.banner.manage", { defaultValue: "Manage" })}
+      </a>
+    ) : (
+      <Button variant="outline" className="min-h-11" onClick={() => setShowManagement(true)}>
+        {t("billing.banner.manage", { defaultValue: "Manage" })}
+      </Button>
+    );
 
-  // Convert to SubscriptionData format for helper functions
-  const subscriptionData: SubscriptionData | null = subscription
-    ? {
-        plan_name: subscription.plan_name,
-        status: subscription.status,
-        current_period_end: subscription.current_period_end,
-        cancel_at_period_end: subscription.cancel_at_period_end,
-        trial_end: subscription.trial_end_date,
-        is_complementary: subscription.is_complementary,
-        complementary_subscription_id: subscription.complementary_subscription_id,
-      }
-    : null;
+  const upgradeLink = (label: string) => (
+    <Link to="/pricing" className={cn(buttonVariants(), "min-h-11")}>
+      {label}
+    </Link>
+  );
 
-  const urgency = getSubscriptionUrgency(subscriptionData);
-  const cta = getSubscriptionCTA(subscriptionData);
-  const showUpgrade = shouldShowUpgradePrompt(subscriptionData);
-  const complementaryInfo = getComplementarySubscriptionInfo(subscriptionData);
-  const trialDays = getTrialDaysRemaining(subscriptionData);
-
-  // Complementary subscription banner
-  if (complementaryInfo.isComplementary) {
+  // Trial: only in its last three days.
+  if (subscription.status === "trialing") {
+    const days = daysUntil(subscription.trialEnd);
+    if (days === null || days > TRIAL_WARNING_DAYS) return null;
+    const title =
+      days === 0
+        ? t("billing.banner.trialEndsToday", { defaultValue: "Your free trial ends today" })
+        : t("billing.banner.trialDaysLeft", {
+            count: days,
+            defaultValue_one: "{{count}} day left in your free trial",
+            defaultValue_other: "{{count}} days left in your free trial",
+          });
     return (
-      <Card className="mb-6 bg-primary/5 border-primary/20">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30">
-                <Gift className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className="font-semibold text-lg">
-                    {subscription?.plan_name} Plan
-                  </h2>
-                  <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                    Complementary Access
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {complementaryInfo.message}
-                  {subscription?.current_period_end && !subscription.cancel_at_period_end && (
-                    <> · Valid until {new Date(subscription.current_period_end).toLocaleDateString()}</>
-                  )}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => setShowManagement(true)}
-              className="w-full md:w-auto"
-            >
-              View Details
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <BannerRow
+        tone="warning"
+        icon={Clock}
+        title={title}
+        body={t("billing.banner.trialBody", {
+          plan,
+          defaultValue: "Upgrade to keep {{plan}} features after the trial.",
+        })}
+      >
+        {upgradeLink(t("billing.banner.upgrade", { defaultValue: "Upgrade" }))}
+      </BannerRow>
     );
   }
 
-  // Free plan with upgrade prompt
-  if (!subscription || subscription.status === null) {
+  if (subscription.status === "past_due") {
     return (
-      <Card className="mb-6 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Sparkles className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className="font-semibold text-lg">
-                    {subscription?.plan_name || "Free"} Plan
-                  </h2>
-                  <Badge variant="secondary">Current</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Upgrade to unlock advanced features like AI meal planning, unlimited recipes, and more!
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={() => navigate("/pricing")}
-              className="w-full md:w-auto"
-            >
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Upgrade Now
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <BannerRow
+        tone="destructive"
+        icon={AlertTriangle}
+        title={t("billing.banner.pastDue", { defaultValue: "Your last payment didn't go through" })}
+        body={t("billing.banner.pastDueBody", {
+          plan,
+          defaultValue: "Update your payment method to keep {{plan}} features.",
+        })}
+      >
+        {upgradeLink(t("billing.banner.updatePayment", { defaultValue: "Update payment" }))}
+      </BannerRow>
     );
   }
 
-  // Trial banner with urgency
-  if (subscription.status === "trialing" && trialDays !== null) {
-    const isUrgent = trialDays <= 3;
-    const borderColor = isUrgent ? "border-orange-500" : "border-primary";
-    const bgGradient = isUrgent
-      ? "from-orange-50 via-red-50/30 to-orange-50 dark:from-orange-950/20 dark:via-red-950/10 dark:to-orange-950/20"
-      : "from-primary/10 via-accent/5 to-primary/10";
-
+  if (subscription.status === "canceled") {
     return (
-      <>
-        <Card className={`mb-6 ${borderColor} bg-gradient-to-r ${bgGradient}`}>
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-full ${isUrgent ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-primary/20'}`}>
-                  <Clock className={`h-5 w-5 ${isUrgent ? 'text-orange-600 dark:text-orange-400' : 'text-primary'}`} />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-lg mb-1">
-                    {trialDays === 0 ? "Trial Ends Today!" :
-                     trialDays === 1 ? "Trial Ends Tomorrow!" :
-                     `${trialDays} ${trialDays === 1 ? "Day" : "Days"} Left in Your Free Trial`}
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    You're on the <strong>{subscription.plan_name}</strong> plan.
-                    {isUrgent ? " Don't lose access - upgrade now!" : " Upgrade now to continue enjoying all features after your trial ends."}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2 w-full md:w-auto">
-                <Button
-                  onClick={() => navigate("/pricing")}
-                  className={`flex-1 md:flex-initial ${isUrgent ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  {isUrgent ? "Upgrade Now" : "Upgrade Today"}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <SubscriptionManagementDialog
-          open={showManagement}
-          onOpenChange={setShowManagement}
-          currentPlanId={subscription.plan_id}
-          currentPlanName={subscription.plan_name}
-          onSuccess={loadSubscriptionStatus}
-        />
-      </>
+      <BannerRow
+        tone="warning"
+        icon={AlertTriangle}
+        title={t("billing.banner.canceled", { plan, defaultValue: "Your {{plan}} plan was canceled" })}
+        body={t("billing.banner.canceledBody", { defaultValue: "Reactivate to get premium features back." })}
+      >
+        {upgradeLink(t("billing.banner.reactivate", { defaultValue: "Reactivate" }))}
+      </BannerRow>
     );
   }
 
-  // Active subscription banner
   if (subscription.status === "active") {
-    const isTopTier = subscription.plan_name === "Professional";
-
+    if (!subscription.cancelAtPeriodEnd) return null;
     return (
       <>
-        <Card className="mb-6 bg-gradient-to-r from-green-50/50 to-emerald-50/50 dark:from-green-950/10 dark:to-emerald-950/10 border-green-200 dark:border-green-800">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
-                  {isTopTier ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  ) : (
-                    <Sparkles className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="font-semibold text-lg">
-                      {subscription.plan_name} Plan
-                    </h2>
-                    <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                      Active
-                    </Badge>
-                    {subscription.cancel_at_period_end && (
-                      <Badge variant="destructive">Cancels at period end</Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {subscription.cancel_at_period_end
-                      ? `Your subscription will end on ${new Date(subscription.current_period_end!).toLocaleDateString()}`
-                      : isTopTier
-                        ? "You have access to all premium features"
-                        : "Enjoying premium features"
-                    }
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2 w-full md:w-auto">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowManagement(true)}
-                  className="flex-1 md:flex-initial"
-                >
-                  Manage Plan
-                </Button>
-                {showUpgrade && !isTopTier && (
-                  <Button
-                    onClick={() => navigate("/pricing")}
-                    className="flex-1 md:flex-initial"
-                  >
-                    <TrendingUp className="w-4 h-4 mr-2" />
-                    Upgrade
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <SubscriptionManagementDialog
-          open={showManagement}
-          onOpenChange={setShowManagement}
-          currentPlanId={subscription.plan_id}
-          currentPlanName={subscription.plan_name}
-          onSuccess={loadSubscriptionStatus}
-        />
+        <BannerRow
+          tone="warning"
+          icon={Clock}
+          title={t("billing.banner.cancelling", {
+            plan,
+            date: formatDate(subscription.currentPeriodEnd),
+            defaultValue: "Your {{plan}} plan ends on {{date}}",
+          })}
+          body={t("billing.banner.cancellingBody", { defaultValue: "You keep every feature until then." })}
+        >
+          {manageButton}
+        </BannerRow>
+        {subscription.source === "stripe" && subscription.planId && (
+          <SubscriptionManagementDialog
+            open={showManagement}
+            onOpenChange={setShowManagement}
+            currentPlanId={subscription.planId}
+            currentPlanName={plan}
+            onSuccess={() => void load()}
+          />
+        )}
       </>
     );
   }
 
-  // Canceled/past due status
-  if (subscription.status === "canceled" || subscription.status === "past_due") {
+  // Free plan: one quiet line, only once the account is set up.
+  if (subscription.source === "free" && setupDone && !dismissed) {
+    const dismiss = () => {
+      setDismissed(true);
+      if (!userId) return;
+      try {
+        getSyncStorage().setItem(dismissKey(userId), "1");
+      } catch {
+        // Storage blocked: the dismissal lasts for this visit only.
+      }
+    };
     return (
-      <Card className="mb-6 border-destructive bg-destructive/5">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-full bg-destructive/20">
-                <Clock className="h-5 w-5 text-destructive" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-lg mb-1">
-                  {subscription.status === "canceled" ? "Subscription Canceled" : "Payment Issue"}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {urgency.message || (subscription.status === "canceled"
-                    ? "Reactivate your subscription to regain access to premium features"
-                    : "Please update your payment method to continue using premium features"
-                  )}
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={() => navigate("/pricing")}
-              className="w-full md:w-auto"
-            >
-              <ArrowRight className="w-4 h-4 mr-2" />
-              {cta.text}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <BannerRow
+        tone="secondary"
+        icon={Sparkles}
+        title={t("billing.banner.freeUpsell", {
+          defaultValue: "Get AI meal plans and unlimited recipes with Pro",
+        })}
+      >
+        {upgradeLink(t("billing.banner.upgrade", { defaultValue: "Upgrade" }))}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-11 w-11"
+          onClick={dismiss}
+          aria-label={t("billing.banner.dismiss", { defaultValue: "Dismiss" })}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </BannerRow>
     );
   }
 

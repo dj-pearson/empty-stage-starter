@@ -14,6 +14,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
 import { isRung, type Rung } from '@/lib/exposureLadder';
+import { kidSafeFoodIds, type KidLadderRow } from '@/lib/kidProgress';
+import type { KidFitKid } from '@/lib/kidFit';
 import { normalizeRecipeComponents, type RecipeComponent } from '@/lib/recipeComponents';
 import {
   planPlates,
@@ -22,6 +24,64 @@ import {
   type PlatingLadderRow,
 } from '@/lib/platePlanner';
 import type { SolverRecipe } from '@/lib/siblingConstraintSolver';
+
+/** kidSafeFoodIds reads the snake_case kid; plating kids are camelCase. */
+function toKidFitKid(kid: PlatingKid): KidFitKid {
+  return {
+    id: kid.id,
+    allergens: kid.allergens ?? undefined,
+    allergen_severity: kid.allergenSeverity ?? undefined,
+    disliked_foods: kid.dislikedFoods ?? undefined,
+    always_eats_foods: kid.alwaysEatsFoods ?? undefined,
+  };
+}
+
+/** Field-by-field, so a renamed column is a type error rather than a silent undefined. */
+function toKidLadderRow(row: PlatingLadderRow): KidLadderRow {
+  return {
+    kid_id: row.kidId,
+    food_id: row.foodId,
+    status: row.status,
+    current_rung: row.currentRung,
+    next_due_on: row.nextDueOn,
+  };
+}
+
+/**
+ * Each kid's safe food ids, resolved through kidSafeFoodIds so an
+ * `always_eats_foods` entry stored as a name ("Rice") matches the food id the
+ * planner compares against. Only the recipes' own foods are resolvable here,
+ * which is all plating needs. A caller-supplied `safeFoodIds` is kept as is.
+ */
+export function withResolvedSafeFoods(
+  kids: readonly PlatingKid[],
+  recipes: readonly SolverRecipe[],
+  ladder: readonly PlatingLadderRow[]
+): PlatingKid[] {
+  const foodsById = new Map<
+    string,
+    { id: string; name: string; allergens?: string[]; is_safe: boolean; is_try_bite: boolean }
+  >();
+  for (const recipe of recipes) {
+    for (const food of recipe.foods) {
+      if (foodsById.has(food.id)) continue;
+      foodsById.set(food.id, {
+        id: food.id,
+        name: food.name,
+        allergens: food.allergens ?? undefined,
+        // Not read by kidSafeFoodIds (the household flag is per-sibling wrong).
+        is_safe: false,
+        is_try_bite: false,
+      });
+    }
+  }
+  const ladderRows = ladder.map(toKidLadderRow);
+  return kids.map((kid) =>
+    kid.safeFoodIds != null
+      ? kid
+      : { ...kid, safeFoodIds: [...kidSafeFoodIds(toKidFitKid(kid), ladderRows, foodsById)] }
+  );
+}
 
 interface UseRecipePlatesArgs {
   /** Candidate recipes, already in solver shape. */
@@ -35,6 +95,12 @@ export interface UseRecipePlatesResult {
   /** recipeId -> one plate per kid. Absent for recipes with no components. */
   platesByRecipe: Map<string, KidPlate[]>;
   loading: boolean;
+  /**
+   * True when the last load failed. The map is then empty: a partial load
+   * (components without their ingredient links) could plan an allergen
+   * component 'On the plate', so the hook fails closed instead.
+   */
+  error: boolean;
 }
 
 export function useRecipePlates({
@@ -48,6 +114,7 @@ export function useRecipePlates({
   );
   const [ladder, setLadder] = useState<PlatingLadderRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   // Stable keys so the effect does not re-run on every parent render.
   const recipeIdKey = useMemo(
@@ -64,6 +131,8 @@ export function useRecipePlates({
       setComponents([]);
       setComponentFoods([]);
       setLadder([]);
+      setLoading(false);
+      setError(false);
       return;
     }
 
@@ -80,17 +149,21 @@ export function useRecipePlates({
         if (cancelled) return;
 
         const normalized = normalizeRecipeComponents(componentRows ?? []);
-        setComponents(normalized);
 
         // Only worth a second round-trip once we know some recipe here has
         // been deconstructed at all.
         if (normalized.length === 0) {
+          setComponents([]);
           setComponentFoods([]);
           setLadder([]);
+          setError(false);
           return;
         }
 
-        const [{ data: ingredientRows }, { data: ladderRows }] = await Promise.all([
+        const [
+          { data: ingredientRows, error: ingredientError },
+          { data: ladderRows, error: ladderError },
+        ] = await Promise.all([
           supabase
             .from('recipe_ingredients')
             .select('component_id, food_id')
@@ -98,11 +171,19 @@ export function useRecipePlates({
           kidIds.length > 0
             ? supabase
                 .from('kid_food_ladder')
-                .select('kid_id, food_id, current_rung, status, next_due_on')
+                .select('kid_id, food_id, current_rung, status, next_due_on, paired_safe_food_id')
                 .in('kid_id', kidIds)
-            : Promise.resolve({ data: [] as never[] }),
+            : Promise.resolve({ data: [] as never[], error: null }),
         ]);
+        // Fail closed: components without their ingredient links would plan
+        // every component as allergen-free.
+        if (ingredientError) throw ingredientError;
+        if (ladderError) throw ladderError;
         if (cancelled) return;
+
+        // Components are set together with their links, never ahead of them,
+        // so no render ever plans plates from components alone.
+        setComponents(normalized);
 
         setComponentFoods(
           (ingredientRows ?? [])
@@ -120,16 +201,20 @@ export function useRecipePlates({
             currentRung: (isRung(row.current_rung) ? row.current_rung : 'looking') as Rung,
             status: row.status,
             nextDueOn: row.next_due_on,
+            pairedSafeFoodId: row.paired_safe_food_id,
           }))
         );
+        setError(false);
       } catch (err) {
         if (!cancelled) {
-          // The breakdown is additive to the result card: on failure it is
-          // simply absent, and the rest of the card still renders.
+          // The breakdown is absent on failure and `error` tells the caller
+          // why, so it can refuse to call a dish safe rather than read an
+          // empty map as "nothing to hold back".
           logger.error('Plate planning load failed:', err);
           setComponents([]);
           setComponentFoods([]);
           setLadder([]);
+          setError(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -152,6 +237,8 @@ export function useRecipePlates({
       else componentsByRecipe.set(component.recipeId, [component]);
     }
 
+    const platingKids = withResolvedSafeFoods(kids, recipes, ladder);
+
     for (const recipe of recipes) {
       const recipeComponents = componentsByRecipe.get(recipe.id);
       if (!recipeComponents || recipeComponents.length === 0) continue;
@@ -163,7 +250,7 @@ export function useRecipePlates({
           recipe,
           components: recipeComponents,
           componentFoods: componentFoods.filter((link) => componentIds.has(link.componentId)),
-          kids,
+          kids: platingKids,
           ladder,
           today,
         })
@@ -173,5 +260,5 @@ export function useRecipePlates({
     return byRecipe;
   }, [recipes, components, componentFoods, kids, ladder, today]);
 
-  return { platesByRecipe, loading };
+  return { platesByRecipe, loading, error };
 }

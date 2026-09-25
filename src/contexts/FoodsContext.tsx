@@ -12,6 +12,7 @@ import { parseFoodRow, parseFoodRows, upsertById, upsertManyById } from "@/lib/n
 import { useAuth } from "./AuthContext";
 import { resolveFood, type CatalogEntry, type EffectiveFood } from "@/lib/effectiveFood";
 import { trackActivationOnce } from "@/lib/trackActivation";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 interface RealtimePayload<T> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -50,7 +51,20 @@ interface FoodsContextType {
   addFoods: (foods: Omit<Food, "id">[]) => Promise<boolean>;
   updateFoods: (updates: { id: string; updates: Partial<Food> }[]) => Promise<void>;
   deleteFoods: (ids: string[]) => Promise<void>;
-  refreshFoods: () => Promise<void>;
+  /**
+   * Re-read the household's foods. `ok` is false when there was no signed-in
+   * household or the read failed; in both cases state is left untouched, so a
+   * caller can tell "refreshed" from "nothing happened" instead of toasting
+   * success either way.
+   */
+  refreshFoods: () => Promise<{ ok: boolean }>;
+  /**
+   * False until the foods slice holds something true: a non-empty cache, or a
+   * settled server load (even an empty one). Lets the pantry show a skeleton
+   * instead of guessing with a timer. Mirrors GroceryContext.groceryHydrated.
+   */
+  foodsHydrated: boolean;
+  setFoodsHydrated: (hydrated: boolean) => void;
   /**
    * US-795: `grocery_product_catalog` rows keyed by id, for every distinct
    * `canonical_id` currently referenced by `foods`. Loaded separately from
@@ -66,6 +80,10 @@ const FoodsContext = createContext<FoodsContextType | undefined>(undefined);
 export function FoodsProvider({ children }: { children: React.ReactNode }) {
   const [foods, setFoods] = useState<Food[]>([]);
   const [catalogById, setCatalogById] = useState<Record<string, CatalogEntry>>({});
+  const [foodsHydrated, setFoodsHydratedState] = useState(false);
+  const setFoodsHydrated = useCallback((hydrated: boolean) => {
+    setFoodsHydratedState(hydrated);
+  }, []);
   const { userId, householdId } = useAuth();
 
   // US-795: the deduped, sorted set of canonical_ids `foods` currently points
@@ -313,20 +331,31 @@ export function FoodsProvider({ children }: { children: React.ReactNode }) {
     );
   }, [userId]);
 
-  const refreshFoods = useCallback(async () => {
+  const refreshFoods = useCallback(async (): Promise<{ ok: boolean }> => {
     // US-550: always scope by household_id (defense-in-depth alongside RLS)
     // instead of relying on RLS with an unscoped select.
-    if (userId && householdId) {
-      const { data } = await supabase.from('foods').select('*')
-        .eq('household_id', householdId)
-        .order('name', { ascending: true }).limit(500);
-      if (data) setFoods(parseFoodRows(data as unknown[]));
+    if (!userId || !householdId) return { ok: false };
+    // US-819: the same paged read and total order (name, then id) as the
+    // AppContext load. This used to stop at .limit(500) and write the partial
+    // slice over state, so a pull-to-refresh on a large pantry dropped rows
+    // the initial load had shown, and still reported success.
+    const { data, error } = await fetchAllRows((from, to) =>
+      supabase.from('foods').select('*').eq('household_id', householdId)
+        .order('name', { ascending: true }).order('id', { ascending: true })
+        .range(from, to)
+    );
+    if (error || !data) {
+      if (error) logger.error('Supabase refreshFoods error:', error);
+      return { ok: false };
     }
+    setFoods(parseFoodRows(data as unknown[]));
+    return { ok: true };
   }, [userId, householdId]);
 
   const value = useMemo(() => ({
-    foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, catalogById
-  }), [foods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, catalogById]);
+    foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, catalogById,
+    foodsHydrated, setFoodsHydrated,
+  }), [foods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, catalogById, foodsHydrated, setFoodsHydrated]);
 
   return (
     <FoodsContext.Provider value={value}>

@@ -1,0 +1,19 @@
+{
+  "grocery": {
+    "kidFilter": {
+      "label": "Show one child's items",
+      "only": "Only {{name}}'s items",
+      "showingHidden_one": "Showing only {{name}}'s items. {{count}} other item hidden.",
+      "showingHidden_other": "Showing only {{name}}'s items. {{count}} other items hidden.",
+      "showing": "Showing only {{name}}'s items. Nothing else is on this list.",
+      "showAll": "Show all items",
+      "left": "{{left}} left of {{total}} for {{name}}",
+      "progressLabel": "{{name}}'s items: {{done}} of {{total}} bought",
+      "emptyTitle": "Nothing left to buy for {{name}}",
+      "emptyBody_one": "{{count}} other item is still on the list.",
+      "emptyBody_other": "{{count}} other items are still on the list.",
+      "inStoreLabel_one": "Only {{name}}'s items. {{count}} other hidden.",
+      "inStoreLabel_other": "Only {{name}}'s items. {{count}} others hidden."
+    }
+  }
+}

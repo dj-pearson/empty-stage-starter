@@ -1,0 +1,120 @@
+{
+  "kids": {
+    "card": {
+      "editAria": "Edit {{name}}'s profile",
+      "sectionCount": "{{title}} ({{count}})",
+      "showAll": "Show all {{count}}",
+      "showLess": "Show less",
+      "age": {
+        "months_one": "{{count}} month old",
+        "months_other": "{{count}} months old",
+        "yearsMonths_one": "{{years}} years {{count}} month old",
+        "yearsMonths_other": "{{years}} years {{count}} months old",
+        "years_one": "{{count}} year old",
+        "years_other": "{{count}} years old"
+      },
+      "severity": {
+        "mild": "mild",
+        "moderate": "moderate",
+        "severe": "severe"
+      },
+      "allergies": {
+        "listLabel": "Allergies for {{name}}",
+        "unknown": "Allergies not recorded",
+        "add": "Add",
+        "addAria": "Add allergies for {{name}}",
+        "none": "No known allergies",
+        "crossContact": "Cross-contact sensitive"
+      },
+      "careCard": {
+        "shareTitle": "{{name}}'s care card",
+        "shareAria": "Share {{name}}'s care card",
+        "copied": "Care card copied. Paste it into a message.",
+        "unavailable": "Sharing isn't available in this browser.",
+        "failed": "Couldn't share the care card. Try again.",
+        "titleWithAge": "{{name}}, {{age}}",
+        "allergiesUnknown": "Allergies: not recorded",
+        "noAllergies": "No known allergies",
+        "allergies": "Allergies: {{list}}",
+        "crossContact": "Cross-contact sensitive: even traces matter (shared utensils, boards, fryers)",
+        "alwaysEats": "Always eats: {{list}}",
+        "dislikes": "Doesn't like right now: {{list}}",
+        "textures": "Texture dislikes: {{list}}",
+        "strategies": "What helps: {{list}}"
+      },
+      "progress": {
+        "title": "This week",
+        "line": "Ate {{ate}} · Tasted {{tasted}} · Refused {{refused}}",
+        "newFoods_one": "{{count}} new food tried",
+        "newFoods_other": "{{count}} new foods tried",
+        "mastered": "{{count}} mastered",
+        "ladderLabel": "Foods in progress",
+        "unnamedFood": "A food",
+        "step": "Step {{n}}",
+        "empty": "Pick a first food to work on"
+      },
+      "rung": {
+        "looking": "Looking",
+        "touching": "Touching",
+        "smelling": "Smelling",
+        "licking": "Licking",
+        "tiny_taste": "Tiny taste",
+        "small_bite": "Small bite",
+        "full_bite": "Full bite",
+        "full_portion": "Full portion"
+      },
+      "completeness": {
+        "label": "Profile {{percent}}% complete",
+        "complete": "Profile complete",
+        "cta": {
+          "allergies": "Add allergies",
+          "birthday": "Add birthday",
+          "safeFoods": "Add safe foods",
+          "preferences": "Add dislikes and textures",
+          "goals": "Add a goal"
+        }
+      },
+      "tabs": {
+        "foods": "Foods",
+        "preferences": "Preferences",
+        "details": "Details"
+      },
+      "foods": {
+        "alwaysEats": "Always eats",
+        "favorites": "Favorites",
+        "dislikes": "Doesn't like right now",
+        "emptyTitle": "No foods added yet",
+        "emptyText": "Add the foods {{name}} always eats so meal plans start from them.",
+        "emptyCta": "Add foods"
+      },
+      "prefs": {
+        "eatingProfile": "Eating profile",
+        "behavior": "Variety: {{value}}",
+        "pickiness": "Pickiness: {{value}}",
+        "newFoods": "New foods: {{value}}",
+        "textureSensitivity": "Texture sensitivity: {{value}}",
+        "textureLikes": "Textures they like",
+        "textureDislikes": "Textures they avoid",
+        "flavors": "Flavors",
+        "preparations": "Preferred preparations",
+        "strategies": "What helps",
+        "emptyTitle": "No preferences yet",
+        "emptyText": "Add the textures and flavors {{name}} likes or avoids."
+      },
+      "details": {
+        "gender": "Gender",
+        "height": "Height",
+        "heightValue": "{{value}} cm",
+        "weight": "Weight",
+        "weightValue": "{{value}} kg",
+        "dietary": "Dietary restrictions",
+        "goals": "Goals",
+        "concerns": "Nutrition concerns",
+        "notes": "Notes",
+        "lastReviewed": "Last updated {{date}}",
+        "emptyTitle": "No details yet",
+        "emptyText": "Goals, dietary needs and notes for {{name}} will show here."
+      }
+    }
+  }
+}

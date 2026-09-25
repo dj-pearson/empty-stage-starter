@@ -193,7 +193,7 @@ export function OrderIngredientsDialog({
 
   const handleCheckout = () => {
     if (cartUrl) {
-      window.open(cartUrl, '_blank');
+      window.open(cartUrl, '_blank', 'noopener,noreferrer');
       trackInstacartUsage('checkout', {
         recipeId: recipe.id,
       });

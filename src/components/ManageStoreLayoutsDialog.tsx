@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -22,281 +23,253 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { assertUUID } from "@/lib/query-sanitize";
 import { toast } from "sonner";
-import { Store, MapPin, Edit, Trash2, List, GripVertical, Plus, Loader2 } from "lucide-react";
+import { Store, MapPin, Edit, Trash2, List, Plus, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card, CardContent } from "@/components/ui/card";
 import { logger } from "@/lib/logger";
-
-interface StoreLayout {
-  id: string;
-  user_id: string;
-  household_id: string | null;
-  store_name: string;
-  store_chain: string | null;
-  store_location: string | null;
-  is_default: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import {
+  isCatalogStore,
+  storeDisplayName,
+  type StoreLayoutRow,
+} from "@/lib/storeLayouts";
+import "@/i18n/appLocale";
 
 interface ManageStoreLayoutsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
-  householdId?: string;
-  onEditStore: (store: StoreLayout) => void;
-  onManageAisles: (store: StoreLayout) => void;
+  householdId: string | null | undefined;
+  onCreateStore: () => void;
+  onEditStore: (store: StoreLayoutRow) => void;
+  onManageAisles: (store: StoreLayoutRow) => void;
+  /** useStoreLayouts().refresh, after a delete. */
+  onStoresChanged?: () => void;
 }
+
+type StoreWithCount = StoreLayoutRow & { aisleCount: number };
 
 export function ManageStoreLayoutsDialog({
   open,
   onOpenChange,
   userId,
   householdId,
+  onCreateStore,
   onEditStore,
   onManageAisles,
+  onStoresChanged,
 }: ManageStoreLayoutsDialogProps) {
-  const [stores, setStores] = useState<StoreLayout[]>([]);
+  const { t } = useTranslation();
+  const [stores, setStores] = useState<StoreWithCount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [storeToDelete, setStoreToDelete] = useState<StoreLayout | null>(null);
+  const [storeToDelete, setStoreToDelete] = useState<StoreWithCount | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [aisleCounts, setAisleCounts] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    if (open) {
-      loadStores();
-    }
-  }, [open, userId, householdId]);
-
-  const loadStores = async () => {
+  const loadStores = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('store_layouts')
-        .select('*')
-        .or(`user_id.eq.${assertUUID(userId, 'userId')}${householdId ? `,household_id.eq.${assertUUID(householdId, 'householdId')}` : ''}`)
-        .order('store_name', { ascending: true });
-
+      // One request: the stores, the shared chains and an aisle count each.
+      let query = supabase.from("store_layouts").select("*, store_aisles(id)");
+      query = householdId
+        ? query.or(`household_id.is.null,household_id.eq.${assertUUID(householdId, "householdId")}`)
+        : query.or(`household_id.is.null,user_id.eq.${assertUUID(userId, "userId")}`);
+      const { data, error } = await query;
       if (error) throw error;
 
-      setStores(data as unknown as StoreLayout[] || []);
-      
-      // Load aisle counts for each store
-      if (data && data.length > 0) {
-        loadAisleCounts(data.map(s => s.id));
-      }
+      const rows: StoreWithCount[] = (data ?? []).map(({ store_aisles, ...row }) => ({
+        ...row,
+        aisleCount: store_aisles?.length ?? 0,
+      }));
+      rows.sort((a, b) => {
+        const ac = isCatalogStore(a);
+        const bc = isCatalogStore(b);
+        if (ac !== bc) return ac ? 1 : -1;
+        return storeDisplayName(a).localeCompare(storeDisplayName(b));
+      });
+      setStores(rows);
     } catch (error) {
-      logger.error('Error loading stores:', error);
-      toast.error("Failed to load stores");
+      logger.error("Error loading stores:", error);
+      toast.error(t("grocery.stores.manage.loadFailed", "Couldn't load your stores"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [householdId, t, userId]);
 
-  const loadAisleCounts = async (storeIds: string[]) => {
-    try {
-      const { data, error } = await supabase
-        .from('store_aisles')
-        .select('store_layout_id')
-        .in('store_layout_id', storeIds);
-
-      if (error) throw error;
-
-      // Count aisles per store
-      const counts: Record<string, number> = {};
-      data?.forEach((aisle: any) => {
-        counts[aisle.store_layout_id] = (counts[aisle.store_layout_id] || 0) + 1;
-      });
-
-      setAisleCounts(counts);
-    } catch (error) {
-      logger.error('Error loading aisle counts:', error);
-    }
-  };
+  useEffect(() => {
+    if (open) void loadStores();
+  }, [open, loadStores]);
 
   const handleDelete = async () => {
-    if (!storeToDelete) return;
-
+    const store = storeToDelete;
+    if (!store) return;
     setDeleting(true);
     try {
-      // First, delete all aisles for this store
-      const { error: aislesError } = await supabase
-        .from('store_aisles')
-        .delete()
-        .eq('store_layout_id', storeToDelete.id);
-
-      if (aislesError) throw aislesError;
-
-      // Now delete the store
-      const { error } = await supabase
-        .from('store_layouts')
-        .delete()
-        .eq('id', storeToDelete.id);
-
+      // store_aisles cascades with the layout, and grocery_lists.store_layout_id
+      // is SET NULL, so lists walking this store fall back to the typical order.
+      const { data, error } = await supabase.from("store_layouts").delete().eq("id", store.id).select("id");
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error("No store deleted");
 
-      toast.success(`Store "${storeToDelete.store_name}" deleted`);
-      setStores(prev => prev.filter(s => s.id !== storeToDelete.id));
-      setDeleteDialogOpen(false);
+      toast.success(t("grocery.stores.manage.deleted", { defaultValue: "{{name}} deleted", name: storeDisplayName(store) }));
+      setStores((prev) => prev.filter((s) => s.id !== store.id));
       setStoreToDelete(null);
+      onStoresChanged?.();
     } catch (error) {
-      logger.error('Error deleting store:', error);
-      toast.error("Failed to delete store");
+      logger.error("Error deleting store:", error);
+      toast.error(t("grocery.stores.manage.deleteFailed", "Couldn't delete the store"));
     } finally {
       setDeleting(false);
     }
   };
 
-  const confirmDelete = (store: StoreLayout) => {
-    setStoreToDelete(store);
-    setDeleteDialogOpen(true);
-  };
+  const own = stores.filter((s) => !isCatalogStore(s));
+  const chains = stores.filter(isCatalogStore);
 
-  const handleEdit = (store: StoreLayout) => {
-    onEditStore(store);
-  };
-
-  const handleManageAisles = (store: StoreLayout) => {
-    onManageAisles(store);
+  const renderStore = (store: StoreWithCount) => {
+    const name = storeDisplayName(store);
+    const readOnly = isCatalogStore(store);
+    return (
+      <li key={store.id} className="flex items-start gap-3 rounded-xl border p-3">
+        <Store className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">{name}</p>
+          {store.store_location && (
+            <p className="mt-0.5 flex items-start gap-1 text-sm text-muted-foreground">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="line-clamp-2">{store.store_location}</span>
+            </p>
+          )}
+          {!readOnly && (
+            <Badge variant="outline" className="mt-1 text-xs">
+              {t("grocery.stores.manage.aisleCount", { defaultValue: "{{count}} aisles", count: store.aisleCount })}
+            </Badge>
+          )}
+        </div>
+        {!readOnly && (
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => onManageAisles(store)}
+              aria-label={t("grocery.stores.manage.aislesFor", { defaultValue: "Aisles for {{name}}", name })}
+            >
+              <List className="mr-1 h-4 w-4" aria-hidden="true" />
+              {t("grocery.stores.manage.aisles", "Aisles")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              onClick={() => onEditStore(store)}
+              aria-label={t("grocery.stores.manage.editFor", { defaultValue: "Edit {{name}}", name })}
+            >
+              <Edit className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11 text-destructive hover:text-destructive"
+              onClick={() => setStoreToDelete(store)}
+              aria-label={t("grocery.stores.manage.deleteFor", { defaultValue: "Delete {{name}}", name })}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        )}
+      </li>
+    );
   };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
+        <DialogContent className="max-h-[90vh] sm:max-w-[640px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>Manage Store Layouts</span>
-              <Button
-                onClick={() => {
-                  onOpenChange(false);
-                  onEditStore(null as any);
-                }}
-                size="sm"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create Store
-              </Button>
-            </DialogTitle>
+            <DialogTitle>{t("grocery.stores.manage.title", "Stores")}</DialogTitle>
             <DialogDescription>
-              Create custom store layouts and organize aisles for optimized shopping.
+              {t("grocery.stores.manage.description", "Add the stores you shop at and set their aisle order.")}
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="max-h-[500px]">
+          <ScrollArea className="max-h-[60vh]">
             {loading ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                <p>Loading stores...</p>
-              </div>
-            ) : stores.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Store className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No store layouts yet.</p>
-                <p className="text-sm mt-2">Create a store layout to organize your shopping.</p>
+              <div className="py-12 text-center text-muted-foreground" role="status">
+                <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin" aria-hidden="true" />
+                <p>{t("grocery.stores.manage.loading", "Loading stores...")}</p>
               </div>
             ) : (
-              <div className="space-y-3 pr-4">
-                {stores.map((store) => {
-                  const aisleCount = aisleCounts[store.id] || 0;
-
-                  return (
-                    <Card key={store.id} className="hover:bg-accent/50 transition-colors">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <Store className="h-6 w-6 text-primary mt-1 shrink-0" />
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-semibold">{store.store_name}</h4>
-                              {store.is_default && (
-                                <Badge variant="secondary" className="text-xs">Default</Badge>
-                              )}
-                            </div>
-                            
-                            {store.store_location && (
-                              <div className="flex items-start gap-1 text-sm text-muted-foreground mb-2">
-                                <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                                <span className="line-clamp-2">{store.store_location}</span>
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Badge variant="outline" className="text-xs">
-                                {aisleCount} {aisleCount === 1 ? 'aisle' : 'aisles'}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col gap-1 shrink-0">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleManageAisles(store)}
-                              className="h-8"
-                            >
-                              <List className="h-4 w-4 mr-1" />
-                              Aisles
-                            </Button>
-                            <div className="flex gap-1">
-                              <Button
-                                aria-label="Edit this store layout"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(store)}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                aria-label="Delete this store layout"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => confirmDelete(store)}
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              <div className="space-y-4 pr-3">
+                <section className="space-y-2">
+                  <h3 className="text-sm font-medium">{t("grocery.stores.picker.yourStores", "Your stores")}</h3>
+                  {own.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {t("grocery.stores.manage.emptyOwn", "None yet. Add the store you shop at most.")}
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">{own.map(renderStore)}</ul>
+                  )}
+                </section>
+                {chains.length > 0 && (
+                  <section className="space-y-2">
+                    <h3 className="text-sm font-medium">{t("grocery.stores.picker.commonChains", "Common chains")}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {t("grocery.stores.manage.chainsNote", "Built in. Pick one from the Store menu on your list.")}
+                    </p>
+                    <ul className="space-y-2">{chains.map(renderStore)}</ul>
+                  </section>
+                )}
               </div>
             )}
           </ScrollArea>
 
-          <DialogFooter>
-            <Button onClick={() => onOpenChange(false)}>Done</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-11" onClick={() => onOpenChange(false)}>
+              {t("grocery.stores.manage.done", "Done")}
+            </Button>
+            <Button
+              className="h-11"
+              disabled={!householdId}
+              onClick={() => {
+                onOpenChange(false);
+                onCreateStore();
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              {t("grocery.stores.manage.create", "Add store")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={!!storeToDelete} onOpenChange={(next) => !next && !deleting && setStoreToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Store Layout</AlertDialogTitle>
+            <AlertDialogTitle>
+              {storeToDelete
+                ? t("grocery.stores.manage.deleteConfirm", {
+                    defaultValue: "Delete {{name}}?",
+                    name: storeDisplayName(storeToDelete),
+                  })
+                : ""}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{storeToDelete?.store_name}"?
-              {aisleCounts[storeToDelete?.id || ''] > 0 && (
-                <span className="block mt-2 font-medium">
-                  This will also delete {aisleCounts[storeToDelete?.id || '']} aisle(s) and all food mappings.
-                </span>
-              )}
+              {storeToDelete && storeToDelete.aisleCount > 0
+                ? t("grocery.stores.manage.deleteWarningAisles", {
+                    defaultValue: "Its {{count}} aisles go with it. Lists using it switch to the typical store.",
+                    count: storeToDelete.aisleCount,
+                  })
+                : t("grocery.stores.manage.deleteWarning", "Lists using it switch to the typical store.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{t("grocery.lists.common.cancel", "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDelete();
+              }}
               disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? "Deleting..." : "Delete"}
+              {deleting ? t("grocery.lists.common.deleting", "Deleting...") : t("grocery.lists.common.delete", "Delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -304,4 +277,3 @@ export function ManageStoreLayoutsDialog({
     </>
   );
 }
-

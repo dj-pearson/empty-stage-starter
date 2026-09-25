@@ -20,11 +20,13 @@
  * a true that should be false is a wrong suggestion the parent has to notice
  * first.
  *
- * NOT covered by this: the curated starter foods offered at onboarding, which a
- * parent is choosing from a list of typical safe foods, and
- * public.refresh_food_is_safe, which rolls the per-kid ladder up into this flag.
- * That one does set is_safe true automatically, but from bites the parent
- * logged rather than from an assumption, and it moves in both directions.
+ * The starter foods a local app is seeded with follow it too
+ * (src/lib/starterFoods.ts): nobody picked them, so nothing there is safe.
+ *
+ * NOT covered by this: public.refresh_food_is_safe, which rolls the per-kid
+ * ladder up into this flag. That one does set is_safe true automatically, but
+ * from bites the parent logged rather than from an assumption, and it moves in
+ * both directions.
  */
 export const ACQUIRED_FOOD_IS_SAFE = false;
 

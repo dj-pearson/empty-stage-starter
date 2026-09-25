@@ -100,7 +100,16 @@ describe("credential and contact inputs declare autoComplete", () => {
 });
 
 describe("the change-password form is legible to a password manager", () => {
-  const source = readFileSync(path.join(ROOT, "src/pages/dashboard/AccountSettings.tsx"), "utf8");
+  // The settings hub split the page into sections: the password form lives in
+  // SecuritySection and the typed delete confirmation in DeleteAccountDialog.
+  const source = readFileSync(
+    path.join(ROOT, "src/components/settings/sections/SecuritySection.tsx"),
+    "utf8",
+  );
+  const deleteSource = readFileSync(
+    path.join(ROOT, "src/components/settings/DeleteAccountDialog.tsx"),
+    "utf8",
+  );
 
   it.each([
     ["currentPassword", "current-password"],
@@ -115,7 +124,8 @@ describe("the change-password form is legible to a password manager", () => {
   // The delete-account confirmation is the one field that must NOT be filled
   // in for the user: typing the address deliberately is the confirmation.
   it("the delete-account confirmation opts out instead", () => {
-    const tag = openingTags(source, "Input").find((t) => t.includes('id="confirm-email"'));
+    const tag = openingTags(deleteSource, "Input").find((t) => t.includes("id={confirmId}"));
+    expect(tag, "no <Input id={confirmId}> in DeleteAccountDialog").toBeDefined();
     expect(tag).toMatch(/autoComplete="off"/);
   });
 });

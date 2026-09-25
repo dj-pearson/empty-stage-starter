@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -11,31 +12,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Store, MapPin } from "lucide-react";
 import { logger } from "@/lib/logger";
-
-interface StoreLayout {
-  id: string;
-  user_id: string;
-  household_id: string | null;
-  store_name: string;
-  store_chain: string | null;
-  store_location: string | null;
-  is_default: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import { storeDisplayName, type StoreLayoutInsert, type StoreLayoutRow } from "@/lib/storeLayouts";
+import "@/i18n/appLocale";
 
 interface CreateStoreLayoutDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
-  householdId?: string;
-  editStore?: StoreLayout | null;
-  onStoreCreated?: (store: StoreLayout) => void;
+  /**
+   * Required to create: a store with no household is invisible to the
+   * co-parent and, with user_id set, is not a catalog chain either.
+   */
+  householdId: string | null | undefined;
+  /** Edit this store instead of creating one. */
+  editStore?: StoreLayoutRow | null;
+  /**
+   * The saved row. After a create the page selects it for the list and opens
+   * the aisles dialog, where "Start from a typical store" is offered.
+   */
+  onStoreCreated?: (store: StoreLayoutRow, created: boolean) => void;
 }
 
 export function CreateStoreLayoutDialog({
@@ -46,168 +45,148 @@ export function CreateStoreLayoutDialog({
   editStore,
   onStoreCreated,
 }: CreateStoreLayoutDialogProps) {
-  const [formData, setFormData] = useState({
-    name: "",
-    address: "",
-    is_default: false,
-  });
+  const { t } = useTranslation();
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (editStore) {
-      setFormData({
-        name: editStore.store_name,
-        address: editStore.store_location || "",
-        is_default: editStore.is_default,
-      });
-    } else {
-      setFormData({
-        name: "",
-        address: "",
-        is_default: false,
-      });
-    }
+    if (!open) return;
+    setName(editStore ? storeDisplayName(editStore) : "");
+    setAddress(editStore?.store_location ?? "");
   }, [editStore, open]);
 
+  const canCreate = Boolean(householdId);
+
   const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error("Please enter a store name");
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error(t("grocery.stores.create.nameRequired", "Give the store a name"));
       return;
     }
 
     setSaving(true);
     try {
       if (editStore) {
-        // Update existing store
         const { data, error } = await supabase
-          .from('store_layouts')
+          .from("store_layouts")
           .update({
-            store_name: formData.name.trim(),
-            store_location: formData.address.trim() || null,
-            is_default: formData.is_default,
+            name: trimmed,
+            store_name: trimmed,
+            store_location: address.trim() || null,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', editStore.id)
+          .eq("id", editStore.id)
           .select()
           .single();
-
         if (error) throw error;
 
-        toast.success(`Store "${formData.name}" updated!`);
-        if (onStoreCreated && data) {
-          onStoreCreated(data as unknown as StoreLayout);
-        }
+        toast.success(t("grocery.stores.create.updated", { defaultValue: "{{name}} updated", name: trimmed }));
+        onStoreCreated?.(data, false);
       } else {
-        // Create new store
-        const { data, error } = await supabase
-          .from('store_layouts')
-          .insert([
-            {
-              user_id: userId,
-              household_id: householdId,
-              store_name: formData.name.trim(),
-              store_location: formData.address.trim() || null,
-              is_default: formData.is_default,
-            },
-          ])
-          .select()
-          .single();
-
+        if (!householdId) return;
+        // Both name columns: iOS reads `name`, the web wrote `store_name`, and
+        // the sync trigger only fills a null one.
+        const row: StoreLayoutInsert = {
+          user_id: userId,
+          household_id: householdId,
+          name: trimmed,
+          store_name: trimmed,
+          store_location: address.trim() || null,
+        };
+        const { data, error } = await supabase.from("store_layouts").insert(row).select().single();
         if (error) throw error;
 
-        toast.success(`Store "${formData.name}" created!`);
-        if (onStoreCreated && data) {
-          onStoreCreated(data as unknown as StoreLayout);
-        }
+        toast.success(t("grocery.stores.create.created", { defaultValue: "{{name}} added", name: trimmed }));
+        onStoreCreated?.(data, true);
       }
-
-      handleClose();
+      onOpenChange(false);
     } catch (error) {
-      logger.error('Error saving store:', error);
-      toast.error(editStore ? "Failed to update store" : "Failed to create store");
+      logger.error("Error saving store:", error);
+      toast.error(
+        editStore
+          ? t("grocery.stores.create.updateFailed", "Couldn't save the store")
+          : t("grocery.stores.create.createFailed", "Couldn't add the store"),
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const handleClose = () => {
-    onOpenChange(false);
-  };
+  const submitDisabled = saving || (!editStore && !canCreate);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {editStore ? "Edit Store Layout" : "Create Store Layout"}
+            {editStore
+              ? t("grocery.stores.create.editTitle", { defaultValue: "Edit {{name}}", name: storeDisplayName(editStore) })
+              : t("grocery.stores.create.title", "Add a store")}
           </DialogTitle>
           <DialogDescription>
-            Organize your grocery aisles for efficient shopping.
+            {t("grocery.stores.create.description", "Set up its aisles once and the list sorts itself in the order you walk.")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Name */}
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!submitDisabled) void handleSave();
+          }}
+        >
           <div className="space-y-2">
-            <Label htmlFor="name">Store Name *</Label>
+            <Label htmlFor="store-layout-name">{t("grocery.stores.create.nameLabel", "Store name")}</Label>
             <div className="relative">
-              <Store className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Store className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Costco, Whole Foods, Kroger"
-                className="pl-10"
+                id="store-layout-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("grocery.stores.create.namePlaceholder", "e.g. Kroger on Main St")}
+                className="h-11 pl-10"
                 required
                 autoFocus
               />
             </div>
           </div>
 
-          {/* Address */}
           <div className="space-y-2">
-            <Label htmlFor="address">Address (optional)</Label>
+            <Label htmlFor="store-layout-address">{t("grocery.stores.create.addressLabel", "Address (optional)")}</Label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <Textarea
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="123 Main St, City, State"
-                className="pl-10 resize-none"
+                id="store-layout-address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={t("grocery.stores.create.addressPlaceholder", "123 Main St, City")}
+                className="resize-none pl-10"
                 rows={2}
               />
             </div>
           </div>
 
-          {/* Default Store */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="is_default"
-              checked={formData.is_default}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, is_default: checked as boolean })
-              }
-            />
-            <label
-              htmlFor="is_default"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Set as default store
-            </label>
-          </div>
-        </div>
+          {!editStore && !canCreate && (
+            <p className="text-sm text-muted-foreground" role="status">
+              {t("grocery.stores.create.needsHousehold", "Your household is still loading. Try again in a moment.")}
+            </p>
+          )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : editStore ? "Update" : "Create Store"}
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="h-11" onClick={() => onOpenChange(false)} disabled={saving}>
+              {t("grocery.lists.common.cancel", "Cancel")}
+            </Button>
+            <Button type="submit" className="h-11" disabled={submitDisabled}>
+              {saving
+                ? t("grocery.stores.create.saving", "Saving...")
+                : editStore
+                  ? t("grocery.stores.create.save", "Save")
+                  : t("grocery.stores.create.submit", "Add store")}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
-

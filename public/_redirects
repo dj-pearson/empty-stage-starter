@@ -38,6 +38,15 @@
 /insights /dashboard/insights 301
 /sibling-meal-finder /dashboard/sibling-meal-finder 301
 
+# Retired dashboard routes -> the section that replaced them. Analytics was
+# folded into Progress; its household numbers are the "numbers" section there.
+# List: DASHBOARD_REDIRECTS in src/lib/routeAliases.ts (the test pins both).
+/dashboard/analytics /dashboard/progress?section=numbers 301
+/dashboard/analytics/ /dashboard/progress?section=numbers 301
+# The accessibility page became a section of the Settings hub.
+/dashboard/accessibility-settings /dashboard/settings?section=accessibility 301
+/dashboard/accessibility-settings/ /dashboard/settings?section=accessibility 301
+
 # Handle trailing slashes consistently. The alias forms go straight to the
 # canonical target rather than chaining through a second 301.
 /kids/ /dashboard/kids 301

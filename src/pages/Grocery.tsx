@@ -1,182 +1,219 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { separateMeasureNotes } from "@/lib/groceryMerge";
+import { lazy, Suspense, useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { separateMeasureNotes, type GroceryAddInput } from "@/lib/groceryMerge";
 import { ACQUIRED_FOOD_IS_SAFE, ACQUIRED_FOOD_IS_TRY_BITE } from "@/lib/foodSafetyDefault";
 import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Helmet } from "react-helmet-async";
 import { useFoods, useGrocery, useKids, usePlan, useRecipes, useInventory } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import type { MovementItem, PurchasableGroceryItem } from "@/lib/movementBuilders";
 import { countMissingForRecipe } from "@/lib/recipeShortfall";
 import { analytics } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { AddGroceryItemDialog } from "@/components/AddGroceryItemDialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { EditGroceryItemDialog } from "@/components/EditGroceryItemDialog";
-import { SmartRestockSuggestions } from "@/components/SmartRestockSuggestions";
+import { SmartRestockSuggestions, type RestockAddSource } from "@/components/SmartRestockSuggestions";
 import { GroceryListSelector } from "@/components/GroceryListSelector";
 import { CreateGroceryListDialog } from "@/components/CreateGroceryListDialog";
 import { ManageGroceryListsDialog } from "@/components/ManageGroceryListsDialog";
-import { CreateStoreLayoutDialog } from "@/components/CreateStoreLayoutDialog";
-import { ManageStoreLayoutsDialog } from "@/components/ManageStoreLayoutsDialog";
-import { ManageStoreAislesDialog } from "@/components/ManageStoreAislesDialog";
-import { AisleContributionDialog } from "@/components/AisleContributionDialog";
-import { ImportRecipeToGroceryDialog } from "@/components/ImportRecipeToGroceryDialog";
-import { ScanReceiptDialog } from "@/components/ScanReceiptDialog";
-import { generateGroceryList } from "@/lib/mealPlanner";
-import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
+import { GroceryRow } from "@/components/grocery/GroceryRow";
+import { GroceryGroupHeader } from "@/components/grocery/GroceryGroupHeader";
+import { GroceryQuickAdd } from "@/components/grocery/GroceryQuickAdd";
+import { CheckoutBar } from "@/components/grocery/CheckoutBar";
+import { PurchasePrices, type PurchasePrice } from "@/components/grocery/PurchasePrices";
+import { priceUnitFits } from "@/lib/money";
+import { PlanSyncBanner } from "@/components/grocery/PlanSyncBanner";
+import { StorePicker } from "@/components/grocery/StorePicker";
+import { PlaceInAisleChips } from "@/components/grocery/PlaceInAisleChips";
+import { KidFilterBar, type KidFilterOption } from "@/components/grocery/KidFilterBar";
+import { GroupByToggle } from "@/components/grocery/GroupByToggle";
+import { GroceryViewSheet } from "@/components/grocery/GroceryViewSheet";
+import { GroceryViewIndicator } from "@/components/grocery/GroceryViewIndicator";
+import { applyReceiptPlan, type ReceiptApplyPlan } from "@/lib/receiptApply";
+import { useStoreLayouts } from "@/hooks/useStoreLayouts";
+import { useGroceryLists } from "@/hooks/useGroceryLists";
+import { storeDisplayName, type StoreLayoutRow } from "@/lib/storeLayouts";
+import { aislePosition, isUnplaced as isUnplacedAisle, sortAisleGroupNames } from "@/lib/storeWalkOrder";
 import { startOfWeek, endOfWeek, toISODate } from "@/lib/date-utils";
+import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
 import {
-  ShoppingCart, Trash2, Printer, Download, Plus, Share2, FileText,
-  Sparkles, Store, Barcode, RefreshCw, ChevronDown, ChevronRight,
-  X, Minus, Check, MoreHorizontal, PackageCheck, ShoppingBag, Pencil
+  ShoppingCart, Printer, Download, Plus, Share2, FileText,
+  Store, Barcode, RefreshCw, ChevronDown, MoreHorizontal, PackageCheck,
+  ShoppingBag, CloudOff, CalendarDays, ClipboardPaste, Loader2, Check, Footprints, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Food, GroceryItem } from "@/types";
+import type { Food, GroceryItem } from "@/types";
 import {
   categoryLabel,
   filterItemsByList,
   splitByChecked,
   computeProgressPercent,
-  milestoneMessage,
+  milestoneKey,
   groupItems,
   flattenGroupedRows,
-  planRegenerationFromPlan,
   buildFoodByDisplayNameIndex,
+  buildGroceryKidIndex,
+  groceryKidKey,
   initialExpandedGroups,
   reconcileExpandedGroups,
+  orderGroupNames,
   slugifyGroupId,
+  stepQuantity,
+  withLingering,
+  partitionForCheckout,
+  filterItemsForKid,
+  kidsWithRows,
 } from "@/lib/groceryData";
-import { supabase } from "@/integrations/supabase/client";
-import { parseGroceryItemRows } from "@/lib/normalizeEntities";
+import { buildResultIndex, getKidFoodFit, summarizeKidFits, type ItemFit, type ResultIndex } from "@/lib/kidFit";
+import { resolveFood, type EffectiveFood } from "@/lib/effectiveFood";
+import { toCsv, downloadCsv } from "@/lib/csvExport";
 import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { normalizeHouseholdId } from "@/lib/householdId";
+import { useHousehold } from "@/hooks/useHousehold";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { usePendingGroceryIds } from "@/hooks/usePendingGroceryIds";
+import { usePlanToGrocery, type PlanToGroceryOptions, type PlanToGroceryResult } from "@/hooks/usePlanToGrocery";
+import "@/i18n/appLocale";
 
-// Extended type for grocery items with additional database properties
-// Type for aisle mapping records
-interface AisleMapping {
-  id: string;
-  store_layout_id: string;
-  food_name: string;
-  aisle_name: string;
-  confidence_level?: 'low' | 'medium' | 'high';
-  created_at?: string;
-  updated_at?: string;
-}
-
-// Type for user contribution records
-interface UserContribution {
-  id: string;
-  user_id: string;
-  store_layout_id: string;
-  food_name: string;
-  aisle_name: string;
-  created_at?: string;
-}
+// Mounted only while open (US perf pass): none of these is on the path to the
+// first painted row, and together they are most of the page's JavaScript.
+const AddGroceryItemDialog = lazy(() =>
+  import("@/components/AddGroceryItemDialog").then((m) => ({ default: m.AddGroceryItemDialog })),
+);
+const ImportRecipeToGroceryDialog = lazy(() =>
+  import("@/components/ImportRecipeToGroceryDialog").then((m) => ({ default: m.ImportRecipeToGroceryDialog })),
+);
+const ScanReceiptDialog = lazy(() =>
+  import("@/components/ScanReceiptDialog").then((m) => ({ default: m.ScanReceiptDialog })),
+);
+const CreateStoreLayoutDialog = lazy(() =>
+  import("@/components/CreateStoreLayoutDialog").then((m) => ({ default: m.CreateStoreLayoutDialog })),
+);
+const ManageStoreLayoutsDialog = lazy(() =>
+  import("@/components/ManageStoreLayoutsDialog").then((m) => ({ default: m.ManageStoreLayoutsDialog })),
+);
+const ManageStoreAislesDialog = lazy(() =>
+  import("@/components/ManageStoreAislesDialog").then((m) => ({ default: m.ManageStoreAislesDialog })),
+);
+// Item 18: mounted only while a parent is in the shop.
+const InStoreMode = lazy(() =>
+  import("@/components/grocery/InStoreMode").then((m) => ({ default: m.InStoreMode })),
+);
 
 // Grocery data derivations (labels, grouping, split, progress, flatten) live in
 // src/lib/groceryData.ts (unit-tested) so they're separated from this JSX and
 // the heavy list subtree can memoize on stable outputs (US-553 AC2).
 
-/**
- * The check-off control, sized for a thumb (US-767).
- *
- * The shadcn Checkbox is h-4 w-4 by default and this page overrode it to h-6
- * w-6, which measured 24px against Apple's and Google's 44px floor -- on the
- * one control a shopper uses standing in an aisle holding a phone in one hand.
- * 44px below sm, back to a tidy 24 on a pointer device where precision is free.
- */
-const GROCERY_CHECKBOX_CLASS = "shrink-0 h-11 w-11 sm:h-6 sm:w-6";
+/** How long a just-checked row stays crossed out in place before it moves. */
+const LINGER_MS = 2000;
+/** Screen-reader announcements coalesce over a burst of check-offs. */
+const ANNOUNCE_DEBOUNCE_MS = 800;
+/** Virtualize above 60 rows, go back to plain rendering below 40. */
+const VIRTUAL_ENTER = 60;
+const VIRTUAL_LEAVE = 40;
+
+/** Units match case-insensitively; an absent unit only matches an absent one. */
+function unitsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+}
+
+/** A deleted/checked-out row as it was, for an Undo that restores it exactly. */
+const snapshot = (item: GroceryItem): GroceryItem => ({ ...item });
+
+interface RowMeta {
+  fit?: ItemFit;
+  forKidNames?: string[];
+  addedByName?: string;
+  pending: boolean;
+  measureNote?: string;
+}
 
 export default function Grocery() {
   const { t } = useTranslation();
-  const { foods, addFood, updateFood, catalogById } = useFoods();
+  const { foods, addFood, updateFood, deleteFood, catalogById } = useFoods();
   // US-672: with writes on, checkout appends purchase movements and the pantry
   // is credited by the ledger rather than by the per-item toggle.
-  const { ledgerWritesEnabled, recordPurchases, recordPurchaseReversal } = useInventory();
+  const { ledgerWritesEnabled, recordPurchases, recordPurchaseReversal, recordRestock } = useInventory();
   const { kids, activeKidId } = useKids();
   const { planEntries } = usePlan();
   const {
-    groceryItems,
-    setGroceryItems, addGroceryItem, toggleGroceryItem,
-    updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
-    addGroceryItemsMerged, clearCheckedGroceryItems
+    groceryItems, groceryHydrated,
+    toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems,
+    mergeGroceryItems, restoreGroceryItems,
   } = useGrocery();
   const { recipes } = useRecipes();
+  // The session AuthContext already resolved. The page used to run its own
+  // getUser() + get_user_household_id pair, which failed offline and took
+  // Add down with it, although nothing about adding a row needs the network.
+  const { userId, householdId } = useAuth();
+  const { members } = useHousehold();
+  const reducedMotion = useReducedMotion();
+  const { ids: pendingIds, count: pendingCount } = usePendingGroceryIds(userId);
 
   const [groupBy, setGroupBy] = useState<"category" | "aisle">("aisle");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showScanReceipt, setShowScanReceipt] = useState(false);
+  // Item 18: one aisle at a time, full screen.
+  const [inStore, setInStore] = useState(false);
+  /** Phone only: the sheet that holds the kid filter, grouping and store. */
+  const [showViewSheet, setShowViewSheet] = useState(false);
+  // Item 42: "Show only <kid>'s items". Null shows everyone's.
+  const [kidFilterId, setKidFilterId] = useState<string | null>(null);
+  const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
-  const [isGeneratingRestock, setIsGeneratingRestock] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [householdId, setHouseholdId] = useState<string | null>(null);
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  // US-714: which list owns the rows whose grocery_list_id is null.
-  const [defaultListId, setDefaultListId] = useState<string | null>(null);
+  // The lists, the selection (remembered per user) and the default. US-714:
+  // the default list owns the rows whose grocery_list_id is null.
+  const groceryLists = useGroceryLists(userId, householdId);
+  const { selectedListId, setSelectedListId, defaultListId } = groceryLists;
   const [showCreateListDialog, setShowCreateListDialog] = useState(false);
   const [showManageListsDialog, setShowManageListsDialog] = useState(false);
 
-  // Store layout states
+  // Store layouts: the list's chosen store (grocery_lists.store_layout_id, the
+  // field iOS reads too) and its walk order.
+  const storeLayouts = useStoreLayouts(householdId, selectedListId);
   const [showCreateStoreDialog, setShowCreateStoreDialog] = useState(false);
   const [showManageStoresDialog, setShowManageStoresDialog] = useState(false);
-  const [showManageAislesDialog, setShowManageAislesDialog] = useState(false);
-  const [editingStore, setEditingStore] = useState<any>(null);
-  const [managingAislesStore, setManagingAislesStore] = useState<any>(null);
-  const [selectedStoreLayoutId, setSelectedStoreLayoutId] = useState<string | null>(null);
+  const [editingStore, setEditingStore] = useState<StoreLayoutRow | null>(null);
+  const [managingAislesStore, setManagingAislesStore] = useState<StoreLayoutRow | null>(null);
 
-  // Aisle contribution state
-  const [showAisleContribution, setShowAisleContribution] = useState(false);
-  const [contributionItem, setContributionItem] = useState<string | null>(null);
+  // Purchased section: null means "follow the default", which is open when
+  // there is nothing left to buy and closed otherwise.
+  const [purchasedOpenPref, setPurchasedOpenPref] = useState<boolean | null>(null);
 
-  // Import recipe state
-  const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
+  // Checkout re-entry guard. The ref short-circuits a second click in the same
+  // tick; the state drives the disabled/aria-busy CTA.
+  const checkingOutRef = useRef(false);
+  const [checkingOut, setCheckingOut] = useState(false);
 
-  // Purchased section state
-  const [purchasedOpen, setPurchasedOpen] = useState(false);
+  // Just-checked rows stay in place for LINGER_MS (id -> checked-at).
+  const [recentlyChecked, setRecentlyChecked] = useState<ReadonlyMap<string, number>>(() => new Map());
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError) {
-          logger.error('Error getting user in Grocery:', authError);
-          return;
-        }
-        setUserId(user?.id || null);
-        if (user) {
-          const { data: hh, error: hhError } = await supabase.rpc('get_user_household_id', { _user_id: user.id });
-          if (hhError) {
-            logger.error('Error getting household ID in Grocery:', hhError);
-            toast.error('Failed to load household data', { description: 'Some features may be unavailable' });
-            return;
-          }
-          setHouseholdId(normalizeHouseholdId(hh));
-        }
-      } catch (error) {
-        logger.error('Unexpected error loading user data in Grocery:', error);
-        toast.error('Failed to load user data');
-      }
-    };
-    loadUserData();
-  }, []);
+  // The one live region on the page.
+  const [announcement, setAnnouncement] = useState("");
+  const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clipboard fallback: shown when the browser refuses the write.
+  const [copyFallback, setCopyFallback] = useState<string | null>(null);
+
+  // Print expands every aisle, whatever the fold on screen.
+  const [printing, setPrinting] = useState(false);
 
   // US-712: there is deliberately no mount-time cleanup of checked rows.
-  // This used to delete every checked item on load and toast "already added to
-  // your pantry", which was false twice over: nothing had been credited, and a
-  // shopper who reloaded mid-trip lost the record of what they had already put
-  // in the cart. Checked rows now live in the Purchased section until the
-  // explicit checkout below, which is the only path that credits the pantry and
-  // the only path that removes them.
+  // Checked rows live in the Purchased section until the explicit checkout
+  // below, which is the only path that removes them.
 
   const isFamilyMode = !activeKidId;
-  const activeKid = kids.find(k => k.id === activeKidId);
 
   // Filter grocery items by selected list
   const filteredGroceryItems = useMemo(
@@ -191,40 +228,61 @@ export default function Grocery() {
   );
 
   /**
-   * US-820: which rows are a second MEASURE rather than a duplicate.
-   *
-   * The merge keeps "2 lb flour" and "3 cups flour" apart because adding a mass
-   * to a volume needs the ingredient's density -- the old code guessed and
-   * turned that into "5 lb". On screen they just read as Flour twice, and the
-   * obvious tidy-up is deleting one, which drops a requirement a recipe has.
-   * Computed over the ACTIVE rows only: a purchased row is not something the
-   * shopper is about to delete by mistake.
+   * US-820: which rows are a second MEASURE rather than a duplicate. Computed
+   * over the ACTIVE rows only: a purchased row is not something the shopper
+   * is about to delete by mistake.
    */
   const measureNotes = useMemo(() => separateMeasureNotes(activeItems), [activeItems]);
 
   // Progress calculation
   const totalItems = filteredGroceryItems.length;
   const purchasedCount = purchasedItems.length;
+  const leftCount = activeItems.length;
   const progressPercent = useMemo(
     () => computeProgressPercent(totalItems, purchasedCount),
     [totalItems, purchasedCount]
   );
 
-  // Milestone message based on progress percentage
-  const milestone = useMemo(() => milestoneMessage(progressPercent), [progressPercent]);
-
   // US-713: the days a sync shops for. The Grocery page has no week picker, so
-  // the visible week is the current one. When the planner grows range and month
-  // views (US-743) this is the single place that has to learn about them.
+  // the visible week is the current one, on the planner's week start (item 3).
+  const weekStartsOn = useWeekStartsOn();
   const shoppingWindow = useMemo(() => {
     const now = new Date();
-    return { from: toISODate(startOfWeek(now)), to: toISODate(endOfWeek(now)) };
-  }, []);
+    return { from: toISODate(startOfWeek(now, weekStartsOn)), to: toISODate(endOfWeek(now, weekStartsOn)) };
+  }, [weekStartsOn]);
 
-  // US-795: mealPlanner.ts has no hook, so it cannot read catalogById itself
-  // -- resolve every food here and pass the map in, keyed by food id, so a
-  // regenerated grocery row shows the same catalog name/category/aisle as
-  // every other linked screen instead of this household's own spelling.
+  // US-795: match a grocery row back to a pantry food by resolved or raw name.
+  const foodByDisplayName = useMemo(
+    () => buildFoodByDisplayNameIndex(foods, catalogById),
+    [foods, catalogById]
+  );
+  const findFoodByDisplayName = useCallback(
+    (name: string): Food | undefined => foodByDisplayName.get(name.toLowerCase()),
+    [foodByDisplayName]
+  );
+  const resolveFoodForRow = useCallback(
+    (row: GroceryItem): Food | undefined => findFoodByDisplayName(row.name),
+    [findFoodByDisplayName]
+  );
+  const exitInStore = useCallback(() => setInStore(false), []);
+
+  // Item 22: an optional price entered on a bought row. It rides on the row
+  // into checkout's purchase movement; in the food's own unit it is also the
+  // food's last known price, which the pantry's waste report estimates from.
+  const handleSetPurchasePrice = useCallback(
+    (item: GroceryItem, price: PurchasePrice | null) => {
+      updateGroceryItem(item.id, {
+        price_per_unit: price?.unitPrice ?? null,
+        currency: price?.currency ?? null,
+      });
+      const food = price ? findFoodByDisplayName(item.name) : undefined;
+      if (food && price && priceUnitFits(food.unit, item.unit)) {
+        updateFood(food.id, { price_per_unit: price.unitPrice, currency: price.currency });
+      }
+    },
+    [updateGroceryItem, findFoodByDisplayName, updateFood]
+  );
+
   const effectiveFoodById = useMemo(() => {
     const map: Record<string, EffectiveFood> = {};
     for (const food of foods) {
@@ -234,546 +292,585 @@ export default function Grocery() {
     return map;
   }, [foods, catalogById]);
 
-  // US-795 fix round: matches a grocery item's name back to a pantry food by
-  // either its resolved (catalog) name or its raw household name -- see the
-  // doc comment on buildFoodByDisplayNameIndex in src/lib/groceryData.ts for
-  // why the household-name arm has to stay. Kept as a Map (via useMemo)
-  // rather than a per-call `.find`, so repeated lookups (e.g. once per row in
-  // handleDoneShopping) stay O(1) each.
-  const foodByDisplayName = useMemo(
-    () => buildFoodByDisplayNameIndex(foods, catalogById),
-    [foods, catalogById]
+  // Which kid each row is for, from every in-window plan entry.
+  const kidIndex = useMemo(
+    () => buildGroceryKidIndex(planEntries, foods, effectiveFoodById, shoppingWindow),
+    [planEntries, foods, effectiveFoodById, shoppingWindow]
   );
+  const kidById = useMemo(() => new Map(kids.map((k) => [k.id, k])), [kids]);
 
-  const findFoodByDisplayName = useCallback(
-    (name: string): Food | undefined => foodByDisplayName.get(name.toLowerCase()),
-    [foodByDisplayName]
+  // ─── Show only one kid's items (Item 42) ──────────────────────────────
+  // Opt-in and loud about it: the toolbar's "N left" and progress bar count
+  // the kid's rows while it is on, and a status line says how many other rows
+  // are off screen, with the way back beside it.
+  const kidFilterKid = kidFilterId ? kidById.get(kidFilterId) ?? null : null;
+  useEffect(() => {
+    // The kid was removed from the household: back to everyone's items.
+    if (kidFilterId && kids.length > 0 && !kidById.has(kidFilterId)) setKidFilterId(null);
+  }, [kidFilterId, kids.length, kidById]);
+  const kidFilterOptions = useMemo<KidFilterOption[]>(() => {
+    const ids = kidsWithRows(filteredGroceryItems, kidIndex, kids.map((k) => k.id));
+    if (kidFilterId && !ids.includes(kidFilterId) && kidById.has(kidFilterId)) ids.push(kidFilterId);
+    return ids.map((id) => ({ id, name: kidById.get(id)?.name ?? "" }));
+  }, [filteredGroceryItems, kidIndex, kids, kidFilterId, kidById]);
+  const kidScope = useMemo(
+    () => filterItemsForKid(filteredGroceryItems, kidIndex, kidFilterKid ? kidFilterKid.id : null),
+    [filteredGroceryItems, kidIndex, kidFilterKid]
   );
-
-  // US-713: sync from the meal plan, persisted.
-  //
-  // This used to end in setGroceryItems, which is local state only: the list
-  // looked right until a reload, never reached the server, and never reached a
-  // partner's phone. New rows now go through addGroceryItemsMerged (one insert,
-  // stamped with the list, auto_generated and the plan entry that caused them)
-  // and rows the plan no longer calls for go through deleteGroceryItems.
-  //
-  // Quantities here are still one-per-meal counts, not recipe-aware amounts.
-  // US-736 replaces the arithmetic; this story makes the path persist.
-  const handleRegenerateFromPlan = useCallback(() => {
-    if (planEntries.length === 0) {
-      toast.info("No meal plan found", { description: "Create a meal plan first to generate a grocery list" });
-      return;
+  const scopedTotal = kidScope.shown.length;
+  const scopedLeft = kidFilterKid ? kidScope.shown.filter((i) => !i.checked).length : leftCount;
+  const scopedDone = scopedTotal - scopedLeft;
+  const scopedProgress = computeProgressPercent(scopedTotal, scopedDone);
+  /** Rows still to buy that the filter keeps off screen. */
+  const hiddenToBuy = kidFilterKid ? leftCount - scopedLeft : 0;
+  const resultIndexByKid = useMemo(() => {
+    const map = new Map<string, ResultIndex>();
+    for (const kid of kids) map.set(kid.id, buildResultIndex(planEntries, kid.id));
+    return map;
+  }, [kids, planEntries]);
+  const memberNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of members) {
+      const name = m.profiles?.full_name?.trim();
+      if (name) map.set(m.user_id, name.split(/\s+/)[0]);
     }
-    const filteredEntries = isFamilyMode
-      ? planEntries
-      : planEntries.filter(e => e.kid_id === activeKidId);
+    return map;
+  }, [members]);
+  const sharedHousehold = members.length > 1;
 
-    // Shop for the week on screen, not for the whole 120-day context window.
-    const generated = generateGroceryList(filteredEntries, foods, effectiveFoodById, shoppingWindow);
-    if (generated.length === 0) {
-      toast.info("Nothing to add", {
-        description: "Every meal planned for this week is already covered by your pantry and list",
-      });
-      return;
-    }
+  // Refs the stable row handlers read, so GroceryRow's memo holds across
+  // renders instead of every row re-rendering on every list change.
+  const itemsRef = useRef(groceryItems);
+  itemsRef.current = groceryItems;
+  const recentlyCheckedRef = useRef(recentlyChecked);
+  recentlyCheckedRef.current = recentlyChecked;
 
-    const plan = planRegenerationFromPlan({
-      existing: groceryItems,
-      generated,
+  // ─── Plan to grocery ───────────────────────────────────────────────────
+  // One options object for both preview and push, so the number on the banner
+  // is the number the Add button writes.
+  const { preview: previewPlan, push: pushPlanToGrocery } = usePlanToGrocery();
+  const planOpts = useMemo<PlanToGroceryOptions>(
+    () => ({
+      kidIds: isFamilyMode || !activeKidId ? undefined : [activeKidId],
       selectedListId,
       defaultListId,
-    });
+    }),
+    [isFamilyMode, activeKidId, selectedListId, defaultListId]
+  );
+  const planPreview = useMemo(
+    () => previewPlan(planEntries, shoppingWindow, planOpts),
+    // groceryItems: preview reads the list through a ref, so a list change
+    // has to recompute it even though previewPlan's identity holds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [previewPlan, planEntries, shoppingWindow, planOpts, groceryItems]
+  );
 
-    if (plan.retireIds.length > 0) deleteGroceryItems(plan.retireIds);
-    const touched = plan.additions.length > 0
-      ? addGroceryItemsMerged(plan.additions, { defaultListId })
-      : 0;
+  /** Undo a push: delete what it inserted, restore what it retired, revert bumps. */
+  const undoPlanPush = useCallback((result: PlanToGroceryResult) => {
+    deleteGroceryItems(result.insertedIds);
+    if (result.retiredRows.length > 0) restoreGroceryItems(result.retiredRows);
+    for (const bump of result.bumps) updateGroceryItem(bump.id, bump.prev);
+  }, [deleteGroceryItems, restoreGroceryItems, updateGroceryItem]);
 
-    if (touched === 0 && plan.retireIds.length === 0) {
-      toast.info("Already up to date", {
-        description: `This week's plan is already on your list (${plan.preservedCount} item${plan.preservedCount === 1 ? '' : 's'} kept)`,
+  const runPlanPush = useCallback((mode: "additive" | "replace") => {
+    if (planEntries.length === 0) {
+      toast.info(t("grocery.planSync.noPlanTitle", { defaultValue: "No meal plan found" }), {
+        description: t("grocery.planSync.noPlanBody", {
+          defaultValue: "Create a meal plan first to generate a grocery list",
+        }),
       });
       return;
     }
-
-    toast.success(`Added ${touched} item${touched === 1 ? '' : 's'} from meal plan`, {
-      description: plan.retireIds.length > 0
-        ? `Removed ${plan.retireIds.length} no longer planned, kept ${plan.preservedCount}`
-        : `Kept ${plan.preservedCount} existing item${plan.preservedCount === 1 ? '' : 's'}`,
+    const result = pushPlanToGrocery(planEntries, shoppingWindow, { ...planOpts, mode });
+    if (result.added === 0 && result.retired === 0) {
+      toast.info(t("grocery.planSync.upToDateTitle", { defaultValue: "Already up to date" }));
+      return;
+    }
+    const title = result.added > 0
+      ? t("grocery.planSync.addedTitle", {
+          defaultValue: "Added {{count}} item from meal plan",
+          defaultValue_other: "Added {{count}} items from meal plan",
+          count: result.added,
+        })
+      : t("grocery.plan.removed", {
+          defaultValue: "Removed {{count}} no longer planned",
+          count: result.retired,
+        });
+    toast.success(title, {
+      description: result.added > 0 && result.retired > 0
+        ? t("grocery.planSync.addedRetiredBody", {
+            defaultValue: "Removed {{retired}} no longer planned, kept {{kept}}",
+            retired: result.retired,
+            kept: result.kept,
+          })
+        : undefined,
+      action: {
+        label: t("grocery.undo", { defaultValue: "Undo" }),
+        onClick: () => undoPlanPush(result),
+      },
     });
-  }, [
-    planEntries, isFamilyMode, activeKidId, foods, effectiveFoodById, shoppingWindow, groceryItems,
-    selectedListId, defaultListId, deleteGroceryItems, addGroceryItemsMerged,
-  ]);
+  }, [planEntries, shoppingWindow, planOpts, pushPlanToGrocery, undoPlanPush, t]);
+
+  const handleAddFromPlan = useCallback(() => runPlanPush("additive"), [runPlanPush]);
+  const handleReplaceFromPlan = useCallback(() => runPlanPush("replace"), [runPlanPush]);
+
+  // ─── Adds ──────────────────────────────────────────────────────────────
+  /** Every add path funnels here: stamped for the list on screen, merged. */
+  const addToList = useCallback((items: GroceryAddInput[]) => {
+    return mergeGroceryItems(
+      items.map((i) => ({ ...i, grocery_list_id: selectedListId ?? undefined, added_via: i.added_via ?? "manual" })),
+      { defaultListId },
+    );
+  }, [mergeGroceryItems, selectedListId, defaultListId]);
+
+  const handleRestockAdd = useCallback((items: GroceryAddInput[], source: RestockAddSource) => {
+    const result = mergeGroceryItems(
+      items.map((i) => ({ ...i, grocery_list_id: selectedListId ?? undefined })),
+      { defaultListId },
+    );
+    if (result.touched === 0) return;
+    const title = t("grocery.restock.added", {
+      defaultValue: "Added {{count}} restock item",
+      defaultValue_other: "Added {{count}} restock items",
+      count: result.touched,
+    });
+    toast.success(title, {
+      // An automatic add nobody tapped for has to say what it put on the list.
+      description: source === "auto"
+        ? t("grocery.restock.addedNames", {
+            defaultValue: "Running low: {{names}}",
+            names: items.map((i) => i.name).join(", "),
+          })
+        : undefined,
+      action: {
+        label: t("grocery.undo", { defaultValue: "Undo" }),
+        onClick: () => {
+          deleteGroceryItems(result.insertedIds);
+          for (const bump of result.bumps) updateGroceryItem(bump.id, bump.prev);
+        },
+      },
+    });
+  }, [mergeGroceryItems, selectedListId, defaultListId, deleteGroceryItems, updateGroceryItem, t]);
+
+  // ─── Pantry crediting (legacy mode) ────────────────────────────────────
+  /**
+   * Credit one bought row to the pantry the legacy way. Quantity is added only
+   * when the units agree; "2 lb" onto a food counted in "bags" is not a sum,
+   * and the food's own unit is never overwritten. Returns what happened.
+   */
+  const creditRow = useCallback(async (item: GroceryItem): Promise<"credited" | "unitDiffers" | "blocked"> => {
+    const existingFood = findFoodByDisplayName(item.name);
+    if (existingFood) {
+      if (!unitsMatch(existingFood.unit, item.unit)) return "unitDiffers";
+      updateFood(existingFood.id, { quantity: (existingFood.quantity || 0) + item.quantity });
+      return "credited";
+    }
+    const added = await addFood({
+      name: item.name,
+      category: item.category,
+      // US-803: buying a food is not the same as a child accepting it.
+      is_safe: ACQUIRED_FOOD_IS_SAFE,
+      is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
+      aisle: item.aisle,
+      quantity: item.quantity,
+      unit: item.unit,
+    });
+    return added ? "credited" : "blocked";
+  }, [findFoodByDisplayName, updateFood, addFood]);
+
+  const uncreditRow = useCallback((item: GroceryItem) => {
+    const food = findFoodByDisplayName(item.name);
+    if (!food || !food.quantity || !unitsMatch(food.unit, item.unit)) return;
+    updateFood(food.id, { quantity: Math.max(0, food.quantity - item.quantity) });
+  }, [findFoodByDisplayName, updateFood]);
+
+  const announce = useCallback((text: string) => {
+    if (announceTimer.current) clearTimeout(announceTimer.current);
+    announceTimer.current = setTimeout(() => setAnnouncement(text), ANNOUNCE_DEBOUNCE_MS);
+  }, []);
+  useEffect(() => () => {
+    if (announceTimer.current) clearTimeout(announceTimer.current);
+  }, []);
+
+  // ─── Receipt scan (Item 16) ────────────────────────────────────────────
+  // One step: the rows the receipt pays for are checked off, and the pantry
+  // is credited through the ledger when it is on, the legacy sum otherwise.
+  // Rows it credited are stamped so checkout leaves them alone.
+  const foodsRef = useRef(foods);
+  foodsRef.current = foods;
+  const handleApplyReceipt = useCallback(async (plan: ReceiptApplyPlan): Promise<boolean> => {
+    try {
+      const outcome = await applyReceiptPlan(plan, {
+        ledgerWritesEnabled,
+        getFood: (id) => foodsRef.current.find((f) => f.id === id),
+        getFoods: () => foodsRef.current,
+        getRow: (id) => itemsRef.current.find((i) => i.id === id),
+        addFood,
+        deleteFood,
+        updateFood,
+        recordRestock: (food, signedQuantity, opts) =>
+          recordRestock(food as unknown as MovementItem, signedQuantity, opts),
+        updateGroceryItem,
+      });
+      const details: string[] = [
+        t("grocery.receiptList.appliedBody", {
+          defaultValue: "{{topped}} topped up, {{added}} new in the pantry",
+          topped: outcome.toppedUp,
+          added: outcome.created,
+        }),
+      ];
+      if (outcome.blocked > 0) {
+        details.push(t("grocery.checkout.blocked", {
+          defaultValue: "{{count}} not added: pantry full on your plan",
+          count: outcome.blocked,
+        }));
+      }
+      const title = outcome.checkedOff > 0
+        ? t("grocery.receiptList.appliedTitle", {
+            defaultValue: "Checked off {{count}} from your receipt",
+            count: outcome.checkedOff,
+          })
+        : t("grocery.receipt.saved", {
+            defaultValue: "Pantry updated: {{added}} new, {{topped}} topped up",
+            added: outcome.created,
+            topped: outcome.toppedUp,
+          });
+      toast.success(
+        title,
+        {
+          description: details.join(". "),
+          action: {
+            label: t("grocery.undo", { defaultValue: "Undo" }),
+            onClick: () => {
+              void outcome.undo().then(() =>
+                toast.info(t("grocery.receiptList.undone", {
+                  defaultValue: "Receipt undone: list and pantry put back",
+                })),
+              );
+            },
+          },
+        },
+      );
+      announce(title);
+      return true;
+    } catch (error) {
+      logger.error("Receipt apply failed", error);
+      toast.error(t("grocery.receipt.saveFailed", { defaultValue: "Couldn't save pantry items. Try again." }));
+      return false;
+    }
+  }, [ledgerWritesEnabled, addFood, deleteFood, updateFood, recordRestock, updateGroceryItem, announce, t]);
+
+  // ─── Check-off ─────────────────────────────────────────────────────────
+
+  const leftCountRef = useRef(scopedLeft);
+  leftCountRef.current = scopedLeft;
 
   const handleToggleItem = useCallback(async (itemId: string) => {
-    const item = groceryItems.find(i => i.id === itemId);
+    const item = itemsRef.current.find(i => i.id === itemId);
     if (!item) return;
 
     toggleGroceryItem(itemId);
 
-    // If checking the item (purchasing), handle pantry sync + aisle contribution
     if (!item.checked) {
-      // Aisle contribution prompt
-      if (selectedStoreLayoutId && userId) {
-        try {
-          const { data: existingContribution } = await supabase
-            .from('user_store_contributions')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('store_layout_id', selectedStoreLayoutId)
-            .eq('food_name', item.name)
-            .maybeSingle() as { data: UserContribution | null };
+      setRecentlyChecked((prev) => new Map(prev).set(itemId, Date.now()));
+      announce(t("grocery.row.checkedAnnounce", {
+        defaultValue: "{{name}} checked off, {{left}} left",
+        name: item.name,
+        left: Math.max(0, leftCountRef.current - 1),
+      }));
 
-          const { data: existingMapping } = await supabase
-            .from('food_aisle_mappings')
-            .select('*')
-            .eq('store_layout_id', selectedStoreLayoutId)
-            .eq('food_name', item.name)
-            .maybeSingle() as { data: AisleMapping | null };
-
-          const shouldAskContribution = !existingContribution ||
-            !existingMapping ||
-            existingMapping?.confidence_level === 'low';
-
-          if (shouldAskContribution && Math.random() < 0.5) {
-            setContributionItem(item.name);
-            setShowAisleContribution(true);
-          }
-        } catch (error) {
-          logger.error('Error checking contribution status:', error);
-        }
-      }
-
-      // US-672 criterion 3: when the ledger is doing the crediting, checking a
-      // row off is just marking it bought. The pantry is credited once, by the
-      // same action that closes the rows (handleDoneShopping), rather than
-      // drifting in item by item as the parent walks the aisles. Crediting here
-      // as well would credit twice.
-      if (ledgerWritesEnabled) return;
-
-      // Add/update pantry inventory
-      const existingFood = findFoodByDisplayName(item.name);
-      let pantryUpdated = true;
-      if (existingFood) {
-        updateFood(existingFood.id, {
-          ...existingFood,
-          quantity: (existingFood.quantity || 0) + item.quantity,
-          unit: item.unit
-        });
-      } else {
-        pantryUpdated = await addFood({
+      // US-672 criterion 3: with the ledger on, checking off is just marking
+      // it bought; checkout credits the pantry once. Item 16: a row a receipt
+      // already credited is in the pantry either way.
+      if (ledgerWritesEnabled || item.pantry_credited_at) return;
+      const outcome = await creditRow(item);
+      if (outcome === "blocked") {
+        // The plan limit stopped the pantry add. The row stays checked so the
+        // shop can go on; this is the only check-off that says anything.
+        toast.info(t("grocery.checkout.pantryFull", {
+          defaultValue: "Pantry full on your plan, {{name}} not added",
           name: item.name,
-          category: item.category,
-          // US-803: buying a food is not the same as a child accepting it.
-          is_safe: ACQUIRED_FOOD_IS_SAFE,
-          is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
-          aisle: item.aisle,
-          quantity: item.quantity,
-          unit: item.unit
-        });
+        }));
       }
-
-      if (pantryUpdated) {
-        toast.success(`${item.name} added to pantry`, {
-          description: `${item.quantity} ${item.unit} moved to inventory`,
-          action: {
-            label: "Undo",
-            onClick: () => {
-              toggleGroceryItem(itemId);
-              // Reverse pantry update
-              const food = findFoodByDisplayName(item.name);
-              if (food && food.quantity) {
-                updateFood(food.id, {
-                  ...food,
-                  quantity: Math.max(0, food.quantity - item.quantity),
-                });
-              }
-            }
-          }
-        });
-      }
-      // If pantry add was blocked by plan limit, the upgrade modal already fired.
-      // The grocery item remains checked so the user can finish shopping; on upgrade
-      // they can re-check to sync to pantry.
     } else {
-      // Unchecking. Nothing to take back when nothing was credited yet.
-      if (ledgerWritesEnabled) return;
-      // Unchecking - remove from pantry
-      const existingFood = findFoodByDisplayName(item.name);
-      if (existingFood && existingFood.quantity) {
-        updateFood(existingFood.id, {
-          ...existingFood,
-          quantity: Math.max(0, existingFood.quantity - item.quantity),
-        });
-        toast.info(`${item.name} moved back to shopping list`);
-      }
-    }
-  }, [groceryItems, toggleGroceryItem, selectedStoreLayoutId, userId, foods, findFoodByDisplayName, updateFood, addFood, ledgerWritesEnabled]);
-
-  const handleDeleteItem = useCallback((itemId: string) => {
-    const item = groceryItems.find(i => i.id === itemId);
-    deleteGroceryItem(itemId);
-    if (item) {
-      toast.success(`Removed ${item.name}`, {
-        action: {
-          label: "Undo",
-          onClick: () => {
-            addGroceryItem({
-              name: item.name,
-              quantity: item.quantity,
-              unit: item.unit,
-              category: item.category,
-              aisle: item.aisle,
-              notes: item.notes,
-              brand_preference: item.brand_preference,
-              barcode: item.barcode,
-              grocery_list_id: item.grocery_list_id,
-            });
-          }
-        }
+      setRecentlyChecked((prev) => {
+        if (!prev.has(itemId)) return prev;
+        const next = new Map(prev);
+        next.delete(itemId);
+        return next;
       });
-    }
-  }, [groceryItems, deleteGroceryItem, addGroceryItem]);
-
-  const handleQuantityChange = useCallback((itemId: string, delta: number) => {
-    const item = groceryItems.find(i => i.id === itemId);
-    if (!item) return;
-    const newQty = Math.max(1, item.quantity + delta);
-    updateGroceryItem(itemId, { quantity: newQty });
-  }, [groceryItems, updateGroceryItem]);
-
-  // US-282, amended by US-672: checkout.
-  //
-  // Two shapes, chosen by the writes flag.
-  //
-  //   flag OFF  the shipped behaviour. The per-item toggle already credited
-  //             the pantry, so this only sweeps the bought rows off the list.
-  //   flag ON   criterion 3. The toggle credited nothing; this one action
-  //             appends a purchase movement per checked row AND closes the
-  //             rows, so the pantry is credited before the car is unloaded
-  //             instead of by a separate "move completed to pantry" chore.
-  //
-  // Rows the ledger cannot take (no matching pantry item, or a unit with no
-  // conversion) fall back to the legacy credit rather than being dropped: a
-  // shop that recorded half of itself would be worse than one that recorded
-  // none of it.
-  const handleDoneShopping = useCallback(async () => {
-    if (ledgerWritesEnabled && purchasedItems.length > 0) {
-      const { skipped } = await recordPurchases(
-        purchasedItems as unknown as PurchasableGroceryItem[],
-        foods as unknown as MovementItem[],
-      );
-      for (const failure of skipped) {
-        logger.warn('US-672: grocery row not recorded as a purchase movement', {
-          reason: failure.reason,
-          itemId: failure.itemId,
-        });
-      }
-      // The legacy credit, for exactly the rows the ledger declined.
-      const skippedItemIds = new Set(skipped.map((f) => f.itemId).filter(Boolean));
-      for (const item of purchasedItems) {
-        const existingFood = findFoodByDisplayName(item.name);
-        const wasSkipped = !existingFood || skippedItemIds.has(existingFood.id);
-        if (!wasSkipped) continue;
-        if (existingFood) {
-          updateFood(existingFood.id, {
-            ...existingFood,
-            quantity: (existingFood.quantity || 0) + item.quantity,
-            unit: item.unit,
-          });
-        } else {
-          await addFood({
-            name: item.name,
-            category: item.category,
-            // US-803, same as the check-off path above: finishing the shop
-            // means these are in the house, not that anyone eats them.
-            is_safe: ACQUIRED_FOOD_IS_SAFE,
-            is_try_bite: ACQUIRED_FOOD_IS_TRY_BITE,
-            aisle: item.aisle,
-            quantity: item.quantity,
-            unit: item.unit,
-          });
-        }
-      }
-    }
-
-    const moved = purchasedItems.map(item => ({
-      name: item.name,
-      category: item.category,
-      quantity: item.quantity,
-      unit: item.unit,
-      aisle: item.aisle,
-      // US-713: is_manual was never a column -- it lived on a local interface
-      // only, so this carried undefined and wrote nothing. The persisted pair
-      // is what an undo has to restore, or a plan-generated row comes back as a
-      // hand-added one that no later sync will retire.
-      auto_generated: item.auto_generated,
-      source_plan_entry_id: item.source_plan_entry_id,
-      added_via: item.added_via,
-      source_recipe_id: item.source_recipe_id,
-      // US-714: without this an undone checkout puts every row back on the
-      // default list, off whichever list the shopper actually bought it from.
-      grocery_list_id: item.grocery_list_id,
-    }));
-    if (moved.length === 0) return;
-
-    // US-292: snapshot missing-counts BEFORE the per-item toggle pantry sync
-    // has fully drained, then re-derive AFTER. Plan entries that had
-    // missingCount > 0 and now have 0 are the ones whose badges cleared.
-    // The per-item toggle (handleToggleItem) updates `foods` synchronously,
-    // so by the time `handleDoneShopping` is called the post-state is current.
-    // We still need the pre-state — derive from the foods snapshot at the
-    // moment the recipes / planEntries / foods closure was captured by this
-    // useCallback. AppContext re-creates this closure when foods change, so
-    // the "pre" state is what we have right now; we reconstruct a hypothetical
-    // pre-state by subtracting the moved items from each matched food.
-    const reconstructPreFoods = () => {
-      const adjusted = foods.map(f => ({ ...f }));
-      for (const item of moved) {
-        const food = findFoodByDisplayName(item.name);
-        if (!food) continue;
-        const target = adjusted.find(f => f.id === food.id);
-        if (target) {
-          target.quantity = Math.max(0, (target.quantity ?? 0) - (item.quantity ?? 1));
-        }
-      }
-      return adjusted;
-    };
-    const preFoods = reconstructPreFoods();
-
-    const recipeIdsInPlan = new Set(
-      planEntries.filter(p => p.recipe_id).map(p => p.recipe_id!)
-    );
-    let plan_entries_cleared = 0;
-    for (const recipeId of recipeIdsInPlan) {
-      const recipe = recipes.find(r => r.id === recipeId);
-      if (!recipe) continue;
-      const before = countMissingForRecipe(recipe, preFoods);
-      const after = countMissingForRecipe(recipe, foods);
-      if (before > 0 && after === 0) plan_entries_cleared++;
-    }
-    if (plan_entries_cleared > 0) {
-      analytics.trackEvent("missing_flags_cleared_after_pantry_move", {
-        plan_entries_cleared,
-        items_moved: moved.length,
-      });
-    }
-
-    clearCheckedGroceryItems();
-    setPurchasedOpen(false);
-
-    toast.success(`Moved ${moved.length} item${moved.length === 1 ? '' : 's'} to pantry`, {
-      description: 'Bought items committed to your inventory',
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          // US-672: when the ledger did the crediting, take it back the same
-          // way -- an appended correction that negates each purchase. A direct
-          // decrement of foods.quantity would be translated by the US-668
-          // trigger into a correction of its own, so doing both would take the
-          // shop back twice.
-          // Re-insert each grocery row as active, so the user can re-check it.
-          // One definition for both paths: duplicating the payload duplicates
-          // every type error in it too, which is how US-672's first version
-          // pushed the typecheck ratchet one over its baseline.
-          const restoreGroceryRows = () => {
-            moved.forEach(item => {
-              addGroceryItem({
-                name: item.name,
-                category: item.category,
-                quantity: item.quantity,
-                unit: item.unit,
-                aisle: item.aisle,
-                auto_generated: item.auto_generated,
-                source_plan_entry_id: item.source_plan_entry_id,
-                added_via: item.added_via,
-                source_recipe_id: item.source_recipe_id,
-                grocery_list_id: item.grocery_list_id,
-              });
-            });
-          };
-
-          if (ledgerWritesEnabled) {
-            // purchasedItems, not `moved`: `moved` is a projection that drops
-            // the grocery row id, and without it the reversal loses the
-            // ref_id that ties it back to the purchase it cancels.
-            void recordPurchaseReversal(
-              purchasedItems as unknown as PurchasableGroceryItem[],
-              foods as unknown as MovementItem[],
-            );
-            restoreGroceryRows();
-            return;
-          }
-
-          // Legacy path: restore the rows AND decrement the pantry food the
-          // toggle incremented. Best-effort: name-based pantry match is
-          // consistent with the toggle path; if no matching food is found we
-          // skip the decrement and just restore the grocery row.
-          restoreGroceryRows();
-          moved.forEach(item => {
-            const food = findFoodByDisplayName(item.name);
-            if (food && food.quantity) {
-              updateFood(food.id, {
-                ...food,
-                quantity: Math.max(0, food.quantity - item.quantity),
-              });
-            }
-          });
-        },
-      },
-    });
-  }, [purchasedItems, clearCheckedGroceryItems, addGroceryItem, foods, findFoodByDisplayName, updateFood, addFood, recipes, planEntries, ledgerWritesEnabled, recordPurchases, recordPurchaseReversal]);
-
-  const handleSmartRestock = async () => {
-    setIsGeneratingRestock(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("You must be logged in");
+      // A receipt's credit is taken back by the receipt's own Undo, not by
+      // unticking one row: the stock stays in the pantry. The stamp goes,
+      // though. It describes this purchase, and a row back on the to-buy list
+      // that kept it would be skipped by checkout (and by the legacy credit)
+      // when it is really bought later.
+      if (item.pantry_credited_at) {
+        updateGroceryItem(itemId, { pantry_credited_at: null });
+        toast.info(t("grocery.receiptList.untickedCredited", {
+          defaultValue: "{{name}} is back on the list. What the receipt added stays in your pantry.",
+          name: item.name,
+        }));
         return;
       }
-      const { data, error } = await supabase.rpc('auto_add_restock_items', {
-        p_user_id: user.id,
-        p_kid_id: activeKidId
-      });
-      if (error) throw error;
-
-      const { data: groceryData } = await supabase
-        .from('grocery_items')
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (groceryData) {
-        setGroceryItems(parseGroceryItemRows(groceryData));
-      }
-      const itemsAdded = Number(data) || 0;
-      if (itemsAdded > 0) {
-        toast.success(`Added ${itemsAdded} item${itemsAdded === 1 ? '' : 's'} to restock`, {
-          description: "Based on low stock and consumption patterns"
-        });
-      } else {
-        toast.info("No restock items needed right now", {
-          description: "Your pantry looks well-stocked!"
-        });
-      }
-    } catch (error) {
-      logger.error('Error generating restock:', error);
-      toast.error("Failed to generate restock suggestions");
-    } finally {
-      setIsGeneratingRestock(false);
+      // Nothing to take back when nothing was credited yet.
+      if (ledgerWritesEnabled) return;
+      uncreditRow(item);
     }
-  };
+  }, [toggleGroceryItem, updateGroceryItem, announce, t, ledgerWritesEnabled, creditRow, uncreditRow]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  // Flush lingering rows. 0ms under reduced motion: nothing animates, so
+  // nothing needs to wait.
+  const lingerMs = reducedMotion ? 0 : LINGER_MS;
+  useEffect(() => {
+    if (recentlyChecked.size === 0) return;
+    const oldest = Math.min(...recentlyChecked.values());
+    const wait = Math.max(0, oldest + lingerMs - Date.now());
+    const timer = setTimeout(() => {
+      setRecentlyChecked((prev) => {
+        const now = Date.now();
+        const next = new Map([...prev].filter(([, ts]) => now - ts < lingerMs));
+        return next.size === prev.size ? prev : next;
+      });
+    }, wait);
+    return () => clearTimeout(timer);
+  }, [recentlyChecked, lingerMs]);
 
-  const handleExportCSV = () => {
-    const csv = [
-      "Category,Item,Quantity,Unit,Aisle,Status",
-      ...activeItems.map(item =>
-        `${categoryLabel(item.category)},"${item.name}",${item.quantity},${item.unit},"${item.aisle || ""}","To Buy"`
-      )
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `grocery-list-${activeKid?.name || "list"}-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV exported!");
-  };
+  const handleDeleteItem = useCallback((itemId: string) => {
+    const item = itemsRef.current.find(i => i.id === itemId);
+    deleteGroceryItem(itemId);
+    if (!item) return;
+    const saved = snapshot(item);
+    toast.success(t("grocery.removed", { defaultValue: "Removed {{name}}", name: item.name }), {
+      action: {
+        label: t("grocery.undo", { defaultValue: "Undo" }),
+        // Same id, every field, checked state included.
+        onClick: () => restoreGroceryItems([saved]),
+      },
+    });
+  }, [deleteGroceryItem, restoreGroceryItems, t]);
 
-  const handleExportText = () => {
-    const text = [
-      `Grocery List${activeKid ? ` - ${activeKid.name}` : ""}`,
-      `${new Date().toLocaleDateString()} - ${activeItems.length} items`,
-      "",
-      ...Object.entries(activeItemsByGroup).map(([group, items]) => {
-        if (items.length === 0) return "";
-        return [
-          `${group}:`,
-          ...items.map(item => `  - ${item.name} (${item.quantity} ${item.unit})`),
-          ""
-        ].join("\n");
-      }).filter(Boolean)
-    ].join("\n");
-    navigator.clipboard.writeText(text);
-    toast.success("List copied to clipboard!");
-  };
+  // Stable row handlers (GroceryRow is memoized).
+  const toggleRef = useRef(handleToggleItem);
+  toggleRef.current = handleToggleItem;
+  const deleteRef = useRef(handleDeleteItem);
+  deleteRef.current = handleDeleteItem;
+  const onRowToggle = useCallback((item: GroceryItem) => { void toggleRef.current(item.id); }, []);
+  const onRowOpen = useCallback((item: GroceryItem) => setEditingItem(item), []);
+  const onRowDelete = useCallback((item: GroceryItem) => deleteRef.current(item.id), []);
+  const onRowQuantityStep = useCallback((item: GroceryItem, delta: number) => {
+    const current = itemsRef.current.find((i) => i.id === item.id);
+    if (!current) return;
+    updateGroceryItem(item.id, { quantity: stepQuantity(current.quantity, delta) });
+  }, [updateGroceryItem]);
 
-  const handleExportAnyList = () => {
-    const csv = activeItems
-      .map(item => `"${item.name}","${item.quantity} ${item.unit}","${item.aisle || categoryLabel(item.category)}"`)
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `anylist-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("AnyList format exported!");
-  };
+  // ─── Checkout ──────────────────────────────────────────────────────────
+  // US-282, amended by US-672. Two shapes, chosen by the writes flag.
+  //
+  //   flag OFF  each check-off already credited the pantry, so checkout only
+  //             clears the bought rows of THIS list.
+  //   flag ON   one purchase movement per checked row, appended here. A
+  //             failed append changes nothing: rows stay checked and on the
+  //             list. Rows the ledger could not take fall back to the legacy
+  //             credit, and nothing claims the pantry was credited until it was.
+  const purchasedRef = useRef(purchasedItems);
+  purchasedRef.current = purchasedItems;
 
-  const handleShareiOS = async () => {
-    const text = activeItems
-      .map(item => `${item.name} (${item.quantity} ${item.unit})`)
-      .join("\n");
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Grocery List${activeKid ? ` - ${activeKid.name}` : ""}`,
-          text: text,
-        });
-      } catch (error) {
-        if ((error as Error).name !== "AbortError") {
-          navigator.clipboard.writeText(text);
-          toast.success("Copied to clipboard!");
+  const handleDoneShopping = useCallback(async () => {
+    if (checkingOutRef.current) return;
+    const rows = purchasedRef.current.map(snapshot);
+    if (rows.length === 0) return;
+    // Item 16: rows a receipt already credited are cleared with the rest but
+    // never credited a second time.
+    const { toCredit, alreadyCredited } = partitionForCheckout(rows);
+    checkingOutRef.current = true;
+    setCheckingOut(true);
+    try {
+      let recordedIds: string[] = [];
+      const fallbackCredited: GroceryItem[] = [];
+      let unitDiffers = 0;
+      let blocked = 0;
+
+      if (ledgerWritesEnabled && toCredit.length > 0) {
+        const result = await recordPurchases(
+          toCredit as unknown as PurchasableGroceryItem[],
+          foods as unknown as MovementItem[],
+          findFoodByDisplayName,
+        );
+        if (result.reason === "the append failed") {
+          toast.error(t("grocery.checkout.failed", {
+            defaultValue: "Couldn't record this shop. Your items are still checked, try again.",
+          }));
+          return;
+        }
+        for (const failure of result.skipped) {
+          logger.warn("US-672: grocery row not recorded as a purchase movement", {
+            reason: failure.reason,
+            groceryItemId: failure.groceryItemId,
+          });
+        }
+        recordedIds = result.recordedRowIds;
+        const recorded = new Set(recordedIds);
+        for (const row of toCredit.filter((r) => !recorded.has(r.id))) {
+          const outcome = await creditRow(row);
+          if (outcome === "credited") fallbackCredited.push(row);
+          else if (outcome === "unitDiffers") unitDiffers++;
+          else blocked++;
         }
       }
-    } else {
-      navigator.clipboard.writeText(text);
-      toast.success("Copied to clipboard!");
+
+      // US-292: plan entries whose missing-ingredient badge this shop cleared.
+      const credited = ledgerWritesEnabled
+        ? toCredit.filter((r) => recordedIds.includes(r.id) || fallbackCredited.includes(r))
+        : toCredit;
+      const preFoods = foods.map(f => ({ ...f }));
+      for (const item of credited) {
+        const food = findFoodByDisplayName(item.name);
+        const target = food && preFoods.find(f => f.id === food.id);
+        if (target) target.quantity = Math.max(0, (target.quantity ?? 0) - (item.quantity ?? 1));
+      }
+      const recipeIdsInPlan = new Set(planEntries.filter(p => p.recipe_id).map(p => p.recipe_id!));
+      let plan_entries_cleared = 0;
+      for (const recipeId of recipeIdsInPlan) {
+        const recipe = recipes.find(r => r.id === recipeId);
+        if (!recipe) continue;
+        if (countMissingForRecipe(recipe, preFoods) > 0 && countMissingForRecipe(recipe, foods) === 0) {
+          plan_entries_cleared++;
+        }
+      }
+      if (plan_entries_cleared > 0) {
+        analytics.trackEvent("missing_flags_cleared_after_pantry_move", {
+          plan_entries_cleared,
+          items_moved: credited.length,
+        });
+      }
+
+      // Only the rows of the list on screen. clearCheckedGroceryItems swept
+      // every checked row in the household, including another list's cart.
+      deleteGroceryItems(rows.map((r) => r.id));
+      setPurchasedOpenPref(null);
+
+      const undo = () => {
+        if (ledgerWritesEnabled) {
+          const recordedSet = new Set(recordedIds);
+          const recordedRows = rows.filter((r) => recordedSet.has(r.id));
+          if (recordedRows.length > 0) {
+            void recordPurchaseReversal(
+              recordedRows as unknown as PurchasableGroceryItem[],
+              foods as unknown as MovementItem[],
+              findFoodByDisplayName,
+            );
+          }
+          fallbackCredited.forEach(uncreditRow);
+        }
+        // Back as they were, checked: in legacy mode the pantry still holds
+        // them, so a checked row is the true state.
+        restoreGroceryItems(rows.map((r) => ({ ...r, checked: true })));
+      };
+
+      const notes: string[] = [];
+      if (alreadyCredited.length > 0) {
+        notes.push(t("grocery.receiptList.checkoutSkipped", {
+          defaultValue: "{{count}} already added from your receipt",
+          count: alreadyCredited.length,
+        }));
+      }
+      if (unitDiffers > 0) {
+        notes.push(t("grocery.checkout.unitDiffers", {
+          defaultValue: "{{count}} not added to the pantry: unit differs",
+          count: unitDiffers,
+        }));
+      }
+      if (blocked > 0) {
+        notes.push(t("grocery.checkout.blocked", {
+          defaultValue: "{{count}} not added: pantry full on your plan",
+          count: blocked,
+        }));
+      }
+      const description = notes.length > 0 ? notes.join(". ") : undefined;
+      const action = { label: t("grocery.undo", { defaultValue: "Undo" }), onClick: undo };
+
+      if (ledgerWritesEnabled) {
+        const creditedCount = recordedIds.length + fallbackCredited.length;
+        if (creditedCount > 0) {
+          toast.success(t("grocery.checkout.recorded", {
+            defaultValue: "Added {{count}} item to your pantry",
+            defaultValue_other: "Added {{count}} items to your pantry",
+            count: creditedCount,
+          }), { description, action });
+        } else {
+          toast.info(t("grocery.checkout.cleared", {
+            defaultValue: "Cleared {{count}} bought item",
+            defaultValue_other: "Cleared {{count}} bought items",
+            count: rows.length,
+          }), { description, action });
+        }
+      } else {
+        toast.success(t("grocery.checkout.cleared", {
+          defaultValue: "Cleared {{count}} bought item",
+          defaultValue_other: "Cleared {{count}} bought items",
+          count: rows.length,
+        }), { description, action });
+      }
+    } catch (error) {
+      logger.error("Grocery checkout failed:", error);
+      toast.error(t("grocery.checkout.failed", {
+        defaultValue: "Couldn't record this shop. Your items are still checked, try again.",
+      }));
+    } finally {
+      checkingOutRef.current = false;
+      setCheckingOut(false);
     }
-  };
+  }, [
+    ledgerWritesEnabled, recordPurchases, recordPurchaseReversal, foods, findFoodByDisplayName,
+    creditRow, uncreditRow, planEntries, recipes, deleteGroceryItems, restoreGroceryItems, t,
+  ]);
 
-  const handleCopyList = () => {
-    const text = activeItems
-      .map(item => `${item.name} (${item.quantity} ${item.unit})`)
-      .join("\n");
-    navigator.clipboard.writeText(text);
-    toast.success("List copied to clipboard!");
-  };
-
-  // Group active items by category or aisle
-  const activeItemsByGroup = useMemo(
-    () => groupItems(activeItems, groupBy),
-    [activeItems, groupBy]
+  // ─── Grouping, order, fold ─────────────────────────────────────────────
+  // Lingering rows stay among the active ones, crossed out, where they were.
+  const lingerIds = useMemo(() => new Set(recentlyChecked.keys()), [recentlyChecked]);
+  const { active: shownActive, purchased: shownPurchased } = useMemo(
+    () => withLingering(activeItems, purchasedItems, lingerIds, filteredGroceryItems),
+    [activeItems, purchasedItems, lingerIds, filteredGroceryItems]
   );
 
-  /*
-    US-767: at phone width the aisles fold, and the one the shopper is working
-    through stays open. The policy lives in src/lib/groceryData.ts so it can be
-    tested without a viewport; this holds the state and reconciles it whenever
-    the grouping changes -- checking the last item off an aisle removes that
-    group, and recomputing from scratch would slam shut a group the shopper had
-    deliberately opened.
-  */
-  const isPhoneWidth = useIsMobile();
+  // Every row shows whichever kid is selected elsewhere in the app. Filtering
+  // to one kid's planned foods hid hand-added rows (milk, nappies) with no
+  // way back from this page, and left a blank list while the progress bar
+  // still counted them. Who a row is for is on the row instead. Item 42's
+  // "Only <kid>'s items" is the opt-in version, which says what it hides.
+  const visibleActive = useMemo(
+    () => (kidFilterKid ? filterItemsForKid(shownActive, kidIndex, kidFilterKid.id).shown : shownActive),
+    [kidFilterKid, shownActive, kidIndex]
+  );
+
+  const activeItemsByGroup = useMemo(
+    () => groupItems(visibleActive, groupBy),
+    [visibleActive, groupBy]
+  );
+
   const groupNames = useMemo(
     () => Object.keys(activeItemsByGroup).filter((g) => activeItemsByGroup[g].length > 0),
     [activeItemsByGroup]
   );
+  const groupOrder = useMemo(
+    () => groupBy === "aisle"
+      ? sortAisleGroupNames(groupNames, storeLayouts.walkContext)
+      : orderGroupNames(groupNames, groupBy),
+    [groupBy, groupNames, storeLayouts.walkContext]
+  );
+
+  /*
+    US-767: at phone width the aisles fold, and the one the shopper is working
+    through stays open. Reconciled whenever the grouping changes, so checking
+    the last item off an aisle does not slam shut one the shopper opened.
+  */
+  const isPhoneWidth = useIsMobile();
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() =>
-    initialExpandedGroups(groupNames, isPhoneWidth)
+    initialExpandedGroups(groupOrder, isPhoneWidth, groupOrder)
   );
   // Keyed on the NAMES, not the array: groupItems returns a fresh object every
   // render, so an effect depending on the array identity re-runs every time.
-  const groupKey = groupNames.join('\u0000');
+  const groupKey = groupOrder.join('\u0000');
   useEffect(() => {
     setExpandedGroups((prev) =>
       reconcileExpandedGroups(prev, groupKey ? groupKey.split('\u0000') : [], isPhoneWidth)
@@ -789,795 +886,847 @@ export default function Grocery() {
     });
   }, []);
 
-  // Virtualization for large grocery lists (>50 items): flatten grouped items
-  // into rows (each row is either a group header or an item).
-  const flattenedRows = useMemo(
-    () => flattenGroupedRows(activeItemsByGroup),
-    [activeItemsByGroup]
+  // Print: every group open while the dialog is up.
+  useEffect(() => {
+    const before = () => setPrinting(true);
+    const after = () => setPrinting(false);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => {
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", after);
+    };
+  }, []);
+  const collapsible = isPhoneWidth && !printing;
+  const renderExpanded = useMemo<ReadonlySet<string>>(
+    () => (collapsible ? expandedGroups : new Set(groupOrder)),
+    [collapsible, expandedGroups, groupOrder]
   );
 
-  const useVirtualGrocery = activeItems.length > 50;
-  const groceryListParentRef = useRef<HTMLDivElement>(null);
-  const groceryVirtualizer = useVirtualizer({
-    count: useVirtualGrocery ? flattenedRows.length : 0,
-    getScrollElement: () => groceryListParentRef.current,
-    // US-636: first-paint guess only. Rows report their real height back via
-    // measureElement, because no constant covers all of them. Measured in
-    // Chromium: an item row is 53px bare, 65px with a w-10 photo, and 69px on
-    // a coarse pointer, where src/index.css:215 forces every button to a 44px
-    // minimum. Against this 56px guess that used to place each row closer than
-    // it rendered, and the error compounded down the list: 11 overlapping row
-    // pairs with a mouse, and all 22 on touch, the worst by 13px.
-    estimateSize: (index) => {
-      if (!useVirtualGrocery) return 0;
-      const row = flattenedRows[index];
-      return row.type === "header" ? 48 : 56;
-    },
+  // ─── Per-row meta ──────────────────────────────────────────────────────
+  const rowMeta = useMemo(() => {
+    const map = new Map<string, RowMeta>();
+    for (const item of visibleActive) {
+      const kidIds = kidIndex.get(groceryKidKey(item.name)) ?? [];
+      const forKids = kidIds.map((id) => kidById.get(id)).filter((k): k is NonNullable<typeof k> => !!k);
+      // Nobody planned it: every kid in the house still eats from the fridge,
+      // so the allergen check runs against all of them.
+      const checkKids = forKids.length > 0 ? forKids : kids;
+      const food = findFoodByDisplayName(item.name);
+      const fit = food && checkKids.length > 0
+        ? summarizeKidFits(checkKids.map((kid) => ({
+            kid,
+            fit: getKidFoodFit(kid, food, resultIndexByKid.get(kid.id) ?? planEntries),
+          })))
+        : undefined;
+      const adder = item.added_by_user_id;
+      const addedByName = sharedHousehold && adder && adder !== userId ? memberNameById.get(adder) : undefined;
+      const notes = measureNotes.get(item.id);
+      map.set(item.id, {
+        fit,
+        forKidNames: forKids.length > 0 ? forKids.map((k) => k.name) : undefined,
+        addedByName,
+        pending: pendingIds.has(item.id),
+        measureNote: notes && notes.length > 0 ? notes.join(", ") : undefined,
+      });
+    }
+    return map;
+  }, [
+    visibleActive, kidIndex, kidById, kids, findFoodByDisplayName, resultIndexByKid, planEntries,
+    sharedHousehold, userId, memberNameById, measureNotes, pendingIds,
+  ]);
+
+  /** A group with no home in this store: Uncategorized, or an aisle it lacks. */
+  const isUnplaced = useCallback(
+    (group: string) => groupBy === "aisle" && isUnplacedAisle(group, storeLayouts.walkContext),
+    [groupBy, storeLayouts.walkContext]
+  );
+  /** Aisle number and "3 of 12" place for a group header, when the store knows it. */
+  const headerPlace = useCallback((group: string) => {
+    if (groupBy !== "aisle") return { aisleNumber: null, position: undefined, total: undefined };
+    const place = aislePosition(group, storeLayouts.walkContext);
+    return place
+      ? { aisleNumber: place.aisleNumber, position: place.index + 1, total: place.total }
+      : { aisleNumber: null, position: undefined, total: undefined };
+  }, [groupBy, storeLayouts.walkContext]);
+
+  const { rememberAisle } = storeLayouts;
+  const onPlaceInAisle = useCallback((item: GroceryItem, aisleName: string, aisleId: string) => {
+    updateGroceryItem(item.id, { aisle: aisleName });
+    rememberAisle(item.name, aisleId);
+  }, [updateGroceryItem, rememberAisle]);
+  // "Not here" is remembered per store by the chips themselves; this hides
+  // the prompt for the rest of the visit even before storage answers.
+  const [placePromptOff, setPlacePromptOff] = useState(false);
+
+  // ─── Virtualization ────────────────────────────────────────────────────
+  // With hysteresis: a list hovering around one threshold would otherwise
+  // swap renderers on every check-off.
+  const [virtualOn, setVirtualOn] = useState(false);
+  const nextVirtual = virtualOn ? visibleActive.length >= VIRTUAL_LEAVE : visibleActive.length > VIRTUAL_ENTER;
+  if (nextVirtual !== virtualOn) setVirtualOn(nextVirtual);
+  const useVirtualGrocery = nextVirtual;
+
+  const flattenedRows = useMemo(
+    () => (useVirtualGrocery ? flattenGroupedRows(activeItemsByGroup, { expanded: renderExpanded, order: groupOrder }) : []),
+    [useVirtualGrocery, activeItemsByGroup, renderExpanded, groupOrder]
+  );
+
+  const listRef = useRef<HTMLDivElement>(null);
+  const groceryVirtualizer = useWindowVirtualizer({
+    count: flattenedRows.length,
+    // US-636: first-paint guess only; rows report their real height back.
+    estimateSize: (index) => (flattenedRows[index]?.type === "header" ? 44 : 60),
     overscan: 10,
+    enabled: useVirtualGrocery,
+    scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
+  // ─── Exports ───────────────────────────────────────────────────────────
+  const today = () => new Date().toISOString().split("T")[0];
+
+  const copyText = useCallback(async (text: string): Promise<boolean> => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (error) {
+      logger.warn("Clipboard write refused; showing the text to copy by hand", error);
+      setCopyFallback(text);
+      return false;
+    }
+  }, []);
+
+  const listAsText = useCallback(() => {
+    const groups = groupOrder
+      .filter((g) => (activeItemsByGroup[g] ?? []).length > 0)
+      .map((g) => [
+        `${g}:`,
+        ...activeItemsByGroup[g].map((item) => `  - ${item.name} (${item.quantity} ${item.unit})`.trimEnd()),
+        "",
+      ].join("\n"));
+    return [
+      t("grocery.export.textTitle", { defaultValue: "Grocery List" }),
+      t("grocery.export.textSubtitle", {
+        defaultValue: "{{date}} - {{count}} item",
+        defaultValue_other: "{{date}} - {{count}} items",
+        date: new Date().toLocaleDateString(),
+        count: activeItems.length,
+      }),
+      "",
+      ...groups,
+    ].join("\n");
+  }, [groupOrder, activeItemsByGroup, activeItems.length, t]);
+
+  const handleExportText = useCallback(async () => {
+    if (await copyText(listAsText())) {
+      toast.success(t("grocery.export.copied", { defaultValue: "List copied" }));
+    }
+  }, [copyText, listAsText, t]);
+
+  const handleExportCSV = useCallback(() => {
+    const csv = toCsv(activeItems, [
+      { header: t("grocery.export.csv.category", { defaultValue: "Category" }), value: (i) => categoryLabel(i.category) },
+      { header: t("grocery.export.csv.item", { defaultValue: "Item" }), value: (i) => i.name },
+      { header: t("grocery.export.csv.quantity", { defaultValue: "Quantity" }), value: (i) => i.quantity },
+      { header: t("grocery.export.csv.unit", { defaultValue: "Unit" }), value: (i) => i.unit },
+      { header: t("grocery.export.csv.aisle", { defaultValue: "Aisle" }), value: (i) => i.aisle ?? "" },
+      { header: t("grocery.export.csv.status", { defaultValue: "Status" }), value: () => t("grocery.export.csv.toBuy", { defaultValue: "To buy" }) },
+    ]);
+    if (downloadCsv(`grocery-list-${today()}.csv`, csv)) {
+      toast.success(t("grocery.export.csvDone", { defaultValue: "CSV exported" }));
+    }
+  }, [activeItems, t]);
+
+  const handleExportAnyList = useCallback(() => {
+    const csv = toCsv(activeItems, [
+      { header: t("grocery.export.csv.item", { defaultValue: "Item" }), value: (i) => i.name },
+      { header: t("grocery.export.csv.quantity", { defaultValue: "Quantity" }), value: (i) => `${i.quantity} ${i.unit}`.trim() },
+      { header: t("grocery.export.csv.aisle", { defaultValue: "Aisle" }), value: (i) => i.aisle || categoryLabel(i.category) },
+    ]);
+    if (downloadCsv(`anylist-${today()}.csv`, csv)) {
+      toast.success(t("grocery.export.anyListDone", { defaultValue: "AnyList file exported" }));
+    }
+  }, [activeItems, t]);
+
+  const handleShare = useCallback(async () => {
+    const text = activeItems.map((item) => `${item.name} (${item.quantity} ${item.unit})`.trimEnd()).join("\n");
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: t("grocery.export.textTitle", { defaultValue: "Grocery List" }), text });
+      } catch (error) {
+        // Cancelling the share sheet is not a failure, and neither is any
+        // other refusal worth a clipboard write the parent did not ask for.
+        if ((error as Error).name !== "AbortError") logger.warn("Share failed", error);
+      }
+      return;
+    }
+    if (await copyText(text)) toast.success(t("grocery.export.copied", { defaultValue: "List copied" }));
+  }, [activeItems, copyText, t]);
+
+  const handlePrint = useCallback(() => {
+    // Expand before the print snapshot is taken; beforeprint alone can land
+    // after some browsers have laid the page out.
+    setPrinting(true);
+    setTimeout(() => window.print(), 0);
+  }, []);
+
+  // ─── Derived view state ────────────────────────────────────────────────
+  const hasItems = totalItems > 0;
   const isEmpty = activeItems.length === 0 && purchasedItems.length === 0;
+  /**
+   * Phone only: whether More options offers the List view sheet. The same
+   * conditions the desktop uses to show the kid filter and the grouping row.
+   */
+  const showViewControls = !isEmpty && (visibleActive.length > 0 || kidFilterOptions.length > 0 || kidFilterKid !== null);
+  /** The store the aisles are walked in, when it is not the typical one. */
+  const activeStoreName = groupBy === "aisle" && storeLayouts.selectedStore
+    ? storeDisplayName(storeLayouts.selectedStore)
+    : null;
+  const showLoading = isEmpty && !groceryHydrated;
+  const allBought = activeItems.length === 0 && purchasedItems.length > 0;
+  const purchasedOpen = purchasedOpenPref ?? activeItems.length === 0;
+  const milestone = milestoneKey(progressPercent);
+  const checkoutLabel = ledgerWritesEnabled
+    ? t("grocery.checkout.ctaLedger", { defaultValue: "Finish shopping ({{count}})", count: purchasedCount })
+    : t("grocery.checkout.ctaLegacy", { defaultValue: "Clear {{count}} bought", count: purchasedCount });
+  const aisleOptions = useMemo(
+    () => [...new Set(groceryItems.map((i) => i.aisle).filter((a): a is string => !!a))].sort(),
+    [groceryItems]
+  );
+  const toAdd = planPreview.toAdd;
+  const selectedListName = groceryLists.lists.find((l) => l.id === selectedListId)?.name ?? null;
+
+  const renderRow = (item: GroceryItem) => {
+    const meta = rowMeta.get(item.id);
+    return (
+      <GroceryRow
+        item={item}
+        checked={item.checked}
+        measureNote={meta?.measureNote}
+        fit={meta?.fit}
+        forKidNames={meta?.forKidNames}
+        addedByName={meta?.addedByName}
+        pending={meta?.pending}
+        inPantry={item.checked && Boolean(item.pantry_credited_at)}
+        compact={isPhoneWidth}
+        onToggle={onRowToggle}
+        onOpen={onRowOpen}
+        onQuantityStep={onRowQuantityStep}
+        onDelete={onRowDelete}
+      />
+    );
+  };
+
+  // One question at a time: the first unchecked row in a group the store has
+  // no place for. Answering it files the row, and the next one comes up.
+  const renderPlaceChips = (group: string, items: GroceryItem[]) => {
+    if (placePromptOff || !isUnplaced(group) || storeLayouts.aisles.length === 0) return null;
+    const item = items.find((i) => !i.checked);
+    if (!item) return null;
+    return (
+      <div className="border-b border-border px-4 py-2 print:hidden">
+        <p className="mb-1 text-xs text-muted-foreground">
+          {t("grocery.placeCaption", { defaultValue: "Where is {{name}} in this store?", name: item.name })}
+        </p>
+        <PlaceInAisleChips
+          aisles={storeLayouts.aisles}
+          onPick={(aisleName, aisleId) => onPlaceInAisle(item, aisleName, aisleId)}
+          onDismiss={() => setPlacePromptOff(true)}
+        />
+      </div>
+    );
+  };
 
   return (
-    <div className="min-h-screen pb-20 md:pt-20 bg-background">
+    <div className="min-h-screen pb-24 md:pb-8 md:pt-20 bg-background">
       <Helmet>
         <title>Grocery List - EatPal</title>
         <meta name="description" content="Manage your grocery shopping list with smart suggestions and store organization" />
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="container mx-auto px-4 py-6 max-w-3xl">
+      <div className="container mx-auto px-4 py-4 md:py-6 max-w-3xl">
 
         {/* ─── Header ─── */}
-        <div className="mb-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <ShoppingCart className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">{t('grocery.title')}</h1>
-                <p className="text-sm text-muted-foreground">
-                  {isFamilyMode ? t('grocery.subtitleFamily') : t('grocery.subtitleChild', { name: activeKid?.name || 'your child' })}
-                </p>
-              </div>
-            </div>
-
-            {/* More options menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="shrink-0" aria-label="More options">
-                  <MoreHorizontal className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={handleRegenerateFromPlan}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Sync from Meal Plan
-                </DropdownMenuItem>
-                {userId && (
-                  <DropdownMenuItem onClick={() => setShowManageStoresDialog(true)}>
-                    <Store className="h-4 w-4 mr-2" />
-                    Store Layouts
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleExportText}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Copy as Text
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleShareiOS}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportCSV}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportAnyList}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export for AnyList
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handlePrint}>
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print List
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        <div className="mb-2 flex items-center gap-3">
+          <div
+            className={cn(
+              "w-10 h-10 rounded-xl bg-primary/10 items-center justify-center shrink-0",
+              hasItems ? "hidden md:flex" : "flex",
+            )}
+          >
+            <ShoppingCart className="h-5 w-5 text-primary" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h1 className={cn("font-bold tracking-tight", hasItems ? "text-lg md:text-2xl" : "text-2xl")}>
+              {t("grocery.title")}
+            </h1>
+            <p className={cn("text-sm text-muted-foreground", hasItems && "hidden md:block")}>
+              {selectedListName
+                ? t("grocery.subtitleList", {
+                    defaultValue: "{{name}} - {{count}} item",
+                    defaultValue_other: "{{name}} - {{count}} items",
+                    name: selectedListName,
+                    count: totalItems,
+                  })
+                : t("grocery.subtitleCount", {
+                    defaultValue: "{{count}} item on this list",
+                    defaultValue_other: "{{count}} items on this list",
+                    count: totalItems,
+                  })}
+            </p>
           </div>
         </div>
 
         {/*
-          US-767 AC1: the list picker and the add bar stay put while the list
-          scrolls under them, at phone width only.
-
-          A shopper works down the list with one hand over a trolley. Scroll to
-          the frozen aisle and both the control saying WHICH list you are on and
-          the button that adds the thing you just remembered are off the top of
-          the screen; getting either back is a scroll up and a scroll back.
-
-          Add Item lives here rather than in Quick Actions below, on every
-          viewport. A phone-only copy of it would be a second duplicate subtree
-          on a route that already carries one (tests/responsive/grocery-phone
-          .spec.ts documents half the checkboxes rendering 0x0 because of it),
-          and sticking the whole Quick Actions row is not an option: measured at
-          390px, its content box is 270px and its narrowest button is 130px, so
-          all four wrap to their own line and the row is 225px tall -- 43% of a
-          664px screen, pinned.
-
-          top-14 and not `top-0`: Dashboard's mobile <nav> is fixed at z-50, so
-          a bar stuck at 0 parks underneath it and is invisible for the whole
-          scroll. 14 is 56px, the same `pt-14` the shell reserves for that nav.
-          This was `top-[97px]` for one commit, because the nav really did
-          render 41px taller than its own reservation: mobile-first.css gave
-          `[class*="card"]` 20px of padding below 768px and that attribute
-          selector matched `bg-card`. US-869 scoped that rule to `main`. A test
-          asserts the stuck bar's top meets the nav's bottom, so the two cannot
-          drift apart again quietly.
-
-          `md:static` reverts above 768px: a control that can only ever do one
-          thing on a screen with room to spare is a control in the way. The
-          -mx-4/px-4 bleed spans the container gutter, or rows scroll visibly
-          through the 16px either side.
+          One sticky toolbar: list picker (with its "N left" line), Add, and
+          the overflow menu. US-767's two-row bar was 120px pinned; this is one
+          48px row. top-14 sits under Dashboard's fixed mobile nav (pt-14).
+          md:static above 768px, where there is room for the list to scroll by.
+          The 2px progress bar rides its bottom edge.
         */}
-        {userId && (
-          <div className="sticky top-14 z-30 bg-background border-b border-border -mx-4 px-4 py-2 mb-4 flex flex-wrap items-center gap-2 md:static md:z-auto md:top-auto md:border-0 md:mx-0 md:px-0 md:py-0">
-            {/*
-              min-w-0 flex-1, or the selector's own `flex items-center gap-2`
-              row sits at its max-content width as a flex item and pushes the
-              page 38px wide at 390px: min-width:auto stops a flex item
-              shrinking below its content, and the w-64 trigger plus two icon
-              buttons is 352px against a 270px content box.
-            */}
-            <div className="min-w-0 flex-1">
+        <div
+          role="toolbar"
+          aria-label={t("grocery.toolbar.label", { defaultValue: "Grocery list tools" })}
+          className="sticky top-14 z-30 -mx-4 mb-2 flex items-center gap-2 bg-background px-4 py-1 border-b border-border md:relative md:z-auto md:top-auto md:mx-0 md:px-0 print:hidden"
+        >
+          <div className="min-w-0 flex-1">
+            {userId ? (
               <GroceryListSelector
-                userId={userId}
-                householdId={householdId || undefined}
+                lists={groceryLists.lists}
                 selectedListId={selectedListId}
+                loading={groceryLists.loading}
+                error={groceryLists.error}
+                onRetry={() => void groceryLists.refresh()}
                 onListChange={setSelectedListId}
                 onCreateNew={() => setShowCreateListDialog(true)}
                 onManageLists={() => setShowManageListsDialog(true)}
-                onDefaultListChange={setDefaultListId}
+                summary={!hasItems
+                  ? undefined
+                  : kidFilterKid
+                    ? t("grocery.kidFilter.left", {
+                        defaultValue: "{{left}} left of {{total}} for {{name}}",
+                        left: scopedLeft,
+                        total: scopedTotal,
+                        name: kidFilterKid.name,
+                      })
+                    : t("grocery.toolbar.left", {
+                        defaultValue: "{{left}} left of {{total}}",
+                        left: leftCount,
+                        total: totalItems,
+                      })}
               />
-            </div>
-            {/*
-              Its own line below md:, alongside the picker above it. The bar's
-              content box is 270px at 390px wide and the picker's row -- a w-64
-              trigger plus a create-list and a manage-lists button -- already
-              wants all of it. Both alternatives were built and looked at:
-              sharing the line wraps the list name to two lines and paints this
-              button over the other two, and shrinking it to an icon still
-              overlaps them. Two rows costs 44px and nothing else.
-            */}
-            <Button
-              onClick={() => setShowAddDialog(true)}
-              size="sm"
-              className="w-full md:w-auto"
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add Item
-            </Button>
-          </div>
-        )}
-
-        {/* Progress Bar - only show when shopping */}
-        {totalItems > 0 && (
-          <div className="mb-4" aria-live="polite">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-muted-foreground">
-                Shopping progress
-              </span>
-              <span className="text-sm font-semibold">
-                {purchasedCount} of {totalItems} items ({progressPercent}%)
-              </span>
-            </div>
-            {/*
-              US-778: a progressbar with no accessible name. Radix renders
-              role="progressbar", and a screen reader announced a percentage
-              attached to nothing. The visible "Shopping progress" text above
-              is a sibling, not a label, so it does not name the bar.
-            */}
-            <Progress
-              value={progressPercent}
-              className="h-2"
-              aria-label={`Shopping progress: ${purchasedCount} of ${totalItems} items purchased`}
-            />
-            <div className="flex items-center justify-between mt-2">
-              {milestone && (
-                <p className={`text-sm font-medium ${progressPercent >= 100 ? "text-primary" : "text-muted-foreground"}`}>
-                  {milestone}
-                </p>
-              )}
-              {progressPercent === 100 && (
-                <p className="text-sm text-primary font-medium">
-                  Tap "Done Shopping" below to clear your list.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/*
-          ─── Quick Actions ───
-
-          Add Item moved up into the sticky bar with the list picker; these
-          three stay in flow. At 390px each of them takes a full line -- the
-          content box is 270px and the narrowest is 130px wide -- so the row is
-          225px tall, and sticking it would pin 43% of a 664px screen.
-        */}
-        <div className="flex gap-2 flex-wrap mb-6">
-          <Button onClick={() => setShowImportRecipeDialog(true)} variant="secondary" size="sm">
-            <FileText className="h-4 w-4 mr-1.5" />
-            From Recipe
-          </Button>
-          <Button onClick={() => setShowScanReceipt(true)} variant="secondary" size="sm">
-            <Barcode className="h-4 w-4 mr-1.5" />
-            Scan Receipt
-          </Button>
-          <Button
-            onClick={handleSmartRestock}
-            variant="secondary"
-            size="sm"
-            disabled={isGeneratingRestock}
-          >
-            {isGeneratingRestock ? (
-              <>
-                <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary mr-1.5" />
-                Analyzing...
-              </>
             ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-1.5" />
-                Smart Restock
-              </>
+              // Same height as the picker, so the toolbar does not jump when
+              // the session resolves.
+              <Skeleton className="h-12 w-full" data-testid="grocery-list-picker-skeleton" />
             )}
-          </Button>
+          </div>
+
+          {/* Add works without a session: the grocery context queues it. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="h-11 shrink-0 px-4">
+                <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
+                {t("grocery.toolbar.add", { defaultValue: "Add" })}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setShowAddDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.addItem", { defaultValue: "Add an item" })}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowImportRecipeDialog(true)}>
+                <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.fromRecipe", { defaultValue: "From a recipe" })}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowScanReceipt(true)}>
+                <Barcode className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.scanReceipt", { defaultValue: "Scan a receipt" })}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                aria-label={t("grocery.toolbar.more", { defaultValue: "More options" })}
+              >
+                <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              {/*
+                Phone only (option a, 2026-09-25): the controls that sit above
+                the list on a desktop live here, so the first row of the list
+                is on the first screen. In-store mode is one tap from the menu.
+              */}
+              {isPhoneWidth && visibleActive.length > 0 && (
+                <DropdownMenuItem
+                  className="min-h-11"
+                  onClick={() => setInStore(true)}
+                  data-testid="grocery-in-store-open"
+                >
+                  <Footprints className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("grocery.inStore.open", { defaultValue: "In-store mode" })}
+                </DropdownMenuItem>
+              )}
+              {isPhoneWidth && showViewControls && (
+                <DropdownMenuItem
+                  className="min-h-11"
+                  onClick={() => setShowViewSheet(true)}
+                  data-testid="grocery-view-open"
+                >
+                  <SlidersHorizontal className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("grocery.phoneView.menuItem")}
+                </DropdownMenuItem>
+              )}
+              {isPhoneWidth && (visibleActive.length > 0 || showViewControls) && <DropdownMenuSeparator />}
+              <DropdownMenuItem onClick={handleAddFromPlan}>
+                <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.syncPlan", { defaultValue: "Add this week's plan" })}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleReplaceFromPlan}>
+                <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.removeUnplanned", { defaultValue: "Remove meals no longer planned" })}
+              </DropdownMenuItem>
+              {userId && (
+                <DropdownMenuItem onClick={() => setShowManageStoresDialog(true)}>
+                  <Store className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("grocery.menu.stores", { defaultValue: "Store layouts" })}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportText}>
+                <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.copyText", { defaultValue: "Copy as text" })}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShare}>
+                <Share2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.share", { defaultValue: "Share" })}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportCSV}>
+                <Download className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.exportCsv", { defaultValue: "Export CSV" })}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportAnyList}>
+                <Download className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.exportAnyList", { defaultValue: "Export for AnyList" })}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handlePrint}>
+                <Printer className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t("grocery.menu.print", { defaultValue: "Print list" })}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {hasItems && (
+            <Progress
+              value={kidFilterKid ? scopedProgress : progressPercent}
+              className="absolute inset-x-0 bottom-0 h-0.5 rounded-none bg-transparent"
+              aria-label={kidFilterKid
+                ? t("grocery.kidFilter.progressLabel", {
+                    defaultValue: "{{name}}'s items: {{done}} of {{total}} bought",
+                    name: kidFilterKid.name,
+                    done: scopedDone,
+                    total: scopedTotal,
+                  })
+                : t("grocery.progress.label", {
+                    defaultValue: "Shopping progress: {{done}} of {{total}} bought",
+                    done: purchasedCount,
+                    total: totalItems,
+                  })}
+            />
+          )}
         </div>
 
-        {/* Smart Restock Suggestions */}
+        {/* The one live region: a debounced line per check-off. */}
+        <div role="status" className="sr-only">{announcement}</div>
+
+        {pendingCount > 0 && (
+          <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground print:hidden">
+            <CloudOff className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("grocery.offline.pending", {
+              defaultValue: "{{count}} change waiting for signal",
+              defaultValue_other: "{{count}} changes waiting for signal",
+              count: pendingCount,
+            })}
+          </p>
+        )}
+
+        <div className="print:hidden">
+          <GroceryQuickAdd onAdd={addToList} />
+        </div>
+
+        {!isEmpty && (
+          <PlanSyncBanner toAdd={toAdd} alreadyHave={planPreview.alreadyHave} onAdd={handleAddFromPlan} />
+        )}
+
         {userId && (
-          <div className="mb-6">
+          <div className="mb-3 print:hidden">
             <SmartRestockSuggestions
               userId={userId}
               kidId={activeKidId || undefined}
-              onAddItems={(items) => {
-                // US-714: stamp the list on screen, or the row lands with a
-                // null list id and is hidden the moment a list is selected.
-                items.forEach(item =>
-                  addGroceryItem({ ...item, grocery_list_id: selectedListId ?? undefined }),
-                );
-              }}
+              onAddItems={handleRestockAdd}
             />
           </div>
         )}
 
-        {/* ─── Empty State ─── */}
-        {isEmpty ? (
-          <Card className="p-12 text-center">
+        {/* ─── Loading / Empty ─── */}
+        {showLoading ? (
+          <div className="space-y-2" aria-hidden="true" data-testid="grocery-loading">
+            {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-11 w-full" />)}
+          </div>
+        ) : isEmpty ? (
+          <Card className="p-8 text-center">
             <div className="max-w-sm mx-auto">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <ShoppingBag className="h-8 w-8 text-primary" />
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <ShoppingBag className="h-7 w-7 text-primary" aria-hidden="true" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Your list is empty</h3>
+              <h2 className="text-xl font-semibold mb-2">
+                {t("grocery.empty.title", { defaultValue: "Your list is empty" })}
+              </h2>
               <p className="text-muted-foreground mb-6">
-                Add items manually, import from a recipe, or sync from your meal plan to get started.
+                {toAdd > 0
+                  ? t("grocery.plan.cta", {
+                      defaultValue: "This week's plan needs {{count}} thing",
+                      defaultValue_other: "This week's plan needs {{count}} things",
+                      count: toAdd,
+                    })
+                  : t("grocery.empty.body", {
+                      defaultValue: "Plan the week and the list writes itself, or add what you need.",
+                    })}
               </p>
-              <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                <Button onClick={() => setShowAddDialog(true)} size="sm">
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Add Item
-                </Button>
-                <Button onClick={handleRegenerateFromPlan} variant="outline" size="sm">
-                  <RefreshCw className="h-4 w-4 mr-1.5" />
-                  Sync from Meal Plan
-                </Button>
+              <div className="flex flex-col gap-2">
+                {toAdd > 0 ? (
+                  <Button onClick={handleAddFromPlan} className="h-11">
+                    <CalendarDays className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                    {t("grocery.empty.addPlan", {
+                      defaultValue: "Add {{count}} from this week's plan",
+                      count: toAdd,
+                    })}
+                  </Button>
+                ) : (
+                  <Button asChild className="h-11">
+                    <Link to="/dashboard/planner">
+                      <CalendarDays className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                      {t("grocery.empty.planWeek", { defaultValue: "Plan this week" })}
+                    </Link>
+                  </Button>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <Button variant="outline" className="h-11 flex-1" onClick={() => setShowImportRecipeDialog(true)}>
+                    <FileText className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                    {t("grocery.empty.fromRecipe", { defaultValue: "Add from a recipe" })}
+                  </Button>
+                  <Button variant="outline" className="h-11 flex-1" onClick={() => setShowAddDialog(true)}>
+                    <ClipboardPaste className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                    {t("grocery.empty.pasteList", { defaultValue: "Paste a list" })}
+                  </Button>
+                </div>
               </div>
             </div>
           </Card>
         ) : (
           <>
-            {/* ─── Group Toggle ─── */}
-            {activeItems.length > 0 && (
-              <div className="mb-4">
-                {/*
-                  US-778: this was a Tabs with no TabsContent.
+            {isPhoneWidth ? (
+              <GroceryViewIndicator
+                kidName={kidFilterKid?.name ?? null}
+                hiddenCount={hiddenToBuy}
+                byCategory={groupBy === "category"}
+                storeName={activeStoreName}
+                onClearKid={() => setKidFilterId(null)}
+                onClearGroup={() => setGroupBy("aisle")}
+                onClearStore={() => void storeLayouts.setSelectedStoreId(null)}
+                onEdit={() => setShowViewSheet(true)}
+              />
+            ) : (
+              <>
+                {(kidFilterOptions.length > 0 || kidFilterKid) && (
+                  <KidFilterBar
+                    kids={kidFilterOptions}
+                    selectedKidId={kidFilterKid?.id ?? null}
+                    onChange={setKidFilterId}
+                    hiddenCount={hiddenToBuy}
+                  />
+                )}
 
-                  Radix puts aria-controls on every TabsTrigger, pointing at the
-                  panel for that value. There were no panels -- the grouped list
-                  is rendered further down, outside the Tabs -- so both triggers
-                  advertised aria-controls="radix-...-content-aisle" for ids that
-                  do not exist. axe rates that critical (aria-valid-attr-value),
-                  and it is honest about the cause: this is a segmented control,
-                  not a set of tabs, because nothing here is a tab panel.
-
-                  So it is a group of toggle buttons now, which is what it always
-                  was. aria-pressed carries the state, no element claims to
-                  control a panel, and the classes are copied verbatim from
-                  TabsList and TabsTrigger (including the data-[state=active]
-                  styles, applied conditionally) so it renders identically.
-
-                  One deliberate difference: TabsList's `inline-flex` is gone.
-                  The page passed `grid`, and cn()'s tailwind-merge resolved
-                  that display conflict in favour of the later class. There is
-                  no cn() here, so keeping both would leave the winner to
-                  stylesheet order rather than to intent.
-                */}
-                <div
-                  role="group"
-                  aria-label="Group items by"
-                  className="grid h-10 w-full max-w-xs grid-cols-2 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground"
-                >
-                  {([
-                    ["aisle", "By Aisle"],
-                    ["category", "By Category"],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={groupBy === value}
-                      onClick={() => setGroupBy(value)}
-                      className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
-                        groupBy === value ? "bg-background text-foreground shadow-sm" : ""
-                      }`}
+                {/* ─── Grouping + store ─── */}
+                {visibleActive.length > 0 && (
+                  <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
+                    <GroupByToggle value={groupBy} onChange={setGroupBy} />
+                    {groupBy === "aisle" && userId && (
+                      <StorePicker
+                        stores={storeLayouts.stores}
+                        selectedId={storeLayouts.selectedStore?.id ?? null}
+                        onChange={(id) => void storeLayouts.setSelectedStoreId(id)}
+                      />
+                    )}
+                    <Button
+                      variant="outline"
+                      className="h-11 gap-1.5"
+                      onClick={() => setInStore(true)}
+                      data-testid="grocery-in-store-open"
                     >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                      <Footprints className="h-4 w-4" aria-hidden="true" />
+                      {t("grocery.inStore.open", { defaultValue: "In-store mode" })}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
 
             {/* ─── Active Shopping Items ─── */}
-            {activeItems.length > 0 ? (
+            {visibleActive.length > 0 ? (
               useVirtualGrocery ? (
-              /* Virtualized rendering for large lists (>50 items) */
-              <div
-                ref={groceryListParentRef}
-                className="mb-6 overflow-auto rounded-xl border"
-                style={{ maxHeight: "70vh" }}
-                aria-live="polite"
-              >
-                <div
-                  style={{
-                    height: `${groceryVirtualizer.getTotalSize()}px`,
-                    position: "relative",
-                  }}
+                <section
+                  aria-labelledby="grocery-list-heading"
+                  id="grocery-list-items"
+                  ref={listRef}
+                  className="mb-4 rounded-xl border border-border overflow-hidden"
                 >
-                  {groceryVirtualizer.getVirtualItems().map((virtualRow) => {
-                    const row = flattenedRows[virtualRow.index];
-                    if (row.type === "header") {
-                      return (
-                        <div
-                          key={`header-${row.group}`}
-                          data-index={virtualRow.index}
-                          ref={groceryVirtualizer.measureElement}
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "100%",
-                            transform: `translateY(${virtualRow.start}px)`,
-                          }}
-                          className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm">{row.group}</span>
-                            <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                              {row.count}
-                            </Badge>
+                  {/* The aisle headings are h3s; this h2 sits between them and
+                      the page's h1 so the outline does not skip a level. */}
+                  <h2 id="grocery-list-heading" className="sr-only">
+                    {t("grocery.list.label", { defaultValue: "Shopping list" })}
+                  </h2>
+                  <div style={{ height: `${groceryVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                    {groceryVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const row = flattenedRows[virtualRow.index];
+                      if (!row) return null;
+                      const style = {
+                        position: "absolute" as const,
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        transform: `translateY(${virtualRow.start - groceryVirtualizer.options.scrollMargin}px)`,
+                      };
+                      if (row.type === "header") {
+                        return (
+                          <div key={`header-${row.group}`} data-index={virtualRow.index} ref={groceryVirtualizer.measureElement} style={style} className="bg-muted">
+                            <GroceryGroupHeader
+                              id="grocery-list-items"
+                              label={row.group}
+                              count={row.count}
+                              expanded={renderExpanded.has(row.group)}
+                              collapsible={collapsible}
+                              onToggle={() => toggleGroup(row.group)}
+                              {...headerPlace(row.group)}
+                            />
                           </div>
+                        );
+                      }
+                      return (
+                        <div key={row.item.id} data-index={virtualRow.index} ref={groceryVirtualizer.measureElement} style={style}>
+                          {renderRow(row.item)}
                         </div>
                       );
-                    }
-                    const item = row.item;
+                    })}
+                  </div>
+                </section>
+              ) : (
+                <section aria-labelledby="grocery-list-heading" className="mb-4 space-y-3">
+                  <h2 id="grocery-list-heading" className="sr-only">
+                    {t("grocery.list.label", { defaultValue: "Shopping list" })}
+                  </h2>
+                  {groupOrder.map((group) => {
+                    const items = activeItemsByGroup[group] ?? [];
+                    if (items.length === 0) return null;
+                    const panelId = `grocery-group-${slugifyGroupId(group)}`;
+                    const isOpen = renderExpanded.has(group);
                     return (
-                      <div
-                        key={item.id}
-                        data-index={virtualRow.index}
-                        ref={groceryVirtualizer.measureElement}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          transform: `translateY(${virtualRow.start}px)`,
-                        }}
-                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group border-b"
-                      >
-                        <Checkbox
-                          checked={false}
-                          onCheckedChange={() => handleToggleItem(item.id)}
-                          aria-label={`Check off ${item.name}`}
-                          className={GROCERY_CHECKBOX_CLASS}
-                        />
-                        {item.photo_url && (
-                          <img
-                            src={item.photo_url}
-                            alt={item.name}
-                            className="w-10 h-10 object-cover rounded-md border shrink-0"
+                      <div key={group} className="rounded-xl border border-border overflow-hidden">
+                        <div className="bg-muted">
+                          <GroceryGroupHeader
+                            id={panelId}
+                            label={group}
+                            count={items.length}
+                            expanded={isOpen}
+                            collapsible={collapsible}
+                            onToggle={() => toggleGroup(group)}
+                            {...headerPlace(group)}
                           />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{item.name}</p>
-                          {item.brand_preference && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {item.brand_preference}
-                            </p>
-                          )}
-                          {item.notes && (
-                            <p className="text-xs text-muted-foreground italic truncate">
-                              {item.notes}
-                            </p>
-                          )}
-                          {measureNotes.has(item.id) && (
-                            // Stacked under the name rather than beside the
-                            // quantity, so it survives the phone layout where
-                            // name and quantity already share a line.
-                            <p className="text-xs text-secondary truncate">
-                              also needed: {measureNotes.get(item.id)!.join(', ')}
-                            </p>
-                          )}
-                          {item.barcode && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Barcode className="h-3 w-3" />
-                              <span className="truncate">{item.barcode}</span>
-                            </div>
-                          )}
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
-                            onClick={() => handleQuantityChange(item.id, -1)}
-                            disabled={item.quantity <= 1}
-                            aria-label="Decrease quantity"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-sm font-medium w-16 text-center tabular-nums">
-                            {item.quantity} {item.unit}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
-                            onClick={() => handleQuantityChange(item.id, 1)}
-                            aria-label="Increase quantity"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
+                        {/*
+                          Mounted and hidden rather than removed: aria-controls
+                          has to name an element that exists (US-778).
+                        */}
+                        <div id={panelId} hidden={!isOpen}>
+                          {items.map((item) => (
+                            <div key={item.id}>{renderRow(item)}</div>
+                          ))}
+                          {renderPlaceChips(group, items)}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                          onClick={() => setEditingItem(item)}
-                          aria-label="Edit item"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDeleteItem(item.id)}
-                          aria-label="Delete item"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
                       </div>
                     );
                   })}
-                </div>
-              </div>
-              ) : (
-              /* Non-virtualized rendering for small lists (<=50 items) */
-              <div className="space-y-3 mb-6" aria-live="polite">
-                {Object.entries(activeItemsByGroup).map(([group, items]) => {
-                  if (items.length === 0) return null;
-
-                  const panelId = `grocery-group-${slugifyGroupId(group)}`;
-                  const isOpen = expandedGroups.has(group);
-
-                  return (
-                    <Card key={group} className="overflow-hidden">
-                      {/*
-                        US-767: the header is a real button at phone width, so
-                        an aisle can be folded away. On a desktop it is a plain
-                        heading and nothing collapses -- there is room for the
-                        whole list, and a control that only ever does one thing
-                        is a control in the way.
-
-                        The panel stays MOUNTED and is hidden with `hidden`
-                        rather than being removed. aria-controls has to name an
-                        element that exists: US-778 fixed exactly that bug on
-                        this page, where two toggles pointed at panel ids Radix
-                        had never rendered and axe rated it critical.
-                      */}
-                      {isPhoneWidth ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleGroup(group)}
-                          aria-expanded={isOpen}
-                          aria-controls={panelId}
-                          className="w-full min-h-11 px-4 py-3 bg-muted/30 border-b flex items-center justify-between text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="font-semibold text-sm">{group}</span>
-                            <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                              {items.length}
-                            </Badge>
-                          </span>
-                          <ChevronDown
-                            className={cn(
-                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                              isOpen && "rotate-180",
-                            )}
-                            aria-hidden="true"
-                          />
-                        </button>
-                      ) : (
-                        <div className="px-4 py-3 bg-muted/30 border-b flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm">{group}</span>
-                            <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                              {items.length}
-                            </Badge>
-                          </div>
-                        </div>
-                      )}
-                      <div id={panelId} hidden={!isOpen} className="divide-y">
-                        {items.map(item => (
-                          <div
-                            key={item.id}
-                            className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group"
-                          >
-                            <Checkbox
-                              checked={false}
-                              onCheckedChange={() => handleToggleItem(item.id)}
-                              aria-label={`Check off ${item.name}`}
-                              className={GROCERY_CHECKBOX_CLASS}
-                            />
-
-                            {/* Item photo */}
-                            {item.photo_url && (
-                              <img
-                                src={item.photo_url}
-                                alt={item.name}
-                                className="w-10 h-10 object-cover rounded-md border shrink-0"
-                              />
-                            )}
-
-                            {/* Item details */}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{item.name}</p>
-                              {item.brand_preference && (
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {item.brand_preference}
-                                </p>
-                              )}
-                              {item.notes && (
-                                <p className="text-xs text-muted-foreground italic truncate">
-                                  {item.notes}
-                                </p>
-                              )}
-                              {measureNotes.has(item.id) && (
-                                // Same note as the virtualised row above. Both
-                                // renderers need it: the list switches between
-                                // them on size, and a shopper does not know
-                                // which one they are looking at.
-                                <p className="text-xs text-secondary truncate">
-                                  also needed: {measureNotes.get(item.id)!.join(', ')}
-                                </p>
-                              )}
-                              {item.barcode && (
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Barcode className="h-3 w-3" />
-                                  <span className="truncate">{item.barcode}</span>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Quantity controls */}
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
-                                onClick={() => handleQuantityChange(item.id, -1)}
-                                disabled={item.quantity <= 1}
-                                aria-label="Decrease quantity"
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="text-sm font-medium w-16 text-center tabular-nums">
-                                {item.quantity} {item.unit}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-11 w-11 sm:h-7 sm:w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity"
-                                onClick={() => handleQuantityChange(item.id, 1)}
-                                aria-label="Increase quantity"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-
-                            {/* Edit button */}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                              onClick={() => setEditingItem(item)}
-                              aria-label="Edit item"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            {/* Delete button */}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-11 w-11 sm:h-7 sm:w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDeleteItem(item.id)}
-                              aria-label="Delete item"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            )
-            ) : purchasedItems.length > 0 ? (
-              /* All items purchased celebration */
-              <Card className="p-8 text-center mb-6 border-primary/20 bg-primary/5">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                  <PackageCheck className="h-7 w-7 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold mb-1">All items purchased!</h3>
+                </section>
+              )
+            ) : kidFilterKid && activeItems.length > 0 ? (
+              <Card className="p-6 text-center mb-4" data-testid="grocery-kid-filter-empty">
+                <h2 className="text-lg font-semibold mb-1">
+                  {t("grocery.kidFilter.emptyTitle", {
+                    defaultValue: "Nothing left to buy for {{name}}",
+                    name: kidFilterKid.name,
+                  })}
+                </h2>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Everything has been added to your pantry.
+                  {t("grocery.kidFilter.emptyBody", {
+                    defaultValue: "{{count}} other item is still on the list.",
+                    defaultValue_other: "{{count}} other items are still on the list.",
+                    count: hiddenToBuy,
+                  })}
                 </p>
-                <Button onClick={handleDoneShopping} size="sm">
-                  <Check className="h-4 w-4 mr-1.5" />
-                  Move {purchasedItems.length} to pantry
+                <Button variant="outline" className="h-11" onClick={() => setKidFilterId(null)}>
+                  {t("grocery.kidFilter.showAll", { defaultValue: "Show all items" })}
+                </Button>
+              </Card>
+            ) : allBought ? (
+              <Card className="p-6 text-center mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                  <PackageCheck className="h-6 w-6 text-primary" aria-hidden="true" />
+                </div>
+                <h2 className="text-lg font-semibold mb-1">
+                  {milestone ? t(milestone) : t("grocery.progress.done", { defaultValue: "Everything is in the cart" })}
+                </h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {ledgerWritesEnabled
+                    ? t("grocery.purchased.allLedger", { defaultValue: "Finish shopping to add it all to your pantry." })
+                    : t("grocery.purchased.allLegacy", { defaultValue: "It's in your pantry. Clear the bought items when you're ready." })}
+                </p>
+                <Button onClick={handleDoneShopping} className="h-11" disabled={checkingOut} aria-busy={checkingOut}>
+                  {checkingOut
+                    ? <Loader2 className="h-4 w-4 mr-1.5 motion-safe:animate-spin" aria-hidden="true" />
+                    : <Check className="h-4 w-4 mr-1.5" aria-hidden="true" />}
+                  {checkoutLabel}
                 </Button>
               </Card>
             ) : null}
 
-            {/* ─── Purchased Items Section ─── */}
-            {purchasedItems.length > 0 && activeItems.length > 0 && (
-              <Collapsible open={purchasedOpen} onOpenChange={setPurchasedOpen}>
-                <Card className="overflow-hidden border-dashed">
-                  {/*
-                    US-778: "Move to pantry" used to sit INSIDE
-                    CollapsibleTrigger, which renders a button -- so this was a
-                    button nested in a button. Invalid HTML, and axe rates it
-                    nested-interactive (serious). The e.stopPropagation() on its
-                    handler was the tell: it existed because clicking the action
-                    also toggled the section. As siblings neither problem
-                    exists, so the stopPropagation goes with the nesting.
-                  */}
-                  <div className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                    <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left">
-                      {purchasedOpen ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span className="text-sm font-medium text-muted-foreground">
-                        Purchased
-                      </span>
-                      <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                        {purchasedItems.length}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        - added to pantry
-                      </span>
-                    </CollapsibleTrigger>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={handleDoneShopping}
-                    >
-                      <Check className="h-3 w-3 mr-1" aria-hidden="true" />
-                      Move to pantry
-                    </Button>
-                  </div>
-
+            {/* ─── Purchased ─── */}
+            {shownPurchased.length > 0 && (
+              <Collapsible open={purchasedOpen} onOpenChange={setPurchasedOpenPref}>
+                <div className="rounded-xl border border-dashed border-border overflow-hidden">
+                  <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-2 px-4 text-left">
+                    <ChevronDown
+                      className={cn("h-4 w-4 shrink-0 text-muted-foreground", !purchasedOpen && "-rotate-90")}
+                      aria-hidden="true"
+                    />
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {ledgerWritesEnabled
+                        ? t("grocery.purchased.headerLedger", {
+                            defaultValue: "Purchased - {{count}} - goes to pantry at checkout",
+                            count: shownPurchased.length,
+                          })
+                        : t("grocery.purchased.headerLegacy", {
+                            defaultValue: "Purchased - in pantry",
+                          })}
+                    </span>
+                  </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div className="divide-y border-t">
-                      {purchasedItems.map(item => (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-3 px-4 py-2.5 bg-muted/20"
-                        >
-                          <Checkbox
-                            checked={true}
-                            onCheckedChange={() => handleToggleItem(item.id)}
-                            aria-label={`Put ${item.name} back on the list`}
-                            className={GROCERY_CHECKBOX_CLASS}
+                    <div className="border-t border-border">
+                      {shownPurchased.map((item) => (
+                        <div key={item.id}>
+                          <GroceryRow
+                            item={item}
+                            checked
+                            inPantry={Boolean(item.pantry_credited_at)}
+                            compact
+                            onToggle={onRowToggle}
+                            onOpen={onRowOpen}
                           />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm line-through text-muted-foreground truncate">
-                              {item.name}
-                            </p>
-                          </div>
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            {item.quantity} {item.unit}
-                          </span>
                         </div>
                       ))}
                     </div>
+                    <PurchasePrices items={shownPurchased} onSetPrice={handleSetPurchasePrice} />
                   </CollapsibleContent>
-                </Card>
+                </div>
               </Collapsible>
             )}
 
-            {/* ─── US-282: Move completed to pantry (floating) ─── */}
-            {purchasedItems.length > 0 && activeItems.length > 0 && (
-              <div className="fixed bottom-24 md:bottom-8 left-0 right-0 flex justify-center z-30 pointer-events-none">
-                <Button
-                  onClick={handleDoneShopping}
-                  size="lg"
-                  className="shadow-lg pointer-events-auto rounded-full px-6"
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Move {purchasedItems.length} to pantry
-                </Button>
-              </div>
+            {purchasedCount > 0 && activeItems.length > 0 && (
+              <CheckoutBar
+                done={purchasedCount}
+                total={totalItems}
+                ctaLabel={checkoutLabel}
+                busy={checkingOut}
+                onCheckout={handleDoneShopping}
+              />
             )}
           </>
         )}
       </div>
 
       {/* ─── Dialogs ─── */}
-      <AddGroceryItemDialog
-        open={showAddDialog}
-        onOpenChange={setShowAddDialog}
-        onAdd={addGroceryItem}
-        selectedListId={selectedListId}
-      />
-
-      <EditGroceryItemDialog
-        open={editingItem !== null}
-        onOpenChange={(open) => !open && setEditingItem(null)}
-        item={editingItem}
-        onSave={(id, updates) => updateGroceryItem(id, updates)}
-      />
-
-      {userId && (
-        <>
-          <CreateGroceryListDialog
-            open={showCreateListDialog}
-            onOpenChange={setShowCreateListDialog}
-            userId={userId}
-            householdId={householdId || undefined}
-            onListCreated={(listId) => {
-              setSelectedListId(listId);
-              setShowCreateListDialog(false);
-            }}
+      <Suspense fallback={null}>
+        {showAddDialog && (
+          <AddGroceryItemDialog
+            open={showAddDialog}
+            onOpenChange={setShowAddDialog}
+            onAddItems={addToList}
+            selectedListId={selectedListId}
           />
-
-          <ManageGroceryListsDialog
-            open={showManageListsDialog}
-            onOpenChange={setShowManageListsDialog}
-            userId={userId}
-            householdId={householdId || undefined}
-            currentListId={selectedListId}
-            onListDeleted={(deletedId) => {
-              if (deletedId === selectedListId) {
-                setSelectedListId(null);
-              }
-            }}
+        )}
+        {showImportRecipeDialog && (
+          <ImportRecipeToGroceryDialog
+            open={showImportRecipeDialog}
+            onOpenChange={setShowImportRecipeDialog}
+            onImport={addToList}
           />
-
+        )}
+        {showScanReceipt && (
+          <ScanReceiptDialog
+            open={showScanReceipt}
+            onClose={() => setShowScanReceipt(false)}
+            listRows={activeItems}
+            resolveFoodForRow={resolveFoodForRow}
+            onApplyToList={handleApplyReceipt}
+          />
+        )}
+        {isPhoneWidth && showViewSheet && (
+          <GroceryViewSheet
+            open={showViewSheet}
+            onOpenChange={setShowViewSheet}
+            kids={kidFilterOptions}
+            selectedKidId={kidFilterKid?.id ?? null}
+            onKidChange={setKidFilterId}
+            hiddenCount={hiddenToBuy}
+            groupBy={groupBy}
+            onGroupByChange={setGroupBy}
+            stores={userId ? storeLayouts.stores : null}
+            selectedStoreId={storeLayouts.selectedStore?.id ?? null}
+            onStoreChange={(id) => void storeLayouts.setSelectedStoreId(id)}
+          />
+        )}
+        {inStore && (
+          <InStoreMode
+            items={visibleActive}
+            walkContext={storeLayouts.walkContext}
+            storeName={storeLayouts.selectedStore ? storeDisplayName(storeLayouts.selectedStore) : null}
+            done={kidFilterKid ? scopedDone : purchasedCount}
+            total={kidFilterKid ? scopedTotal : totalItems}
+            filterLabel={kidFilterKid
+              ? t("grocery.kidFilter.inStoreLabel", {
+                  defaultValue: "Only {{name}}'s items. {{count}} other hidden.",
+                  name: kidFilterKid.name,
+                  count: hiddenToBuy,
+                })
+              : null}
+            onToggle={onRowToggle}
+            onQuantityStep={onRowQuantityStep}
+            onEdit={onRowOpen}
+            onDelete={onRowDelete}
+            onExit={exitInStore}
+            onFinish={purchasedCount > 0 ? handleDoneShopping : undefined}
+            finishLabel={checkoutLabel}
+            finishing={checkingOut}
+          />
+        )}
+        {userId && showCreateStoreDialog && (
           <CreateStoreLayoutDialog
             open={showCreateStoreDialog}
             onOpenChange={(open) => {
@@ -1585,19 +1734,33 @@ export default function Grocery() {
               if (!open) setEditingStore(null);
             }}
             userId={userId}
-            householdId={householdId || undefined}
+            householdId={householdId}
             editStore={editingStore}
-            onStoreCreated={() => {
+            onStoreCreated={(store, created) => {
               setEditingStore(null);
               setShowCreateStoreDialog(false);
+              void storeLayouts.refresh();
+              if (created) {
+                // A new store is for the list on screen, and it has no aisles
+                // yet: straight to the aisles dialog.
+                void storeLayouts.setSelectedStoreId(store.id);
+                setManagingAislesStore(store);
+              }
             }}
           />
-
+        )}
+        {userId && showManageStoresDialog && (
           <ManageStoreLayoutsDialog
             open={showManageStoresDialog}
             onOpenChange={setShowManageStoresDialog}
             userId={userId}
-            householdId={householdId || undefined}
+            householdId={householdId}
+            onStoresChanged={() => void storeLayouts.refresh()}
+            onCreateStore={() => {
+              setEditingStore(null);
+              setShowManageStoresDialog(false);
+              setShowCreateStoreDialog(true);
+            }}
             onEditStore={(store) => {
               setEditingStore(store);
               setShowManageStoresDialog(false);
@@ -1606,59 +1769,82 @@ export default function Grocery() {
             onManageAisles={(store) => {
               setManagingAislesStore(store);
               setShowManageStoresDialog(false);
-              setShowManageAislesDialog(true);
             }}
           />
+        )}
+        {managingAislesStore && (
+          <ManageStoreAislesDialog
+            open
+            onOpenChange={(open) => {
+              if (!open) {
+                setManagingAislesStore(null);
+                setShowManageStoresDialog(true);
+              }
+            }}
+            storeLayout={managingAislesStore}
+            onAislesChanged={() => void storeLayouts.refresh()}
+          />
+        )}
+      </Suspense>
 
-          {managingAislesStore && (
-            <ManageStoreAislesDialog
-              open={showManageAislesDialog}
-              onOpenChange={(open) => {
-                setShowManageAislesDialog(open);
-                if (!open) {
-                  setManagingAislesStore(null);
-                  setShowManageStoresDialog(true);
-                }
-              }}
-              storeLayout={managingAislesStore}
-            />
-          )}
+      <EditGroceryItemDialog
+        open={editingItem !== null}
+        onOpenChange={(open) => !open && setEditingItem(null)}
+        item={editingItem}
+        onSave={(id, updates) => updateGroceryItem(id, updates)}
+        aisleOptions={aisleOptions}
+      />
 
-          <AisleContributionDialog
-            open={showAisleContribution}
-            onOpenChange={setShowAisleContribution}
-            itemName={contributionItem || ""}
-            storeLayoutId={selectedStoreLayoutId}
+      {userId && (
+        <>
+          <CreateGroceryListDialog
+            open={showCreateListDialog}
+            onOpenChange={setShowCreateListDialog}
             userId={userId}
-            onContribute={() => {
-              toast.success("Thank you for helping the community!");
+            householdId={householdId}
+            onCreated={(row) => {
+              groceryLists.upsertLocal(row);
+              setSelectedListId(row.id);
+              setShowCreateListDialog(false);
             }}
           />
-
-          <ImportRecipeToGroceryDialog
-            open={showImportRecipeDialog}
-            onOpenChange={setShowImportRecipeDialog}
-            onImport={(ingredients) => {
-              ingredients.forEach(ingredient => {
-                addGroceryItem({
-                  name: ingredient.name,
-                  quantity: ingredient.quantity,
-                  unit: ingredient.unit,
-                  category: ingredient.category,
-                  notes: ingredient.notes,
-                  aisle: undefined,
-                  grocery_list_id: selectedListId || undefined
-                });
-              });
+          <ManageGroceryListsDialog
+            open={showManageListsDialog}
+            onOpenChange={setShowManageListsDialog}
+            userId={userId}
+            householdId={householdId}
+            currentListId={selectedListId}
+            refresh={groceryLists.refresh}
+            removeLocal={groceryLists.removeLocal}
+            onListDeleted={(deletedId) => {
+              // The server cascade already took the rows; drop the local copies.
+              const gone = itemsRef.current.filter((i) => i.grocery_list_id === deletedId).map((i) => i.id);
+              if (gone.length > 0) deleteGroceryItems(gone);
             }}
           />
         </>
       )}
 
-      <ScanReceiptDialog
-        open={showScanReceipt}
-        onClose={() => setShowScanReceipt(false)}
-      />
+      {/* Clipboard refused: the text, selectable, to copy by hand. */}
+      <Dialog open={copyFallback !== null} onOpenChange={(open) => !open && setCopyFallback(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("grocery.export.copyFallbackTitle", { defaultValue: "Copy your list" })}</DialogTitle>
+            <DialogDescription>
+              {t("grocery.export.copyFallbackBody", {
+                defaultValue: "This browser didn't let us copy. Select the text below and copy it.",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            readOnly
+            value={copyFallback ?? ""}
+            onFocus={(e) => e.currentTarget.select()}
+            className="h-48 w-full rounded-md border border-input bg-background p-2 text-sm"
+            aria-label={t("grocery.export.copyFallbackTitle", { defaultValue: "Copy your list" })}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

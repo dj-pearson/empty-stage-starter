@@ -1,0 +1,609 @@
+/**
+ * How a food or recipe fits one specific child (contract C4).
+ *
+ * `is_safe` and `is_try_bite` are household flags on the food, so on their own
+ * they cannot say whether THIS kid eats it: a sibling's safe food can carry
+ * this child's allergen, or be on this child's dislike list. These helpers
+ * fold the kid's profile and their own plan history into one answer the
+ * pickers and the grid can badge from.
+ *
+ * `disliked_foods` and `always_eats_foods` hold either food ids or free-text
+ * names depending on which screen wrote them, so both are matched on id and on
+ * the lowercased, trimmed name.
+ *
+ * Pure: no React, no Supabase.
+ */
+
+import type { Food, Kid, PlanEntry, Recipe } from "@/types";
+import { worstFoodAllergen, type AllergenSeverity } from "./allergens";
+
+export type KidFitKid = Pick<Kid, "id" | "allergens" | "disliked_foods" | "always_eats_foods"> &
+  Partial<Pick<Kid, "allergen_severity">>;
+
+export type KidFitResult = "ate" | "tasted" | "refused";
+
+export interface KidFit {
+  /**
+   * The first of the kid's allergens this item carries, canonicalized, or null.
+   * Read from the food's allergen list and its name, through allergen families
+   * ("Almond flour" is a tree-nut hit).
+   */
+  allergen: string | null;
+  /**
+   * Severity every safety decision uses for `allergen`, or null when there is
+   * no hit. An allergy the parent recorded without a severity is "severe" here
+   * (owner decision 2026-09-24); `allergenSeverityRecorded` says which it was.
+   * Optional so older fixtures still type-check; read it through isSevereFit.
+   */
+  allergenSeverity?: AllergenSeverity | null;
+  /**
+   * False when `allergenSeverity` was not chosen by the parent but defaulted
+   * to severe. Copy must not claim "severe" as the parent's word in that case.
+   * Optional so older fixtures still type-check; read it through
+   * isFitSeverityRecorded.
+   */
+  allergenSeverityRecorded?: boolean;
+  disliked: boolean;
+  alwaysEats: boolean;
+  /**
+   * The food's household `is_safe` flag, copied as is. It is NOT per-kid: every
+   * sibling gets the same value. For "is this safe for THIS child", read the
+   * kid's own ladder and always-eats list (kidSafeFoodIds in kidProgress.ts).
+   */
+  safe: boolean;
+  tryBite: boolean;
+  /** Offers with a recorded result (ate + tasted + refused). */
+  tries: number;
+  ate: number;
+  /**
+   * Split of the remaining tries. Optional so fixtures written before they
+   * existed still type-check; getKidFoodFit and getKidRecipeFit always set them.
+   */
+  tasted?: number;
+  refused?: number;
+  /** Every past offer, logged or not. */
+  offered: number;
+  /** The most recent recorded result, by date. */
+  lastResult: KidFitResult | null;
+}
+
+export interface ResultStats {
+  tries: number;
+  ate: number;
+  tasted: number;
+  refused: number;
+  offered: number;
+  lastResult: KidFitResult | null;
+  /** Date key (YYYY-MM-DD) of lastResult; used to keep "last" honest. */
+  lastDate: string | null;
+}
+
+/** Per-food outcome counts for one kid, keyed by food id. */
+export type ResultIndex = Map<string, ResultStats>;
+
+const nameKey = (value: string | null | undefined): string =>
+  String(value ?? "").trim().toLowerCase();
+
+function listMatches(list: readonly string[] | null | undefined, food: Pick<Food, "id" | "name">): boolean {
+  if (!list || list.length === 0) return false;
+  const name = nameKey(food.name);
+  for (const raw of list) {
+    if (raw === food.id) return true;
+    const k = nameKey(raw);
+    if (k && k === name) return true;
+  }
+  return false;
+}
+
+function emptyStats(): ResultStats {
+  return { tries: 0, ate: 0, tasted: 0, refused: 0, offered: 0, lastResult: null, lastDate: null };
+}
+
+/**
+ * Build the outcome index for one kid from plan history. Entries for other
+ * kids are ignored. Only entries dated before `before` (a YYYY-MM-DD key,
+ * exclusive) count when it is given, so the index can describe "how it went
+ * last time" without counting today's still-open plan.
+ *
+ * Warning: without `before`, a raw plan array counts FUTURE offers too. Every
+ * planned dinner next week lands in `offered`, so a caller that reads
+ * `offered` as "has been put in front of the kid" must pass `before`
+ * (tomorrow's key to include today, today's key to exclude it).
+ */
+export function buildResultIndex(
+  planEntries: readonly PlanEntry[],
+  kidId: string,
+  before?: string,
+): ResultIndex {
+  const index: ResultIndex = new Map();
+  for (const entry of planEntries) {
+    if (entry.kid_id !== kidId || !entry.food_id) continue;
+    const date = typeof entry.date === "string" ? entry.date.slice(0, 10) : "";
+    if (before && date && date >= before) continue;
+    let stats = index.get(entry.food_id);
+    if (!stats) {
+      stats = emptyStats();
+      index.set(entry.food_id, stats);
+    }
+    stats.offered++;
+    const result = entry.result;
+    if (result === "ate" || result === "tasted" || result === "refused") {
+      stats.tries++;
+      stats[result]++;
+      if (stats.lastDate === null || date >= stats.lastDate) {
+        stats.lastDate = date;
+        stats.lastResult = result;
+      }
+    }
+  }
+  return index;
+}
+
+function statsFor(index: ResultIndex, foodId: string): ResultStats {
+  return index.get(foodId) ?? emptyStats();
+}
+
+function fitFromStats(
+  food: Pick<Food, "is_safe" | "is_try_bite">,
+  allergen: string | null,
+  allergenSeverity: AllergenSeverity | null,
+  allergenSeverityRecorded: boolean,
+  disliked: boolean,
+  alwaysEats: boolean,
+  stats: ResultStats,
+): KidFit {
+  return {
+    allergen,
+    allergenSeverity,
+    allergenSeverityRecorded,
+    disliked,
+    alwaysEats,
+    safe: Boolean(food.is_safe),
+    tryBite: Boolean(food.is_try_bite),
+    tries: stats.tries,
+    ate: stats.ate,
+    tasted: stats.tasted,
+    refused: stats.refused,
+    offered: stats.offered,
+    lastResult: stats.lastResult,
+  };
+}
+
+/**
+ * Fit of one food for one kid. `history` may be the full plan (other kids are
+ * filtered out) or a prebuilt ResultIndex when a caller scores many foods.
+ *
+ * Warning: a raw plan array is indexed with no `before` bound, so future
+ * offers count in `offered`. Pass a ResultIndex built with `before` when the
+ * answer must describe only what has already happened.
+ */
+export function getKidFoodFit(
+  kid: KidFitKid,
+  food: Pick<Food, "id" | "name" | "allergens" | "is_safe" | "is_try_bite">,
+  history: readonly PlanEntry[] | ResultIndex,
+): KidFit {
+  const index = history instanceof Map ? history : buildResultIndex(history, kid.id);
+  // Worst hit, not first: a mild milk tag listed before a severe egg tag must
+  // not hide the egg.
+  const hit = worstFoodAllergen(kid, food);
+  return fitFromStats(
+    food,
+    hit?.allergen ?? null,
+    hit?.severity ?? null,
+    hit?.recorded ?? false,
+    listMatches(kid.disliked_foods, food),
+    listMatches(kid.always_eats_foods, food),
+    statsFor(index, food.id),
+  );
+}
+
+/**
+ * Fit of a recipe for one kid, judged over the recipe's foods.
+ *
+ * - allergen: the first hit among the recipe's foods, in food_ids order.
+ * - disliked: at least one food is on the dislike list.
+ * - alwaysEats / safe: every resolvable food qualifies.
+ * - tryBite: at least one food is a try bite.
+ * - History: summed over the recipe's foods; lastResult is the most recent.
+ *
+ * Foods missing from `foodById` are skipped rather than guessed at.
+ */
+export function getKidRecipeFit(
+  kid: KidFitKid,
+  recipe: Pick<Recipe, "food_ids">,
+  foodById: ReadonlyMap<string, Food> | Readonly<Record<string, Food>>,
+  history: readonly PlanEntry[] | ResultIndex,
+): KidFit {
+  const index = history instanceof Map ? history : buildResultIndex(history, kid.id);
+  const lookup = (id: string): Food | undefined =>
+    foodById instanceof Map ? foodById.get(id) : (foodById as Readonly<Record<string, Food>>)[id];
+
+  const foods = (recipe.food_ids ?? [])
+    .map(lookup)
+    .filter((f): f is Food => Boolean(f));
+
+  let allergen: string | null = null;
+  let allergenSeverity: AllergenSeverity | null = null;
+  let allergenSeverityRecorded = false;
+  let disliked = false;
+  let tryBite = false;
+  let alwaysEats = foods.length > 0;
+  let safe = foods.length > 0;
+  const totals = emptyStats();
+
+  for (const food of foods) {
+    const fit = getKidFoodFit(kid, food, index);
+    if (allergen === null && fit.allergen) {
+      allergen = fit.allergen;
+      allergenSeverity = fit.allergenSeverity ?? null;
+      allergenSeverityRecorded = isFitSeverityRecorded(fit);
+    } else if (fit.allergen && isSevereFit(fit) && allergenSeverity !== "severe") {
+      // A severe hit anywhere in the recipe (recorded or unrated) outranks a
+      // milder first hit.
+      allergen = fit.allergen;
+      allergenSeverity = "severe";
+      allergenSeverityRecorded = isFitSeverityRecorded(fit);
+    }
+    if (fit.disliked) disliked = true;
+    if (fit.tryBite) tryBite = true;
+    if (!fit.alwaysEats) alwaysEats = false;
+    if (!fit.safe) safe = false;
+    const stats = statsFor(index, food.id);
+    totals.tries += stats.tries;
+    totals.ate += stats.ate;
+    totals.tasted += stats.tasted;
+    totals.refused += stats.refused;
+    totals.offered += stats.offered;
+    if (stats.lastResult && (totals.lastDate === null || (stats.lastDate ?? "") >= totals.lastDate)) {
+      totals.lastDate = stats.lastDate;
+      totals.lastResult = stats.lastResult;
+    }
+  }
+
+  return {
+    allergen,
+    allergenSeverity,
+    allergenSeverityRecorded,
+    disliked,
+    alwaysEats,
+    safe,
+    tryBite,
+    tries: totals.tries,
+    ate: totals.ate,
+    tasted: totals.tasted,
+    refused: totals.refused,
+    offered: totals.offered,
+    lastResult: totals.lastResult,
+  };
+}
+
+/**
+ * Acceptance rate as a planning weight: ate > tasted > untried > refused.
+ * Returns a positive number so it can be used directly for weighted picks.
+ */
+export function acceptanceWeight(stats: ResultStats | undefined): number {
+  if (!stats || stats.tries === 0) return 2; // untried: neutral
+  const score = (stats.ate * 4 + stats.tasted * 2.5 + stats.refused * 0.5) / stats.tries;
+  return Math.max(0.25, score);
+}
+
+/** acceptanceWeight for a KidFit, which carries the same counts as ResultStats. */
+export function fitAcceptanceWeight(fit: KidFit): number {
+  if (fit.tries === 0) return acceptanceWeight(undefined);
+  const tasted = fit.tasted ?? 0;
+  return acceptanceWeight({
+    tries: fit.tries,
+    ate: fit.ate,
+    tasted,
+    refused: fit.refused ?? Math.max(0, fit.tries - fit.ate - tasted),
+    offered: fit.offered,
+    lastResult: fit.lastResult,
+    lastDate: null,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// One item scored against several kids (lifted from MealQuickAddDrawer).
+// ---------------------------------------------------------------------------
+
+export interface KidHit {
+  kid: Kid;
+  fit: KidFit;
+}
+
+/**
+ * Whether an item is safe from allergens for every target kid.
+ *
+ * - hit: at least one kid's allergen is in it.
+ * - unknown: no hit found, but we could not check everything, because a kid's
+ *   allergy list is missing (redacted from the offline cache) or some of the
+ *   item's ingredients do not resolve to a food we know the allergens of.
+ * - safe: every kid's list was known and every ingredient was checked.
+ *
+ * Unknown is never shown as safe.
+ */
+export type AllergenStatus = "safe" | "hit" | "unknown";
+
+/** One item scored against every target kid. */
+export interface ItemFit {
+  perKid: KidHit[];
+  allergenKids: KidHit[];
+  dislikeKids: Kid[];
+  goToKids: Kid[];
+  /** Safe or go-to for every kid, no dislike, and allergenStatus is "safe". */
+  safeForAll: boolean;
+  trying: boolean;
+  tries: number;
+  lastResult: KidFit["lastResult"];
+  allergenStatus: AllergenStatus;
+  /** Ingredients that could not be checked for allergens. */
+  unchecked: number;
+}
+
+export interface SummarizeOptions {
+  /** Ingredients that could not be checked (see countUncheckedIngredients). */
+  unchecked?: number;
+  /** Kids whose allergy list is not known. Kids with `allergens` undefined count too. */
+  unknownKidIds?: readonly string[];
+}
+
+/** A kid's allergy list is unknown when the field is absent, not when it is empty. */
+export function isAllergyUnknown(kid: Pick<Kid, "allergens">): boolean {
+  return kid.allergens === undefined;
+}
+
+export function summarizeKidFits(perKid: KidHit[], opts: SummarizeOptions = {}): ItemFit {
+  const unchecked = Math.max(0, opts.unchecked ?? 0);
+  const unknownIds = new Set(opts.unknownKidIds ?? []);
+  const allergenKids = perKid.filter((h) => h.fit.allergen);
+  const dislikeKids = perKid.filter((h) => h.fit.disliked).map((h) => h.kid);
+  const goToKids = perKid.filter((h) => h.fit.alwaysEats).map((h) => h.kid);
+  const anyUnknownKid = perKid.some((h) => unknownIds.has(h.kid.id) || isAllergyUnknown(h.kid));
+  const allergenStatus: AllergenStatus =
+    allergenKids.length > 0 ? "hit" : anyUnknownKid || unchecked > 0 ? "unknown" : "safe";
+  const safeForAll =
+    allergenStatus === "safe" &&
+    perKid.length > 0 &&
+    perKid.every((h) => (h.fit.safe || h.fit.alwaysEats) && !h.fit.allergen && !h.fit.disliked);
+  const trying = allergenKids.length === 0 && perKid.some((h) => h.fit.tryBite);
+  const tries = perKid.reduce((m, h) => Math.max(m, h.fit.tries), 0);
+  const lastResult = perKid.length === 1 ? perKid[0].fit.lastResult : null;
+  return {
+    perKid,
+    allergenKids,
+    dislikeKids,
+    goToKids,
+    safeForAll,
+    trying,
+    tries,
+    lastResult,
+    allergenStatus,
+    unchecked,
+  };
+}
+
+export type FitGroup = "safe" | "trying" | "other";
+
+/** Safe for everyone first, then what a kid is working on, then the rest. */
+export function fitGroup(fit: ItemFit): FitGroup {
+  if (fit.allergenKids.length > 0) return "other";
+  if (fit.safeForAll) return "safe";
+  if (fit.trying) return "trying";
+  return "other";
+}
+
+type FoodLookup = ReadonlyMap<string, Food>;
+
+/**
+ * Ingredients whose allergens we cannot check: food_ids that do not resolve in
+ * `foodById`, plus recipe_ingredients rows with no food at all (typed-in
+ * ingredients, or an import nothing matched).
+ */
+/**
+ * A hit every safety decision treats as severe: recorded severe, or recorded
+ * with no severity (owner decision 2026-09-24). A fit with an allergen but no
+ * allergenSeverity at all (an older fixture or caller) is unrated, so severe.
+ */
+export function isSevereFit(fit: Pick<KidFit, "allergen" | "allergenSeverity"> | null | undefined): boolean {
+  return Boolean(fit?.allergen) && (fit?.allergenSeverity ?? "severe") === "severe";
+}
+
+/** Whether the parent chose the fit's severity, rather than it defaulting to severe. */
+export function isFitSeverityRecorded(
+  fit: Pick<KidFit, "allergenSeverity" | "allergenSeverityRecorded"> | null | undefined,
+): boolean {
+  return fit?.allergenSeverityRecorded ?? fit?.allergenSeverity != null;
+}
+
+/** A conflict treated as severe: recorded severe, or no severity recorded. */
+export function isSevereConflict(conflict: Pick<AllergenConflict<Pick<Kid, "id" | "allergens">>, "severity">): boolean {
+  return (conflict.severity ?? "severe") === "severe";
+}
+
+/** Whether the parent chose the conflict's severity, rather than it defaulting to severe. */
+export function isConflictSeverityRecorded(
+  conflict: Pick<AllergenConflict<Pick<Kid, "id" | "allergens">>, "severity" | "severityRecorded">,
+): boolean {
+  return conflict.severityRecorded ?? conflict.severity != null;
+}
+
+/** Conflicts treated as severe (recorded or unrated): never placed by a suggestion or auto-plan. */
+export function severeConflicts<K extends Pick<Kid, "id" | "allergens">>(
+  conflicts: readonly AllergenConflict<K>[],
+): AllergenConflict<K>[] {
+  return conflicts.filter(isSevereConflict);
+}
+
+/** True when any target kid has a severe (recorded or unrated) hit in this item. */
+export function hasSevereAllergenHit(fit: Pick<ItemFit, "allergenKids"> | null | undefined): boolean {
+  return Boolean(fit?.allergenKids.some((h) => isSevereFit(h.fit)));
+}
+
+export function countUncheckedIngredients(
+  recipe: Pick<Recipe, "food_ids" | "recipe_ingredients">,
+  foodById: FoodLookup,
+): number {
+  let n = 0;
+  for (const id of recipe.food_ids ?? []) if (!foodById.has(id)) n++;
+  for (const row of recipe.recipe_ingredients ?? []) if (row.food_id == null) n++;
+  return n;
+}
+
+export interface AllergenConflict<K extends Pick<Kid, "id" | "allergens"> = Kid> {
+  kid: K;
+  food: Food;
+  /** Canonical allergen name, e.g. "peanut". */
+  allergen: string;
+  /**
+   * Severity every safety decision uses: what the parent recorded, or "severe"
+   * when they recorded the allergy without one. Null only from older callers;
+   * read it through isSevereConflict.
+   */
+  severity: AllergenSeverity | null;
+  /**
+   * False when `severity` defaulted to severe because none was recorded.
+   * Optional so older fixtures still type-check; read it through
+   * isConflictSeverityRecorded.
+   */
+  severityRecorded?: boolean;
+}
+
+/**
+ * Every (kid, food) pair where the food carries one of the kid's allergens.
+ * Canonical matching, so a kid's "peanuts" matches a food's "en:peanuts";
+ * families and the food's name count too (matchingFoodAllergen).
+ * Foods missing from `foodById` are skipped: they are "unknown", not a hit.
+ */
+export function findAllergenConflicts<K extends Pick<Kid, "id" | "allergens">>(
+  kids: readonly K[],
+  foodIds: readonly string[],
+  foodById: FoodLookup,
+): AllergenConflict<K>[] {
+  const out: AllergenConflict<K>[] = [];
+  const foods = [...new Set(foodIds)]
+    .map((id) => foodById.get(id))
+    .filter((f): f is Food => Boolean(f));
+  for (const kid of kids) {
+    if (!kid.allergens || kid.allergens.length === 0) continue;
+    for (const food of foods) {
+      const hit = worstFoodAllergen(kid as Partial<Pick<Kid, "allergens" | "allergen_severity">>, food);
+      if (!hit) continue;
+      out.push({ kid, food, allergen: hit.allergen, severity: hit.severity, severityRecorded: hit.recorded });
+    }
+  }
+  return out;
+}
+
+/**
+ * Score every recipe against the target kids. History counts up to (not
+ * including) `todayKey`. One ResultIndex is built per kid and shared across
+ * all recipes, so the cost is kids x plan + recipes x kids x foods.
+ */
+export function buildRecipeFits(
+  recipes: readonly Recipe[],
+  targetKids: readonly Kid[],
+  foodById: FoodLookup,
+  planEntries: readonly PlanEntry[],
+  todayKey?: string,
+): Map<string, ItemFit> {
+  const indexes = new Map<string, ResultIndex>();
+  for (const k of targetKids) indexes.set(k.id, buildResultIndex(planEntries, k.id, todayKey));
+  const out = new Map<string, ItemFit>();
+  for (const recipe of recipes) {
+    const perKid = targetKids.map((k) => ({
+      kid: k,
+      fit: getKidRecipeFit(k, recipe, foodById, indexes.get(k.id) ?? new Map()),
+    }));
+    out.set(recipe.id, summarizeKidFits(perKid, { unchecked: countUncheckedIngredients(recipe, foodById) }));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Insights: what is working, and the try bite to plan next.
+// ---------------------------------------------------------------------------
+
+type InsightFood = Pick<Food, "id" | "name" | "allergens" | "is_safe" | "is_try_bite">;
+
+export interface ReliableFood<F extends InsightFood = InsightFood> {
+  food: F;
+  ate: number;
+  tries: number;
+}
+
+export interface ReliableFoodOptions {
+  /** Logged results needed before a food can count as reliable. */
+  minTries?: number;
+  /** Share of those results that must be 'ate'. */
+  minAteShare?: number;
+  limit?: number;
+}
+
+/**
+ * Foods this kid reliably eats, by logged results in `index`: at least
+ * `minTries` results with `minAteShare` or more of them eaten. A food carrying
+ * one of the kid's allergens, or on their dislike list, is never listed, even
+ * if the log says it was eaten. Most-eaten first; ties go to the higher share,
+ * then the name, so the list is the same on every render.
+ */
+export function selectReliableFoods<F extends InsightFood>(
+  index: ResultIndex,
+  foodsById: ReadonlyMap<string, F>,
+  kid: KidFitKid,
+  { minTries = 3, minAteShare = 0.67, limit = 3 }: ReliableFoodOptions = {},
+): ReliableFood<F>[] {
+  const out: ReliableFood<F>[] = [];
+  for (const [foodId, stats] of index) {
+    if (stats.tries < minTries || stats.tries === 0) continue;
+    if (stats.ate / stats.tries < minAteShare) continue;
+    const food = foodsById.get(foodId);
+    if (!food) continue;
+    const fit = getKidFoodFit(kid, food, index);
+    if (fit.allergen !== null || fit.disliked) continue;
+    out.push({ food, ate: stats.ate, tries: stats.tries });
+  }
+  out.sort(
+    (a, b) =>
+      b.ate - a.ate ||
+      b.ate / b.tries - a.ate / a.tries ||
+      a.food.name.localeCompare(b.food.name) ||
+      a.food.id.localeCompare(b.food.id),
+  );
+  return out.slice(0, Math.max(0, limit));
+}
+
+export interface TryNextPick<F extends InsightFood = InsightFood> {
+  food: F;
+  /** Date key (YYYY-MM-DD) of the tasted result. */
+  lastDate: string | null;
+}
+
+/**
+ * The try bite to plan again when the exposure ladder is off: a food marked
+ * is_try_bite whose most recent logged result was 'tasted', most recent
+ * first. A taste is the moment to offer it again; a refusal is not. Allergen
+ * and disliked foods are skipped.
+ */
+export function selectTryNextFromResults<F extends InsightFood>(
+  index: ResultIndex,
+  foods: readonly F[],
+  kid: KidFitKid,
+): TryNextPick<F> | null {
+  let best: TryNextPick<F> | null = null;
+  for (const food of foods) {
+    if (!food.is_try_bite) continue;
+    const stats = index.get(food.id);
+    if (!stats || stats.lastResult !== "tasted") continue;
+    const fit = getKidFoodFit(kid, food, index);
+    if (fit.allergen !== null || fit.disliked) continue;
+    const date = stats.lastDate ?? "";
+    if (
+      best === null ||
+      date > (best.lastDate ?? "") ||
+      (date === (best.lastDate ?? "") && food.name.localeCompare(best.food.name) < 0)
+    ) {
+      best = { food, lastDate: stats.lastDate };
+    }
+  }
+  return best;
+}

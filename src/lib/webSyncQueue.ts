@@ -320,6 +320,23 @@ export async function pendingWebOps(
   }
 }
 
+/** Fired on window whenever the queue gains or loses ops. */
+export const SYNC_QUEUE_EVENT = "eatpal:syncqueue";
+
+/**
+ * Tell the page the queue changed, so a row can show (or stop showing) that its
+ * change has not reached the server yet. Never throws: a runtime without
+ * `window` or CustomEvent must not turn a stored write into a failed one.
+ */
+export function notifySyncQueueChanged(): void {
+  try {
+    if (typeof window === "undefined" || typeof CustomEvent === "undefined") return;
+    window.dispatchEvent(new CustomEvent(SYNC_QUEUE_EVENT));
+  } catch {
+    /* nothing listening is not an error */
+  }
+}
+
 /**
  * Queue one write for replay. Returns whether it was durably stored -- the
  * caller keeps its optimistic row only on a true, so a queue that could not
@@ -338,6 +355,7 @@ export async function queueWrite(
     // enqueue swallows a storage failure so the caller's write survives, so
     // "did it land" is a separate question from "did enqueue throw".
     const held = await queue.peek();
+    notifySyncQueueChanged();
     return held.some((op) => op.kind === kind);
   } catch {
     return false;
@@ -361,6 +379,7 @@ export async function queueWrites(
     const queue = createWebSyncQueue(userId, storage);
     for (const payload of payloads) await queue.enqueue(kind, payload);
     const held = await queue.peek();
+    notifySyncQueueChanged();
     return held.filter((op) => op.kind === kind).length >= payloads.length;
   } catch {
     return false;

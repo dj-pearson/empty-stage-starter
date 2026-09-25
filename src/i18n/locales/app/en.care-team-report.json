@@ -1,0 +1,17 @@
+{
+  "foodJournal": {
+    "careTeam": {
+      "role": "Parent",
+      "previewTitle": "Report for the care team",
+      "previewBody": "This is exactly what will be sent. Kids appear by first name only, and household notes are signed \"Parent\" instead of by name.",
+      "copy": "Copy",
+      "share": "Share"
+    }
+  },
+  "foodLadder": {
+    "report": {
+      "basedOnTries_one": "Based on {{count}} logged try",
+      "basedOnTries_other": "Based on {{count}} logged tries"
+    }
+  }
+}

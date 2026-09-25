@@ -151,8 +151,12 @@ export default function Onboarding() {
 
       <main id="main-content" className="container mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 p-4 sm:p-6">
         <div className="space-y-2">
-          <Progress value={(step / totalSteps) * 100} className="h-2" />
-          <p className="text-sm text-muted-foreground">
+          <Progress
+            value={(step / totalSteps) * 100}
+            className="h-2"
+            aria-labelledby="onboarding-step"
+          />
+          <p id="onboarding-step" className="text-sm text-muted-foreground">
             Step {step} of {totalSteps}
           </p>
         </div>

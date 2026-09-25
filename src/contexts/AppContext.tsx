@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useEffect, useRef, createContext, useConte
 import { Food, Kid, PlanEntry, GroceryItem, Recipe } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { generateId } from "@/lib/utils";
+import { seedStarterFoods } from "@/lib/starterFoods";
 import { getStorage } from "@/lib/platform";
 import { logger } from "@/lib/logger";
 import { scrubOnSignOut } from "@/lib/signOutScrub";
@@ -11,13 +12,13 @@ import { redactSnapshotForCache } from "@/lib/cacheSnapshot";
 import { mergeWindowedPlanEntries } from "@/lib/planWindow";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { FoodsProvider, useFoods } from "./FoodsContext";
-import { KidsProvider, useKids } from "./KidsContext";
+import { KidsProvider, useKids, type KidPatch } from "./KidsContext";
 import { RecipesProvider, useRecipes, parseRecipeRows, RECIPE_WITH_INGREDIENTS_SELECT, selectRecipesWithFallback } from "./RecipesContext";
 import { fetchAllRows, ROW_CEILING } from "@/lib/fetchAllRows";
 import { toISODate, addIsoDays } from "@/lib/date-utils";
 import { parseKidRows, parseFoodRows, parsePlanEntryRows, parseGroceryItemRows } from "@/lib/normalizeEntities";
-import { PlanProvider, usePlan } from "./PlanContext";
-import { GroceryProvider, useGrocery } from "./GroceryContext";
+import { PlanProvider, usePlan, type CopyWeekResult, type PlanDeleteResult } from "./PlanContext";
+import { GroceryProvider, useGrocery, type GroceryMergeResult } from "./GroceryContext";
 import { InventoryProvider, useInventory, parseMovementRows, parseStockRows, MOVEMENT_WINDOW_DAYS, MOVEMENT_LIMIT } from "./InventoryContext";
 import { toast } from "sonner";
 import { compareLedgerToLegacy, summarizeDivergences, type ComparableItem } from "@/lib/stockComparison";
@@ -45,12 +46,20 @@ interface AppContextType {
   activeKidId: string | null;
   planEntries: PlanEntry[];
   groceryItems: GroceryItem[];
+  /** See GroceryContext: false until the cache held rows or the server load settled. */
+  groceryHydrated: boolean;
+  /** See FoodsContext: false until the cache held foods or the server load settled. */
+  foodsHydrated: boolean;
+  /** See KidsContext: false until the cache held kids or the server load settled. */
+  kidsHydrated: boolean;
+  /** See KidsContext: the last failed kids read, or null. */
+  kidsLoadError: string | null;
   addFood: (food: Omit<Food, "id">) => Promise<boolean>;
   updateFood: (id: string, food: Partial<Food>) => void;
   deleteFood: (id: string) => void;
-  addKid: (kid: Omit<Kid, "id">) => Promise<boolean>;
-  updateKid: (id: string, kid: Partial<Kid>) => void;
-  deleteKid: (id: string) => void;
+  addKid: (kid: Omit<Kid, "id" | "allergens"> & { allergens?: string[] | null }) => Promise<boolean>;
+  updateKid: (id: string, kid: KidPatch) => Promise<boolean>;
+  deleteKid: (id: string) => Promise<boolean>;
   setActiveKid: (id: string | null) => void;
   setActiveKidId: (id: string | null) => void;
   addRecipe: (recipe: Omit<Recipe, "id">) => Promise<Recipe>;
@@ -63,6 +72,8 @@ interface AppContextType {
   setGroceryItems: (items: GroceryItem[]) => void;
   addGroceryItem: (item: Omit<GroceryItem, "id" | "checked">) => void;
   addGroceryItemsMerged: (items: GroceryAddInput[]) => number;
+  mergeGroceryItems: (items: GroceryAddInput[], opts?: { defaultListId?: string | null }) => GroceryMergeResult;
+  restoreGroceryItems: (rows: GroceryItem[]) => void;
   toggleGroceryItem: (id: string) => void;
   updateGroceryItem: (id: string, updates: Partial<GroceryItem>) => void;
   deleteGroceryItem: (id: string) => void;
@@ -74,9 +85,9 @@ interface AppContextType {
   addFoods: (foods: Omit<Food, "id">[]) => Promise<boolean>;
   updateFoods: (updates: { id: string; updates: Partial<Food> }[]) => Promise<void>;
   deleteFoods: (ids: string[]) => Promise<void>;
-  copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<void>;
-  deleteWeekPlan: (weekStart: string, kidId: string) => Promise<void>;
-  refreshFoods?: () => Promise<void>;
+  copyWeekPlan: (fromDate: string, toDate: string, kidId: string) => Promise<CopyWeekResult>;
+  deleteWeekPlan: (weekStart: string, kidId: string) => Promise<PlanDeleteResult>;
+  refreshFoods?: () => Promise<{ ok: boolean }>;
   refreshRecipes?: () => Promise<void>;
   refreshKids?: () => Promise<void>;
 }
@@ -100,32 +111,14 @@ const LEDGER_COMPARISON_DEBOUNCE_MS = 1000;
  */
 export const RETIRED_ROW_CAPS = { foods: 500, recipes: 200, groceryItems: 500 } as const;
 
-const STARTER_FOODS: Omit<Food, "id">[] = [
-  { name: "Chicken Nuggets", category: "protein", is_safe: true, is_try_bite: false },
-  { name: "Mac & Cheese", category: "carb", is_safe: true, is_try_bite: false },
-  { name: "Pizza", category: "carb", is_safe: true, is_try_bite: false },
-  { name: "Yogurt", category: "dairy", is_safe: true, is_try_bite: false },
-  { name: "Apple Slices", category: "fruit", is_safe: true, is_try_bite: false },
-  { name: "Banana", category: "fruit", is_safe: true, is_try_bite: false },
-  { name: "Goldfish Crackers", category: "snack", is_safe: true, is_try_bite: false },
-  { name: "String Cheese", category: "dairy", is_safe: true, is_try_bite: false },
-  { name: "Grapes", category: "fruit", is_safe: true, is_try_bite: false },
-  { name: "Carrots", category: "vegetable", is_safe: true, is_try_bite: false },
-  { name: "Broccoli", category: "vegetable", is_safe: false, is_try_bite: true },
-  { name: "Strawberries", category: "fruit", is_safe: false, is_try_bite: true },
-  { name: "Hummus", category: "protein", is_safe: false, is_try_bite: true },
-  { name: "Avocado", category: "vegetable", is_safe: false, is_try_bite: true },
-  { name: "Turkey Slices", category: "protein", is_safe: false, is_try_bite: true },
-];
-
 /** Inner component that composes all domain contexts into a single AppContext for backward compatibility */
 function AppContextComposer({ children }: { children: React.ReactNode }) {
   const { userId, householdId } = useAuth();
-  const { foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods } = useFoods();
-  const { kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids } = useKids();
+  const { foods, setFoods, addFood, updateFood, deleteFood, addFoods, updateFoods, deleteFoods, refreshFoods, foodsHydrated, setFoodsHydrated } = useFoods();
+  const { kids, setKids, activeKidId, setActiveKidId, addKid, updateKid, deleteKid, setActiveKid, refreshKids, kidsHydrated, setKidsHydrated, kidsLoadError, setKidsLoadError } = useKids();
   const { recipes, setRecipes, addRecipe, updateRecipe, deleteRecipe, refreshRecipes } = useRecipes();
   const { planEntries, setPlanEntries, setPlanEntriesState, addPlanEntry, addPlanEntries, updatePlanEntry, copyWeekPlan, deleteWeekPlan } = usePlan();
-  const { groceryItems, setGroceryItems, setGroceryItemsState, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
+  const { groceryItems, groceryHydrated, setGroceryHydrated, setGroceryItems, setGroceryItemsState, addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem, updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems } = useGrocery();
   // US-671: the ledger slices. Read-only here; nothing in the composer appends.
   const { movements, setMovements, itemStock, setItemStock, stockRows, ledgerReadsEnabled } = useInventory();
 
@@ -144,8 +137,42 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   // cross-device-edited row — a violation of the US-341 precedence contract).
   const serverLoadAppliedRef = useRef(false);
 
+  // The scope the latest load effect is for, so a load that settles after the
+  // account or household changed does not mark the new scope's list ready.
+  const currentScopeRef = useRef<string | null>(null);
+
+  // The 'My Child' placeholder is for the signed-out/local app only. A
+  // signed-in parent with an empty cache must never see a child they did not
+  // add, so the mount hydrate checks for a session before seeding one, and
+  // the id is kept so a session that resolves later can take it back out.
+  const userIdRef = useRef<string | null>(userId);
+  userIdRef.current = userId;
+  const placeholderKidIdRef = useRef<string | null>(null);
+  // Set when kidsHydrated was granted with no session (the local app). A
+  // sign-in afterwards starts a server load, which is not settled yet.
+  const localKidsHydratedRef = useRef(false);
+
   // Load from storage on mount (platform-aware)
   useEffect(() => {
+    const hasSession = async (): Promise<boolean> => {
+      if (userIdRef.current) return true;
+      try {
+        const { data } = await supabase.auth.getSession();
+        return Boolean(data?.session?.user);
+      } catch {
+        return false;
+      }
+    };
+    const seedLocalPlaceholder = async () => {
+      if (await hasSession()) return;
+      if (serverLoadAppliedRef.current) return;
+      const defaultKid = { id: generateId(), name: "My Child", age: 5 };
+      placeholderKidIdRef.current = defaultKid.id;
+      setKids([defaultKid]);
+      setActiveKidId(defaultKid.id);
+      localKidsHydratedRef.current = true;
+      setKidsHydrated(true);
+    };
     const loadData = async () => {
       try {
         const storage = await getStorage();
@@ -156,31 +183,45 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         if (stored) {
           const data = JSON.parse(stored);
           setFoods(data.foods || []);
+          // Same rule as the grocery list below: cached foods are something
+          // true to show while the server answers; an empty cache is not.
+          if (Array.isArray(data.foods) && data.foods.length > 0) {
+            setFoodsHydrated(true);
+          }
           setKids(data.kids || []);
+          if (Array.isArray(data.kids) && data.kids.length > 0) {
+            setKidsHydrated(true);
+          } else if (!(await hasSession())) {
+            // Signed out, so no server load is coming to settle this.
+            localKidsHydratedRef.current = true;
+            setKidsHydrated(true);
+          }
           setRecipes(data.recipes || []);
           setActiveKidId(data.activeKidId || (data.kids?.[0]?.id ?? null));
           setPlanEntriesState(data.planEntries || []);
           setGroceryItemsState(data.groceryItems || []);
+          // A cached list is something true to show while the server answers.
+          // An empty cache is not: "your list is empty" before the load lands
+          // is a claim nobody has checked yet.
+          if (Array.isArray(data.groceryItems) && data.groceryItems.length > 0) {
+            setGroceryHydrated(true);
+          }
           // US-671: the ledger slices hydrate from the cache like every other
           // domain, so an offline pantry still has a balance to render.
           setMovements(parseMovementRows(data.movements || []));
           setItemStock(parseStockRows(data.itemStock || []));
         } else {
-          const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+          const starterFoods = seedStarterFoods(generateId);
           setFoods(starterFoods);
-          const defaultKid = { id: generateId(), name: "My Child", age: 5 };
-          setKids([defaultKid]);
-          setActiveKidId(defaultKid.id);
+          await seedLocalPlaceholder();
         }
       } catch (error) {
         logger.error("Error loading data from storage:", error);
         // Same precedence guard: don't seed starter data over server data.
         if (serverLoadAppliedRef.current) return;
-        const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+        const starterFoods = seedStarterFoods(generateId);
         setFoods(starterFoods);
-        const defaultKid = { id: generateId(), name: "My Child", age: 5 };
-        setKids([defaultKid]);
-        setActiveKidId(defaultKid.id);
+        await seedLocalPlaceholder();
       }
     };
     loadData();
@@ -252,9 +293,23 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     // prior sign-out (US-537).
     signedOutRef.current = false;
     const scope = `${userId}:${householdId}`;
+    currentScopeRef.current = scope;
     if (loadedScopeRef.current === scope) return;
     const prevUserId = loadedScopeRef.current?.split(':')[0] ?? null;
     loadedScopeRef.current = scope;
+
+    // A placeholder seeded before the session resolved is not this account's
+    // child. Take it out rather than wait on the load to replace it.
+    const placeholderId = placeholderKidIdRef.current;
+    if (placeholderId) {
+      placeholderKidIdRef.current = null;
+      setKids((prev) => prev.filter((k) => k.id !== placeholderId));
+      setActiveKidId((prev) => (prev === placeholderId ? null : prev));
+    }
+    if (localKidsHydratedRef.current) {
+      localKidsHydratedRef.current = false;
+      setKidsHydrated(false);
+    }
 
     // US-538 leak guard: if a DIFFERENT user resolves on this device without an
     // intervening SIGNED_OUT event (account switch, token change), clear the
@@ -271,6 +326,10 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setActiveKidId(null);
       setPlanEntriesState([]);
       setGroceryItemsState([]);
+      setGroceryHydrated(false);
+      setFoodsHydrated(false);
+      setKidsHydrated(false);
+      setKidsLoadError(null);
       setMovements([]);
       setItemStock([]);
     }
@@ -364,6 +423,14 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         // slices. Mark it so a late mount cache-hydrate cannot overwrite them.
         serverLoadAppliedRef.current = true;
 
+        // A failed kids read leaves the cached children on screen; the page
+        // says it is showing saved data instead of pretending it refreshed.
+        if (kidsRes.error) {
+          const message = (kidsRes.error as { message?: unknown }).message;
+          setKidsLoadError(typeof message === 'string' && message ? message : 'Could not load children');
+        } else {
+          setKidsLoadError(null);
+        }
         if (kidsRes.data) {
           // US-333: normalize on load so the shape matches the realtime path.
           const loadedKids = parseKidRows(kidsRes.data as unknown[]);
@@ -509,11 +576,22 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
         }
         if (outcome === 'not-auth-error') {
           logger.error('Error loading user data from Supabase:', error);
+          if (currentScopeRef.current === scope) {
+            setKidsLoadError(error instanceof Error ? error.message : 'Could not load children');
+          }
         }
       }
     };
 
-    loadUserData();
+    // Settled either way -- loaded, failed, or bounced to /auth -- the list
+    // has stopped waiting on this load. Only for the scope it was started for.
+    void loadUserData().finally(() => {
+      if (currentScopeRef.current === scope) {
+        setGroceryHydrated(true);
+        setFoodsHydrated(true);
+        setKidsHydrated(true);
+      }
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, householdId]);
 
@@ -525,6 +603,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event !== 'SIGNED_OUT') return;
       loadedScopeRef.current = null;
+      currentScopeRef.current = null;
       serverLoadAppliedRef.current = false;
       // US-537: block + cancel any pending debounced save so it can't re-write
       // the cache (with child PII) after we scrub it below.
@@ -539,6 +618,12 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
       setActiveKidId(null);
       setPlanEntriesState([]);
       setGroceryItemsState([]);
+      setGroceryHydrated(false);
+      setFoodsHydrated(false);
+      setKidsHydrated(false);
+      setKidsLoadError(null);
+      placeholderKidIdRef.current = null;
+      localKidsHydratedRef.current = false;
       setMovements([]);
       setItemStock([]);
       getStorage()
@@ -698,7 +783,7 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   }, [setFoods, setKids, setRecipes, setActiveKidId, setPlanEntriesState, setGroceryItemsState]);
 
   const resetAllData = useCallback(() => {
-    const starterFoods = STARTER_FOODS.map(f => ({ ...f, id: generateId() }));
+    const starterFoods = seedStarterFoods(generateId);
     setFoods(starterFoods);
     const defaultKid = { id: generateId(), name: "My Child", age: 5 };
     setKids([defaultKid]);
@@ -708,24 +793,26 @@ function AppContextComposer({ children }: { children: React.ReactNode }) {
   }, [setFoods, setKids, setActiveKidId, setPlanEntriesState, setGroceryItemsState]);
 
   const value = useMemo<AppContextType>(() => ({
-    foods, kids, recipes, activeKidId, planEntries, groceryItems,
+    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated, foodsHydrated,
+    kidsHydrated, kidsLoadError,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
     setPlanEntries, addPlanEntry, addPlanEntries, updatePlanEntry,
-    setGroceryItems, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem,
+    setGroceryItems, addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems,
     exportData, importData, resetAllData,
     addFoods, updateFoods, deleteFoods,
     copyWeekPlan, deleteWeekPlan,
     refreshFoods, refreshRecipes, refreshKids,
   }), [
-    foods, kids, recipes, activeKidId, planEntries, groceryItems,
+    foods, kids, recipes, activeKidId, planEntries, groceryItems, groceryHydrated, foodsHydrated,
+    kidsHydrated, kidsLoadError,
     addFood, updateFood, deleteFood,
     addKid, updateKid, deleteKid, setActiveKid, setActiveKidId,
     addRecipe, updateRecipe, deleteRecipe,
     setPlanEntries, addPlanEntry, addPlanEntries, updatePlanEntry,
-    setGroceryItems, addGroceryItem, addGroceryItemsMerged, toggleGroceryItem,
+    setGroceryItems, addGroceryItem, addGroceryItemsMerged, mergeGroceryItems, restoreGroceryItems, toggleGroceryItem,
     updateGroceryItem, deleteGroceryItem, deleteGroceryItems, clearCheckedGroceryItems,
     exportData, importData, resetAllData,
     addFoods, updateFoods, deleteFoods,

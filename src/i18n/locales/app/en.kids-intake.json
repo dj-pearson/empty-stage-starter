@@ -1,0 +1,239 @@
+{
+  "allergens": {
+    "eggs": "eggs",
+    "fish": "fish",
+    "milk": "milk",
+    "peanuts": "peanuts",
+    "sesame": "sesame",
+    "shellfish": "shellfish",
+    "soy": "soy",
+    "tree_nuts": "tree nuts",
+    "wheat": "wheat"
+  },
+  "kids": {
+    "intake": {
+      "allergies": {
+        "crossContact": "Reacts to cross-contact (shared pans, traces)",
+        "heading": "Food allergies",
+        "help": "Meal plans and recipes skip any food that carries one of these.",
+        "other": "Other allergen",
+        "otherHint": "Type one and press Enter, for example kiwi or mustard.",
+        "pickerLegend": "Known food allergies",
+        "restrictions": "Dietary restrictions",
+        "severity": {
+          "mild": "Mild",
+          "moderate": "Moderate",
+          "severe": "Severe"
+        },
+        "severityHeading": "How severe is each reaction?",
+        "severityPlaceholder": "Select",
+        "status": {
+          "has": "Has allergies",
+          "none": "No known allergies",
+          "unsure": "Not sure yet"
+        },
+        "statusLegend": "Does {{name}} have food allergies?"
+      },
+      "avoid": {
+        "label": "Foods {{name}} strongly dislikes or refuses",
+        "optional": "Optional. Foods listed here are left out of suggestions.",
+        "placeholder": "e.g. mushrooms, onions"
+      },
+      "back": "Back",
+      "basics": {
+        "cm": "Height (cm)",
+        "concerns": "Health conditions or growth concerns (select any that apply)",
+        "feet": "Height (feet)",
+        "gender": "Gender (optional)",
+        "genderPlaceholder": "Select gender",
+        "genders": {
+          "female": "Female",
+          "male": "Male",
+          "other": "Other",
+          "preferNot": "Prefer not to say"
+        },
+        "goals": "Health goals (optional)",
+        "imperial": "Imperial (ft/lb)",
+        "inches": "Height (inches)",
+        "kg": "Weight (kg)",
+        "metric": "Metric (cm/kg)",
+        "pounds": "Weight (lb)",
+        "units": "Measurement units"
+      },
+      "behavior": {
+        "habits": {
+          "brands": "Only eats specific brands",
+          "mixed": "Refuses mixed foods (foods touching)",
+          "prepared": "Food must be prepared a certain way",
+          "refusesNew": "Refuses to try new foods",
+          "sameFoods": "Eats the same foods every day",
+          "upset": "Gets upset when new foods are presented"
+        },
+        "habitsLegend": "Eating habits (select all that apply)",
+        "variety": {
+          "limited": "Limited variety (10-15 foods)",
+          "moderate": "Eats moderately (15-30 foods)",
+          "veryLimited": "Very limited (fewer than 10 foods)",
+          "wide": "Eats a wide variety (30+ different foods regularly)"
+        },
+        "varietyHint": "Pick the one closest to how many foods they eat.",
+        "varietyLegend": "How would you describe {{name}}'s current eating habits?",
+        "willingness": {
+          "hesitant": "Hesitant but will sometimes try",
+          "refuses": "Refuses to try new foods entirely",
+          "veryHesitant": "Very hesitant, rarely tries new foods",
+          "willing": "Willing and curious about new foods"
+        },
+        "willingnessLegend": "Willingness to try new foods"
+      },
+      "chips": {
+        "remove": "Remove {{item}}"
+      },
+      "closeGuard": {
+        "description": "You've changed {{name}}'s profile. Save what you have and finish the rest later, or discard the changes.",
+        "discard": "Discard",
+        "keepEditing": "Keep editing",
+        "saveLater": "Save and finish later",
+        "title": "Keep these answers?"
+      },
+      "complete": "Complete Profile",
+      "concerns": {
+        "adhd": "ADHD",
+        "constipation": "Constipation",
+        "diabetes": "Diabetes",
+        "iron": "Iron deficiency",
+        "overweight": "Overweight",
+        "underweight": "Underweight"
+      },
+      "errors": {
+        "allergens": "Each allergen needs a name of 50 characters or fewer, and there can be at most 20.",
+        "foods": "Keep each food under 100 characters, and the list to 50 foods.",
+        "gender": "Pick one of the gender options, or leave it blank.",
+        "generic": "One of these answers couldn't be saved. Check it and try again.",
+        "height": "Height needs to be between 40 and 220 cm (about 1 ft 4 in to 7 ft 2 in).",
+        "notes": "The eating habit notes are too long to save.",
+        "saveFailed": "Couldn't save. Your answers are still here, so try again.",
+        "weight": "Weight needs to be between 1 and 200 kg (about 2 to 440 lb)."
+      },
+      "goals": {
+        "gainWeight": "Gain weight",
+        "nutrition": "Better nutrition",
+        "protein": "More protein",
+        "sugar": "Reduce sugar",
+        "vegetables": "Increase vegetable intake"
+      },
+      "loadError": "Couldn't load this profile, so it can't be edited right now",
+      "next": "Next",
+      "pickiness": {
+        "extremely_picky": "Extremely picky",
+        "not_picky": "Not picky",
+        "somewhat_picky": "Somewhat picky",
+        "very_picky": "Very picky"
+      },
+      "preferences": {
+        "alwaysEats": "Foods they eat every day",
+        "alwaysEatsHint": "These are the safe foods new meals are built around. Press Enter or type a comma after each.",
+        "alwaysEatsPlaceholder": "e.g. chicken nuggets, mac and cheese",
+        "favorites": "Favorite foods",
+        "favoritesPlaceholder": "e.g. apples, chicken, pasta",
+        "intro": "Tell us what {{name}} regularly eats, so suggestions start from foods they know."
+      },
+      "restrictions": {
+        "dairyFree": "Dairy-free",
+        "glutenFree": "Gluten-free",
+        "halal": "Halal",
+        "kosher": "Kosher",
+        "vegan": "Vegan",
+        "vegetarian": "Vegetarian"
+      },
+      "review": {
+        "allergies": "Allergies",
+        "alwaysEats": "Eats every day",
+        "avoids": "Avoids: {{list}}",
+        "crossContact": "Reacts to cross-contact",
+        "description": "Check {{name}}'s answers before saving.",
+        "dislikes": "Dislikes",
+        "eating": "Eating habits",
+        "edit": "Edit",
+        "editAria": "Edit {{section}}",
+        "favorites": "Favorite foods",
+        "goals": "Goals and health",
+        "heading": "Profile summary",
+        "likes": "Likes: {{list}}",
+        "notAnswered": "Not answered",
+        "restrictions": "Dietary restrictions",
+        "severityUnknown": "severity not set",
+        "textures": "Textures"
+      },
+      "saved": "{{name}}'s profile is saved",
+      "savedForLater": "Saved. You can finish {{name}}'s profile later.",
+      "saving": "Saving...",
+      "stepOf": "Step {{n}} of {{total}}:",
+      "steps": {
+        "allergies": {
+          "description": "Safety first",
+          "title": "Allergies and restrictions"
+        },
+        "avoid": {
+          "description": "Dislikes (optional)",
+          "title": "Foods to avoid"
+        },
+        "basics": {
+          "description": "Health and growth",
+          "title": "Basic information"
+        },
+        "behavior": {
+          "description": "Current habits",
+          "title": "Eating behavior"
+        },
+        "preferences": {
+          "description": "What they eat",
+          "title": "Food preferences"
+        },
+        "review": {
+          "description": "Check before saving",
+          "title": "Review"
+        },
+        "texture": {
+          "description": "Sensitivities",
+          "title": "Texture and sensory"
+        }
+      },
+      "subtitle": "A few questions so meal plans fit {{name}}. Skip anything you're not sure about.",
+      "texture": {
+        "avoid": {
+          "chewy": "Chewy",
+          "crunchy": "Crunchy",
+          "lumpy": "Lumpy",
+          "mushy": "Soft/mushy",
+          "slimy": "Slimy",
+          "touching": "Foods touching each other",
+          "wet": "Wet"
+        },
+        "avoidLegend": "Which textures does {{name}} avoid?",
+        "levelLegend": "Does {{name}} have texture sensitivities?",
+        "levels": {
+          "mild": "Mild, dislikes 1-2 specific textures",
+          "none": "No texture issues, eats all textures",
+          "severe": "Severe, texture aversions limit the diet a lot",
+          "strong": "Strong, avoids several textures"
+        },
+        "like": {
+          "chewy": "Chewy",
+          "crispy": "Crispy",
+          "crunchy": "Crunchy",
+          "smooth": "Smooth",
+          "soft": "Soft"
+        },
+        "likeLegend": "Textures they like",
+        "short": {
+          "mild": "Mild",
+          "none": "None",
+          "severe": "Severe",
+          "strong": "Strong"
+        }
+      },
+      "title": "{{name}}'s profile questionnaire"
+    }
+  }
+}

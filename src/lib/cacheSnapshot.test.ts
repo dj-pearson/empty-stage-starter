@@ -26,6 +26,35 @@ describe("redactKidForCache (US-537)", () => {
     }
   });
 
+  it("drops the health and profile fields added with the Kids page rework", () => {
+    const row = {
+      ...fullKid(),
+      allergen_severity: { peanuts: "severe" },
+      cross_contamination_sensitive: true,
+      nutrition_concerns: ["low iron"],
+      behavioral_notes: "gags on mixed textures",
+      gender: "female",
+      height_cm: 110,
+      weight_kg: 19,
+      eating_behavior: "grazer",
+    } as unknown as Kid;
+    const out = redactKidForCache(row) as unknown as Record<string, unknown>;
+    for (const field of [
+      "allergen_severity",
+      "cross_contamination_sensitive",
+      "nutrition_concerns",
+      "behavioral_notes",
+      "gender",
+      "height_cm",
+      "weight_kg",
+      "favorite_foods",
+      "eating_behavior",
+    ]) {
+      expect(field in out, `expected ${field} to be redacted`).toBe(false);
+    }
+    expect(JSON.stringify(redactSnapshotForCache({ kids: [row] }))).not.toContain("severe");
+  });
+
   it("does not mutate the original kid", () => {
     const kid = fullKid();
     redactKidForCache(kid);

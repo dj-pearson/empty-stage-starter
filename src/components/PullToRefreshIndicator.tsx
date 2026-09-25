@@ -1,5 +1,7 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Loader2, ArrowDown, Check } from "lucide-react";
+import "@/i18n/appLocale";
 
 interface PullToRefreshIndicatorProps {
   pullDistance: number;
@@ -18,13 +20,17 @@ export function PullToRefreshIndicator({
   threshold = 80,
   className,
 }: PullToRefreshIndicatorProps) {
+  const { t } = useTranslation();
   const progress = Math.min((pullDistance / threshold) * 100, 100);
   const shouldTrigger = pullDistance >= threshold;
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={cn(
-        "absolute top-0 left-0 right-0 flex items-center justify-center transition-all duration-200",
+        // top-14: below the 56px mobile header, which would otherwise cover it.
+        "pointer-events-none fixed top-14 left-0 right-0 z-30 flex items-center justify-center overflow-hidden motion-safe:transition-all motion-safe:duration-200",
         className
       )}
       style={{
@@ -42,12 +48,13 @@ export function PullToRefreshIndicator({
           )}
         >
           {isRefreshing ? (
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <Loader2 className="h-6 w-6 motion-safe:animate-spin" aria-hidden="true" />
           ) : shouldTrigger ? (
-            <Check className="h-6 w-6 animate-in zoom-in duration-200" />
+            <Check className="h-6 w-6 motion-safe:animate-in motion-safe:zoom-in motion-safe:duration-200" aria-hidden="true" />
           ) : (
             <ArrowDown
-              className="h-6 w-6 transition-transform duration-200"
+              aria-hidden="true"
+              className="h-6 w-6 motion-safe:transition-transform motion-safe:duration-200"
               style={{
                 transform: `rotate(${progress * 1.8}deg)`,
               }}
@@ -71,10 +78,10 @@ export function PullToRefreshIndicator({
         {/* Text */}
         <p className="text-xs text-muted-foreground font-medium">
           {isRefreshing
-            ? "Refreshing..."
+            ? t("pullToRefresh.refreshing", "Refreshing...")
             : shouldTrigger
-            ? "Release to refresh"
-            : "Pull to refresh"}
+            ? t("pullToRefresh.release", "Release to refresh")
+            : t("pullToRefresh.pull", "Pull to refresh")}
         </p>
       </div>
     </div>

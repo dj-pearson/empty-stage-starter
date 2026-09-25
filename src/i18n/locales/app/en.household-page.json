@@ -1,0 +1,45 @@
+{
+  "household": {
+    "page": {
+      "metaTitle": "Household | EatPal",
+      "titleFallback": "Your household",
+      "summary_one": "{{count}} person can see your kids",
+      "summary_other": "{{count}} people can see your kids",
+      "summaryLoading": "Checking who can see your kids",
+      "bodyLabel": "Household details",
+      "loading": "Loading your household",
+      "loaded_one": "Household loaded. {{count}} person is in it.",
+      "loaded_other": "Household loaded. {{count}} people are in it.",
+      "signedOut": "Sign in to see who shares your household.",
+      "error": {
+        "title": "We couldn't load your household",
+        "fallback": "Something went wrong loading the household.",
+        "retry": "Try again",
+        "retrying": "Trying again"
+      },
+      "stale": "Showing what we last loaded",
+      "offline": {
+        "title": "You're offline",
+        "body": "Inviting, removing, leaving and renaming need a connection. The list below is what we last loaded."
+      },
+      "rename": {
+        "button": "Rename",
+        "buttonLabel": "Rename household {{name}}",
+        "label": "Household name",
+        "hint": "1 to 60 characters",
+        "save": "Save",
+        "saving": "Saving",
+        "cancel": "Cancel",
+        "saved": "Household renamed to {{name}}",
+        "failed": "Couldn't rename the household."
+      },
+      "scope": {
+        "title": "What's shared",
+        "sharedHeading": "Shared with everyone here",
+        "privateHeading": "Stays with your account",
+        "careCardsLink": "See what caregivers see: care cards",
+        "foodJournalLink": "Who logged what: Food Journal"
+      }
+    }
+  }
+}

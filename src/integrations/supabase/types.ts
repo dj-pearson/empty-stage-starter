@@ -4067,6 +4067,7 @@ export type Database = {
       }
       chain_network_aggregates: {
         Row: {
+          distinct_contributors: number
           first_observed_at: string
           last_observed_at: string
           partial_count: number
@@ -4078,6 +4079,7 @@ export type Database = {
           total_count: number
         }
         Insert: {
+          distinct_contributors?: number
           first_observed_at?: string
           last_observed_at?: string
           partial_count?: number
@@ -4089,6 +4091,7 @@ export type Database = {
           total_count?: number
         }
         Update: {
+          distinct_contributors?: number
           first_observed_at?: string
           last_observed_at?: string
           partial_count?: number
@@ -4101,9 +4104,28 @@ export type Database = {
         }
         Relationships: []
       }
+      chain_network_contribution_quota: {
+        Row: {
+          calls: number
+          day: string
+          user_id: string
+        }
+        Insert: {
+          calls?: number
+          day: string
+          user_id: string
+        }
+        Update: {
+          calls?: number
+          day?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chain_network_contributions: {
         Row: {
           contribution_key: string
+          contributor_hash: string | null
           outcome: string
           pickiness_bucket: string
           recorded_at: string
@@ -4112,6 +4134,7 @@ export type Database = {
         }
         Insert: {
           contribution_key: string
+          contributor_hash?: string | null
           outcome: string
           pickiness_bucket: string
           recorded_at?: string
@@ -4120,11 +4143,30 @@ export type Database = {
         }
         Update: {
           contribution_key?: string
+          contributor_hash?: string | null
           outcome?: string
           pickiness_bucket?: string
           recorded_at?: string
           source_food_key?: string
           target_food_key?: string
+        }
+        Relationships: []
+      }
+      chain_network_secret: {
+        Row: {
+          created_at: string
+          id: boolean
+          salt: string
+        }
+        Insert: {
+          created_at?: string
+          id?: boolean
+          salt: string
+        }
+        Update: {
+          created_at?: string
+          id?: boolean
+          salt?: string
         }
         Relationships: []
       }
@@ -6112,6 +6154,7 @@ export type Database = {
           item_id: string | null
           name: string
           notes: string | null
+          pantry_credited_at: string | null
           photo_url: string | null
           price_per_unit: number | null
           priority: string | null
@@ -6141,6 +6184,7 @@ export type Database = {
           item_id?: string | null
           name: string
           notes?: string | null
+          pantry_credited_at?: string | null
           photo_url?: string | null
           price_per_unit?: number | null
           priority?: string | null
@@ -6170,6 +6214,7 @@ export type Database = {
           item_id?: string | null
           name?: string
           notes?: string | null
+          pantry_credited_at?: string | null
           photo_url?: string | null
           price_per_unit?: number | null
           priority?: string | null
@@ -7754,11 +7799,14 @@ export type Database = {
           new_food_willingness: string | null
           notes: string | null
           nutrition_concerns: string[] | null
+          pickiness_level: string | null
+          preferred_preparations: string[] | null
           profile_completed: boolean | null
           profile_last_reviewed: string | null
           profile_picture_url: string | null
           texture_dislikes: string[] | null
           texture_preferences: string[] | null
+          texture_sensitivity_level: string | null
           updated_at: string | null
           user_id: string
           weight_kg: number | null
@@ -7787,11 +7835,14 @@ export type Database = {
           new_food_willingness?: string | null
           notes?: string | null
           nutrition_concerns?: string[] | null
+          pickiness_level?: string | null
+          preferred_preparations?: string[] | null
           profile_completed?: boolean | null
           profile_last_reviewed?: string | null
           profile_picture_url?: string | null
           texture_dislikes?: string[] | null
           texture_preferences?: string[] | null
+          texture_sensitivity_level?: string | null
           updated_at?: string | null
           user_id: string
           weight_kg?: number | null
@@ -7820,11 +7871,14 @@ export type Database = {
           new_food_willingness?: string | null
           notes?: string | null
           nutrition_concerns?: string[] | null
+          pickiness_level?: string | null
+          preferred_preparations?: string[] | null
           profile_completed?: boolean | null
           profile_last_reviewed?: string | null
           profile_picture_url?: string | null
           texture_dislikes?: string[] | null
           texture_preferences?: string[] | null
+          texture_sensitivity_level?: string | null
           updated_at?: string | null
           user_id?: string
           weight_kg?: number | null
@@ -11362,6 +11416,65 @@ export type Database = {
           },
           {
             foreignKeyName: "recipe_photos_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_shares: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          recipe_id: string
+          revoked_at: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          recipe_id: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          recipe_id?: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_shares_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_shares_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_scaling_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_shares_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_success_stats"
+            referencedColumns: ["recipe_id"]
+          },
+          {
+            foreignKeyName: "recipe_shares_recipe_id_fkey"
             columns: ["recipe_id"]
             isOneToOne: false
             referencedRelation: "recipes"
@@ -18876,6 +18989,9 @@ export type Database = {
         }
         Returns: string
       }
+      chain_network_fnv1a_hex: { Args: { p_input: string }; Returns: string }
+      chain_network_food_key: { Args: { p_food_id: string }; Returns: string }
+      chain_network_key: { Args: { p_input: string }; Returns: string }
       check_ai_budget: {
         Args: { p_budget_type?: string; p_user_id: string }
         Returns: {
@@ -19062,6 +19178,19 @@ export type Database = {
         Returns: undefined
       }
       detect_error_spike: { Args: never; Returns: undefined }
+      detect_foods_quantity_drift: {
+        Args: never
+        Returns: {
+          canonical_unit: string
+          display_unit: string
+          foods_quantity: number
+          household_id: string
+          item_id: string
+          kind: string
+          ledger_quantity: number
+          on_hand_canonical: number
+        }[]
+      }
       detect_item_stock_drift: {
         Args: never
         Returns: {
@@ -19396,6 +19525,19 @@ export type Database = {
           trend: string
         }[]
       }
+      get_shared_recipe: {
+        Args: { p_token: string }
+        Returns: {
+          cook_time: string
+          image_url: string
+          ingredients: Json
+          instructions: string
+          name: string
+          prep_time: string
+          servings: string
+          total_time_minutes: number
+        }[]
+      }
       get_unread_notifications_count: {
         Args: { p_user_id: string }
         Returns: number
@@ -19459,6 +19601,7 @@ export type Database = {
         Args: { p_household_id: string }
         Returns: number
       }
+      html_escape_text: { Args: { p_value: string }; Returns: string }
       increment_budget_referral_count: {
         Args: { referrer_email_param: string }
         Returns: undefined
@@ -19616,6 +19759,14 @@ export type Database = {
         }
         Returns: Json
       }
+      repair_unseeded_ledger_items: {
+        Args: never
+        Returns: {
+          remaining: number
+          seeded: number
+          unconvertible: number
+        }[]
+      }
       replace_email_variables: {
         Args: { p_metadata: Json; p_text: string; p_user_name: string }
         Returns: string
@@ -19737,6 +19888,7 @@ export type Database = {
           user_tier: string
         }[]
       }
+      seed_food_ledger_balance: { Args: { p_food_id: string }; Returns: string }
       should_send_notification: {
         Args: {
           p_notification_type: string
@@ -19799,6 +19951,10 @@ export type Database = {
           p_utm_term?: string
         }
         Returns: string
+      }
+      transfer_user_household_data: {
+        Args: { p_dry_run?: boolean; p_user_id: string }
+        Returns: Json
       }
       trigger_churn_interventions: { Args: never; Returns: number }
       unit_to_canonical: {

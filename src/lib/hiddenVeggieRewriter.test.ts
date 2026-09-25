@@ -125,6 +125,28 @@ describe('generateHiddenVeggieRewrites - kid safety', () => {
     expect(result).toEqual([]);
   });
 
+  it('matches the veggie allergen canonically and through families (item 27/28)', () => {
+    const spelled = generateHiddenVeggieRewrites({
+      recipe: baseRecipe(),
+      techniques: [baseTechnique({ veggieAllergens: ['en:tree-nuts'] })],
+      kids: [kid('k1', 'Emma', { allergens: ['Tree Nuts'] })],
+    });
+    expect(spelled).toEqual([]);
+    const family = generateHiddenVeggieRewrites({
+      recipe: baseRecipe(),
+      techniques: [baseTechnique({ veggieName: 'almond flour', veggieAllergens: [] })],
+      kids: [kid('k1', 'Emma', { allergens: ['tree nuts'] })],
+    });
+    expect(family).toEqual([]);
+    // Control: the same technique survives for a kid without the allergy.
+    const control = generateHiddenVeggieRewrites({
+      recipe: baseRecipe(),
+      techniques: [baseTechnique({ veggieName: 'almond flour', veggieAllergens: [] })],
+      kids: [kid('k1', 'Emma', { allergens: ['peanuts'] })],
+    });
+    expect(control).toHaveLength(1);
+  });
+
   it('marks kids as safe when no allergen overlap', () => {
     const result = generateHiddenVeggieRewrites({
       recipe: baseRecipe(),

@@ -5,7 +5,7 @@
  * each logged attempt, and when that food is next due.
  *
  * The eight rungs are the same labels the app has always written to
- * `food_attempts.stage` (see the STAGES list in FoodSuccessTracker). Reusing
+ * `food_attempts.stage` (the old tracker's STAGES list, retired in item 40). Reusing
  * that vocabulary is what makes deriving a ladder from existing history
  * possible at all — see `deriveLadderFromAttempts` (US-598).
  *
@@ -109,7 +109,7 @@ export function prevRung(rung: Rung): Rung {
   return idx <= 0 ? RUNGS[0] : RUNGS[idx - 1];
 }
 
-/** Human label + emoji, matching what FoodSuccessTracker already shows. */
+/** Human label + emoji for each rung. */
 export const RUNG_META: Record<Rung, { label: string; emoji: string }> = {
   looking: { label: 'Looking', emoji: '👀' },
   touching: { label: 'Touching', emoji: '✋' },
@@ -312,4 +312,56 @@ export function deriveLadderFromAttempts(
   );
 
   return derived;
+}
+
+/**
+ * How many active rows the database lets share one `next_due_on` per child.
+ * Mirrors `max_due` in enforce_ladder_active_exposure_cap
+ * (20260801000000_kid_food_ladder.sql) and MAX_ACTIVE_EXPOSURES in the
+ * scheduler. It is a DB contract, not a progression rule, so it is kept out
+ * of the constants the Swift parity test pins.
+ */
+export const DUE_DAY_CAP = 3;
+
+/** The narrow view of a ladder row the due-date cap needs. */
+export interface DueDateRow {
+  id: string;
+  kidId: string;
+  status: LadderStatus;
+  nextDueOn: string | null;
+}
+
+/**
+ * The first date on or after `wanted` that still has room under the per-day
+ * exposure cap for this child.
+ *
+ * The DB trigger rejects an active row whose due date already holds `max`
+ * other active rows. Every write path that sets a due date (a log, starting a
+ * food, resuming one) runs the date through here first, so the fourth food
+ * due on the same day slides to the next free day instead of failing the
+ * parent's tap with a check_violation. `excludeRowId` is the row being
+ * written, which must not count against itself. Pure: the only date input is
+ * `wanted`.
+ */
+export function firstFreeDueDate(
+  rows: readonly DueDateRow[],
+  kidId: string,
+  wanted: string,
+  excludeRowId?: string,
+  max = DUE_DAY_CAP
+): string {
+  const load = new Map<string, number>();
+  for (const r of rows) {
+    if (r.kidId !== kidId || r.id === excludeRowId) continue;
+    if (r.status !== 'active' || !r.nextDueOn) continue;
+    load.set(r.nextDueOn, (load.get(r.nextDueOn) ?? 0) + 1);
+  }
+
+  let date = wanted;
+  // Bounded: a child cannot have more active rows than there are days to
+  // spread them over, but a runaway loop is never the right failure mode.
+  for (let i = 0; i <= rows.length && (load.get(date) ?? 0) >= max; i++) {
+    date = addDays(date, 1);
+  }
+  return date;
 }

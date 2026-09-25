@@ -1,37 +1,46 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Sparkles, ChevronDown, Loader2, X } from "lucide-react";
+import { Sparkles, ChevronDown, Loader2, X, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { parseDurationMinutes } from "@/lib/recipeFilters";
+import { toSafeHttpUrl } from "@/lib/recipeUrl";
+import { coerceDifficulty } from "@/lib/recipeImport";
 import {
   buildAdditionalIngredientsDisplay,
   draftsFromRecipe,
   toIngredientPayloads,
   type IngredientDraft,
 } from "@/lib/recipeIngredients";
+import { draftsFromImportRows } from "@/lib/recipeImportReview";
 import { Recipe, Food, Kid } from "@/types";
 import { cn } from "@/lib/utils";
 import { IngredientSelector } from "./IngredientSelector";
 import { IngredientRow, type IngredientRowData } from "./IngredientRow";
 import { InstructionStepBuilder } from "./InstructionStepBuilder";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
+import "@/i18n/appLocale";
 
 interface EnhancedRecipeBuilderProps {
   foods: Food[];
   kids: Kid[];
   activeKidId: string | null;
   editRecipe?: Recipe | null;
+  /**
+   * A parsed import to review before it is saved (item 12). Prefills every
+   * field; ignored when editRecipe is set. Nothing is saved until Save.
+   */
+  initialDraft?: Omit<Recipe, "id"> | null;
   onSave: (recipe: Partial<Recipe>) => Promise<void>;
   onCancel: () => void;
 }
@@ -56,22 +65,63 @@ function generateIngredientId() {
   return `ing_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/** "1 hr 10 min" -> "70"; anything unreadable -> "". The inputs hold minutes. */
+function minutesText(value: string | null | undefined): string {
+  const m = parseDurationMinutes(value);
+  return m != null && m > 0 ? String(Math.round(m)) : "";
+}
+
+const digitsOnly = (value: string) => value.replace(/[^\d]/g, "").slice(0, 4);
+
+const DIFFICULTY_SELECTED: Record<"easy" | "medium" | "hard", string> = {
+  easy: "bg-safe-food text-primary-foreground hover:bg-safe-food/90",
+  medium: "bg-warning text-foreground hover:bg-warning/90",
+  hard: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+};
+
+/** What suggest-recipe may send back. Every field is checked before use. */
+interface SuggestedRecipe {
+  description?: unknown;
+  instructions?: unknown;
+  food_ids?: unknown;
+  prepTime?: unknown;
+  cookTime?: unknown;
+  tips?: unknown;
+  difficulty?: unknown;
+}
+
+const asText = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+
+function toStepList(value: unknown): string[] {
+  const lines = Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : typeof value === "string"
+      ? value.split(/\r?\n/)
+      : [];
+  return lines.map((l) => l.replace(/^\d+[.)]\s*/, "").trim()).filter((l) => l.length > 0);
+}
+
 export function EnhancedRecipeBuilder({
   foods,
   kids,
   activeKidId,
   editRecipe,
+  initialDraft,
   onSave,
   onCancel,
 }: EnhancedRecipeBuilderProps) {
+  const { t } = useTranslation();
+  // What the form starts from: the recipe being edited, else an import under
+  // review, else nothing.
+  const seed: Omit<Recipe, "id"> | null = editRecipe ?? initialDraft ?? null;
   // Basic info
-  const [name, setName] = useState(editRecipe?.name ?? "");
-  const [description, setDescription] = useState(editRecipe?.description ?? "");
-  const [imageUrl, setImageUrl] = useState(editRecipe?.image_url ?? "");
+  const [name, setName] = useState(seed?.name ?? "");
+  const [description, setDescription] = useState(seed?.description ?? "");
+  const [imageUrl, setImageUrl] = useState(seed?.image_url ?? "");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">(
-    editRecipe?.difficulty_level ?? "easy"
+    seed?.difficulty_level ?? "easy"
   );
-  const [tags, setTags] = useState<string[]>(editRecipe?.tags ?? []);
+  const [tags, setTags] = useState<string[]>(seed?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
 
   // Ingredients
@@ -80,7 +130,10 @@ export function EnhancedRecipeBuilder({
   // and additional_ingredients is parsed as a last resort, which is how a
   // recipe that only ever had the free-text blob becomes structured.
   const [ingredients, setIngredients] = useState<IngredientRowData[]>(() =>
-    draftsFromRecipe(editRecipe, foods).map((draft) => ({
+    (!editRecipe && initialDraft?.recipe_ingredient_rows?.length
+      ? draftsFromImportRows(initialDraft.recipe_ingredient_rows)
+      : draftsFromRecipe(seed, foods)
+    ).map((draft) => ({
       id: draft.id,
       rowId: draft.rowId ?? undefined,
       food_id: draft.food_id ?? undefined,
@@ -95,30 +148,30 @@ export function EnhancedRecipeBuilder({
 
   // Instructions
   const [steps, setSteps] = useState<string[]>(() => {
-    if (!editRecipe?.instructions) return [""];
+    if (!seed?.instructions) return [""];
     try {
-      const parsed = JSON.parse(editRecipe.instructions);
+      const parsed = JSON.parse(seed.instructions);
       if (Array.isArray(parsed)) return parsed;
     } catch {
       // Split text into steps
-      const lines = editRecipe.instructions
+      const lines = seed.instructions
         .split(/\r?\n/)
         .map((l) => l.replace(/^\d+[.)]\s*/, "").trim())
         .filter((l) => l.length > 0);
       if (lines.length > 0) return lines;
     }
-    return [editRecipe.instructions];
+    return [seed.instructions];
   });
 
   // Additional info
-  const [prepTime, setPrepTime] = useState(editRecipe?.prepTime ?? "");
-  const [cookTime, setCookTime] = useState(editRecipe?.cookTime ?? "");
-  const [servings, setServings] = useState(editRecipe?.servings ?? "4");
-  const [tips, setTips] = useState(editRecipe?.tips ?? "");
-  const [sourceUrl, setSourceUrl] = useState(editRecipe?.source_url ?? "");
-  const [selectedKids, setSelectedKids] = useState<string[]>(
-    editRecipe?.assigned_kid_ids ?? (activeKidId ? [activeKidId] : [])
-  );
+  // Minutes as digits. "1 hr 10 min" from an import is seeded as "70" rather
+  // than shown as a blank number input.
+  const [prepTime, setPrepTime] = useState(() => minutesText(seed?.prepTime));
+  const [cookTime, setCookTime] = useState(() => minutesText(seed?.cookTime));
+  const [servings, setServings] = useState(seed?.servings || "4");
+  const [tips, setTips] = useState(seed?.tips ?? "");
+  const [sourceUrl, setSourceUrl] = useState(seed?.source_url ?? "");
+  const [urlErrors, setUrlErrors] = useState<{ image?: string; source?: string }>({});
 
   // Section open states
   const [sectionsOpen, setSectionsOpen] = useState({
@@ -180,24 +233,16 @@ export function EnhancedRecipeBuilder({
     ]);
   }, []);
 
-  const updateIngredient = (id: string, updates: Partial<IngredientRowData>) => {
+  // Stable across renders so IngredientRow's memo skips unchanged rows.
+  const updateIngredient = useCallback((id: string, updates: Partial<IngredientRowData>) => {
     setIngredients((prev) =>
       prev.map((ing) => (ing.id === id ? { ...ing, ...updates } : ing))
     );
-  };
+  }, []);
 
-  const removeIngredient = (id: string) => {
+  const removeIngredient = useCallback((id: string) => {
     setIngredients((prev) => prev.filter((ing) => ing.id !== id));
-  };
-
-  // Kid toggle
-  const toggleKid = (kidId: string) => {
-    setSelectedKids((prev) =>
-      prev.includes(kidId)
-        ? prev.filter((id) => id !== kidId)
-        : [...prev, kidId]
-    );
-  };
+  }, []);
 
   // AI generation
   const handleAIGenerate = async () => {
@@ -209,7 +254,7 @@ export function EnhancedRecipeBuilder({
     setIsGenerating(true);
     try {
       const activeKid = kids.find((k) => k.id === activeKidId);
-      const { data, error } = await invokeEdgeFunction("suggest-recipe", {
+      const { data, error } = await invokeEdgeFunction<{ recipe?: SuggestedRecipe }>("suggest-recipe", {
         body: {
           recipeName: name,
           availableFoods: foods.map((f) => ({ id: f.id, name: f.name, category: f.category })),
@@ -219,37 +264,53 @@ export function EnhancedRecipeBuilder({
 
       if (error) throw error;
 
-      if (data?.recipe) {
-        const r = data.recipe;
-        if (r.description) setDescription(r.description);
-        if (r.instructions) {
-          const stepsArr = Array.isArray(r.instructions)
-            ? r.instructions
-            : r.instructions
-                .split(/\r?\n/)
-                .map((l: string) => l.replace(/^\d+[.)]\s*/, "").trim())
-                .filter((l: string) => l.length > 0);
-          setSteps(stepsArr);
+      const r: SuggestedRecipe | undefined = data?.recipe;
+      if (r) {
+        // Fill what is empty and append to what is not: a cook who typed
+        // half a recipe and asked for help keeps every word they wrote.
+        const desc = asText(r.description);
+        if (desc) setDescription((prev) => (prev.trim() ? prev : desc));
+
+        const newSteps = toStepList(r.instructions);
+        if (newSteps.length > 0) {
+          setSteps((prev) => [...prev.filter((st) => st.trim()), ...newSteps]);
         }
-        if (r.food_ids && Array.isArray(r.food_ids)) {
-          const newIngredients = r.food_ids.map((foodId: string) => {
-            const food = foods.find((f) => f.id === foodId);
-            return {
-              id: generateIngredientId(),
-              food_id: foodId,
-              name: food?.name ?? "Unknown",
-              quantity: "",
-              unit: "",
-              prepNotes: "",
-              isOptional: false,
-            };
+
+        if (Array.isArray(r.food_ids)) {
+          const foodById = new Map(foods.map((f) => [f.id, f] as const));
+          setIngredients((prev) => {
+            const have = new Set(prev.map((ing) => ing.food_id).filter(Boolean));
+            const added: IngredientRowData[] = [];
+            for (const raw of r.food_ids as unknown[]) {
+              if (typeof raw !== "string" || have.has(raw)) continue;
+              // An id the pantry does not have is dropped, not shown as "Unknown".
+              const food = foodById.get(raw);
+              if (!food) continue;
+              have.add(raw);
+              added.push({
+                id: generateIngredientId(),
+                food_id: food.id,
+                name: food.name,
+                quantity: "",
+                unit: "",
+                prepNotes: "",
+                isOptional: false,
+              });
+            }
+            return added.length > 0 ? [...prev, ...added] : prev;
           });
-          setIngredients(newIngredients);
         }
-        if (r.prepTime) setPrepTime(r.prepTime);
-        if (r.cookTime) setCookTime(r.cookTime);
-        if (r.tips) setTips(r.tips);
-        if (r.difficulty) setDifficulty(r.difficulty);
+
+        const prep = minutesText(asText(r.prepTime));
+        if (prep) setPrepTime((prev) => prev || prep);
+        const cook = minutesText(asText(r.cookTime));
+        if (cook) setCookTime((prev) => prev || cook);
+
+        const tip = asText(r.tips);
+        if (tip) setTips((prev) => (prev.trim() ? `${prev.trim()}\n${tip}` : tip));
+
+        const level = coerceDifficulty(r.difficulty);
+        if (level) setDifficulty(level);
 
         toast.success("AI generated recipe details!");
       }
@@ -265,6 +326,24 @@ export function EnhancedRecipeBuilder({
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast.error("Recipe name is required");
+      return;
+    }
+
+    // Only http(s) links are stored, and "example.com/pie" means https://.
+    const safeImage = toSafeHttpUrl(imageUrl, { addScheme: true });
+    const safeSource = toSafeHttpUrl(sourceUrl, { addScheme: true });
+    const invalid = t("recipes.builder.invalidUrl", { defaultValue: "Enter a web address starting with http:// or https://" });
+    const errors = {
+      image: safeImage === null ? invalid : undefined,
+      source: safeSource === null ? invalid : undefined,
+    };
+    setUrlErrors(errors);
+    if (errors.image || errors.source) {
+      setSectionsOpen((prev) => ({
+        ...prev,
+        basic: prev.basic || Boolean(errors.image),
+        additional: prev.additional || Boolean(errors.source),
+      }));
       return;
     }
 
@@ -297,20 +376,22 @@ export function EnhancedRecipeBuilder({
           ? JSON.stringify(steps.filter((s) => s.trim()))
           : undefined;
 
+      const prepMinutes = parseDurationMinutes(prepTime);
+      const cookMinutes = parseDurationMinutes(cookTime);
+
       const recipeData: Partial<Recipe> & { additionalIngredients?: string } = {
         name: name.trim(),
         description: description.trim() || undefined,
         food_ids: foodIds,
         instructions: instructionsStr,
-        prepTime: prepTime || undefined,
-        cookTime: cookTime || undefined,
+        prepTime: prepMinutes != null ? String(prepMinutes) : undefined,
+        cookTime: cookMinutes != null ? String(cookMinutes) : undefined,
         servings: servings || undefined,
         tips: tips.trim() || undefined,
-        image_url: imageUrl.trim() || undefined,
-        source_url: sourceUrl.trim() || undefined,
+        image_url: safeImage || undefined,
+        source_url: safeSource || undefined,
         difficulty_level: difficulty,
         tags: tags.length > 0 ? tags : undefined,
-        assigned_kid_ids: selectedKids.length > 0 ? selectedKids : undefined,
         additionalIngredients: additionalIngredients || undefined,
         recipe_ingredient_rows: ingredientRows,
       };
@@ -318,8 +399,8 @@ export function EnhancedRecipeBuilder({
       // Calculate total time
       // US-721: parseInt("1 hr 30 min") is 1. parseDurationMinutes reads the
       // units, so an hour is 60 minutes rather than one.
-      const prep = parseDurationMinutes(prepTime) ?? 0;
-      const cook = parseDurationMinutes(cookTime) ?? 0;
+      const prep = prepMinutes ?? 0;
+      const cook = cookMinutes ?? 0;
       if (prep + cook > 0) {
         recipeData.total_time_minutes = prep + cook;
       }
@@ -370,16 +451,29 @@ export function EnhancedRecipeBuilder({
             <Label htmlFor="recipe-img">Image URL</Label>
             <Input
               id="recipe-img"
+              type="url"
+              inputMode="url"
               value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
+              onChange={(e) => {
+                setImageUrl(e.target.value);
+                if (urlErrors.image) setUrlErrors((prev) => ({ ...prev, image: undefined }));
+              }}
               placeholder="https://..."
+              aria-invalid={Boolean(urlErrors.image)}
+              aria-describedby={urlErrors.image ? "recipe-img-error" : undefined}
             />
+            {urlErrors.image && (
+              <p id="recipe-img-error" className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                {urlErrors.image}
+              </p>
+            )}
           </div>
 
           {/* Difficulty */}
           <div>
-            <Label>Difficulty</Label>
-            <div className="flex gap-2 mt-1">
+            <Label id="recipe-difficulty-label">Difficulty</Label>
+            <div className="flex gap-2 mt-1" role="group" aria-labelledby="recipe-difficulty-label">
               {(["easy", "medium", "hard"] as const).map((level) => (
                 <Button
                   key={level}
@@ -387,12 +481,8 @@ export function EnhancedRecipeBuilder({
                   variant={difficulty === level ? "default" : "outline"}
                   size="sm"
                   onClick={() => setDifficulty(level)}
-                  className={cn(
-                    "capitalize flex-1",
-                    difficulty === level && level === "easy" && "bg-green-600 hover:bg-green-700",
-                    difficulty === level && level === "medium" && "bg-yellow-600 hover:bg-yellow-700",
-                    difficulty === level && level === "hard" && "bg-red-600 hover:bg-red-700"
-                  )}
+                  aria-pressed={difficulty === level}
+                  className={cn("capitalize flex-1 h-10 sm:h-9", difficulty === level && DIFFICULTY_SELECTED[level])}
                 >
                   {level}
                 </Button>
@@ -470,8 +560,8 @@ export function EnhancedRecipeBuilder({
                 <IngredientRow
                   key={ing.id}
                   ingredient={ing}
-                  onUpdate={(updates) => updateIngredient(ing.id, updates)}
-                  onRemove={() => removeIngredient(ing.id)}
+                  onUpdate={updateIngredient}
+                  onRemove={removeIngredient}
                 />
               ))}
             </div>
@@ -509,9 +599,11 @@ export function EnhancedRecipeBuilder({
               <Input
                 id="prep-time"
                 value={prepTime}
-                onChange={(e) => setPrepTime(e.target.value)}
+                onChange={(e) => setPrepTime(digitsOnly(e.target.value))}
                 placeholder="15"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
               />
             </div>
             <div>
@@ -519,9 +611,11 @@ export function EnhancedRecipeBuilder({
               <Input
                 id="cook-time"
                 value={cookTime}
-                onChange={(e) => setCookTime(e.target.value)}
+                onChange={(e) => setCookTime(digitsOnly(e.target.value))}
                 placeholder="30"
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
               />
             </div>
             <div>
@@ -551,29 +645,25 @@ export function EnhancedRecipeBuilder({
             <Label htmlFor="source-url">Source URL</Label>
             <Input
               id="source-url"
+              type="url"
+              inputMode="url"
               value={sourceUrl}
-              onChange={(e) => setSourceUrl(e.target.value)}
+              onChange={(e) => {
+                setSourceUrl(e.target.value);
+                if (urlErrors.source) setUrlErrors((prev) => ({ ...prev, source: undefined }));
+              }}
               placeholder="https://recipe-site.com/..."
+              aria-invalid={Boolean(urlErrors.source)}
+              aria-describedby={urlErrors.source ? "source-url-error" : undefined}
             />
+            {urlErrors.source && (
+              <p id="source-url-error" className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                {urlErrors.source}
+              </p>
+            )}
           </div>
 
-          {/* Kid assignment */}
-          {kids.length > 0 && (
-            <div>
-              <Label>Assign to Kids</Label>
-              <div className="flex flex-wrap gap-2 mt-1.5">
-                {kids.map((kid) => (
-                  <label key={kid.id} className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={selectedKids.includes(kid.id)}
-                      onCheckedChange={() => toggleKid(kid.id)}
-                    />
-                    <span className="text-sm">{kid.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
         </CollapsibleContent>
       </Collapsible>
 
@@ -581,7 +671,7 @@ export function EnhancedRecipeBuilder({
       <Collapsible open={sectionsOpen.ai} onOpenChange={() => toggleSection("ai")}>
         <CollapsibleTrigger className="flex items-center justify-between w-full py-2 font-medium text-sm">
           <span className="flex items-center gap-1.5">
-            <Sparkles className="h-4 w-4 text-purple-500" />
+            <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
             AI Assistant
           </span>
           <ChevronDown className={cn("h-4 w-4 transition-transform", sectionsOpen.ai && "rotate-180")} />

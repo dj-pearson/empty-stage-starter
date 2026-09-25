@@ -192,7 +192,8 @@ describe('delete-account storage cleanup', () => {
   });
 
   it('removes storage objects before deleting the auth user', () => {
-    const removeAt = source.indexOf('.remove(paths)');
+    // Match the storage call itself, not a variable name inside it.
+    const removeAt = source.search(/storage\s*\.from\([^)]*\)\s*\.remove\(/);
     const deleteUserAt = source.indexOf('auth.admin.deleteUser');
 
     expect(removeAt).toBeGreaterThan(-1);

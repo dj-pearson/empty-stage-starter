@@ -19,13 +19,19 @@
 import { render, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { AppProvider, useApp, useFoods, useInventory } from './AppContext';
+import { AppProvider, useApp, useFoods, useInventory, useKids } from './AppContext';
 import { writeFlag } from '@/lib/featureFlagCache';
 import { queueWrite } from '@/lib/webSyncQueue';
 
 // ---- Supabase mock: a chainable, thenable query builder per table ----------
 const tableData: Record<string, unknown[]> = {};
 let sessionUser: { id: string } | null = null;
+/** When set, the grocery_items read waits for it: a server that has not answered yet. */
+let groceryGate: Promise<void> | null = null;
+/** When set, the grocery_items read fails with it. */
+let groceryError: unknown = null;
+/** When set, the kids read fails with it. */
+let kidsError: unknown = null;
 
 function makeBuilder(table: string) {
   const builder: Record<string, unknown> = {};
@@ -50,11 +56,18 @@ function makeBuilder(table: string) {
     return builder;
   });
   // thenable: awaiting the builder resolves to the table's dataset.
-  builder.then = (resolve: (v: { data: unknown[]; error: null }) => unknown) => {
+  builder.then = (resolve: (v: { data: unknown[] | null; error: unknown }) => unknown) => {
     let rows = tableData[table] ?? [];
     if (window) rows = rows.slice(window.from, window.to + 1);
     if (cap !== null) rows = rows.slice(0, cap);
-    return resolve({ data: rows, error: null });
+    const answer = () =>
+      table === 'grocery_items' && groceryError
+        ? resolve({ data: null, error: groceryError })
+        : table === 'kids' && kidsError
+          ? resolve({ data: null, error: kidsError })
+          : resolve({ data: rows, error: null });
+    if (table === 'grocery_items' && groceryGate) return groceryGate.then(answer);
+    return answer();
   };
   return builder;
 }
@@ -581,5 +594,295 @@ describe('US-819: the load reaches past the old row caps', () => {
 
     await waitFor(() => expect(rows.length).toBe(1));
     expect(rows[0].checked).toBe(false);
+  });
+});
+
+/**
+ * groceryHydrated lets the Grocery page tell "still loading" from "your list is
+ * empty". It must not claim ready before the server has answered (an empty
+ * cache is not an answer), and it must not wait forever when the load fails.
+ */
+describe('groceryHydrated', () => {
+  const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    localStorage.clear();
+    groceryGate = null;
+    groceryError = null;
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+    tableData['grocery_items'] = [
+      { id: 'g1', name: 'Milk', quantity: 1, checked: false, household_id: HOUSEHOLD },
+      { id: 'g2', name: 'Bread', quantity: 1, checked: false, household_id: HOUSEHOLD },
+    ];
+  });
+
+  function probe() {
+    const seen = { hydrated: [] as boolean[], rows: [] as Array<{ id: string; checked: boolean }> };
+    function GroceryProbe() {
+      const { groceryItems, groceryHydrated } = useApp();
+      seen.hydrated.push(groceryHydrated);
+      seen.rows = groceryItems.map((g) => ({ id: g.id, checked: g.checked }));
+      return null;
+    }
+    return { seen, GroceryProbe };
+  }
+
+  it('is false until the server load resolves, then true', async () => {
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, GroceryProbe } = probe();
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    // Everything else has loaded; the grocery read is still out.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.hydrated.at(-1)).toBe(false);
+    expect(seen.hydrated).not.toContain(true);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.rows.map((r) => r.id)).toEqual(['g1', 'g2']);
+  });
+
+  it('turns true when the load fails, so the page does not spin forever', async () => {
+    groceryError = { message: 'boom', code: 'XX000' };
+    const { seen, GroceryProbe } = probe();
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+  });
+
+  it('a queued toggle still survives the load that marks the list ready', async () => {
+    await queueWrite('user-1', 'grocery.toggle', { id: 'g2', checked: true });
+    const { seen, GroceryProbe } = probe();
+
+    render(
+      <AppProvider>
+        <GroceryProbe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.rows.find((r) => r.id === 'g2')?.checked).toBe(true);
+    expect(seen.rows.find((r) => r.id === 'g1')?.checked).toBe(false);
+  });
+});
+
+/**
+ * foodsHydrated replaces the pantry's 1200ms "probably loaded by now" timer.
+ * Same contract as groceryHydrated: not ready before the server answers, ready
+ * once it settles even with zero rows, and a non-empty cache counts as ready.
+ * The grocery gate holds the whole Promise.all, so it holds the foods load too.
+ */
+describe('foodsHydrated', () => {
+  const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    localStorage.clear();
+    groceryGate = null;
+    groceryError = null;
+    sessionUser = { id: 'user-1' };
+    tableData['kids'] = [{ id: 'k1', name: 'Kid', age: 4, household_id: HOUSEHOLD }];
+  });
+
+  function probe() {
+    const seen = { hydrated: [] as boolean[], names: [] as string[] };
+    function Probe() {
+      const { foods, foodsHydrated } = useFoods();
+      const app = useApp();
+      expect(app.foodsHydrated).toBe(foodsHydrated);
+      seen.hydrated.push(foodsHydrated);
+      seen.names = foods.map((f) => f.name);
+      return null;
+    }
+    return { seen, Probe };
+  }
+
+  it('is false until the server load settles, then true', async () => {
+    tableData['foods'] = [
+      { id: 'srv', name: 'Server Milk', category: 'dairy', is_safe: true, is_try_bite: false, household_id: HOUSEHOLD },
+    ];
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.hydrated.at(-1)).toBe(false);
+    expect(seen.hydrated).not.toContain(true);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Server Milk']);
+  });
+
+  it('turns true when the server answers with zero foods', async () => {
+    tableData['foods'] = [];
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.hydrated.at(-1)).toBe(false);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual([]);
+  });
+
+  it('a non-empty cache counts as hydrated before the server answers', async () => {
+    storageBacking[STORAGE_KEY] = JSON.stringify({
+      foods: [{ id: 'f1', name: 'Cached Apple', category: 'fruit', is_safe: true, is_try_bite: false }],
+      kids: [{ id: 'k1', name: 'Kid', age: 4 }],
+      recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
+    });
+    groceryGate = new Promise<void>(() => {});
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Cached Apple']);
+  });
+});
+
+/**
+ * kidsHydrated lets the Kids page show a skeleton instead of an empty state (or
+ * a made-up 'My Child') before the server has answered. Same contract as
+ * foodsHydrated, plus kidsLoadError for a read that failed.
+ */
+describe('kidsHydrated', () => {
+  const HOUSEHOLD = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const k of Object.keys(storageBacking)) delete storageBacking[k];
+    for (const k of Object.keys(tableData)) delete tableData[k];
+    localStorage.clear();
+    groceryGate = null;
+    groceryError = null;
+    kidsError = null;
+    sessionUser = { id: 'user-1' };
+  });
+
+  function probe() {
+    const seen = {
+      hydrated: [] as boolean[],
+      names: [] as string[],
+      everNames: new Set<string>(),
+      error: null as string | null,
+    };
+    function Probe() {
+      const { kids, kidsHydrated, kidsLoadError } = useKids();
+      const app = useApp();
+      expect(app.kidsHydrated).toBe(kidsHydrated);
+      seen.hydrated.push(kidsHydrated);
+      seen.names = kids.map((k) => k.name);
+      for (const name of seen.names) seen.everNames.add(name);
+      seen.error = kidsLoadError;
+      return null;
+    }
+    return { seen, Probe };
+  }
+
+  it('signed in with an empty cache: no placeholder, not hydrated until the load settles', async () => {
+    tableData['kids'] = [{ id: 'k1', name: 'Server Kid', household_id: HOUSEHOLD }];
+    let open!: () => void;
+    groceryGate = new Promise<void>((r) => { open = r; });
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(seen.names).toEqual([]);
+    expect(seen.hydrated).not.toContain(true);
+
+    open();
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Server Kid']);
+    expect(seen.everNames.has('My Child')).toBe(false);
+  });
+
+  it('is true after a load that returns no kids, still with no placeholder', async () => {
+    tableData['kids'] = [];
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual([]);
+    expect(seen.everNames.has('My Child')).toBe(false);
+  });
+
+  it('a failed kids read sets kidsLoadError and keeps the cached kids', async () => {
+    storageBacking[STORAGE_KEY] = JSON.stringify({
+      foods: [], kids: [{ id: 'k1', name: 'Cached Kid', age: 4 }],
+      recipes: [], planEntries: [], groceryItems: [], activeKidId: 'k1',
+    });
+    kidsError = { message: 'boom', code: 'XX000' };
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.error).toBe('boom'));
+    await waitFor(() => expect(seen.hydrated.at(-1)).toBe(true));
+    expect(seen.names).toEqual(['Cached Kid']);
+  });
+
+  it('signed out with an empty cache still seeds the local placeholder', async () => {
+    sessionUser = null;
+    const { seen, Probe } = probe();
+
+    render(
+      <AppProvider>
+        <Probe />
+      </AppProvider>
+    );
+
+    await waitFor(() => expect(seen.names).toEqual(['My Child']));
+    expect(seen.hydrated.at(-1)).toBe(true);
   });
 });

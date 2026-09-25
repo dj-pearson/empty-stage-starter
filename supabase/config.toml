@@ -212,6 +212,11 @@ verify_jwt = false
 [functions.create-checkout]
 verify_jwt = true
 
+# StoreKit transaction verification: the signed-in user's JWT, checked again
+# in-function; the row is bound to that user.
+[functions.verify-app-store-transaction]
+verify_jwt = true
+
 [functions.stripe-webhook]
 verify_jwt = false
 

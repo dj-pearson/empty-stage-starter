@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Camera, Upload, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats, type Html5QrcodeCameraScanConfig } from "html5-qrcode";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +13,19 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from "sonner";
 import { FoodCategory } from "@/types";
 import { logger } from "@/lib/logger";
 import { PHOTO_AI_NOTICE } from "@/lib/aiSafety";
-import { ACQUIRED_FOOD_IS_SAFE } from "@/lib/foodSafetyDefault";
+import '@/i18n/appLocale';
+
+
+/** Camera constraints html5-qrcode passes through that the DOM lib does not declare. */
+type CameraConstraints = MediaTrackConstraints & {
+  focusMode?: string;
+  advanced?: Array<MediaTrackConstraintSet & { zoom?: number }>;
+};
 
 export interface FoodIdentification {
   name: string;
@@ -30,7 +37,9 @@ export interface FoodIdentification {
   servingSize: string;
   quantity: number;
   servingSizeOptions?: string[];
-  is_safe?: boolean;
+  // No is_safe (US-803). A photo says what a food is, not whether a child
+  // eats it, so this shape has nowhere to carry that answer: the page adds
+  // the food with ACQUIRED_FOOD_IS_SAFE like every other capture path.
 }
 
 interface ImageFoodCaptureProps {
@@ -40,6 +49,7 @@ interface ImageFoodCaptureProps {
 }
 
 export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: ImageFoodCaptureProps) {
+  const { t } = useTranslation();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [identifiedFood, setIdentifiedFood] = useState<FoodIdentification | null>(null);
@@ -47,8 +57,8 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const [editedQuantity, setEditedQuantity] = useState<string>("1");
   const [editedVariety, setEditedVariety] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const mountedRef = useRef(true);
   const [showCamera, setShowCamera] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
@@ -85,7 +95,11 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       }
       const back = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
 
-      const config: any = {
+      const config: Omit<Html5QrcodeCameraScanConfig, "videoConstraints"> & {
+        videoConstraints: CameraConstraints;
+        formatsToSupport: Html5QrcodeSupportedFormats[];
+        experimentalFeatures: { useBarCodeDetectorIfSupported: boolean };
+      } = {
         fps: 10,
         aspectRatio: 1.777,
         qrbox: undefined,
@@ -112,41 +126,68 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       logger.debug('Html5Qrcode camera started on device:', back.label || back.id);
     } catch (error) {
       logger.error('Error starting camera with Html5Qrcode:', error);
-      toast.error("Camera Error", { description: (error instanceof Error ? error.message : 'Unable to access camera') + (isEmbedded ? ' (embedded preview may restrict camera; open in a new tab if issues persist)' : '') });
+      toast.error(t("pantry.photo.cameraError", "Camera error"), {
+        description:
+          (error instanceof Error ? error.message : t("pantry.photo.cameraUnavailable", "Unable to access camera")) +
+          (isEmbedded ? ` ${t("pantry.photo.embeddedHint", "(an embedded preview may block the camera; open in a new tab)")}` : ""),
+      });
       setShowCamera(false);
     }
   };
 
   const stopCamera = async () => {
+    // Taken off the ref before stopping, so a second call (unmount racing a
+    // close) finds nothing to stop instead of stopping the same one twice.
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
     try {
-      if (scannerRef.current) {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
-        scannerRef.current = null;
+      if (scanner) {
+        await scanner.stop();
+        await scanner.clear();
       }
     } catch (e) {
       logger.error('Error stopping camera:', e);
     }
 
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
-    setShowCamera(false);
+    if (mountedRef.current) setShowCamera(false);
   };
+
+  // The camera light must go off when the dialog does. Closing by route
+  // change or by the parent flipping `open` never ran handleClose, so the
+  // stream kept running behind a closed dialog.
+  const stopCameraRef = useRef(stopCamera);
+  stopCameraRef.current = stopCamera;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      void stopCameraRef.current();
+    };
+  }, []);
+  useEffect(() => {
+    if (!open) void stopCameraRef.current();
+  }, [open]);
 
   const capturePhoto = async () => {
     const videoEl = document.querySelector('#food-camera video') as HTMLVideoElement | null;
     if (!videoEl) {
       logger.error('No video element found in scanner container');
-      toast.error("Camera Not Ready", { description: "Please wait for the camera to fully load" });
+      toast.error(t("pantry.photo.notReady", "Camera not ready"), {
+        description: t("pantry.photo.notReadyHint", "Wait a moment for the camera to load"),
+      });
       return;
     }
 
     logger.debug('Video dimensions:', videoEl.videoWidth, 'x', videoEl.videoHeight);
 
     if (videoEl.videoWidth === 0 || videoEl.videoHeight === 0) {
-      toast.error("Camera Not Ready", { description: "Please wait for the camera to fully load" });
+      toast.error(t("pantry.photo.notReady", "Camera not ready"), {
+        description: t("pantry.photo.notReadyHint", "Wait a moment for the camera to load"),
+      });
       return;
     }
 
@@ -180,7 +221,11 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
   const analyzeImage = async (imageBase64: string) => {
     setIsAnalyzing(true);
     try {
-      const { data, error } = await invokeEdgeFunction('identify-food-image', {
+      const { data, error } = await invokeEdgeFunction<{
+        success?: boolean;
+        error?: string;
+        foodData?: FoodIdentification;
+      }>('identify-food-image', {
         body: { imageBase64 }
       });
 
@@ -191,16 +236,31 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       }
 
       if (data?.success && data?.foodData) {
-        setIdentifiedFood(data.foodData);
-        setEditedServingSize(data.foodData.servingSize);
-        setEditedQuantity(String(data.foodData.quantity || 1));
-        setEditedVariety(data.foodData.variety || "");
-        toast("Food Identified!", { description: `Found: ${data.foodData.name}${data.foodData.variety ? ` })` : ''} (${data.foodData.confidence}% confident)`,
+        const found: FoodIdentification = data.foodData;
+        setIdentifiedFood(found);
+        setEditedServingSize(found.servingSize);
+        setEditedQuantity(String(found.quantity || 1));
+        setEditedVariety(found.variety || "");
+        toast(t("pantry.photo.identified", "Food identified"), {
+          description: found.variety
+            ? t("pantry.photo.foundVariety", {
+                defaultValue: "Found {{name}} ({{variety}}), {{confidence}}% sure",
+                name: found.name,
+                variety: found.variety,
+                confidence: found.confidence,
+              })
+            : t("pantry.photo.found", {
+                defaultValue: "Found {{name}}, {{confidence}}% sure",
+                name: found.name,
+                confidence: found.confidence,
+              }),
         });
       }
     } catch (error) {
       logger.error('Error analyzing image:', error);
-      toast.error("Analysis Failed", { description: error instanceof Error ? error.message : "Failed to identify food from image" });
+      toast.error(t("pantry.photo.analysisFailed", "Couldn't identify that"), {
+        description: error instanceof Error ? error.message : t("pantry.photo.analysisFailedHint", "Try a clearer photo"),
+      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -210,7 +270,9 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     if (!identifiedFood) return;
     const qtyNum = parseInt(editedQuantity);
     if (!editedQuantity || isNaN(qtyNum) || qtyNum < 1) {
-      toast.error("Quantity required", { description: "Please enter a valid quantity (1 or more)." });
+      toast.error(t("pantry.photo.quantityRequired", "Quantity required"), {
+        description: t("pantry.photo.quantityHint", "Enter a quantity of 1 or more."),
+      });
       return;
     }
     
@@ -224,15 +286,12 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
       name: finalName,
       servingSize: editedServingSize,
       quantity: qtyNum,
-      // US-803: identifying a food from a photo says what it is, not
-      // whether the child eats it.
-      is_safe: ACQUIRED_FOOD_IS_SAFE,
     });
     handleClose();
   };
 
   const handleClose = () => {
-    stopCamera();
+    void stopCamera();
     setCapturedImage(null);
     setIdentifiedFood(null);
     onOpenChange(false);
@@ -251,9 +310,9 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Identify Food by Photo</DialogTitle>
+          <DialogTitle>{t("pantry.photo.title", "Identify a food by photo")}</DialogTitle>
           <DialogDescription>
-            Take a photo or upload an image to automatically identify and add food items
+            {t("pantry.photo.description", "Take or upload a photo and we'll name the food for you to check.")}
           </DialogDescription>
           {/* US-632: say where the photo goes before it is taken, not after. */}
           <p className="text-xs text-muted-foreground">{PHOTO_AI_NOTICE}</p>
@@ -268,7 +327,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                 size="lg"
               >
                 <Camera className="h-5 w-5 mr-2" />
-                Take Photo
+                {t("pantry.photo.takePhoto", "Take photo")}
               </Button>
               
               <Button
@@ -278,7 +337,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                 size="lg"
               >
                 <Upload className="h-5 w-5 mr-2" />
-                Upload Image
+                {t("pantry.photo.upload", "Upload image")}
               </Button>
               
               <input
@@ -298,20 +357,20 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                 <button
                   type="button"
                   onClick={capturePhoto}
-                  aria-label="Tap to capture"
+                  aria-label={t("pantry.photo.tapToCapture", "Tap to capture")}
                   className="absolute inset-0 z-10 bg-transparent focus:outline-none"
                 />
                 <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-background/60 text-foreground/80 text-xs">
-                  Tap video or press Capture
+                  {t("pantry.photo.tapHint", "Tap the video or press Capture")}
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button onClick={capturePhoto} className="flex-1" size="lg">
                   <Camera className="h-5 w-5 mr-2" />
-                  Capture
+                  {t("pantry.photo.capture", "Capture")}
                 </Button>
                 <Button
-                  aria-label="Stop the camera" onClick={stopCamera} variant="outline" size="lg">
+                  aria-label={t("pantry.photo.stopCamera", "Stop the camera")} onClick={() => void stopCamera()} variant="outline" size="lg">
                   <X className="h-5 w-5" />
                 </Button>
               </div>
@@ -321,7 +380,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
           {capturedImage && (
             <div className="space-y-4">
               <div className="relative rounded-lg overflow-hidden border">
-                <img src={capturedImage} alt="Captured food" className="w-full" />
+                <img src={capturedImage} alt={t("pantry.photo.capturedAlt", "Captured food")} className="w-full" />
               </div>
 
               {isAnalyzing && (
@@ -329,7 +388,7 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                   <CardContent className="flex items-center justify-center py-8">
                     <div className="text-center space-y-2">
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                      <p className="text-sm text-muted-foreground">Analyzing image...</p>
+                      <p className="text-sm text-muted-foreground">{t("pantry.photo.analyzing", "Looking at the photo...")}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -339,45 +398,50 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                 <Card>
                   <CardContent className="pt-6 space-y-4">
                     <div className="space-y-2">
-                      <Label>Identified Food</Label>
-                      <Input value={identifiedFood.name} readOnly />
+                      <Label htmlFor="photo-food-name">{t("pantry.photo.identifiedLabel", "Identified food")}</Label>
+                      <Input id="photo-food-name" value={identifiedFood.name} readOnly />
                     </div>
 
                     {identifiedFood.varietyOptions && identifiedFood.varietyOptions.length > 0 && (
                       <div className="space-y-2">
-                        <Label>Variety (Optional)</Label>
+                        <Label htmlFor="photo-food-variety">{t("pantry.photo.varietyLabel", "Variety (optional)")}</Label>
                         <select
+                          id="photo-food-variety"
                           value={editedVariety}
                           onChange={(e) => setEditedVariety(e.target.value)}
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
-                          <option value="">Generic {identifiedFood.name}</option>
+                          <option value="">{t("pantry.photo.generic", { defaultValue: "Any {{name}}", name: identifiedFood.name })}</option>
                           {identifiedFood.varietyOptions.map((option) => (
                             <option key={option} value={option}>{option}</option>
                           ))}
                         </select>
                         <p className="text-xs text-muted-foreground">
-                          {editedVariety ? `Will be saved as: ${editedVariety} ${identifiedFood.name}` : `Will be saved as: ${identifiedFood.name}`}
+                          {t("pantry.photo.savedAs", {
+                            defaultValue: "Saved as {{name}}",
+                            name: editedVariety ? `${editedVariety} ${identifiedFood.name}` : identifiedFood.name,
+                          })}
                         </p>
                       </div>
                     )}
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Category</Label>
-                        <Input value={identifiedFood.category} readOnly className="capitalize" />
+                        <Label htmlFor="photo-food-category">{t("pantry.photo.categoryLabel", "Category")}</Label>
+                        <Input id="photo-food-category" value={identifiedFood.category} readOnly className="capitalize" />
                       </div>
                       <div className="space-y-2">
-                        <Label>Confidence</Label>
-                        <Input value={`${identifiedFood.confidence}%`} readOnly />
+                        <Label htmlFor="photo-food-confidence">{t("pantry.photo.confidenceLabel", "Confidence")}</Label>
+                        <Input id="photo-food-confidence" value={`${identifiedFood.confidence}%`} readOnly />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Serving Size</Label>
+                        <Label htmlFor="photo-food-serving">{t("pantry.photo.servingLabel", "Serving size")}</Label>
                         {identifiedFood.servingSizeOptions && identifiedFood.servingSizeOptions.length > 0 ? (
                           <select
+                            id="photo-food-serving"
                             value={editedServingSize}
                             onChange={(e) => setEditedServingSize(e.target.value)}
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -388,18 +452,20 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                           </select>
                         ) : (
                           <Input
+                            id="photo-food-serving"
                             value={editedServingSize}
                             onChange={(e) => setEditedServingSize(e.target.value)}
                           />
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Quantity</Label>
+                        <Label htmlFor="photo-food-quantity">{t("pantry.photo.quantityLabel", "Quantity")}</Label>
                         <Input
+                          id="photo-food-quantity"
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          placeholder="e.g., 6"
+                          placeholder={t("pantry.photo.quantityPlaceholder", "e.g., 6")}
                           value={editedQuantity}
                           onChange={(e) => {
                             const next = e.target.value.replace(/[^0-9]/g, '');
@@ -409,22 +475,22 @@ export function ImageFoodCapture({ open, onOpenChange, onFoodIdentified }: Image
                           className={!quantityValid ? "border-destructive focus-visible:ring-destructive" : undefined}
                         />
                         {!quantityValid && (
-                          <p className="text-xs text-destructive">Quantity is required</p>
+                          <p className="text-xs text-destructive">{t("pantry.photo.quantityRequired", "Quantity required")}</p>
                         )}
                       </div>
                       </div>
 
                     <div className="space-y-2">
-                      <Label>Description</Label>
+                      <p className="text-sm font-medium">{t("pantry.photo.descriptionLabel", "Description")}</p>
                       <p className="text-sm text-muted-foreground">{identifiedFood.description}</p>
                     </div>
 
                     <div className="flex gap-2 pt-4">
                       <Button onClick={handleAddFood} className="flex-1" size="lg" disabled={!quantityValid}>
-                        Add to Pantry
+                        {t("pantry.photo.add", "Add to pantry")}
                       </Button>
                       <Button onClick={retakePhoto} variant="outline" size="lg">
-                        Retake
+                        {t("pantry.photo.retake", "Retake")}
                       </Button>
                     </div>
                   </CardContent>

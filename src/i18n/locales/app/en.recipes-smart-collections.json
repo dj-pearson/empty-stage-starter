@@ -1,0 +1,17 @@
+{
+  "recipes": {
+    "smart": {
+      "emptyFit": "Mark the foods your kids eat as safe in the pantry and matching recipes show up here.",
+      "emptyQuick": "No recipe takes 30 minutes or less. Add prep and cook times to see them here.",
+      "emptyTitle": "Nothing here yet",
+      "emptyUnfiled": "Every recipe is in a collection.",
+      "everyone": "Everyone can eat",
+      "everyoneHint": "Every child eats or is trying it, and no allergen for anyone",
+      "label": "Smart collections",
+      "quick": "Quick",
+      "quickHint": "30 minutes or less",
+      "safeFor": "Safe for {{name}}",
+      "unfiled": "Unfiled"
+    }
+  }
+}

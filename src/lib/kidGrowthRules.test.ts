@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import {
   ageMilestoneFor,
   assertNoAllergenAutoRemoval,
@@ -46,6 +46,36 @@ describe('isBirthdayToday', () => {
 
   it('returns false on a non-matching day', () => {
     expect(isBirthdayToday('2020-05-19', NOW)).toBe(false);
+  });
+});
+
+describe('isBirthdayToday on the local calendar (America/Chicago)', () => {
+  // Node re-reads TZ when it changes, so Date's local getters follow it.
+  const previousTz = process.env.TZ;
+  beforeAll(() => {
+    process.env.TZ = 'America/Chicago';
+  });
+  afterAll(() => {
+    process.env.TZ = previousTz;
+  });
+
+  it('is false at 8pm the evening before, when UTC has already rolled over', () => {
+    const eveningBefore = new Date(2026, 8, 23, 20, 0);
+    // The zone is really applied: 8pm CDT is 1am the next day in UTC.
+    expect(eveningBefore.toISOString()).toBe('2026-09-24T01:00:00.000Z');
+    expect(isBirthdayToday('2020-09-24', eveningBefore)).toBe(false);
+    expect(calcAgeYears('2020-09-24', eveningBefore)).toBe(5);
+  });
+
+  it('is true at 8pm on the birthday itself', () => {
+    const eveningOf = new Date(2026, 8, 24, 20, 0);
+    expect(eveningOf.toISOString()).toBe('2026-09-25T01:00:00.000Z');
+    expect(isBirthdayToday('2020-09-24', eveningOf)).toBe(true);
+    expect(calcAgeYears('2020-09-24', eveningOf)).toBe(6);
+  });
+
+  it('rejects an impossible date', () => {
+    expect(isBirthdayToday('2020-02-31', new Date(2026, 2, 2, 12, 0))).toBe(false);
   });
 });
 
@@ -125,6 +155,16 @@ describe('buildKidGrowthSuggestions', () => {
     expect(out!.allergenReintroPrompts[0]).toMatch(/peanut/i);
   });
 
+  it('finds the prompt for picker plurals and synonyms (item 27)', () => {
+    const k = makeKid({
+      date_of_birth: '2020-05-20',
+      allergens: ['peanuts', 'tree nuts', 'eggs', 'dairy', 'milk'],
+    });
+    const out = buildKidGrowthSuggestions(k, [], { asOf: NOW });
+    // dairy and milk share one prompt.
+    expect(out!.allergenReintroPrompts).toHaveLength(4);
+  });
+
   it('does not invent prompts for unknown allergens', () => {
     const k = makeKid({
       date_of_birth: '2020-05-20',
@@ -148,6 +188,10 @@ describe('assertNoAllergenAutoRemoval', () => {
 
   it('passes when the same allergens are preserved', () => {
     expect(assertNoAllergenAutoRemoval(['peanut'], ['peanut'])).toBe(true);
+  });
+
+  it('treats a respelling as the same allergen, not a removal', () => {
+    expect(assertNoAllergenAutoRemoval(['Peanuts', 'dairy'], ['peanut', 'milk'])).toBe(true);
   });
 
   it('throws when an allergen is silently dropped', () => {

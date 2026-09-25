@@ -1,8 +1,36 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import path from 'path';
+import React from 'react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { buildGroceryRow } from './groceryRow';
-import { createGroceryExecutor } from './webSyncQueue';
+import { createGroceryExecutor, pendingWebOps } from './webSyncQueue';
+import type { GroceryItem } from '@/types';
+
+// --- For the write paths below: every request fails the way a dead aisle does.
+const OFFLINE = { message: 'TypeError: Failed to fetch' };
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: {
+    from: () => ({
+      insert: () => ({ select: () => Promise.resolve({ data: null, error: OFFLINE }) }),
+    }),
+    rpc: () => Promise.resolve({ error: OFFLINE }),
+    channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+    removeChannel: () => undefined,
+  },
+}));
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ userId: 'u1', householdId: 'h1' }),
+}));
+vi.mock('@/hooks/useRealtimeSubscription', () => ({
+  registerSubscription: () => undefined,
+  unregisterSubscription: () => undefined,
+}));
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+import { GroceryProvider, useGrocery } from '@/contexts/GroceryContext';
 
 /**
  * Every queued op kind has somewhere to be replayed (US-823).
@@ -211,5 +239,75 @@ describe('the web queue replays every kind it declares', () => {
     });
 
     expect(landed).toBe(true);
+  });
+});
+
+/**
+ * The two write paths that had no offline arm, or had none yet. A merge that
+ * bumps a row used to roll back offline while the insert beside it was
+ * queued, and an Undo that puts rows back has to replay under the ids the
+ * queued deletes named.
+ */
+describe('grocery write paths queue what they cannot send', () => {
+  const wrapper = ({ children }: { children: React.ReactNode }) =>
+    React.createElement(GroceryProvider, null, children);
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('the merge-bump path queues grocery.update', async () => {
+    const { result } = renderHook(() => useGrocery(), { wrapper });
+    act(() => {
+      result.current.setGroceryItemsState([
+        { id: 'row-1', name: 'milk', quantity: 1, unit: 'gal', checked: false, category: 'dairy' },
+      ]);
+    });
+    act(() => {
+      result.current.mergeGroceryItems([{ name: 'milk', quantity: 1, unit: 'gal' }]);
+    });
+
+    await waitFor(async () => expect(await pendingWebOps('u1')).toHaveLength(1));
+    const [op] = await pendingWebOps('u1');
+    expect(op.kind).toBe('grocery.update');
+    expect(op.payload).toEqual({ id: 'row-1', updates: { quantity: 2, unit: 'gal', name: 'milk' } });
+  });
+
+  it('restoreGroceryItems queues grocery.insert under the original id', async () => {
+    const { result } = renderHook(() => useGrocery(), { wrapper });
+    const row = {
+      id: 'orig-7',
+      name: 'Oat milk',
+      quantity: 2,
+      unit: 'carton',
+      checked: true,
+      category: 'dairy',
+      grocery_list_id: 'list-1',
+      brand_preference: 'Oatly',
+      source_plan_entry_id: 'e1',
+      added_via: 'meal_plan_sync',
+      auto_generated: true,
+      notes: 'barista',
+    } as GroceryItem;
+
+    act(() => {
+      result.current.restoreGroceryItems([row]);
+    });
+
+    await waitFor(async () => expect(await pendingWebOps('u1')).toHaveLength(1));
+    const [op] = await pendingWebOps('u1');
+    expect(op.kind).toBe('grocery.insert');
+    expect((op.payload as { row: Record<string, unknown> }).row).toMatchObject({
+      id: 'orig-7',
+      checked: true,
+      grocery_list_id: 'list-1',
+      brand_preference: 'Oatly',
+      source_plan_entry_id: 'e1',
+      added_via: 'meal_plan_sync',
+      auto_generated: true,
+      notes: 'barista',
+    });
+    // Still on screen, under the same id, checked as it was.
+    expect(result.current.groceryItems).toEqual([expect.objectContaining({ id: 'orig-7', checked: true })]);
   });
 });

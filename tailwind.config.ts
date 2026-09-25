@@ -65,6 +65,67 @@ export default {
         "safe-food": "hsl(var(--safe-food))",
         "try-bite": "hsl(var(--try-bite))",
         "sky-blue": "hsl(var(--sky-blue))",
+        // Badge tiers, mirroring iOS BadgeTier; tokens in src/index.css.
+        badge: {
+          bronze: {
+            DEFAULT: "hsl(var(--badge-bronze))",
+            foreground: "hsl(var(--badge-bronze-foreground))",
+            soft: "hsl(var(--badge-bronze-soft))",
+          },
+          silver: {
+            DEFAULT: "hsl(var(--badge-silver))",
+            foreground: "hsl(var(--badge-silver-foreground))",
+            soft: "hsl(var(--badge-silver-soft))",
+          },
+          gold: {
+            DEFAULT: "hsl(var(--badge-gold))",
+            foreground: "hsl(var(--badge-gold-foreground))",
+            soft: "hsl(var(--badge-gold-soft))",
+          },
+          platinum: {
+            DEFAULT: "hsl(var(--badge-platinum))",
+            foreground: "hsl(var(--badge-platinum-foreground))",
+            soft: "hsl(var(--badge-platinum-soft))",
+          },
+        },
+        // Pantry category colours (item 24), tokens in src/index.css.
+        cat: {
+          protein: {
+            DEFAULT: "hsl(var(--cat-protein))",
+            foreground: "hsl(var(--cat-protein-foreground))",
+            soft: "hsl(var(--cat-protein-soft))",
+          },
+          carb: {
+            DEFAULT: "hsl(var(--cat-carb))",
+            foreground: "hsl(var(--cat-carb-foreground))",
+            soft: "hsl(var(--cat-carb-soft))",
+          },
+          dairy: {
+            DEFAULT: "hsl(var(--cat-dairy))",
+            foreground: "hsl(var(--cat-dairy-foreground))",
+            soft: "hsl(var(--cat-dairy-soft))",
+          },
+          fruit: {
+            DEFAULT: "hsl(var(--cat-fruit))",
+            foreground: "hsl(var(--cat-fruit-foreground))",
+            soft: "hsl(var(--cat-fruit-soft))",
+          },
+          vegetable: {
+            DEFAULT: "hsl(var(--cat-vegetable))",
+            foreground: "hsl(var(--cat-vegetable-foreground))",
+            soft: "hsl(var(--cat-vegetable-soft))",
+          },
+          snack: {
+            DEFAULT: "hsl(var(--cat-snack))",
+            foreground: "hsl(var(--cat-snack-foreground))",
+            soft: "hsl(var(--cat-snack-soft))",
+          },
+          other: {
+            DEFAULT: "hsl(var(--cat-other))",
+            foreground: "hsl(var(--cat-other-foreground))",
+            soft: "hsl(var(--cat-other-soft))",
+          },
+        },
         // Research-backed trust colors for parents - using HSL for proper light/dark mode support
         trust: {
           blue: "hsl(var(--trust-blue))",

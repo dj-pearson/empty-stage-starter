@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import "@/i18n/appLocale";
 import { WifiOff, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,7 +20,9 @@ import { pendingWriteCount } from "@/lib/webSyncQueue";
  * src/lib/webSyncQueue.ts, and useOfflineSyncDriver actually replays it.
  */
 export function OfflineIndicator() {
+  const { t } = useTranslation();
   const { userId } = useAuth();
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine !== false,
   );
@@ -43,7 +47,12 @@ export function OfflineIndicator() {
       setIsReconnecting(true);
       // The drain runs off the same `online` event. Re-read after it has had a
       // moment so the badge reflects what is left, not what was there.
-      setTimeout(() => {
+      // Kept in a ref so an unmount (sign-out, route change) inside the two
+      // seconds does not set state on a component that is gone, and a second
+      // `online` event restarts the wait rather than stacking another timer.
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = setTimeout(() => {
+        reconnectTimer.current = null;
         setIsReconnecting(false);
         refreshPendingCount();
       }, 2000);
@@ -60,6 +69,10 @@ export function OfflineIndicator() {
 
     return () => {
       cancel();
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
@@ -84,24 +97,28 @@ export function OfflineIndicator() {
         // every dashboard route -- this banner, the install prompt and the support
         // FAB -- and the cookie bar (bottom-0, z-[100]) covered all of them for a
         // first-time visitor. A connectivity banner belongs at the top anyway.
-        "fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all",
-        isReconnecting
-          ? "bg-amber-500 text-white"
-          : "bg-destructive text-destructive-foreground",
+        // On a phone the dashboard header is fixed at top-0, h-14, z-50, so the
+        // banner starts at top-14 and sits one layer above it: below the header
+        // on screen, not hidden under it. From md up the header is sticky in the
+        // content column and top-4 clears it by centring over the page.
+        "fixed top-14 left-1/2 -translate-x-1/2 md:top-4 z-[60] flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium bg-warning text-warning-foreground",
       )}
     >
       {isReconnecting ? (
         <>
-          <RefreshCw className="h-4 w-4 animate-spin" />
-          Reconnecting...
+          <RefreshCw className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+          {t("offline.reconnecting", { defaultValue: "Reconnecting..." })}
         </>
       ) : (
         <>
-          <WifiOff className="h-4 w-4" />
-          You are offline
+          <WifiOff className="h-4 w-4" aria-hidden="true" />
+          {t("offline.banner", { defaultValue: "You're offline" })}
           {pendingCount > 0 && (
             <span className="ml-1 bg-background/20 px-2 py-0.5 rounded-full text-xs">
-              {pendingCount} pending {pendingCount === 1 ? "change" : "changes"}
+              {t("offline.pending", {
+                defaultValue: "{{count}} changes waiting to sync",
+                count: pendingCount,
+              })}
             </span>
           )}
         </>

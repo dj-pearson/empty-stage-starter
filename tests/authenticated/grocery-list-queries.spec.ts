@@ -27,9 +27,14 @@ test.describe('grocery list picker', () => {
   test(`loads its lists in at most ${MAX_LIST_QUERIES} queries`, async ({ page, context }) => {
     await signIn(context);
 
+    // The picker's own read, which selects every column. Two other readers of
+    // this table are on the page and are not the picker re-fetching: the
+    // shell's nav badge looks up the default list's id (select=id,is_default),
+    // and the store picker reads the list's store (select=store_layout_id).
     const queries: string[] = [];
     page.on('request', (request) => {
-      if (new URL(request.url()).pathname === '/rest/v1/grocery_lists') {
+      const url = new URL(request.url());
+      if (url.pathname === '/rest/v1/grocery_lists' && url.searchParams.get('select') === '*') {
         queries.push(request.method());
       }
     });

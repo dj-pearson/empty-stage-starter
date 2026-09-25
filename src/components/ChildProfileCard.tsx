@@ -1,485 +1,466 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import '@/i18n/appLocale';
+import { memo, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KidAvatarImage } from '@/components/KidAvatarImage';
 import {
-  AlertTriangle, Heart, Target, TrendingUp, ChefHat,
-  Sparkles, Edit, CheckCircle2, Calendar, Utensils,
-  Scale, Ruler, ThumbsUp, ThumbsDown, Leaf
+  AlertTriangle, Sparkles, Edit, CheckCircle2, Calendar, Share2, TrendingUp, Plus, ChevronRight, Pencil,
 } from "lucide-react";
-import { format } from "date-fns";
-import { calculateAge } from "@/lib/utils";
+import type { Kid } from "@/types";
+import type { KidProgressSummary } from "@/lib/kidProgress";
+import { kidAllergenChips, kidAllergyState } from "@/lib/kidAllergenChips";
+import { computeProfileCompleteness, parseReviewed, type ProfileGap } from "@/lib/kidProfileCompleteness";
+import { buildCareCardText, formatKidAge, humanize, severityLabel, type CareCardT } from "@/lib/careCard";
+import { RUNGS, RUNG_META } from "@/lib/exposureLadder";
+import type { KidSectionId } from "@/lib/kidIntakeForm";
+import { GAP_SECTION, KID_SECTION_TITLES } from "@/components/kids/kidSectionMeta";
+import {
+  DIETARY_RESTRICTIONS,
+  EATING_BEHAVIOR,
+  GENDERS,
+  HEALTH_GOALS,
+  NUTRITION_CONCERNS,
+  PICKINESS_LABELS,
+  TEXTURE_DISLIKES,
+  TEXTURE_LEVELS,
+  TEXTURE_LIKES,
+  WILLINGNESS,
+  type KidOption,
+} from "@/components/kids/kidEditorOptions";
 
 interface ChildProfileCardProps {
-  kid: {
-    id: string;
-    name: string;
-    age?: number;
-    date_of_birth?: string;
-    gender?: string;
-    height_cm?: number;
-    weight_kg?: number;
-    profile_picture_url?: string;
-    allergens?: string[];
-    allergen_severity?: Record<string, string>;
-    cross_contamination_sensitive?: boolean;
-    dietary_restrictions?: string[];
-    health_goals?: string[];
-    nutrition_concerns?: string[];
-    eating_behavior?: string;
-    pickiness_level?: string;
-    new_food_willingness?: string;
-    texture_sensitivity_level?: string;
-    texture_preferences?: string[];
-    texture_dislikes?: string[];
-    flavor_preferences?: string[];
-    preferred_preparations?: string[];
-    helpful_strategies?: string[];
-    favorite_foods?: string[];
-    always_eats_foods?: string[];
-    disliked_foods?: string[];
-    profile_completed?: boolean;
-    profile_last_reviewed?: string;
-  };
-  safeFoodsCount: number;
-  tryBitesCount: number;
-  totalMeals: number;
-  completedMeals: number;
-  onEdit: () => void;
-  onCompleteProfile: () => void;
+  kid: Kid;
+  progress?: KidProgressSummary;
+  /** Open the profile editor on one section of this child. */
+  onEditSection: (kidId: string, section: KidSectionId) => void;
 }
 
-export function ChildProfileCard({
-  kid,
-  safeFoodsCount,
-  tryBitesCount,
-  totalMeals,
-  completedMeals,
-  onEdit,
-  onCompleteProfile
-}: ChildProfileCardProps) {
-  const mealProgress = totalMeals > 0 ? (completedMeals / totalMeals) * 100 : 0;
-  const age = calculateAge(kid.date_of_birth);
+/** Ladder foods listed under "This week". */
+const LADDER_PREVIEW = 3;
+/** Food Chaining, where a parent picks a first food to work on (src/App.tsx). */
+const CHAINING_ROUTE = "/dashboard/food-chaining";
 
-  // Profile completion calculation
-  // Each criterion is worth 20% for a total of 100%
-  const profileCompletion = (() => {
-    let score = 0;
-    // name is required and always present = 20%
-    if (kid.name) score += 20;
-    // age set (via date_of_birth or age field) = 20%
-    if (kid.date_of_birth || kid.age) score += 20;
-    // allergens list has items = 20%
-    if (kid.allergens && kid.allergens.length > 0) score += 20;
-    // safe foods >= 5 = 20%
-    if (safeFoodsCount >= 5) score += 20;
-    // notes/preferences filled (eating_behavior, texture_preferences, or flavor_preferences) = 20%
-    if (
-      kid.eating_behavior ||
-      (kid.texture_preferences && kid.texture_preferences.length > 0) ||
-      (kid.flavor_preferences && kid.flavor_preferences.length > 0) ||
-      (kid.helpful_strategies && kid.helpful_strategies.length > 0)
-    ) {
-      score += 20;
+const GAP_CTA: Record<ProfileGap, { key: string; english: string }> = {
+  allergies: { key: "kids.card.completeness.cta.allergies", english: "Add allergies" },
+  birthday: { key: "kids.card.completeness.cta.birthday", english: "Add birthday" },
+  safeFoods: { key: "kids.editor.cta.alwaysEats", english: "Add foods they always eat" },
+  preferences: { key: "kids.card.completeness.cta.preferences", english: "Add dislikes and textures" },
+  goals: { key: "kids.card.completeness.cta.goals", english: "Add a goal" },
+};
+
+/** Card rows, in editor order. Allergies live in the header, under the name. */
+const ROW_SECTIONS: readonly KidSectionId[] = [
+  "basics",
+  "safeFoods",
+  "alwaysEats",
+  "dislikes",
+  "textures",
+  "behavior",
+  "goals",
+  "notes",
+];
+
+const nonEmpty = (list: readonly string[] | null | undefined): string[] =>
+  (list ?? []).filter((v): v is string => typeof v === "string" && v.trim() !== "");
+
+function ChildProfileCardImpl({ kid, progress, onEditSection }: ChildProfileCardProps) {
+  const { t, i18n } = useTranslation();
+  const tt = useCallback<CareCardT>((key, options) => String(t(key, options)), [t]);
+
+  const age = formatKidAge(kid, tt);
+  const allergyState = kidAllergyState(kid);
+  const allergenChips = useMemo(() => kidAllergenChips(kid), [kid]);
+  const completeness = useMemo(() => computeProfileCompleteness(kid), [kid]);
+  const nextGap = completeness.missing[0];
+  const reviewed = parseReviewed(kid.profile_last_reviewed);
+  const initial = Array.from(kid.name.trim())[0]?.toUpperCase() ?? "?";
+  const dietary = nonEmpty(kid.dietary_restrictions);
+
+  /** The label for a stored answer: its option's text, or the stored value made readable. */
+  const label = useCallback(
+    (options: readonly KidOption[], value: string) => {
+      const o = options.find((opt) => opt.value === value);
+      return o ? t(o.labelKey, { defaultValue: o.label }) : humanize(value);
+    },
+    [t],
+  );
+
+  const handleShare = useCallback(async () => {
+    const title = t("kids.card.careCard.shareTitle", { name: kid.name, defaultValue: "{{name}}'s care card" });
+    const text = buildCareCardText(kid, tt);
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title, text });
+        return;
+      }
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        toast.success(t("kids.card.careCard.copied", { defaultValue: "Care card copied. Paste it into a message." }));
+        return;
+      }
+      toast.error(t("kids.card.careCard.unavailable", { defaultValue: "Sharing isn't available in this browser." }));
+    } catch (error) {
+      // The parent closed the share sheet: nothing went wrong.
+      if (error instanceof Error && error.name === "AbortError") return;
+      toast.error(t("kids.card.careCard.failed", { defaultValue: "Couldn't share the care card. Try again." }));
     }
-    return score;
-  })();
+  }, [kid, t, tt]);
+
+  /** One line per section, or null when the section has nothing in it yet. */
+  const summaries = useMemo((): Record<KidSectionId, string | null> => {
+    const join = (parts: readonly (string | null | undefined | false)[], sep = " · ") => {
+      const kept = parts.filter((p): p is string => typeof p === "string" && p.trim() !== "");
+      return kept.length > 0 ? kept.join(sep) : null;
+    };
+    const list = (items: readonly string[], format: (v: string) => string = (v) => v) =>
+      items.length > 0 ? items.map(format).join(", ") : null;
+
+    const texturesAvoid = nonEmpty(kid.texture_dislikes);
+    const texturesLike = nonEmpty(kid.texture_preferences);
+    const preparations = nonEmpty(kid.preferred_preparations);
+    const flavors = nonEmpty(kid.flavor_preferences);
+    const habits = (kid.behavioral_notes ?? "").split(",").map((h) => h.trim()).filter(Boolean);
+    const strategies = nonEmpty(kid.helpful_strategies);
+
+    return {
+      basics: join([
+        kid.gender ? label(GENDERS, kid.gender) : null,
+        kid.height_cm ? t("kids.card.details.heightValue", { value: kid.height_cm, defaultValue: "{{value}} cm" }) : null,
+        kid.weight_kg ? t("kids.card.details.weightValue", { value: kid.weight_kg, defaultValue: "{{value}} kg" }) : null,
+      ]),
+      allergies: null,
+      safeFoods: list(nonEmpty(kid.favorite_foods)),
+      alwaysEats: list(nonEmpty(kid.always_eats_foods)),
+      dislikes: list(nonEmpty(kid.disliked_foods)),
+      textures: join([
+        kid.texture_sensitivity_level
+          ? t("kids.card.prefs.textureSensitivity", {
+              value: TEXTURE_LEVELS.some((o) => o.value === kid.texture_sensitivity_level)
+                ? t(`kids.intake.texture.short.${kid.texture_sensitivity_level}`, {
+                    defaultValue: humanize(kid.texture_sensitivity_level),
+                  })
+                : humanize(kid.texture_sensitivity_level),
+              defaultValue: "Texture sensitivity: {{value}}",
+            })
+          : null,
+        texturesAvoid.length > 0
+          ? t("kids.intake.review.avoids", { list: list(texturesAvoid, (v) => label(TEXTURE_DISLIKES, v)), defaultValue: "Avoids: {{list}}" })
+          : null,
+        texturesLike.length > 0
+          ? t("kids.intake.review.likes", { list: list(texturesLike, (v) => label(TEXTURE_LIKES, v)), defaultValue: "Likes: {{list}}" })
+          : null,
+        preparations.length > 0
+          ? t("kids.editor.card.prepared", { list: list(preparations), defaultValue: "Prepared: {{list}}" })
+          : null,
+        flavors.length > 0
+          ? t("kids.editor.card.flavors", { list: list(flavors, humanize), defaultValue: "Flavors: {{list}}" })
+          : null,
+      ]),
+      behavior: join([
+        kid.eating_behavior ? label(EATING_BEHAVIOR, kid.eating_behavior) : null,
+        kid.new_food_willingness ? label(WILLINGNESS, kid.new_food_willingness) : null,
+        kid.pickiness_level ? label(PICKINESS_LABELS, kid.pickiness_level) : null,
+        list(habits),
+      ]),
+      goals: join([
+        list(nonEmpty(kid.health_goals), (v) => label(HEALTH_GOALS, v)),
+        list(nonEmpty(kid.nutrition_concerns), (v) => label(NUTRITION_CONCERNS, v)),
+        strategies.length > 0
+          ? t("kids.editor.card.helps", { list: list(strategies, humanize), defaultValue: "What helps: {{list}}" })
+          : null,
+      ]),
+      notes: kid.notes?.trim() ? kid.notes.trim() : null,
+    };
+  }, [kid, label, t]);
+
+  const ladderPreview = (progress?.activeLadder ?? []).slice(0, LADDER_PREVIEW);
+  const rungLabel = (rung: number) => {
+    const key = Number.isInteger(rung) && rung >= 0 ? RUNGS[rung] : undefined;
+    return key
+      ? t(`kids.card.rung.${key}`, { defaultValue: RUNG_META[key].label })
+      : t("kids.card.progress.step", { n: rung + 1, defaultValue: "Step {{n}}" });
+  };
+
+  const sectionTitle = (section: KidSectionId) =>
+    t(KID_SECTION_TITLES[section].key, { defaultValue: KID_SECTION_TITLES[section].label });
+
+  const headingId = `kid-${kid.id}-name`;
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16 border-2 border-background shadow-md">
-              <KidAvatarImage src={kid.profile_picture_url} />
-              <AvatarFallback className="text-xl">{kid.name[0]}</AvatarFallback>
+      <CardHeader className="bg-card space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Avatar className="h-14 w-14 shrink-0 border-2 border-border">
+              <KidAvatarImage src={kid.profile_picture_url} alt="" />
+              <AvatarFallback className="text-xl">{initial}</AvatarFallback>
             </Avatar>
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                {kid.name}
-                {kid.profile_completed && (
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                )}
-              </CardTitle>
-              {age !== null && <p className="text-sm text-muted-foreground">{age} years old</p>}
-              {kid.profile_last_reviewed && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                  <Calendar className="h-3 w-3" />
-                  Last updated: {format(new Date(kid.profile_last_reviewed), "MMM d, yyyy")}
-                </p>
-              )}
-              {/* Profile completion indicator */}
-              <div className="mt-2">
-                <div className="flex items-center gap-2">
-                  {/* aria-label (US-778): a progressbar with no name announces
-                      only a percentage, with nothing saying what it measures. */}
-                  <Progress
-                    value={profileCompletion}
-                    className="h-1.5 w-24"
-                    aria-label={`Profile ${profileCompletion}% complete`}
+            <div className="min-w-0">
+              <h2
+                id={headingId}
+                className="flex items-center gap-2 text-2xl font-semibold leading-none tracking-tight"
+              >
+                <span className="truncate">{kid.name}</span>
+                {completeness.percent === 100 && (
+                  <CheckCircle2
+                    className="h-4 w-4 shrink-0 text-primary"
+                    aria-label={t("kids.card.completeness.complete", { defaultValue: "Profile complete" })}
                   />
-                  <span className={`text-xs font-medium ${profileCompletion >= 80 ? "text-primary" : "text-muted-foreground"}`}>
-                    Profile {profileCompletion}% complete
-                  </span>
-                </div>
-                {profileCompletion < 80 && (
-                  <button
-                    onClick={onCompleteProfile}
-                    className="text-xs text-primary hover:underline mt-1 font-medium"
-                  >
-                    Complete Profile
-                  </button>
                 )}
-              </div>
+              </h2>
+              {age && <p className="mt-1 text-sm text-muted-foreground">{age}</p>}
             </div>
           </div>
-          {/* aria-label (US-778): icon-only, so it announced as an unnamed
-              button -- and it is rendered once per child, so the Kids page had
-              as many nameless controls as the household has children. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onEdit}
-            aria-label={`Edit ${kid.name}'s profile`}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="min-h-11 min-w-11"
+              onClick={handleShare}
+              aria-label={t("kids.card.careCard.shareAria", {
+                name: kid.name,
+                defaultValue: "Share {{name}}'s care card",
+              })}
+            >
+              <Share2 className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            {/* aria-label (US-778): icon-only, and rendered once per child. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="min-h-11 min-w-11"
+              onClick={() => onEditSection(kid.id, "basics")}
+              aria-label={t("kids.card.editAria", { name: kid.name, defaultValue: "Edit {{name}}'s profile" })}
+            >
+              <Edit className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
+
+        {/* Allergies sit directly under the name on every card: they are the
+            one thing a caregiver must not have to look for. */}
+        <div className="flex items-start justify-between gap-2">
+          <div
+            role="list"
+            aria-label={t("kids.card.allergies.listLabel", { name: kid.name, defaultValue: "Allergies for {{name}}" })}
+            className="flex flex-wrap items-center gap-1.5"
+          >
+            {allergyState === "unknown" && (
+              <div role="listitem" className="flex items-center gap-1.5">
+                <Badge variant="outline" className="border-warning bg-warning/15 text-foreground text-xs">
+                  <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
+                  {t("kids.card.allergies.unknown", { defaultValue: "Allergies not recorded" })}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => onEditSection(kid.id, "allergies")}
+                  aria-label={t("kids.card.allergies.addAria", {
+                    name: kid.name,
+                    defaultValue: "Add allergies for {{name}}",
+                  })}
+                >
+                  <Plus className="mr-1 h-3 w-3" aria-hidden="true" />
+                  {t("kids.card.allergies.add", { defaultValue: "Add" })}
+                </Button>
+              </div>
+            )}
+            {allergyState === "none" && (
+              <Badge role="listitem" variant="secondary" className="text-xs">
+                {t("kids.card.allergies.none", { defaultValue: "No known allergies" })}
+              </Badge>
+            )}
+            {allergyState === "listed" &&
+              allergenChips.map((chip) =>
+                chip.severity === "severe" ? (
+                  <Badge key={chip.key} role="listitem" variant="destructive" className="text-xs">
+                    <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
+                    {chip.label} ({severityLabel(chip.severity, tt)})
+                  </Badge>
+                ) : (
+                  <Badge
+                    key={chip.key}
+                    role="listitem"
+                    variant="outline"
+                    className="border-destructive text-destructive text-xs"
+                  >
+                    {chip.label}
+                    {chip.severity ? ` (${severityLabel(chip.severity, tt)})` : ""}
+                  </Badge>
+                ),
+              )}
+            {kid.cross_contamination_sensitive && (
+              <Badge role="listitem" variant="outline" className="border-destructive text-destructive text-xs">
+                {t("kids.card.allergies.crossContact", { defaultValue: "Cross-contact sensitive" })}
+              </Badge>
+            )}
+          </div>
+          {allergyState !== "unknown" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="min-h-11 min-w-11 shrink-0"
+              onClick={() => onEditSection(kid.id, "allergies")}
+              aria-label={t("kids.editor.card.editAllergies", {
+                name: kid.name,
+                defaultValue: "Edit allergies for {{name}}",
+              })}
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+        {dietary.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {t("kids.editor.card.diet", {
+              list: dietary.map((d) => label(DIETARY_RESTRICTIONS, d)).join(", "),
+              defaultValue: "Diet: {{list}}",
+            })}
+          </p>
+        )}
       </CardHeader>
 
-      <CardContent className="pt-4 space-y-4">
-        {!kid.profile_completed && (
-          <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <p className="text-sm font-medium">Complete {kid.name}'s profile</p>
-              </div>
-              <Button size="sm" onClick={onCompleteProfile}>
-                Start
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Get personalized meal plans by answering a few questions
+      <CardContent className="space-y-4 pt-0">
+        {progress && (
+          <section aria-labelledby={`kid-${kid.id}-week`} className="space-y-2 rounded-lg bg-muted/50 p-3">
+            <h3 id={`kid-${kid.id}-week`} className="flex items-center gap-2 text-sm font-medium">
+              <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
+              {t("kids.card.progress.title", { defaultValue: "This week" })}
+            </h3>
+            <p className="text-sm">
+              {t("kids.card.progress.line", {
+                ate: progress.ate,
+                tasted: progress.tasted,
+                refused: progress.refused,
+                defaultValue: "Ate {{ate}} · Tasted {{tasted}} · Refused {{refused}}",
+              })}
             </p>
+            <p className="text-xs text-muted-foreground">
+              {t("kids.card.progress.newFoods", {
+                count: progress.newFoodsTried,
+                defaultValue: progress.newFoodsTried === 1 ? "{{count}} new food tried" : "{{count}} new foods tried",
+              })}
+              {" · "}
+              {t("kids.card.progress.mastered", {
+                count: progress.mastered,
+                defaultValue: "{{count}} mastered",
+              })}
+            </p>
+            {ladderPreview.length > 0 ? (
+              <ul className="space-y-1" aria-label={t("kids.card.progress.ladderLabel", { defaultValue: "Foods in progress" })}>
+                {ladderPreview.map((item) => (
+                  <li key={item.foodId} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate">
+                      {item.foodName || t("kids.card.progress.unnamedFood", { defaultValue: "A food" })}
+                    </span>
+                    <Badge variant="outline" className="shrink-0 text-xs">
+                      {rungLabel(item.rung)}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Link to={`${CHAINING_ROUTE}?kid=${encodeURIComponent(kid.id)}`} className="inline-block text-sm font-medium text-primary hover:underline">
+                {t("kids.card.progress.empty", { defaultValue: "Pick a first food to work on" })}
+              </Link>
+            )}
+          </section>
+        )}
+
+        {completeness.percent < 100 && nextGap && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              {/* aria-label (US-778): a progressbar needs a name saying what it measures. */}
+              <Progress
+                value={completeness.percent}
+                className="h-1.5 w-24"
+                aria-label={t("kids.card.completeness.label", {
+                  percent: completeness.percent,
+                  defaultValue: "Profile {{percent}}% complete",
+                })}
+              />
+              <span className="text-xs text-muted-foreground">
+                {t("kids.card.completeness.label", {
+                  percent: completeness.percent,
+                  defaultValue: "Profile {{percent}}% complete",
+                })}
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => onEditSection(kid.id, GAP_SECTION[nextGap])}
+            >
+              <Sparkles className="mr-1 h-4 w-4" aria-hidden="true" />
+              {t(GAP_CTA[nextGap].key, { defaultValue: GAP_CTA[nextGap].english })}
+            </Button>
           </div>
         )}
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="health">Health</TabsTrigger>
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="foods">Foods</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-4 mt-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Heart className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Safe Foods</span>
-                </div>
-                <p className="text-2xl font-bold">{safeFoodsCount}</p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <ChefHat className="h-4 w-4 text-accent" />
-                  <span className="text-sm font-medium">Try Bites</span>
-                </div>
-                <p className="text-2xl font-bold">{tryBitesCount}</p>
-              </div>
-            </div>
-
-            {(kid.gender || kid.height_cm || kid.weight_kg) && (
-              <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
-                {kid.gender && (
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">Gender</span>
-                    <p className="text-sm font-medium capitalize">{kid.gender}</p>
-                  </div>
-                )}
-                {kid.height_cm && (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1">
-                      <Ruler className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">Height</span>
-                    </div>
-                    <p className="text-sm font-medium">{kid.height_cm} cm</p>
-                  </div>
-                )}
-                {kid.weight_kg && (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1">
-                      <Scale className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">Weight</span>
-                    </div>
-                    <p className="text-sm font-medium">{kid.weight_kg} kg</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {kid.eating_behavior && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Utensils className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Eating Profile</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Badge variant="outline" className="justify-start">
-                    Behavior: {kid.eating_behavior.replace(/_/g, " ")}
-                  </Badge>
-                  {kid.pickiness_level && (
-                    <Badge variant="outline" className="justify-start">
-                      Pickiness: {kid.pickiness_level}
-                    </Badge>
+        {/* Each row opens the editor on that section alone. */}
+        <ul
+          className="divide-y rounded-lg border"
+          aria-label={t("kids.editor.card.sectionsLabel", { name: kid.name, defaultValue: "{{name}}'s profile" })}
+        >
+          {ROW_SECTIONS.map((section) => {
+            const summary = summaries[section];
+            const title = sectionTitle(section);
+            return (
+              <li key={section}>
+                <button
+                  type="button"
+                  onClick={() => onEditSection(kid.id, section)}
+                  className="flex min-h-11 w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="sr-only">
+                      {t("kids.editor.card.editPrefix", { defaultValue: "Edit" })}{" "}
+                    </span>
+                    <span className="block text-sm font-medium">{title}</span>
+                    {summary ? (
+                      <span className="line-clamp-2 block whitespace-pre-line text-sm text-muted-foreground">
+                        {summary}
+                      </span>
+                    ) : (
+                      <span className="block text-sm text-muted-foreground">
+                        {t("kids.editor.card.empty", { defaultValue: "Not added yet" })}
+                      </span>
+                    )}
+                  </span>
+                  {summary ? (
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  ) : (
+                    <Plus className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   )}
-                  {kid.new_food_willingness && (
-                    <Badge variant="outline" className="justify-start">
-                      New Foods: {kid.new_food_willingness}
-                    </Badge>
-                  )}
-                  {kid.texture_sensitivity_level && (
-                    <Badge variant="outline" className="justify-start">
-                      Texture Sensitivity: {kid.texture_sensitivity_level}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
 
-            <div className="space-y-2 pt-2 border-t">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Meal Progress</span>
-                <span className="font-medium">{completedMeals} / {totalMeals}</span>
-              </div>
-              <Progress
-                value={mealProgress}
-                className="h-2"
-                aria-label={`Meal progress: ${completedMeals} of ${totalMeals} complete`}
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="health" className="space-y-4 mt-4">
-            {kid.allergens && kid.allergens.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                  <span className="text-sm font-medium">Allergens & Severity</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.allergens.map((allergen) => (
-                    <Badge key={allergen} variant="destructive" className="text-xs">
-                      {allergen}
-                      {kid.allergen_severity?.[allergen] && 
-                        ` (${kid.allergen_severity[allergen]})`
-                      }
-                    </Badge>
-                  ))}
-                </div>
-                {kid.cross_contamination_sensitive && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    Cross-contamination sensitive
-                  </p>
-                )}
-              </div>
-            )}
-
-            {kid.dietary_restrictions && kid.dietary_restrictions.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Leaf className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Dietary Restrictions</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.dietary_restrictions.map((restriction) => (
-                    <Badge key={restriction} variant="secondary" className="text-xs capitalize">
-                      {restriction}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.health_goals && kid.health_goals.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Health Goals</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.health_goals.map((goal) => (
-                    <Badge key={goal} variant="outline" className="text-xs capitalize">
-                      {goal.replace(/_/g, " ")}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.nutrition_concerns && kid.nutrition_concerns.length > 0 && (
-              <div className="space-y-2">
-                <span className="text-sm font-medium">Nutrition Concerns</span>
-                <div className="flex flex-wrap gap-1">
-                  {kid.nutrition_concerns.map((concern) => (
-                    <Badge key={concern} variant="outline" className="text-xs capitalize">
-                      {concern.replace(/_/g, " ")}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {!kid.allergens?.length && !kid.dietary_restrictions?.length && !kid.health_goals?.length && !kid.nutrition_concerns?.length && (
-              <div className="text-center py-6 text-muted-foreground">
-                <Heart className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm font-medium">No health info added yet</p>
-                <p className="text-xs mt-1">Complete {kid.name}'s profile to add health details, allergens, and nutrition concerns</p>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="preferences" className="space-y-4 mt-4">
-            {kid.texture_preferences && kid.texture_preferences.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <ThumbsUp className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Texture Preferences</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.texture_preferences.map((texture) => (
-                    <Badge key={texture} variant="outline" className="text-xs capitalize">
-                      {texture}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.texture_dislikes && kid.texture_dislikes.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <ThumbsDown className="h-4 w-4 text-destructive" />
-                  <span className="text-sm font-medium">Texture Dislikes</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.texture_dislikes.map((texture) => (
-                    <Badge key={texture} variant="destructive" className="text-xs capitalize">
-                      {texture}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.flavor_preferences && kid.flavor_preferences.length > 0 && (
-              <div className="space-y-2">
-                <span className="text-sm font-medium">Flavor Preferences</span>
-                <div className="flex flex-wrap gap-1">
-                  {kid.flavor_preferences.map((flavor) => (
-                    <Badge key={flavor} variant="outline" className="text-xs capitalize">
-                      {flavor}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.preferred_preparations && kid.preferred_preparations.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <ChefHat className="h-4 w-4 text-accent" />
-                  <span className="text-sm font-medium">Preferred Preparations</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.preferred_preparations.map((prep) => (
-                    <Badge key={prep} variant="secondary" className="text-xs capitalize">
-                      {prep.replace(/_/g, " ")}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.helpful_strategies && kid.helpful_strategies.length > 0 && (
-              <div className="space-y-2">
-                <span className="text-sm font-medium">Helpful Strategies</span>
-                <div className="flex flex-wrap gap-1">
-                  {kid.helpful_strategies.map((strategy) => (
-                    <Badge key={strategy} variant="outline" className="text-xs">
-                      {strategy.replace(/_/g, " ")}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {!kid.texture_preferences?.length && !kid.texture_dislikes?.length && !kid.flavor_preferences?.length && !kid.preferred_preparations?.length && !kid.helpful_strategies?.length && (
-              <div className="text-center py-6 text-muted-foreground">
-                <ChefHat className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm font-medium">No preferences set yet</p>
-                <p className="text-xs mt-1">Complete {kid.name}'s profile to add texture and flavor preferences</p>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="foods" className="space-y-4 mt-4">
-            {kid.always_eats_foods && kid.always_eats_foods.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Heart className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Always Eats</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.always_eats_foods.map((food) => (
-                    <Badge key={food} className="text-xs bg-primary/20 text-primary hover:bg-primary/30">
-                      {food}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.favorite_foods && kid.favorite_foods.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-accent" />
-                  <span className="text-sm font-medium">Favorites</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.favorite_foods.map((food) => (
-                    <Badge key={food} className="text-xs bg-accent/20 text-accent-foreground">
-                      {food}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {kid.disliked_foods && kid.disliked_foods.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <ThumbsDown className="h-4 w-4 text-destructive" />
-                  <span className="text-sm font-medium">Foods to Avoid</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {kid.disliked_foods.map((food) => (
-                    <Badge key={food} variant="destructive" className="text-xs">
-                      {food}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        {reviewed && (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Calendar className="h-3 w-3" aria-hidden="true" />
+            {t("kids.card.details.lastReviewed", {
+              date: new Intl.DateTimeFormat(i18n.language || undefined, { dateStyle: "medium" }).format(reviewed),
+              defaultValue: "Last updated {{date}}",
+            })}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
 }
+
+export const ChildProfileCard = memo(ChildProfileCardImpl);

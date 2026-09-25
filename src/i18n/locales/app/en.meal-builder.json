@@ -1,0 +1,167 @@
+{
+  "mealBuilder": {
+    "title": "Meal Builder",
+    "titleForKid": "Build {{name}}'s plate",
+    "meta": {
+      "title": "Build a plate with your child",
+      "description": "Build one meal with your child: a food they eat, a small try bite and something for the food group today is missing, then add it to the plan in one tap."
+    },
+    "subtitle": "You choose what's offered. {{name}} picks from it.",
+    "links": {
+      "label": "Related screens",
+      "foodTracker": "Log tries in Food Tracker",
+      "planner": "Add anything else in the Planner"
+    },
+    "slotChip": "{{slot}}, {{day}}",
+    "slotChipLabel": "Meal: {{slot}}, {{day}}. Change",
+    "day": {
+      "today": "today",
+      "tomorrow": "tomorrow"
+    },
+    "slotPicker": {
+      "title": "Which meal?",
+      "date": "Day",
+      "slot": "Meal",
+      "done": "Done"
+    },
+    "loadingKids": "Loading your children",
+    "kidsError": {
+      "title": "Couldn't load your children",
+      "body": "Check your connection and try again.",
+      "retry": "Retry"
+    },
+    "noKids": {
+      "title": "Add a child to build a plate",
+      "body": "Plates are built from the foods one child knows, so the builder needs a child first.",
+      "cta": "Add a child"
+    },
+    "kidPicker": {
+      "body": "Pick who this plate is for."
+    },
+    "chooseChild": "Whose plate?",
+    "switchedTo": "Building {{name}}'s plate",
+    "plateHeading": "{{name}}'s plate",
+    "plateLoading": "Loading {{name}}'s foods",
+    "zones": {
+      "safe": "Safe food",
+      "tryBite": "Try bite",
+      "bridge": "Bridge food",
+      "gap": "Fill a gap",
+      "gapFor": "Add a {{group}}"
+    },
+    "zoneName": {
+      "safe": "safe food",
+      "tryBite": "try bite",
+      "bridge": "bridge food",
+      "gap": "food-group filler"
+    },
+    "zoneHint": {
+      "safe": "Something {{name}} already eats.",
+      "tryBite": "A small taste on the side. Touching or smelling it counts.",
+      "bridge": "Close to the safe food. Optional.",
+      "gap": "Today has no {{group}} yet."
+    },
+    "groups": {
+      "protein": "protein",
+      "carb": "grain or starch",
+      "dairy": "dairy",
+      "fruit": "fruit",
+      "vegetable": "vegetable"
+    },
+    "reason": {
+      "mastered": "now a safe food",
+      "alwaysEats": "always eats",
+      "reliable": "eats it often",
+      "reliableCount": "ate it {{ate}} of {{offered}} times",
+      "householdUnconfirmed": "marked safe for the family",
+      "dueToday": "due today",
+      "closeToSafe": "nearly safe",
+      "chainPair": "goes with the try bite",
+      "chainSuggestion": "like the safe food",
+      "gapPantry": "in the pantry",
+      "gapOnList": "on the grocery list",
+      "gapOther": "easy to add"
+    },
+    "choiceLabel": "{{food}}, {{zone}}, {{reason}}",
+    "empty": {
+      "safe": "No safe foods for {{name}} yet.",
+      "safeLink": "Mark what {{name}} eats in Food Tracker",
+      "tryBite": "No ladder step due today.",
+      "tryBiteLink": "Pick a food to work on in Food Tracker",
+      "gap": "Nothing you have fills the {{group}} gap.",
+      "bridge": "No bridge food for this safe food yet."
+    },
+    "status": {
+      "tryBitePending": "Loading the ladder",
+      "tryBiteUnavailable": "Couldn't load the ladder.",
+      "retry": "Retry",
+      "balanced": "Every food group is covered today.",
+      "bridgePending": "Looking for a bridge food"
+    },
+    "heldBack": {
+      "summary": "Held back ({{count}})",
+      "intro": "Not offered for {{name}}:",
+      "item": "{{food}}: {{reason}}",
+      "allergen": "contains {{allergen}}",
+      "allergenSevere": "contains {{allergen}}, severe allergy",
+      "allergenSevereUnrated": "contains {{allergen}}, allergy severity not recorded",
+      "disliked": "on {{name}}'s dislike list",
+      "stalled": "resting after a few hard tries",
+      "paused": "paused on the ladder",
+      "alreadyInSlot": "already on this meal",
+      "alreadyPlannedToday": "already planned today",
+      "unknownFood": "no longer in your foods"
+    },
+    "allergiesUnknown": "{{name}}'s allergies aren't recorded, so nothing here was checked against them.",
+    "allergiesUnknownLink": "Record allergies",
+    "hand": {
+      "start": "Hand to {{name}}",
+      "done": "Done",
+      "banner": "{{name}} is choosing. One from each row."
+    },
+    "kidPicked": "Picked {{food}} for the {{zone}}.",
+    "handBack": "Back to you.",
+    "save": {
+      "add": "Add to plan",
+      "saving": "Adding...",
+      "nothing": "Pick a food first",
+      "summary_one": "{{count}} food for {{slot}}, {{day}}",
+      "summary_other": "{{count}} foods for {{slot}}, {{day}}"
+    },
+    "tryBitePlacement": {
+      "label": "Where the try bite goes",
+      "row": "Try-bite row",
+      "same": "Same meal"
+    },
+    "offline": {
+      "save": "You're offline. This plate is kept on this device; add it when you're back online.",
+      "restored": "Your unsaved plate is back."
+    },
+    "saved": "Added to {{slot}}, {{day}}",
+    "skipped": "{{food}} was already on {{slot}}",
+    "nothingNew": "Everything on this plate was already on {{slot}}.",
+    "notSaved": "Not saved. Your plate is still here.",
+    "undone": "Taken off the plan. Your plate is back.",
+    "undoFailed": "Couldn't undo. Remove it in the Planner.",
+    "postSave": {
+      "planner": "See it on the Planner",
+      "logTryBite": "How did the try bite go? Log it"
+    },
+    "confirm": {
+      "blockTitle": "{{food}} can't go on {{name}}'s plate",
+      "blockSevere": "{{name}} has a severe {{allergen}} allergy, and {{food}} contains {{allergen}}.",
+      "blockSevereUnrated": "{{food}} contains {{allergen}}. {{name}}'s {{allergen}} allergy has no severity recorded, so it's treated as severe.",
+      "cancel": "Go back",
+      "plainTitle": "{{food}} contains {{allergen}}",
+      "plainBody": "{{name}} has a {{severity}} {{allergen}} allergy.",
+      "plainAction": "Add it for {{name}} anyway",
+      "unknownTitle": "{{name}}'s allergies aren't recorded",
+      "unknownBody": "This plate couldn't be checked against {{name}}'s allergies.",
+      "unknownAction": "Add it for {{name}}"
+    },
+    "recent": {
+      "title": "Recent plates",
+      "use": "Use this plate: {{foods}}"
+    }
+  }
+}

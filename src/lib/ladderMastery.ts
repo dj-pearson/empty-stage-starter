@@ -16,7 +16,9 @@
  *     scores on sensory similarity.
  */
 
+import { matchingAllergen, matchingFoodAllergen } from '@/lib/allergens';
 import type { ChainOutcome, PickinessBucket } from './chainNetwork';
+import { deterministicUuid, normalizeChainFoodName } from './chainNetworkKeys';
 
 export interface ChainSuggestion {
   foodId: string;
@@ -28,6 +30,12 @@ export interface ChainSuggestion {
 export interface MasteryCandidate extends ChainSuggestion {
   /** The mastered food this target chains from — the new row's anchor. */
   anchorFoodId: string;
+  /**
+   * The child these candidates were computed for. A candidate is only valid
+   * for that child's allergens and ladder, so it must never be started for
+   * whoever happens to be selected when the parent taps it.
+   */
+  kidId: string | null;
 }
 
 export interface HandoffContext {
@@ -35,20 +43,30 @@ export interface HandoffContext {
   masteredFoodId: string;
   /** Every food already on this child's ladder, whatever its status. */
   ladderFoodIds: string[];
-  /** Lowercased allergens for the child. */
+  /** The child's allergens, in any spelling; matched via matchingAllergen. */
   kidAllergens: string[];
-  /** Allergens per candidate food, keyed by food id. */
+  /**
+   * Allergens per candidate food, keyed by food id. For a child with any
+   * allergen, a candidate missing from this map is dropped: an unknown
+   * allergen list is not a safe one.
+   */
   allergensByFoodId: Map<string, string[]>;
+  /**
+   * The candidate foods themselves, keyed by id. When given, the check reads
+   * the food's name and allergen families as well as its tags
+   * (matchingFoodAllergen), so an untagged "Peanut butter crackers" is caught.
+   * Optional so older callers keep working; without it only the tags in
+   * `allergensByFoodId` are checked.
+   */
+  foodsById?: ReadonlyMap<string, { name?: string | null; allergens?: readonly string[] | null }>;
+  /** The child the candidates are for; copied onto each candidate. */
+  kidId?: string | null;
   /** How many targets to offer. Kept small on purpose. */
   limit?: number;
 }
 
 /** Offering a wall of options is its own kind of pressure. */
 export const DEFAULT_HANDOFF_LIMIT = 3;
-
-function lower(values: string[] | null | undefined): string[] {
-  return (values ?? []).map((v) => v.toLowerCase().trim()).filter(Boolean);
-}
 
 /**
  * Pick the next ladder targets after a food is mastered.
@@ -62,7 +80,7 @@ export function selectHandoffCandidates(
   ctx: HandoffContext
 ): MasteryCandidate[] {
   const alreadyTracked = new Set(ctx.ladderFoodIds);
-  const allergens = new Set(lower(ctx.kidAllergens));
+  const kidHasAllergens = ctx.kidAllergens.some((a) => typeof a === 'string' && a.trim());
   const limit = ctx.limit ?? DEFAULT_HANDOFF_LIMIT;
 
   return suggestions
@@ -71,9 +89,18 @@ export function selectHandoffCandidates(
       if (s.foodId === ctx.masteredFoodId) return false;
       if (alreadyTracked.has(s.foodId)) return false;
 
-      if (allergens.size > 0) {
-        const foodAllergens = lower(ctx.allergensByFoodId.get(s.foodId));
-        if (foodAllergens.some((a) => allergens.has(a))) return false;
+      if (kidHasAllergens) {
+        const foodAllergens = ctx.allergensByFoodId.get(s.foodId);
+        if (ctx.foodsById) {
+          const food = ctx.foodsById.get(s.foodId);
+          // Unknown to both maps: an unknown allergen list is not a safe one.
+          if (!food && !foodAllergens) return false;
+          const checked = food ?? { name: s.foodName, allergens: foodAllergens };
+          if (matchingFoodAllergen(ctx.kidAllergens, checked) !== null) return false;
+        } else {
+          if (!foodAllergens) return false;
+          if (matchingAllergen(ctx.kidAllergens, foodAllergens) !== null) return false;
+        }
       }
       return true;
     })
@@ -85,7 +112,7 @@ export function selectHandoffCandidates(
       return a.foodId.localeCompare(b.foodId);
     })
     .slice(0, limit)
-    .map((s) => ({ ...s, anchorFoodId: ctx.masteredFoodId }));
+    .map((s) => ({ ...s, anchorFoodId: ctx.masteredFoodId, kidId: ctx.kidId ?? null }));
 }
 
 export interface WinContributionArgs {
@@ -112,7 +139,9 @@ export interface WinContribution {
  *
  * The ladder row id is the idempotency key, mirroring how US-296 reuses an
  * attempt's UUID: a row can only be mastered once, so re-saving or replaying
- * a queued write cannot inflate the cross-family counts.
+ * a queued write cannot inflate the cross-family counts. The server column is
+ * a UUID, so the key is `deterministicUuid('ladder:<rowId>')`: a readable
+ * `ladder:<id>` string failed the cast and every mastery contribution was lost.
  */
 export function buildWinContribution(args: WinContributionArgs): WinContribution | null {
   if (!args.shareEnabled) return null;
@@ -121,9 +150,11 @@ export function buildWinContribution(args: WinContributionArgs): WinContribution
   const target = args.targetFoodName.trim();
   // A contribution keyed to an unnamed food teaches the network nothing.
   if (!source || !target) return null;
+  // The server drops source == target after normalizing; don't send one.
+  if (normalizeChainFoodName(source) === normalizeChainFoodName(target)) return null;
 
   return {
-    contributionKey: `ladder:${args.ladderRowId}`,
+    contributionKey: deterministicUuid(`ladder:${args.ladderRowId}`),
     sourceFoodName: source,
     targetFoodName: target,
     pickinessBucket: args.pickinessBucket,

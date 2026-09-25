@@ -40,11 +40,7 @@ const SRC = join(ROOT, 'src');
  */
 const KNOWN_UNNAMED: Record<string, number> = {
   'src/App.tsx': 1,
-  'src/components/AchievementBadge.tsx': 1,
-  'src/components/AchievementsView.tsx': 1,
-  'src/components/ChildIntakeQuestionnaire.tsx': 1,
   'src/components/KidMealVoting.tsx': 1,
-  'src/components/ProgressDashboard.tsx': 4,
   'src/components/TonightCookDialog.tsx': 1,
   'src/components/VoteResultsDisplay.tsx': 3,
   'src/components/admin/BulkUserManagement.tsx': 2,
@@ -62,11 +58,7 @@ const KNOWN_UNNAMED: Record<string, number> = {
   'src/components/admin/pseo/PseoAdminDashboard.tsx': 1,
   'src/components/admin/seo/SeoContentTab.tsx': 4,
   'src/components/admin/seo/SeoKeywordsTab.tsx': 1,
-  'src/components/subscription/UsageMeter.tsx': 1,
-  'src/pages/Onboarding.tsx': 1,
   'src/pages/PickyEaterQuiz.tsx': 1,
-  'src/pages/dashboard/AccountSettings.tsx': 1,
-  'src/pages/dashboard/Billing.tsx': 1,
 };
 
 export function scanProgress(file: string, source: string): string[] {
@@ -139,6 +131,22 @@ describe('US-859: unnamed progress bars may only decrease', () => {
     // number is going down.
     const stale = Object.keys(KNOWN_UNNAMED).filter((file) => (counts[file] ?? 0) === 0);
     expect(stale, `fixed -- remove from KNOWN_UNNAMED:\n${stale.join('\n')}`).toEqual([]);
+  });
+
+  it('the billing screens stay named', () => {
+    // Billing's period bar and UsageMeter's bar were named when the page was
+    // rebuilt on usePlanStatus; the new billing components start at zero.
+    for (const file of [
+      'src/pages/dashboard/Billing.tsx',
+      'src/components/subscription/UsageMeter.tsx',
+      'src/components/billing/PlanStatusCard.tsx',
+      'src/components/billing/PlanUsageSection.tsx',
+      'src/components/billing/CancelSubscriptionDialog.tsx',
+      'src/components/billing/ManagePlanCard.tsx',
+      'src/components/settings/sections/PlanSection.tsx',
+    ]) {
+      expect(counts[file] ?? 0, file).toBe(0);
+    }
   });
 
   it('the two screens this story fixed stay fixed', () => {

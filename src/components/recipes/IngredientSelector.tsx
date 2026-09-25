@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Command,
   CommandEmpty,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Package } from "lucide-react";
 import { Food, FoodCategory } from "@/types";
+import "@/i18n/appLocale";
 
 interface IngredientSelectorProps {
   foods: Food[];
@@ -48,25 +50,36 @@ export function IngredientSelector({
   onSelectFood,
   onAddCustom,
 }: IngredientSelectorProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [customName, setCustomName] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
 
-  // Group foods by category, excluding already-selected
-  const availableFoods = foods.filter((f) => !selectedFoodIds.includes(f.id));
-
-  const groupedFoods = CATEGORY_ORDER.reduce((acc, category) => {
-    const catFoods = availableFoods.filter((f) => f.category === category);
-    if (catFoods.length > 0) {
-      acc.push({ category, label: CATEGORY_LABELS[category], foods: catFoods });
+  // Group foods by category, excluding already-selected. A Set keeps this
+  // linear in the pantry size instead of pantry x selected.
+  const groupedFoods = useMemo(() => {
+    const selected = new Set(selectedFoodIds);
+    const byCategory = new Map<FoodCategory, Food[]>();
+    for (const food of foods) {
+      if (selected.has(food.id)) continue;
+      const list = byCategory.get(food.category);
+      if (list) list.push(food);
+      else byCategory.set(food.category, [food]);
     }
-    return acc;
-  }, [] as { category: FoodCategory; label: string; foods: Food[] }[]);
+    return CATEGORY_ORDER.filter((c) => byCategory.has(c)).map((category) => ({
+      category,
+      label: t(`recipes.builder.category.${category}`, { defaultValue: CATEGORY_LABELS[category] }),
+      foods: byCategory.get(category) ?? [],
+    }));
+  }, [foods, selectedFoodIds, t]);
 
-  const handleSelectFood = (food: Food) => {
-    onSelectFood(food);
-    // Keep open for multi-select
+  const trimmedSearch = search.trim();
+
+  const addTyped = () => {
+    if (!trimmedSearch) return;
+    onAddCustom(trimmedSearch);
+    setSearch("");
   };
 
   const handleAddCustom = () => {
@@ -80,38 +93,34 @@ export function IngredientSelector({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          Add Ingredient
+        <Button type="button" variant="outline" size="sm" className="gap-1.5 h-11 sm:h-9">
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          {t("recipes.builder.addIngredient", { defaultValue: "Add Ingredient" })}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className="w-[min(300px,calc(100vw-2rem))] p-0" align="start">
         <Command>
           <CommandInput
-            placeholder="Search foods..."
+            placeholder={t("recipes.builder.searchFoods", { defaultValue: "Search foods..." })}
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
             <CommandEmpty>
-              <div className="py-2 text-center">
-                <p className="text-sm text-muted-foreground mb-2">
-                  No food found
-                </p>
-                {!showCustomInput ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setShowCustomInput(true);
-                      setCustomName(search);
-                    }}
-                  >
-                    Add "{search}" as custom
-                  </Button>
-                ) : null}
-              </div>
+              <p className="py-2 text-center text-sm text-muted-foreground">
+                {t("recipes.builder.noFood", { defaultValue: "No food found" })}
+              </p>
             </CommandEmpty>
+
+            {/* One tap to add exactly what was typed, whatever else matches. */}
+            {trimmedSearch && (
+              <CommandGroup forceMount>
+                <CommandItem forceMount value={`__add__${trimmedSearch}`} onSelect={addTyped}>
+                  <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("recipes.builder.addTyped", { defaultValue: 'Add "{{name}}"', name: trimmedSearch })}
+                </CommandItem>
+              </CommandGroup>
+            )}
 
             {groupedFoods.map((group) => (
               <CommandGroup key={group.category} heading={group.label}>
@@ -119,13 +128,13 @@ export function IngredientSelector({
                   <CommandItem
                     key={food.id}
                     value={food.name}
-                    onSelect={() => handleSelectFood(food)}
+                    onSelect={() => onSelectFood(food)}
                     className="flex items-center justify-between"
                   >
                     <span>{food.name}</span>
                     {food.quantity !== undefined && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Package className="h-3 w-3" />
+                        <Package className="h-3 w-3" aria-hidden="true" />
                         {food.quantity}
                       </span>
                     )}
@@ -134,16 +143,14 @@ export function IngredientSelector({
               </CommandGroup>
             ))}
 
-            {/* Custom ingredient option */}
-            <CommandGroup heading="Other">
-              <CommandItem
-                value="__add_custom__"
-                onSelect={() => setShowCustomInput(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add custom ingredient
-              </CommandItem>
-            </CommandGroup>
+            {!trimmedSearch && (
+              <CommandGroup heading={t("recipes.builder.other", { defaultValue: "Other" })}>
+                <CommandItem value="__add_custom__" onSelect={() => setShowCustomInput(true)}>
+                  <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("recipes.builder.addCustom", { defaultValue: "Add custom ingredient" })}
+                </CommandItem>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
 
@@ -151,7 +158,8 @@ export function IngredientSelector({
         {showCustomInput && (
           <div className="p-2 border-t flex gap-2">
             <Input
-              placeholder="e.g. salt, olive oil..."
+              placeholder={t("recipes.builder.customPlaceholder", { defaultValue: "e.g. salt, olive oil..." })}
+              aria-label={t("recipes.builder.customLabel", { defaultValue: "Custom ingredient" })}
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               onKeyDown={(e) => {
@@ -160,11 +168,11 @@ export function IngredientSelector({
                   handleAddCustom();
                 }
               }}
-              className="h-8 text-sm"
+              className="h-10 text-sm"
               autoFocus
             />
-            <Button size="sm" className="h-8" onClick={handleAddCustom}>
-              Add
+            <Button type="button" size="sm" className="h-10" onClick={handleAddCustom}>
+              {t("recipes.builder.add", { defaultValue: "Add" })}
             </Button>
           </div>
         )}

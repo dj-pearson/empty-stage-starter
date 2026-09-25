@@ -36,6 +36,15 @@ describe('the nav registry is internally consistent', () => {
     expect(routes).toEqual([...new Set(routes)]);
   });
 
+  it('has one Settings entry and no separate Accessibility page', () => {
+    // Accessibility is ?section=accessibility of the hub; its old route is a
+    // redirect (DASHBOARD_REDIRECTS), which renders no path="..." literal and
+    // so is neither an orphan nor a nav destination.
+    const settings = NAV_ITEMS.filter((item) => item.to.startsWith('/dashboard/settings'));
+    expect(settings.map((item) => [item.to, item.label])).toEqual([['/dashboard/settings', 'Settings']]);
+    expect(NAV_ITEMS.map((item) => item.to)).not.toContain('/dashboard/accessibility-settings');
+  });
+
   it('has no duplicate labels', () => {
     // Two entries reading "Account Settings" is what the hamburger shipped.
     const labels = NAV_ITEMS.map((item) => item.label);
@@ -221,5 +230,22 @@ describe('the renderers consume the registry rather than their own copies', () =
     // `slice(0, 4)`, `slice(0, 5)` and `slice(5, length - (isAdmin ? 1 : 0))`
     // were the three renderers, and the reason Account Settings appeared twice.
     expect(dashboard).not.toMatch(/NavItems\.slice\(/);
+  });
+});
+
+describe('nav badges (item 33)', () => {
+  const badgeOf = (to: string) => NAV_ITEMS.find((item) => item.to === to)?.badge;
+
+  it('puts each badge on the screen it describes', () => {
+    expect(badgeOf('/dashboard')).toBe('unloggedMeals');
+    expect(badgeOf('/dashboard/planner')).toBe('dinnerUnplanned');
+    expect(badgeOf('/dashboard/grocery')).toBe('groceryLeft');
+    expect(badgeOf('/dashboard/food-tracker')).toBe('ladderDue');
+  });
+
+  it('uses each badge once, so two links never claim the same number', () => {
+    const keys = NAV_ITEMS.map((item) => item.badge).filter(Boolean);
+    expect(keys).toHaveLength(4);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

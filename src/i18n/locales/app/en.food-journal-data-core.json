@@ -1,0 +1,15 @@
+{
+  "foodJournal": {
+    "day": {
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "unknownFood": "Unknown food",
+    "report": {
+      "noteOnly": "Note only",
+      "firstTaste": "First taste",
+      "contains": "Contains {{allergen}}",
+      "reaction": "Reaction: {{text}}"
+    }
+  }
+}

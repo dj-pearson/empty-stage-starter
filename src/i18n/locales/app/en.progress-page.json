@@ -1,0 +1,45 @@
+{
+  "progressPage": {
+    "meta": {
+      "title": "Progress - EatPal",
+      "description": "What has changed for each child over the months: foods that reached safe, ladder graduations, badges and household numbers."
+    },
+    "header": {
+      "titleKid": "{{name}}'s progress",
+      "titleFamily": "Family progress",
+      "since": "From what you've logged since {{date}}",
+      "sinceNone": "From what you've logged"
+    },
+    "scope": {
+      "chooseChild": "Show progress for"
+    },
+    "jump": {
+      "label": "Jump to section",
+      "milestones": "Milestones",
+      "badges": "Badges",
+      "numbers": "Numbers",
+      "history": "Recent meals"
+    },
+    "badges": {
+      "title": "Badges",
+      "familyIntro": "Each child earns their own. Pick one to see theirs.",
+      "familyRow": "See {{name}}'s badges"
+    },
+    "numbers": {
+      "title": "Household numbers"
+    },
+    "links": {
+      "label": "Elsewhere in EatPal",
+      "thisWeek": "This week",
+      "working": "What's working",
+      "journal": "Meal log and care-team report",
+      "tracker": "Offer today"
+    }
+  },
+  "insightsPage": {
+    "links": {
+      "progress": "{{name}}'s progress over months",
+      "progressFamily": "Progress over months"
+    }
+  }
+}

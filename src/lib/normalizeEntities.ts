@@ -160,7 +160,42 @@ const KID_ARRAY_FIELDS = [
   'helpful_strategies',
   'disliked_foods',
   'always_eats_foods',
+  'nutrition_concerns',
 ] as const;
+
+const ALLERGEN_SEVERITIES = new Set(['mild', 'moderate', 'severe']);
+
+/**
+ * Trim, drop blanks and dedupe case-insensitively (first spelling wins).
+ * Allergen lists feed every kid-fit check, so ' peanuts' and 'Peanuts' must
+ * not count as two allergies, and '' must not count as one.
+ */
+function cleanAllergenList(list: unknown[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const entry of list) {
+    if (entry == null) continue;
+    const value = String(entry).trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
+/** A plain object of allergen -> 'mild'|'moderate'|'severe', or undefined. */
+function cleanAllergenSeverity(value: unknown): Kid['allergen_severity'] | undefined {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, 'mild' | 'moderate' | 'severe'> = {};
+  for (const [key, level] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof level === 'string' && ALLERGEN_SEVERITIES.has(level)) {
+      out[key] = level as 'mild' | 'moderate' | 'severe';
+    }
+  }
+  return out;
+}
 
 export function normalizeKidFromDB(row: Row): Kid {
   const out = { ...(row as unknown as Kid) } as Kid & Record<string, unknown>;
@@ -169,5 +204,19 @@ export function normalizeKidFromDB(row: Row): Kid {
     if (coerced) out[field] = coerced;
     else if (row[field] == null) delete out[field];
   }
+
+  // allergens: null/absent means "not recorded", [] means "none known". A
+  // non-empty list that cleans down to nothing held no real entry, so it is
+  // unknown too -- never report that as "no allergies".
+  if (Array.isArray(row.allergens)) {
+    const cleaned = cleanAllergenList(row.allergens as unknown[]);
+    if (row.allergens.length > 0 && cleaned.length === 0) delete out.allergens;
+    else out.allergens = cleaned;
+  }
+
+  const severity = cleanAllergenSeverity(row.allergen_severity);
+  if (severity) out.allergen_severity = severity;
+  else delete out.allergen_severity;
+
   return out;
 }

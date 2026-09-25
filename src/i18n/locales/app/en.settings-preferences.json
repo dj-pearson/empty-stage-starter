@@ -1,0 +1,154 @@
+{
+  "settings": {
+    "prefs": {
+      "automation": {
+        "autoRestock": {
+          "help": "Items forecast to run out soon go on your grocery list by themselves.",
+          "label": "Auto-add predicted run-outs"
+        },
+        "description": "Let the pantry forecast keep your grocery list topped up.",
+        "leadDays_one": "{{count}} day",
+        "leadDays_other": "{{count}} days",
+        "leadLabel": "Add when due within",
+        "leadWeek": "1 week",
+        "title": "Grocery automation"
+      },
+      "email": {
+        "about": {
+          "anyTime": "Change any of these at any time.",
+          "footer": "Unsubscribe in any email footer stops them all. You can turn them back on here.",
+          "neverShared": "We never share your email address with anyone else.",
+          "title": "About EatPal email",
+          "transactional": "Password resets and sign-in codes always arrive."
+        },
+        "categories": {
+          "marketing": {
+            "help": "New features and offers. Off unless you turn it on.",
+            "label": "Product news"
+          },
+          "milestone": {
+            "help": "When a child reaches a new food or a tasting streak.",
+            "label": "Milestones"
+          },
+          "tips": {
+            "help": "Practical ideas from feeding specialists, about once a week.",
+            "label": "Tips for picky eating"
+          },
+          "weekly": {
+            "help": "A short recap of what your kids tried and ate this week.",
+            "label": "Weekly summary"
+          },
+          "welcome": {
+            "help": "A few setup emails in your first weeks.",
+            "label": "Getting started"
+          }
+        },
+        "description": "Choose which emails EatPal sends you. Password and sign-in emails always arrive.",
+        "history": {
+          "empty": "No emails sent yet.",
+          "notDelivered": "Couldn't deliver. We'll retry.",
+          "queuedAt": "Queued {{when}}",
+          "sentAt": "Sent {{when}}",
+          "title": "Recent emails"
+        },
+        "loadFailed": "Couldn't load your email preferences.",
+        "loading": "Loading email preferences",
+        "retry": "Retry",
+        "saveFailed": "Couldn't save your email choice. Please try again.",
+        "signInToUpdate": "Please sign in to update email preferences",
+        "status": {
+          "cancelled": "Cancelled",
+          "failed": "Not delivered",
+          "pending": "Queued",
+          "sent": "Sent",
+          "unknown": "Unknown"
+        },
+        "templates": {
+          "milestone": "Milestone",
+          "other": "EatPal email",
+          "tips": "Tips and advice",
+          "weeklySummary": "Weekly summary",
+          "welcome": "Welcome email"
+        },
+        "title": "Email",
+        "unsubscribed": {
+          "action": "Turn email back on",
+          "body": "Turning any email on below also undoes that.",
+          "title": "You unsubscribed from all EatPal email on {{date}}"
+        }
+      },
+      "planner": {
+        "deviceOnly": "Saved on this device only.",
+        "retry": "Retry",
+        "undo": "Undo"
+      },
+      "privacy": {
+        "scope": {
+          "manage": "Manage your household",
+          "private": "Only you see",
+          "shared": "Your household sees",
+          "title": "Who sees what"
+        },
+        "winNetwork": {
+          "checking": "Checking your choice...",
+          "description": "Other families see which food bridges worked for kids like theirs. Your try-bites can help, anonymously.",
+          "help": "Nothing is shared until this choice has loaded from your account.",
+          "label": "Share my try-bite results anonymously",
+          "neverAges": "Ages or birthdays",
+          "neverNames": "Names, yours or your kids'",
+          "neverNotes": "Notes, allergies or anything you typed",
+          "neverTitle": "Never shared",
+          "saveFailed": "Couldn't save your sharing choice. Nothing changed.",
+          "saving": "Saving...",
+          "sharedBucket": "A broad pickiness level: low, medium or high",
+          "sharedPairs": "The two foods you bridged, like crackers to toast, and whether the try-bite went fully or partly well",
+          "sharedTitle": "What is shared",
+          "title": "Win Network"
+        }
+      },
+      "scope": {
+        "account": "Saved to your account",
+        "device": "This device only",
+        "household": "Whole household",
+        "you": "Just you"
+      },
+      "shareLinks": {
+        "cancel": "Keep them",
+        "confirmAction": "Turn them all off",
+        "confirmBody": "Anyone who has one of these links, including links your co-parent made, will stop seeing the recipe. The recipes stay in your household.",
+        "confirmTitle_one": "Turn off 1 public link?",
+        "confirmTitle_other": "Turn off {{count}} public links?",
+        "copied": "Link copied",
+        "copy": "Copy",
+        "copyFor": "Copy link to {{name}}",
+        "copyManually": "Copy this link:",
+        "description": "Anyone with one of these links can see that recipe. Never your kids, allergies or notes. Either parent can turn a link off.",
+        "empty": "No recipes are public. Share one from any recipe.",
+        "loadFailed": "Couldn't load your links.",
+        "loading": "Loading links",
+        "madeBy": "Made by {{name}}",
+        "madeByHousehold": "Made by your household",
+        "madeByYou": "Made by you",
+        "retry": "Retry",
+        "revokeAllPartial_one": "1 link is still on. Try again.",
+        "revokeAllPartial_other": "{{count}} links are still on. Try again.",
+        "revokeFailed": "Couldn't turn the link off. Please try again.",
+        "revoked": "Link turned off. It no longer opens the recipe.",
+        "revokedAll": "All links are off.",
+        "title": "Public recipe links",
+        "turnOff": "Turn off",
+        "turnOffAll": "Turn off all links",
+        "turnOffFor": "Turn off the link to {{name}}",
+        "unnamedRecipe": "A recipe"
+      },
+      "suggestions": {
+        "description": "Gentle prompts inside EatPal. They never send email or push alerts.",
+        "title": "In-app suggestions",
+        "variety": {
+          "help": "Point out when a meal keeps repeating and suggest a small twist.",
+          "label": "Variety nudges"
+        }
+      }
+    }
+  }
+}

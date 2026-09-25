@@ -1,0 +1,27 @@
+{
+  "planner": {
+    "allergenSafety": {
+      "unratedLine": "{{food}} contains {{allergen}}. {{name}} has a {{allergen}} allergy with no severity recorded, so it is treated as severe.",
+      "unratedTitle": "{{allergen}} allergy (severity not recorded, treated as severe): {{name}}",
+      "drawerUnrated": "Contains {{allergen}} - allergy, severity not recorded (treated as severe): {{names}}"
+    },
+    "familyGrid": {
+      "chip": {
+        "allergenUnrated": "{{allergen}} allergy, severity not recorded (treated as severe)"
+      }
+    }
+  },
+  "recipes": {
+    "allergenSafety": {
+      "unratedKid": "{{name}}: {{allergen}}, severity not recorded (treated as severe)"
+    },
+    "cooked": {
+      "gateUnrated": "{{allergen}} allergy, severity not recorded (treated as severe). Not added to the plan."
+    }
+  },
+  "pantry": {
+    "starter": {
+      "blockedUnrated": "Allergy (severity not recorded, treated as severe), not for {{name}}: {{allergen}}"
+    }
+  }
+}

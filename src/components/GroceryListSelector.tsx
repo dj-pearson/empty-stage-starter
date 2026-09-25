@@ -1,198 +1,157 @@
-import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus, Settings } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { GroceryList } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { logger } from "@/lib/logger";
-import { assertUUID } from "@/lib/query-sanitize";
+import { Plus, RotateCw, Settings } from "lucide-react";
+import type { GroceryListRow } from "@/hooks/useGroceryLists";
+import "@/i18n/appLocale";
+
+/** Select values that are actions, not lists. Never a uuid, so never a list id. */
+const NEW_LIST = "__new_list__";
+const MANAGE_LISTS = "__manage_lists__";
 
 interface GroceryListSelectorProps {
-  userId: string;
-  householdId?: string;
-  selectedListId?: string | null;
+  lists: GroceryListRow[];
+  selectedListId: string | null;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
   onListChange: (listId: string) => void;
   onCreateNew: () => void;
   onManageLists: () => void;
-  /**
-   * US-714: reports which list is the household default, so the page can treat
-   * rows with a null grocery_list_id as belonging to it. The selector already
-   * fetches the lists; nothing else on the page knows which one is default.
-   */
-  onDefaultListChange?: (listId: string | null) => void;
+  /** Second line under the list name, e.g. "6 left". */
+  summary?: string;
 }
 
+/**
+ * The list picker in the grocery toolbar. Presentational: the lists, the
+ * selection and the fetch live in useGroceryLists, which is where the US-864
+ * query-count guarantee now sits.
+ */
 export function GroceryListSelector({
-  userId,
-  householdId,
+  lists,
   selectedListId,
+  loading,
+  error,
+  onRetry,
   onListChange,
   onCreateNew,
   onManageLists,
-  onDefaultListChange,
+  summary,
 }: GroceryListSelectorProps) {
-  const [lists, setLists] = useState<GroceryList[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  /*
-   * US-864: this effect used to re-run because of its own side effect.
-   *
-   * `selectedListId` was in the dependency array, and the effect CHANGES it --
-   * it calls onListChange(defaultList.id) to auto-select the default. So every
-   * mount fetched the lists, selected one, and fetched them again because the
-   * selection had changed. Measured on the built grocery page: 6 x
-   * GET /rest/v1/grocery_lists per load -- three per instance, and Dashboard
-   * mounted the whole routed page twice, once per shell (US-865).
-   *
-   * Which lists exist has nothing to do with which one is selected. The
-   * selection is read through a ref so the effect can see it without being
-   * re-triggered by it.
-   *
-   * THE CALLBACKS ARE HELD IN REFS TOO. `setSelectedListId` and
-   * `setDefaultListId` happen to be stable today, so they were not part of the
-   * measured problem -- but a caller passing an inline arrow would silently
-   * reintroduce a fetch on every parent render, and nothing would catch it.
-   * This component cannot control how it is called; it can control what
-   * re-triggers its query.
-   */
-  const selectedListIdRef = useRef(selectedListId);
-  selectedListIdRef.current = selectedListId;
-  const onListChangeRef = useRef(onListChange);
-  onListChangeRef.current = onListChange;
-  const onDefaultListChangeRef = useRef(onDefaultListChange);
-  onDefaultListChangeRef.current = onDefaultListChange;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadLists = async () => {
-      setLoading(true);
-      try {
-        const query = supabase
-          .from('grocery_lists')
-          .select('*')
-          .eq('is_archived', false)
-          .order('is_default', { ascending: false })
-          .order('name');
-
-        // Filter by user_id or household_id
-        if (householdId) {
-          query.or(`user_id.eq.${assertUUID(userId, 'userId')},household_id.eq.${assertUUID(householdId, 'householdId')}`);
-        } else {
-          query.eq('user_id', userId);
-        }
-
-        const { data, error } = await query;
-        if (cancelled) return;
-
-        if (!error && data) {
-          const groceryLists = data as unknown as GroceryList[];
-          setLists(groceryLists);
-
-          const defaultList = groceryLists.find(l => l.is_default) || groceryLists[0];
-          onDefaultListChangeRef.current?.(defaultList?.id ?? null);
-
-          // Auto-select default list if none selected
-          if (!selectedListIdRef.current && defaultList) {
-            onListChangeRef.current(defaultList.id);
-          }
-        }
-      } catch (err) {
-        logger.error('Error loading grocery lists:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    loadLists();
-
-    return () => {
-      // A household resolving mid-flight would otherwise let the first
-      // response land after the second and overwrite it.
-      cancelled = true;
-    };
-  }, [userId, householdId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-10 w-10" />
-      </div>
-    );
-  }
+  const { t } = useTranslation();
 
   if (lists.length === 0) {
+    // A failed fetch is not an empty household: offering "Create your first
+    // list" there would put a duplicate list on an account that already has one.
+    if (error) {
+      return (
+        <div className="flex w-full items-center justify-between gap-2" role="status">
+          <span className="text-sm text-muted-foreground">
+            {t("grocery.lists.selector.loadFailed", "Couldn't load your lists")}
+          </span>
+          <Button variant="outline" className="h-11" onClick={onRetry}>
+            <RotateCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t("grocery.lists.selector.retry", "Try again")}
+          </Button>
+        </div>
+      );
+    }
+    if (loading) {
+      return <Skeleton className="h-12 w-full" aria-label={t("grocery.lists.selector.loading", "Loading lists")} />;
+    }
     return (
-      <Button onClick={onCreateNew} variant="outline">
-        <Plus className="h-4 w-4 mr-2" />
-        Create Your First List
+      <Button onClick={onCreateNew} variant="outline" className="h-11 w-full">
+        <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+        {t("grocery.lists.selector.createFirst", "Create your first list")}
       </Button>
     );
   }
 
-  const selectedList = lists.find(l => l.id === selectedListId);
+  const selectedList = lists.find((l) => l.id === selectedListId);
+
+  const handleValueChange = (value: string) => {
+    if (value === NEW_LIST) onCreateNew();
+    else if (value === MANAGE_LISTS) onManageLists();
+    else onListChange(value);
+  };
 
   return (
-    <div className="flex items-center gap-2">
-      <Select value={selectedListId || undefined} onValueChange={onListChange}>
+    <div className="flex w-full min-w-0 items-center gap-2">
+      <Select value={selectedListId ?? undefined} onValueChange={handleValueChange}>
         {/*
-          US-778: the trigger needs its own name, not one borrowed from its
-          contents. SelectValue renders the children below only when
-          `selectedList` resolves, and shows the placeholder only when no value
-          is set -- so a stored list id that is not in the fetched lists gives
-          both an empty value and no placeholder, and the button ends up with no
-          accessible name at all. axe rates that critical, and it is the state
-          CI scans in.
+          US-778: the trigger carries its own name. A stored list id missing from
+          the fetched lists leaves SelectValue with neither children nor a
+          placeholder, and the button would otherwise have no accessible name.
         */}
-        <SelectTrigger className="w-64" aria-label="Grocery list">
-          <SelectValue placeholder="Select a list">
+        <SelectTrigger
+          className="h-auto min-h-12 w-full min-w-0 py-1.5 text-left"
+          aria-label={t("grocery.lists.selector.label", "Grocery list")}
+        >
+          <SelectValue placeholder={t("grocery.lists.selector.placeholder", "Select a list")}>
             {selectedList && (
-              <div className="flex items-center gap-2">
-                {selectedList.icon && <span>{selectedList.icon}</span>}
-                <span>{selectedList.name}</span>
-                {selectedList.is_default && (
-                  <span className="text-xs text-muted-foreground">(Default)</span>
-                )}
-              </div>
+              <span className="flex min-w-0 flex-col">
+                <span className="flex min-w-0 items-center gap-2 font-medium">
+                  {selectedList.icon && <span aria-hidden="true">{selectedList.icon}</span>}
+                  <span className="truncate">{selectedList.name}</span>
+                </span>
+                {summary && <span className="truncate text-xs text-muted-foreground">{summary}</span>}
+              </span>
             )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {lists.map((list) => (
-            <SelectItem key={list.id} value={list.id}>
-              <div className="flex items-center gap-2">
-                {list.icon && <span>{list.icon}</span>}
-                <span>{list.name}</span>
-                {list.is_default && (
-                  <span className="text-xs text-muted-foreground ml-2">(Default)</span>
-                )}
-                {list.store_name && (
-                  <span className="text-xs text-muted-foreground ml-2">
-                    · {list.store_name}
-                  </span>
-                )}
-              </div>
+          <SelectGroup>
+            {lists.map((list) => (
+              <SelectItem key={list.id} value={list.id} className="min-h-11">
+                <span className="flex items-center gap-2">
+                  {list.icon && <span aria-hidden="true">{list.icon}</span>}
+                  <span>{list.name}</span>
+                  {list.is_default && (
+                    <span className="text-xs text-muted-foreground">
+                      {t("grocery.lists.selector.defaultTag", "(Default)")}
+                    </span>
+                  )}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectSeparator />
+          <SelectGroup>
+            <SelectItem value={NEW_LIST} className="min-h-11">
+              <span className="flex items-center gap-2">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                {t("grocery.lists.selector.newList", "New list...")}
+              </span>
             </SelectItem>
-          ))}
+            <SelectItem value={MANAGE_LISTS} className="min-h-11">
+              <span className="flex items-center gap-2">
+                <Settings className="h-4 w-4" aria-hidden="true" />
+                {t("grocery.lists.selector.manageLists", "Manage lists...")}
+              </span>
+            </SelectItem>
+          </SelectGroup>
         </SelectContent>
       </Select>
-
-      <Button onClick={onCreateNew} variant="outline" size="icon" aria-label="Create new list">
-        <Plus className="h-4 w-4" />
-      </Button>
-
-      <Button onClick={onManageLists} variant="outline" size="icon" aria-label="Manage lists">
-        <Settings className="h-4 w-4" />
-      </Button>
+      {error && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-11 w-11 shrink-0"
+          onClick={onRetry}
+          aria-label={t("grocery.lists.selector.retryStale", "Lists may be out of date. Try again")}
+        >
+          <RotateCw className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      )}
     </div>
   );
 }
-

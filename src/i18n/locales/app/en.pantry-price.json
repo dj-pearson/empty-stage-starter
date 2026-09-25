@@ -1,0 +1,13 @@
+{
+  "pantry": {
+    "price": {
+      "label": "Price per {{unit}} (optional)",
+      "hint": "Used to estimate what thrown-out food costs. Leave blank if you don't know.",
+      "invalid": "Enter a price like 3.50, or leave it blank.",
+      "checkoutToggle": "Add prices (optional)",
+      "checkoutHide": "Hide prices",
+      "checkoutHint": "Saved with this shop, and used to estimate what thrown-out food costs.",
+      "rowLabel": "{{name}}, per {{unit}}"
+    }
+  }
+}

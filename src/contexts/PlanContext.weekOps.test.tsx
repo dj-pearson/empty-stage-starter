@@ -41,6 +41,7 @@ vi.mock("sonner", () => ({
   }),
 }));
 vi.mock("@/lib/logger", () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("@/lib/trackActivation", () => ({ trackActivationOnce: vi.fn() }));
 vi.mock("@/hooks/useRealtimeSubscription", () => ({ registerSubscription: vi.fn(), unregisterSubscription: vi.fn() }));
 
 let api: ReturnType<typeof usePlan> | null = null;
@@ -194,5 +195,149 @@ describe("PlanContext insert rollback (US-717)", () => {
     // The temporary id is gone; the row carries the id the server assigned.
     expect(api!.planEntries[0].id).toBe("server-1");
     expect(toastError).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * replaceWeekPlan and copyWeekPlan diff instead of wiping. A generated week
+ * used to be deleteWeekPlan + addPlanEntries: every logged result in the week
+ * went with it, and a rejected insert after a landed delete left the week
+ * empty.
+ */
+describe("PlanContext week diffing", () => {
+  const row = (id: string, over: Partial<PlanEntry> = {}): PlanEntry => ({
+    id, kid_id: "k1", date: "2026-06-01", meal_slot: "dinner", food_id: "f1", result: null, ...over,
+  });
+
+  /** A from('plan_entries') whose insert and delete can be steered per test. */
+  const serverWith = (opts: { insertError?: unknown; deleteErrors?: unknown[] }) => {
+    const inserted: Array<Record<string, unknown>> = [];
+    const deleted: string[][] = [];
+    const deleteErrors = [...(opts.deleteErrors ?? [])];
+    mockFrom.mockImplementation(() => ({
+      insert: (rows: Array<Record<string, unknown>>) => {
+        inserted.push(...rows);
+        const data = opts.insertError ? null : rows.map((r, i) => ({ ...r, id: `srv-${inserted.length - rows.length + i}` }));
+        return { select: () => Promise.resolve({ data, error: opts.insertError ?? null }) };
+      },
+      delete: () => ({
+        in: (_c: string, ids: string[]) => {
+          deleted.push(ids);
+          return Promise.resolve({ error: deleteErrors.shift() ?? null });
+        },
+      }),
+    }));
+    return { inserted, deleted };
+  };
+
+  beforeEach(() => {
+    api = null;
+    auth.userId = "u1";
+    auth.householdId = "hh1";
+    mockFrom.mockReset();
+    toastError.mockReset();
+  });
+  afterEach(() => {
+    auth.userId = null;
+    auth.householdId = null;
+  });
+
+  const mount = async (entries: PlanEntry[]) => {
+    render(<PlanProvider><Probe /></PlanProvider>);
+    await waitFor(() => expect(api).not.toBeNull());
+    act(() => { api!.setPlanEntries(entries); });
+    await waitFor(() => expect(api!.planEntries).toHaveLength(entries.length));
+  };
+
+  it("replaceWeekPlan keeps overlapping keys, results included, and writes only the difference", async () => {
+    const server = serverWith({});
+    await mount([
+      row("kept", { result: "ate", notes: "loved it" }),
+      row("stale", { date: "2026-06-02", food_id: "f2" }),
+      row("next-week", { date: "2026-06-09" }),
+      row("other-kid", { kid_id: "k2" }),
+    ]);
+
+    let res: Awaited<ReturnType<NonNullable<typeof api>["replaceWeekPlan"]>> | undefined;
+    await act(async () => {
+      res = await api!.replaceWeekPlan("2026-06-01", "k1", [
+        { kid_id: "k1", date: "2026-06-01", meal_slot: "dinner", food_id: "f1", result: null },
+        { kid_id: "k1", date: "2026-06-03", meal_slot: "lunch", food_id: "f3", result: null },
+      ]);
+    });
+
+    expect(res!.error).toBeNull();
+    // The overlapping key is never re-inserted, so the US-716 unique index
+    // cannot answer 23505 for it.
+    expect(server.inserted.map((r) => r.food_id)).toEqual(["f3"]);
+    expect(server.deleted).toEqual([["stale"]]);
+    expect(res!.removed.map((e) => e.id)).toEqual(["stale"]);
+    const kept = api!.planEntries.find((e) => e.id === "kept");
+    expect(kept?.result).toBe("ate");
+    expect(kept?.notes).toBe("loved it");
+    expect(api!.planEntries.map((e) => e.id).sort()).toEqual(["kept", "next-week", "other-kid", "srv-0"]);
+  });
+
+  it("replaceWeekPlan leaves the old week intact when the insert is refused (23505)", async () => {
+    const server = serverWith({ insertError: { code: "23505", message: "duplicate key value" } });
+    await mount([row("a", { result: "tasted" }), row("b", { food_id: "f2" })]);
+
+    let res: Awaited<ReturnType<NonNullable<typeof api>["replaceWeekPlan"]>> | undefined;
+    await act(async () => {
+      res = await api!.replaceWeekPlan("2026-06-01", "k1", [
+        { kid_id: "k1", date: "2026-06-04", meal_slot: "lunch", food_id: "f9", result: null },
+      ]);
+    });
+
+    expect(res!.error).toBeTruthy();
+    expect(server.deleted).toEqual([]);
+    expect(api!.planEntries.map((e) => e.id).sort()).toEqual(["a", "b"]);
+    expect(String(toastError.mock.calls[0][0])).toMatch(/already planned/i);
+  });
+
+  it("replaceWeekPlan removes what it inserted when the delete is refused", async () => {
+    const server = serverWith({ deleteErrors: [{ message: "permission denied" }] });
+    await mount([row("old", { food_id: "f1" })]);
+
+    let res: Awaited<ReturnType<NonNullable<typeof api>["replaceWeekPlan"]>> | undefined;
+    await act(async () => {
+      res = await api!.replaceWeekPlan("2026-06-01", "k1", [
+        { kid_id: "k1", date: "2026-06-02", meal_slot: "lunch", food_id: "f2", result: null },
+      ]);
+    });
+
+    expect(res!.error).toBeTruthy();
+    expect(server.deleted).toEqual([["old"], ["srv-0"]]);
+    // One week, not two stacked: the old row, restored, and nothing else.
+    await waitFor(() => expect(api!.planEntries.map((e) => e.id)).toEqual(["old"]));
+  });
+
+  it("copyWeekPlan skips keys already in the destination and copies is_primary_dish with result null", async () => {
+    const server = serverWith({});
+    await mount([
+      row("src-1", { recipe_id: "rec", is_primary_dish: true, result: "ate" }),
+      row("src-2", { date: "2026-06-02", food_id: "f2", result: "refused" }),
+      // Destination (week of 2026-06-08) already has src-1's food in that slot.
+      row("dest", { date: "2026-06-08" }),
+    ]);
+
+    let res: Awaited<ReturnType<NonNullable<typeof api>["copyWeekPlan"]>> | undefined;
+    await act(async () => { res = await api!.copyWeekPlan("2026-06-01", "2026-06-08", "k1"); });
+
+    expect(res).toMatchObject({ error: null, copied: 1, skipped: 1 });
+    expect(server.inserted).toHaveLength(1);
+    expect(server.inserted[0]).toMatchObject({ date: "2026-06-09", food_id: "f2", result: null });
+    expect(server.inserted[0]).not.toHaveProperty("outcome");
+  });
+
+  it("copyWeekPlan carries is_primary_dish across", async () => {
+    const server = serverWith({});
+    await mount([row("src", { recipe_id: "rec", is_primary_dish: true, result: "ate" })]);
+
+    await act(async () => { await api!.copyWeekPlan("2026-06-01", "2026-06-08", "k1"); });
+
+    expect(server.inserted[0]).toMatchObject({
+      date: "2026-06-08", recipe_id: "rec", is_primary_dish: true, result: null,
+    });
   });
 });

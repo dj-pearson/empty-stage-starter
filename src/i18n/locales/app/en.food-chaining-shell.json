@@ -1,0 +1,26 @@
+{
+  "foodChaining": {
+    "shell": {
+      "meta": {
+        "title": "Food Chaining - EatPal",
+        "description": "Plan small steps from the foods your child already eats toward new ones, one change at a time."
+      },
+      "title": "Food Chaining",
+      "titleForKid": "{{name}}'s food chains",
+      "chooseChild": "Choose a child",
+      "whoseChains": "Whose chains? Pick a child to see their next small step.",
+      "noKids": "Add a child to start a chain",
+      "addChild": "Add child",
+      "ladderNext": "Next on {{kid}}'s ladder: {{food}}",
+      "ladderNone": "See where {{kid}}'s foods sit on the ladder",
+      "ladderLoading": "Checking {{kid}}'s ladder",
+      "explainer": {
+        "summary": "How food chaining works",
+        "line1": "Start from a food your child already eats.",
+        "line2": "Each next link changes one thing about it: the taste, the texture, the color or the shape.",
+        "line3": "Offer a link a few times before moving on. A refusal is part of learning, not a failure.",
+        "example": "For example: plain pasta, then buttered pasta, then pasta with a little sauce."
+      }
+    }
+  }
+}

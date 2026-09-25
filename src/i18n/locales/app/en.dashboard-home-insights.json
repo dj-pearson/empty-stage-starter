@@ -1,0 +1,41 @@
+{
+  "home": {
+    "insights": {
+      "label": "Insight",
+      "seeAll": "See all insights",
+      "fatigue": {
+        "counts": "{{long}}x in 4 weeks, {{short}}x this week"
+      },
+      "birthday": {
+        "title": "{{name}} turned {{age}} today!",
+        "dismissAria": "Dismiss birthday card",
+        "portionTitle": "Portions grow with age",
+        "portionDetail": "About {{percent}}% of a 5-year-old's portion.",
+        "retryTitle": "Retry these foods?",
+        "retryHint": "Tastes shift fast. {{name}} may now tolerate a few foods they refused before.",
+        "pediatricianTitle": "Talk to your pediatrician",
+        "allergenNote": "Informational only. We never remove anything from {{name}}'s allergen list.",
+        "milestones": {
+          "infant": "infant",
+          "toddler": "toddler",
+          "preschool": "preschool",
+          "school_age": "school age",
+          "tween": "tween",
+          "teen": "teen"
+        }
+      },
+      "seasonal": {
+        "noKids": "None of the kids from last year are on your account now, so there is nothing to copy.",
+        "alreadyPlanned": "Those days are already planned, nothing to add.",
+        "copied_one": "Added {{count}} meal from last year.",
+        "copied_other": "Added {{count}} meals from last year.",
+        "copyFailed": "Could not copy last year's week. Try again in a moment.",
+        "dismissAria": "Dismiss seasonal recall",
+        "hitCount_one": "Eaten once around this week last year",
+        "hitCount_other": "Eaten {{count}}x around this week last year",
+        "lastYear": "Last year",
+        "copyWeek": "Copy this week"
+      }
+    }
+  }
+}

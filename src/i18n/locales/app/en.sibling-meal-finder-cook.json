@@ -1,0 +1,23 @@
+{
+  "siblingMealFinder": {
+    "cook": {
+      "serving": {
+        "title": "Serving",
+        "blocked_one": "Not for {{names}} tonight. Serve something else.",
+        "blocked_other": "Not for {{names}} tonight. Serve them something else."
+      },
+      "timer": {
+        "started_one": "{{count}} minute timer started",
+        "started_other": "{{count}} minute timer started",
+        "paused": "Timer paused",
+        "resumed": "Timer resumed",
+        "done": "Timer done"
+      }
+    }
+  },
+  "home": {
+    "tonight": {
+      "findForEveryone": "Find one everyone eats"
+    }
+  }
+}

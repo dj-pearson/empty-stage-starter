@@ -1,23 +1,32 @@
 import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger } from "@/lib/logger";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FoodCategory } from '@/types';
 import { parseGroceryText, type ParsedGroceryItem } from '@/lib/parse-grocery-text';
+import type { GroceryAddInput } from '@/lib/groceryMerge';
+import { useFoods, useKids } from '@/contexts/AppContext';
+import { parseGroceryImagePayload, toGroceryAddInput } from '@/components/grocery/groceryInputSchemas';
 import { ParsedItemsPreview } from '@/components/grocery/ParsedItemsPreview';
 import { validateFile, compressImage, fileToBase64, FileSizeLimits, MimeTypeGroups } from '@/lib/file-utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Image, Type, Upload, Loader2, ClipboardPaste } from 'lucide-react';
 import { toast } from 'sonner';
+import { PHOTO_AI_NOTICE } from '@/lib/aiSafety';
+import '@/i18n/appLocale';
 
 interface GroceryImportTabProps {
-  onAddItems: (items: { name: string; quantity: number; unit: string; category: FoodCategory }[]) => void;
+  /** Rows arrive tagged added_via 'import'. */
+  onAddItems: (items: GroceryAddInput[]) => void;
 }
 
 export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
+  const { t } = useTranslation();
+  const { foods } = useFoods();
+  const { kids } = useKids();
   const [mode, setMode] = useState<'image' | 'text'>('text');
   const [text, setText] = useState('');
   const [parsedItems, setParsedItems] = useState<ParsedGroceryItem[] | null>(null);
@@ -28,16 +37,16 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
 
   const handleParseText = () => {
     if (!text.trim()) {
-      toast.error('Please paste or type a grocery list');
+      toast.error(t('grocery.input.import.emptyText', 'Paste or type a grocery list first'));
       return;
     }
     const items = parseGroceryText(text);
     if (items.length === 0) {
-      toast.error('No grocery items could be parsed from the text');
+      toast.error(t('grocery.input.import.noneInText', 'No grocery items could be read from the text'));
       return;
     }
     setParsedItems(items);
-    toast.success(`Found ${items.length} item${items.length !== 1 ? 's' : ''}`);
+    toast.success(t('grocery.input.import.found', { defaultValue: 'Found {{count}} items', count: items.length }));
   };
 
   const processImage = useCallback(async (file: File) => {
@@ -70,27 +79,29 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
 
       if (error) throw error;
 
-      const items: ParsedGroceryItem[] = (data?.items || []).map((item: any) => ({
-        name: item.name,
-        quantity: item.quantity || 1,
-        unit: item.unit || '',
-        category: item.category || 'snack',
-      }));
+      // Model output: validate each row, keep the readable ones, say how many
+      // were not.
+      const { items, dropped } = parseGroceryImagePayload(data);
 
       if (items.length === 0) {
-        toast.error('No grocery items found in the image. Try a clearer photo.');
+        toast.error(t('grocery.input.import.noneInImage', 'No grocery items found in the image. Try a clearer photo.'));
         return;
       }
 
       setParsedItems(items);
-      toast.success(`Found ${items.length} item${items.length !== 1 ? 's' : ''}`);
+      toast.success(t('grocery.input.import.found', { defaultValue: 'Found {{count}} items', count: items.length }), {
+        description:
+          dropped > 0
+            ? t('grocery.input.import.dropped', { defaultValue: '{{count}} lines could not be read', count: dropped })
+            : undefined,
+      });
     } catch (err) {
       logger.error('Image parse error:', err);
-      toast.error('Failed to process image. Check your connection and try again.');
+      toast.error(t('grocery.input.import.imageFailed', 'Failed to process image. Check your connection and try again.'));
     } finally {
       setIsProcessing(false);
     }
-  }, []);
+  }, [t]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,7 +137,7 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
   const handleAddSelected = async (items: ParsedGroceryItem[]) => {
     setIsAdding(true);
     try {
-      onAddItems(items);
+      onAddItems(items.map((item) => toGroceryAddInput(item, { added_via: 'import' })));
       setParsedItems(null);
       setText('');
     } finally {
@@ -141,48 +152,61 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
           <Tabs value={mode} onValueChange={(v) => setMode(v as 'image' | 'text')}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="text" className="gap-1.5">
-                <Type className="h-3.5 w-3.5" />
-                Paste Text
+                <Type className="h-3.5 w-3.5" aria-hidden="true" />
+                {t('grocery.input.import.pasteTab', 'Paste text')}
               </TabsTrigger>
               <TabsTrigger value="image" className="gap-1.5">
-                <Image className="h-3.5 w-3.5" />
-                From Image
+                <Image className="h-3.5 w-3.5" aria-hidden="true" />
+                {t('grocery.input.import.imageTab', 'From image')}
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="text" className="space-y-3 mt-3">
               <div className="space-y-2">
                 <Label htmlFor="grocery-text" className="text-sm">
-                  Paste your grocery list
+                  {t('grocery.input.import.pasteLabel', 'Paste your grocery list')}
                 </Label>
                 <Textarea
                   id="grocery-text"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder={`Paste from Notes, Reminders, or type items:\n\n- 2 lbs chicken breast\n- 1 gallon milk\n- Bananas\n- 3 cans tomato sauce\n- Bread\n\nOr comma-separated: eggs, butter, cheese, rice`}
+                  placeholder={t(
+                    'grocery.input.import.pastePlaceholder',
+                    'Paste from Notes or Reminders, or type items:\n\n2 lbs chicken breast\n1 gallon milk\nBananas\n\nOr comma-separated: eggs, butter, rice',
+                  )}
                   rows={7}
-                  className="font-mono text-sm"
+                  className="text-sm"
                 />
               </div>
               <Button
                 type="button"
                 onClick={handleParseText}
                 disabled={!text.trim()}
-                className="w-full"
+                className="w-full h-11"
               >
-                <ClipboardPaste className="h-4 w-4 mr-2" />
-                Parse List
+                <ClipboardPaste className="h-4 w-4 mr-2" aria-hidden="true" />
+                {t('grocery.input.import.parse', 'Read list')}
               </Button>
             </TabsContent>
 
             <TabsContent value="image" className="space-y-3 mt-3">
+              {/* US-632: the image goes to an AI provider; say so before it is sent. */}
+              <p className="text-xs text-muted-foreground">{PHOTO_AI_NOTICE}</p>
               <Card
                 className={`p-6 border-2 border-dashed transition-colors cursor-pointer ${
                   dragOver
                     ? 'border-primary bg-primary/5'
                     : 'border-muted-foreground/25 hover:border-muted-foreground/50'
                 } ${isProcessing ? 'pointer-events-none opacity-60' : ''}`}
+                role="button"
+                tabIndex={isProcessing ? -1 : 0}
+                aria-disabled={isProcessing}
                 onClick={() => !isProcessing && fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (isProcessing || (e.key !== 'Enter' && e.key !== ' ')) return;
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
@@ -192,8 +216,10 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
                     <>
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       <div>
-                        <p className="font-medium text-sm">Processing image...</p>
-                        <p className="text-xs text-muted-foreground">AI is extracting grocery items</p>
+                        <p className="font-medium text-sm">{t('grocery.input.import.processing', 'Reading the image...')}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t('grocery.input.import.processingHint', 'Picking out the grocery items')}
+                        </p>
                       </div>
                     </>
                   ) : (
@@ -201,10 +227,10 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
                       <Upload className="h-8 w-8 text-muted-foreground" />
                       <div>
                         <p className="font-medium text-sm">
-                          Drop image here, click to browse, or paste from clipboard
+                          {t('grocery.input.import.dropHint', 'Drop an image here, tap to browse, or paste one')}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Supports screenshots, photos of handwritten lists, Notes app exports
+                          {t('grocery.input.import.dropSub', 'Screenshots, photos of handwritten lists, Notes exports')}
                         </p>
                       </div>
                     </>
@@ -217,33 +243,35 @@ export function GroceryImportTab({ onAddItems }: GroceryImportTabProps) {
                 accept="image/*"
                 onChange={handleFileSelect}
                 className="hidden"
-                aria-label="Upload grocery list image"
+                aria-label={t('grocery.input.import.uploadLabel', 'Upload grocery list image')}
               />
             </TabsContent>
           </Tabs>
 
           <p className="text-xs text-muted-foreground text-center">
-            Tip: You can paste an image from clipboard anywhere on this tab
+            {t('grocery.input.import.pasteTip', 'Tip: you can paste an image anywhere on this tab')}
           </p>
         </>
       ) : (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="font-medium text-sm">Parsed Items</h4>
+            <h4 className="font-medium text-sm">{t('grocery.input.import.parsedHeading', 'Items found')}</h4>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => setParsedItems(null)}
-              className="text-xs"
+              className="text-xs h-11 sm:h-9"
             >
-              Start Over
+              {t('grocery.input.import.startOver', 'Start over')}
             </Button>
           </div>
           <ParsedItemsPreview
             items={parsedItems}
             onAddSelected={handleAddSelected}
             isAdding={isAdding}
+            foods={foods}
+            kids={kids}
           />
         </div>
       )}

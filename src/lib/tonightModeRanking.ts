@@ -16,6 +16,8 @@
  * collapses to -Infinity).
  */
 
+import { worstFoodAllergen, type AllergenSeverity } from './allergens';
+
 export interface PantryFood {
   id: string;
   name: string;
@@ -26,6 +28,8 @@ export interface KidContext {
   id: string;
   name: string;
   allergens?: string[] | null;
+  /** kids.allergen_severity, for labelling the hit. Every hit is still excluded. */
+  allergenSeverity?: Partial<Record<string, AllergenSeverity>> | null;
   dislikedFoods?: string[] | null;
 }
 
@@ -60,6 +64,16 @@ export interface KidFit {
   score: number;
   blockingAversions: string[];
   allergenHits: string[];
+  /**
+   * Worst severity among this kid's hits, or null when there is no hit. An
+   * allergy with no recorded severity counts as "severe" (item 3a).
+   */
+  allergenSeverity?: AllergenSeverity | null;
+  /**
+   * False when `allergenSeverity` is "severe" only because no severity was
+   * recorded; label it "severity not recorded", not "severe".
+   */
+  allergenSeverityRecorded?: boolean;
 }
 
 export interface ScoredRecipe {
@@ -115,24 +129,37 @@ export function computeVarietyScore(
   return clamp01((weighted / Math.max(1, lookbackDays)) * 3);
 }
 
+const SEVERITY_RANK: Record<AllergenSeverity | 'none', number> = { none: 0, mild: 1, moderate: 2, severe: 3 };
+
 export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
-  const kidAllergens = lowerSet(kid.allergens);
   const dislikedIds = new Set(kid.dislikedFoods ?? []);
   const dislikedNames = lowerSet(kid.dislikedFoods);
 
   const allergenHits: string[] = [];
   const blockingAversions: string[] = [];
+  let worst: AllergenSeverity | null = null;
+  let worstRecorded = false;
 
   for (const food of recipe.foods) {
-    let allergic = false;
-    for (const a of food.allergens ?? []) {
-      if (kidAllergens.has(String(a).trim().toLowerCase())) {
-        allergic = true;
-        break;
-      }
-    }
-    if (allergic) {
+    // Canonical matching, as kidFit does: a kid's "Peanuts" has to catch a
+    // food's "en:peanuts", which a lowercased exact compare let through.
+    // Families and the food's name count too ("Almond flour", tree nuts).
+    const worstHit = worstFoodAllergen(
+      { allergens: kid.allergens, allergen_severity: kid.allergenSeverity },
+      food,
+    );
+    if (worstHit) {
       allergenHits.push(food.name);
+      const level = worstHit.severity;
+      const rank = SEVERITY_RANK[level];
+      const worstRank = SEVERITY_RANK[worst ?? 'none'];
+      if (rank > worstRank) {
+        worst = level;
+        worstRecorded = worstHit.recorded;
+      } else if (rank === worstRank && worstHit.recorded) {
+        // A recorded severe beats an unrated one for the label.
+        worstRecorded = true;
+      }
       continue;
     }
     if (
@@ -152,6 +179,8 @@ export function evaluateKidFit(recipe: RecipeContext, kid: KidContext): KidFit {
     score: clamp01(score),
     blockingAversions,
     allergenHits,
+    allergenSeverity: worst,
+    allergenSeverityRecorded: worst === null ? false : worstRecorded,
   };
 }
 
@@ -233,4 +262,81 @@ export function topSuggestions(
   return scoreRecipes(inputs, opts)
     .filter((r) => !r.excluded)
     .slice(0, limit);
+}
+
+/**
+ * The shape the planner grid holds. Structural so this module stays free of
+ * app imports: PlanEntry from '@/types' satisfies it.
+ */
+export interface ScheduledPlanRow {
+  kid_id: string;
+  date: string;
+  meal_slot: string;
+  recipe_id?: string | null;
+}
+
+const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})/;
+
+/** Whole calendar days from `from` to `to`, both 'YYYY-MM-DD'. DST-proof. */
+function isoDayDiff(from: string, to: string): number | null {
+  const a = ISO_DAY.exec(from);
+  const b = ISO_DAY.exec(to);
+  if (!a || !b) return null;
+  const ua = Date.UTC(Number(a[1]), Number(a[2]) - 1, Number(a[3]));
+  const ub = Date.UTC(Number(b[1]), Number(b[2]) - 1, Number(b[3]));
+  return Math.round((ub - ua) / 86_400_000);
+}
+
+/**
+ * Plan rows -> the RecentPlanEntry list computeVarietyScore expects, counting
+ * each time a recipe was SERVED rather than each row it expanded into.
+ *
+ * Scheduling a recipe writes one plan_entries row per ingredient, so a single
+ * 5-ingredient dinner used to count as "made 5x" and trip the fatigue chip on
+ * first use. Rows are deduped on recipe|date|slot, scoped to one kid (a
+ * sibling's plan is not this child's repetition), and dates after `today` are
+ * dropped: a meal that has not happened yet is not something anyone is tired of.
+ */
+export function recentRecipeServings(
+  rows: readonly ScheduledPlanRow[],
+  kidId: string,
+  today: string,
+  lookbackDays = VARIETY_LOOKBACK_DEFAULT,
+): RecentPlanEntry[] {
+  const seen = new Set<string>();
+  const out: RecentPlanEntry[] = [];
+  for (const row of rows) {
+    if (!row.recipe_id || row.kid_id !== kidId) continue;
+    const daysAgo = isoDayDiff(row.date, today);
+    if (daysAgo === null || daysAgo < 0 || daysAgo > lookbackDays) continue;
+    const key = `${row.recipe_id}|${row.date}|${row.meal_slot}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ recipeId: row.recipe_id, daysAgo });
+  }
+  return out;
+}
+
+export interface RecipeFatigue {
+  score: number;
+  count: number;
+}
+
+/** Per-recipe fatigue for one kid, from recentRecipeServings. */
+export function fatigueByRecipe(
+  rows: readonly ScheduledPlanRow[],
+  kidId: string,
+  today: string,
+  lookbackDays = VARIETY_LOOKBACK_DEFAULT,
+): Map<string, RecipeFatigue> {
+  const recent = recentRecipeServings(rows, kidId, today, lookbackDays);
+  const counts = new Map<string, number>();
+  for (const r of recent) {
+    if (r.recipeId) counts.set(r.recipeId, (counts.get(r.recipeId) ?? 0) + 1);
+  }
+  const out = new Map<string, RecipeFatigue>();
+  for (const [recipeId, count] of counts) {
+    out.set(recipeId, { score: computeVarietyScore(recipeId, recent, lookbackDays), count });
+  }
+  return out;
 }

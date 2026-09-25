@@ -34,3 +34,26 @@ export const ROUTE_ALIASES: Readonly<Record<string, string>> = Object.freeze({
 export const ROUTE_ALIAS_ENTRIES: ReadonlyArray<readonly [string, string]> = Object.freeze(
   Object.entries(ROUTE_ALIASES).map(([from, to]) => Object.freeze([from, to]) as [string, string])
 );
+
+/**
+ * Retired /dashboard routes and where their content lives now.
+ *
+ * Different from ROUTE_ALIASES: an alias points at the page of the same name,
+ * while these point at a section of a different page. /dashboard/analytics was
+ * folded into Progress, whose "numbers" section carries the household counts
+ * Analytics used to show, so an old bookmark lands on that section. The
+ * separate accessibility page became the Accessibility section of the
+ * Settings hub the same way.
+ *
+ * Paths are relative to /dashboard in App.tsx and absolute here, because
+ * public/_redirects needs the absolute form and the test compares the two.
+ */
+export const DASHBOARD_REDIRECTS: Readonly<Record<string, string>> = Object.freeze({
+  '/dashboard/analytics': '/dashboard/progress?section=numbers',
+  '/dashboard/accessibility-settings': '/dashboard/settings?section=accessibility',
+});
+
+/** `[['/dashboard/analytics', '/dashboard/progress?section=numbers']]`. */
+export const DASHBOARD_REDIRECT_ENTRIES: ReadonlyArray<readonly [string, string]> = Object.freeze(
+  Object.entries(DASHBOARD_REDIRECTS).map(([from, to]) => Object.freeze([from, to]) as [string, string])
+);

@@ -1,0 +1,117 @@
+{
+  "settings": {
+    "a11y": {
+      "title": "Accessibility",
+      "intro": "Changes apply straight away, on every page.",
+      "saved": {
+        "account": "Saved to your account",
+        "device": "Saved on this device"
+      },
+      "state": {
+        "on": "on",
+        "off": "off"
+      },
+      "announce": {
+        "toggled": "{{label}} {{state}}"
+      },
+      "textSize": {
+        "label": "Text size",
+        "group": "Text size",
+        "default": "Standard",
+        "large": "Large",
+        "x-large": "Extra large",
+        "short": {
+          "default": "A",
+          "large": "A+",
+          "x-large": "A++"
+        }
+      },
+      "quick": {
+        "label": "Comfort settings",
+        "preview": "Tonight: pasta with a few peas on the side, and a no-thank-you bite of broccoli.",
+        "previewLabel": "Preview",
+        "on": "On",
+        "off": "Off"
+      },
+      "highContrast": {
+        "label": "High contrast",
+        "description": "Darker text and stronger borders."
+      },
+      "reducedMotion": {
+        "label": "Reduce motion",
+        "description": "Stops slides, fades and moving decorations."
+      },
+      "dyslexiaFont": {
+        "label": "Easier-to-read font",
+        "description": "A rounder font with more space between letters and lines."
+      },
+      "groups": {
+        "reading": "Reading and navigation",
+        "more": "More options",
+        "moreHint": "Focus outlines, a flatter look, page announcements and keyboard shortcuts."
+      },
+      "extendedTimeouts": {
+        "label": "Keep messages on screen longer",
+        "description": "Pop-up messages stay for 12 seconds instead of 4, so there is time to read them or press Undo."
+      },
+      "screenReaderMode": {
+        "label": "Move focus to the page heading on navigation",
+        "description": "After you open a new page, keyboard and screen reader focus starts at its main content instead of the top of the window."
+      },
+      "announcePageChanges": {
+        "label": "Announce page changes",
+        "description": "Screen readers say the name of each new page you open."
+      },
+      "enhancedFocus": {
+        "label": "Clearer focus outlines",
+        "description": "A thicker outline around whatever the keyboard is on."
+      },
+      "simplifiedUI": {
+        "label": "Flatter look (no shadows or gradients)",
+        "description": "Removes drop shadows and color gradients. Nothing is hidden."
+      },
+      "keyboardShortcuts": {
+        "label": "Single-key shortcuts",
+        "description": "On the dashboard, one letter jumps to a page: T for today, G for groceries, S for the pantry, L to log a meal, ? for the list. Turn off if you use speech input or a switch device and letters fire by accident. Ctrl/Cmd + K and Escape keep working either way."
+      },
+      "shortcuts": {
+        "title": "Keyboard shortcuts",
+        "singleKey": "Single-key (dashboard)",
+        "always": "Always on",
+        "offNote": "Single-key shortcuts are off.",
+        "search": "Open search and commands",
+        "skip": "Skip to main content",
+        "skipKey": "Tab (first press)",
+        "close": "Close a dialog or menu",
+        "lists": "Move through menus and choices",
+        "listsKey": "Arrow keys",
+        "activate": "Select or activate",
+        "activateKey": "Enter / Space"
+      },
+      "reset": {
+        "button": "Reset to defaults",
+        "hint": "Keeps what your device asks for, such as reduced motion.",
+        "done": "Accessibility settings reset",
+        "undo": "Undo"
+      },
+      "statement": {
+        "title": "Need help?",
+        "body": "If something in EatPal is hard to use, tell us and we will fix it or find another way.",
+        "link": "Read the accessibility statement",
+        "contact": "Email accessibility@tryeatpal.com"
+      },
+      "widget": {
+        "title": "Accessibility",
+        "dialogLabel": "Quick accessibility settings",
+        "open": "Open accessibility settings",
+        "close": "Close accessibility settings",
+        "opened": "Accessibility settings panel opened",
+        "closed": "Accessibility settings panel closed",
+        "seeing": "Seeing and reading",
+        "motion": "Motion",
+        "keyboard": "Keyboard and focus",
+        "all": "All accessibility settings"
+      }
+    }
+  }
+}

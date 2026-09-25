@@ -6,13 +6,12 @@
  * returns one row per ingredient that the household doesn't have on
  * hand in sufficient quantity.
  *
- * v1 unit handling is conservative: when both sides report the same
- * (case-insensitive, trimmed) unit string, we do straight numeric
- * subtraction. When units differ — or when one side is missing — we
- * mark the row `comparable: false` and treat the on-hand contribution
- * as zero so the user is reminded to verify before submitting. The
- * full unit normalization layer (US-287) replaces the comparable check
- * with a proper convert + compare and removes the conservative bias.
+ * Unit handling: same unit (case-insensitive, trimmed) subtracts directly;
+ * different units go through unitNormalize.convert (2 lb covers 16 oz).
+ * Only when convert cannot bridge them (cups vs lb, an unknown unit) is the
+ * row marked `comparable: false` with the on-hand contribution treated as
+ * zero, so the user is reminded to verify before submitting. A recipe line
+ * with no amount ("to taste") is also a verify row, never a guessed 1.
  *
  * Pantry-match strategy:
  *   1. If ingredient.food_id is set, look up by id.
@@ -20,43 +19,109 @@
  *   3. No match → treated as "not in pantry" (full quantity is short).
  */
 
-import type { Recipe, RecipeIngredient, Food } from "@/types";
+import type { Recipe, RecipeIngredient, Food, GroceryItem } from "@/types";
+import { convert } from "./unitNormalize";
+
+/**
+ * Why a row is on the list, so the dialog can say it in words instead of a
+ * bare "verify" badge.
+ *   short            - matched in the pantry, same or convertible unit, not enough
+ *   not_in_pantry    - no pantry food matched
+ *   unit_mismatch    - matched, but the units cannot be converted (cups vs lb)
+ *   unknown_quantity - the recipe gives no amount ("to taste", 0, blank)
+ */
+export type ShortfallReason = "short" | "not_in_pantry" | "unit_mismatch" | "unknown_quantity";
 
 export type Shortfall = {
   ingredient: RecipeIngredient;
-  /** Quantity the recipe needs (defaults to 1 when ingredient has no qty). */
+  /**
+   * Quantity still to buy, in neededUnit. 0 when the recipe gives no amount
+   * (reason "unknown_quantity"); callers adding to a list pick their own
+   * default then.
+   */
   needed: number;
   /** Recipe-side unit; null when missing. */
   neededUnit: string | null;
-  /** Quantity already on hand from the matched pantry food. */
+  /** Quantity already on hand from the matched pantry food, in onHandUnit. */
   onHand: number;
   /** Pantry-side unit; null when missing or no match. */
   onHandUnit: string | null;
   /** The matched pantry food, or null if there is none. */
   matchedFood: Food | null;
   /**
-   * True when the on-hand contribution was subtracted from the needed
-   * quantity (units matched). False when units mismatched or were
-   * absent — caller should still surface the row but treat it as
-   * "verify before adding to grocery".
+   * True when `needed` is a real figure: the recipe gave an amount and the
+   * pantry side was either absent or subtracted (same unit, or converted via
+   * unitNormalize). False means "verify before adding to grocery".
    */
   comparable: boolean;
+  reason: ShortfallReason;
+  /** Quantity already on the grocery list (unchecked), in neededUnit. */
+  onListQty?: number;
 };
+
+const nameKey = (value: string | null | undefined) => String(value ?? "").trim().toLowerCase();
+
+/**
+ * Convert `qty` from one unit to another. Same unit (or both absent) passes
+ * through; otherwise unitNormalize.convert decides, and null means the two
+ * cannot be compared (cups vs lb, or an unknown unit).
+ */
+function toUnit(qty: number, from: string | null, to: string | null): number | null {
+  if ((from ?? "") === (to ?? "")) return qty;
+  if (!from || !to) return null;
+  return convert(qty, from, to);
+}
+
+/**
+ * Total unchecked grocery-list quantity per lowercased name, kept per unit so
+ * each can be converted to the recipe's unit at lookup time.
+ */
+function indexOnList(onList: readonly GroceryItem[] | undefined) {
+  const byName = new Map<string, Array<{ qty: number; unit: string | null }>>();
+  for (const item of onList ?? []) {
+    if (item.checked) continue;
+    const k = nameKey(item.name);
+    if (!k) continue;
+    const bucket = byName.get(k) ?? [];
+    bucket.push({ qty: Number(item.quantity) || 0, unit: normalizeUnitTag(item.unit ?? null) });
+    byName.set(k, bucket);
+  }
+  return byName;
+}
 
 /**
  * Compute the ingredients-needed-but-not-on-hand list for a recipe.
  * Returns rows in `sort_order` to match the recipe's display order.
+ *
+ * `onList`, when given, is the current grocery list: unchecked rows with the
+ * same name count toward the need (converted to the recipe's unit where the
+ * units allow), so an ingredient already on the list is not offered twice.
+ *
+ * `scale` multiplies every recipe quantity before comparing, so a recipe
+ * doubled from 4 to 8 servings asks for twice as much. Omitted, non-finite or
+ * non-positive values mean 1.
  */
 export function computeRecipeShortfall(
   recipe: Recipe,
-  foods: Food[]
+  foods: Food[],
+  onList?: readonly GroceryItem[],
+  scale: number = 1,
 ): Shortfall[] {
   const ingredients = recipe.recipe_ingredients ?? [];
   if (ingredients.length === 0) return [];
+  const factor = Number.isFinite(scale) && scale > 0 ? scale : 1;
 
   const sorted = ingredients
     .slice()
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  const foodById = new Map(foods.map((f) => [f.id, f]));
+  const foodByName = new Map<string, Food>();
+  for (const f of foods) {
+    const k = nameKey(f.name);
+    if (k && !foodByName.has(k)) foodByName.set(k, f);
+  }
+  const listByName = indexOnList(onList);
 
   const shortfalls: Shortfall[] = [];
 
@@ -66,66 +131,81 @@ export function computeRecipeShortfall(
     const name = (ing.name ?? "").trim();
     if (!name) continue;
 
-    const needed = typeof ing.quantity === "number" && ing.quantity > 0
-      ? ing.quantity
-      : 1;
+    const quantityKnown = typeof ing.quantity === "number" && ing.quantity > 0;
     const neededUnit = normalizeUnitTag(ing.unit ?? null);
 
     const matchedFood =
-      (ing.food_id && foods.find((f) => f.id === ing.food_id)) ||
-      foods.find((f) => f.name.trim().toLowerCase() === name.toLowerCase()) ||
+      (ing.food_id ? foodById.get(ing.food_id) : undefined) ??
+      foodByName.get(name.toLowerCase()) ??
       null;
+    const onHand = matchedFood ? matchedFood.quantity ?? 0 : 0;
+    const onHandUnit = matchedFood ? normalizeUnitTag(matchedFood.unit ?? null) : null;
+    const listed = listByName.get(name.toLowerCase()) ?? [];
 
-    if (!matchedFood) {
+    if (!quantityKnown) {
+      // "To taste", 0 or blank: there is no amount to subtract from, so any
+      // stock in the pantry or on the list counts as covered and anything
+      // else is a row the user has to judge.
+      if (onHand > 0 || listed.length > 0) continue;
       shortfalls.push({
         ingredient: ing,
-        needed,
-        neededUnit,
-        onHand: 0,
-        onHandUnit: null,
-        matchedFood: null,
-        comparable: false,
-      });
-      continue;
-    }
-
-    const onHand = matchedFood.quantity ?? 0;
-    const onHandUnit = normalizeUnitTag(matchedFood.unit ?? null);
-
-    // Same unit (or both side missing units) → arithmetic comparison.
-    const comparable =
-      (neededUnit ?? "") === (onHandUnit ?? "");
-
-    if (!comparable) {
-      shortfalls.push({
-        ingredient: ing,
-        needed,
+        needed: 0,
         neededUnit,
         onHand,
         onHandUnit,
         matchedFood,
         comparable: false,
+        reason: "unknown_quantity",
       });
       continue;
     }
 
-    if (onHand >= needed) {
-      // Fully covered, no shortfall row.
-      continue;
+    const scaledQty = (ing.quantity as number) * factor;
+    let needed = scaledQty;
+    let reason: ShortfallReason = matchedFood ? "short" : "not_in_pantry";
+    let comparable = true;
+
+    if (matchedFood) {
+      const onHandInNeeded = toUnit(onHand, onHandUnit, neededUnit);
+      if (onHandInNeeded === null) {
+        comparable = false;
+        reason = "unit_mismatch";
+      } else {
+        needed -= onHandInNeeded;
+      }
     }
+
+    let onListQty = 0;
+    for (const row of listed) {
+      const converted = toUnit(row.qty, row.unit, neededUnit);
+      if (converted !== null) onListQty += converted;
+    }
+    if (comparable) needed -= onListQty;
+
+    // Float noise from conversions ("2 lb" is 32.00000001 oz) must not leave a
+    // phantom 0.00000001-oz row behind.
+    if (comparable && needed <= 1e-6) continue;
+    // An incomparable row already on the list is covered as far as we can tell.
+    if (!comparable && listed.length > 0) continue;
 
     shortfalls.push({
       ingredient: ing,
-      needed: needed - onHand,
+      needed: comparable ? roundQty(needed) : roundQty(scaledQty),
       neededUnit,
       onHand,
       onHandUnit,
       matchedFood,
-      comparable: true,
+      comparable,
+      reason,
+      ...(onListQty > 0 ? { onListQty: roundQty(onListQty) } : {}),
     });
   }
 
   return shortfalls;
+}
+
+function roundQty(qty: number): number {
+  return Math.round(qty * 1000) / 1000;
 }
 
 /** Trim + lowercase a unit string so "TBSP " and "tbsp" compare equal. */
@@ -152,10 +232,11 @@ function normalizeUnitTag(raw: string | null): string | null {
  */
 export function countMissingForRecipe(
   recipe: Pick<Recipe, "food_ids" | "recipe_ingredients">,
-  foods: Food[]
+  foods: Food[],
+  onList?: readonly GroceryItem[],
 ): number {
   if (recipe.recipe_ingredients && recipe.recipe_ingredients.length > 0) {
-    return computeRecipeShortfall(recipe as Recipe, foods).length;
+    return computeRecipeShortfall(recipe as Recipe, foods, onList).length;
   }
 
   const foodIds = recipe.food_ids ?? [];

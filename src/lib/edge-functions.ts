@@ -15,6 +15,28 @@
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from "@/lib/logger";
 
+/**
+ * A non-2xx answer from an edge function.
+ *
+ * The message is unchanged ("Edge Function '<name>' failed: <error>") so every
+ * caller that string-matches it still works; `status` and `code` are carried
+ * alongside so a caller can branch on the contract (e.g. create-checkout's
+ * 409 { code: "already_subscribed" }) instead of on English.
+ */
+export class EdgeFunctionError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+  readonly body: Record<string, unknown> | null;
+
+  constructor(message: string, status: number, body: Record<string, unknown> | null) {
+    super(message);
+    this.name = 'EdgeFunctionError';
+    this.status = status;
+    this.body = body;
+    this.code = body && typeof body.code === 'string' ? body.code : null;
+  }
+}
+
 export interface EdgeFunctionResponse<T = unknown> {
   data: T | null;
   error: Error | null;
@@ -92,15 +114,23 @@ export async function invokeEdgeFunction<T = unknown>(
     if (!response.ok) {
       const errorText = await response.text();
       let errorMessage: string;
+      let errorBody: Record<string, unknown> | null = null;
 
       try {
         const errorJson = JSON.parse(errorText);
+        if (errorJson && typeof errorJson === 'object' && !Array.isArray(errorJson)) {
+          errorBody = errorJson as Record<string, unknown>;
+        }
         errorMessage = errorJson.error || errorJson.message || response.statusText;
       } catch {
         errorMessage = errorText || response.statusText;
       }
 
-      throw new Error(`Edge Function '${functionName}' failed: ${errorMessage}`);
+      throw new EdgeFunctionError(
+        `Edge Function '${functionName}' failed: ${errorMessage}`,
+        response.status,
+        errorBody,
+      );
     }
 
     // Handle empty responses

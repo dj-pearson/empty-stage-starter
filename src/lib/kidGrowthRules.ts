@@ -18,6 +18,7 @@
  * `KidBirthdayCard` UI; the actual mutation paths live in AppContext.
  */
 import type { Food, Kid } from '@/types';
+import { canonicalAllergen } from '@/lib/allergens';
 
 export interface KidGrowthSuggestions {
   /** Total years today; 0..18+ */
@@ -40,47 +41,72 @@ export type AgeMilestone =
   | 'tween'
   | 'teen';
 
+/**
+ * Keyed by canonicalAllergen. The kid pickers store plurals ("peanuts",
+ * "tree nuts", "eggs"), which a lowercased lookup never found, so the prompt
+ * never showed for the most common allergies.
+ */
 const ALLERGEN_REINTRO_RULES: Record<string, string> = {
   peanut:
     'Many pediatricians revisit peanut tolerance around now. Bring it up at the next well-visit before reintroducing.',
   'tree nut':
     'Tree-nut tolerance can change with age. Ask your pediatrician about a structured rechallenge.',
-  tree_nut:
-    'Tree-nut tolerance can change with age. Ask your pediatrician about a structured rechallenge.',
   egg:
     'Egg allergy often outgrows in childhood. Don\'t reintroduce at home without confirming with your pediatrician.',
-  dairy:
-    'Dairy tolerance often shifts. Talk with your pediatrician about whether a milk-ladder is appropriate.',
   milk:
     'Dairy tolerance often shifts. Talk with your pediatrician about whether a milk-ladder is appropriate.',
 };
 
 /**
- * Calendar age in whole years. Identical to the helper in src/lib/utils.ts
- * but standalone so this module stays pure.
+ * Parse a 'YYYY-MM-DD' date of birth into local calendar parts. A birthday is
+ * a calendar date, not an instant, so it is never run through a timezone.
+ * Returns null when the string is not a real date.
+ */
+function parseDobParts(birthdate: string): { year: number; month: number; day: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthdate.trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  const probe = new Date(year, month, day);
+  if (
+    Number.isNaN(probe.getTime()) ||
+    probe.getFullYear() !== year ||
+    probe.getMonth() !== month ||
+    probe.getDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
+}
+
+/**
+ * Calendar age in whole years, on the parent's local calendar. Identical in
+ * intent to the helper in src/lib/utils.ts but standalone so this module
+ * stays pure.
  */
 export function calcAgeYears(birthdate: string, asOf: Date = new Date()): number {
-  const dob = new Date(`${birthdate}T12:00:00Z`);
-  if (Number.isNaN(dob.getTime())) return 0;
-  let years = asOf.getUTCFullYear() - dob.getUTCFullYear();
+  const dob = parseDobParts(birthdate);
+  if (!dob) return 0;
+  let years = asOf.getFullYear() - dob.year;
   const beforeBirthday =
-    asOf.getUTCMonth() < dob.getUTCMonth() ||
-    (asOf.getUTCMonth() === dob.getUTCMonth() && asOf.getUTCDate() < dob.getUTCDate());
+    asOf.getMonth() < dob.month || (asOf.getMonth() === dob.month && asOf.getDate() < dob.day);
   if (beforeBirthday) years -= 1;
   return Math.max(0, years);
 }
 
 /**
- * True when today (UTC) matches the kid's birthday (month + day).
- * Year-agnostic so the card fires every year on the right day.
+ * True when today, on the parent's local calendar, matches the kid's birthday
+ * (month + day). Year-agnostic so the card fires every year on the right day.
+ *
+ * This used to compare UTC parts, so in the Americas the card appeared the
+ * evening before the birthday (after 7pm in Chicago) and was gone by the
+ * evening of the day itself.
  */
 export function isBirthdayToday(birthdate: string, asOf: Date = new Date()): boolean {
-  const dob = new Date(`${birthdate}T12:00:00Z`);
-  if (Number.isNaN(dob.getTime())) return false;
-  return (
-    dob.getUTCMonth() === asOf.getUTCMonth() &&
-    dob.getUTCDate() === asOf.getUTCDate()
-  );
+  const dob = parseDobParts(birthdate);
+  if (!dob) return false;
+  return dob.month === asOf.getMonth() && dob.day === asOf.getDate();
 }
 
 /**
@@ -169,8 +195,7 @@ export function buildKidGrowthSuggestions(
   // Allergen reintro prompts — informational only.
   const allergenReintroPrompts: string[] = [];
   for (const allergen of kid.allergens ?? []) {
-    const key = allergen.trim().toLowerCase();
-    const message = ALLERGEN_REINTRO_RULES[key];
+    const message = ALLERGEN_REINTRO_RULES[canonicalAllergen(allergen)];
     if (message && !allergenReintroPrompts.includes(message)) {
       allergenReintroPrompts.push(message);
     }
@@ -196,12 +221,11 @@ export function assertNoAllergenAutoRemoval(
   proposedAllergens: ReadonlyArray<string> | undefined
 ): true {
   if (!prevAllergens || prevAllergens.length === 0) return true;
-  const prevSet = new Set(prevAllergens.map((s) => s.trim().toLowerCase()));
-  const proposedSet = new Set(
-    (proposedAllergens ?? []).map((s) => s.trim().toLowerCase())
-  );
-  for (const a of prevSet) {
-    if (!proposedSet.has(a)) {
+  // Canonical: "Peanuts" rewritten as "peanut" is the same allergen, not a removal.
+  const proposedSet = new Set((proposedAllergens ?? []).map((s) => canonicalAllergen(s)));
+  for (const a of prevAllergens) {
+    if (!canonicalAllergen(a)) continue;
+    if (!proposedSet.has(canonicalAllergen(a))) {
       throw new Error(
         `assertNoAllergenAutoRemoval: refusing to drop allergen "${a}" — confirmed pediatrician review required.`
       );

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { createWebSyncQueue,
-  purgeForeignQueuesFromBrowser, createGroceryExecutor } from "@/lib/webSyncQueue";
+  purgeForeignQueuesFromBrowser, createGroceryExecutor, notifySyncQueueChanged } from "@/lib/webSyncQueue";
 
 /**
  * US-823: replay the web app's queued writes.
@@ -49,6 +49,9 @@ export function useOfflineSyncDriver(userId: string | null | undefined): void {
         if (pending.length === 0 || cancelled) return;
 
         const result = await queue.drain(createGroceryExecutor());
+        // Rows marked "not synced yet" re-read the queue on this, whatever the
+        // outcome: sent ops leave it, dropped ones too.
+        notifySyncQueueChanged();
         if (cancelled) return;
 
         logger.info(

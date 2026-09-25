@@ -50,6 +50,23 @@ describe('generateId', () => {
     const id = generateId();
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   });
+
+  it('stays UUID v4 shaped from getRandomValues where randomUUID is missing', () => {
+    // A plain-http page is not a secure context and has no crypto.randomUUID.
+    const real = globalThis.crypto;
+    const getRandomValues = vi.fn(<T extends ArrayBufferView>(a: T) => real.getRandomValues(a as never) as T);
+    vi.stubGlobal('crypto', { getRandomValues });
+    try {
+      const ids = new Set(Array.from({ length: 50 }, () => generateId()));
+      expect(ids.size).toBe(50);
+      for (const id of ids) {
+        expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      }
+      expect(getRandomValues).toHaveBeenCalledTimes(50);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('debounce', () => {

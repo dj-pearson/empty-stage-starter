@@ -34,6 +34,12 @@ export const SCRUBBED_KEYS: readonly string[] = [
   'eatpal_recent_searches',
   'eatpal.auto_restock_added_today',
   'eatpal.auto_restock_blocklist',
+  // Settings pass B: the three meal-insight toggles. They are this account's
+  // choices, not the device's; a shared tablet must not hand the next parent
+  // the previous one's auto-restock or nudge settings.
+  'eatpal.nudge_variety',
+  'eatpal.auto_restock_enabled',
+  'eatpal.auto_restock_lead_days',
   'eatpal_onboarding_completed',
   'eatpal_onboarding_dismissed',
   'onboarding-dismissed',
@@ -44,6 +50,17 @@ export const SCRUBBED_KEYS: readonly string[] = [
   'eatpal_admin_feature_flags',
   'blog_webhook_url',
   'eatpal.share_chain_outcomes',
+  // The Pantry kid lens holds a kid id from the previous household.
+  'eatpal.pantry.lensKid',
+  // Item 3: the week-start cache names the user it belongs to.
+  'eatpal.week_starts_on',
+  // Sibling Meal Finder keys from before the selection became per-household:
+  // no longer written, but still on devices holding kid and recipe ids.
+  'siblingMealFinder.selectedKidIds',
+  'siblingMealFinder.familyWins',
+  // The Household page opens "What's shared" for a person who has not seen it.
+  // The next person to sign in on this device has not, whoever saw it before.
+  'eatpal.household.scopeSeen',
 ];
 
 /**
@@ -73,6 +90,9 @@ export const SCRUBBED_SESSION_KEYS: readonly string[] = [
   'returnTo',
   'share-target-pending',
   'bind-email-banner-dismissed',
+  // BindEmailFlow keeps its step here so a re-render mid-flow does not send
+  // the user back to step one. It names the step of another person's flow.
+  'bind-email-flow-step',
 ];
 
 /**
@@ -86,6 +106,22 @@ export const SCRUBBED_PREFIXES: readonly string[] = [
   'frequency-',
   'recent-',
   'prefs-',
+  // The Grocery page's caches: list names, the chosen list and the household's
+  // store layouts, keyed by user or household id, plus per-store dismissals.
+  'grocery:lists:',
+  'grocery:selectedList:',
+  'grocery:storeLayouts:',
+  'grocery.aislePrompt.dismissed.',
+  // The AI Coach composer's unsent question, per conversation (and 'draft' for
+  // a new one). It is what a parent typed about their child, and the 'draft'
+  // key is not user-scoped, so the next account on the device would see it.
+  'aiCoach.draft.',
+  // Meal Builder's offline plate draft, one per child, date and meal slot. It
+  // names a child and the foods chosen for them, and is not user-scoped.
+  'mealBuilder:draft:',
+  // Sibling Meal Finder's "who's eating" selection, one per household. It
+  // holds that household's kid ids.
+  'siblingMealFinder.selection.',
 ];
 
 /** Keys that survive sign-out on purpose, each with the reason it does. */
@@ -102,6 +138,18 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
     'device-level service-worker kill switch that support sets by hand; a sign-out must not undo it',
   'route-error-chunk-reload-at':
     'cooldown that stops a broken deploy reload-looping the browser, and is about the build rather than the account',
+  'recipe-view':
+    'grid or list on the Recipes page is a layout choice for this screen size, not account data',
+  'eatpal.pantry.viewMode':
+    'list or grid on the Pantry page is a layout choice for this screen size, not account data',
+  'eatpal.pantry.sortBy':
+    'the Pantry sort order is a viewing preference holding one of a fixed set of option names',
+  'eatpal.planner.tryBitesOpen':
+    'whether the planner try-bite strip starts open; a yes/no layout choice with no account data in it',
+  'siblingMealFinder.controlsOpen':
+    'whether the Sibling Meal Finder settings panel starts open; a yes/no layout choice with no account data in it',
+  'eatpal.recipes.plan.addMissing':
+    'whether "add missing ingredients" starts ticked when planning a recipe; a yes/no with no account data in it',
   'eatpal.activation.fired':
     'US-707: which activation events each user id has already reported. Holds no account data -- event names and ids -- and clearing it would re-fire food_added and meal_planned on the next sign-in, inflating a funnel step above the signups it is measured against',
 };
@@ -110,6 +158,10 @@ export const KEPT_KEYS: Readonly<Record<string, string>> = {
 export const KEPT_PREFIXES: Readonly<Record<string, string>> = {
   'eatpal.web.syncQueue.':
     'already scoped to a user id (webQueueKey), so it cannot replay into another account; its owner still wants it on their next sign-in',
+  'varietyFatigue.dismissedFor.':
+    'a yes/no dismissal of the variety nudge, already scoped to a user id, so another account on this browser never reads it',
+  'eatpal:billing-upsell-dismissed:':
+    'a yes/no dismissal of the home upgrade nudge, already scoped to a user id, so another account on this browser never reads it',
   __storage_test__: 'availability probe, written and removed in the same statement',
   __test__: 'availability probe in env-utils and browser-utils, removed in the same statement',
 };
@@ -161,9 +213,20 @@ export function keysToScrub(existing: readonly string[]): string[] {
   );
 }
 
+/**
+ * sessionStorage key prefixes removed on sign-out. The Food Tracker's unsent
+ * detail-log draft is keyed per (child, food) and carries reaction notes about
+ * a child, which the next person signing in to the same tab must not see.
+ */
+export const SCRUBBED_SESSION_PREFIXES: readonly string[] = ['eatpal.ladderLogDraft.'];
+
 /** Pure: which of `existing` this module says to remove from sessionStorage. */
 export function sessionKeysToScrub(existing: readonly string[]): string[] {
-  return existing.filter((key) => SCRUBBED_SESSION_KEYS.includes(key));
+  return existing.filter(
+    (key) =>
+      SCRUBBED_SESSION_KEYS.includes(key) ||
+      SCRUBBED_SESSION_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
 }
 
 /**
@@ -179,4 +242,28 @@ export function scrubOnSignOut(
   for (const key of local) storage.removeItem(key);
   for (const key of session) sessionStorageAdapter.removeItem(key);
   return [...local, ...session];
+}
+
+/**
+ * Everything scrubOnSignOut removes, plus the keys sign-out deliberately keeps
+ * for a returning user: once the account is deleted there is no returning
+ * user. Only keys under a KEPT_PREFIXES family that carry this user id are
+ * removed (the offline write queue, the per-user dismissals), so another
+ * account on the same browser keeps its own. Never throws.
+ */
+export function scrubDeletedAccount(
+  userId: string,
+  storage: ScrubStorage = browserScrubStorage('local'),
+  sessionStorageAdapter: ScrubStorage = browserScrubStorage('session')
+): string[] {
+  const removed = scrubOnSignOut(storage, sessionStorageAdapter);
+  if (!userId) return removed;
+  const prefixes = Object.keys(KEPT_PREFIXES);
+  for (const key of storage.keys()) {
+    if (!key.includes(userId)) continue;
+    if (!prefixes.some((prefix) => key.startsWith(prefix))) continue;
+    storage.removeItem(key);
+    removed.push(key);
+  }
+  return removed;
 }

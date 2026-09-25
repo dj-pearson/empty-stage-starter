@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft,
@@ -11,6 +11,11 @@ interface CookModeProps {
   recipeName: string;
   instructions: string;
   onClose: () => void;
+  /**
+   * The last step's Done: the meal is cooked. Defaults to onClose. The detail
+   * sheet uses it to log the cook and ask how each kid did (item 9).
+   */
+  onDone?: () => void;
 }
 
 function parseSteps(instructions: string): string[] {
@@ -47,7 +52,16 @@ function detectTimer(step: string): number | null {
   return null;
 }
 
-export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
+/** "30 sec", "5 min", "1 hr 30 min" for the start button. */
+function timerLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  if (h === 0) return `${m} min`;
+  return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+}
+
+export function CookMode({ recipeName, instructions, onClose, onDone }: CookModeProps) {
   const steps = parseSteps(instructions);
   const [currentStep, setCurrentStep] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
@@ -55,21 +69,36 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
 
   const detectedTimer = detectTimer(steps[currentStep] || "");
 
-  // Screen wake lock
+  // Screen wake lock. The browser drops it whenever the tab is hidden (a
+  // glance at a text, the lock screen), so it is asked for again on return.
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
+    let cancelled = false;
     const requestWakeLock = async () => {
       try {
-        if ("wakeLock" in navigator) {
-          wakeLock = await navigator.wakeLock.request("screen");
+        if ("wakeLock" in navigator && document.visibilityState === "visible") {
+          const lock = await navigator.wakeLock.request("screen");
+          if (cancelled) {
+            void lock.release();
+            return;
+          }
+          wakeLock = lock;
         }
       } catch {
         // Wake lock not available or denied
       }
     };
-    requestWakeLock();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && (wakeLock === null || wakeLock.released)) {
+        void requestWakeLock();
+      }
+    };
+    void requestWakeLock();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      wakeLock?.release();
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      void wakeLock?.release();
     };
   }, []);
 
@@ -92,9 +121,11 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
   }, [timerRunning]);
 
   const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
+    const ss = s.toString().padStart(2, "0");
+    return h > 0 ? `${h}:${m.toString().padStart(2, "0")}:${ss}` : `${m}:${ss}`;
   };
 
   const startTimer = (seconds: number) => {
@@ -102,11 +133,34 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
     setTimerRunning(true);
   };
 
-  const goToStep = (step: number) => {
-    setCurrentStep(step);
-    setTimerSeconds(null);
-    setTimerRunning(false);
-  };
+  const goToStep = useCallback(
+    (step: number) => {
+      if (step < 0 || step >= steps.length) return;
+      setCurrentStep(step);
+      setTimerSeconds(null);
+      setTimerRunning(false);
+    },
+    [steps.length],
+  );
+
+  // Escape leaves, arrows step, for a cook with one clean knuckle.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToStep(currentStep + 1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToStep(currentStep - 1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [currentStep, goToStep, onClose]);
 
   return (
     <div className="fixed inset-0 z-[100] bg-background flex flex-col">
@@ -123,7 +177,7 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
         <div className="text-sm text-muted-foreground mb-4">
           Step {currentStep + 1} of {steps.length}
         </div>
-        <p className="text-xl md:text-2xl leading-relaxed max-w-2xl">
+        <p className="text-xl md:text-2xl leading-relaxed max-w-2xl" aria-live="polite" aria-atomic="true">
           {steps[currentStep]}
         </p>
 
@@ -136,7 +190,7 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
                   {formatTime(timerSeconds)}
                 </div>
                 {timerSeconds === 0 ? (
-                  <p className="text-sm text-green-600 font-medium">
+                  <p className="text-sm text-safe-food font-medium" role="status">
                     Timer complete!
                   </p>
                 ) : (
@@ -157,7 +211,7 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
                 className="gap-2"
               >
                 <Timer className="h-4 w-4" />
-                Start {Math.floor(detectedTimer / 60)}min timer
+                Start {timerLabel(detectedTimer)} timer
               </Button>
             )}
           </div>
@@ -198,7 +252,7 @@ export function CookMode({ recipeName, instructions, onClose }: CookModeProps) {
           variant={currentStep === steps.length - 1 ? "default" : "outline"}
           onClick={() => {
             if (currentStep === steps.length - 1) {
-              onClose();
+              (onDone ?? onClose)();
             } else {
               goToStep(currentStep + 1);
             }

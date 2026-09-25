@@ -66,13 +66,16 @@ test.describe('accessibility preferences are written when they change', () => {
     await signIn(context);
     const writes = watchWrites(page);
 
-    await page.goto('/dashboard/accessibility-settings');
+    // The accessibility page is a section of the Settings hub now. Scope to it:
+    // a bare [role="switch"] would also match the hub's Quick row on a phone
+    // and whatever other section happens to be mounted.
+    await page.goto('/dashboard/settings?section=accessibility');
     await settle(page);
 
-    const switches = page.locator('[role="switch"]');
+    const switches = page.locator('#settings-accessibility [role="switch"]');
     // The floor: with no switches found, the click below is a no-op and the
     // assertion after it would be measuring nothing.
-    expect(await switches.count(), 'no preference switches on the settings page').toBeGreaterThan(5);
+    expect(await switches.count(), 'no preference switches on the settings page').toBeGreaterThan(0);
 
     expect(writes, 'the settings page itself wrote on load').toEqual([]);
 

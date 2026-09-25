@@ -7,7 +7,7 @@ import { parseIsoDate, toISODate } from "./date-utils";
  * US-830: a plan entry's `date` is a calendar key, and two different things are
  * done with it. They need opposite parsing, which is the whole trap.
  *
- *  - BUCKETING against "today" (TodayMeals, streak grouping) must be LOCAL, or
+ *  - BUCKETING against "today" (todayPlan, streak grouping) must be LOCAL, or
  *    today's entry lands on yesterday for every user west of Greenwich.
  *  - DAY ARITHMETIC between two keys (copy-week, delete-week) must be UTC, or
  *    a 23-hour DST day makes two consecutive dates read as the same day.
@@ -90,8 +90,9 @@ describe("the call sites follow those rules", () => {
   const read = (rel: string) =>
     readFileSync(path.resolve(__dirname, "../..", rel), "utf-8");
 
+  // ProgressDashboard.tsx left this list when it became the months view: it
+  // reads food_attempts and the ladder, and computes no streak.
   const STREAK_FILES = [
-    "src/components/ProgressDashboard.tsx",
     "src/components/AchievementsView.tsx",
   ];
 
@@ -113,6 +114,13 @@ describe("the call sites follow those rules", () => {
     expect(src).not.toMatch(/new Date\(entry\.date\)/);
   });
 
+  it("ProgressDashboard.tsx does not import plan-entry streak code", () => {
+    const src = read("src/components/ProgressDashboard.tsx");
+    expect(src).not.toMatch(/streakRules/);
+    expect(src).not.toMatch(/usePlan\(|planEntries/);
+    expect(src).not.toMatch(/new Date\(entry\.date\)/);
+  });
+
   it("the shared streak rule steps day keys rather than Dates", () => {
     const src = read("src/lib/streakRules.ts");
     expect(src).toMatch(/addIsoDays\(todayKey, -offset\)/);
@@ -120,8 +128,11 @@ describe("the call sites follow those rules", () => {
     expect(src).not.toMatch(/dayDiff/);
   });
 
-  it("TodayMeals asks isToday about a locally-parsed key", () => {
-    expect(read("src/components/TodayMeals.tsx")).toMatch(/isToday\(parseIsoDate\(p\.date\)\)/);
+  // The home screen's today list is todayPlan.ts (TodayMeals was removed).
+  it("todayPlan buckets today by comparing local day keys", () => {
+    const src = read("src/lib/todayPlan.ts");
+    expect(src).toMatch(/dateKey\(e\.date\) === todayKey/);
+    expect(src).not.toMatch(/new Date\(e\.date\)/);
   });
 
   // The opposite rule, guarded so a later "consistency" pass does not convert

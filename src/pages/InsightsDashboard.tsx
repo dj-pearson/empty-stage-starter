@@ -1,312 +1,207 @@
-import { useMemo } from "react";
-import { Helmet } from "react-helmet-async";
-import { useFoods, useKids, usePlan } from "@/contexts/AppContext";
-import { computeInsights } from "@/lib/insights";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { 
-  TrendingUp, 
-  Apple, 
-  ShieldCheck, 
-  Lightbulb, 
-  Calendar, 
-  Award,
-  PieChart,
-  AlertCircle,
-  ArrowRight,
-  CheckCircle2,
-  XCircle,
-  Clock
-} from "lucide-react";
-import { format } from "date-fns";
+/**
+ * Insights: for one child over the last four weeks, how it is going, what is
+ * working, where variety is thin and the one thing to try next.
+ *
+ * This page is a composer. It resolves the scope once (a child, or the
+ * family when no child is selected or the selected id no longer exists, the
+ * same rule KidChips uses), owns the single progress read, and hands each
+ * section what it needs. The sections compute their own claims from logged
+ * results; the per-food ladder, the meal log and the day-by-day week line stay
+ * on their own screens and are linked from InsightsLinks.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useFoods, useKids, usePlan } from '@/contexts/AppContext';
+import { useKidsProgressSummary } from '@/hooks/useKidsProgressSummary';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { toISODate } from '@/lib/date-utils';
+import { KidChips } from '@/components/foodTracker/KidChips';
+import { InsightsGate } from '@/components/insights/InsightsGate';
+import { InsightsLinks } from '@/components/insights/InsightsLinks';
+import { WeekTrendSection } from '@/components/insights/WeekTrendSection';
+import { NextStepSection } from '@/components/insights/NextStepSection';
+import { WorkingSection } from '@/components/insights/WorkingSection';
+import { VarietySection } from '@/components/insights/VarietySection';
+import { AllergyCheckSection } from '@/components/insights/AllergyCheckSection';
+import type { Kid } from '@/types';
+import '@/i18n/appLocale';
+
+/** Four weeks, today included: inside the -30d plan window the app loads. */
+const WINDOW_DAYS = 28;
+
+type Scope = { kind: 'kid'; kid: Kid } | { kind: 'family' };
+
+/** Home's InsightSlot kinds, and the section each one lands on. */
+const FROM_TARGET: Record<'safeFood' | 'fatigue' | 'seasonal' | 'birthday', string | null> = {
+  safeFood: 'insights-working',
+  fatigue: 'insights-variety',
+  seasonal: null,
+  birthday: null,
+};
+
+function isFromKind(value: string | null): value is keyof typeof FROM_TARGET {
+  return value !== null && Object.prototype.hasOwnProperty.call(FROM_TARGET, value);
+}
+
+/** Bumps when the tab comes back into view, so a return refetches progress. */
+function useVisibleCount(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const onChange = () => {
+      if (document.visibilityState === 'visible') setCount((c) => c + 1);
+    };
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+  return count;
+}
 
 export default function InsightsDashboard() {
-  const { kids, activeKidId, setActiveKidId } = useKids();
-  const { foods } = useFoods();
+  const { t } = useTranslation();
+  const { kids, activeKidId, setActiveKid, kidsHydrated } = useKids();
+  const { foodsHydrated } = useFoods();
   const { planEntries } = usePlan();
-  const activeKid = kids.find(k => k.id === activeKidId);
-  const isFamilyMode = !activeKidId;
+  const prefersReducedMotion = useReducedMotion();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [todayIso] = useState(() => toISODate(new Date()));
 
-  // US-540: derive insights with useMemo (typed, no effect+setState(any)).
-  const insights = useMemo(
-    () => computeInsights({ activeKid, isFamilyMode, kids, foods, planEntries }),
-    [activeKid, isFamilyMode, kids, foods, planEntries]
+  const activeKid = activeKidId ? kids.find((k) => k.id === activeKidId) : undefined;
+  const scope: Scope = activeKid ? { kind: 'kid', kid: activeKid } : { kind: 'family' };
+
+  const targetKidIds = useMemo(
+    () => (activeKid ? [activeKid.id] : kids.map((k) => k.id)),
+    [activeKid, kids],
   );
 
-  if (kids.length === 0) {
-    return (
-      <div className="container mx-auto p-6">
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Add a child profile first to view nutrition insights
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  const visibleCount = useVisibleCount();
+  const loggedCount = useMemo(() => {
+    const ids = new Set(targetKidIds);
+    return planEntries.filter((e) => ids.has(e.kid_id) && e.result != null).length;
+  }, [planEntries, targetKidIds]);
+  const refreshKey = `${visibleCount}:${loggedCount}`;
 
-  const educationalTips = [
-    "Children often need 8-15 exposures to accept a new food. Don't give up!",
-    "Always include at least one familiar food per meal to build confidence.",
-    "Small portions reduce pressure and make trying new foods less intimidating.",
-    "Let your child explore new foods without pressure to eat them.",
-    "Model adventurous eating - children learn by watching you!"
-  ];
+  const progressOpts = useMemo(() => ({ windowDays: WINDOW_DAYS, refreshKey }), [refreshKey]);
+  const progress = useKidsProgressSummary(targetKidIds, progressOpts);
 
-  const randomTip = educationalTips[Math.floor(Math.random() * educationalTips.length)];
+  // ?from=<kind> from Home's "See all insights": read once, land on the
+  // matching section, then drop the param so Back or a refresh do not replay it.
+  const fromHandled = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const ready = kidsHydrated && foodsHydrated && kids.length > 0;
+  const landOn = useCallback(
+    (targetId: string | null) => {
+      if (!mounted.current) return;
+      const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth';
+      const section = targetId ? document.getElementById(targetId) : null;
+      if (section) {
+        section.scrollIntoView?.({ behavior, block: 'start' });
+        const heading = section.querySelector<HTMLElement>('h2');
+        if (heading) {
+          if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+          heading.focus({ preventScroll: true });
+        }
+      } else if (typeof window.scrollTo === 'function') {
+        try {
+          window.scrollTo({ top: 0, behavior });
+        } catch {
+          // jsdom and old engines: position is already the top on a fresh load.
+        }
+      }
+    },
+    [prefersReducedMotion],
+  );
+
+  useEffect(() => {
+    if (fromHandled.current) return;
+    const from = searchParams.get('from');
+    if (from === null) {
+      fromHandled.current = true;
+      return;
+    }
+    if (!ready) return;
+    fromHandled.current = true;
+    const targetId = isFromKind(from) ? FROM_TARGET[from] : null;
+    // Clearing the param re-runs this effect, so the frame is not cancelled
+    // in its cleanup; landOn is a no-op once the page has unmounted.
+    requestAnimationFrame(() => landOn(targetId));
+    const next = new URLSearchParams(searchParams);
+    next.delete('from');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, ready, landOn]);
+
+  const title =
+    scope.kind === 'kid'
+      ? t('insightsPage.header.titleKid', { name: scope.kid.name, defaultValue: "{{name}}'s insights" })
+      : t('insightsPage.header.titleFamily', { defaultValue: 'Family insights' });
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl space-y-6">
+    <div className="container mx-auto max-w-3xl space-y-4 px-4 py-4 md:space-y-6 md:py-8">
       <Helmet>
-        <title>Nutrition Insights - EatPal</title>
-        <meta name="description" content="Comprehensive overview of eating patterns, food group coverage, and nutrition progress" />
+        <title>{t('insightsPage.meta.title', { defaultValue: 'Insights - EatPal' })}</title>
+        <meta
+          name="description"
+          content={t('insightsPage.meta.description', {
+            defaultValue:
+              "How each child's eating is going over the last four weeks: what is working, where variety is thin, and what to try next.",
+          })}
+        />
         <meta name="robots" content="noindex" />
       </Helmet>
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <PieChart className="h-8 w-8 text-primary" />
-          Nutrition Insights Dashboard
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Comprehensive overview of {activeKid.name}'s eating patterns and progress
+
+      <header>
+        <h1 className="text-2xl font-bold md:text-3xl">{title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t('insightsPage.header.subtitle', { defaultValue: 'The last four weeks, from what you logged.' })}
         </p>
-      </div>
+        <KidChips
+          className="mt-3"
+          ariaLabel={t('insightsPage.scope.chooseChild', { defaultValue: 'Show insights for' })}
+        />
+      </header>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Safe Foods</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{insights.safeFoodsCount || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Foods accepted</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Try Bites</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{insights.tryBitesCount || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Foods to explore</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Success Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{Math.round(insights.successRate || 0)}%</div>
-            <p className="text-xs text-muted-foreground mt-1">Last 30 days</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Foods Variety</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{insights.uniqueFoodsTried || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Unique foods tried</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Safe Food Coverage Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Apple className="h-5 w-5" />
-            Food Group Coverage
-          </CardTitle>
-          <CardDescription>
-            Balance of safe foods across different food groups
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {insights.coverage?.map((item) => (
-            <div key={item.category}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium capitalize">{item.category}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{item.count} foods</span>
-                  <Badge variant={item.count > 3 ? "default" : item.count > 1 ? "secondary" : "destructive"}>
-                    {Math.round(item.percentage)}%
-                  </Badge>
-                </div>
-              </div>
-              <Progress 
-                value={item.percentage} 
-                className={item.count < 2 ? "bg-red-100" : ""}
-                aria-label={`${item.category} variety`}
-                aria-valuetext={`${item.count} foods, ${Math.round(item.percentage)} percent`}
-              />
-            </div>
-          ))}
-          
-          {insights.coverage?.some((c) => c.count < 2) && (
-            <Alert className="mt-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Some food groups have low coverage. Try adding more variety in: {
-                  insights.coverage
-                    .filter((c) => c.count < 2)
-                    .map((c) => c.category)
-                    .join(', ')
-                }
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Allergen Safety */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5" />
-              Allergen Safety
-            </CardTitle>
-            <CardDescription>
-              Foods are filtered to avoid these allergens
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {activeKid.allergens && activeKid.allergens.length > 0 ? (
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {activeKid.allergens.map((allergen: string) => (
-                    <Badge key={allergen} variant="destructive" className="text-sm">
-                      <XCircle className="h-3 w-3 mr-1" />
-                      {allergen}
-                    </Badge>
-                  ))}
-                </div>
-                <Alert>
-                  <ShieldCheck className="h-4 w-4" />
-                  <AlertDescription>
-                    All meal plans automatically exclude these ingredients
-                  </AlertDescription>
-                </Alert>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No allergens recorded</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Try Bite Progress */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5" />
-              Try Bite Progress
-            </CardTitle>
-            <CardDescription>
-              Success with new food introductions
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Successful Try Bites</span>
-                <span className="font-medium">{insights.successfulTryBites || 0} / {insights.totalTryBites || 0}</span>
-              </div>
-              <Progress 
-                value={insights.totalTryBites > 0 ? (insights.successfulTryBites / insights.totalTryBites) * 100 : 0} 
-                aria-label="Successful try bites"
-                aria-valuetext={`${insights.successfulTryBites || 0} of ${insights.totalTryBites || 0}`}
-              />
-            </div>
-            
-            {insights.totalTryBites > 0 && (
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{insights.successfulTryBites}</div>
-                  <div className="text-xs text-muted-foreground">Accepted</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">
-                    {insights.totalTryBites - insights.successfulTryBites}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Need Retry</div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Meal Tracking Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Recent Meal Tracking (Last 30 Days)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 rounded-lg bg-muted">
-              <div className="text-sm text-muted-foreground mb-1">Total Tracked</div>
-              <div className="text-3xl font-bold">{insights.totalTracked || 0}</div>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950/20">
-              <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto mb-1" />
-              <div className="text-sm text-muted-foreground mb-1">Ate</div>
-              <div className="text-3xl font-bold text-green-600">{insights.completedMeals || 0}</div>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-              <Clock className="h-5 w-5 text-yellow-600 mx-auto mb-1" />
-              <div className="text-sm text-muted-foreground mb-1">Tasted</div>
-              <div className="text-3xl font-bold text-yellow-600">{insights.tastedMeals || 0}</div>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-red-50 dark:bg-red-950/20">
-              <XCircle className="h-5 w-5 text-red-600 mx-auto mb-1" />
-              <div className="text-sm text-muted-foreground mb-1">Refused</div>
-              <div className="text-3xl font-bold text-red-600">{insights.refusedMeals || 0}</div>
-            </div>
+      <InsightsGate>
+        {scope.kind === 'kid' ? (
+          <div className="space-y-4 md:space-y-6">
+            <WeekTrendSection kids={[scope.kid]} progress={progress} todayIso={todayIso} />
+            <NextStepSection kid={scope.kid} todayIso={todayIso} progress={progress} />
+            <WorkingSection kid={scope.kid} todayIso={todayIso} />
+            <VarietySection kid={scope.kid} todayIso={todayIso} />
+            <AllergyCheckSection kid={scope.kid} todayIso={todayIso} />
+            <InsightsLinks kid={scope.kid} />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Educational Insights */}
-      <Card className="bg-primary/5 border-primary/20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5 text-primary" />
-            Daily Feeding Tip
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm leading-relaxed">{randomTip}</p>
-        </CardContent>
-      </Card>
-
-      {/* Profile Review Reminder */}
-      {activeKid.profile_last_reviewed && (
-        <Alert>
-          <Calendar className="h-4 w-4" />
-          <AlertDescription className="flex items-center justify-between">
-            <span>
-              Profile last reviewed: {format(new Date(activeKid.profile_last_reviewed), 'MMMM dd, yyyy')}
-            </span>
-            <Button variant="outline" size="sm">
-              Update Profile
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+        ) : (
+          <ul className="divide-y divide-border">
+            {kids.map((kid) => (
+              <li key={kid.id} className="space-y-3 py-4 first:pt-0 last:pb-0">
+                <h2 className="text-lg font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setActiveKid(kid.id)}
+                    aria-label={t('insightsPage.family.rowLabel', {
+                      name: kid.name,
+                      defaultValue: "Open {{name}}'s insights",
+                    })}
+                    className="-mx-2 inline-flex min-h-11 items-center rounded-md px-2 text-left text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    {kid.name}
+                  </button>
+                </h2>
+                <WeekTrendSection kids={[kid]} progress={progress} todayIso={todayIso} compact embedded />
+                <NextStepSection kid={kid} todayIso={todayIso} progress={progress} compact />
+              </li>
+            ))}
+          </ul>
+        )}
+      </InsightsGate>
     </div>
   );
 }
