@@ -527,3 +527,80 @@ test.describe('Grocery list fits the first phone screen', () => {
     await expect.poll(() => page.locator(VISIBLE_CHECKBOX).count()).toBeGreaterThan(before);
   });
 });
+
+/**
+ * Option a (2026-09-25): on a phone the kid filter, grouping, store picker and
+ * In-store mode moved out of the page and into More options, which is what
+ * brought the first checkbox onto the first screen. Moving them must not lose
+ * them: each is still reachable, and a filter that is on says so on the page.
+ */
+test.describe('Grocery list view controls live in More options on a phone', () => {
+  test.beforeEach(async ({ context, page }) => {
+    await signIn(context);
+    await page.goto('/dashboard/grocery');
+    await page.waitForLoadState('networkidle');
+  });
+
+  async function openMore(page: import('@playwright/test').Page) {
+    await page.getByRole('button', { name: 'More options' }).click();
+  }
+
+  test('nothing above the list but the toolbar, quick add and the one-line plan banner', async ({ page }) => {
+    await expect(page.getByRole('group', { name: 'Group items by' })).toHaveCount(0);
+    await expect(page.getByTestId('grocery-in-store-open')).toHaveCount(0);
+    await expect(page.getByTestId('grocery-view-indicator')).toHaveCount(0);
+
+    const banner = page.getByTestId('grocery-plan-banner');
+    if (await banner.count()) {
+      const box = (await banner.boundingBox())!;
+      expect(box.height, `the plan banner is ${Math.round(box.height)}px tall`).toBeLessThanOrEqual(48);
+    }
+  });
+
+  test('In-store mode is one tap from the menu', async ({ page }) => {
+    await openMore(page);
+    await page.getByRole('menuitem', { name: 'In-store mode' }).click();
+    await expect(page.getByTestId('in-store-mode')).toBeVisible();
+  });
+
+  test('a kid filter set in the sheet is named on the page, and clears from there', async ({ page }) => {
+    await openMore(page);
+    await page.getByRole('menuitem', { name: 'Filter, group and store' }).click();
+    const sheet = page.getByRole('dialog', { name: 'List view' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('group', { name: 'Group items by' })).toBeVisible();
+
+    const kidToggle = sheet.getByRole('button', { name: /^Only .+'s items$/ }).first();
+    await kidToggle.click();
+    await expect(kidToggle).toHaveAttribute('aria-pressed', 'true');
+    await sheet.getByRole('button', { name: 'Done' }).click();
+    await expect(sheet).toBeHidden();
+
+    const indicator = page.getByTestId('grocery-view-indicator');
+    await expect(indicator).toBeVisible();
+    await expect(indicator).toContainText("'s items");
+    await indicator.getByRole('button', { name: "Show everyone's items" }).click();
+    await expect(indicator).toHaveCount(0);
+  });
+
+  test('grouping by category from the sheet is named on the page', async ({ page }) => {
+    await openMore(page);
+    await page.getByRole('menuitem', { name: 'Filter, group and store' }).click();
+    const sheet = page.getByRole('dialog', { name: 'List view' });
+    await sheet.getByRole('button', { name: 'By category' }).click();
+    await sheet.getByRole('button', { name: 'Done' }).click();
+
+    const indicator = page.getByTestId('grocery-view-indicator');
+    await expect(indicator).toContainText('By category');
+    await indicator.getByRole('button', { name: 'Group by aisle again' }).click();
+    await expect(indicator).toHaveCount(0);
+  });
+
+  test('a desktop keeps the controls above the list and no sheet entry', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByRole('group', { name: 'Group items by' })).toBeVisible();
+    await expect(page.getByTestId('grocery-in-store-open')).toBeVisible();
+    await openMore(page);
+    await expect(page.getByRole('menuitem', { name: 'Filter, group and store' })).toHaveCount(0);
+  });
+});

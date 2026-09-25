@@ -1,0 +1,24 @@
+{
+  "grocery": {
+    "phoneView": {
+      "menuItem": "Filter, group and store",
+      "title": "List view",
+      "description": "Choose whose items to show, how to group them, and which store you are walking.",
+      "kidSection": "Whose items",
+      "groupSection": "Group by",
+      "storeSection": "Store",
+      "done": "Done",
+      "activeLabel": "Active list view",
+      "kidChip": "{{name}}'s items",
+      "kidChipHidden_one": "{{name}}'s items, {{count}} hidden",
+      "kidChipHidden_other": "{{name}}'s items, {{count}} hidden",
+      "storeChip": "Store: {{name}}",
+      "clearKid": "Show everyone's items",
+      "clearGroup": "Group by aisle again",
+      "clearStore": "Use the typical store",
+      "edit": "Change list view",
+      "planShort_one": "Plan needs {{count}} thing",
+      "planShort_other": "Plan needs {{count}} things"
+    }
+  }
+}

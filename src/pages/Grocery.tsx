@@ -36,6 +36,9 @@ import { PlanSyncBanner } from "@/components/grocery/PlanSyncBanner";
 import { StorePicker } from "@/components/grocery/StorePicker";
 import { PlaceInAisleChips } from "@/components/grocery/PlaceInAisleChips";
 import { KidFilterBar, type KidFilterOption } from "@/components/grocery/KidFilterBar";
+import { GroupByToggle } from "@/components/grocery/GroupByToggle";
+import { GroceryViewSheet } from "@/components/grocery/GroceryViewSheet";
+import { GroceryViewIndicator } from "@/components/grocery/GroceryViewIndicator";
 import { applyReceiptPlan, type ReceiptApplyPlan } from "@/lib/receiptApply";
 import { useStoreLayouts } from "@/hooks/useStoreLayouts";
 import { useGroceryLists } from "@/hooks/useGroceryLists";
@@ -46,7 +49,7 @@ import { useWeekStartsOn } from "@/hooks/useWeekStartsOn";
 import {
   ShoppingCart, Printer, Download, Plus, Share2, FileText,
   Store, Barcode, RefreshCw, ChevronDown, MoreHorizontal, PackageCheck,
-  ShoppingBag, CloudOff, CalendarDays, ClipboardPaste, Loader2, Check, Footprints,
+  ShoppingBag, CloudOff, CalendarDays, ClipboardPaste, Loader2, Check, Footprints, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Food, GroceryItem } from "@/types";
@@ -163,6 +166,8 @@ export default function Grocery() {
   const [showScanReceipt, setShowScanReceipt] = useState(false);
   // Item 18: one aisle at a time, full screen.
   const [inStore, setInStore] = useState(false);
+  /** Phone only: the sheet that holds the kid filter, grouping and store. */
+  const [showViewSheet, setShowViewSheet] = useState(false);
   // Item 42: "Show only <kid>'s items". Null shows everyone's.
   const [kidFilterId, setKidFilterId] = useState<string | null>(null);
   const [showImportRecipeDialog, setShowImportRecipeDialog] = useState(false);
@@ -1069,6 +1074,15 @@ export default function Grocery() {
   // ─── Derived view state ────────────────────────────────────────────────
   const hasItems = totalItems > 0;
   const isEmpty = activeItems.length === 0 && purchasedItems.length === 0;
+  /**
+   * Phone only: whether More options offers the List view sheet. The same
+   * conditions the desktop uses to show the kid filter and the grouping row.
+   */
+  const showViewControls = !isEmpty && (visibleActive.length > 0 || kidFilterOptions.length > 0 || kidFilterKid !== null);
+  /** The store the aisles are walked in, when it is not the typical one. */
+  const activeStoreName = groupBy === "aisle" && storeLayouts.selectedStore
+    ? storeDisplayName(storeLayouts.selectedStore)
+    : null;
   const showLoading = isEmpty && !groceryHydrated;
   const allBought = activeItems.length === 0 && purchasedItems.length > 0;
   const purchasedOpen = purchasedOpenPref ?? activeItems.length === 0;
@@ -1245,6 +1259,32 @@ export default function Grocery() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
+              {/*
+                Phone only (option a, 2026-09-25): the controls that sit above
+                the list on a desktop live here, so the first row of the list
+                is on the first screen. In-store mode is one tap from the menu.
+              */}
+              {isPhoneWidth && visibleActive.length > 0 && (
+                <DropdownMenuItem
+                  className="min-h-11"
+                  onClick={() => setInStore(true)}
+                  data-testid="grocery-in-store-open"
+                >
+                  <Footprints className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("grocery.inStore.open", { defaultValue: "In-store mode" })}
+                </DropdownMenuItem>
+              )}
+              {isPhoneWidth && showViewControls && (
+                <DropdownMenuItem
+                  className="min-h-11"
+                  onClick={() => setShowViewSheet(true)}
+                  data-testid="grocery-view-open"
+                >
+                  <SlidersHorizontal className="h-4 w-4 mr-2" aria-hidden="true" />
+                  {t("grocery.phoneView.menuItem")}
+                </DropdownMenuItem>
+              )}
+              {isPhoneWidth && (visibleActive.length > 0 || showViewControls) && <DropdownMenuSeparator />}
               <DropdownMenuItem onClick={handleAddFromPlan}>
                 <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
                 {t("grocery.menu.syncPlan", { defaultValue: "Add this week's plan" })}
@@ -1393,62 +1433,51 @@ export default function Grocery() {
           </Card>
         ) : (
           <>
-            {(kidFilterOptions.length > 0 || kidFilterKid) && (
-              <KidFilterBar
-                kids={kidFilterOptions}
-                selectedKidId={kidFilterKid?.id ?? null}
-                onChange={setKidFilterId}
+            {isPhoneWidth ? (
+              <GroceryViewIndicator
+                kidName={kidFilterKid?.name ?? null}
                 hiddenCount={hiddenToBuy}
+                byCategory={groupBy === "category"}
+                storeName={activeStoreName}
+                onClearKid={() => setKidFilterId(null)}
+                onClearGroup={() => setGroupBy("aisle")}
+                onClearStore={() => void storeLayouts.setSelectedStoreId(null)}
+                onEdit={() => setShowViewSheet(true)}
               />
-            )}
-
-            {/* ─── Grouping + store ─── */}
-            {visibleActive.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
-                {/*
-                  US-778: a group of toggle buttons, not Tabs: nothing here is
-                  a tab panel, and Tabs' aria-controls pointed at none.
-                */}
-                <div
-                  role="group"
-                  aria-label={t("grocery.groupBy.label", { defaultValue: "Group items by" })}
-                  className="grid h-11 w-full max-w-[16rem] grid-cols-2 items-center rounded-md bg-muted p-1 text-muted-foreground"
-                >
-                  {([
-                    ["aisle", t("grocery.groupBy.aisle", { defaultValue: "By aisle" })],
-                    ["category", t("grocery.groupBy.category", { defaultValue: "By category" })],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={groupBy === value}
-                      onClick={() => setGroupBy(value)}
-                      className={cn(
-                        "inline-flex h-full items-center justify-center whitespace-nowrap rounded-sm px-3 text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        groupBy === value && "bg-background text-foreground",
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {groupBy === "aisle" && userId && (
-                  <StorePicker
-                    stores={storeLayouts.stores}
-                    selectedId={storeLayouts.selectedStore?.id ?? null}
-                    onChange={(id) => void storeLayouts.setSelectedStoreId(id)}
+            ) : (
+              <>
+                {(kidFilterOptions.length > 0 || kidFilterKid) && (
+                  <KidFilterBar
+                    kids={kidFilterOptions}
+                    selectedKidId={kidFilterKid?.id ?? null}
+                    onChange={setKidFilterId}
+                    hiddenCount={hiddenToBuy}
                   />
                 )}
-                <Button
-                  variant="outline"
-                  className="h-11 gap-1.5"
-                  onClick={() => setInStore(true)}
-                  data-testid="grocery-in-store-open"
-                >
-                  <Footprints className="h-4 w-4" aria-hidden="true" />
-                  {t("grocery.inStore.open", { defaultValue: "In-store mode" })}
-                </Button>
-              </div>
+
+                {/* ─── Grouping + store ─── */}
+                {visibleActive.length > 0 && (
+                  <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
+                    <GroupByToggle value={groupBy} onChange={setGroupBy} />
+                    {groupBy === "aisle" && userId && (
+                      <StorePicker
+                        stores={storeLayouts.stores}
+                        selectedId={storeLayouts.selectedStore?.id ?? null}
+                        onChange={(id) => void storeLayouts.setSelectedStoreId(id)}
+                      />
+                    )}
+                    <Button
+                      variant="outline"
+                      className="h-11 gap-1.5"
+                      onClick={() => setInStore(true)}
+                      data-testid="grocery-in-store-open"
+                    >
+                      <Footprints className="h-4 w-4" aria-hidden="true" />
+                      {t("grocery.inStore.open", { defaultValue: "In-store mode" })}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
 
             {/* ─── Active Shopping Items ─── */}
@@ -1656,6 +1685,21 @@ export default function Grocery() {
             listRows={activeItems}
             resolveFoodForRow={resolveFoodForRow}
             onApplyToList={handleApplyReceipt}
+          />
+        )}
+        {isPhoneWidth && showViewSheet && (
+          <GroceryViewSheet
+            open={showViewSheet}
+            onOpenChange={setShowViewSheet}
+            kids={kidFilterOptions}
+            selectedKidId={kidFilterKid?.id ?? null}
+            onKidChange={setKidFilterId}
+            hiddenCount={hiddenToBuy}
+            groupBy={groupBy}
+            onGroupByChange={setGroupBy}
+            stores={userId ? storeLayouts.stores : null}
+            selectedStoreId={storeLayouts.selectedStore?.id ?? null}
+            onStoreChange={(id) => void storeLayouts.setSelectedStoreId(id)}
           />
         )}
         {inStore && (
