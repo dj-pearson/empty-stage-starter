@@ -269,6 +269,90 @@ describe('the ported edge-function guards (US-773)', () => {
 });
 
 /**
+ * The admin SEO tools gate, validate, then spend.
+ *
+ * analyze-semantic-keywords and optimize-page-content referenced AIServiceV2,
+ * modelConfig and apiKey with none of them bound, so both threw on every call.
+ * They now use the shared AIServiceV2 path like every other model caller. The
+ * only caller is src/components/admin/ContentOptimizer.tsx (the SEO tab of the
+ * admin dashboard), so both stay requireAdmin rather than gateAiRequest, which
+ * would widen them to any signed-in account.
+ *
+ * Read from source, as the rest of this file is: the handlers import esm.sh
+ * modules that vitest cannot load. The validators they call run for real in
+ * src/lib/seoContentRequestShared.test.ts.
+ */
+describe('the admin SEO tools (analyze-semantic-keywords, optimize-page-content)', () => {
+  const read = (name: string) =>
+    readFileSync(path.join(FUNCTIONS_DIR, name, 'index.ts'), 'utf8');
+
+  const TOOLS = [
+    { name: 'analyze-semantic-keywords', parser: 'parseSemanticKeywordsRequest' },
+    { name: 'optimize-page-content', parser: 'parsePageOptimizationRequest' },
+  ];
+
+  /** Offset of the first match, or -1. */
+  const at = (source: string, pattern: RegExp) => source.search(pattern);
+
+  it.each(TOOLS)('$name refuses a non-POST, then a non-admin, then meters, before reading the body', ({ name }) => {
+    const source = read(name);
+    const method = at(source, /rejectNonPost\(req/);
+    const admin = at(source, /await requireAdmin\(req\)/);
+    const deny = at(source, /if \(!gate\.ok\)\s*\{\s*return new Response/);
+    const meter = at(source, new RegExp(`meterAdminRequest\\(gate, '${name}'`));
+    const body = at(source, /await req\.json\(\)/);
+
+    for (const [label, offset] of Object.entries({ method, admin, deny, meter, body })) {
+      expect(offset, `${name} is missing its ${label} step`).toBeGreaterThan(-1);
+    }
+    expect(method).toBeLessThan(admin);
+    expect(admin).toBeLessThan(deny);
+    expect(deny).toBeLessThan(meter);
+    expect(meter).toBeLessThan(body);
+    // Not requireUser or gateAiRequest: those admit any signed-in account.
+    expect(source).not.toMatch(/requireUser|gateAiRequest/);
+  });
+
+  it.each(TOOLS)('$name validates the body before it fetches or calls a model', ({ name, parser }) => {
+    const source = read(name);
+    expect(source).toMatch(new RegExp(`import \\{[^}]*${parser}[^}]*\\} from '\\.\\./_shared/seoContentRequest\\.ts'`));
+    const parsed = at(source, new RegExp(`${parser}\\(rawBody\\)`));
+    const refused = at(source, /if \(!parsed\.ok\) throw new PublicError\(parsed\.error\)/);
+    const fetched = at(source, /fetchRecipePage\(url\)/);
+    const model = at(source, /new AIServiceV2\(\)/);
+    expect(parsed).toBeGreaterThan(-1);
+    expect(refused).toBeGreaterThan(parsed);
+    expect(fetched).toBeGreaterThan(refused);
+    expect(model).toBeGreaterThan(refused);
+    // A body that is not JSON is a 400 with a written message, not a 500.
+    expect(source).toContain('throw new PublicError("Request body must be valid JSON")');
+  });
+
+  it.each(TOOLS)('$name uses the shared AI service and nothing it used to half-reference', ({ name }) => {
+    const source = read(name);
+    expect(source).toMatch(/import \{ AIServiceV2 \} from '\.\.\/_shared\/ai-service-v2\.ts'/);
+    // generateContent takes an AIRequest; the old call passed a prompt string.
+    expect(source).toMatch(/aiService\.generateContent\(\s*\{\s*messages:/);
+    // Model, provider and key come from AIServiceV2's env config, not a table
+    // row or a hardcoded id.
+    expect(source).not.toMatch(/modelConfig|apiKey|ai_settings|api_key_env_var|claude-|gpt-/);
+  });
+
+  it.each(TOOLS)('$name fetches every URL under the SSRF guards', ({ name }) => {
+    const source = read(name);
+    expect(source).toMatch(/import \{ fetchRecipePage \} from '\.\.\/_shared\/url-validator\.ts'/);
+    expect(source).not.toMatch(/await fetch\(/);
+  });
+
+  it.each(TOOLS)('$name answers a caught error with a contained message and status', ({ name }) => {
+    const source = read(name);
+    expect(source).toContain('error: publicMessage(error)');
+    expect(source).toContain('status: publicStatus(error)');
+    expect(source).not.toMatch(/:\s*any\b/);
+  });
+});
+
+/**
  * Every deployed handler is reachable through the self-hosted server (US-774).
  *
  * edge-functions-server.ts carried a hand-written FUNCTIONS_MAP, and it had

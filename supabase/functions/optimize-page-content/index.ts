@@ -1,8 +1,10 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { requireAdmin } from '../_shared/require-admin.ts';
 import { meterAdminRequest, rejectNonPost } from '../_shared/ai-gate.ts';
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PublicError, publicMessage } from '../_shared/errors.ts';
+import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { fetchRecipePage } from '../_shared/url-validator.ts';
+import { PublicError, publicMessage, publicStatus } from '../_shared/errors.ts';
+import { parseModelJsonObject, parsePageOptimizationRequest } from '../_shared/seoContentRequest.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,9 +39,9 @@ function extractTextContent(html: string): string {
 }
 
 function extractElements(html: string, tag: string): string[] {
-  const regex = new RegExp(`<${tag}[^>]*>([^<]+)<\/${tag}>`, "gi");
-  const matches = [];
-  let match;
+  const regex = new RegExp(`<${tag}[^>]*>([^<]+)</${tag}>`, "gi");
+  const matches: string[] = [];
+  let match: RegExpExecArray | null;
   while ((match = regex.exec(html)) !== null) {
     matches.push(match[1].trim());
   }
@@ -55,6 +57,34 @@ function extractMetaTag(html: string, property: string): string {
   return match ? match[1] : "";
 }
 
+interface CompetitorSummary {
+  url: string;
+  wordCount: number;
+  h2Topics: string[];
+  h3Topics: string[];
+}
+
+/** One competitor page, fetched under the SSRF guards; null on any failure. */
+async function summarizeCompetitor(compUrl: string): Promise<CompetitorSummary | null> {
+  try {
+    const page = await fetchRecipePage(compUrl);
+    if (!page.ok) {
+      console.error(`Failed to fetch competitor ${compUrl}: ${page.status} ${page.error}`);
+      return null;
+    }
+    const compText = extractTextContent(page.html);
+    return {
+      url: compUrl,
+      wordCount: (compText.match(/\b\w+\b/g) || []).length,
+      h2Topics: extractElements(page.html, "h2"),
+      h3Topics: extractElements(page.html, "h3"),
+    };
+  } catch (e) {
+    console.error(`Failed to fetch competitor ${compUrl}:`, e);
+    return null;
+  }
+}
+
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -65,6 +95,9 @@ export default async (req: Request) => {
   const notPost = rejectNonPost(req, corsHeaders);
   if (notPost) return notPost;
 
+  // Admin-only: the sole caller is src/components/admin/ContentOptimizer.tsx
+  // (the SEO tab of the admin dashboard). requireAdmin also admits the
+  // service-role key for server-to-server callers.
   const gate = await requireAdmin(req);
   if (!gate.ok) {
     return new Response(
@@ -79,30 +112,30 @@ export default async (req: Request) => {
   if (limited) return limited;
 
   try {
-    const {
-      url,
-      targetKeyword,
-      competitorUrls = [],
-      includeContentGapAnalysis = true,
-    } = await req.json();
-
-    if (!url) {
-      throw new PublicError("URL is required");
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      throw new PublicError("Request body must be valid JSON");
     }
+    const parsed = parsePageOptimizationRequest(rawBody);
+    if (!parsed.ok) throw new PublicError(parsed.error);
+    const { url, targetKeyword, competitorUrls, includeContentGapAnalysis } = parsed.value;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // requireAdmin hands back its service-role client on success.
+    const supabase = gate.admin;
+    if (!supabase) throw new Error("requireAdmin returned no client");
 
     console.log(`Optimizing content for ${url}...`);
 
-    // Fetch the target page
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch page: ${response.status}`);
+    // Fetch the target page under the same SSRF guards as the recipe
+    // importers: https only, public hosts only, capped size.
+    const page = await fetchRecipePage(url);
+    if (!page.ok) {
+      console.error(`Failed to fetch ${url}: ${page.status} ${page.error}`);
+      throw new PublicError("Could not fetch the page to optimize", page.status);
     }
-
-    const html = await response.text();
+    const html = page.html;
 
     // Extract content elements
     const text = extractTextContent(html);
@@ -115,44 +148,18 @@ export default async (req: Request) => {
     const words = text.match(/\b\w+\b/g) || [];
     const wordCount = words.length;
 
-    // Get AI model configuration
-    const { data: aiModel } = await supabase
-      .from("ai_settings")
-      .select("*")
-      .eq("is_active", true)
-      .single();
-
-    // Initialize AI service (centralized configuration)
+    // Centralized AI configuration: provider, model and API key come from
+    // the environment, as for every other AIServiceV2 caller.
     const aiService = new AIServiceV2();
 
-    // Prepare competitor analysis data (if requested)
+    // Prepare competitor analysis data (if requested). The parser already
+    // capped the list at three.
     let competitorData = "";
     if (includeContentGapAnalysis && competitorUrls.length > 0) {
       console.log("Analyzing competitor content...");
-      const competitorPromises = competitorUrls.slice(0, 3).map(async (compUrl: string) => {
-        try {
-          const compResponse = await fetch(compUrl);
-          if (!compResponse.ok) return null;
-
-          const compHtml = await compResponse.text();
-          const compText = extractTextContent(compHtml);
-          const compH2s = extractElements(compHtml, "h2");
-          const compH3s = extractElements(compHtml, "h3");
-
-          return {
-            url: compUrl,
-            wordCount: (compText.match(/\b\w+\b/g) || []).length,
-            h2Topics: compH2s,
-            h3Topics: compH3s,
-            contentSample: compText.substring(0, 500),
-          };
-        } catch (e) {
-          console.error(`Failed to fetch competitor ${compUrl}:`, e);
-          return null;
-        }
-      });
-
-      const competitors = (await Promise.all(competitorPromises)).filter(Boolean);
+      const competitors = (await Promise.all(competitorUrls.map(summarizeCompetitor))).filter(
+        (c): c is CompetitorSummary => c !== null,
+      );
 
       if (competitors.length > 0) {
         competitorData = `\n\nCOMPETITOR ANALYSIS:\n${competitors
@@ -259,107 +266,59 @@ Provide optimization suggestions in strict JSON format:
   "priorityActions": ["...", "...", "..."]
 }`;
 
-    // Build API request
-    const authHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    console.log("Calling AI API for content optimization...");
 
-    const isAnthropic = modelConfig.endpoint_url.includes("anthropic.com");
-
-    if (isAnthropic) {
-      authHeaders["anthropic-version"] = "2023-06-01";
-    }
-
-    if (modelConfig.auth_type === "x-api-key") {
-      authHeaders["x-api-key"] = apiKey;
-    } else if (modelConfig.auth_type === "bearer") {
-      authHeaders["Authorization"] = `Bearer ${apiKey}`;
-    } else if (modelConfig.auth_type === "api-key") {
-      authHeaders["api-key"] = apiKey;
-    }
-
-    let requestBody: any;
-    if (isAnthropic) {
-      requestBody = {
-        model: modelConfig.model_name,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-        max_tokens: modelConfig.max_tokens || 8000,
-        temperature: 0.5,
-      };
-    } else {
-      requestBody = {
-        model: modelConfig.model_name,
+    const reply = await aiService.generateContent(
+      {
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
+        maxTokens: 8000,
         temperature: 0.5,
-      };
-
-      if (modelConfig.max_tokens) {
-        requestBody.max_tokens = modelConfig.max_tokens;
-      }
-    }
-
-    console.log("Calling AI API for content optimization...");
-
-    const content = await aiService.generateContent(userPrompt, {
-      systemPrompt,
-      taskType: 'standard', // Content optimization is complex
-      temperature: 0.7,
-    });
+      },
+      "standard", // Content optimization is complex
+    );
+    const content = reply.content;
 
     if (!content) {
-      throw new PublicError("No content received from AI");
+      throw new PublicError("No content received from AI", 502);
     }
 
-    // Parse AI response
-    let sanitized = content.trim();
-    if (sanitized.startsWith("```")) {
-      sanitized = sanitized
-        .replace(/^```(?:json|JSON)?\n?/, "")
-        .replace(/```$/, "")
-        .trim();
+    const optimizations = parseModelJsonObject(content);
+    if (!optimizations) {
+      console.error("Failed to parse AI response:", content.substring(0, 500));
+      throw new PublicError("Failed to parse AI optimization suggestions", 502);
     }
 
-    let optimizations;
-    try {
-      const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        let jsonStr = jsonMatch[0];
-        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, "$1");
-        optimizations = JSON.parse(jsonStr);
-      } else {
-        optimizations = JSON.parse(sanitized);
-      }
-    } catch (e) {
-      console.error("Failed to parse AI response:", e);
-      console.error("Raw content:", sanitized.substring(0, 500));
-      throw new PublicError("Failed to parse AI optimization suggestions");
-    }
+    const suggestedOf = (key: string): string | null => {
+      const section = optimizations[key];
+      if (typeof section !== "object" || section === null) return null;
+      const suggested = (section as Record<string, unknown>).suggested;
+      return typeof suggested === "string" ? suggested : null;
+    };
+    const score = optimizations.overallScore;
 
     // Save optimization results to database
     const optimizationData = {
       page_url: url,
       target_keyword: targetKeyword,
       current_title: title,
-      suggested_title: optimizations.titleOptimization?.suggested || null,
+      suggested_title: suggestedOf("titleOptimization"),
       current_meta_description: metaDescription,
-      suggested_meta_description:
-        optimizations.metaDescriptionOptimization?.suggested || null,
+      suggested_meta_description: suggestedOf("metaDescriptionOptimization"),
       heading_optimizations: JSON.stringify(
-        optimizations.headingOptimizations || []
+        optimizations.headingOptimizations ?? []
       ),
-      lsi_keywords: JSON.stringify(optimizations.lsiKeywords || []),
-      semantic_clusters: JSON.stringify(optimizations.semanticClusters || []),
-      content_gaps: JSON.stringify(optimizations.contentGaps || []),
+      lsi_keywords: JSON.stringify(optimizations.lsiKeywords ?? []),
+      semantic_clusters: JSON.stringify(optimizations.semanticClusters ?? []),
+      content_gaps: JSON.stringify(optimizations.contentGaps ?? []),
       structure_improvements: JSON.stringify(
-        optimizations.structureImprovements || []
+        optimizations.structureImprovements ?? []
       ),
-      key_rewrites: JSON.stringify(optimizations.keyRewriteSuggestions || []),
-      overall_score: optimizations.overallScore || 0,
-      priority_actions: JSON.stringify(optimizations.priorityActions || []),
+      key_rewrites: JSON.stringify(optimizations.keyRewriteSuggestions ?? []),
+      overall_score: typeof score === "number" && Number.isFinite(score) ? score : 0,
+      priority_actions: JSON.stringify(optimizations.priorityActions ?? []),
       competitor_urls: JSON.stringify(competitorUrls),
       analyzed_at: new Date().toISOString(),
     };
@@ -392,7 +351,7 @@ Provide optimization suggestions in strict JSON format:
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in optimize-page-content:", error);
     return new Response(
       JSON.stringify({
@@ -401,7 +360,7 @@ Provide optimization suggestions in strict JSON format:
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
+        status: publicStatus(error),
       }
     );
   }

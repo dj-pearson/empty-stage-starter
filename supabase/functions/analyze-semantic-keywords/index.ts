@@ -1,8 +1,10 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { requireAdmin } from '../_shared/require-admin.ts';
 import { meterAdminRequest, rejectNonPost } from '../_shared/ai-gate.ts';
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PublicError, publicMessage } from '../_shared/errors.ts';
+import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
+import { fetchRecipePage } from '../_shared/url-validator.ts';
+import { PublicError, publicMessage, publicStatus } from '../_shared/errors.ts';
+import { parseModelJsonObject, parseSemanticKeywordsRequest } from '../_shared/seoContentRequest.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +48,9 @@ export default async (req: Request) => {
   const notPost = rejectNonPost(req, corsHeaders);
   if (notPost) return notPost;
 
+  // Admin-only: the sole caller is src/components/admin/ContentOptimizer.tsx
+  // (the SEO tab of the admin dashboard). requireAdmin also admits the
+  // service-role key for server-to-server callers.
   const gate = await requireAdmin(req);
   if (!gate.ok) {
     return new Response(
@@ -60,42 +65,39 @@ export default async (req: Request) => {
   if (limited) return limited;
 
   try {
-    const { url, targetKeyword, contentText } = await req.json();
-
-    if (!url && !contentText) {
-      throw new PublicError("Either URL or contentText is required");
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      throw new PublicError("Request body must be valid JSON");
     }
+    const parsed = parseSemanticKeywordsRequest(rawBody);
+    if (!parsed.ok) throw new PublicError(parsed.error);
+    const { url, targetKeyword, contentText } = parsed.value;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // requireAdmin hands back its service-role client on success.
+    const supabase = gate.admin;
+    if (!supabase) throw new Error("requireAdmin returned no client");
 
     console.log(`Analyzing semantic keywords...`);
 
-    let text = contentText;
+    let text = contentText ?? "";
 
-    // Fetch the page if URL is provided
+    // Fetch the page if no content was pasted. Same SSRF guards as the
+    // recipe importers: https only, public hosts only, capped size.
     if (url && !contentText) {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch page: ${response.status}`);
+      const page = await fetchRecipePage(url);
+      if (!page.ok) {
+        console.error(`Failed to fetch ${url}: ${page.status} ${page.error}`);
+        throw new PublicError("Could not fetch the page to analyze", page.status);
       }
-
-      const html = await response.text();
-      text = extractTextContent(html);
+      text = extractTextContent(page.html);
     }
 
-    // Get AI model configuration
-    const { data: aiModel } = await supabase
-      .from("ai_settings")
-      .select("*")
-      .eq("is_active", true)
-      .single();
-
-    // Initialize AI service (centralized configuration)
+    // Centralized AI configuration: provider, model and API key come from
+    // the environment, as for every other AIServiceV2 caller.
     const aiService = new AIServiceV2();
 
-    // Create AI prompt for semantic analysis
     const systemPrompt = `You are an expert SEO analyst specializing in semantic SEO, LSI (Latent Semantic Indexing) keywords, and entity extraction.
 
 Analyze content and identify:
@@ -158,95 +160,45 @@ Return valid JSON with this exact structure:
   "topRecommendations": ["rec1", "rec2", "rec3"]
 }`;
 
-    // Build API request
-    const authHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    console.log("Calling AI API for semantic analysis...");
 
-    const isAnthropic = modelConfig.endpoint_url.includes("anthropic.com");
-
-    if (isAnthropic) {
-      authHeaders["anthropic-version"] = "2023-06-01";
-    }
-
-    if (modelConfig.auth_type === "x-api-key") {
-      authHeaders["x-api-key"] = apiKey;
-    } else if (modelConfig.auth_type === "bearer") {
-      authHeaders["Authorization"] = `Bearer ${apiKey}`;
-    } else if (modelConfig.auth_type === "api-key") {
-      authHeaders["api-key"] = apiKey;
-    }
-
-    let requestBody: any;
-    if (isAnthropic) {
-      requestBody = {
-        model: modelConfig.model_name,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-        max_tokens: 4000,
-        temperature: 0.3,
-      };
-    } else {
-      requestBody = {
-        model: modelConfig.model_name,
+    const reply = await aiService.generateContent(
+      {
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
+        maxTokens: 4000,
         temperature: 0.3,
-        max_tokens: 2000,
-      };
-    }
-
-    console.log("Calling AI API for semantic analysis...");
-
-    const content = await aiService.generateContent(userPrompt, {
-      systemPrompt,
-      taskType: 'lightweight', // Semantic analysis is fast
-      temperature: 0.3,
-    });
+      },
+      "lightweight", // Semantic analysis is fast
+    );
+    const content = reply.content;
 
     if (!content) {
-      throw new PublicError("No content received from AI");
+      throw new PublicError("No content received from AI", 502);
     }
 
-    // Parse AI response
-    let sanitized = content.trim();
-    if (sanitized.startsWith("```")) {
-      sanitized = sanitized
-        .replace(/^```(?:json|JSON)?\n?/, "")
-        .replace(/```$/, "")
-        .trim();
+    const semanticAnalysis = parseModelJsonObject(content);
+    if (!semanticAnalysis) {
+      console.error("Failed to parse AI response:", content.substring(0, 500));
+      throw new PublicError("Failed to parse semantic analysis", 502);
     }
 
-    let semanticAnalysis;
-    try {
-      const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        let jsonStr = jsonMatch[0];
-        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, "$1");
-        semanticAnalysis = JSON.parse(jsonStr);
-      } else {
-        semanticAnalysis = JSON.parse(sanitized);
-      }
-    } catch (e) {
-      console.error("Failed to parse AI response:", e);
-      console.error("Raw content:", sanitized.substring(0, 500));
-      throw new PublicError("Failed to parse semantic analysis");
-    }
+    const score = semanticAnalysis.overallSemanticScore;
 
     // Save semantic analysis to database
     const analysisData = {
-      page_url: url || null,
-      target_keyword: targetKeyword || null,
-      lsi_keywords: JSON.stringify(semanticAnalysis.lsiKeywords || []),
-      entities: JSON.stringify(semanticAnalysis.entities || []),
-      topic_clusters: JSON.stringify(semanticAnalysis.topicClusters || []),
-      semantic_gaps: JSON.stringify(semanticAnalysis.semanticGaps || []),
-      intent_signals: JSON.stringify(semanticAnalysis.intentSignals || {}),
-      semantic_score: semanticAnalysis.overallSemanticScore || 0,
+      page_url: url,
+      target_keyword: targetKeyword,
+      lsi_keywords: JSON.stringify(semanticAnalysis.lsiKeywords ?? []),
+      entities: JSON.stringify(semanticAnalysis.entities ?? []),
+      topic_clusters: JSON.stringify(semanticAnalysis.topicClusters ?? []),
+      semantic_gaps: JSON.stringify(semanticAnalysis.semanticGaps ?? []),
+      intent_signals: JSON.stringify(semanticAnalysis.intentSignals ?? {}),
+      semantic_score: typeof score === "number" && Number.isFinite(score) ? score : 0,
       top_recommendations: JSON.stringify(
-        semanticAnalysis.topRecommendations || []
+        semanticAnalysis.topRecommendations ?? []
       ),
       analyzed_at: new Date().toISOString(),
     };
@@ -279,7 +231,7 @@ Return valid JSON with this exact structure:
         status: 200,
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in analyze-semantic-keywords:", error);
     return new Response(
       JSON.stringify({
@@ -288,7 +240,7 @@ Return valid JSON with this exact structure:
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
+        status: publicStatus(error),
       }
     );
   }

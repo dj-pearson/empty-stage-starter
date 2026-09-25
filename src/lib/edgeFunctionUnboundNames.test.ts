@@ -23,15 +23,14 @@ import ts from 'typescript';
 const FUNCTIONS_DIR = path.join(process.cwd(), 'supabase', 'functions');
 
 /**
- * Handlers already carrying an unbound name when this test was written. Both
- * are admin SEO tools that reference `AIServiceV2`, `modelConfig` and `apiKey`
- * without importing or declaring them, so they throw on every call. Listed so
- * the guard can land without folding their repair into a billing change; the
- * list may only shrink, and a name here is a bug report, not a waiver.
+ * There is no known-broken list any more. analyze-semantic-keywords and
+ * optimize-page-content were on one when this test landed: both referenced
+ * `AIServiceV2`, `modelConfig` and `apiKey` without importing or declaring
+ * them and threw on every call. They were wired to the shared AIServiceV2
+ * path, so every handler is now held to zero.
  */
-const KNOWN_UNBOUND = new Set(['analyze-semantic-keywords', 'optimize-page-content']);
 
-/** Handlers that must stay clean whatever the list above says. */
+/** The billing handlers, named so a regression there is reported on its own. */
 const MUST_BE_CLEAN = ['manage-subscription', 'manage-payment-methods', 'generate-invoice', 'create-checkout'];
 
 function unboundNamesByHandler(): Map<string, string[]> {
@@ -76,13 +75,16 @@ describe('every deployed edge function binds the names it evaluates', () => {
     expect(offenders, 'these throw ReferenceError at runtime').toEqual([]);
   });
 
-  it('adds no new handler to the known-broken list', () => {
-    const fresh = [...found.keys()].filter((name) => !KNOWN_UNBOUND.has(name));
-    expect(fresh.map((name) => `${name} ${found.get(name)!.join(' | ')}`)).toEqual([]);
+  it('leaves no handler with an unbound name', () => {
+    const offenders = [...found.entries()].map(([name, lines]) => `${name} ${lines.join(' | ')}`);
+    expect(offenders, 'these throw ReferenceError at runtime').toEqual([]);
   });
 
-  it('drops a handler from the known-broken list once it is fixed', () => {
-    const fixed = [...KNOWN_UNBOUND].filter((name) => !found.has(name));
-    expect(fixed, 'remove these from KNOWN_UNBOUND').toEqual([]);
+  it('still sees the SEO handlers it used to excuse', () => {
+    // A rename or a moved index.ts would make the check above vacuous for
+    // exactly the two handlers that were broken.
+    for (const name of ['analyze-semantic-keywords', 'optimize-page-content']) {
+      expect(existsSync(path.join(FUNCTIONS_DIR, name, 'index.ts')), name).toBe(true);
+    }
   });
 });
