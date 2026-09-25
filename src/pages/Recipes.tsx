@@ -195,7 +195,7 @@ function mergeChildProfiles(kids: readonly Kid[]): Partial<Kid> {
 
 const chipClass = (checked: boolean) =>
   cn(
-    "inline-flex min-h-9 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 text-sm font-medium",
+    "inline-flex min-h-11 md:min-h-9 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 text-sm font-medium",
     "motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     checked
       ? "border-primary bg-primary text-primary-foreground"
@@ -802,7 +802,7 @@ export default function Recipes() {
   const showChipRow = kids.length >= 1 || collectionList.length > 0;
 
   return (
-    <div className="min-h-screen pb-20 md:pt-20 bg-background">
+    <div className="min-h-screen pb-20 md:pt-6 bg-background">
       <Helmet>
         <title>{t("recipes.metaTitle", { defaultValue: "Recipes - EatPal" })}</title>
         <meta

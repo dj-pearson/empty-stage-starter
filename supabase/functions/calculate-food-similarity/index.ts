@@ -3,6 +3,8 @@ import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { publicMessage } from '../_shared/errors.ts';
+import { buildChatRequest } from '../_shared/modelJson.ts';
+import { parseFoodChains, type FoodChain } from '../_shared/aiSuggestionParsers.ts';
 import { resolveSimilarityScope, type HouseholdScopedRow } from '../_shared/foodSimilarityScope.ts';
 
 // Rows come back wider than this; the scope check reads id and household_id.
@@ -132,7 +134,7 @@ export default async (req: Request) => {
       .slice(0, 10); // Top 10 similar foods
 
     // Use AI to enhance recommendations if available
-    let aiEnhancedChains = [];
+    let aiEnhancedChains: FoodChain[] = [];
     if (kidProfile) {
       try {
         const kidContext = `Child Profile:
@@ -170,16 +172,17 @@ Format as JSON with this structure:
   ]
 }`;
 
-        const aiContent = await aiService.generateContent(userPrompt, {
-          systemPrompt,
-          taskType: 'standard', // Food chain analysis is complex
-        });
+        // generateContent takes { messages } plus the task type and resolves
+        // to { content, model, usage }; it used to get (prompt, { systemPrompt,
+        // taskType }), which threw on every call.
+        const response = await aiService.generateContent(
+          buildChatRequest(systemPrompt, userPrompt),
+          'standard', // Food chain analysis is complex
+        );
 
-        // Parse JSON response
-        const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const result = JSON.parse(jsonMatch[0]);
-          aiEnhancedChains = result.chains || [];
+        aiEnhancedChains = parseFoodChains(response?.content);
+        if (aiEnhancedChains.length === 0) {
+          console.warn('AI chain generation returned no usable chains');
         }
       } catch (aiError) {
         console.error('AI chain generation failed:', aiError);

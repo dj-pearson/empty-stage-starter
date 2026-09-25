@@ -1123,7 +1123,7 @@ export default function Pantry() {
 
   const resultCount = processedFoods.length;
   const pillBase =
-    "flex items-center gap-1.5 min-h-9 px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors duration-200 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+    "flex items-center gap-1.5 min-h-11 md:min-h-9 px-3 py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors duration-200 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const pillActive = "bg-primary text-primary-foreground border-primary shadow-sm";
   const pillInactive = "bg-card hover:bg-muted/80 border-border";
 
@@ -1161,7 +1161,7 @@ export default function Pantry() {
   return (
     <div
       ref={pullToRefreshRef}
-      className="relative min-h-screen pb-20 md:pt-20 bg-background"
+      className="relative min-h-screen pb-20 md:pt-6 bg-background"
     >
       <Helmet>
         <title>{t("pantry.meta.title")}</title>
@@ -1452,7 +1452,7 @@ export default function Pantry() {
               <button
                 type="button"
                 onClick={clearAllFilters}
-                className="flex items-center gap-1 min-h-9 px-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex items-center gap-1 min-h-11 md:min-h-9 px-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="h-3 w-3" aria-hidden="true" />
                 {t("pantry.filters.clear", { count: activeFilterCount, formatted: fmt(activeFilterCount) })}

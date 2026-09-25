@@ -414,6 +414,22 @@ All colors MUST be HSL.
   }
 }
 
+/*
+  Phone gutter for `.container`: 1rem a side instead of the config's 2rem.
+  This used to be `.container { padding: 16px }` in styles/mobile-first.css,
+  which loads after the utilities and so also replaced the `py-*` and `px-*`
+  written next to `container`. In the components layer it lands after
+  Tailwind's own `.container` and before every utility.
+*/
+@layer components {
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+}
+
 @layer utilities {
 
   /* Safe area insets for modern devices (iPhone X+) */

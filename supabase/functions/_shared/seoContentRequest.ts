@@ -12,6 +12,7 @@
  * project too.
  * Vitest mirror: src/lib/seoContentRequestShared.test.ts.
  */
+import { extractJsonObject } from './modelJson.ts';
 import { validateUrl } from './url-rules.ts';
 
 /** Longest URL accepted. Anything longer is not a page an admin pasted. */
@@ -149,16 +150,5 @@ export function parsePageOptimizationRequest(body: unknown): BodyParse<PageOptim
  * something other than an object is null: every caller reads named fields.
  */
 export function parseModelJsonObject(content: string): Record<string, unknown> | null {
-  let text = content.trim();
-  if (text.startsWith('```')) {
-    text = text.replace(/^```(?:json|JSON)?\n?/, '').replace(/```$/, '').trim();
-  }
-  const match = text.match(/\{[\s\S]*\}/);
-  const candidate = (match ? match[0] : text).replace(/,(\s*[}\]])/g, '$1');
-  try {
-    const parsed: unknown = JSON.parse(candidate);
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  return extractJsonObject(content);
 }

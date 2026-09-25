@@ -274,35 +274,41 @@ export const MobileMealPlanner = memo(function MobileMealPlanner({
         tabIdPrefix={TAB_PREFIX}
       />
 
-      {/* Action buttons */}
-      <div className="flex gap-2 px-1">
-        <Button onClick={onAIGenerate} size="sm" className="flex-1 min-h-11" disabled={isGeneratingPlan}>
+      {/* Action buttons. min-w-0 plus a truncating label lets the row shrink
+          instead of overflowing: at 390px the three labels and the menu button
+          were 21px wider than the row, the page panned sideways, and the week
+          strip's scrollIntoView then scrolled the whole planner left. Button
+          already spaces icon and label with gap-2, so the icons carry no
+          margin of their own, and px-2.5 / gap-1.5 are what lets all three
+          labels fit untruncated at 390px. */}
+      <div className="flex gap-1.5 px-1">
+        <Button onClick={onAIGenerate} size="sm" className="min-w-0 flex-auto min-h-11 px-2.5" disabled={isGeneratingPlan}>
           {isGeneratingPlan ? (
             <>
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" aria-hidden="true" />
-              {t("planner.mobile.generating", { defaultValue: "Generating..." })}
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <span className="truncate">{t("planner.mobile.generating", { defaultValue: "Generating..." })}</span>
             </>
           ) : (
             <>
-              <Sparkles className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              {t("planner.mobile.aiPlan", { defaultValue: "AI Plan" })}
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              <span className="truncate">{t("planner.mobile.aiPlan", { defaultValue: "AI Plan" })}</span>
             </>
           )}
         </Button>
-        <Button onClick={onBuildWeek} variant="outline" size="sm" className="flex-1 min-h-11">
-          <RefreshCw className="h-4 w-4 mr-1.5" aria-hidden="true" />
-          {t("planner.mobile.quickBuild", { defaultValue: "Quick Build" })}
+        <Button onClick={onBuildWeek} variant="outline" size="sm" className="min-w-0 flex-auto min-h-11 px-2.5">
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          <span className="truncate">{t("planner.mobile.quickBuild", { defaultValue: "Quick Build" })}</span>
         </Button>
         {onPushWeekToGrocery && (
           <Button
             onClick={handlePushWeek}
             variant="outline"
             size="sm"
-            className="flex-1 min-h-11"
+            className="min-w-0 flex-auto min-h-11 px-2.5"
             aria-label={t("planner.mobile.shopThisWeek", { defaultValue: "Shop this week" })}
           >
-            <ShoppingCart className="h-4 w-4 mr-1.5" aria-hidden="true" />
-            {t("planner.mobile.shop", { defaultValue: "Shop" })}
+            <ShoppingCart className="h-4 w-4" aria-hidden="true" />
+            <span className="truncate">{t("planner.mobile.shop", { defaultValue: "Shop" })}</span>
           </Button>
         )}
         <DropdownMenu>

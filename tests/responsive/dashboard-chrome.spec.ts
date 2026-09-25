@@ -61,40 +61,41 @@ test.describe('dashboard chrome fits the space reserved for it', () => {
     });
   }
 
-  test('cards still get their mobile padding', async ({ context, page }) => {
-    // The fix scopes the rule to `main` rather than deleting it. Deleting it
-    // would take 20px of padding off every card on every phone screen, which
-    // is a redesign, not a bug fix.
-    //
-    // WHICH PAGE, AND WHEN, is what made this flaky. It used to read Recipes
-    // 500ms after networkidle. Against the fake backend Recipes has no recipes,
-    // so at rest it is an empty state with ONE card; for about a second before
-    // that it shows six skeleton cards. The count ("> 3") only passed when the
-    // measurement landed inside the skeleton window, so a pass was measuring
-    // placeholders and a fail was the page telling the truth.
+  test('a card is padded by its own classes, not by the stylesheet', async ({ context, page }) => {
+    // US-869 scoped `main [class*="card"] { padding: 20px }` to main and
+    // pinned it here. The substring still matched every `bg-card` and
+    // `text-card-foreground` inside main at (0,1,1), so it beat `p-3` on list
+    // rows and doubled the inset of every shadcn Card (whose header and
+    // content already carry p-6). It is gone from mobile-first.css, and this
+    // asserts the phone gets what the markup asks for: a card element with no
+    // padding class of its own has none.
     //
     // The planner's day view renders one card per meal slot (Breakfast, Lunch,
     // Dinner, Snack 1, Snack 2) whether or not anything is planned, so the
-    // count does not depend on fixture data. And the wait is for that settled
+    // count does not depend on fixture data. The wait is for that settled
     // state -- the last slot rendered and no skeleton left -- not for a clock.
     await signIn(context);
     await page.goto('/dashboard/planner');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('main .animate-pulse')).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.locator('main [class*="card"]').filter({ hasText: 'Snack 2' }).first()).toBeVisible();
+    await expect(page.locator('main [class*="bg-card"]').filter({ hasText: 'Snack 2' }).first()).toBeVisible();
 
-    const padded = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll('main [class*="card"]')) as HTMLElement[];
+    const cards = await page.evaluate(() => {
+      const els = Array.from(document.querySelectorAll('main [class*="bg-card"]')) as HTMLElement[];
+      // p-4, px-3, md:p-6, max-md:pt-2 ... any padding utility, any variant.
+      const hasPaddingClass = (el: HTMLElement) =>
+        Array.from(el.classList).some((c) => /^([\w-]+:)*!?p[xytrbl]?-/.test(c));
       return {
-        count: cards.length,
-        unpadded: cards
-          .filter((el) => parseFloat(getComputedStyle(el).paddingTop) < 20)
-          .map((el) => (el.textContent || '').trim().slice(0, 30)),
+        count: els.length,
+        paddedByStylesheet: els
+          .filter((el) => !hasPaddingClass(el))
+          .filter((el) => parseFloat(getComputedStyle(el).paddingTop) > 0)
+          .map((el) => `${getComputedStyle(el).paddingTop} "${(el.textContent || '').trim().slice(0, 30)}"`),
       };
     });
 
-    expect(padded.count, 'no cards rendered, so this asserts nothing').toBeGreaterThan(3);
-    expect(padded.unpadded, 'cards without the 20px mobile padding').toEqual([]);
+    expect(cards.count, 'no cards rendered, so this asserts nothing').toBeGreaterThan(3);
+    expect(cards.paddedByStylesheet, 'cards padded by a rule their markup did not ask for').toEqual([]);
   });
 
   test('the chrome is not padded, on either side of the fix', async ({ context, page }) => {
@@ -115,8 +116,8 @@ test.describe('dashboard chrome fits the space reserved for it', () => {
       }),
     );
 
-    // They still carry bg-card; what changed is that the rule no longer
-    // reaches them, because they are chrome and live outside <main>.
+    // They still carry bg-card. US-869 moved the card rule off them by
+    // scoping it to <main>; the rule is now gone altogether.
     //
     // Top and left rather than the shorthand: the tab bar sets its own
     // padding-bottom for the home-indicator inset, and that is its business.

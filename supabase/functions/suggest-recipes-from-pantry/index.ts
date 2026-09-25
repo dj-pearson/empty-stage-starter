@@ -2,6 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { gateAiRequest } from '../_shared/ai-gate.ts';
 import { AIServiceV2 } from '../_shared/ai-service-v2.ts';
 import { publicMessage } from '../_shared/errors.ts';
+import { buildChatRequest } from '../_shared/modelJson.ts';
+import { matchPantryFoodIds, parsePantryRecipeSuggestions } from '../_shared/aiSuggestionParsers.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -146,29 +148,25 @@ Return your response as a JSON array with this structure:
 
     console.log('Calling AI for recipe suggestions...');
 
-    const content = await aiService.generateContent(userPrompt, {
-      systemPrompt,
-      taskType: 'lightweight', // Recipe suggestions are fast
-    });
+    // generateContent takes { messages } plus the task type and resolves to
+    // { content, model, usage }; it used to get (prompt, { systemPrompt,
+    // taskType }), which threw on every call.
+    const response = await aiService.generateContent(
+      buildChatRequest(systemPrompt, userPrompt),
+      'lightweight', // Recipe suggestions are fast
+    );
 
-    if (!content) {
+    if (!response?.content) {
       return new Response(
         JSON.stringify({ error: 'AI service error' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    let responseText = content;
-
-    // Parse AI response
-    let suggestions: RecipeSuggestion[];
-    try {
-      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) ||
-                       responseText.match(/\[[\s\S]*\]/);
-      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : responseText;
-      suggestions = JSON.parse(jsonStr);
-    } catch (e) {
-      console.error('Failed to parse AI response as JSON:', e);
+    // Parse AI response (tolerates ```json fences and prose around the array)
+    const suggestions = parsePantryRecipeSuggestions(response.content);
+    if (!suggestions) {
+      console.error('Failed to parse AI response as JSON:', response.content.substring(0, 500));
       return new Response(
         JSON.stringify({ error: 'Failed to parse AI response' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -176,21 +174,10 @@ Return your response as a JSON array with this structure:
     }
 
     // Map food names to IDs
-    const enrichedSuggestions = suggestions.map(suggestion => {
-      const food_ids = suggestion.food_names
-        .map(name => {
-          const food = pantryFoods.find((f: any) =>
-            f.name.toLowerCase() === name.toLowerCase()
-          );
-          return food?.id;
-        })
-        .filter(Boolean);
-
-      return {
-        ...suggestion,
-        food_ids
-      };
-    });
+    const enrichedSuggestions: RecipeSuggestion[] = suggestions.map(suggestion => ({
+      ...suggestion,
+      food_ids: matchPantryFoodIds(suggestion.food_names, pantryFoods),
+    }));
 
     return new Response(
       JSON.stringify({ suggestions: enrichedSuggestions }),
