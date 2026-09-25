@@ -30,6 +30,7 @@ import { Recipe, Food } from '@/types';
 import { toast } from 'sonner';
 import { logger } from "@/lib/logger";
 import { escapeHtml } from "@/lib/sanitize";
+import { EmailSchema } from "@/lib/validations";
 import { buildRecipeShareText, recipeIngredientLines, shareRecipe } from "@/lib/recipeShareText";
 
 interface RecipeExportActionsProps {
@@ -186,12 +187,21 @@ export function RecipeExportActions({ recipe, foods, trigger, className }: Recip
       toast.error('Please enter an email address');
       return;
     }
+    // Validate and encode the address: typed raw into the link, a '?' or '&'
+    // in it would add its own cc/bcc/body parameters to the mail.
+    const address = EmailSchema.safeParse(email.trim());
+    if (!address.success) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
 
     // In production, this would call a backend API
     // For now, we'll use mailto
     const subject = encodeURIComponent(`Recipe: ${recipe.name}`);
     const body = encodeURIComponent(generateShoppingList());
-    const mailtoLink = `mailto:${email}?subject=${subject}&body=${body}`;
+    const at = address.data.lastIndexOf('@');
+    const to = `${encodeURIComponent(address.data.slice(0, at))}@${encodeURIComponent(address.data.slice(at + 1))}`;
+    const mailtoLink = `mailto:${to}?subject=${subject}&body=${body}`;
     
     window.location.href = mailtoLink;
     setShowEmailDialog(false);
