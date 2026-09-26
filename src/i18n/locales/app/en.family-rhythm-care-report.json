@@ -1,0 +1,161 @@
+{
+  "familyRhythm": {
+    "title": "Logging rhythm",
+    "milestonesLink": "Family milestones",
+    "streak_one": "{{count}}-day logging streak",
+    "streak_other": "{{count}}-day logging streak",
+    "streakNone": "Log a meal to start a streak",
+    "best_one": "Best so far: {{count}} day",
+    "best_other": "Best so far: {{count}} days",
+    "grace": {
+      "atRisk": "Yesterday used your grace day. Log anything today to keep the streak.",
+      "used": "Grace day used. The next one is ready {{date}}.",
+      "ready": "One missed day a week won't break it."
+    },
+    "week": {
+      "label": "Days logged this week",
+      "logged": "logged",
+      "ahead": "still ahead",
+      "notLogged": "nothing logged",
+      "reached_one": "Week goal reached: {{count}} day logged together.",
+      "reached_other": "Week goal reached: {{count}} days logged together.",
+      "progress_one": "{{count}} of {{goal}} days logged this week. Anyone in the household counts.",
+      "progress_other": "{{count}} of {{goal}} days logged this week. Anyone in the household counts."
+    },
+    "recap": {
+      "title": "Last week",
+      "days_one": "{{count}} day logged",
+      "days_other": "{{count}} days logged",
+      "offers_one": "{{count}} offer",
+      "offers_other": "{{count}} offers",
+      "newFoods_one": "{{count}} new food offered",
+      "newFoods_other": "{{count}} new foods offered"
+    },
+    "milestones": {
+      "intro": "{{earned}} of {{total}} earned. These count what the grown-ups do: logging and offering.",
+      "new": "New",
+      "progressLabel": "{{title}}: {{progress}} of {{target}}",
+      "first_log": { "title": "First log", "description": "Logged the first meal." },
+      "days_7": { "title": "A week of notes", "description": "Logged on 7 different days." },
+      "days_30": { "title": "A month of notes", "description": "Logged on 30 different days." },
+      "days_100": { "title": "The long record", "description": "Logged on 100 different days." },
+      "streak_7": { "title": "Steady hand", "description": "A 7-day logging streak." },
+      "streak_21": { "title": "Habit formed", "description": "A 21-day logging streak." },
+      "streak_60": { "title": "Two months running", "description": "A 60-day logging streak." },
+      "new_foods_5": { "title": "Widening the table", "description": "Offered 5 foods for the first time." },
+      "new_foods_20": { "title": "Adventurous kitchen", "description": "Offered 20 foods for the first time." },
+      "stuck_with_it": {
+        "title": "Stuck with it",
+        "description": "Offered one food 10 times, whatever happened each time."
+      }
+    }
+  },
+  "foodTracker": {
+    "exposures": {
+      "ofTarget": "{{count}} of about {{target}} offers",
+      "pastTarget": "{{count}} offers so far",
+      "explainer": "Most kids need about {{target}} offers before a new food feels familiar. Every offer counts, refusals too."
+    }
+  },
+  "progressPage": {
+    "jump": {
+      "family": "Family",
+      "report": "Care report"
+    },
+    "family": {
+      "title": "Family milestones"
+    },
+    "report": {
+      "title": "Care report",
+      "intro": "For a psychologist, feeding therapist or dietitian. Download a PDF, or send a link that expires. Nothing is shared until you choose to.",
+      "familyRow": "Make {{name}}'s report"
+    }
+  },
+  "careReport": {
+    "cta": "Care report",
+    "title": "Care report",
+    "dialogTitle": "Care report for {{name}}",
+    "dialogBody": "A summary for a psychologist, feeding therapist or dietitian: how often you logged, what was offered and how it went, safe foods and the exposure ladder. {{name}} appears by first name only.",
+    "includeNotes": "Include my notes from each try",
+    "includeNotesHint": "Off by default. Notes can mention names, places or other people, so read them first.",
+    "download": "Download PDF",
+    "downloaded": "Saved {{filename}}",
+    "failed": "Couldn't make the report. Try again.",
+    "filename": "care-report-{{name}}-{{from}}",
+    "emptyRange": "Nothing was logged for {{name}} in this range.",
+    "newFoodLine": "{{food}}: first offered {{date}}, {{offers}} offers, {{accepted}} accepted",
+    "generatedNote": "Made in EatPal from what the family logged. The child appears by first name only.",
+    "headings": {
+      "summary": "Summary",
+      "safe": "Safe foods now",
+      "new": "New foods offered",
+      "ladder": "Exposure ladder",
+      "notes": "Parent's notes"
+    },
+    "empty": {
+      "safe": "None recorded yet.",
+      "new": "No first-time offers in this range.",
+      "ladder": "No foods on the ladder."
+    },
+    "summary": {
+      "days_one": "Logged on {{count}} day",
+      "days_other": "Logged on {{count}} days",
+      "offers_one": "{{count}} offer across {{foods}} foods",
+      "offers_other": "{{count}} offers across {{foods}} foods",
+      "outcomes": "Accepted (ate or partly ate): {{accepted}} · Refused: {{refused}} · Distress: {{distress}}",
+      "newFoods_one": "{{count}} food offered for the first time",
+      "newFoods_other": "{{count}} foods offered for the first time"
+    },
+    "share": {
+      "start": "Share as a link",
+      "failed": "Couldn't make the link. Try again.",
+      "copied": "Link copied",
+      "copyFailed": "Copy the link from the box instead.",
+      "revoked": "Link turned off",
+      "revokeFailed": "Couldn't turn the link off. Try again.",
+      "expiryLegend": "Link works for",
+      "expiryDays_one": "{{count}} day",
+      "expiryDays_other": "{{count}} days",
+      "labelLabel": "Who is it for? Only you see this.",
+      "labelPlaceholder": "e.g. Feeding therapist",
+      "create": "Create link",
+      "back": "Back",
+      "createdLabel_one": "Link ready. It works for {{count}} day.",
+      "createdLabel_other": "Link ready. It works for {{count}} days.",
+      "copy": "Copy link",
+      "done": "Done",
+      "listHeading": "Links you have shared",
+      "listError": "Couldn't load your links.",
+      "listEmpty": "None yet.",
+      "stateLive": "Works until {{date}}",
+      "stateExpired": "Expired {{date}}",
+      "stateRevoked": "Turned off",
+      "views_one": "Opened {{count}} time, last {{date}}",
+      "views_other": "Opened {{count}} times, last {{date}}",
+      "notOpened": "Not opened yet",
+      "untitled": "Link from {{date}}",
+      "revoke": "Turn off",
+      "consent": {
+        "heading": "Before you share",
+        "anyone": "Anyone with the link can open it until it expires or you turn it off, and they can forward it.",
+        "contents": "It shows this report as it is now. It won't update as you log more.",
+        "contentsNotes": "It shows this report as it is now, including your notes. It won't update as you log more.",
+        "notMedical": "EatPal is not a healthcare provider, and this link is not a medical record. Send it only to people you choose.",
+        "control": "You can see how many times it was opened, and turn it off at any time.",
+        "agree": "I'm {{name}}'s parent or guardian, and I choose to share this report."
+      }
+    },
+    "page": {
+      "metaTitle": "Care report for {{name}} - EatPal",
+      "metaTitleFallback": "A shared care report - EatPal",
+      "print": "Print or save as PDF",
+      "loading": "Loading the report",
+      "heading": "Care report for {{name}}",
+      "sharedLine": "Shared by the family on {{shared}}. This link works until {{expires}}.",
+      "missingTitle": "This report isn't available",
+      "missingBody": "The link may have expired or been turned off. Ask the family to send a new one.",
+      "errorTitle": "Couldn't load this report",
+      "errorBody": "Check your connection and try again."
+    }
+  }
+}

@@ -90,3 +90,22 @@ sync rather than printing "27 / 25".
 **What stays open:** a family with no iPhone never earns a badge, because
 nothing on the web writes one. Moving evaluation server-side would fix that and
 is not this change.
+
+---
+
+## Family rhythm and care report links - web only, by accident until decided
+
+**Family rhythm** (`src/lib/familyRhythm.ts`) is the parent's side: a logging
+streak with one grace day per seven, a Monday-to-Sunday household meter toward
+five logged days, last week's recap, and ten family milestones. It counts any
+logged attempt, refusals included, and never what the child ate; the child's
+try-bite streak in `streakRules.ts` is a separate rule and is unchanged. It is
+derived from `food_attempts` on every read, so there is no table for iOS to
+write and nothing to drift: an iOS surface would port the pure module (the
+tests include a brute-force check of the streak walk to port against).
+
+**Care report links** (`care_report_shares`, `/care/:token`) are made on the
+web only. iOS has no screen that creates or lists them. A link made on the web
+works for anyone, and the web list shows links made by either parent.
+
+The exposure counter on ladder rows ("6 of about 10 offers") is web only too.
