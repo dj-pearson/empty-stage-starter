@@ -407,13 +407,6 @@ struct GroceryView: View {
             }
     }
 
-    /// US-276 + US-280: "Suggested for you" pill row. Empty-state safe
-    /// — returns an EmptyView when neither the cadence predictor nor
-    /// the expiry suggester has anything useful, so the section header
-    /// doesn't render.
-    ///
-    /// Expiring chips render first (most urgent), capped at 4, then the
-    /// cadence-due chips fill the remaining space.
     /// Safe foods at one or none that aren't already on the list. Running out
     /// of the few foods a child reliably eats is the purchase that matters
     /// most, and the cadence predictor never looked at isSafe.
@@ -443,6 +436,13 @@ struct GroceryView: View {
         } catch { /* toasted in AppState */ }
     }
 
+    /// US-276 + US-280: "Suggested for you" pill row. Empty-state safe
+    /// — returns an EmptyView when neither the cadence predictor nor
+    /// the expiry suggester has anything useful, so the section header
+    /// doesn't render.
+    ///
+    /// Expiring chips render first (most urgent), capped at 4, then the
+    /// cadence-due chips fill the remaining space.
     @ViewBuilder
     private var restockSuggestionsSection: some View {
         let due = restockSuggestions.prefix(8)
@@ -564,7 +564,7 @@ struct GroceryView: View {
     }
 
     private func restockColor(for s: RestockPredictor.Suggestion) -> Color {
-        s.daysUntilDue <= 0 ? .green : .blue
+        s.daysUntilDue <= 0 ? .orange : .blue
     }
 
     @ViewBuilder
@@ -2040,14 +2040,18 @@ struct EditGroceryItemView: View {
         // stale copy.
         var updates = GroceryItemUpdate()
         if name != item.name { updates.name = name }
-        if category.rawValue != item.category { updates.category = category.rawValue }
+        // Compare to what the sheet loaded, so a legacy category string that
+        // loads as the default isn't rewritten on an untouched save.
+        if category != (FoodCategory(rawValue: item.category) ?? .protein) { updates.category = category.rawValue }
         if quantity != item.quantity { updates.quantity = quantity }
         if unit != item.unit { updates.unit = unit }
         if notes != (item.notes ?? "") { updates.notes = notes }
         if priority != (item.priority ?? "medium") { updates.priority = priority }
         if aisleSection.rawValue != item.aisleSection { updates.aisleSection = aisleSection.rawValue }
         let trimmedBrand = brand.trimmingCharacters(in: .whitespaces)
-        if trimmedBrand != (item.brandPreference ?? "") { updates.brandPreference = trimmedBrand }
+        if trimmedBrand != (item.brandPreference ?? "").trimmingCharacters(in: .whitespaces) {
+            updates.brandPreference = trimmedBrand
+        }
         let changedSomething = updates.name != nil || updates.category != nil || updates.quantity != nil
             || updates.unit != nil || updates.notes != nil || updates.priority != nil
             || updates.aisleSection != nil || updates.brandPreference != nil
