@@ -47,10 +47,10 @@ enum StarterMealPlanService {
     }
 
     /// Apply a starter template to the given week for the given kid.
-    /// - Allergen guard: any meal whose `category`-implied food matches an
-    ///   existing pantry food with allergens that conflict with the target
-    ///   kid is skipped. (Fresh foods we auto-create have no allergens by
-    ///   default, so they pass through.)
+    /// - Allergen guard: a meal is skipped when its name or the matching
+    ///   pantry food's tags carry one of the kid's allergens. Checked before
+    ///   any food is created: a fresh food has no tags, so a tag-only check
+    ///   let "Crunchy peanut butter toast" onto a peanut-allergic child's plan.
     static func apply(
         _ template: StarterTemplate,
         weekStart: Date,
@@ -59,7 +59,6 @@ enum StarterMealPlanService {
     ) async throws -> ApplyResult {
         let calendar = Calendar.current
         let kid = appState.kids.first { $0.id == kidId }
-        let kidAllergens = Set((kid?.allergens ?? []).map { $0.lowercased() })
 
         var foodsCreated = 0
         var entriesCreated = 0
@@ -67,23 +66,18 @@ enum StarterMealPlanService {
         var skipAllergens: Set<String> = []
 
         for meal in template.meals {
+            if let kid, let hit = allergenHit(mealName: meal.foodName, kid: kid, appState: appState) {
+                skipCount += 1
+                skipAllergens.insert(hit)
+                continue
+            }
+
             let food = try await resolveFood(
                 named: meal.foodName,
                 category: meal.category,
                 appState: appState,
                 createdCounter: &foodsCreated
             )
-
-            // Allergen guard against existing pantry foods.
-            if !kidAllergens.isEmpty {
-                let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
-                let conflict = foodAllergens.intersection(kidAllergens)
-                if !conflict.isEmpty {
-                    skipCount += 1
-                    skipAllergens.formUnion(conflict)
-                    continue
-                }
-            }
 
             let date = calendar.date(byAdding: .day, value: meal.dayIndex, to: weekStart) ?? weekStart
             let entry = PlanEntry(
@@ -96,7 +90,7 @@ enum StarterMealPlanService {
             )
 
             do {
-                try await appState.addPlanEntry(entry)
+                try await appState.addPlanEntry(entry, silent: true)
                 entriesCreated += 1
             } catch {
                 skipCount += 1
@@ -118,25 +112,30 @@ enum StarterMealPlanService {
         kidId: String,
         appState: AppState
     ) -> [(foodName: String, allergens: [String])] {
-        let kid = appState.kids.first { $0.id == kidId }
-        let kidAllergens = Set((kid?.allergens ?? []).map { $0.lowercased() })
-        guard !kidAllergens.isEmpty else { return [] }
+        guard let kid = appState.kids.first(where: { $0.id == kidId }),
+              !(kid.allergens ?? []).isEmpty else { return [] }
 
         var seen: Set<String> = []
         var result: [(String, [String])] = []
         for meal in template.meals {
-            guard let existing = appState.foods.first(where: {
-                $0.name.lowercased() == meal.foodName.lowercased()
-            }) else { continue }
-
-            let foodAllergens = Set((existing.allergens ?? []).map { $0.lowercased() })
-            let conflict = foodAllergens.intersection(kidAllergens)
-            if !conflict.isEmpty, !seen.contains(existing.id) {
-                seen.insert(existing.id)
-                result.append((existing.name, Array(conflict).sorted()))
-            }
+            let key = meal.foodName.lowercased()
+            guard !seen.contains(key),
+                  let hit = allergenHit(mealName: meal.foodName, kid: kid, appState: appState) else { continue }
+            seen.insert(key)
+            result.append((meal.foodName, [hit]))
         }
         return result
+    }
+
+    /// The kid's allergen in a template meal: the pantry food of that name
+    /// (its tags and name) or, with no such food, the meal name itself.
+    private static func allergenHit(mealName: String, kid: Kid, appState: AppState) -> String? {
+        let existing = appState.foods.first { $0.name.lowercased() == mealName.lowercased() }
+        return AllergenMatcher.matching(
+            kidAllergens: kid.allergens,
+            foodName: existing?.name ?? mealName,
+            foodAllergens: existing?.allergens
+        )
     }
 
     // MARK: - Private

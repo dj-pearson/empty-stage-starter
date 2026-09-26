@@ -2,8 +2,8 @@ import SwiftUI
 
 /// US-231: Optional follow-up to a meal-result tap. Captures a 1-5 emoji
 /// rating, how much was eaten (a lot / some / nibbles) and an optional note.
-/// Skippable; auto-dismisses after 8s of no input so the parent never gets
-/// blocked on the modal mid-cook. Everything saved here shows up in the Food
+/// Skippable; auto-dismisses after 20s of no input so the parent never gets
+/// blocked on the modal mid-cook (never under VoiceOver). Everything saved here shows up in the Food
 /// Journal for the whole household.
 struct MealFeedbackSheet: View {
     @Environment(\.dismiss) var dismiss
@@ -18,13 +18,14 @@ struct MealFeedbackSheet: View {
     @State private var note: String = ""
     @State private var isSubmitting = false
     @State private var autoDismissTask: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 8-second silent dismiss — long enough to read + tap a star, short
-    /// enough that distracted parents aren't held up by an empty modal.
-    private static let autoDismissSeconds: UInt64 = 8
+    /// Silent dismiss for an untouched sheet. 8s pulled it away mid-thought
+    /// after a hard meal; 20s still keeps a distracted parent unblocked.
+    private static let autoDismissSeconds: UInt64 = 20
 
     private let scale: [(rating: Int, emoji: String, label: String)] = [
-        (1, "😖", "Hated it"),
+        (1, "😐", "Not for them yet"),
         (2, "🙁", "Meh"),
         (3, "🙂", "OK"),
         (4, "😋", "Loved it"),
@@ -103,7 +104,7 @@ struct MealFeedbackSheet: View {
                         Text(item.emoji)
                             .font(.system(size: selectedRating == item.rating ? 38 : 32))
                             .scaleEffect(selectedRating == item.rating ? 1.1 : 1.0)
-                            .animation(.spring(response: 0.3), value: selectedRating)
+                            .animation(reduceMotion ? nil : .spring(response: 0.3), value: selectedRating)
                         if selectedRating == item.rating {
                             Text(item.label)
                                 .font(.caption2)
@@ -209,6 +210,8 @@ struct MealFeedbackSheet: View {
 
     private func scheduleAutoDismiss() {
         autoDismissTask?.cancel()
+        // A VoiceOver user can't finish reading the sheet in a fixed window.
+        guard !UIAccessibility.isVoiceOverRunning else { return }
         autoDismissTask = Task {
             try? await Task.sleep(for: .seconds(Double(Self.autoDismissSeconds)))
             guard !Task.isCancelled else { return }

@@ -8,6 +8,9 @@ struct AIMealPlanView: View {
     /// US-397: guards the Add-All loop so it can't be triggered twice and
     /// create duplicate plan entries.
     @State private var isAddingAll = false
+    /// Suggestions already put on the plan, so neither the card's button nor
+    /// "Add All" can insert the same meal twice.
+    @State private var addedSuggestionIds: Set<String> = []
     /// US-243: read the same UserDefault the Budget view writes — when set,
     /// gets passed to the edge function so the LLM prefers cheaper picks.
     @AppStorage("budget.weeklyTarget") private var weeklyTarget: Double = 0
@@ -147,11 +150,33 @@ struct AIMealPlanView: View {
 
                         // Suggestions
                         if !aiService.suggestions.isEmpty {
+                            // What the plan was checked against, so the parent
+                            // can see the restrictions were respected.
+                            if let kid = activeKid, !(kid.allergens ?? []).isEmpty {
+                                Label(
+                                    "Checked against \(kid.name)'s allergies: \((kid.allergens ?? []).joined(separator: ", "))",
+                                    systemImage: "exclamationmark.shield"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal)
+                            }
+
                             ForEach(aiService.suggestions) { suggestion in
-                                SuggestionCard(suggestion: suggestion) {
+                                SuggestionCard(
+                                    suggestion: suggestion,
+                                    isAdded: addedSuggestionIds.contains(suggestion.id),
+                                    allergen: allergenHit(for: suggestion)
+                                ) {
                                     Task {
-                                        let ok = await addSuggestionToPlan(suggestion)
-                                        if !ok {
+                                        switch await addSuggestionToPlan(suggestion) {
+                                        case .added:
+                                            ToastManager.shared.success("Added to plan", message: suggestion.foodName)
+                                            HapticManager.success()
+                                        case .alreadyAdded, .blockedByAllergen:
+                                            break
+                                        case .failed:
                                             // US-398: don't silently drop — tell the user.
                                             ToastManager.shared.error(
                                                 "Couldn't add meal",
@@ -176,7 +201,9 @@ struct AIMealPlanView: View {
                             .tint(.green)
                             .padding(.horizontal)
                             // US-397: prevent a double-tap from duplicating entries.
-                            .disabled(isAddingAll)
+                            .disabled(isAddingAll || aiService.suggestions.allSatisfy {
+                                addedSuggestionIds.contains($0.id) || allergenHit(for: $0) != nil
+                            })
 
                             // US-238: items the plan needs but the fridge
                             // photo didn't include — one tap to add to grocery.
@@ -277,7 +304,10 @@ struct AIMealPlanView: View {
     private func generateSuggestions() async {
         guard let kid = activeKid else { return }
 
+        // This child's history only: a sibling's refusals shouldn't shape
+        // this child's suggestions.
         let recentEntries = appState.planEntries
+            .filter { $0.kidId == kid.id }
             .sorted { ($0.date) > ($1.date) }
             .prefix(21)
 
@@ -342,27 +372,54 @@ struct AIMealPlanView: View {
         }
     }
 
-    /// Returns true when the suggestion was added, false when it was skipped
-    /// (food couldn't be resolved/created).
-    @discardableResult
-    private func addSuggestionToPlan(_ suggestion: AIMealService.MealSuggestion) async -> Bool {
-        guard let kidId = appState.activeKidId else { return false }
-        guard let foodId = await resolveFoodId(for: suggestion) else { return false }
+    enum AddOutcome { case added, alreadyAdded, blockedByAllergen, failed }
+
+    /// The allergen a suggestion carries for the active child: the matched
+    /// pantry food's tags, or the suggestion's name when there is no match.
+    private func allergenHit(for suggestion: AIMealService.MealSuggestion) -> String? {
+        guard let kid = activeKid else { return nil }
+        let normalized = suggestion.foodName.lowercased()
+        let existing = appState.foods.first(where: { $0.id == suggestion.foodId })
+            ?? appState.foods.first(where: { $0.name.lowercased() == normalized })
+        return AllergenMatcher.matching(
+            kidAllergens: kid.allergens,
+            foodName: existing?.name ?? suggestion.foodName,
+            foodAllergens: existing?.allergens
+        )
+    }
+
+    /// The model is asked for "snack", but plan_entries.meal_slot only takes
+    /// snack1/snack2, so a snack suggestion failed to insert every time.
+    private static func planSlot(for raw: String) -> String {
+        switch raw.lowercased() {
+        case "snack", "morning_snack": return MealSlot.snack1.rawValue
+        case "afternoon_snack": return MealSlot.snack2.rawValue
+        case "try bite", "trybite": return MealSlot.tryBite.rawValue
+        default: return raw.lowercased()
+        }
+    }
+
+    /// Adds one suggestion. Silent: the caller says what happened, once.
+    private func addSuggestionToPlan(_ suggestion: AIMealService.MealSuggestion) async -> AddOutcome {
+        guard !addedSuggestionIds.contains(suggestion.id) else { return .alreadyAdded }
+        guard let kidId = appState.activeKidId else { return .failed }
+        if allergenHit(for: suggestion) != nil { return .blockedByAllergen }
+        guard let foodId = await resolveFoodId(for: suggestion) else { return .failed }
 
         let entry = PlanEntry(
             id: UUID().uuidString,
             userId: "",
             kidId: kidId,
             date: DateFormatter.isoDate.string(from: date),
-            mealSlot: suggestion.mealSlot,
+            mealSlot: Self.planSlot(for: suggestion.mealSlot),
             foodId: foodId
         )
         do {
-            try await appState.addPlanEntry(entry)
-            HapticManager.success()
-            return true
+            try await appState.addPlanEntry(entry, silent: true)
+            addedSuggestionIds.insert(suggestion.id)
+            return .added
         } catch {
-            return false
+            return .failed
         }
     }
 
@@ -373,22 +430,35 @@ struct AIMealPlanView: View {
 
         var added = 0
         var skipped = 0
+        var allergenSkipped = 0
         for suggestion in aiService.suggestions {
-            if await addSuggestionToPlan(suggestion) {
-                added += 1
-            } else {
-                skipped += 1
+            switch await addSuggestionToPlan(suggestion) {
+            case .added: added += 1
+            case .alreadyAdded: break
+            case .blockedByAllergen: allergenSkipped += 1
+            case .failed: skipped += 1
             }
         }
         // US-398: report the real added-vs-skipped count rather than assuming
         // every suggestion landed.
         let toast = ToastManager.shared
-        if skipped == 0 {
-            toast.success("All added", message: "\(added) meals added to plan.")
+        let allergenNote = allergenSkipped > 0
+            ? " \(allergenSkipped) skipped for allergies."
+            : ""
+        if added == 0 && skipped == 0 {
+            // Everything left was blocked for allergies (or already added):
+            // not a success, and the sheet stays open.
+            if allergenSkipped > 0 {
+                toast.warning("Nothing added", message: "\(allergenSkipped) suggestion\(allergenSkipped == 1 ? "" : "s") skipped for allergies.")
+            }
+            return
+        } else if skipped == 0 {
+            toast.success("Added to plan", message: "\(added) meal\(added == 1 ? "" : "s") added.\(allergenNote)")
+            HapticManager.success()
         } else if added == 0 {
-            toast.error("Couldn't add meals", message: "None of the \(skipped) suggestions could be added.")
+            toast.error("Couldn't add meals", message: "None of the \(skipped) suggestions could be added.\(allergenNote)")
         } else {
-            toast.info("Added \(added) of \(added + skipped)", message: "\(skipped) couldn't be added.")
+            toast.info("Added \(added) of \(added + skipped)", message: "\(skipped) couldn't be added.\(allergenNote)")
         }
         // US-415: only dismiss on a clean run; on partial success keep the
         // sheet open so the user can retry the suggestions that didn't land.
@@ -442,6 +512,10 @@ struct AIMealPlanView: View {
 
 struct SuggestionCard: View {
     let suggestion: AIMealService.MealSuggestion
+    var isAdded: Bool = false
+    /// The active child's allergen in this suggestion, if any. Adding is
+    /// then disabled rather than left to a warning.
+    var allergen: String? = nil
     let onAdd: () -> Void
 
     private var slotDisplay: String {
@@ -467,23 +541,31 @@ struct SuggestionCard: View {
             Text(suggestion.foodName)
                 .font(.headline)
 
+            if let allergen {
+                Label("Contains \(allergen). Not added for this child.", systemImage: "exclamationmark.octagon.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+
             Text(suggestion.reasoning)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if let note = suggestion.nutritionNote, !note.isEmpty {
-                Label(note, systemImage: "leaf.fill")
+                // Model text, not measured data: say so.
+                Label("AI estimate: \(note)", systemImage: "leaf.fill")
                     .font(.caption2)
                     .foregroundStyle(.green)
             }
 
             Button(action: onAdd) {
-                Label("Add to Plan", systemImage: "plus.circle")
+                Label(isAdded ? "Added" : "Add to Plan", systemImage: isAdded ? "checkmark" : "plus.circle")
                     .font(.subheadline)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .tint(.green)
+            .disabled(isAdded || allergen != nil)
         }
         .padding()
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))

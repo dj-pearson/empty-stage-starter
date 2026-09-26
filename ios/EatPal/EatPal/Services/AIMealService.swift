@@ -135,10 +135,15 @@ final class AIMealService: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        let safeFoods = foods.filter(\.isSafe).map {
+        // Expired or used-up food is not offered for a meal, and a food
+        // carrying this child's allergen is not a candidate at all.
+        let offerable = foods.filter {
+            !$0.isExpired && ($0.quantity ?? 1) > 0 && AllergenMatcher.hit(for: kid, food: $0) == nil
+        }
+        let safeFoods = offerable.filter(\.isSafe).map {
             FoodSummary(id: $0.id, name: $0.name, category: $0.category)
         }
-        let tryBiteFoods = foods.filter(\.isTryBite).map {
+        let tryBiteFoods = offerable.filter(\.isTryBite).map {
             FoodSummary(id: $0.id, name: $0.name, category: $0.category)
         }
 
@@ -217,7 +222,7 @@ final class AIMealService: ObservableObject {
             errorMessage = "Failed to generate suggestions: \(error.localizedDescription)"
 
             // Fallback: generate local suggestions from safe foods
-            suggestions = generateLocalFallback(safeFoods: foods.filter(\.isSafe))
+            suggestions = generateLocalFallback(safeFoods: offerable.filter(\.isSafe))
             await MainActor.run {
                 AnalyticsService.track(.aiPlanGenerated(promptType: "local_fallback"))
             }

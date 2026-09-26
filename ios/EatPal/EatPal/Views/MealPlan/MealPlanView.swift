@@ -65,6 +65,56 @@ struct MealPlanView: View {
         return appState.planEntriesForDate(selectedDate, kidId: kidId)
     }
 
+    /// The day in the order it happens. MealSlot.allCases put both snacks
+    /// after dinner; a predictable routine reads top to bottom.
+    static let slotsInDayOrder: [MealSlot] = [.breakfast, .snack1, .lunch, .snack2, .dinner, .tryBite]
+
+    /// Every entry for the active kid this week, for the Clear confirmation.
+    private var weekEntries: [PlanEntry] {
+        guard let kidId = appState.activeKidId else { return [] }
+        return weekDates.flatMap { appState.planEntriesForDate($0, kidId: kidId) }
+    }
+
+    /// "Sep 28 - Oct 4", the week the planner is showing.
+    private var weekRangeText: String {
+        guard let first = weekDates.first, let last = weekDates.last else { return "" }
+        return "\(DateFormatter.shortDisplay.string(from: first)) - \(DateFormatter.shortDisplay.string(from: last))"
+    }
+
+    private var copyTargetWeekStart: Date {
+        copyTargetDate.weekDates.first ?? copyTargetDate
+    }
+
+    private var copyTargetIsSourceWeek: Bool {
+        Calendar.current.isDate(copyTargetWeekStart, inSameDayAs: weekStart)
+    }
+
+    /// Meals already planned in the copy's target week, so copying on top of
+    /// them is a visible choice rather than a silent doubling.
+    private var copyTargetExistingCount: Int {
+        guard let kidId = appState.activeKidId else { return 0 }
+        return copyTargetDate.weekDates.reduce(0) { $0 + appState.planEntriesForDate($1, kidId: kidId).count }
+    }
+
+    /// What Copy will do, said before it does it.
+    private var copyWeekSummary: String {
+        if weekEntries.isEmpty {
+            return "Nothing is planned this week, so there is nothing to copy."
+        }
+        if copyTargetIsSourceWeek {
+            return "Pick a different week. Copying a week onto itself would double every meal."
+        }
+        let count = weekEntries.count
+        let who = appState.activeKid?.name ?? "this child"
+        let target = DateFormatter.shortDisplay.string(from: copyTargetWeekStart)
+        var text = "Copies \(count) meal\(count == 1 ? "" : "s") for \(who) to the week of \(target)."
+        let existing = copyTargetExistingCount
+        if existing > 0 {
+            text += " That week already has \(existing) meal\(existing == 1 ? "" : "s"); these are added alongside them."
+        }
+        return text
+    }
+
     // MARK: - Selected-day persistence (US-463)
 
     /// Per-kid last-selected planner day (kidId -> ISO yyyy-MM-dd) so a
@@ -114,7 +164,8 @@ struct MealPlanView: View {
                 // Week Navigation
                 WeekNavigationView(
                     selectedDate: $selectedDate,
-                    weekDates: weekDates
+                    weekDates: weekDates,
+                    kidId: appState.activeKidId
                 )
 
                 // US-235: empty-week starter prompt
@@ -157,7 +208,7 @@ struct MealPlanView: View {
                     .padding(.horizontal)
                 } else if appState.activeKidId != nil {
                     VStack(spacing: 12) {
-                        ForEach(MealSlot.allCases, id: \.self) { slot in
+                        ForEach(Self.slotsInDayOrder, id: \.self) { slot in
                             MealSlotCard(
                                 slot: slot,
                                 date: selectedDate,
@@ -183,7 +234,8 @@ struct MealPlanView: View {
             }
             .padding(.vertical)
         }
-        .navigationTitle("Meal Plan")
+        // Whose plan this is, even with one child and the selector hidden.
+        .navigationTitle(appState.activeKid.map { "\($0.name)'s plan" } ?? "Meal Plan")
         // US-463: restore/persist the selected planner day per active kid.
         .onAppear { restoreSelectedDate(for: appState.activeKidId) }
         .onChange(of: appState.activeKidId) { _, newKidId in
@@ -193,6 +245,17 @@ struct MealPlanView: View {
             persistSelectedDate()
         }
         .toolbar {
+            // "Today" sits apart from the actions that write to the plan, so
+            // a tap aimed at it can't land on AI or the menu instead.
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    selectedDate = Date()
+                } label: {
+                    Text("Today")
+                        .font(.subheadline)
+                }
+                .disabled(Calendar.current.isDateInToday(selectedDate))
+            }
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 12) {
                     Button {
@@ -200,7 +263,8 @@ struct MealPlanView: View {
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }
-                    .accessibilityLabel("Generate AI meal plan")
+                    // It plans the selected day, not the week.
+                    .accessibilityLabel("AI meal ideas for \(DateFormatter.fullDisplay.string(from: selectedDate))")
                     .disabled(appState.activeKidId == nil)
 
                     Menu {
@@ -211,6 +275,9 @@ struct MealPlanView: View {
                         }
 
                         Button {
+                            // Default to next week: today's date would copy
+                            // the week onto itself and double every meal.
+                            copyTargetDate = weekStart.addingDays(7)
                             showingCopyWeek = true
                         } label: {
                             Label("Copy This Week", systemImage: "doc.on.doc")
@@ -226,30 +293,26 @@ struct MealPlanView: View {
                             }
                         }
 
-                        Button(role: .destructive) {
-                            showingClearWeekAlert = true
-                        } label: {
-                            Label("Clear This Week", systemImage: "trash")
-                        }
-
-                        Divider()
-
                         Button {
                             showingSaveTemplate = true
                         } label: {
                             Label("Save as Template", systemImage: "square.and.arrow.down")
                         }
+
+                        // Destructive last, after a divider, away from the
+                        // actions used every week.
+                        Divider()
+
+                        Button(role: .destructive) {
+                            showingClearWeekAlert = true
+                        } label: {
+                            Label("Clear This Week", systemImage: "trash")
+                        }
+                        .disabled(weekEntries.isEmpty)
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
                     .accessibilityLabel("More meal plan actions")
-
-                    Button {
-                        selectedDate = Date()
-                    } label: {
-                        Text("Today")
-                            .font(.subheadline)
-                    }
                 }
             }
         }
@@ -281,8 +344,12 @@ struct MealPlanView: View {
         .sheet(isPresented: $showingCopyWeek) {
             NavigationStack {
                 Form {
-                    Section("Copy meals to another week") {
-                        DatePicker("Target Week", selection: $copyTargetDate, displayedComponents: .date)
+                    Section {
+                        DatePicker("Target week", selection: $copyTargetDate, displayedComponents: .date)
+                    } header: {
+                        Text("Copy meals to another week")
+                    } footer: {
+                        Text(copyWeekSummary)
                     }
                 }
                 .navigationTitle("Copy Week")
@@ -295,18 +362,21 @@ struct MealPlanView: View {
                         Button("Copy") {
                             Task {
                                 guard let kidId = appState.activeKidId else { return }
-                                let targetStart = copyTargetDate.weekDates.first ?? copyTargetDate
+                                let targetStart = copyTargetWeekStart
                                 // US-415: surface success/failure and only close
                                 // the sheet on a confirmed copy.
                                 do {
-                                    try await MealPlanTemplateService.shared.copyWeekPlan(
+                                    let copied = try await MealPlanTemplateService.shared.copyWeekPlan(
                                         from: weekStart,
                                         to: targetStart,
                                         kidId: kidId,
                                         appState: appState
                                     )
                                     HapticManager.success()
-                                    ToastManager.shared.success("Week copied")
+                                    ToastManager.shared.success(
+                                        "Week copied",
+                                        message: "\(copied) meal\(copied == 1 ? "" : "s") to the week of \(DateFormatter.shortDisplay.string(from: targetStart))"
+                                    )
                                     showingCopyWeek = false
                                 } catch {
                                     HapticManager.error()
@@ -317,6 +387,7 @@ struct MealPlanView: View {
                                 }
                             }
                         }
+                        .disabled(weekEntries.isEmpty || copyTargetIsSourceWeek)
                     }
                 }
             }
@@ -366,12 +437,15 @@ struct MealPlanView: View {
                             ToastManager.shared.show(Toast(
                                 type: .success,
                                 title: "Week cleared",
+                                message: "\(snapshot.count) meal\(snapshot.count == 1 ? "" : "s") removed",
+                                duration: 6,
                                 actionLabel: "Undo",
                                 retry: {
                                     do {
                                         for entry in snapshot {
-                                            try await appState.addPlanEntry(entry)
+                                            try await appState.addPlanEntry(entry, silent: true)
                                         }
+                                        ToastManager.shared.success("Week restored")
                                         HapticManager.success()
                                     } catch {
                                         ToastManager.shared.error(
@@ -393,20 +467,32 @@ struct MealPlanView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will remove all meals planned for this week.")
+            Text(clearWeekMessage)
         }
         .alert("Save as Template", isPresented: $showingSaveTemplate) {
             TextField("Template name", text: $templateName)
             Button("Save") {
+                let name = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
+                templateName = ""
                 Task {
-                    guard let kidId = appState.activeKidId, !templateName.isEmpty else { return }
-                    try? await MealPlanTemplateService.shared.saveAsTemplate(
-                        name: templateName,
-                        weekStart: weekStart,
-                        kidId: kidId,
-                        appState: appState
-                    )
-                    templateName = ""
+                    guard let kidId = appState.activeKidId else { return }
+                    guard !name.isEmpty else {
+                        ToastManager.shared.warning("Template not saved", message: "Give it a name first.")
+                        return
+                    }
+                    // The service toasts success; a failure used to vanish
+                    // into try?.
+                    do {
+                        try await MealPlanTemplateService.shared.saveAsTemplate(
+                            name: name,
+                            weekStart: weekStart,
+                            kidId: kidId,
+                            appState: appState
+                        )
+                    } catch {
+                        HapticManager.error()
+                        ToastManager.shared.show(error, as: { .save(entity: "template", underlying: $0) })
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {
@@ -418,6 +504,19 @@ struct MealPlanView: View {
         .refreshable {
             await appState.loadAllData()
         }
+    }
+
+    /// Names the child, the week and the count, and says when logged results
+    /// go with it, so "Clear" is never a guess.
+    private var clearWeekMessage: String {
+        let entries = weekEntries
+        let who = appState.activeKid?.name ?? "this child"
+        var text = "Removes all \(entries.count) meal\(entries.count == 1 ? "" : "s") planned for \(who), \(weekRangeText)."
+        let logged = entries.filter { $0.result != nil }.count
+        if logged > 0 {
+            text += " \(logged) of them already have a logged result, which will be removed too."
+        }
+        return text
     }
 
     /// US-285/US-353: run after any add/copy sheet closes. Aggregates the
@@ -449,8 +548,24 @@ struct MealPlanView: View {
 // MARK: - Week Navigation
 
 struct WeekNavigationView: View {
+    @EnvironmentObject var appState: AppState
     @Binding var selectedDate: Date
     let weekDates: [Date]
+    /// The child whose meals the day chips count. Nil hides the counts.
+    var kidId: String? = nil
+
+    private func mealCount(on date: Date) -> Int {
+        guard let kidId else { return 0 }
+        return appState.planEntriesForDate(date, kidId: kidId).count
+    }
+
+    /// "Sep 28 - Oct 4": the week is what the arrows move, so it's the title.
+    private var rangeText: String {
+        guard let first = weekDates.first, let last = weekDates.last else {
+            return DateFormatter.fullDisplay.string(from: selectedDate)
+        }
+        return "\(DateFormatter.shortDisplay.string(from: first)) - \(DateFormatter.shortDisplay.string(from: last))"
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -465,8 +580,9 @@ struct WeekNavigationView: View {
 
                 Spacer()
 
-                Text(DateFormatter.fullDisplay.string(from: selectedDate))
+                Text(rangeText)
                     .font(.headline)
+                    .accessibilityLabel("Week of \(rangeText)")
 
                 Spacer()
 
@@ -486,7 +602,8 @@ struct WeekNavigationView: View {
                         DayChip(
                             date: date,
                             isSelected: Calendar.current.isDate(date, inSameDayAs: selectedDate),
-                            isToday: Calendar.current.isDateInToday(date)
+                            isToday: Calendar.current.isDateInToday(date),
+                            mealCount: mealCount(on: date)
                         ) {
                             // US-246: respect Reduce Motion on the day-switch
                             // animation; users on reduce motion see an instant
@@ -510,6 +627,9 @@ struct DayChip: View {
     let date: Date
     let isSelected: Bool
     let isToday: Bool
+    /// Meals planned that day; a dot marks days with any, so gaps in the
+    /// week show without tapping through all seven.
+    var mealCount: Int = 0
     let action: () -> Void
 
     // US-424: scale the chip with Dynamic Type so the day-of-week label and
@@ -528,6 +648,11 @@ struct DayChip: View {
                 Text("\(Calendar.current.component(.day, from: date))")
                     .font(.title3)
                     .fontWeight(isSelected ? .bold : .regular)
+
+                Circle()
+                    .fill(isSelected ? Color.white : Color.green)
+                    .frame(width: 5, height: 5)
+                    .opacity(mealCount > 0 ? 1 : 0)
             }
             .frame(minWidth: chipWidth, minHeight: chipHeight)
             .background(
@@ -541,9 +666,20 @@ struct DayChip: View {
         .buttonStyle(.plain)
         // US-372: announce full context instead of just the day number.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(DayChip.accessibilityLabel.string(from: date) + (isToday ? ", today" : ""))
+        .accessibilityLabel(spokenLabel)
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var spokenLabel: String {
+        var label = DayChip.accessibilityLabel.string(from: date)
+        if isToday { label += ", today" }
+        if mealCount == 0 {
+            label += ", nothing planned"
+        } else {
+            label += ", \(mealCount) meal\(mealCount == 1 ? "" : "s")"
+        }
+        return label
     }
 
     /// Full "Monday, June 14" style label for VoiceOver.
@@ -564,6 +700,26 @@ struct MealSlotCard: View {
     let onAdd: () -> Void
 
     @State private var isTargeted = false
+
+    /// A main meal with food on it but nothing the child reliably eats: a
+    /// food marked safe, or one on their "always eats" list.
+    private var needsSafeFood: Bool {
+        guard [.breakfast, .lunch, .dinner].contains(slot), !entries.isEmpty,
+              let kid = appState.activeKid else { return false }
+        let always = Set((kid.alwaysEatsFoods ?? []).map { $0.lowercased() })
+        let hasFamiliar = entries.contains { entry in
+            var ids = [entry.foodId]
+            if let rid = entry.recipeId, let recipe = appState.recipes.first(where: { $0.id == rid }) {
+                ids += recipe.foodIds
+            }
+            return ids.contains { id in
+                guard let food = appState.foods.first(where: { $0.id == id }) else { return false }
+                return (food.isSafe || always.contains(food.name.lowercased()))
+                    && AllergenMatcher.hit(for: kid, food: food) == nil
+            }
+        }
+        return !hasFamiliar
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -591,7 +747,9 @@ struct MealSlotCard: View {
             if entries.isEmpty {
                 HStack {
                     Spacer()
-                    Text(isTargeted ? "Release to add to \(slot.displayName.lowercased())" : "No foods planned")
+                    Text(isTargeted
+                         ? "Release to add to \(slot.displayName.lowercased())"
+                         : (slot == .tryBite ? "Pick a gentle try bite" : "No foods planned"))
                         .font(.subheadline)
                         .foregroundStyle(isTargeted ? .green : .secondary)
                     Spacer()
@@ -600,6 +758,15 @@ struct MealSlotCard: View {
             } else {
                 ForEach(entries) { entry in
                     PlanEntryRow(entry: entry, slot: slot, date: date)
+                }
+                if needsSafeFood {
+                    Label("No safe food in this meal yet", systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else if slot == .tryBite {
+                    Text("Just on the plate. No bite needed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -621,7 +788,15 @@ struct MealSlotCard: View {
 
             Task {
                 var addedCount = 0
+                var blocked: [String] = []
+                let kid = appState.kids.first { $0.id == kidId }
                 for dropped in droppedFoods {
+                    // Same allergen guard as the picker: a drag is still an add.
+                    if let kid, let food = appState.foods.first(where: { $0.id == dropped.id }),
+                       let hit = AllergenMatcher.hit(for: kid, food: food) {
+                        blocked.append("\(food.name) (\(hit))")
+                        continue
+                    }
                     let entry = PlanEntry(
                         id: UUID().uuidString,
                         userId: "",
@@ -631,13 +806,21 @@ struct MealSlotCard: View {
                         foodId: dropped.id
                     )
                     do {
-                        try await appState.addPlanEntry(entry)
+                        try await appState.addPlanEntry(entry, silent: true)
                         addedCount += 1
                     } catch {
                         continue
                     }
                 }
-                HapticManager.success()
+                if !blocked.isEmpty {
+                    HapticManager.error()
+                    ToastManager.shared.warning(
+                        "Not added for \(kid?.name ?? "this child")",
+                        message: "Allergen: \(blocked.joined(separator: ", "))"
+                    )
+                } else {
+                    HapticManager.success()
+                }
                 await TipEvents.didDragFood.donate()
                 if addedCount > 0 {
                     ToastManager.shared.success(
@@ -694,6 +877,17 @@ struct PlanEntryRow: View {
     /// US-348: present the missing-ingredients sheet for an actionable badge.
     @State private var coverageShortfallContext: CoverageShortfall?
 
+    /// The allergen in this meal for the child it's planned for, if any.
+    private var allergenHit: String? {
+        guard let kid = appState.kids.first(where: { $0.id == entry.kidId }) else { return nil }
+        return MealPlanTemplateService.allergenHit(entry: entry, kid: kid, appState: appState)
+    }
+
+    /// Results are for meals that have happened (or are happening today).
+    private var isFutureDay: Bool {
+        Calendar.current.startOfDay(for: date) > Calendar.current.startOfDay(for: Date())
+    }
+
     /// US-608: the ladder row this entry is an exposure for, when there is
     /// one. Only active rows get the one-tap controls — a paused or mastered
     /// food is not something we should be asking about at the table.
@@ -710,8 +904,11 @@ struct PlanEntryRow: View {
             if let recipe = recipe {
                 Image(systemName: "book.fill")
                     .foregroundStyle(.green)
-                Text(recipe.name)
-                    .font(.subheadline)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(recipe.name)
+                        .font(.subheadline)
+                    allergenCaption
+                }
             } else {
                 let cat = FoodCategory(rawValue: food?.category ?? "")
                 Text(cat?.icon ?? "🍽")
@@ -725,6 +922,7 @@ struct PlanEntryRow: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    allergenCaption
                 }
             }
 
@@ -735,14 +933,25 @@ struct PlanEntryRow: View {
 
             Spacer()
 
-            // Result Badge
+            // Result Badge. Tappable, so a wrong log is fixed with one tap
+            // instead of a hidden long-press.
             if let result = entry.result, let mealResult = MealResult(rawValue: result) {
-                Label(mealResult.displayName, systemImage: mealResult.icon)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(resultColor(mealResult).opacity(0.15), in: Capsule())
-                    .foregroundStyle(resultColor(mealResult))
+                Button {
+                    showingResultPicker = true
+                } label: {
+                    Label(mealResult.displayName, systemImage: mealResult.icon)
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(resultColor(mealResult).opacity(0.15), in: Capsule())
+                        .foregroundStyle(resultColor(mealResult))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Logged \(mealResult.displayName)")
+                .accessibilityHint("Change what was logged")
+            } else if isFutureDay {
+                // Nothing to log yet; keeps a sitter from logging tomorrow.
+                EmptyView()
             } else if let ladderRow = ladderRow {
                 // US-608: three taps, no modal. The full detail sheet is
                 // still reachable from the tracker for parents who want to
@@ -756,6 +965,7 @@ struct PlanEntryRow: View {
                 .font(.caption)
                 .buttonStyle(.bordered)
                 .tint(.green)
+                .accessibilityLabel("Log how \(entryName) went")
             }
         }
         .confirmationDialog("How did it go?", isPresented: $showingResultPicker) {
@@ -776,16 +986,19 @@ struct PlanEntryRow: View {
             .environmentObject(appState)
         }
         .contextMenu {
-            ForEach(MealResult.allCases, id: \.self) { result in
-                Button {
-                    switch result {
-                    case .ate: HapticManager.success()
-                    case .tasted: HapticManager.lightImpact()
-                    case .refused: HapticManager.warning()
+            if !isFutureDay {
+                ForEach(MealResult.allCases, id: \.self) { result in
+                    Button {
+                        // A declined food gets the same light tap as a taste,
+                        // not a warning buzz.
+                        switch result {
+                        case .ate: HapticManager.success()
+                        case .tasted, .refused: HapticManager.lightImpact()
+                        }
+                        Task { await logResult(result) }
+                    } label: {
+                        Label("Log \(result.displayName)", systemImage: result.icon)
                     }
-                    Task { await logResult(result) }
-                } label: {
-                    Label("Log \(result.displayName)", systemImage: result.icon)
                 }
             }
 
@@ -984,6 +1197,17 @@ struct PlanEntryRow: View {
         }
     }
 
+    /// Red caption naming the allergen, shown under the meal's name.
+    @ViewBuilder
+    private var allergenCaption: some View {
+        if let hit = allergenHit {
+            let who = appState.kids.first(where: { $0.id == entry.kidId })?.name ?? "this child"
+            Label("Contains \(hit): \(who) is allergic", systemImage: "exclamationmark.octagon.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.red)
+        }
+    }
+
     /// Persists the result, then surfaces the optional 1-5 feedback sheet.
     /// Pulled out so the confirmationDialog and contextMenu paths share
     /// one definition — both used to call updatePlanEntry inline.
@@ -997,7 +1221,9 @@ struct PlanEntryRow: View {
             // already a rating on file, skip the modal so re-logging doesn't
             // pester the user. They can still re-rate via a future detail
             // view if we add one.
-            if !appState.hasOwnFeedback(for: entry.id) {
+            // No rating prompt for a declined food: rating a food the child
+            // didn't eat turns an exposure into a verdict.
+            if result != .refused, !appState.hasOwnFeedback(for: entry.id) {
                 feedbackContext = MealFeedbackContext(
                     id: entry.id,
                     entryName: entryName,
@@ -1039,7 +1265,7 @@ struct PlanEntryRow: View {
                 recipeId: entry.recipeId
             )
             do {
-                try await appState.addPlanEntry(copy)
+                try await appState.addPlanEntry(copy, silent: true)
                 added += 1
             } catch {
                 failed += 1
@@ -1079,7 +1305,7 @@ struct PlanEntryRow: View {
                 recipeId: entry.recipeId
             )
             do {
-                try await appState.addPlanEntry(copy)
+                try await appState.addPlanEntry(copy, silent: true)
                 insertedIds.append(copy.id)
             } catch {
                 failed += 1
@@ -1107,11 +1333,7 @@ struct PlanEntryRow: View {
     }
 
     private func resultColor(_ result: MealResult) -> Color {
-        switch result {
-        case .ate: return .green
-        case .tasted: return .orange
-        case .refused: return .red
-        }
+        result.tint
     }
 
     /// US-348: the coverage badge. Fully-stocked is informational; partial/not
@@ -1164,14 +1386,50 @@ struct AddPlanEntryView: View {
     @State private var selectedFoodId: String?
     @State private var selectedRecipeId: String?
     @State private var searchText = ""
+    /// Siblings to add the same meal for, so a shared family dinner is one
+    /// add rather than one per child.
+    @State private var alsoForKidIds: Set<String> = []
+    /// Set when the pick contains the child's allergen; the add waits for an
+    /// explicit "Add anyway".
+    @State private var pendingAllergenWarning: String?
 
+    private var activeKid: Kid? { appState.activeKid }
+
+    private var siblings: [Kid] {
+        appState.kids.filter { $0.id != appState.activeKidId }
+    }
+
+    private func allergen(in food: Food, for kid: Kid?) -> String? {
+        guard let kid else { return nil }
+        return AllergenMatcher.hit(for: kid, food: food)
+    }
+
+    private func allergen(in recipe: Recipe, for kid: Kid?) -> String? {
+        guard let kid else { return nil }
+        let ids = recipe.foodIds + recipe.ingredients.compactMap(\.foodId)
+        for id in ids {
+            guard let food = appState.foods.first(where: { $0.id == id }) else { continue }
+            if let hit = AllergenMatcher.hit(for: kid, food: food) { return hit }
+        }
+        return nil
+    }
+
+    /// Expired food is left out: it shouldn't be offered for a meal. Safe
+    /// foods come first, then the rest, and anything carrying this child's
+    /// allergen sinks to the bottom with a red label.
     private var filteredFoods: [Food] {
-        if searchText.isEmpty {
-            return appState.foods
+        let base = appState.foods.filter { !$0.isExpired }
+        let matched = searchText.isEmpty
+            ? base
+            : base.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        // Rank each food once; the matcher is too costly to run per compare.
+        let ranked = matched.enumerated().map { offset, food -> (offset: Int, rank: Int, food: Food) in
+            let rank = allergen(in: food, for: activeKid) != nil ? 2 : (food.isSafe ? 0 : 1)
+            return (offset, rank, food)
         }
-        return appState.foods.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
-        }
+        return ranked
+            .sorted { $0.rank != $1.rank ? $0.rank < $1.rank : $0.offset < $1.offset }
+            .map(\.food)
     }
 
     private var filteredRecipes: [Recipe] {
@@ -1195,6 +1453,15 @@ struct AddPlanEntryView: View {
                         Spacer()
                         Text(DateFormatter.shortDisplay.string(from: date))
                             .foregroundStyle(.secondary)
+                    }
+
+                    if let kid = activeKid {
+                        LabeledContent("For", value: kid.name)
+                        if let allergens = kid.allergens, !allergens.isEmpty {
+                            Label("Allergies: \(allergens.joined(separator: ", "))", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
                     }
 
                     Picker("Type", selection: $entryType) {
@@ -1226,8 +1493,24 @@ struct AddPlanEntryView: View {
                                     HStack {
                                         let cat = FoodCategory(rawValue: food.category)
                                         Text(cat?.icon ?? "🍽")
-                                        Text(food.name)
-                                            .foregroundStyle(.primary)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(food.name)
+                                                .foregroundStyle(.primary)
+                                            if let hit = allergen(in: food, for: activeKid) {
+                                                Text("Contains \(hit)")
+                                                    .font(.caption)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundStyle(.red)
+                                            } else if food.isSafe || food.isTryBite || food.isExpiringSoon() {
+                                                Text([
+                                                    food.isSafe ? "Safe food" : nil,
+                                                    food.isTryBite ? "Try bite" : nil,
+                                                    food.isExpiringSoon() ? "Use soon" : nil,
+                                                ].compactMap { $0 }.joined(separator: " · "))
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
                                         Spacer()
                                         if selectedFoodId == food.id {
                                             Image(systemName: "checkmark.circle.fill")
@@ -1254,8 +1537,11 @@ struct AddPlanEntryView: View {
                         } else {
                             ForEach(filteredRecipes) { recipe in
                                 Button {
+                                    // The food id is resolved from the recipe at
+                                    // add time; setting it here left the Food
+                                    // tab showing a food as picked.
                                     selectedRecipeId = recipe.id
-                                    selectedFoodId = recipe.foodIds.first
+                                    selectedFoodId = nil
                                 } label: {
                                     HStack {
                                         Image(systemName: "book.fill")
@@ -1263,7 +1549,12 @@ struct AddPlanEntryView: View {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(recipe.name)
                                                 .foregroundStyle(.primary)
-                                            if let difficulty = recipe.difficultyLevel {
+                                            if let hit = allergen(in: recipe, for: activeKid) {
+                                                Text("Contains \(hit)")
+                                                    .font(.caption2)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundStyle(.red)
+                                            } else if let difficulty = recipe.difficultyLevel {
                                                 Text(difficulty.capitalized)
                                                     .font(.caption2)
                                                     .foregroundStyle(.secondary)
@@ -1279,6 +1570,33 @@ struct AddPlanEntryView: View {
                             }
                         }
                     }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if !siblings.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Also add for")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(siblings) { sibling in
+                                    Toggle(sibling.name, isOn: Binding(
+                                        get: { alsoForKidIds.contains(sibling.id) },
+                                        set: { on in
+                                            if on { alsoForKidIds.insert(sibling.id) } else { alsoForKidIds.remove(sibling.id) }
+                                        }
+                                    ))
+                                    .toggleStyle(.button)
+                                    .buttonStyle(.bordered)
+                                    .tint(.green)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.bar)
                 }
             }
             .listStyle(.insetGrouped)
@@ -1302,12 +1620,49 @@ struct AddPlanEntryView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        Task { await addEntry() }
+                        if let warning = selectionAllergenWarning {
+                            pendingAllergenWarning = warning
+                        } else {
+                            Task { await addEntry() }
+                        }
                     }
                     .disabled(selectedFoodId == nil && selectedRecipeId == nil)
                 }
             }
+            .alert(
+                "Contains an allergen",
+                isPresented: Binding(
+                    get: { pendingAllergenWarning != nil },
+                    set: { if !$0 { pendingAllergenWarning = nil } }
+                ),
+                presenting: pendingAllergenWarning
+            ) { _ in
+                Button("Add anyway", role: .destructive) {
+                    pendingAllergenWarning = nil
+                    Task { await addEntry() }
+                }
+                Button("Cancel", role: .cancel) { pendingAllergenWarning = nil }
+            } message: { warning in
+                Text(warning)
+            }
         }
+    }
+
+    /// "Contains peanut, which Maya is allergic to." for the current pick,
+    /// or nil when it's clear for the child being planned.
+    private var selectionAllergenWarning: String? {
+        guard let kid = activeKid else { return nil }
+        let hit: String?
+        if let recipeId = selectedRecipeId,
+           let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+            hit = allergen(in: recipe, for: kid)
+        } else if let foodId = selectedFoodId,
+                  let food = appState.foods.first(where: { $0.id == foodId }) {
+            hit = allergen(in: food, for: kid)
+        } else {
+            hit = nil
+        }
+        return hit.map { "Contains \($0), which \(kid.name) is allergic to." }
     }
 
     private func addEntry() async {
@@ -1351,6 +1706,7 @@ struct AddPlanEntryView: View {
 
         do {
             try await appState.addPlanEntry(entry)
+            await addForSiblings(foodId: foodId)
             // US-285: fire the recipe-added hook before dismissing so the
             // parent can queue the missing-ingredient shortfall sheet.
             if let recipeId = selectedRecipeId,
@@ -1361,6 +1717,45 @@ struct AddPlanEntryView: View {
         } catch {
             // AppState already surfaces a toast; stay on the sheet so the
             // user can correct the input.
+        }
+    }
+
+    /// Adds the same meal for each ticked sibling, skipping any it would put
+    /// an allergen in front of, and says which were skipped.
+    private func addForSiblings(foodId: String) async {
+        let targets = siblings.filter { alsoForKidIds.contains($0.id) }
+        guard !targets.isEmpty else { return }
+        var skipped: [String] = []
+        for sibling in targets {
+            let hit: String?
+            if let recipeId = selectedRecipeId,
+               let recipe = appState.recipes.first(where: { $0.id == recipeId }) {
+                hit = allergen(in: recipe, for: sibling)
+            } else if let food = appState.foods.first(where: { $0.id == foodId }) {
+                hit = allergen(in: food, for: sibling)
+            } else {
+                hit = nil
+            }
+            if let hit {
+                skipped.append("\(sibling.name) (\(hit))")
+                continue
+            }
+            let copy = PlanEntry(
+                id: UUID().uuidString,
+                userId: "",
+                kidId: sibling.id,
+                date: DateFormatter.isoDate.string(from: date),
+                mealSlot: mealSlot.rawValue,
+                foodId: foodId,
+                recipeId: selectedRecipeId
+            )
+            try? await appState.addPlanEntry(copy, silent: true)
+        }
+        if !skipped.isEmpty {
+            ToastManager.shared.warning(
+                "Not added for everyone",
+                message: "Skipped for allergies: \(skipped.joined(separator: ", "))"
+            )
         }
     }
 }
@@ -1410,24 +1805,35 @@ struct CopyWeekToKidSheet: View {
     }
 
     /// Foods in the source week whose allergens conflict with the target kid.
-    private var conflictingFoods: [(food: Food, allergens: [String])] {
-        guard let target = targetKid else { return [] }
-        let targetAllergens = Set((target.allergens ?? []).map { $0.lowercased() })
-        guard !targetAllergens.isEmpty else { return [] }
+    /// Uses the same check the copy applies (canonical match, recipe
+    /// ingredients included), so the preview and the result agree.
+    /// Named by recipe when the meal is one, since the hit may come from any
+    /// of its ingredients rather than the entry's first food.
+    private var conflictingFoods: [(id: String, name: String, allergens: [String])] {
+        guard let target = targetKid, !(target.allergens ?? []).isEmpty else { return [] }
 
         var seen: Set<String> = []
-        var result: [(Food, [String])] = []
+        var result: [(id: String, name: String, allergens: [String])] = []
         for entry in sourceEntries {
-            guard !seen.contains(entry.foodId),
-                  let food = appState.foods.first(where: { $0.id == entry.foodId }) else { continue }
-            let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
-            let conflict = foodAllergens.intersection(targetAllergens)
-            if !conflict.isEmpty {
-                seen.insert(entry.foodId)
-                result.append((food, Array(conflict).sorted()))
-            }
+            let key = entry.recipeId ?? entry.foodId
+            guard !seen.contains(key),
+                  let hit = MealPlanTemplateService.allergenHit(entry: entry, kid: target, appState: appState)
+            else { continue }
+            seen.insert(key)
+            let name = entry.recipeId.flatMap { rid in appState.recipes.first { $0.id == rid }?.name }
+                ?? appState.foods.first(where: { $0.id == entry.foodId })?.name
+                ?? "Meal"
+            result.append((id: key, name: name, allergens: [hit]))
         }
         return result
+    }
+
+    /// Meals (not distinct foods) the copy will skip.
+    private var skippedMealCount: Int {
+        guard let target = targetKid, !(target.allergens ?? []).isEmpty else { return 0 }
+        return sourceEntries.filter {
+            MealPlanTemplateService.allergenHit(entry: $0, kid: target, appState: appState) != nil
+        }.count
     }
 
     var body: some View {
@@ -1481,9 +1887,9 @@ struct CopyWeekToKidSheet: View {
 
                 if !conflictingFoods.isEmpty {
                     Section {
-                        ForEach(conflictingFoods, id: \.food.id) { row in
+                        ForEach(conflictingFoods, id: \.id) { row in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(row.food.name)
+                                Text(row.name)
                                     .font(.subheadline)
                                 Text("Allergen: \(row.allergens.joined(separator: ", "))")
                                     .font(.caption)
@@ -1492,7 +1898,7 @@ struct CopyWeekToKidSheet: View {
                         }
                     } header: {
                         Label(
-                            "\(conflictingFoods.count) meal\(conflictingFoods.count == 1 ? "" : "s") will be skipped",
+                            "\(skippedMealCount) meal\(skippedMealCount == 1 ? "" : "s") will be skipped",
                             systemImage: "exclamationmark.triangle.fill"
                         )
                     } footer: {
