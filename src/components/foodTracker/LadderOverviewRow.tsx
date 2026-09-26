@@ -17,6 +17,7 @@ import { LadderRowMenu, RungTrack } from '@/components/FoodLadderBoard';
 import { matchingAllergen } from '@/lib/allergens';
 import { RUNGS, RUNG_META, rungIndex } from '@/lib/exposureLadder';
 import { exposuresToSafe } from '@/lib/ladderOverview';
+import { EXPOSURE_TARGET } from '@/lib/familyRhythm';
 import type { LadderRow, LogAttemptArgs, LogResult } from '@/hooks/useFoodLadder';
 import type { Food, Kid } from '@/types';
 import { formatRelativeDay } from './ladderDates';
@@ -40,6 +41,11 @@ export interface LadderOverviewRowProps {
   onStepDown: (row: LadderRow) => unknown;
   onRemove: (row: LadderRow) => Promise<boolean>;
   onRestore: (row: LadderRow) => Promise<boolean>;
+  /**
+   * Every offer of this food to this child, refusals included. Absent while
+   * the count loads or when the read failed; the row then says nothing.
+   */
+  exposures?: number;
   /** Safe now: add to the child's always-eats list. Absent once it is there. */
   onAddToAlwaysEats?: (row: LadderRow) => void;
   announce?: (message: string) => void;
@@ -62,6 +68,7 @@ export function LadderOverviewRow({
   onRestore,
   onAddToAlwaysEats,
   announce,
+  exposures,
 }: LadderOverviewRowProps) {
   const { t, i18n } = useTranslation();
   const meta = RUNG_META[row.currentRung];
@@ -130,6 +137,21 @@ export function LadderOverviewRow({
               <span> · {t('foodLadder.servedWith', { food: anchorName })}</span>
             ) : null}
             {when ? <span> · {when}</span> : null}
+            {exposures !== undefined && exposures > 0 && group !== 'safeNow' ? (
+              <span data-testid="ladder-row-exposures">
+                {' · '}
+                {exposures < EXPOSURE_TARGET
+                  ? t('foodTracker.exposures.ofTarget', {
+                      defaultValue: '{{count}} of about {{target}} offers',
+                      count: exposures,
+                      target: EXPOSURE_TARGET,
+                    })
+                  : t('foodTracker.exposures.pastTarget', {
+                      defaultValue: '{{count}} offers so far',
+                      count: exposures,
+                    })}
+              </span>
+            ) : null}
           </p>
 
           {stalled && group !== 'safeNow' ? (

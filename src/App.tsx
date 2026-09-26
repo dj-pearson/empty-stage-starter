@@ -94,6 +94,7 @@ const AccountSettings = lazy(() => import('./pages/dashboard/AccountSettings'));
 const ApiDocs = lazy(() => import('./pages/ApiDocs'));
 const ShareTarget = lazy(() => import('./pages/ShareTarget'));
 const SharedRecipe = lazy(() => import('./pages/SharedRecipe'));
+const SharedCareReport = lazy(() => import('./pages/SharedCareReport'));
 
 // pSEO programmatic pages
 const PseoPage = lazy(() => import('./pages/pseo/PseoPage'));
@@ -232,6 +233,15 @@ const App = () => (
                         element={
                           <RouteErrorBoundary>
                             <CheckoutSuccess />
+                          </RouteErrorBoundary>
+                        }
+                      />
+                      {/* A care report a parent shared with a clinician. Public, noindex, no auth. */}
+                      <Route
+                        path="/care/:token"
+                        element={
+                          <RouteErrorBoundary>
+                            <SharedCareReport />
                           </RouteErrorBoundary>
                         }
                       />

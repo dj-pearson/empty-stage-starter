@@ -39,32 +39,32 @@
       "cta": "Offer a try-bite"
     },
     "firstTryBite": {
-      "title": "First Try-Bite",
-      "description": "Tried a new food"
+      "title": "First Offer",
+      "description": "Offered a food and logged how it went"
     },
     "fiveDayStreak": {
       "title": "5-Day Streak",
-      "description": "5 days of try-bites in a row"
+      "description": "5 days of logged meals in a row"
     },
     "tenDayStreak": {
       "title": "10-Day Streak",
-      "description": "10 days of try-bites in a row"
+      "description": "10 days of logged meals in a row"
     },
     "categoryExplorer": {
       "title": "Category Explorer",
-      "description": "Tried foods from 5 categories"
+      "description": "Offered foods from 5 categories"
     },
     "vegetableExplorer": {
       "title": "Vegetable Explorer",
-      "description": "10 different vegetables"
+      "description": "Offered 10 different vegetables"
     },
     "fruitExplorer": {
       "title": "Fruit Explorer",
-      "description": "10 different fruits"
+      "description": "Offered 10 different fruits"
     },
     "proteinPro": {
-      "title": "Protein Pro",
-      "description": "10 different proteins"
+      "title": "Protein Explorer",
+      "description": "Offered 10 different proteins"
     },
     "weekWarrior": {
       "title": "Week Warrior",

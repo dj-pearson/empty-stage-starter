@@ -8,7 +8,9 @@
  *
  *   milestones  the months trajectory and headline per child
  *   badges      earned badges, per child
+ *   family      the parents' logging rhythm and family milestones
  *   numbers     household counts over the year, with export
+ *   report      the care report for a clinician: PDF or expiring link
  *   history     the last logged dishes
  *
  * /dashboard/analytics used to redraw a pie, a top-five list and a success
@@ -31,6 +33,9 @@ import { ProgressDashboard as ProgressTrajectory } from '@/components/ProgressDa
 import { AchievementsView } from '@/components/AchievementsView';
 import { HouseholdNumbers } from '@/components/progress/HouseholdNumbers';
 import { ResultHistoryCard } from '@/components/ResultHistoryCard';
+import { FamilyRhythmCard } from '@/components/family/FamilyRhythmCard';
+import { FamilyMilestones } from '@/components/family/FamilyMilestones';
+import { CareReportDialog } from '@/components/careReport/CareReportDialog';
 import type { Food, Kid } from '@/types';
 import '@/i18n/appLocale';
 
@@ -40,12 +45,14 @@ type Scope = { kind: 'kid'; kid: Kid } | { kind: 'family' };
 const PROGRESS_SECTIONS = Object.freeze({
   milestones: 'progress-milestones',
   badges: 'progress-badges',
+  family: 'progress-family',
   numbers: 'progress-numbers',
+  report: 'progress-report',
   history: 'progress-history',
 } as const);
 
 type SectionKey = keyof typeof PROGRESS_SECTIONS;
-const SECTION_ORDER: readonly SectionKey[] = ['milestones', 'badges', 'numbers', 'history'];
+const SECTION_ORDER: readonly SectionKey[] = ['milestones', 'badges', 'family', 'numbers', 'report', 'history'];
 
 const linkClass =
   'inline-flex min-h-11 shrink-0 items-center rounded-md px-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -167,7 +174,9 @@ function ProgressBody({ scope, onSince }: { scope: Scope; onSince: (iso: string 
   const sectionLabel: Record<SectionKey, string> = {
     milestones: t('progressPage.jump.milestones', { defaultValue: 'Milestones' }),
     badges: t('progressPage.jump.badges', { defaultValue: 'Badges' }),
+    family: t('progressPage.jump.family', { defaultValue: 'Family' }),
     numbers: t('progressPage.jump.numbers', { defaultValue: 'Numbers' }),
+    report: t('progressPage.jump.report', { defaultValue: 'Care report' }),
     history: t('progressPage.jump.history', { defaultValue: 'Recent meals' }),
   };
 
@@ -242,11 +251,49 @@ function ProgressBody({ scope, onSince }: { scope: Scope; onSince: (iso: string 
         )}
       </section>
 
+      <section id={PROGRESS_SECTIONS.family} aria-labelledby="progress-family-title" className={sectionClass}>
+        <h2 id="progress-family-title" className="text-lg font-semibold">
+          {t('progressPage.family.title', { defaultValue: 'Family milestones' })}
+        </h2>
+        {/* Household-wide on purpose: whoever logs, for whichever child, it counts. */}
+        <FamilyRhythmCard attempts={progress.attempts} todayIso={todayIso} loading={progress.loading} headingLevel="h3" />
+        <FamilyMilestones attempts={progress.attempts} todayIso={todayIso} />
+      </section>
+
       <section id={PROGRESS_SECTIONS.numbers} aria-labelledby="progress-numbers-title" className={sectionClass}>
         <h2 id="progress-numbers-title" className="text-lg font-semibold">
           {t('progressPage.numbers.title', { defaultValue: 'Household numbers' })}
         </h2>
         <HouseholdNumbers kids={kids} scopeKidId={scopeKidId} ladderRows={progress.ladderRows} />
+      </section>
+
+      <section id={PROGRESS_SECTIONS.report} aria-labelledby="progress-report-title" className={sectionClass}>
+        <h2 id="progress-report-title" className="text-lg font-semibold">
+          {t('progressPage.report.title', { defaultValue: 'Care report' })}
+        </h2>
+        <p className="max-w-[68ch] text-sm text-muted-foreground">
+          {t('progressPage.report.intro', {
+            defaultValue:
+              'For a psychologist, feeding therapist or dietitian. Download a PDF, or send a link that expires. Nothing is shared until you choose to.',
+          })}
+        </p>
+        {scope.kind === 'kid' ? (
+          <CareReportDialog kid={scope.kid} ladderRows={progress.ladderRows} foods={foods} />
+        ) : (
+          <ul className="-mx-2">
+            {kids.map((kid) => (
+              <li key={kid.id}>
+                <button
+                  type="button"
+                  onClick={() => setActiveKid(kid.id)}
+                  className="inline-flex min-h-11 items-center rounded-md px-2 text-left text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {t('progressPage.report.familyRow', { name: kid.name, defaultValue: "Make {{name}}'s report" })}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section id={PROGRESS_SECTIONS.history} aria-labelledby="progress-history-title" className="scroll-mt-20">

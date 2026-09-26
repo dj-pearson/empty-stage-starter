@@ -4110,6 +4110,76 @@ export type Database = {
         }
         Relationships: []
       }
+      care_report_shares: {
+        Row: {
+          consent_version: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          household_id: string
+          id: string
+          kid_id: string
+          label: string | null
+          last_viewed_at: string | null
+          report: Json
+          revoked_at: string | null
+          token: string
+          view_count: number
+        }
+        Insert: {
+          consent_version: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          household_id: string
+          id?: string
+          kid_id: string
+          label?: string | null
+          last_viewed_at?: string | null
+          report: Json
+          revoked_at?: string | null
+          token?: string
+          view_count?: number
+        }
+        Update: {
+          consent_version?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          household_id?: string
+          id?: string
+          kid_id?: string
+          label?: string | null
+          last_viewed_at?: string | null
+          report?: Json
+          revoked_at?: string | null
+          token?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_report_shares_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_report_shares_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kid_food_success_stats"
+            referencedColumns: ["kid_id"]
+          },
+          {
+            foreignKeyName: "care_report_shares_kid_id_fkey"
+            columns: ["kid_id"]
+            isOneToOne: false
+            referencedRelation: "kids"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chain_network_aggregates: {
         Row: {
           distinct_contributors: number
@@ -19568,6 +19638,14 @@ export type Database = {
           position_change: number
           previous_position: number
           trend: string
+        }[]
+      }
+      get_shared_care_report: {
+        Args: { p_token: string }
+        Returns: {
+          expires_at: string
+          report: Json
+          shared_at: string
         }[]
       }
       get_shared_recipe: {

@@ -55,7 +55,7 @@ const PrivacyPolicy = () => {
       {/* Content */}
       <main id="main-content" className="container mx-auto px-4 py-12 max-w-4xl">
         <h1 className="text-4xl md:text-5xl font-heading font-bold mb-6 text-primary">{t('privacyPolicy.title')}</h1>
-        <p className="text-sm text-muted-foreground mb-8">Last Updated: August 18, 2026</p>
+        <p className="text-sm text-muted-foreground mb-8">Last Updated: September 26, 2026</p>
 
         <div className="prose prose-lg max-w-none space-y-8">
           <section>
@@ -147,7 +147,7 @@ const PrivacyPolicy = () => {
               <li><strong>Service Providers / Subprocessors:</strong> With the trusted vendors listed below who process data on our behalf under contract.</li>
               <li><strong>Legal Requirements:</strong> When required by law or to protect our rights and safety.</li>
               <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets.</li>
-              <li><strong>With Your Consent:</strong> When you explicitly authorize us to share information.</li>
+              <li><strong>With Your Consent:</strong> When you explicitly authorize us to share information, including a care report or recipe link you create (see Section 5a).</li>
             </ul>
 
             <h3 className="text-xl font-semibold mb-3 text-foreground">Our Subprocessors</h3>
@@ -163,6 +163,49 @@ const PrivacyPolicy = () => {
               <li><strong>Resend</strong> — transactional and (with your consent) marketing email delivery (email address).</li>
               <li><strong>AI providers (Anthropic, OpenAI, and/or Google)</strong> — power AI meal planning and coaching features (see Section 6).</li>
             </ul>
+          </section>
+
+          <section id="shared-reports">
+            <h2 className="text-2xl font-heading font-bold mb-4 text-primary">5a. Reports and Links You Share</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              EatPal lets you hand information to someone outside your household, such as a psychologist, feeding
+              therapist or dietitian. Nothing is shared this way unless you do it yourself.
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground mb-4">
+              <li>
+                <strong>Care report PDF:</strong> made on your device and saved there. We do not receive a copy. What
+                happens to the file after that is up to you.
+              </li>
+              <li>
+                <strong>Care report link:</strong> when you create one, we store a copy of that report on our servers
+                and give you a private link to it. The copy holds your child's first name, the names of foods, counts of
+                what was offered and how it went (including refusals), safe foods, exposure ladder progress, and your
+                notes only if you choose to include them. It does not include your child's full name, date of birth,
+                allergies, photos, or any account or household details. It is a snapshot and does not update.
+              </li>
+              <li>
+                <strong>Who can see it:</strong> anyone who has the link, until it expires or you turn it off. You choose
+                7, 30 or 90 days, and no link lasts longer than 90 days. A person who opens it is not asked to sign in,
+                and they can copy, print or forward what they see. We cannot control what a recipient does with it.
+              </li>
+              <li>
+                <strong>What we record:</strong> when the link was made and by which account, which version of the
+                sharing consent you accepted, how many times it was opened, and when it was last opened. Both parents in
+                a household can see and turn off any link.
+              </li>
+              <li>
+                <strong>Recipe links:</strong> a recipe link shows the recipe's name, picture, ingredients, steps, times
+                and servings, and nothing about your household or children.
+              </li>
+            </ul>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              A link that has expired or been turned off stops working at once. We keep the record of it with your
+              household's data, and delete it when the child's profile or your household's data is deleted.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              EatPal is not a healthcare provider, and a care report link is not a medical record system. We do not
+              offer accounts for clinicians or let anyone outside your household follow your child's data.
+            </p>
           </section>
 
           <section>

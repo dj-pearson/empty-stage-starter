@@ -98,6 +98,11 @@ struct DashboardHomeView: View {
                         message: "Add your child to start planning meals and keep a calm record of the foods they try."
                     )
                 } else {
+                    // The parents' logging streak and this week's household
+                    // meter. Counts any logged try, refusals included, never
+                    // what a child ate (FamilyRhythm).
+                    FamilyRhythmCard(date: today)
+
                     // Food groups across the week for the selected child.
                     if let kidId = appState.activeKidId {
                         WeeklyVarietyStrip(kidId: kidId, date: today)

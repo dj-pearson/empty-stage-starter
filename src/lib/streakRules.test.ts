@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import {
   EMPTY_DAYS_FORGIVEN,
-  REFUSAL_BREAKS_STREAK,
   bestStreak,
   currentStreak,
 } from './streakRules';
@@ -18,8 +17,9 @@ import {
  * So a child who refused everything yesterday had a live streak on the web and
  * a broken one on the phone, and the two web numbers disagreed with each other
  * as well. The decision, recorded in PLATFORMS.md, is that the phone's rule
- * wins: it is what ships, and a streak that survives a day of pure refusals is
- * counting that the app was opened rather than that anything was tried.
+ * wins because it is what ships. The phone then moved to M12: any logged
+ * result counts, a refusal included, so a hard day logged honestly keeps the
+ * streak rather than teaching a parent to skip logging it.
  */
 
 const TODAY = '2026-09-18';
@@ -41,18 +41,15 @@ const streak = (entries: Array<ReturnType<typeof entry>>, kidId = 'ana') =>
   currentStreak(entries, kidId, { todayKey: TODAY });
 
 describe('currentStreak matches the rule the phone ships', () => {
-  it('counts consecutive try-bite days', () => {
+  it('counts consecutive logged days', () => {
     expect(streak([entry(0, 'ate'), entry(1, 'tasted'), entry(2, 'ate')])).toBe(3);
   });
 
-  it('ends on a day of nothing but refusals', () => {
-    // The consequential difference between the web rules and the phone's.
-    expect(streak([entry(0, 'ate'), entry(1, 'refused'), entry(2, 'ate')])).toBe(1);
-  });
-
-  it('does not end when a refusal shares the day with a try-bite', () => {
-    // A child who refused broccoli and ate the pasta still tried something.
-    expect(streak([entry(0, 'refused'), entry(0, 'ate'), entry(1, 'ate')])).toBe(2);
+  it('counts a day of nothing but refusals (M12)', () => {
+    // An offer logged honestly is an exposure. Breaking the streak on it
+    // taught parents to stop logging the hard days.
+    expect(streak([entry(0, 'ate'), entry(1, 'refused'), entry(2, 'ate')])).toBe(3);
+    expect(streak([entry(0, 'refused'), entry(1, 'refused')])).toBe(2);
   });
 
   it('forgives one empty day and ends on the second', () => {
@@ -64,7 +61,7 @@ describe('currentStreak matches the rule the phone ships', () => {
     expect(streak([entry(1, 'ate'), entry(2, 'ate')])).toBe(2);
   });
 
-  it('restores the skip budget after a productive day', () => {
+  it('restores the skip budget after a logged day', () => {
     // ate, gap, ate, gap, ate -- each gap is spent and then refunded.
     expect(streak([entry(0, 'ate'), entry(2, 'ate'), entry(4, 'ate')])).toBe(3);
   });
@@ -94,17 +91,16 @@ describe('a streak belongs to one child', () => {
   });
 });
 
-describe('the kinder rule is one constant away', () => {
-  it('ships with the refusal rule on', () => {
-    expect(REFUSAL_BREAKS_STREAK).toBe(true);
+describe('the rule matches the phone', () => {
+  it('forgives one empty day, as BadgeService.currentStreak does', () => {
     expect(EMPTY_DAYS_FORGIVEN).toBe(1);
   });
 
-  it('forgives a refusal when that constant is flipped', () => {
-    // The whole difference between the two readings. If the product decides a
-    // discouraged parent matters more than the measurement, this is the edit.
-    const entries = [entry(0, 'ate'), entry(1, 'refused'), entry(2, 'ate')];
-    expect(currentStreak(entries, 'ana', { todayKey: TODAY, refusalBreaks: false })).toBe(2);
+  it('reads the same rule the Swift source states', () => {
+    // No Swift toolchain in CI for this suite: hold the two to the same words.
+    const ios = fs.readFileSync('ios/EatPal/EatPal/Services/BadgeService.swift', 'utf8');
+    expect(ios).toMatch(/M12: any logged result counts/);
+    expect(ios).toMatch(/entry\.kidId == kidId && entry\.result != nil/);
   });
 });
 

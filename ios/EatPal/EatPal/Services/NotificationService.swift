@@ -282,7 +282,7 @@ final class NotificationService: ObservableObject {
             case .tryBite:        return "When a kid tries a new food"
             case .expiringFood:   return "Pantry items about to expire (US-230)"
             case .aiSummary:      return "Sunday roundup + next-week ideas"
-            case .streakMilestone:return "Badge unlocks + try-bite streaks"
+            case .streakMilestone:return "Badge unlocks + logging streaks"
             }
         }
 
@@ -378,7 +378,7 @@ final class NotificationService: ObservableObject {
         case .tryBite:        return "Sarah just tried broccoli — log a result?"
         case .expiringFood:   return "3 foods in your pantry expire this week."
         case .aiSummary:      return "Last week: 5 try-bites, 12 wins. Tap for next week's ideas."
-        case .streakMilestone:return "5-day try-bite streak unlocked! 🎉"
+        case .streakMilestone:return "5 days logged in a row! 🎉"
         }
     }
 
