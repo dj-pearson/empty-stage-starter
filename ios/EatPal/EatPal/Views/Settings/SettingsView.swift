@@ -242,7 +242,12 @@ struct SettingsView: View {
         } message: {
             // M5: say what happens to a shared household and to billing,
             // which the old copy left the parent to guess.
-            Text("This permanently deletes your account. You can't undo it.\n\nIn a shared household, your children, plans and lists stay with the other members. If you're the only member, they're deleted too.\n\nDeleting your account doesn't cancel an App Store subscription. Cancel it in Settings > your name > Subscriptions.")
+            Text(
+                "This permanently deletes your account. You can't undo it.\n\nIn a shared household, your " +
+                "children, plans and lists stay with the other members. If you're the only member, they're " +
+                "deleted too.\n\nDeleting your account doesn't cancel an App Store subscription. Cancel it " +
+                "in Settings > your name > Subscriptions."
+            )
         }
         .alert(
             "Couldn't delete account",

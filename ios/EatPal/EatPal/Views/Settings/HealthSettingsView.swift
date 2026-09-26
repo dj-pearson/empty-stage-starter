@@ -28,9 +28,17 @@ struct HealthSettingsView: View {
                 } else if isEnabled {
                     // M24: Health on this phone is the phone owner's, so a
                     // child's meal lands in the parent's nutrition totals.
-                    Text("When you mark a meal as eaten for any child, EatPal saves one serving's calories, protein, carbs and fat from the linked recipe to the Health profile on this phone, which is yours, not your child's.")
+                    Text(
+                        "When you mark a meal as eaten for any child, EatPal saves one serving's calories, protein, " +
+                        "carbs and fat from the linked recipe to the Health profile on this phone, which is yours, " +
+                        "not your child's."
+                    )
                 } else {
-                    Text("When enabled, meals you log for any child add one serving of the linked recipe's nutrition to the Health profile on this phone, which is yours, not your child's. You can turn this off at any time.")
+                    Text(
+                        "When enabled, meals you log for any child add one serving of the linked recipe's nutrition " +
+                        "to the Health profile on this phone, which is yours, not your child's. You can turn this " +
+                        "off at any time."
+                    )
                 }
             }
 
