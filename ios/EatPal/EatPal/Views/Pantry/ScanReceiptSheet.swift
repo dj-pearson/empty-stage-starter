@@ -253,7 +253,9 @@ struct ScanReceiptSheet: View {
                 householdId: nil,
                 name: row.item.parsedName,
                 category: ReceiptScanService.normalizedCategory(row.item.category),
-                isSafe: true,
+                // Not safe by default: a receipt line is not a food the
+                // child has accepted (coffee, detergent, try-bite targets).
+                isSafe: false,
                 isTryBite: false,
                 allergens: nil,
                 barcode: nil,

@@ -56,6 +56,7 @@ struct Food: Identifiable, Codable, Equatable {
         if let quantity = updates.quantity { self.quantity = quantity }
         if let unit = updates.unit { self.unit = unit }
         if let expiryDate = updates.expiryDate { self.expiryDate = expiryDate }
+        if updates.clearsExpiryDate { self.expiryDate = nil }
         if let pricePerUnit = updates.pricePerUnit { self.pricePerUnit = pricePerUnit }
         if let currency = updates.currency { self.currency = currency }
     }
@@ -106,6 +107,10 @@ struct FoodUpdate: Codable {
     var expiryDate: String?
     var pricePerUnit: Double?
     var currency: String?
+    /// Sends `expiry_date: null`. A nil `expiryDate` is omitted from the
+    /// payload (so partial updates leave the column alone), which meant
+    /// switching "Track expiry date" off kept the old date. Not a column.
+    var clearsExpiryDate: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case name, category
@@ -115,6 +120,47 @@ struct FoodUpdate: Codable {
         case expiryDate = "expiry_date"
         case pricePerUnit = "price_per_unit"
         case currency
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(category, forKey: .category)
+        try c.encodeIfPresent(isSafe, forKey: .isSafe)
+        try c.encodeIfPresent(isTryBite, forKey: .isTryBite)
+        try c.encodeIfPresent(allergens, forKey: .allergens)
+        try c.encodeIfPresent(barcode, forKey: .barcode)
+        try c.encodeIfPresent(aisle, forKey: .aisle)
+        try c.encodeIfPresent(quantity, forKey: .quantity)
+        try c.encodeIfPresent(unit, forKey: .unit)
+        if clearsExpiryDate && expiryDate == nil {
+            try c.encodeNil(forKey: .expiryDate)
+        } else {
+            try c.encodeIfPresent(expiryDate, forKey: .expiryDate)
+        }
+        try c.encodeIfPresent(pricePerUnit, forKey: .pricePerUnit)
+        try c.encodeIfPresent(currency, forKey: .currency)
+    }
+}
+
+extension FoodUpdate {
+    /// Decoded by hand so an explicit `"expiry_date": null` (a queued clear
+    /// replayed from OfflineStore) comes back as a clear, not as "no change".
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        isSafe = try c.decodeIfPresent(Bool.self, forKey: .isSafe)
+        isTryBite = try c.decodeIfPresent(Bool.self, forKey: .isTryBite)
+        allergens = try c.decodeIfPresent([String].self, forKey: .allergens)
+        barcode = try c.decodeIfPresent(String.self, forKey: .barcode)
+        aisle = try c.decodeIfPresent(String.self, forKey: .aisle)
+        quantity = try c.decodeIfPresent(Double.self, forKey: .quantity)
+        unit = try c.decodeIfPresent(String.self, forKey: .unit)
+        expiryDate = try c.decodeIfPresent(String.self, forKey: .expiryDate)
+        clearsExpiryDate = try c.contains(.expiryDate) && c.decodeNil(forKey: .expiryDate)
+        pricePerUnit = try c.decodeIfPresent(Double.self, forKey: .pricePerUnit)
+        currency = try c.decodeIfPresent(String.self, forKey: .currency)
     }
 }
 

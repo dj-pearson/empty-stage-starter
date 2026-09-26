@@ -269,6 +269,9 @@ struct ScannedProductView: View {
             isTryBite: isTryBite,
             allergens: allergenList,
             barcode: effectiveBarcode,
+            // One package in hand. With no quantity the row showed a red
+            // "0" (out of stock) the moment it was added.
+            quantity: 1,
             expiryDate: expiryISO
         )
 

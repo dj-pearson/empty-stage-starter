@@ -101,9 +101,12 @@ struct PantryView: View {
         let remove: () -> Void
     }
 
+    /// Food tags plus every child's recorded allergies, so "hide what Maya
+    /// can't have" is offered even before any food carries the tag.
     private var availableAllergens: [String] {
-        let all = appState.foods.compactMap(\.allergens).flatMap { $0 }
-        return Array(Set(all)).sorted()
+        let fromFoods = appState.foods.compactMap(\.allergens).flatMap { $0 }
+        let fromKids = appState.kids.compactMap(\.allergens).flatMap { $0 }
+        return Array(Set(fromFoods + fromKids)).sorted()
     }
 
     private var filteredFoods: [Food] {
@@ -114,11 +117,12 @@ struct PantryView: View {
             foods = foods.filter { $0.category == category.rawValue }
         }
 
-        // Apply quick segment filter
+        // Apply quick segment filter. Expired food is not "available", so
+        // it doesn't count as a safe food or a try bite until it's replaced.
         switch filterMode {
         case .all: break
-        case .safe: foods = foods.filter(\.isSafe)
-        case .tryBite: foods = foods.filter(\.isTryBite)
+        case .safe: foods = foods.filter { $0.isSafe && !$0.isExpired }
+        case .tryBite: foods = foods.filter { $0.isTryBite && !$0.isExpired }
         }
 
         // Apply advanced filters
@@ -133,6 +137,56 @@ struct PantryView: View {
         )
 
         return foods
+    }
+
+    /// Safe foods that are out or nearly out: running out of one is the
+    /// emergency for a child with a short list of foods they'll eat.
+    private var safeFoodsRunningLow: [Food] {
+        appState.foods
+            .filter { food in
+                guard food.isSafe, let quantity = food.quantity else { return false }
+                return quantity <= 2
+            }
+            .sorted { ($0.quantity ?? 0) < ($1.quantity ?? 0) }
+    }
+
+    private var expiredFoods: [Food] {
+        appState.foods.filter(\.isExpired)
+    }
+
+    /// Clears every narrowing control at once, for the "No matches" state.
+    private func clearAllFilters() {
+        searchText = ""
+        selectedCategory = nil
+        filterMode = .all
+        filters = PantryFilters()
+    }
+
+    /// Adds a restock line for `food` unless an unchecked line with the same
+    /// name is already on the list. Carries the barcode, so the list names
+    /// the exact product (a brand-specific safe food is only safe as that
+    /// brand).
+    private func restock(_ food: Food) async {
+        let key = food.name.lowercased()
+        if appState.groceryItems.contains(where: { !$0.checked && $0.name.lowercased() == key }) {
+            ToastManager.shared.info("\(food.name) is already on your grocery list")
+            return
+        }
+        var item = GroceryItem(
+            id: UUID().uuidString,
+            userId: "",
+            name: food.name,
+            category: food.category,
+            quantity: 1,
+            unit: food.unit ?? "count",
+            checked: false,
+            addedVia: "restock"
+        )
+        item.barcode = food.barcode
+        // addGroceryItem toasts added / queued / error itself.
+        do {
+            try await appState.addGroceryItem(item)
+        } catch { /* toasted in AppState */ }
     }
 
     private var groupedFoods: [(String, [Food])] {
@@ -240,6 +294,57 @@ struct PantryView: View {
                 }
             }
 
+            // Safe foods running low / expired: the two things to act on,
+            // shown above the full list when nothing is filtering it.
+            if !isSelecting && !isFiltering && !safeFoodsRunningLow.isEmpty {
+                Section {
+                    ForEach(safeFoodsRunningLow) { food in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(food.name)
+                                    .font(.subheadline.weight(.medium))
+                                Text((food.quantity ?? 0) <= 0 ? "Out" : "\((food.quantity ?? 0).formatted()) left")
+                                    .font(.caption)
+                                    .foregroundStyle((food.quantity ?? 0) <= 0 ? .red : .orange)
+                            }
+                            Spacer()
+                            Button {
+                                Task { await restock(food) }
+                            } label: {
+                                Label("Add to list", systemImage: "cart.badge.plus")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Add \(food.name) to grocery list")
+                        }
+                    }
+                } header: {
+                    Label("Safe foods running low", systemImage: "heart.fill")
+                }
+            }
+
+            if !isSelecting && !isFiltering && !expiredFoods.isEmpty {
+                Section {
+                    ForEach(expiredFoods) { food in
+                        Button {
+                            selectedFood = food
+                        } label: {
+                            HStack {
+                                Text(food.name)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if let days = food.daysUntilExpiry {
+                                    ExpiryChip(days: days)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Label("Expired: check before serving", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                }
+            }
+
             // Foods List
             if appState.isLoading && appState.foods.isEmpty {
                 Section {
@@ -249,11 +354,30 @@ struct PantryView: View {
                 }
             } else if groupedFoods.isEmpty {
                 Section {
-                    ContentUnavailableView(
-                        "No Foods",
-                        systemImage: "leaf.fill",
-                        description: Text("Add foods to your pantry to get started.")
-                    )
+                    if isFiltering && !appState.foods.isEmpty {
+                        // The pantry isn't empty; the filters are hiding it.
+                        ContentUnavailableView {
+                            Label("No matches", systemImage: "line.3.horizontal.decrease.circle")
+                        } description: {
+                            Text(searchText.isEmpty
+                                 ? "Nothing matches the current filters."
+                                 : "Nothing matches \"\(searchText)\" with the current filters.")
+                        } actions: {
+                            Button("Clear search and filters") { clearAllFilters() }
+                        }
+                    } else if filterMode == .tryBite {
+                        ContentUnavailableView(
+                            "No try-bite foods yet",
+                            systemImage: "star",
+                            description: Text("Mark a food as a try bite from its details or by long-pressing it.")
+                        )
+                    } else {
+                        ContentUnavailableView(
+                            "No Foods",
+                            systemImage: "leaf.fill",
+                            description: Text("Add foods to your pantry to get started.")
+                        )
+                    }
                 }
             } else {
                 ForEach(groupedFoods, id: \.0) { category, foods in
@@ -266,9 +390,10 @@ struct PantryView: View {
                                         .imageScale(.large)
                                         .accessibilityLabel(selectedIds.contains(food.id) ? "Selected" : "Not selected")
                                 }
-                                FoodRowView(food: food)
+                                FoodRowView(food: food, isSelecting: isSelecting)
                             }
                                 .contentShape(Rectangle())
+                                .accessibilityAddTraits(.isButton)
                                 .onTapGesture {
                                     if isSelecting {
                                         toggleSelection(food.id)
@@ -289,7 +414,9 @@ struct PantryView: View {
                                     .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8))
                                     .shadow(radius: 4)
                                 }
-                                .swipeActions(edge: .leading, allowsFullSwipe: !isSelecting) {
+                                // No full swipe: a stray long swipe used to
+                                // add one to the shared stock count.
+                                .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                     if !isSelecting {
                                         Button {
                                             HapticManager.lightImpact()
@@ -323,12 +450,14 @@ struct PantryView: View {
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
+                                            // "Safe" means the child accepts it, not
+                                            // allergy-safe; a heart, not a shield.
                                             Label(
-                                                food.isSafe ? "Unsafe" : "Safe",
-                                                systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
+                                                food.isSafe ? "Not safe yet" : "Safe food",
+                                                systemImage: food.isSafe ? "heart.slash" : "heart"
                                             )
                                         }
-                                        .tint(food.isSafe ? .orange : .blue)
+                                        .tint(food.isSafe ? .gray : .pink)
                                     }
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
@@ -343,22 +472,8 @@ struct PantryView: View {
                                         Button {
                                             HapticManager.success()
                                             Task {
-                                                let item = GroceryItem(
-                                                    id: UUID().uuidString,
-                                                    userId: "",
-                                                    name: food.name,
-                                                    category: food.category,
-                                                    quantity: 1,
-                                                    unit: food.unit ?? "count",
-                                                    checked: false,
-                                                    addedVia: "restock"
-                                                )
-                                                // US-416: only confirm on success — addGroceryItem
-                                                // already toasts (added / queued / error); the old
-                                                // try? fired a false "Added to grocery" even on failure.
-                                                do {
-                                                    try await appState.addGroceryItem(item)
-                                                } catch { /* toasted in AppState */ }
+                                                // US-416: only AppState's toast fires.
+                                                await restock(food)
                                                 await TipEvents.didSwipePantry.donate()
                                             }
                                         } label: {
@@ -372,23 +487,7 @@ struct PantryView: View {
                                     if !isSelecting {
                                         Button {
                                             HapticManager.success()
-                                            Task {
-                                                let item = GroceryItem(
-                                                    id: UUID().uuidString,
-                                                    userId: "",
-                                                    name: food.name,
-                                                    category: food.category,
-                                                    quantity: 1,
-                                                    unit: food.unit ?? "count",
-                                                    checked: false,
-                                                    addedVia: "restock"
-                                                )
-                                                // US-416: see swipe action — only the AppState
-                                                // toast should fire (no false success on failure).
-                                                do {
-                                                    try await appState.addGroceryItem(item)
-                                                } catch { /* toasted in AppState */ }
-                                            }
+                                            Task { await restock(food) }
                                         } label: {
                                             Label("Add to Grocery", systemImage: "cart.fill.badge.plus")
                                         }
@@ -405,8 +504,8 @@ struct PantryView: View {
                                             }
                                         } label: {
                                             Label(
-                                                food.isSafe ? "Mark Unsafe" : "Mark Safe",
-                                                systemImage: food.isSafe ? "xmark.shield" : "checkmark.shield"
+                                                food.isSafe ? "Remove from safe foods" : "Mark as safe food",
+                                                systemImage: food.isSafe ? "heart.slash" : "heart"
                                             )
                                         }
 
@@ -809,6 +908,9 @@ struct CategoryChip: View {
 struct FoodRowView: View {
     @EnvironmentObject var appState: AppState
     let food: Food
+    /// In select mode a tap selects the row; the stepper would otherwise
+    /// catch taps aimed at the row and change the stock.
+    var isSelecting: Bool = false
 
     @State private var showQuantityAdjust = false
 
@@ -816,10 +918,25 @@ struct FoodRowView: View {
         food.quantity ?? 0
     }
 
+    /// No recorded quantity is "unknown", not "out of stock".
+    private var quantityText: String {
+        guard let quantity = food.quantity else { return "-" }
+        return quantity.formatted(.number.precision(.fractionLength(0...1)))
+    }
+
     private var stockColor: Color {
+        guard food.quantity != nil else { return .secondary }
         if displayQuantity <= 0 { return .red }
         if displayQuantity <= 2 { return .orange }
         return .secondary
+    }
+
+    /// "Not for Maya (peanut)" for each child the food carries an allergen
+    /// for. A bare count told a sitter nothing.
+    private var kidConflicts: [String] {
+        appState.kids.compactMap { kid in
+            AllergenMatcher.hit(for: kid, food: food).map { "\(kid.name) (\($0))" }
+        }
     }
 
     var body: some View {
@@ -840,7 +957,8 @@ struct FoodRowView: View {
 
                 HStack(spacing: 6) {
                     if food.isSafe {
-                        Label("Safe", systemImage: "checkmark.shield.fill")
+                        // A food the child accepts; not an allergy claim.
+                        Label("Safe food", systemImage: "heart.fill")
                             .font(.caption2)
                             .foregroundStyle(.green)
                     }
@@ -849,10 +967,15 @@ struct FoodRowView: View {
                             .font(.caption2)
                             .foregroundStyle(.orange)
                     }
-                    if let allergens = food.allergens, !allergens.isEmpty {
-                        Label("\(allergens.count) allergens", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption2)
+                    if !kidConflicts.isEmpty {
+                        Label("Not for \(kidConflicts.joined(separator: ", "))", systemImage: "exclamationmark.octagon.fill")
+                            .font(.caption2.weight(.semibold))
                             .foregroundStyle(.red)
+                    } else if let allergens = food.allergens, !allergens.isEmpty {
+                        Label("Contains \(allergens.joined(separator: ", "))", systemImage: "exclamationmark.triangle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                     // US-230: expiry chip — red dot for ≤3 days, full red
                     // 'Expired' chip when past, otherwise the days-until.
@@ -875,14 +998,14 @@ struct FoodRowView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(displayQuantity <= 0)
-                .accessibilityLabel("Decrease quantity")
+                .disabled(displayQuantity <= 0 || isSelecting)
+                .accessibilityLabel("Decrease \(food.name)")
 
                 Button {
                     showQuantityAdjust = true
                 } label: {
                     VStack(spacing: 0) {
-                        Text(displayQuantity.formatted(.number.precision(.fractionLength(0...1))))
+                        Text(quantityText)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(stockColor)
@@ -902,6 +1025,9 @@ struct FoodRowView: View {
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
+                .disabled(isSelecting)
+                .accessibilityLabel("\(food.name), \(food.quantity == nil ? "no quantity recorded" : "\(quantityText) \(food.unit ?? "")")")
+                .accessibilityHint("Adjust quantity")
 
                 Button {
                     adjust(by: 1)
@@ -913,7 +1039,8 @@ struct FoodRowView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Increase quantity")
+                .disabled(isSelecting)
+                .accessibilityLabel("Increase \(food.name)")
             }
 
             Image(systemName: "chevron.right")
@@ -1110,9 +1237,13 @@ struct AddFoodView: View {
                         .onChange(of: unit) { _, _ in didEditQuantityUnit = true }
                 }
 
-                Section("Status") {
-                    Toggle("Safe Food", isOn: $isSafe)
-                    Toggle("Try Bite", isOn: $isTryBite)
+                Section {
+                    Toggle("Safe food", isOn: $isSafe)
+                    Toggle("Try bite", isOn: $isTryBite)
+                } header: {
+                    Text("Status")
+                } footer: {
+                    Text("A safe food is one your child reliably eats. It says nothing about allergies.")
                 }
 
                 // US-230: collapsed by default — user must opt in to add an
@@ -1227,8 +1358,33 @@ struct FoodDetailView: View {
     // US-230
     @State private var hasExpiry: Bool = false
     @State private var expiryDate: Date = Date()
+    /// Comma-separated, so a wrong or missing tag from a barcode lookup can
+    /// be fixed without deleting the food.
+    @State private var allergensText: String = ""
+    @State private var quantityEdited = false
 
-    private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l", "servings"]
+    private static let baseUnits = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l", "servings"]
+
+    /// The fixed list plus the food's own unit, so an inferred unit like
+    /// "dozen" doesn't leave the picker blank.
+    private var units: [String] {
+        Self.baseUnits.contains(unit) || unit.isEmpty ? Self.baseUnits : Self.baseUnits + [unit]
+    }
+
+    private var editedAllergens: [String] {
+        allergensText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Which children the food (as edited) carries an allergen for.
+    private var kidConflicts: [(kid: Kid, allergen: String)] {
+        appState.kids.compactMap { kid in
+            AllergenMatcher.matching(kidAllergens: kid.allergens, foodName: name, foodAllergens: editedAllergens)
+                .map { (kid, $0) }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -1246,6 +1402,7 @@ struct FoodDetailView: View {
                 Section("Inventory") {
                     HStack {
                         Button {
+                            quantityEdited = true
                             quantity = max(0, quantity - 1)
                         } label: {
                             Image(systemName: "minus.circle.fill")
@@ -1260,6 +1417,7 @@ struct FoodDetailView: View {
                             .frame(maxWidth: .infinity)
 
                         Button {
+                            quantityEdited = true
                             quantity += 1
                         } label: {
                             Image(systemName: "plus.circle.fill")
@@ -1278,9 +1436,13 @@ struct FoodDetailView: View {
                     }
                 }
 
-                Section("Status") {
-                    Toggle("Safe Food", isOn: $isSafe)
-                    Toggle("Try Bite", isOn: $isTryBite)
+                Section {
+                    Toggle("Safe food", isOn: $isSafe)
+                    Toggle("Try bite", isOn: $isTryBite)
+                } header: {
+                    Text("Status")
+                } footer: {
+                    Text("A safe food is one your child reliably eats. It says nothing about allergies.")
                 }
 
                 // US-230: same opt-in pattern as AddFoodView so the editor
@@ -1298,42 +1460,57 @@ struct FoodDetailView: View {
                     Text("Expiry")
                 }
 
-                if let allergens = food.allergens, !allergens.isEmpty {
-                    Section("Allergens") {
-                        ForEach(allergens, id: \.self) { allergen in
-                            Label(allergen, systemImage: "exclamationmark.triangle.fill")
+                Section {
+                    TextField("e.g. milk, peanuts", text: $allergensText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if kidConflicts.isEmpty {
+                        if !appState.kids.isEmpty {
+                            Label("No conflicts with your children's allergies", systemImage: "checkmark.shield")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        ForEach(kidConflicts, id: \.kid.id) { conflict in
+                            Label("Not for \(conflict.kid.name): \(conflict.allergen)", systemImage: "exclamationmark.octagon.fill")
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.red)
                         }
                     }
+                } header: {
+                    Text("Allergens")
+                } footer: {
+                    Text("Separate with commas. Checked against each child's allergies, including by the food's name.")
                 }
 
                 Section {
                     Button("Save Changes") {
                         Task {
-                            // US-230: only send expiryDate when the toggle is
-                            // on. Setting nil via Codable would just omit the
-                            // field (encodeIfPresent), so existing values are
-                            // preserved when the user leaves the toggle off.
-                            // Clearing an existing date via this UI isn't
-                            // wired (would need a sentinel-aware encoder); the
-                            // workaround is to set it to a far-future date.
+                            // US-230: expiryDate is sent when the toggle is on.
                             // US-416: only dismiss on success so a failed save
                             // doesn't silently drop the user's edits.
+                            // Switching expiry off on a food that had a date
+                            // sends an explicit null (clearsExpiryDate); a nil
+                            // is omitted and used to leave the old date. A food
+                            // with no recorded quantity keeps none unless it was
+                            // edited (saving 0 read as "out of stock").
+                            // A typed value counts too, not only the +/- buttons.
+                            let keepsQuantity = food.quantity != nil || quantityEdited || quantity != 0
+                            var updates = FoodUpdate(
+                                name: name,
+                                category: category.rawValue,
+                                isSafe: isSafe,
+                                isTryBite: isTryBite,
+                                allergens: editedAllergens,
+                                quantity: keepsQuantity ? quantity : nil,
+                                unit: unit,
+                                expiryDate: hasExpiry
+                                    ? DateFormatter.isoDate.string(from: expiryDate)
+                                    : nil
+                            )
+                            updates.clearsExpiryDate = !hasExpiry && food.expiryDate != nil
                             do {
-                                try await appState.updateFood(
-                                    food.id,
-                                    updates: FoodUpdate(
-                                        name: name,
-                                        category: category.rawValue,
-                                        isSafe: isSafe,
-                                        isTryBite: isTryBite,
-                                        quantity: quantity,
-                                        unit: unit,
-                                        expiryDate: hasExpiry
-                                            ? DateFormatter.isoDate.string(from: expiryDate)
-                                            : nil
-                                    )
-                                )
+                                try await appState.updateFood(food.id, updates: updates)
                                 dismiss()
                             } catch { /* rolled back + toasted in AppState */ }
                         }
@@ -1355,6 +1532,7 @@ struct FoodDetailView: View {
                 isTryBite = food.isTryBite
                 quantity = food.quantity ?? 0
                 unit = food.unit ?? "count"
+                allergensText = (food.allergens ?? []).joined(separator: ", ")
                 if let raw = food.expiryDate, let date = DateFormatter.isoDate.date(from: raw) {
                     hasExpiry = true
                     expiryDate = date
