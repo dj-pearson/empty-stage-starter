@@ -213,3 +213,12 @@ describe('familyMilestones', () => {
     expect(byId.get('first_log')?.earnedOn).toBeNull();
   });
 });
+
+describe('the phone runs the same rule', () => {
+  it('uses the same grace spacing and weekly goal in FamilyRhythm.swift', async () => {
+    const fs = await import('node:fs');
+    const swift = fs.readFileSync('ios/EatPal/EatPal/Services/FamilyRhythm.swift', 'utf8');
+    expect(swift).toContain(`static let graceSpacingDays = ${GRACE_SPACING_DAYS}`);
+    expect(swift).toContain(`static let weeklyGoalDays = ${WEEKLY_GOAL_DAYS}`);
+  });
+});

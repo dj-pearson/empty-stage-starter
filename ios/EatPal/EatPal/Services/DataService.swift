@@ -427,6 +427,36 @@ final class DataService {
             .execute()
     }
 
+    // MARK: - Family rhythm
+
+    /// Every attempt for these children, all time, for the parent's logging
+    /// streak and last week's recap (FamilyRhythm).
+    ///
+    /// Paged: PostgREST caps a response at 1000 rows and a busy household
+    /// passes that within months, which would quietly shorten a streak. The
+    /// order is total (attempted_at, then id) so no row repeats or goes
+    /// missing across pages. Stops at 10,000 rows, as the web's reader does.
+    func fetchRhythmAttempts(kidIds: [String]) async throws -> [RhythmAttemptRow] {
+        guard !kidIds.isEmpty else { return [] }
+        let pageSize = 1000
+        let ceiling = 10_000
+        var rows: [RhythmAttemptRow] = []
+        var from = 0
+        while true {
+            let page: [RhythmAttemptRow] = try await client.from("food_attempts")
+                .select("kid_id, food_id, attempted_at, outcome")
+                .in("kid_id", values: kidIds)
+                .order("attempted_at", ascending: true)
+                .order("id", ascending: true)
+                .range(from: from, to: from + pageSize - 1)
+                .execute()
+                .value
+            rows.append(contentsOf: page)
+            if page.count < pageSize || rows.count >= ceiling { return rows }
+            from += pageSize
+        }
+    }
+
     // MARK: - Exposure Ladder (US-596 / US-606)
 
     func fetchKidFoodLadder() async throws -> [KidFoodLadder] {

@@ -48,10 +48,14 @@ one a parent has been watching on their phone. And a streak that survives a day
 of pure refusals is not counting try-bites; it is counting that the app was
 opened.
 
-**The kinder reading is one constant away.** `REFUSAL_BREAKS_STREAK` in that
-file. If the product decides that what a discouraged parent sees matters more
-than what the number measures, flipping it is the whole change, and
-`src/lib/streakRules.test.ts` has the case for both.
+**Update (2026-09-26): the phone moved, and the web followed.** BadgeService
+now counts any logged result, a refusal included (M12 in its comments): a
+streak a hard day could break taught parents to stop logging hard days, which
+are the days a feeding therapist most wants to see. The web still said a pure
+refusal ended the streak, so its progress bars for the streak badges counted
+something the phone no longer did. `streakRules.ts` now counts any logged
+result, forgives one empty day, and has no refusal switch;
+`streakRules.test.ts` holds it to the words in the Swift source.
 
 `BadgeService.swift` keeps its own copy because Swift cannot import TypeScript.
 The two are described here together on purpose: a change to one is a change to
@@ -93,7 +97,7 @@ is not this change.
 
 ---
 
-## Family rhythm and care report links - web only, by accident until decided
+## Family rhythm, variety badges and care report links
 
 **Family rhythm** (`src/lib/familyRhythm.ts`) is the parent's side: a logging
 streak with one grace day per seven, a Monday-to-Sunday household meter toward
@@ -103,6 +107,22 @@ try-bite streak in `streakRules.ts` is a separate rule and is unchanged. It is
 derived from `food_attempts` on every read, so there is no table for iOS to
 write and nothing to drift: an iOS surface would port the pure module (the
 tests include a brute-force check of the streak walk to port against).
+
+**Update (2026-09-26): the streak is on iOS.** `FamilyRhythm.swift` is a
+rule-for-rule port (streak with grace, week meter, last week's recap), drawn on
+the Home tab by `FamilyRhythmCard.swift` from every `food_attempts` row plus
+the plan results already in memory. `FamilyRhythmTests.swift` repeats the web
+cases and the brute-force check, and `familyRhythm.test.ts` fails if the grace
+spacing or weekly goal differs between the two. The ten family milestones are
+still web only.
+
+**Variety badges count offers (2026-09-26).** First Try-Bite (now "First
+Offer"), Category, Vegetable and Fruit Explorer and Protein Pro (now "Protein
+Explorer") used to count only `ate`/`tasted`, which rewarded a child for
+eating. They now count any food offered with a result logged. Ids are
+unchanged, so every earned badge stays earned; older iOS builds keep the old
+criteria and old titles until they update. `badgeCatalog.parity.test.ts`
+checks that the web copy matches the Swift titles and descriptions.
 
 **Care report links** (`care_report_shares`, `/care/:token`) are made on the
 web only. iOS has no screen that creates or lists them. A link made on the web
