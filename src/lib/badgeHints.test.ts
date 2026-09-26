@@ -25,15 +25,17 @@ describe('thisWeekResults', () => {
 });
 
 describe('lockedBadgeHint', () => {
-  it('counts this week ate results for perfectWeek', () => {
-    expect(lockedBadgeHint('perfectWeek', 5, [e('2026-09-22', 'ate'), e('2026-09-23', 'ate')], 'ana', TODAY)).toEqual({
+  it('counts every logged result this week for perfectWeek', () => {
+    expect(lockedBadgeHint('perfectWeek', 5, [e('2026-09-22', 'ate'), e('2026-09-23', 'tasted')], 'ana', TODAY)).toEqual({
       progress: 2,
       total: 5,
     });
   });
 
-  it('shows no bar for perfectWeek after a refusal this week', () => {
-    expect(lockedBadgeHint('perfectWeek', 5, [e('2026-09-22', 'refused')], 'ana', TODAY)).toBeNull();
+  it('counts a refusal toward perfectWeek instead of hiding the bar', () => {
+    expect(
+      lockedBadgeHint('perfectWeek', 5, [e('2026-09-22', 'refused'), e('2026-09-23', 'ate')], 'ana', TODAY),
+    ).toEqual({ progress: 2, total: 5 });
   });
 
   it('uses the shared streak rule for streak badges', () => {

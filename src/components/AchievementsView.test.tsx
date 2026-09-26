@@ -83,7 +83,7 @@ describe('AchievementsView', () => {
 
   it('names every progress bar, and a full streak reads as ready to sync', async () => {
     // Pinned to a Wednesday. Seven days of try-bites ending on a Friday,
-    // Saturday or Sunday also fill Perfect Week (5 this Monday-first week),
+    // Saturday or Sunday also fill Steady Week (5 this Monday-first week),
     // and a second "ready to sync" line made getByText throw on those days.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-09-23T12:00:00'));
@@ -124,7 +124,7 @@ describe('AchievementBadge', () => {
 
   it('renders 27 of 25 as full and ready to sync, never 27 / 25', () => {
     render(<AchievementBadge badge={badge} earned={false} hint={{ progress: 27, total: 25 }} />);
-    const bar = screen.getByRole('progressbar', { name: 'Perfect Week progress' });
+    const bar = screen.getByRole('progressbar', { name: 'Steady Week progress' });
     expect(bar).toHaveAttribute('aria-valuenow', '100');
     expect(bar).toHaveAttribute('aria-valuetext', '25 of 25');
     expect(screen.getByText('Done. Shows as earned after the iPhone app syncs.')).toBeInTheDocument();
@@ -133,7 +133,7 @@ describe('AchievementBadge', () => {
 
   it('does not throw on a total of 0', () => {
     render(<AchievementBadge badge={badge} earned={false} hint={{ progress: 3, total: 0 }} />);
-    expect(screen.getByRole('progressbar', { name: 'Perfect Week progress' })).toHaveAttribute('aria-valuenow', '0');
+    expect(screen.getByRole('progressbar', { name: 'Steady Week progress' })).toHaveAttribute('aria-valuenow', '0');
   });
 
   it('labels the household badge and a locked state for screen readers', () => {
