@@ -26,10 +26,12 @@ import { LadderReportDialog } from '@/components/LadderReportDialog';
 import { firstName } from '@/lib/firstName';
 import { useFoods, useKids } from '@/contexts/AppContext';
 import { useFoodLadder, type LadderRow } from '@/hooks/useFoodLadder';
+import { useExposureCounts } from '@/hooks/useExposureCounts';
 import { usePickyWinSharePref } from '@/hooks/usePickyWinSharePref';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { analytics } from '@/lib/analytics';
 import { groupLadder, summaryCounts, type LadderGroups } from '@/lib/ladderOverview';
+import { EXPOSURE_TARGET } from '@/lib/familyRhythm';
 import type { Kid } from '@/types';
 import { LadderFoodPicker } from './LadderFoodPicker';
 import { LadderOverviewRow, type OverviewGroup } from './LadderOverviewRow';
@@ -83,6 +85,13 @@ export function LadderOverview({ kid, logRequestNonce, logFoodId }: LadderOvervi
     masteredFoodName,
     dismissMastery,
   } = useFoodLadder(kid.id, { kid, foods, shareWins });
+
+  // Refetch the offer counts whenever any row records a new attempt.
+  const lastLoggedAt = useMemo(
+    () => rows.reduce<string>((latest, r) => (r.lastAttemptAt && r.lastAttemptAt > latest ? r.lastAttemptAt : latest), ''),
+    [rows],
+  );
+  const exposuresByFood = useExposureCounts(kid.id, lastLoggedAt);
 
   const [today, setToday] = useState(localIsoDate);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -293,6 +302,13 @@ export function LadderOverview({ kid, logRequestNonce, logFoodId }: LadderOvervi
           {t('foodTracker.ladderUi.subtitle', {
             defaultValue:
               'Each food moves one small step at a time. A no simply steps it back to rest.',
+          })}
+        </p>
+        <p className="max-w-[68ch] text-sm text-muted-foreground">
+          {t('foodTracker.exposures.explainer', {
+            defaultValue:
+              'Most kids need about {{target}} offers before a new food feels familiar. Every offer counts, refusals too.',
+            target: EXPOSURE_TARGET,
           })}
         </p>
       </div>
@@ -583,6 +599,7 @@ export function LadderOverview({ kid, logRequestNonce, logFoodId }: LadderOvervi
                         row.pairedSafeFoodId ? foodNameById.get(row.pairedSafeFoodId) ?? null : null
                       }
                       stalled={groups.stalledIds.has(row.id)}
+                      exposures={exposuresByFood.get(row.foodId)}
                       today={today}
                       onLog={logAttempt}
                       onUndo={undoLog}

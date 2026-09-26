@@ -76,7 +76,7 @@ function rungIndex(rung: string): number {
 }
 
 /** The local calendar day of a timestamp, or null when it does not parse. */
-function localDay(timestamp: string | null | undefined): string | null {
+export function localDay(timestamp: string | null | undefined): string | null {
   if (!timestamp) return null;
   // A bare date is already a local day; new Date('YYYY-MM-DD') would read it
   // as UTC midnight and move it back a day west of Greenwich.

@@ -8,12 +8,13 @@ import { InsightSlot } from "@/components/home/InsightSlot";
 import { TonightHero } from "@/components/home/TonightHero";
 import { TodayTasks } from "@/components/home/TodayTasks";
 import { KidWeekLine } from "@/components/home/KidWeekLine";
+import { HomeFamilyRhythm } from "@/components/home/HomeFamilyRhythm";
 
 /**
  * /dashboard: a ten-second answer for a parent on a phone.
  *
  * Tonight first (dinner per kid, with fit and allergens), then what needs
- * doing today, then setup while there is any, one insight, and a line per kid
+ * doing today, the household's logging rhythm, then setup while there is any, one insight, and a line per kid
  * about the week. The Dashboard shell owns the header, nav and the offsets
  * for them, so this page has no min-h-screen or top/bottom padding of its own.
  *
@@ -41,6 +42,7 @@ export default function Home() {
         <HomeGreeting />
         <TonightHero />
         <TodayTasks />
+        <HomeFamilyRhythm />
         <SetupChecklist />
         <SubscriptionStatusBanner />
         <InsightSlot />
