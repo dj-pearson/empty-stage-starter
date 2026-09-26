@@ -540,7 +540,7 @@ struct KidProfileEditorView: View {
 
     /// Accepts "12,5" as well as "12.5"; the decimal pad types a comma in
     /// many locales and Double("12,5") is nil.
-    static func parseMeasurement(_ text: String) -> Double? {
+    nonisolated static func parseMeasurement(_ text: String) -> Double? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         return Double(trimmed.replacingOccurrences(of: ",", with: "."))
