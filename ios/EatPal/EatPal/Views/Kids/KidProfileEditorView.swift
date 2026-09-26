@@ -9,7 +9,8 @@ struct KidProfileEditorView: View {
 
     // Basic Info
     @State private var name: String = ""
-    @State private var age: Int = 5
+    // nil is "not set"; a default here used to save a made-up age.
+    @State private var age: Int?
     @State private var gender: String = ""
     @State private var pickinessLevel: String = "not_picky"
 
@@ -20,10 +21,14 @@ struct KidProfileEditorView: View {
     // Allergens & Diet
     @State private var allergens: String = ""
     @State private var dietaryRestrictions: String = ""
+    // Keyed by AllergenMatcher.canonical so "Peanuts" and "peanut" share one.
+    @State private var severity: [String: String] = [:]
+    @State private var crossContact = false
 
     // Food Preferences
     @State private var favoriteFoods: String = ""
     @State private var dislikedFoods: String = ""
+    @State private var alwaysEatsFoods: String = ""
 
     // Texture & Flavor
     @State private var texturePreferences: String = ""
@@ -47,13 +52,9 @@ struct KidProfileEditorView: View {
     @State private var loadedSnapshot: String?
     @State private var showDiscardConfirm = false
 
-    // US-228: HealthKit import state
-    @State private var isImportingFromHealth = false
-    @State private var healthImportError: String?
-    @State private var healthSyncedAt: Date?
-    @State private var healthSourcedFields: Set<HealthSourcedField> = []
-
-    enum HealthSourcedField: String { case age, height, weight }
+    // US-228's "Import from Health" was removed from this screen: Health on
+    // the phone holds the phone owner's height, weight and birth date, so it
+    // wrote the parent's numbers into the child's profile.
 
     // US-240: PickyEaterQuiz sheet
     @State private var showingQuiz = false
@@ -79,14 +80,19 @@ struct KidProfileEditorView: View {
                 // Basic Info
                 Section("Basic Information") {
                     TextField("Name", text: $name)
-                    HStack {
-                        Stepper("Age: \(age)", value: $age, in: 0...18)
-                            .onChange(of: age) { _, _ in
-                                healthSourcedFields.remove(.age)
-                            }
-                        if healthSourcedFields.contains(.age) {
-                            HealthSourcePill()
+                    Stepper(value: Binding(
+                        get: { age ?? 0 },
+                        set: { age = $0 }
+                    ), in: 0...18) {
+                        HStack {
+                            Text("Age")
+                            Spacer()
+                            Text(ageLabel)
+                                .foregroundStyle(.secondary)
                         }
+                    }
+                    if age != nil {
+                        Button("Clear age") { age = nil }
                     }
                     Picker("Gender", selection: $gender) {
                         Text("Not Specified").tag("")
@@ -94,10 +100,10 @@ struct KidProfileEditorView: View {
                         Text("Female").tag("female")
                         Text("Other").tag("other")
                     }
-                    Picker("Pickiness Level", selection: $pickinessLevel) {
-                        Text("Not Picky").tag("not_picky")
-                        Text("Somewhat Picky").tag("somewhat_picky")
-                        Text("Very Picky").tag("very_picky")
+                    Picker("Eating style", selection: $pickinessLevel) {
+                        Text("Eats a wide range").tag("not_picky")
+                        Text("Selective eater").tag("somewhat_picky")
+                        Text("Needs extra support").tag("very_picky")
                     }
                 }
 
@@ -105,79 +111,62 @@ struct KidProfileEditorView: View {
                 Section {
                     HStack {
                         Text("Height")
-                        if healthSourcedFields.contains(.height) {
-                            HealthSourcePill()
-                        }
                         Spacer()
                         TextField("cm", text: $heightCm)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
-                            .onChange(of: heightCm) { _, _ in
-                                healthSourcedFields.remove(.height)
-                            }
                         Text("cm")
                             .foregroundStyle(.secondary)
                     }
                     HStack {
                         Text("Weight")
-                        if healthSourcedFields.contains(.weight) {
-                            HealthSourcePill()
-                        }
                         Spacer()
                         TextField("kg", text: $weightKg)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
-                            .onChange(of: weightKg) { _, _ in
-                                healthSourcedFields.remove(.weight)
-                            }
                         Text("kg")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if HealthKitService.shared.isAvailable {
-                        Button {
-                            Task { await importFromHealth() }
-                        } label: {
-                            HStack(spacing: 8) {
-                                if isImportingFromHealth {
-                                    ProgressView().controlSize(.small)
-                                }
-                                Image(systemName: "heart.text.square.fill")
-                                    .foregroundStyle(.pink)
-                                Text(isImportingFromHealth ? "Importing…" : "Import from Health")
-                                Spacer()
-                            }
-                        }
-                        .disabled(isImportingFromHealth)
-                    }
-
-                    if let healthImportError {
-                        Text(healthImportError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    } else if let healthSyncedAt {
-                        Text("Last synced from Health \(healthSyncedAt, style: .relative)")
-                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("Measurements")
+                } footer: {
+                    Text("Enter your child's own measurements. Leave blank if you don't track them.")
                 }
 
                 // Allergens & Diet
-                Section("Allergens & Dietary Restrictions") {
+                Section {
                     TextField("Allergens (comma separated)", text: $allergens)
                         .textInputAutocapitalization(.never)
+                    // M22: severity per allergen, so a sitter can tell a
+                    // mild intolerance from an EpiPen allergy.
+                    ForEach(allergenList, id: \.self) { allergen in
+                        Picker(allergen, selection: severityBinding(for: allergen)) {
+                            Text("Not recorded").tag("")
+                            Text("Mild").tag("mild")
+                            Text("Moderate").tag("moderate")
+                            Text("Severe").tag("severe")
+                        }
+                    }
+                    if !allergenList.isEmpty {
+                        Toggle("Reacts to cross-contact", isOn: $crossContact)
+                    }
                     TextField("Dietary restrictions (comma separated)", text: $dietaryRestrictions)
                         .textInputAutocapitalization(.never)
+                } header: {
+                    Text("Allergens & Dietary Restrictions")
+                } footer: {
+                    if !allergenList.isEmpty {
+                        Text("Cross-contact means even traces from shared pans, boards or fryers matter.")
+                    }
                 }
 
                 // Food Preferences
                 Section("Food Preferences") {
                     TextField("Favorite foods (comma separated)", text: $favoriteFoods)
                     TextField("Disliked foods (comma separated)", text: $dislikedFoods)
+                    TextField("Always eats (comma separated)", text: $alwaysEatsFoods)
                 }
 
                 // Texture & Flavor
@@ -203,12 +192,12 @@ struct KidProfileEditorView: View {
                                     .foregroundStyle(.pink)
                             }
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(hasTakenQuiz ? "Retake the picky-eater quiz" : "Discover \(kid.name)'s eating style")
+                                Text(hasTakenQuiz ? "Retake the eating style quiz" : "Discover \(kid.name)'s eating style")
                                     .font(.body)
                                     .foregroundStyle(.primary)
                                 Text(hasTakenQuiz
                                      ? "Refresh recommended strategies"
-                                     : "8 quick questions • saves pickiness + tailored strategies")
+                                     : "8 quick questions • saves eating style + tailored strategies")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -227,14 +216,26 @@ struct KidProfileEditorView: View {
                 Section("Behavioral Notes") {
                     TextEditor(text: $behavioralNotes)
                         .frame(minHeight: 80)
+                        .accessibilityLabel("Behavioral notes")
+                        .overlay(alignment: .topLeading) {
+                            if behavioralNotes.isEmpty {
+                                Text("Mealtime behavior, sensory needs...")
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.top, 8)
+                                    .padding(.leading, 4)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                     TextEditor(text: $notes)
                         .frame(minHeight: 80)
+                        .accessibilityLabel("General notes")
                         .overlay(alignment: .topLeading) {
                             if notes.isEmpty {
                                 Text("General notes...")
                                     .foregroundStyle(.tertiary)
                                     .padding(.top, 8)
                                     .padding(.leading, 4)
+                                    .allowsHitTesting(false)
                             }
                         }
                 }
@@ -290,7 +291,10 @@ struct KidProfileEditorView: View {
                 Button("Keep editing", role: .cancel) {}
             }
             .onAppear { loadKid() }
-            .sheet(isPresented: $showingQuiz) {
+            // The quiz writes pickinessLevel and helpfulStrategies straight to
+            // the kid. Pull them into the form, or Save would write the old
+            // (possibly empty, so now cleared) values back over the result.
+            .sheet(isPresented: $showingQuiz, onDismiss: syncQuizResult) {
                 // Pull the freshest copy of the kid from AppState so the result
                 // reflects any in-flight edits and the post-save toast updates
                 // the same record the form is bound to.
@@ -301,27 +305,69 @@ struct KidProfileEditorView: View {
         }
     }
 
-    /// True once the kid has either an explicit pickinessLevel or any saved
-    /// strategies — used to flip the CTA copy from "Discover" to "Retake".
+    /// True once the quiz has saved strategies. pickinessLevel is not a
+    /// signal: Add Child always sets one, so every kid read as "taken".
     private var hasTakenQuiz: Bool {
-        if let level = kid.pickinessLevel, !level.isEmpty { return true }
         if let strategies = kid.helpfulStrategies, !strategies.isEmpty { return true }
         return false
+    }
+
+    private func syncQuizResult() {
+        guard let latest = appState.kids.first(where: { $0.id == kid.id }) else { return }
+        if let level = latest.pickinessLevel { pickinessLevel = level }
+        if let strategies = latest.helpfulStrategies, !strategies.isEmpty {
+            helpfulStrategies = strategies.joined(separator: ", ")
+        }
+    }
+
+    private var ageLabel: String {
+        guard let age else { return "Not set" }
+        return age == 1 ? "1 year" : "\(age) years"
+    }
+
+    /// The allergens typed so far, de-duplicated so ForEach ids stay unique.
+    private var allergenList: [String] {
+        var seen: Set<String> = []
+        var out: [String] = []
+        for item in parseList(allergens) ?? [] {
+            let key = AllergenMatcher.canonical(item)
+            if key.isEmpty || seen.contains(key) { continue }
+            seen.insert(key)
+            out.append(item)
+        }
+        return out
+    }
+
+    private func severityBinding(for allergen: String) -> Binding<String> {
+        let key = AllergenMatcher.canonical(allergen)
+        return Binding(
+            get: { severity[key] ?? "" },
+            set: { newValue in severity[key] = newValue.isEmpty ? nil : newValue }
+        )
     }
 
     // MARK: - Load
 
     private func loadKid() {
         name = kid.name
-        age = kid.age ?? 5
+        age = kid.age
         gender = kid.gender ?? ""
         pickinessLevel = kid.pickinessLevel ?? "not_picky"
         heightCm = kid.heightCm.map { String(format: "%.1f", $0) } ?? ""
         weightKg = kid.weightKg.map { String(format: "%.1f", $0) } ?? ""
         allergens = (kid.allergens ?? []).joined(separator: ", ")
         dietaryRestrictions = (kid.dietaryRestrictions ?? []).joined(separator: ", ")
+        var loadedSeverity: [String: String] = [:]
+        for allergen in kid.allergens ?? [] {
+            if let level = AllergenMatcher.recordedSeverity(for: kid, key: allergen) {
+                loadedSeverity[AllergenMatcher.canonical(allergen)] = level
+            }
+        }
+        severity = loadedSeverity
+        crossContact = kid.crossContaminationSensitive ?? false
         favoriteFoods = (kid.favoriteFoods ?? []).joined(separator: ", ")
         dislikedFoods = (kid.dislikedFoods ?? []).joined(separator: ", ")
+        alwaysEatsFoods = (kid.alwaysEatsFoods ?? []).joined(separator: ", ")
         texturePreferences = (kid.texturePreferences ?? []).joined(separator: ", ")
         textureDislikes = (kid.textureDislikes ?? []).joined(separator: ", ")
         flavorPreferences = (kid.flavorPreferences ?? []).joined(separator: ", ")
@@ -337,13 +383,26 @@ struct KidProfileEditorView: View {
     /// US-413: serialized form state for dirty-tracking (separator avoids
     /// false matches across field boundaries).
     private var currentSnapshot: String {
-        [
-            name, String(age), gender, pickinessLevel, heightCm, weightKg,
-            allergens, dietaryRestrictions, favoriteFoods, dislikedFoods,
+        let ageText: String = age.map { String($0) } ?? ""
+        let crossText: String = crossContact ? "1" : "0"
+        let photoText: String = profileImage == nil ? "0" : "1"
+        let parts: [String] = [
+            name, ageText, gender, pickinessLevel, heightCm, weightKg,
+            allergens, severitySnapshot, crossText,
+            dietaryRestrictions, favoriteFoods, dislikedFoods, alwaysEatsFoods,
             texturePreferences, textureDislikes, flavorPreferences,
             behavioralNotes, notes, healthGoals, nutritionConcerns,
-            helpfulStrategies, profileImage == nil ? "0" : "1",
-        ].joined(separator: "\u{1}")
+            helpfulStrategies, photoText,
+        ]
+        return parts.joined(separator: "\u{1}")
+    }
+
+    private var severitySnapshot: String {
+        let pairs: [String] = severity.keys.sorted().map { (key: String) -> String in
+            let level: String = severity[key] ?? ""
+            return key + "=" + level
+        }
+        return pairs.joined(separator: ",")
     }
 
     private var isDirty: Bool {
@@ -354,6 +413,21 @@ struct KidProfileEditorView: View {
     // MARK: - Save
 
     private func save() async {
+        // Reject a typo before anything is written, rather than saving a
+        // 1500 cm child or silently dropping "12,5".
+        let height = Self.parseMeasurement(heightCm)
+        let weight = Self.parseMeasurement(weightKg)
+        if !heightCm.trimmingCharacters(in: .whitespaces).isEmpty
+            && (height == nil || !Self.plausibleHeightCm.contains(height ?? 0)) {
+            ToastManager.shared.warning("Check the height", message: "Enter it in centimeters, for example 110.")
+            return
+        }
+        if !weightKg.trimmingCharacters(in: .whitespaces).isEmpty
+            && (weight == nil || !Self.plausibleWeightKg.contains(weight ?? 0)) {
+            ToastManager.shared.warning("Check the weight", message: "Enter it in kilograms, for example 18.5.")
+            return
+        }
+
         isSubmitting = true
         // US-413: always reset the submitting flag on every exit path.
         defer { isSubmitting = false }
@@ -378,27 +452,60 @@ struct KidProfileEditorView: View {
             }
         }
 
-        let updates = KidUpdate(
+        let allergenValues = parseList(allergens)
+        var severityMap: [String: String] = [:]
+        for allergen in allergenList {
+            if let level = severity[AllergenMatcher.canonical(allergen)] {
+                severityMap[allergen] = level
+            }
+        }
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBehavioral = behavioralNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var updates = KidUpdate(
             name: name,
             age: age,
             gender: gender.isEmpty ? nil : gender,
-            allergens: parseList(allergens),
+            allergens: allergenValues,
+            allergenSeverity: severityMap.isEmpty ? nil : severityMap,
+            crossContaminationSensitive: allergenValues == nil ? false : crossContact,
             dietaryRestrictions: parseList(dietaryRestrictions),
             pickinessLevel: pickinessLevel,
-            notes: notes.isEmpty ? nil : notes,
-            heightCm: Double(heightCm),
-            weightKg: Double(weightKg),
+            notes: trimmedNotes.isEmpty ? nil : notes,
+            heightCm: height,
+            weightKg: weight,
             profilePictureUrl: photoURL,
             texturePreferences: parseList(texturePreferences),
             textureDislikes: parseList(textureDislikes),
             flavorPreferences: parseList(flavorPreferences),
             favoriteFoods: parseList(favoriteFoods),
             dislikedFoods: parseList(dislikedFoods),
-            behavioralNotes: behavioralNotes.isEmpty ? nil : behavioralNotes,
+            alwaysEatsFoods: parseList(alwaysEatsFoods),
+            behavioralNotes: trimmedBehavioral.isEmpty ? nil : behavioralNotes,
             healthGoals: parseList(healthGoals),
             nutritionConcerns: parseList(nutritionConcerns),
             helpfulStrategies: parseList(helpfulStrategies)
         )
+        // A field left empty here means "remove it", so send an explicit
+        // null; a nil on its own would leave the old value in place.
+        updates.clear(.age, when: updates.age == nil)
+        updates.clear(.gender, when: updates.gender == nil)
+        updates.clear(.allergens, when: updates.allergens == nil)
+        updates.clear(.allergenSeverity, when: updates.allergenSeverity == nil)
+        updates.clear(.dietaryRestrictions, when: updates.dietaryRestrictions == nil)
+        updates.clear(.notes, when: updates.notes == nil)
+        updates.clear(.heightCm, when: updates.heightCm == nil)
+        updates.clear(.weightKg, when: updates.weightKg == nil)
+        updates.clear(.texturePreferences, when: updates.texturePreferences == nil)
+        updates.clear(.textureDislikes, when: updates.textureDislikes == nil)
+        updates.clear(.flavorPreferences, when: updates.flavorPreferences == nil)
+        updates.clear(.favoriteFoods, when: updates.favoriteFoods == nil)
+        updates.clear(.dislikedFoods, when: updates.dislikedFoods == nil)
+        updates.clear(.alwaysEatsFoods, when: updates.alwaysEatsFoods == nil)
+        updates.clear(.behavioralNotes, when: updates.behavioralNotes == nil)
+        updates.clear(.healthGoals, when: updates.healthGoals == nil)
+        updates.clear(.nutritionConcerns, when: updates.nutritionConcerns == nil)
+        updates.clear(.helpfulStrategies, when: updates.helpfulStrategies == nil)
 
         // US-413: only dismiss on confirmed success; on failure surface a toast
         // and keep the sheet open so the user doesn't lose their profile edits.
@@ -428,73 +535,15 @@ struct KidProfileEditorView: View {
         return items.isEmpty ? nil : items
     }
 
-    // MARK: - HealthKit import (US-228)
+    static let plausibleHeightCm: ClosedRange<Double> = 30...220
+    static let plausibleWeightKg: ClosedRange<Double> = 1...200
 
-    private func importFromHealth() async {
-        let service = HealthKitService.shared
-        isImportingFromHealth = true
-        healthImportError = nil
-        defer { isImportingFromHealth = false }
-
-        do {
-            _ = try await service.requestReadAuthorization()
-        } catch {
-            healthImportError = "Couldn't ask Health for permission: \(error.localizedDescription)"
-            HapticManager.error()
-            return
-        }
-
-        let snapshot = await service.readKidGrowthSnapshot()
-
-        var anyImported = false
-
-        if let derivedAge = snapshot.derivedAge, derivedAge >= 0, derivedAge <= 18 {
-            age = derivedAge
-            healthSourcedFields.insert(.age)
-            anyImported = true
-        }
-        if let h = snapshot.heightCm, h > 0 {
-            heightCm = String(format: "%.1f", h)
-            healthSourcedFields.insert(.height)
-            anyImported = true
-        }
-        if let w = snapshot.weightKg, w > 0 {
-            weightKg = String(format: "%.1f", w)
-            healthSourcedFields.insert(.weight)
-            anyImported = true
-        }
-
-        if anyImported {
-            healthSyncedAt = snapshot.lastSyncedAt
-            HapticManager.success()
-            ToastManager.shared.success(
-                "Imported from Health",
-                message: "\(healthSourcedFields.count) field\(healthSourcedFields.count == 1 ? "" : "s") updated"
-            )
-            AnalyticsService.track(.healthImportRequested(fields: healthSourcedFields.count))
-        } else {
-            healthImportError = "No height, weight, or date of birth found in Health (or permission denied)."
-            HapticManager.warning()
-        }
-    }
-}
-
-// MARK: - Health source pill (US-228)
-
-private struct HealthSourcePill: View {
-    var body: some View {
-        HStack(spacing: 2) {
-            Image(systemName: "heart.fill")
-                .font(.caption2)
-            Text("Health")
-                .font(.caption2)
-                .fontWeight(.medium)
-        }
-        .foregroundStyle(.pink)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Color.pink.opacity(0.12), in: Capsule())
-        .accessibilityLabel("Imported from Health")
+    /// Accepts "12,5" as well as "12.5"; the decimal pad types a comma in
+    /// many locales and Double("12,5") is nil.
+    static func parseMeasurement(_ text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        return Double(trimmed.replacingOccurrences(of: ",", with: "."))
     }
 }
 

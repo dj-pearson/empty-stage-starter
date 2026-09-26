@@ -29,14 +29,14 @@ struct AICoachView: View {
     private var examplePrompts: [String] {
         if let kid = activeKid {
             return [
-                "Why won't \(kid.name) eat broccoli?",
+                "Ideas to help \(kid.name) get used to broccoli",
                 "Plan a nut-free dinner for \(kid.name)",
                 "How do I introduce a new texture?",
                 "Quick high-protein breakfast ideas",
             ]
         }
         return [
-            "Why won't my kid eat broccoli?",
+            "Ideas to help my child get used to broccoli",
             "Plan a nut-free dinner",
             "How do I introduce a new texture?",
             "Quick high-protein breakfast ideas",
@@ -79,6 +79,14 @@ struct AICoachView: View {
                 .background(Color.orange.opacity(0.1))
                 .accessibilityElement(children: .combine)
             }
+
+            // M17: the coach is a language model; say so where the answers are.
+            Text("Suggestions, not medical advice. For weight loss, choking, gagging or very few accepted foods, talk to your pediatrician.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.vertical, 6)
 
             // Messages
             ScrollViewReader { proxy in

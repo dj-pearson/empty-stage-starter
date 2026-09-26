@@ -64,98 +64,82 @@ final class BadgeService: ObservableObject {
 
     // MARK: - Streak
 
-    /// Current consecutive-day try-bite streak for a kid.
+    /// Current streak of days with a logged meal result for a kid.
     ///
-    /// A "try-bite" is any day with at least one `ate` or `tasted` result on a
-    /// PlanEntry. A `refused` result on the most recent day breaks the streak
-    /// (per AC), but a missing day does NOT — the family might just have
-    /// forgotten to log, and we don't want to punish that. Walks back from
-    /// today and counts consecutive try-bite days separated by ≤ 1 missing day.
+    /// M12: any logged result counts, "not today" included. Offering a food
+    /// and writing down how it went is the exposure; a streak that a hard
+    /// day could break taught parents to stop logging hard days, and those
+    /// are the days a feeding therapist most wants to see. A missing day
+    /// does not break it either (the family may just have forgotten to log),
+    /// up to one skipped day in a row.
     func currentStreak(kidId: String, planEntries: [PlanEntry]) -> Int {
+        Self.currentStreak(kidId: kidId, planEntries: planEntries, today: Date())
+    }
+
+    /// Best-ever streak, by the same rule as `currentStreak`, so the card can
+    /// never show a current streak longer than the best one.
+    func bestStreak(kidId: String, planEntries: [PlanEntry]) -> Int {
+        Self.bestStreak(kidId: kidId, planEntries: planEntries, today: Date())
+    }
+
+    /// Distinct yyyy-MM-dd days with at least one logged result.
+    nonisolated static func loggedDays(kidId: String, planEntries: [PlanEntry]) -> Set<String> {
+        var days: Set<String> = []
+        for entry in planEntries where entry.kidId == kidId && entry.result != nil {
+            days.insert(entry.date)
+        }
+        return days
+    }
+
+    nonisolated static func currentStreak(kidId: String, planEntries: [PlanEntry], today: Date) -> Int {
         let calendar = Calendar.current
         let formatter = DateFormatter.isoDate
+        let days = loggedDays(kidId: kidId, planEntries: planEntries)
 
-        // Index entries by yyyy-MM-dd day key for O(1) lookups while walking.
-        var byDay: [String: [String]] = [:]  // day → [result strings]
-        for entry in planEntries where entry.kidId == kidId {
-            guard let result = entry.result else { continue }
-            byDay[entry.date, default: []].append(result)
-        }
-
-        // Walk back from today. A day with `refused` (and no `ate`/`tasted`
-        // alongside it) breaks the streak. A day with no entries is treated
-        // as a "skip" — allowed up to one in a row before the streak ends.
         var streak = 0
         var skipsAllowed = 1
-        var cursor = Date()
+        var cursor = today
         // Cap the walk at 365 days to avoid pathological O(N) on very old
         // accounts; 365 is also the longest streak we ever care to display.
         for _ in 0..<365 {
-            let key = formatter.string(from: cursor)
-            let results = byDay[key] ?? []
-
-            if results.isEmpty {
-                if skipsAllowed > 0 {
-                    skipsAllowed -= 1
-                } else {
-                    break
-                }
+            if days.contains(formatter.string(from: cursor)) {
+                streak += 1
+                skipsAllowed = 1
+            } else if skipsAllowed > 0 {
+                skipsAllowed -= 1
             } else {
-                let hasTryBite = results.contains { $0 == MealResult.ate.rawValue || $0 == MealResult.tasted.rawValue }
-                let hasRefusal = results.contains { $0 == MealResult.refused.rawValue }
-                if hasTryBite {
-                    streak += 1
-                    skipsAllowed = 1  // reset skip budget on a productive day
-                } else if hasRefusal {
-                    // Pure-refusal day breaks the streak.
-                    break
-                } else {
-                    if skipsAllowed > 0 {
-                        skipsAllowed -= 1
-                    } else {
-                        break
-                    }
-                }
+                break
             }
-
             guard let prev = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
             cursor = prev
         }
         return streak
     }
 
-    /// Best-ever streak the kid achieved, computed from the same entries.
-    /// Recomputed on demand — cheap enough at hundreds of entries; if this
-    /// becomes a perf hot spot later, cache against the planEntries hash.
-    func bestStreak(kidId: String, planEntries: [PlanEntry]) -> Int {
-        let formatter = DateFormatter.isoDate
+    nonisolated static func bestStreak(kidId: String, planEntries: [PlanEntry], today: Date) -> Int {
         let calendar = Calendar.current
-
-        // Distinct days that had a try-bite result, sorted ascending.
-        let tryBiteDays: [Date] = planEntries
-            .filter { $0.kidId == kidId }
-            .compactMap { entry -> Date? in
-                guard let result = entry.result,
-                      result == MealResult.ate.rawValue || result == MealResult.tasted.rawValue,
-                      let date = formatter.date(from: entry.date) else { return nil }
-                return calendar.startOfDay(for: date)
-            }
-
-        let uniqueSorted = Array(Set(tryBiteDays)).sorted()
-        guard !uniqueSorted.isEmpty else { return 0 }
+        let formatter = DateFormatter.isoDate
+        let dates: [Date] = loggedDays(kidId: kidId, planEntries: planEntries)
+            .compactMap { formatter.date(from: $0) }
+            .map { calendar.startOfDay(for: $0) }
+            .sorted()
+        let current = currentStreak(kidId: kidId, planEntries: planEntries, today: today)
+        guard !dates.isEmpty else { return current }
 
         var best = 1
-        var current = 1
-        for i in 1..<uniqueSorted.count {
-            if let diff = calendar.dateComponents([.day], from: uniqueSorted[i - 1], to: uniqueSorted[i]).day,
-               diff == 1 {
-                current += 1
-                best = max(best, current)
+        var run = 1
+        for i in 1..<dates.count {
+            let gap = calendar.dateComponents([.day], from: dates[i - 1], to: dates[i]).day ?? 99
+            // One missing day between logged days keeps the run going, as
+            // in currentStreak.
+            if gap >= 1 && gap <= 2 {
+                run += 1
             } else {
-                current = 1
+                run = 1
             }
+            best = max(best, run)
         }
-        return best
+        return max(best, current)
     }
 
     // MARK: - Evaluation
@@ -467,7 +451,9 @@ enum Badge: String, CaseIterable, Identifiable {
     case consistentTracker      // 30+ result entries
     case recipeChef             // 5+ recipes
     case loggedThirtyMeals      // 30+ planned meals
-    case perfectWeek            // 5+ ate results in current calendar week, 0 refused
+    // Id kept so earned badges stay earned; it now means "5 meals logged this
+    // week", whatever the results. "0 refusals" rewarded hiding hard meals.
+    case perfectWeek
 
     var id: String { rawValue }
 
@@ -484,7 +470,7 @@ enum Badge: String, CaseIterable, Identifiable {
         case .consistentTracker: return "Consistent Tracker"
         case .recipeChef:        return "Recipe Chef"
         case .loggedThirtyMeals: return "Meal Master"
-        case .perfectWeek:       return "Perfect Week"
+        case .perfectWeek:       return "Steady Week"
         }
     }
 
@@ -492,8 +478,8 @@ enum Badge: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .firstTryBite:      return "Tried a new food"
-        case .fiveDayStreak:     return "5 days of try-bites in a row"
-        case .tenDayStreak:      return "10 days of try-bites in a row"
+        case .fiveDayStreak:     return "5 days of logged meals in a row"
+        case .tenDayStreak:      return "10 days of logged meals in a row"
         case .categoryExplorer:  return "Tried foods from 5 categories"
         case .vegetableExplorer: return "10 different vegetables 🥦"
         case .fruitExplorer:     return "10 different fruits 🍎"
@@ -502,7 +488,7 @@ enum Badge: String, CaseIterable, Identifiable {
         case .consistentTracker: return "Logged 30 meal results"
         case .recipeChef:        return "Created 5 recipes"
         case .loggedThirtyMeals: return "Planned 30 meals"
-        case .perfectWeek:       return "5+ wins, 0 refusals this week"
+        case .perfectWeek:       return "Logged 5 meals this week"
         }
     }
 
@@ -537,10 +523,10 @@ enum Badge: String, CaseIterable, Identifiable {
     var tier: BadgeTier {
         switch self {
         case .firstTryBite, .weekWarrior, .recipeChef:                 return .bronze
-        case .fiveDayStreak, .categoryExplorer, .loggedThirtyMeals:    return .silver
+        case .fiveDayStreak, .categoryExplorer, .loggedThirtyMeals,
+             .perfectWeek:                                             return .silver
         case .tenDayStreak, .vegetableExplorer, .fruitExplorer,
              .proteinPro, .consistentTracker:                          return .gold
-        case .perfectWeek:                                             return .platinum
         }
     }
 
@@ -575,10 +561,8 @@ enum Badge: String, CaseIterable, Identifiable {
         case .perfectWeek:
             let formatter = DateFormatter.isoDate
             let weekDates = Set(Date().weekDates.map(formatter.string(from:)))
-            let thisWeek = ctx.kidEntries.filter { weekDates.contains($0.date) }
-            let ate = thisWeek.filter { $0.result == MealResult.ate.rawValue }.count
-            let refused = thisWeek.filter { $0.result == MealResult.refused.rawValue }.count
-            return ate >= 5 && refused == 0
+            let logged = ctx.kidEntries.filter { weekDates.contains($0.date) && $0.result != nil }.count
+            return logged >= 5
         }
     }
 }

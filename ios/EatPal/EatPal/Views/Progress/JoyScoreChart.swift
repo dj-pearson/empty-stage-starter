@@ -354,17 +354,19 @@ private struct JoyScoreWeekDetailSheet: View {
                 }
 
                 if !detail.refused.isEmpty {
-                    Section("Refused (1-2)") {
+                    // Neutral wording and color: a low rating is information
+                    // for next time, not a mark against the child.
+                    Section("Harder meals (1-2)") {
                         ForEach(detail.refused, id: \.self) { title in
-                            Label(title, systemImage: "hand.thumbsdown.fill")
-                                .foregroundStyle(.red)
+                            Label(title, systemImage: "cloud")
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
 
                 if detail.loved.isEmpty && detail.refused.isEmpty {
                     Section {
-                        Text("Mid-range ratings only — no strong loves or refusals this week.")
+                        Text("Mid-range ratings only this week.")
                             .foregroundStyle(.secondary)
                     }
                 }

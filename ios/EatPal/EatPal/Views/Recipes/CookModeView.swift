@@ -7,6 +7,10 @@ import UIKit
 struct CookModeView: View {
     let recipeName: String
     let instructions: String?
+    /// M10: the cook needs the ingredient list and the allergy warning
+    /// without leaving the step view.
+    var ingredientLines: [String] = []
+    var allergenHits: [RecipeAllergenCheck.KidHit] = []
 
     @Environment(\.dismiss) private var dismiss
     // US-359 AC4: gate step transitions behind Reduce Motion.
@@ -14,20 +18,28 @@ struct CookModeView: View {
 
     @State private var currentStep = 0
     @State private var checkedSteps: Set<Int> = []
+    @State private var showingIngredients = false
 
     private var steps: [String] { RecipeStepParser.parse(instructions) }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if steps.isEmpty {
-                    ContentUnavailableView(
-                        "No steps",
-                        systemImage: "list.number",
-                        description: Text("This recipe has no instructions to cook from yet.")
-                    )
-                } else {
-                    cookContent
+            VStack(spacing: 0) {
+                if !allergenHits.isEmpty {
+                    RecipeAllergenBanner(hits: allergenHits)
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                }
+                Group {
+                    if steps.isEmpty {
+                        ContentUnavailableView(
+                            "No steps",
+                            systemImage: "list.number",
+                            description: Text("This recipe has no instructions to cook from yet.")
+                        )
+                    } else {
+                        cookContent
+                    }
                 }
             }
             .navigationTitle(recipeName)
@@ -36,6 +48,41 @@ struct CookModeView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+                if !ingredientLines.isEmpty {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showingIngredients = true
+                        } label: {
+                            Label("Ingredients", systemImage: "list.bullet")
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingIngredients) {
+                NavigationStack {
+                    List {
+                        if !allergenHits.isEmpty {
+                            Section {
+                                RecipeAllergenBanner(hits: allergenHits)
+                                    .listRowInsets(EdgeInsets())
+                            }
+                        }
+                        Section {
+                            ForEach(Array(ingredientLines.enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.body)
+                            }
+                        }
+                    }
+                    .navigationTitle("Ingredients")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showingIngredients = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
             }
         }
         // US-359 AC3: keep the screen awake only while cooking; restore on exit.

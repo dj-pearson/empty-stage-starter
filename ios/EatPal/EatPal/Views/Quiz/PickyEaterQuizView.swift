@@ -89,7 +89,7 @@ struct PickyEaterQuizView: View {
                     Spacer()
                 }
             }
-            .navigationTitle("Picky Eater Quiz")
+            .navigationTitle("Eating Style Quiz")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -290,9 +290,11 @@ enum PickyEaterPersonality {
 
     var pickinessDisplay: String {
         switch suggestedPickinessLevel {
-        case "not_picky": return "Not Picky"
-        case "somewhat_picky": return "Somewhat Picky"
-        case "very_picky": return "Very Picky"
+        // Display only; the stored values are unchanged. "Picky" is a label
+        // children overhear, so the words describe support, not the child.
+        case "not_picky": return "Eats a wide range"
+        case "somewhat_picky": return "Selective eater"
+        case "very_picky": return "Needs extra support"
         default: return suggestedPickinessLevel
         }
     }
@@ -371,7 +373,7 @@ struct QuizResultView: View {
                         .tint(didApply ? .gray : .green)
                         .disabled(isApplying || didApply)
 
-                        Text("Sets pickiness to \(personality.pickinessDisplay) and saves these strategies to \(kid.name)'s profile.")
+                        Text("Saves \"\(personality.pickinessDisplay)\" and these strategies to \(kid.name)'s profile.")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

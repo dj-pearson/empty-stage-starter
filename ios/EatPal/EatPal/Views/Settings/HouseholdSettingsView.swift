@@ -22,6 +22,8 @@ struct HouseholdSettingsView: View {
     @State private var joinSuccess: String?
 
     @State private var memberToRemove: HouseholdMember?
+    // M2: joining switches this account into another household's data.
+    @State private var showingJoinConfirm = false
     @State private var inviteToRevoke: HouseholdInviteCode?
 
     /// US-274: Household-shared smart-add preferences. Off by default so
@@ -68,6 +70,18 @@ struct HouseholdSettingsView: View {
         }
         .navigationTitle("Household")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "Join this household?",
+            isPresented: $showingJoinConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Join") {
+                Task { await acceptInvite() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You'll switch to the inviter's household and see and edit their children, meal plan, pantry and grocery list. Only join a code from someone you know.")
+        }
         .task { await load() }
         .refreshable { await load() }
         .alert(
@@ -160,6 +174,7 @@ struct HouseholdSettingsView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(members) { member in
+                    let isMe = isCurrentUser(member)
                     HStack(spacing: 12) {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.title3)
@@ -169,7 +184,9 @@ struct HouseholdSettingsView: View {
                             // RLS only exposes the membership row, not profile
                             // data. Showing the role + relative join date is
                             // a reasonable disambiguator.
-                            Text(member.displayRole)
+                            // M4/M11: with every row reading "Parent" you
+                            // could not tell which one was you.
+                            Text(isMe ? member.displayRole + " (You)" : member.displayRole)
                                 .font(.body)
                             if let joined = member.joinedAt {
                                 Text("Joined \(formattedJoin(joined))")
@@ -178,14 +195,18 @@ struct HouseholdSettingsView: View {
                             }
                         }
                         Spacer()
-                        Button(role: .destructive) {
-                            memberToRemove = member
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundStyle(.red)
+                        // Removing yourself here locked you out with no
+                        // confirmation that it was you; hidden for your row.
+                        if !isMe {
+                            Button(role: .destructive) {
+                                memberToRemove = member
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove \(member.displayRole) from household")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Remove \(member.displayRole) from household")
                     }
                 }
             }
@@ -270,7 +291,7 @@ struct HouseholdSettingsView: View {
     private var joinSection: some View {
         Section {
             HStack {
-                TextField("6-digit code", text: $joinCode)
+                TextField("6-character code", text: $joinCode)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
@@ -281,7 +302,7 @@ struct HouseholdSettingsView: View {
                     }
 
                 Button("Join") {
-                    Task { await acceptInvite() }
+                    showingJoinConfirm = true
                 }
                 .disabled(joinCode.count < 6 || isJoining)
             }
@@ -360,6 +381,13 @@ struct HouseholdSettingsView: View {
                 ?? error.localizedDescription
             HapticManager.error()
         }
+    }
+
+    private func isCurrentUser(_ member: HouseholdMember) -> Bool {
+        guard let me = SupabaseManager.client.auth.currentSession?.user.id.uuidString.lowercased() else {
+            return false
+        }
+        return member.userId.lowercased() == me
     }
 
     private func remove(_ member: HouseholdMember) async {

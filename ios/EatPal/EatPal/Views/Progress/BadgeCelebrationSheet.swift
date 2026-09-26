@@ -81,7 +81,7 @@ struct BadgeCelebrationSheet: View {
                     Button {
                         dismiss()
                     } label: {
-                        Text("Awesome")
+                        Text("Done")
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 4)

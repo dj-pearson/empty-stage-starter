@@ -27,18 +27,24 @@ struct KidsView: View {
                 }
             } else {
                 ForEach(appState.kids) { kid in
-                    KidRowView(kid: kid)
-                        .contentShape(Rectangle())
-                        .onTapGesture { selectedKid = kid }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                // US-417: confirm before deleting — this cascades
-                                // streaks, plan entries and other child data.
-                                kidPendingDeletion = kid
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
+                    // A Button rather than onTapGesture so VoiceOver reads the
+                    // row as actionable.
+                    Button {
+                        selectedKid = kid
+                    } label: {
+                        KidRowView(kid: kid)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            // US-417: confirm before deleting — this cascades
+                            // streaks, plan entries and other child data.
+                            kidPendingDeletion = kid
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
+                    }
                 }
             }
         }
@@ -143,14 +149,16 @@ struct KidRowView: View {
                 }
 
                 if let allergens = kid.allergens, !allergens.isEmpty {
-                    HStack(spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption2)
                             .foregroundStyle(.red)
-                        Text(allergens.joined(separator: ", "))
+                        // Wraps instead of truncating: a cut-off list hides
+                        // the very allergen a sitter needs to see.
+                        Text(KidAllergySummary.line(for: kid))
                             .font(.caption2)
                             .foregroundStyle(.red)
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -166,9 +174,9 @@ struct KidRowView: View {
 
     private func pickinessDisplay(_ level: String) -> String {
         switch level {
-        case "not_picky": return "Not Picky"
-        case "somewhat_picky": return "Somewhat Picky"
-        case "very_picky": return "Very Picky"
+        case "not_picky": return "Eats a wide range"
+        case "somewhat_picky": return "Selective eater"
+        case "very_picky": return "Needs extra support"
         default: return level.capitalized
         }
     }
@@ -198,9 +206,9 @@ struct AddKidView: View {
     @State private var isSubmitting = false
 
     private let pickinessOptions = [
-        ("not_picky", "Not Picky"),
-        ("somewhat_picky", "Somewhat Picky"),
-        ("very_picky", "Very Picky"),
+        ("not_picky", "Eats a wide range"),
+        ("somewhat_picky", "Selective eater"),
+        ("very_picky", "Needs extra support"),
     ]
 
     var body: some View {
@@ -230,7 +238,7 @@ struct AddKidView: View {
                 }
 
                 Section("Eating Profile") {
-                    Picker("Pickiness Level", selection: $pickinessLevel) {
+                    Picker("Eating style", selection: $pickinessLevel) {
                         ForEach(pickinessOptions, id: \.0) { value, label in
                             Text(label).tag(value)
                         }
@@ -298,170 +306,209 @@ struct AddKidView: View {
 
 // MARK: - Kid Detail View
 
+/// M7: opens on a read-only "About" summary, the page a co-parent or sitter
+/// needs, with editing behind Edit. Pushed from the More tab (deep link) it
+/// must not wrap itself in a second NavigationStack.
 struct KidDetailView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     let kid: Kid
+    /// True when presented as a sheet; false when pushed onto an existing
+    /// NavigationStack.
+    var embedInNavigationStack: Bool = true
 
-    @State private var name: String = ""
-    @State private var age: Int = 0
-    @State private var pickinessLevel: String = "not_picky"
-    @State private var notes: String = ""
-
+    @State private var showingEditor = false
     // US-240: Picky-eater quiz sheet
     @State private var showingQuiz = false
-    // US-413: guard against double-submit and surface save failures.
-    @State private var isSaving = false
+
+    /// Live record, so edits made in the editor or the quiz show on return.
+    private var current: Kid {
+        appState.kids.first { $0.id == kid.id } ?? kid
+    }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Basic Info") {
-                    TextField("Name", text: $name)
-
-                    Stepper(value: $age, in: 0...18) {
-                        HStack {
-                            Text("Age")
-                            Spacer()
-                            Text("\(age) years")
-                                .foregroundStyle(.secondary)
+        if embedInNavigationStack {
+            NavigationStack {
+                content
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { dismiss() }
                         }
                     }
-                }
+            }
+        } else {
+            content
+        }
+    }
 
-                Section("Eating Profile") {
-                    Picker("Pickiness Level", selection: $pickinessLevel) {
-                        Text("Not Picky").tag("not_picky")
-                        Text("Somewhat Picky").tag("somewhat_picky")
-                        Text("Very Picky").tag("very_picky")
+    private var content: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(current.name)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    if !headerSubtitle.isEmpty {
+                        Text(headerSubtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
+                }
+                .padding(.vertical, 4)
+            }
 
-                    // US-240: Quiz entry point — drives the picker above and
-                    // populates helpfulStrategies on the underlying kid record.
-                    Button {
-                        showingQuiz = true
-                    } label: {
+            Section("Allergies") {
+                let allergens = current.allergens ?? []
+                if allergens.isEmpty {
+                    Text("No allergies recorded")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(allergens, id: \.self) { allergen in
                         HStack {
-                            Image(systemName: "questionmark.circle.fill")
-                                .foregroundStyle(.pink)
-                            Text(kidHasTakenQuiz ? "Retake picky-eater quiz" : "Take picky-eater quiz")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .foregroundStyle(.primary)
-                }
-
-                if let allergens = kid.allergens, !allergens.isEmpty {
-                    Section("Allergens") {
-                        ForEach(allergens, id: \.self) { allergen in
                             Label(allergen, systemImage: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.red)
+                            Spacer()
+                            Text(severityText(for: allergen))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
+                    }
+                    if current.crossContaminationSensitive == true {
+                        Label("Reacts to cross-contact. Keep pans, boards and fryers separate.", systemImage: "hand.raised.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.red)
                     }
                 }
+            }
 
-                // Stats
-                Section("Stats") {
-                    // US-410: scope Safe Foods to THIS child — a safe food is
-                    // excluded when any of its allergens match the kid's
-                    // allergen list, so the stat reflects the kid, not the
-                    // whole household.
-                    let kidAllergens = Set((kid.allergens ?? []).map { $0.lowercased() })
-                    let safeFoodCount = appState.foods.filter { food in
-                        guard food.isSafe else { return false }
-                        let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
-                        return foodAllergens.isDisjoint(with: kidAllergens)
-                    }.count
-                    let todayEntries = appState.planEntriesForDate(Date(), kidId: kid.id)
+            listSection("Always eats", items: current.alwaysEatsFoods)
+            listSection("Favorites", items: current.favoriteFoods)
+            listSection("Not a fan of", items: current.dislikedFoods)
+            listSection("What helps", items: current.helpfulStrategies)
 
-                    LabeledContent("Safe Foods") {
-                        Text("\(safeFoodCount)")
-                    }
-                    LabeledContent("Today's Meals") {
-                        Text("\(todayEntries.count)")
-                    }
+            if let behavioral = current.behavioralNotes, !behavioral.isEmpty {
+                Section("Mealtime notes") {
+                    Text(behavioral)
                 }
-
+            }
+            if let notes = current.notes, !notes.isEmpty {
                 Section("Notes") {
-                    TextField("Notes", text: $notes, axis: .vertical)
-                        .lineLimit(4)
+                    Text(notes)
                 }
+            }
 
-                Section {
-                    Button("Save Changes") {
-                        Task { await save() }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .disabled(name.isEmpty || isSaving)
+            Section("Today") {
+                LabeledContent("Safe foods") {
+                    Text("\(safeFoodCount)")
+                }
+                LabeledContent("Meals planned") {
+                    Text("\(appState.planEntriesForDate(Date(), kidId: kid.id).count)")
                 }
             }
-            .navigationTitle(kid.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+
+            Section {
+                // US-240: quiz entry point; writes pickinessLevel and
+                // helpfulStrategies on the kid record.
+                Button {
+                    showingQuiz = true
+                } label: {
+                    Label(
+                        hasTakenQuiz ? "Retake eating style quiz" : "Take eating style quiz",
+                        systemImage: "questionmark.circle.fill"
+                    )
+                }
+                Button {
+                    showingEditor = true
+                } label: {
+                    Label("Edit full profile", systemImage: "pencil")
                 }
             }
-            .onAppear {
-                name = kid.name
-                age = kid.age ?? 0
-                pickinessLevel = kid.pickinessLevel ?? "not_picky"
-                notes = kid.notes ?? ""
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("About \(current.name)")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Edit") { showingEditor = true }
             }
-            .sheet(isPresented: $showingQuiz) {
-                // Always pull the latest kid record so the quiz applies its
-                // result on top of in-flight edits, not the stale snapshot.
-                PickyEaterQuizView(
-                    kid: appState.kids.first { $0.id == kid.id } ?? kid
-                )
-            }
-            .onChange(of: appState.kids) { _, latest in
-                // After the quiz writes a new pickinessLevel, sync the local
-                // picker so the user sees the change without reopening.
-                if let updated = latest.first(where: { $0.id == kid.id }),
-                   let level = updated.pickinessLevel,
-                   level != pickinessLevel {
-                    pickinessLevel = level
+        }
+        .sheet(isPresented: $showingEditor) {
+            KidProfileEditorView(kid: current)
+        }
+        .sheet(isPresented: $showingQuiz) {
+            // Always pull the latest kid record so the quiz applies its
+            // result on top of in-flight edits, not the stale snapshot.
+            PickyEaterQuizView(kid: current)
+        }
+    }
+
+    @ViewBuilder
+    private func listSection(_ title: String, items: [String]?) -> some View {
+        if let items, !items.isEmpty {
+            Section(title) {
+                ForEach(items, id: \.self) { item in
+                    Text(item)
                 }
             }
         }
     }
 
-    /// US-413: only dismiss on confirmed success; on failure surface a toast
-    /// and keep the sheet open so the user doesn't silently lose their edits.
-    private func save() async {
-        isSaving = true
-        defer { isSaving = false }
-        do {
-            try await appState.updateKid(
-                kid.id,
-                updates: KidUpdate(
-                    name: name,
-                    age: age,
-                    pickinessLevel: pickinessLevel,
-                    notes: notes.isEmpty ? nil : notes
-                )
-            )
-            HapticManager.success()
-            dismiss()
-        } catch {
-            HapticManager.error()
-            ToastManager.shared.error(
-                "Couldn't save changes",
-                message: "Please try again."
-            )
+    private var headerSubtitle: String {
+        var parts: [String] = []
+        if let age = current.age {
+            parts.append(age == 1 ? "1 year old" : "\(age) years old")
         }
+        if let level = current.pickinessLevel {
+            switch level {
+            case "not_picky": parts.append("Eats a wide range")
+            case "somewhat_picky": parts.append("Selective eater")
+            case "very_picky": parts.append("Needs extra support")
+            default: break
+            }
+        }
+        return parts.joined(separator: " - ")
     }
 
-    /// US-240: True once the kid has either an explicit pickinessLevel or
-    /// quiz-derived strategies on file. Drives the CTA copy.
-    private var kidHasTakenQuiz: Bool {
-        if let level = kid.pickinessLevel, !level.isEmpty { return true }
-        if let strategies = kid.helpfulStrategies, !strategies.isEmpty { return true }
+    private func severityText(for allergen: String) -> String {
+        guard let level = AllergenMatcher.recordedSeverity(for: current, key: allergen) else {
+            return "Severity not recorded"
+        }
+        return level.capitalized
+    }
+
+    /// US-410: safe foods scoped to this child. Uses AllergenMatcher so
+    /// "Peanuts" vs "peanut" or "almonds" vs a tree-nut allergy are caught,
+    /// which the old exact-string compare missed.
+    private var safeFoodCount: Int {
+        let child = current
+        return appState.foods.filter { food in
+            food.isSafe && AllergenMatcher.hit(for: child, food: food) == nil
+        }.count
+    }
+
+    /// US-240: the quiz is what writes helpfulStrategies. pickinessLevel is
+    /// not a signal; Add Child always sets one.
+    private var hasTakenQuiz: Bool {
+        if let strategies = current.helpfulStrategies, !strategies.isEmpty { return true }
         return false
+    }
+}
+
+/// One-line allergy summary with severity, for rows and banners.
+enum KidAllergySummary {
+    static func line(for kid: Kid) -> String {
+        let parts: [String] = (kid.allergens ?? []).map { (allergen: String) -> String in
+            if let level = AllergenMatcher.recordedSeverity(for: kid, key: allergen) {
+                return "\(allergen) (\(level))"
+            }
+            return allergen
+        }
+        var text = parts.joined(separator: ", ")
+        if kid.crossContaminationSensitive == true {
+            text += ", cross-contact"
+        }
+        return text
     }
 }
 

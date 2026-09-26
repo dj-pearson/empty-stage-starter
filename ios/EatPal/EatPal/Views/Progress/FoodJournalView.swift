@@ -126,6 +126,20 @@ struct FoodJournalView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Food Journal")
+        .toolbar {
+            // M16: the whole range as text, for a feeding therapist or the
+            // pediatrician. The per-day Copy buttons stay for one day.
+            if !journalDays.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    ShareLink(
+                        item: exportText(for: journalDays),
+                        subject: Text("Food journal")
+                    ) {
+                        Label("Share journal", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
         .refreshable {
             await appState.loadPlanEntryFeedback()
         }
@@ -136,6 +150,27 @@ struct FoodJournalView: View {
         .sheet(item: $editing) { item in
             FoodJournalEditSheet(item: item)
         }
+    }
+
+    // MARK: - Export
+
+    private func exportText(for days: [FoodJournalDay]) -> String {
+        let name = appState.activeKid?.name ?? "My child"
+        let items = days.flatMap(\.items)
+        let ate = days.map(\.ateCount).reduce(0, +)
+        let tasted = days.map(\.tastedCount).reduce(0, +)
+        let notToday = days.map(\.refusedCount).reduce(0, +)
+        var lines: [String] = []
+        lines.append("Food journal: " + name + ", last " + range.label)
+        lines.append("\(items.count) logged meals. Ate \(ate), tasted \(tasted), not today \(notToday).")
+        if onlyWithNotes {
+            lines.append("Only meals with notes are included.")
+        }
+        var text = lines.joined(separator: "\n")
+        for day in days {
+            text += "\n\n" + FoodJournal.plainText(for: day, heading: heading(for: day.date))
+        }
+        return text
     }
 
     // MARK: - Rows
@@ -151,7 +186,7 @@ struct FoodJournalView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Text("\(items.count) logged meals")
                 .font(.subheadline.weight(.semibold))
-            Text("Ate \(ate) · Tasted \(tasted) · Refused \(refused)")
+            Text("Ate \(ate) · Tasted \(tasted) · Not today \(refused)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(amounts.map { "\($0.0.displayName) \($0.1)" }.joined(separator: " · "))
@@ -203,11 +238,7 @@ struct FoodJournalView: View {
     }
 
     private func color(for result: MealResult) -> Color {
-        switch result {
-        case .ate: return .green
-        case .tasted: return .orange
-        case .refused: return .red
-        }
+        result.tint
     }
 
     private func slotLabel(for item: FoodJournalItem) -> String {
