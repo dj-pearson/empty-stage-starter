@@ -523,10 +523,12 @@ enum Badge: String, CaseIterable, Identifiable {
     var tier: BadgeTier {
         switch self {
         case .firstTryBite, .weekWarrior, .recipeChef:                 return .bronze
-        case .fiveDayStreak, .categoryExplorer, .loggedThirtyMeals,
-             .perfectWeek:                                             return .silver
+        case .fiveDayStreak, .categoryExplorer, .loggedThirtyMeals:    return .silver
         case .tenDayStreak, .vegetableExplorer, .fruitExplorer,
              .proteinPro, .consistentTracker:                          return .gold
+        // Tier stays in step with src/lib/badgeCatalog.ts (the web draws it
+        // from there; badgeCatalog.parity.test.ts checks both).
+        case .perfectWeek:                                             return .platinum
         }
     }
 
