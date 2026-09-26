@@ -39,11 +39,18 @@ enum GroceryGeneratorService {
         var candidates: [String: Candidate] = [:]
         let lookups = Lookups(appState: appState)
 
+        // One family meal planned for three children is cooked once, so it
+        // is bought once: the same (day, slot, recipe or food) across kids
+        // counts a single time. Per-kid accumulation tripled the pasta.
+        var seenMeals: Set<String> = []
+
         for date in dates {
             let dateString = date.isoDateString
             for kidId in kidIds {
                 let entries = appState.planEntriesForDate(date, kidId: kidId)
                 for entry in entries {
+                    let mealKey = "\(dateString)|\(entry.mealSlot)|\(entry.recipeId ?? "food:\(entry.foodId)")"
+                    guard seenMeals.insert(mealKey).inserted else { continue }
                     accumulate(
                         from: entry,
                         dateString: dateString,
@@ -92,8 +99,10 @@ enum GroceryGeneratorService {
         // and nothing in the app prevents two grocery items sharing a
         // lowercased name — so generating a list could hard-crash. Keep the
         // first match instead.
+        // Unchecked rows only: something bought last week but not cleared
+        // yet is not "already on your list" for this week's shop.
         let existingByName = Dictionary(
-            appState.groceryItems.map { ($0.name.lowercased(), $0.id) },
+            appState.groceryItems.filter { !$0.checked }.map { ($0.name.lowercased(), $0.id) },
             uniquingKeysWith: { first, _ in first }
         )
         // US-588: index pantry stock by name so the skip decision can compare
@@ -272,7 +281,7 @@ enum GroceryGeneratorService {
         appState: AppState
     ) async throws {
         for item in result.items {
-            try await appState.addGroceryItem(item)
+            try await appState.addGroceryItem(item, silent: true)
         }
 
         if !result.sources.isEmpty {

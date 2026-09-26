@@ -1908,7 +1908,46 @@ final class AppState: ObservableObject {
         return false
     }
 
-    func clearCheckedGroceryItems() async throws {
+    /// Clears every bought item and offers one Undo that restores all of
+    /// them with their recipe links. The view-level undo restored only the
+    /// rows it could see, lost the By Recipe links and queued behind a
+    /// second "Cleared" toast.
+    func clearCheckedGroceryItemsWithUndo() async {
+        let checked = groceryItems.filter(\.checked)
+        guard !checked.isEmpty else { return }
+        let ids = Set(checked.map(\.id))
+        let sources = groceryItemSources.filter { ids.contains($0.groceryItemId) }
+        do {
+            try await clearCheckedGroceryItems(announce: false)
+        } catch {
+            return // rolled back and toasted.
+        }
+        toast.show(Toast(
+            type: .success,
+            title: "Cleared \(checked.count) item\(checked.count == 1 ? "" : "s")",
+            duration: 6,
+            actionLabel: "Undo",
+            retry: { [weak self] in
+                guard let self else { return }
+                var restored = 0
+                for item in checked {
+                    do {
+                        try await self.addGroceryItem(item, silent: true)
+                        restored += 1
+                    } catch { continue }
+                }
+                if !sources.isEmpty {
+                    try? await self.dataService.insertGroceryItemSources(sources)
+                    self.groceryItemSources.append(contentsOf: sources)
+                }
+                if restored > 0 {
+                    self.toast.success("Restored \(restored) item\(restored == 1 ? "" : "s")")
+                }
+            }
+        ))
+    }
+
+    func clearCheckedGroceryItems(announce: Bool = true) async throws {
         let checked = groceryItems.filter(\.checked)
         let checkedIds = Set(checked.map(\.id))
         // US-264: hold the source rows for the rollback path; DB-side
@@ -1920,7 +1959,9 @@ final class AppState: ObservableObject {
         do {
             // US-386: one bulk round-trip instead of N serial deletes.
             try await dataService.bulkDeleteGroceryItems(Array(checkedIds))
-            toast.success("Cleared \(checkedIds.count) items")
+            if announce {
+                toast.success("Cleared \(checkedIds.count) items")
+            }
             HapticManager.success()
             AnalyticsService.track(.groceryListCleared(checkedCount: checkedIds.count))
         } catch {
@@ -2008,6 +2049,9 @@ final class AppState: ObservableObject {
                     // and paper towels became safe foods.
                     isSafe: false,
                     isTryBite: false,
+                    // Carry a scan's allergen tags into the pantry, where
+                    // every later allergy check reads them.
+                    allergens: item.notedAllergens.isEmpty ? nil : item.notedAllergens,
                     aisle: item.aisle,
                     quantity: item.quantity,
                     unit: item.unit

@@ -135,13 +135,14 @@ struct ShoppingModeView: View {
                         dismiss()
                     }
                 }
-                Button("Just clear bought items", role: .destructive) {
+                Button("Keep list as-is") { dismiss() }
+                // Destructive last, and undoable from the toast.
+                Button("Remove bought items from list", role: .destructive) {
                     Task {
-                        try? await appState.clearCheckedGroceryItems()
+                        await appState.clearCheckedGroceryItemsWithUndo()
                         dismiss()
                     }
                 }
-                Button("Keep list as-is") { dismiss() }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("You bought \(boughtCount) item\(boughtCount == 1 ? "" : "s"). Move them into your pantry so your inventory stays up to date.")
@@ -193,6 +194,8 @@ struct ShoppingModeView: View {
                     ForEach(items) { item in
                         ShoppingRow(
                             item: item,
+                            detail: GroceryItemRow.productDetail(for: item),
+                            allergyNote: allergyNote(for: item),
                             onTap: { check(item) }
                         )
                     }
@@ -322,7 +325,9 @@ struct ShoppingModeView: View {
         HapticManager.success()
         Task {
             do {
-                try await appState.toggleGroceryItem(item.id)
+                // Set, not toggle: a partner's check landing first would
+                // otherwise be flipped back to unchecked.
+                try await appState.setGroceryItemChecked(item.id, checked: true)
             } catch {
                 // US-365: toggleGroceryItem already rolled back the optimistic
                 // flip and surfaced an error toast, so the row reappears as
@@ -358,7 +363,7 @@ struct ShoppingModeView: View {
         undoTask?.cancel()
         HapticManager.lightImpact()
         Task {
-            try? await appState.toggleGroceryItem(item.id)
+            try? await appState.setGroceryItemChecked(item.id, checked: false)
             await MainActor.run {
                 if reduceMotion {
                     lastCheckedItemId = nil
@@ -367,6 +372,12 @@ struct ShoppingModeView: View {
                 }
             }
         }
+    }
+
+    /// "Allergen for Maya (peanut)" when the item carries a child's allergen.
+    private func allergyNote(for item: GroceryItem) -> String? {
+        let conflicts = GroceryItemRow.kidConflicts(for: item, kids: appState.kids)
+        return conflicts.isEmpty ? nil : "Allergen for \(conflicts.joined(separator: ", "))"
     }
 
     private func exit() {
@@ -385,6 +396,9 @@ struct ShoppingModeView: View {
 
 private struct ShoppingRow: View {
     let item: GroceryItem
+    /// Brand and notes: which exact product to pick up.
+    var detail: String? = nil
+    var allergyNote: String? = nil
     let onTap: () -> Void
 
     @State private var pressedDown = false
@@ -393,7 +407,20 @@ private struct ShoppingRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Button(action: onTap) {
+        // The check flashes on an actual tap. A zero-distance drag gesture
+        // flashed it on whatever row a scroll started on, so rows looked
+        // bought when they weren't.
+        Button {
+            if reduceMotion {
+                pressedDown = true
+            } else {
+                withAnimation { pressedDown = true }
+            }
+            onTap()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                pressedDown = false
+            }
+        } label: {
             HStack(spacing: 16) {
                 Image(systemName: pressedDown ? "checkmark.circle.fill" : "circle")
                     .font(.title)
@@ -407,6 +434,18 @@ private struct ShoppingRow: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
+
+                    if let detail {
+                        Text(detail)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.primary)
+                    }
+
+                    if let allergyNote {
+                        Label(allergyNote, systemImage: "exclamationmark.octagon.fill")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
 
                     HStack(spacing: 10) {
                         Text("\(item.quantity.formatted()) \(item.unit)")
@@ -428,30 +467,15 @@ private struct ShoppingRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Brief visual confirmation right when the user taps. The actual
-        // mutation runs async; this keeps the tap from feeling laggy.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !pressedDown {
-                        if reduceMotion {
-                            pressedDown = true
-                        } else {
-                            withAnimation { pressedDown = true }
-                        }
-                    }
-                }
-                .onEnded { _ in
-                    // Hold the visual confirmation just long enough to feel
-                    // satisfying, then reset (the row will disappear on the
-                    // next render anyway since `unchecked` filters it out).
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        pressedDown = false
-                    }
-                }
-        )
-        .accessibilityLabel("Buy \(item.name), \(item.quantity.formatted()) \(item.unit)")
+        .accessibilityLabel(spokenLabel)
         .accessibilityHint("Double tap to mark as bought")
+    }
+
+    private var spokenLabel: String {
+        var label = "Buy \(item.name), \(item.quantity.formatted()) \(item.unit)"
+        if let detail { label += ". \(detail)" }
+        if let allergyNote { label += ". \(allergyNote)" }
+        return label
     }
 }
 

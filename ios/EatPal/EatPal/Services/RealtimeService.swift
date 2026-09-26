@@ -333,7 +333,7 @@ final class RealtimeService {
 
     /// US-255: if a remote UPDATE on `(table, rowId)` lands inside the
     /// 5s conflict window of a local edit on that same row, surface a
-    /// one-time "kept your version" toast and fire telemetry. Best-effort
+    /// one-time "changed on another device" toast and fire telemetry. Best-effort
     /// — failures are swallowed so the row still updates cleanly.
     private func detectAndAnnounceConflict(
         table: ConflictDetector.Table,
@@ -366,9 +366,12 @@ final class RealtimeService {
         // column today (follow-up migration), so we can't safely name
         // the conflicting member. "Your household" gives the parent the
         // actionable signal without misattributing the edit.
+        // The caller applies the incoming row (last write wins), so what the
+        // user now sees is the other device's version. "Kept your version"
+        // said the opposite of what happened.
         ToastManager.shared.info(
-            "Kept your version",
-            message: "Your household also edited \(kindNoun) just now."
+            "\(kindNoun) was changed on another device",
+            message: "Showing the latest version. Check it if you were editing it too."
         )
         AnalyticsService.track(.householdConflictResolved(
             table: table.rawValue,

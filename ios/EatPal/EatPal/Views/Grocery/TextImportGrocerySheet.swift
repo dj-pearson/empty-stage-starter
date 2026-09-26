@@ -183,8 +183,14 @@ struct TextImportGrocerySheet: View {
         defer { isSaving = false }
 
         var addedCount = 0
+        // Skip what is already on the list (two phones both adding "eggs"),
+        // file each item in its aisle so it sorts into the store walk, and
+        // add silently: the summary toast below says what happened once.
+        var onList = Set(appState.groceryItems.filter { !$0.checked }.map { $0.name.lowercased() })
         for parsed in toSave {
-            let item = GroceryItem(
+            let key = parsed.name.lowercased()
+            guard !onList.contains(key) else { continue }
+            var item = GroceryItem(
                 id: UUID().uuidString,
                 userId: "",
                 name: parsed.name,
@@ -194,12 +200,23 @@ struct TextImportGrocerySheet: View {
                 checked: false,
                 addedVia: sourceTag
             )
+            item.aisleSection = GroceryAisle.classify(parsed.name).rawValue
             do {
-                try await appState.addGroceryItem(item)
+                try await appState.addGroceryItem(item, silent: true)
+                onList.insert(key)
                 addedCount += 1
             } catch {
                 continue
             }
+        }
+
+        let alreadyOnList = toSave.filter { parsed in
+            appState.groceryItems.contains { !$0.checked && $0.name.lowercased() == parsed.name.lowercased() }
+        }.count - addedCount
+        if addedCount == 0 && alreadyOnList > 0 {
+            ToastManager.shared.info("Already on your list")
+            dismiss()
+            return
         }
 
         if addedCount > 0 {

@@ -83,13 +83,20 @@ struct QuickAddGrocerySheet: View {
         NavigationStack {
             Form {
                 nameSection
+                if let allergyWarning {
+                    Section {
+                        Label(allergyWarning, systemImage: "exclamationmark.octagon.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
+                }
                 if !suggestions.isEmpty {
                     suggestionsSection
                 }
                 detailsSection
-                if !brand.isEmpty || lastResolveSource == .userPreference {
-                    brandSection
-                }
+                // Always offered: the first time a safe food is added is
+                // exactly when its exact product needs recording.
+                brandSection
                 if !notes.isEmpty {
                     notesSection
                 }
@@ -375,10 +382,29 @@ struct QuickAddGrocerySheet: View {
     }
 
     private var brandSection: some View {
-        Section("Brand") {
-            TextField("Preferred brand (optional)", text: $brand)
+        Section("Exact product") {
+            TextField("Brand, flavour or shape (optional)", text: $brand)
                 .textInputAutocapitalization(.words)
         }
+    }
+
+    /// The scan's allergen tags (written into notes) and the name, checked
+    /// against each child. The data was fetched and then never compared.
+    private var allergyWarning: String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        var probe = GroceryItem(
+            id: "",
+            userId: "",
+            name: trimmed,
+            category: category.rawValue,
+            quantity: quantity,
+            unit: unit,
+            checked: false
+        )
+        probe.notes = notes.isEmpty ? nil : notes
+        let conflicts = GroceryItemRow.kidConflicts(for: probe, kids: appState.kids)
+        return conflicts.isEmpty ? nil : "Allergen for \(conflicts.joined(separator: ", "))"
     }
 
     private var notesSection: some View {
@@ -617,11 +643,12 @@ struct QuickAddGrocerySheet: View {
         )
 
         do {
+            // addGroceryItem already records the add for learning; a second
+            // recordAdd here wrote two history rows and skewed the restock
+            // cadence.
             try await appState.addGroceryItem(item)
             addedThisSession += 1
             HapticManager.success()
-            // Fire-and-forget: don't block the user; learn in background.
-            Task.detached { await SmartProductService.shared.recordAdd(item: item) }
             resetFormForNextItem()
         } catch {
             // AppState already surfaces a toast; nothing to do here.

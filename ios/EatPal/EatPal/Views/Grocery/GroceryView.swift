@@ -317,7 +317,9 @@ struct GroceryView: View {
                     Button {
                         HapticManager.success()
                         Task {
-                            try? await appState.toggleGroceryItem(item.id)
+                            // Set, not toggle: if a partner's check landed a
+                            // moment earlier, a toggle would uncheck it.
+                            try? await appState.setGroceryItemChecked(item.id, checked: true)
                             await TipEvents.didSwipeGrocery.donate()
                         }
                     } label: {
@@ -327,12 +329,14 @@ struct GroceryView: View {
                     .accessibilityLabel("Mark \(item.name) as bought")
                 }
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
+            // No full swipe for delete: one long swipe removed a partner's
+            // item with no way back.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 if !isSelecting {
                     Button(role: .destructive) {
                         HapticManager.error()
                         Task {
-                            try? await appState.deleteGroceryItem(item.id)
+                            await appState.deleteGroceryItemWithUndo(item.id)
                             await TipEvents.didSwipeGrocery.donate()
                         }
                     } label: {
@@ -351,7 +355,7 @@ struct GroceryView: View {
             .contextMenu {
                 Button {
                     HapticManager.success()
-                    Task { try? await appState.toggleGroceryItem(item.id) }
+                    Task { try? await appState.setGroceryItemChecked(item.id, checked: !item.checked) }
                 } label: {
                     Label(item.checked ? "Uncheck" : "Mark Bought",
                           systemImage: item.checked ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
@@ -367,7 +371,7 @@ struct GroceryView: View {
                 Button {
                     HapticManager.success()
                     Task {
-                        let duplicate = GroceryItem(
+                        var duplicate = GroceryItem(
                             id: UUID().uuidString,
                             userId: "",
                             name: item.name,
@@ -379,8 +383,14 @@ struct GroceryView: View {
                             priority: item.priority,
                             addedVia: "manual"
                         )
-                        try? await appState.addGroceryItem(duplicate)
-                        ToastManager.shared.success("Duplicated", message: item.name)
+                        // Keep the brand and the aisle, or the copy lands in a
+                        // legacy section with no product named.
+                        duplicate.brandPreference = item.brandPreference
+                        duplicate.aisleSection = item.aisleSection
+                        do {
+                            try await appState.addGroceryItem(duplicate, silent: true)
+                            ToastManager.shared.success("Duplicated", message: item.name)
+                        } catch { /* toasted in AppState */ }
                     }
                 } label: {
                     Label("Duplicate", systemImage: "plus.square.on.square")
@@ -390,7 +400,7 @@ struct GroceryView: View {
 
                 Button(role: .destructive) {
                     HapticManager.error()
-                    Task { try? await appState.deleteGroceryItem(item.id) }
+                    Task { await appState.deleteGroceryItemWithUndo(item.id) }
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -404,14 +414,68 @@ struct GroceryView: View {
     ///
     /// Expiring chips render first (most urgent), capped at 4, then the
     /// cadence-due chips fill the remaining space.
+    /// Safe foods at one or none that aren't already on the list. Running out
+    /// of the few foods a child reliably eats is the purchase that matters
+    /// most, and the cadence predictor never looked at isSafe.
+    private var safeFoodsToRestock: [Food] {
+        let onList = Set(uncheckedItems.map { $0.name.lowercased() })
+        return appState.foods.filter { food in
+            guard food.isSafe, let quantity = food.quantity, quantity <= 1 else { return false }
+            return !onList.contains(food.name.lowercased())
+        }
+    }
+
+    private func addSafeFoodToList(_ food: Food) async {
+        var item = GroceryItem(
+            id: UUID().uuidString,
+            userId: "",
+            name: food.name,
+            category: food.category,
+            quantity: 1,
+            unit: food.unit ?? "count",
+            checked: false,
+            addedVia: "restock"
+        )
+        item.barcode = food.barcode
+        item.aisleSection = GroceryAisle.classify(food.name).rawValue
+        do {
+            try await appState.addGroceryItem(item)
+        } catch { /* toasted in AppState */ }
+    }
+
     @ViewBuilder
     private var restockSuggestionsSection: some View {
         let due = restockSuggestions.prefix(8)
         let expiring = expiringSuggestions.prefix(4)
-        if !due.isEmpty || !expiring.isEmpty {
+        let safeLow = safeFoodsToRestock.prefix(6)
+        if !due.isEmpty || !expiring.isEmpty || !safeLow.isEmpty {
             Section {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
+                        ForEach(Array(safeLow), id: \.id) { food in
+                            Button {
+                                Task { await addSafeFoodToList(food) }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "heart.fill")
+                                            .foregroundStyle(.pink)
+                                        Text(food.name)
+                                            .font(.callout)
+                                            .fontWeight(.semibold)
+                                            .lineLimit(1)
+                                    }
+                                    Text((food.quantity ?? 0) <= 0 ? "Safe food · out" : "Safe food · 1 left")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.pink.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Add safe food \(food.name) to the list")
+                        }
                         ForEach(Array(expiring), id: \.id) { suggestion in
                             Button {
                                 Task { await addFromExpiringSuggestion(suggestion) }
@@ -490,19 +554,17 @@ struct GroceryView: View {
         }
     }
 
+    /// Informational, not an alarm: "3d overdue" in red put pressure on a
+    /// tired parent for what is only a buying rhythm.
     private func restockSubtitle(for s: RestockPredictor.Suggestion) -> String {
         if s.daysUntilDue <= 0 {
-            return s.daysUntilDue == 0
-                ? "Due today · usually every \(s.cadenceDays)d"
-                : "\(-s.daysUntilDue)d overdue · usually every \(s.cadenceDays)d"
+            return "Usually every \(s.cadenceDays)d · time to restock"
         }
-        return "Due in \(s.daysUntilDue)d · usually every \(s.cadenceDays)d"
+        return "Usually every \(s.cadenceDays)d · in \(s.daysUntilDue)d"
     }
 
     private func restockColor(for s: RestockPredictor.Suggestion) -> Color {
-        if s.daysUntilDue <= 0 { return .red }
-        if s.daysUntilDue <= 2 { return .orange }
-        return .blue
+        s.daysUntilDue <= 0 ? .green : .blue
     }
 
     @ViewBuilder
@@ -799,17 +861,17 @@ struct GroceryView: View {
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     Button {
                                         HapticManager.lightImpact()
-                                        Task { try? await appState.toggleGroceryItem(item.id) }
+                                        Task { try? await appState.setGroceryItemChecked(item.id, checked: false) }
                                     } label: {
                                         Label("Uncheck", systemImage: "arrow.uturn.backward.circle")
                                     }
                                     .tint(.orange)
                                     .accessibilityLabel("Uncheck \(item.name)")
                                 }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
                                         HapticManager.error()
-                                        Task { try? await appState.deleteGroceryItem(item.id) }
+                                        Task { await appState.deleteGroceryItemWithUndo(item.id) }
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -885,8 +947,10 @@ struct GroceryView: View {
                     HapticManager.mediumImpact()
                     showingShoppingMode = true
                 } label: {
-                    Image(systemName: "figure.walk.motion")
-                        .symbolRenderingMode(.hierarchical)
+                    // Words, not a walking-figure icon: a helper handed the
+                    // phone won't guess what the icon means.
+                    Label("Shop", systemImage: "cart")
+                        .labelStyle(.titleAndIcon)
                 }
                 .disabled(uncheckedItems.isEmpty)
                 .accessibilityLabel("Start shopping mode")
@@ -1026,7 +1090,7 @@ struct GroceryView: View {
                         Button {
                             Task { await generateFromWeekPlan() }
                         } label: {
-                            Label("Generate from this week's plan", systemImage: "calendar.badge.plus")
+                            Label("Add ingredients for the next 7 days", systemImage: "calendar.badge.plus")
                         }
                         .disabled(isGenerating)
 
@@ -1093,7 +1157,7 @@ struct GroceryView: View {
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }
-                    .accessibilityLabel("Quick add options")
+                    .accessibilityLabel("More ways to add, and store options")
 
                     Button {
                         showingQuickAdd = true
@@ -1276,46 +1340,8 @@ struct GroceryView: View {
     // US-414: clear checked items with an Undo affordance — snapshot the
     // checked rows first, clear, then offer to restore them via a toast action.
     private func clearCompleted() {
-        let snapshot = checkedItems
-        guard !snapshot.isEmpty else { return }
-        Task {
-            do {
-                try await appState.clearCheckedGroceryItems()
-                HapticManager.success()
-                ToastManager.shared.show(Toast(
-                    type: .success,
-                    title: "Cleared \(snapshot.count) item\(snapshot.count == 1 ? "" : "s")",
-                    actionLabel: "Undo",
-                    retry: { await restoreClearedItems(snapshot) }
-                ))
-            } catch {
-                HapticManager.error()
-                ToastManager.shared.error(
-                    "Couldn't clear items",
-                    message: "Please try again."
-                )
-            }
-        }
-    }
-
-    private func restoreClearedItems(_ items: [GroceryItem]) async {
-        var restored = 0
-        for item in items {
-            do {
-                try await appState.addGroceryItem(item)
-                restored += 1
-            } catch {
-                continue
-            }
-        }
-        if restored > 0 {
-            HapticManager.success()
-        } else {
-            ToastManager.shared.error(
-                "Couldn't restore items",
-                message: "Please re-add them manually."
-            )
-        }
+        guard !checkedItems.isEmpty else { return }
+        Task { await appState.clearCheckedGroceryItemsWithUndo() }
     }
 
     // MARK: - US-269 bulk actions
@@ -1495,10 +1521,23 @@ struct GroceryView: View {
         }
     }
 
+    /// Covers every child's meals from today for 7 days. It used to start
+    /// at the beginning of the week (re-buying meals already eaten) and to
+    /// cover only the selected child without saying so; a shared family meal
+    /// is now bought once, not once per child.
     private func generateFromWeekPlan() async {
         isGenerating = true
-        let weekStart = Date().weekDates.first ?? Date()
-        let kidIds = appState.activeKidId.map { [$0] } ?? appState.kids.map(\.id)
+        let weekStart = Calendar.current.startOfDay(for: Date())
+        let kidIds = appState.kids.map(\.id)
+        let plannedDays = (0..<7).compactMap { Calendar.current.date(byAdding: .day, value: $0, to: weekStart) }
+        let hasPlan = plannedDays.contains { day in
+            kidIds.contains { !appState.planEntriesForDate(day, kidId: $0).isEmpty }
+        }
+        guard hasPlan else {
+            ToastManager.shared.info("No meals planned", message: "Nothing is on the plan for the next 7 days.")
+            isGenerating = false
+            return
+        }
 
         do {
             // US-264: returns both new items and the source-link rows
@@ -1528,10 +1567,42 @@ struct GroceryItemRow: View {
     @EnvironmentObject var appState: AppState
     let item: GroceryItem
 
+    /// "Maya (peanut)" for each child the item carries an allergen for, from
+    /// its name and any tags a barcode scan put in the notes.
+    private var kidConflicts: [String] {
+        GroceryItemRow.kidConflicts(for: item, kids: appState.kids)
+    }
+
+    static func kidConflicts(for item: GroceryItem, kids: [Kid]) -> [String] {
+        kids.compactMap { kid in
+            AllergenMatcher.matching(
+                kidAllergens: kid.allergens,
+                foodName: item.name,
+                foodAllergens: item.notedAllergens
+            ).map { "\(kid.name) (\($0))" }
+        }
+    }
+
+    /// The exact product line: brand, then the first line of the notes
+    /// ("blue box, not shapes"). Allergen lines are shown separately.
+    static func productDetail(for item: GroceryItem) -> String? {
+        var parts: [String] = []
+        if let brand = item.brandPreference?.trimmingCharacters(in: .whitespaces), !brand.isEmpty {
+            parts.append(brand)
+        }
+        if let firstNote = item.notes?
+            .split(whereSeparator: \.isNewline)
+            .map({ $0.trimmingCharacters(in: .whitespaces) })
+            .first(where: { !$0.isEmpty && !$0.lowercased().hasPrefix("allergens:") }) {
+            parts.append(firstNote)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Button {
-                Task { try? await appState.toggleGroceryItem(item.id) }
+                Task { try? await appState.setGroceryItemChecked(item.id, checked: !item.checked) }
             } label: {
                 Image(systemName: item.checked ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
@@ -1553,6 +1624,19 @@ struct GroceryItemRow: View {
                     .strikethrough(item.checked)
                     .foregroundStyle(item.checked ? .secondary : .primary)
 
+                if let detail = Self.productDetail(for: item) {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                if !kidConflicts.isEmpty {
+                    Label("Allergen for \(kidConflicts.joined(separator: ", "))", systemImage: "exclamationmark.octagon.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.red)
+                }
+
                 HStack(spacing: 8) {
                     Text("\(item.quantity.formatted()) \(item.unit)")
                         .font(.caption)
@@ -1564,7 +1648,7 @@ struct GroceryItemRow: View {
                             .foregroundStyle(.red)
                     }
 
-                    if let aisle = item.aisle {
+                    if let aisle = item.aisle, item.aisleSection == nil {
                         Text("Aisle: \(aisle)")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -1573,12 +1657,6 @@ struct GroceryItemRow: View {
             }
 
             Spacer()
-
-            if let notes = item.notes, !notes.isEmpty {
-                Image(systemName: "note.text")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
@@ -1592,7 +1670,8 @@ struct AddGroceryItemView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var name = ""
-    @State private var category: FoodCategory = .protein
+    // Matches the default aisle (.other): protein tagged every manual item.
+    @State private var category: FoodCategory = .snack
     // US-263: store-section taxonomy. Defaults to .other so the user
     // explicitly opts into a real aisle; auto-classification (US-266)
     // will pre-fill this for known item names.
@@ -1812,10 +1891,19 @@ struct EditGroceryItemView: View {
     @State private var unit: String = "count"
     @State private var notes: String = ""
     @State private var priority: String = "medium"
+    @State private var brand: String = ""
     // US-414: guard double-submit and only dismiss on a confirmed save.
     @State private var isSubmitting = false
+    /// Loading the item's aisle fires the aisle onChange, which used to
+    /// overwrite the saved category (Apples saved as "vegetable").
+    @State private var skipNextAisleChange = false
 
-    private let units = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
+    private static let baseUnits = ["count", "oz", "lb", "g", "kg", "cups", "tbsp", "tsp", "ml", "l"]
+
+    /// Keeps the item's own unit selectable so the picker isn't blank.
+    private var units: [String] {
+        Self.baseUnits.contains(unit) || unit.isEmpty ? Self.baseUnits : Self.baseUnits + [unit]
+    }
     private let priorities = ["low", "medium", "high"]
 
     private var sortedAisles: [GroceryAisle] {
@@ -1834,6 +1922,10 @@ struct EditGroceryItemView: View {
                         }
                     }
                     .onChange(of: aisleSection) { _, newAisle in
+                        if skipNextAisleChange {
+                            skipNextAisleChange = false
+                            return
+                        }
                         category = newAisle.derivedFoodCategory
                     }
 
@@ -1888,6 +1980,14 @@ struct EditGroceryItemView: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section {
+                    TextField("Brand, flavour or shape", text: $brand)
+                } header: {
+                    Text("Exact product")
+                } footer: {
+                    Text("Shown on the list and in Shopping Mode, so whoever shops buys the right one.")
+                }
+
                 Section("Notes") {
                     TextField("Optional notes", text: $notes, axis: .vertical)
                         .lineLimit(3)
@@ -1911,11 +2011,14 @@ struct EditGroceryItemView: View {
             .onAppear {
                 name = item.name
                 category = FoodCategory(rawValue: item.category) ?? .protein
-                aisleSection = item.aisleSectionEnum ?? .other
+                let loadedAisle = item.aisleSectionEnum ?? .other
+                skipNextAisleChange = loadedAisle != aisleSection
+                aisleSection = loadedAisle
                 quantity = item.quantity
                 unit = item.unit
                 notes = item.notes ?? ""
                 priority = item.priority ?? "medium"
+                brand = item.brandPreference ?? ""
             }
         }
     }
@@ -1925,19 +2028,35 @@ struct EditGroceryItemView: View {
         // of closing the sheet as if the edit was saved.
         isSubmitting = true
         defer { isSubmitting = false }
+        // A partner may have deleted it while this sheet was open; the update
+        // would silently do nothing and the sheet would close as if saved.
+        guard appState.groceryItems.contains(where: { $0.id == item.id }) else {
+            ToastManager.shared.warning("Not saved", message: "\(item.name) was removed on another device.")
+            dismiss()
+            return
+        }
+        // Send only what changed here, so a partner's concurrent change to
+        // another field (say, the quantity) isn't overwritten by this sheet's
+        // stale copy.
+        var updates = GroceryItemUpdate()
+        if name != item.name { updates.name = name }
+        if category.rawValue != item.category { updates.category = category.rawValue }
+        if quantity != item.quantity { updates.quantity = quantity }
+        if unit != item.unit { updates.unit = unit }
+        if notes != (item.notes ?? "") { updates.notes = notes }
+        if priority != (item.priority ?? "medium") { updates.priority = priority }
+        if aisleSection.rawValue != item.aisleSection { updates.aisleSection = aisleSection.rawValue }
+        let trimmedBrand = brand.trimmingCharacters(in: .whitespaces)
+        if trimmedBrand != (item.brandPreference ?? "") { updates.brandPreference = trimmedBrand }
+        let changedSomething = updates.name != nil || updates.category != nil || updates.quantity != nil
+            || updates.unit != nil || updates.notes != nil || updates.priority != nil
+            || updates.aisleSection != nil || updates.brandPreference != nil
+        guard changedSomething else {
+            dismiss()
+            return
+        }
         do {
-            try await appState.updateGroceryItem(
-                item.id,
-                updates: GroceryItemUpdate(
-                    name: name,
-                    category: category.rawValue,
-                    quantity: quantity,
-                    unit: unit,
-                    notes: notes.isEmpty ? nil : notes,
-                    priority: priority,
-                    aisleSection: aisleSection.rawValue
-                )
-            )
+            try await appState.updateGroceryItem(item.id, updates: updates)
             HapticManager.success()
             dismiss()
         } catch {

@@ -69,6 +69,22 @@ struct GroceryItem: Identifiable, Codable, Equatable {
         if let pricePerUnit = updates.pricePerUnit { self.pricePerUnit = pricePerUnit }
         if let currency = updates.currency { self.currency = currency }
         if let aisleSection = updates.aisleSection { self.aisleSection = aisleSection }
+        if let brandPreference = updates.brandPreference { self.brandPreference = brandPreference }
+    }
+
+    /// Allergen tags a barcode scan wrote into the notes ("Allergens: milk,
+    /// peanuts"), for the allergy check on the list. Empty when there are none.
+    var notedAllergens: [String] {
+        guard let notes else { return [] }
+        for line in notes.split(whereSeparator: \.isNewline) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.lowercased().hasPrefix("allergens:") else { continue }
+            return trimmed.dropFirst("allergens:".count)
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        }
+        return []
     }
 
     /// US-263: typed accessor that returns the aisle section as the
@@ -100,12 +116,16 @@ struct GroceryItemUpdate: Codable {
     var currency: String?
     /// US-263: store-section taxonomy update.
     var aisleSection: String?
+    /// The exact product to buy. The column existed; the update didn't, so a
+    /// wrong brand couldn't be fixed from the app.
+    var brandPreference: String?
 
     enum CodingKeys: String, CodingKey {
         case name, category, quantity, unit, checked, notes, aisle, priority
         case pricePerUnit = "price_per_unit"
         case currency
         case aisleSection = "aisle_section"
+        case brandPreference = "brand_preference"
     }
 }
 
